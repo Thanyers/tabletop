@@ -91,6 +91,6 @@ Production mode is a deployment candidate that requires all of the following to 
 
 Production startup does not apply database migrations; it requires the configured PostgreSQL schema to be ready. The explicit migration entrypoint is `node --import tsx server/migrate.ts --environment production`. A database owner must approve the target database, schema operation, scope, and recovery plan before anyone runs it. Do not run that command against a shared or production database as part of ordinary startup.
 
-The [production setup proposal](PRODUCTION_SETUP.md) recommends a Render Node service with Supabase PostgreSQL and Auth. It includes the remaining account, retention, AI, credential, and cost work; no cost approval is implied. The container expects an HTTPS reverse proxy and external PostgreSQL; it does not provision either one.
+The revised [production setup proposal](PRODUCTION_SETUP.md) uses Cloudflare Workers, Durable Objects, D1, and R2. It includes the required runtime/storage port plus account, retention, AI, credential, and cost work; no cost approval is implied. The current Node container still expects an HTTPS reverse proxy and external PostgreSQL. It does not provision them or run as a Worker without that port.
 
 The included `Dockerfile` is a multistage, non-root container candidate with a built-in Node health check. It defaults to production mode, so it will stop at startup until the production environment and required values are supplied. It has not been deployed, and its presence does not mean production readiness.
