@@ -1,6 +1,6 @@
 # Tabletop production setup and resume
 
-สถานะวันที่ 18 ตุลาคม 2026: **Cloudflare implementation candidate ในเครื่อง** มี Workers API/Static Assets, Room/Billing Durable Objects, D1, Google login, resume, multiplayer, admin metadata และ AI draft แล้ว ยังไม่ได้สร้าง resource บน Cloudflare, apply production schema, อัปโหลด secret หรือ deploy ระบบจริง ดู [ขอบเขตเปิดระบบและผลทดสอบ](CLOUDFLARE_RELEASE.md)
+สถานะวันที่ 18 ตุลาคม 2026: **เปิด public alpha บน Cloudflare Free แล้ว** ที่ [Tabletop](https://tabletop.ptchrr.workers.dev) มี Workers API/Static Assets, Room/Billing SQLite Durable Objects, D1 และคีย์ฝั่งเซิร์ฟเวอร์ครบ เจ้าของเลือก Free และยังไม่ได้เปิด Paid ทดสอบ Google login ของเจ้าของ, logout/login resume และ AI จริงครบสามเคสแล้ว แต่ hosted multiplayer สองบัญชีและ recovery ยังต้องตรวจ ดู [ผลทดสอบหลังเปิดระบบ](../handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md)
 
 ## ระบบที่ใช้
 
@@ -36,9 +36,21 @@ AI สร้างเพียง draft จากนั้นต้อง simula
 
 งบรายวัน/เดือนต้องเป็นค่าบวกจึงเปิด AI ค่าเริ่มต้นเป็นศูนย์ Billing DO กันงบก่อน network call, ป้องกัน dispatch ซ้ำ, คิด cache-hit ด้วย และเก็บเงินจองไว้เมื่อไม่รู้ผลลัพธ์แน่ชัด การจำกัดนี้ครอบคลุมเฉพาะการเรียกจาก Tabletop ไม่ครอบคลุม key เดียวกันที่นำไปใช้ที่อื่น
 
-ผล live API ก่อนหน้านี้อยู่ใน [AI provider verification](AI_PROVIDER_VERIFICATION.md) ส่วน end-to-end ล่าสุดใน emulator ใช้คำตอบจำลอง ยังต้องตรวจ Google login และ AI จาก URL production จริง
+ผล live API ก่อนหน้านี้อยู่ใน [AI provider verification](AI_PROVIDER_VERIFICATION.md) ส่วนผลจาก URL จริงรอบนี้: 4 คำขอได้ 3 ร่าง (Invoice, Teaching, Encounter) โดย Teaching ครั้งแรกล้มเหลวและส่งคำขอเดิมใหม่สำเร็จ ยังระบุสาเหตุครั้งแรกไม่ได้ ไม่มีร่างใดถูกเปิดใช้อัตโนมัติ
 
 ## ค่าใช้จ่ายรายเดือน
+
+**แผนที่ใช้อยู่คือ Free: ฐาน Cloudflare 0 USD/เดือน + ค่า DeepSeek ตามใช้จริง** ตั้งเพดาน AI ในแอป 1 USD/วัน UTC และ 10 USD/เดือน UTC งบที่อนุมัติ 20 USD/เดือนเป็นวงเงินวางแผน ไม่ใช่ยอดเรียกเก็บล่วงหน้า
+
+| โควตาหลักของ Free | จำนวน |
+| --- | --- |
+| Worker requests | 100,000/วัน; CPU 10 ms ต่อ HTTP request |
+| SQLite Durable Objects | 100,000 requests/วัน และ 13,000 GB-s/วัน |
+| D1 | อ่าน 5 ล้าน rows/วัน, เขียน 100,000 rows/วัน, storage รวม 5 GB |
+
+ตรวจจาก [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) และ [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) วันที่ 18 ตุลาคม 2026 Free ใช้ SQLite DO ได้ การรอ DeepSeek ทาง network ไม่นับเป็น Worker CPU แต่ DO มี duration quota ของตัวเอง เมื่อใช้โควตา Free หมด งานที่เกินอาจถูกปฏิเสธจนโควตารีเซ็ต จึงต้องวัดจากการเล่นจริงก่อนขยายผู้ใช้
+
+ตาราง Workers Paid ด้านล่างเป็น **ทางเลือกสำหรับอัปเกรดภายหลัง** ไม่ใช่ subscription ที่เปิดอยู่:
 
 ราคาหน่วยเป็น USD ก่อนภาษีและค่าธรรมเนียมบัตร ตรวจวันที่ 18 ตุลาคม 2026 **ฐาน Cloudflare Workers Paid เริ่มที่ 5 USD ต่อเดือนต่อ account** เมื่อการใช้บริการยังอยู่ใน allocation ของแต่ละบริการ คิดส่วนเกินตามจริง ไม่ใช่แพ็กเกจเหมาจ่ายไม่จำกัด และ quota ของ account อาจถูกใช้โดย project อื่นด้วย
 
@@ -54,7 +66,7 @@ AI สร้างเพียง draft จากนั้นต้อง simula
 
 ต้องวัด **เวลาที่ DO active จริง** ไม่ใช้ CPU time ของ Worker แทน duration: ถ้า 5 ห้อง active ตลอด 4 ชั่วโมง/วัน จะใช้ 276,480 GB-s ก่อนรวมงานอื่น ส่วน 10 ห้องในเงื่อนไขเดียวกันใช้ 552,960 GB-s เกิน allocation 152,960 GB-s ซึ่ง Cloudflare ปัดส่วนเกินขึ้นเป็น 1M GB-s คิด **เพิ่ม 12.50 USD** ตามหน่วยบิล การใช้ hibernation และปล่อยให้ห้องพักเมื่อไม่มีงานจึงเป็นข้อกำหนดของ implementation งานรอ network หรือ timer ที่ค้างอยู่ก็อาจกันไม่ให้พักได้
 
-เสนอวงเงินวางแผนสำหรับรอบทีมเล็ก **infrastructure 10 USD + AI 10 USD = 20 USD/เดือน ประมาณ 700 บาท** ที่อัตราตั้งงบ 35 บาทต่อ USD ตัวเลขนี้แทนข้อเสนอ 70 USD ของโครงสร้างเดิม อัตราแลกเปลี่ยนเป็นสมมติฐาน วงเงินยังไม่ได้รับอนุมัติ และ **ไม่ใช่ hard cap ของ Cloudflare** ต้องวัด duration/usage, จำกัด requests/CPU/storage และแจ้งเตือนก่อนเพิ่มจำนวนโต๊ะหรือเปิดสาธารณะ
+เจ้าของอนุมัติวงเงินวางแผน **infrastructure 10 USD + AI 10 USD = 20 USD/เดือน** แล้ว และเลือก Free สำหรับการทดสอบปัจจุบัน อัตราตั้งงบ 35 บาทต่อ USD เป็นเพียงสมมติฐาน ถ้าอัปเกรดเป็น Paid ในอนาคต วงเงิน infrastructure นี้ **ไม่ใช่ hard cap ของ Cloudflare** ต้องวัด duration/usage ก่อนขยายจำนวนผู้ใช้
 
 งบนี้ไม่รวม domain ที่ซื้อเอง, Container/parser/scanning, อีเมลส่งออก, paid Access, backup เพิ่มเติม และบริการหรือส่วนเกินที่ไม่ได้อยู่ใน scenario ข้างต้น ต้องทดลองกู้คืน DO, D1 และ R2 ให้สอดคล้องกัน ไม่มีการรับรอง backup ของทั้งแอปจากการมี storage ถาวรเพียงอย่างเดียว
 
@@ -80,7 +92,7 @@ Peak ตามเวลาไทยคือ 08:00–11:00 และ 13:00–17:
 
 จำนวน token เป็นสมมติฐานของ workload ไม่ใช่ผลวัดทุก workflow และไม่ใช่ใบเรียกเก็บจาก provider ข้อความยาว reasoning ภาพ และ retry เพิ่มค่าใช้จ่าย ต้องเก็บ usage จริง โดยไม่ log ข้อความหรือ key
 
-ก่อนเปิดใช้จริง ต้องมี cost ledger ถาวรแยกจากข้อมูล model job ที่ถูกล้างเมื่อ Reset โต๊ะ แผน Cloudflare ใช้ Billing Durable Object แยกหนึ่งตัวต่อ deployment บันทึก reservation แบบ atomic ตามราคาสูงสุดและขอบเขต token ก่อนเรียก provider ใช้ job ID เดิมป้องกันจองซ้ำ ตัดยอดตาม usage และเก็บ reservation ไว้เมื่อ timeout ไม่ทราบยอด เพื่อไม่คิดว่า abort ทำให้ provider หยุดคิดเงิน การคืนผลเข้า Room DO ต้องตรวจ job/epoch/revision อีกครั้ง เพราะเป็นคนละ transaction ตั้งเพดานรายวัน/เดือน โควตาต่อผู้ใช้และโต๊ะ และ concurrency limit ที่เซิร์ฟเวอร์ ตัว gateway ปัจจุบันยังมีเพียง daily reservation ใน job JSON จึงยังไม่รับรองเพดานงบ production
+ระบบที่ deploy ใช้ Billing Durable Object เป็น cost ledger ถาวรแยกจาก model job ของแต่ละห้อง บันทึก reservation แบบ atomic ก่อนเรียก provider ป้องกัน dispatch ซ้ำ ตัดยอดตาม usage และเก็บ reservation เมื่อไม่ทราบผลแน่ชัด การคืนผลตรวจ job/epoch/revision อีกครั้ง เพราะเป็นคนละ transaction กับห้อง มีเพดานรายวัน/เดือน โควตาต่อผู้ใช้และโต๊ะ และ concurrency limit ฝั่งเซิร์ฟเวอร์ ชุดทดสอบ ledger ใน emulator ผ่านแล้ว; การทดสอบบังคับให้ชนเพดานบนระบบจริงยังไม่ทำ
 
 DeepSeek หักจาก balance; [Balance API](https://api-docs.deepseek.com/api/get-user-balance/) ใช้ตรวจ availability ได้ แต่ไม่พบเพดานค่าใช้จ่ายราย key/โต๊ะในเอกสารที่ตรวจ การเติมเครดิตหรือใช้ key เดียวกับแอปอื่นจึงไม่เท่ากับเพดานงบ Tabletop
 
@@ -95,14 +107,14 @@ DeepSeek หักจาก balance; [Balance API](https://api-docs.deepseek.com
 | `TABLETOP_ADMIN_EMAIL` | bootstrap admin จาก Google account ที่ตรวจแล้วและ pin subject |
 | `DEEPSEEK_KEY` | Worker Secret ใช้เรียก provider ฝั่งเซิร์ฟเวอร์ |
 | `GITHUB_TOKEN` | ใช้ส่ง source ไป repository ที่ระบุ ไม่ส่งขึ้น Cloudflare |
-| `APPROVED_MONTHLY_INFRA_BUDGET_USD`, `APPROVED_MONTHLY_AI_BUDGET_USD`, `APPROVED_MONTHLY_TOTAL_BUDGET_USD` | บันทึกวงเงินที่เจ้าของอนุมัติ ปัจจุบันยังไม่ได้รับอนุมัติ |
+| `APPROVED_MONTHLY_INFRA_BUDGET_USD`, `APPROVED_MONTHLY_AI_BUDGET_USD`, `APPROVED_MONTHLY_TOTAL_BUDGET_USD` | ช่องบันทึกวงเงิน local; รอบนี้ใช้คำอนุมัติในแชตและ ignored release receipt โดยไม่เขียนทับไฟล์ credential |
 
-Target origin: `https://tabletop.ptchrr.workers.dev` และ Google Authorized redirect URI: `https://tabletop.ptchrr.workers.dev/api/auth/google/callback` ต้องตรงกันทุกตัว โค้ดและ credential readiness ผ่านการตรวจในเครื่อง แต่ยังไม่ได้ลองล็อกอิน Google จริงที่ URL นี้
+Target origin: `https://tabletop.ptchrr.workers.dev` และ Google Authorized redirect URI: `https://tabletop.ptchrr.workers.dev/api/auth/google/callback` ตรงกัน ตรวจ Google login ของเจ้าของจริงและกลับเข้าห้องหลัง logout/login แล้ว ยังไม่ได้ตรวจบัญชีที่สองหรือเครื่องอื่น
 
 GitHub เก็บโค้ดและชื่อ configuration Cloudflare ฉีด secret ให้ Worker ตอนรัน จึงไม่ต้องมี API key ใน GitHub หรือ `VITE_*` CI ใช้ synthetic credentials และไม่มีสิทธิ์ deploy ดู [Worker Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 
-รอบแรกต้องอนุมัติ resource/schema ใหม่และวงเงินตาม [release scope](CLOUDFLARE_RELEASE.md) ก่อน: Worker `tabletop`, D1 `tabletop-production`, และ SQLite DO `Room`/`Billing` ไม่แก้ฐานข้อมูลเดิม ไม่เปิด R2/upload ในรอบนี้ การมี API token ไม่ใช่หลักฐานว่า plan paid พร้อมหรืออนุมัติค่าใช้จ่ายแล้ว
+เจ้าของอนุมัติและสร้าง resource/schema ตาม [release scope](CLOUDFLARE_RELEASE.md) แล้ว: Worker `tabletop`, D1 `tabletop-production`, และ SQLite DO `Room`/`Billing` ใช้ฐานข้อมูลใหม่ ไม่เปิด R2/upload หรือ Paid ในรอบนี้
 
 Token ต้องจัดการ Worker เป้าหมายและ D1 ที่อนุมัติได้ ไม่ต้องให้สิทธิ์ DNS, Google service account, Global API Key หรือ billing เพื่อทดสอบและ deploy ที่ workers.dev หากต้องเปิด Workers Paid เจ้าของทำขั้นตอนชำระเงินใน Cloudflare ได้ ตรวจสิทธิ์ที่ใช้งานจริงก่อนทำ ไม่ขยายสิทธิ์ token อัตโนมัติ
 
-หลังอนุมัติจึงสร้างฐานใหม่และ apply migration, ตั้ง secret ที่ host, deploy commit ที่ผ่าน CI, ตรวจ served assets/HTTPS, ให้เจ้าของล็อกอิน Google, ตรวจสองบัญชี/สองเครื่อง, AI จริงแบบจำกัดจำนวน และทดสอบ rollback/restore ก่อนถือว่าพร้อมใช้งานจริง ไม่มีการ merge PR อัตโนมัติ
+ส่วนที่ทำแล้วคือฐานใหม่/schema, secret ที่ host, deploy commit ที่ผ่าน CI, ตรวจ served assets/HTTPS, Google login ของเจ้าของ และ AI จริงแบบจำกัดจำนวน ส่วนที่เหลือคือสองบัญชี/สองเครื่อง, hosted mobile, multiplayer และ rollback/restore ไม่มีการ merge PR อัตโนมัติ และยังไม่เรียกว่า Production Ready

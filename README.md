@@ -14,7 +14,7 @@ npm start
 
 Open <http://127.0.0.1:4310>. Read [Local development](docs/LOCAL_DEVELOPMENT.md) for data paths, imports, sample sources, and production boundaries. The `.env.example` file is a reference; the server does not load `.env` automatically.
 
-For team review, follow the [three-workflow demo guide](docs/R1_DEMO_GUIDE.md), inspect the [implementation boundaries](docs/R1_ARCHITECTURE.md), and read the [Cloudflare release candidate](docs/CLOUDFLARE_RELEASE.md). The Cloudflare implementation runs in a local Workers emulator; resource creation, hosted Google login, live AI acceptance, and production deployment remain pending.
+For team review, open the [public alpha](https://tabletop.ptchrr.workers.dev), follow the [three-workflow demo guide](docs/R1_DEMO_GUIDE.md), and read the [post-deployment report](handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md). The initial deployment uses Cloudflare Free. Owner Google sign-in, logout/login resume, and live AI drafts in all three workflows were exercised; two-account hosted multiplayer and full recovery remain pending. See the [release record](docs/CLOUDFLARE_RELEASE.md) and [implementation boundaries](docs/R1_ARCHITECTURE.md).
 
 ## What is available
 

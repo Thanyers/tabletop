@@ -1,6 +1,6 @@
 # Cloudflare release candidate
 
-18 October 2026, Asia/Bangkok. **Local implementation; not deployed.** Google/Cloudflare/DeepSeek credential readiness has been checked without exposing values. No Cloudflare resource, remote schema, runtime secret, subscription, or public deployment was created during this preparation.
+18 October 2026, Asia/Bangkok. **Public alpha deployed on Cloudflare Free; hosted acceptance is partial.** Open [Tabletop](https://tabletop.ptchrr.workers.dev). Runtime source: `a495cf5617f60af1c51087b54b6c145f0621e938`; active Worker version: `dfdc8c72-2fc2-4344-92c1-44fbc48d80d0`. The owner approved the resource/schema scope below and selected Free. No Paid subscription was activated. See the [post-deployment report](../handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md) for executed checks and remaining gates.
 
 ## What this candidate delivers
 
@@ -12,7 +12,7 @@
 
 Cloudflare public file uploads are **disabled**. The sample invoice case, verified-source review, rules, calculations, and exports work; uploading a team's own files requires a later private R2/scanning/parser integration. Account deletion, configurable retention, full D&D rules, and private-content support overrides are outside this slice.
 
-## Concrete provisioning scope for approval
+## Approved provisioning scope
 
 Target: the already verified Cloudflare account with Workers subdomain `ptchrr`. Planned origin: `https://tabletop.ptchrr.workers.dev`. Google must allow exactly `https://tabletop.ptchrr.workers.dev/api/auth/google/callback`.
 
@@ -36,13 +36,13 @@ Recovery: keep the last deployed Worker version and use compatible code rollback
 
 No R2 bucket, DNS change, custom domain purchase, Render/Supabase resource, GitHub credential upload, or automatic main-branch merge is included.
 
-## Budget awaiting approval
+## Approved budget and selected plan
 
-Proposed planning allowance: **infrastructure USD 10 + AI USD 10 = USD 20/month**, approximately THB 700 at the explicit planning assumption of THB 35/USD, before tax/fees. Workers Paid starts at USD 5/month with included allocations; see the detailed sourced scenarios in [Production setup](PRODUCTION_SETUP.md). Infrastructure charges can exceed this planning allowance; Cloudflare does not enforce it as a hard spending cap.
+The owner approved a planning allowance of **infrastructure USD 10 + AI USD 10 = USD 20/month** and subsequently selected **Workers Free for the initial test**. The Cloudflare base subscription is therefore USD 0; DeepSeek is billed separately. The allowance is not a prepaid charge. No Paid checkout was accepted. A later Paid upgrade is a separate decision and does not have a provider hard spending cap.
 
-For this first limited release, propose an application AI cap of **USD 10 per UTC month and USD 1 per UTC day**, with conservative reservations before provider calls. The current checked-in values are zero and no cost approval has been recorded. This cap applies only to requests made through this application, not other use of the same DeepSeek key.
+The deployed application AI caps are **USD 10 per UTC month and USD 1 per UTC day**, with conservative reservations before provider calls. Checked-in budget values remain zero; the approved deployment configuration supplies the positive limits. The Free deployment omits the checked-in custom 50 ms CPU setting and uses the platform's Free limit. This cap applies only to requests made through this application, not other use of the same DeepSeek key.
 
-Read-only preflight could inspect Workers and D1; subscription/billing inspection returned HTTP 403. The account's paid-plan state is therefore unverified. The R2 listing also returned HTTP 403; R2 is not needed by this candidate while uploads stay disabled. No credential permissions were changed.
+The dashboard confirmed the Free plan. The approved new D1 database and seven application tables were created, the Room/Billing SQLite classes were registered, four runtime secrets were installed, and the workers.dev hostname was enabled. Public preview URLs remain disabled. R2 is not used while uploads remain disabled. No credential permissions were changed.
 
 ## Verification record
 
@@ -64,13 +64,17 @@ Ignored local reports: `test-results/production-candidate-unit.json`, `test-resu
 
 Review found and addressed out-of-order directory sync, cost omission for cached AI input, committed-AI receipt recovery, Origin normalization, lost invite acknowledgements, and the clipped admin dialog. The timeout/commit interleavings also pass. A native Workers browser test caught unsupported redirect mode and an unbound native fetch receiver missed by injected mocks; provider/OAuth requests now reject redirects using manual mode, and the provider fetch receiver is bound to the global runtime. One simulated provider request reaches the durable ledger and creates a draft without activating it. Independent review found no remaining material finding in its bounded scope.
 
-## Hosted acceptance after approval
+## Hosted acceptance and remaining work
 
-1. Confirm the target account, paid-plan state, empty new-resource scope, and approved budgets; provision only the resources above.
-2. Apply the approved schema, replace the D1 placeholder ID, set positive approved AI budgets, and install only required secrets at Cloudflare.
-3. Deploy the exact CI-passing commit; verify HTTPS, security headers, readiness, and served asset hashes against the build.
-4. Complete actual Google sign-in with the owner's account and a separate teammate account. Check redirect, admin bootstrap, invite redemption, private projections, logout, and resume from a second device.
-5. Exercise hibernation, delayed alarms, duplicate commands, redeploy/reconnect, and session revocation on live WebSockets. Validate storage recovery and code rollback without erasing progress.
-6. Make bounded consented live AI requests for all three workflows; check provider schema, latency, durable accounting, daily/monthly rejection, and absence of automatic rule activation. Earlier provider probes and emulator results do not substitute for this.
+Executed on the public origin: 14 HTTP/security/asset checks (including all 117 public non-index asset hashes), owner Google sign-in and admin bootstrap, creation of three tables, encounter reload, logout/login resume, and real AI drafts plus simulation in all three workflows. Four AI requests produced three drafts; the first teaching request failed with a generic message and the identical manual resubmission succeeded. Its cause is not established. Encounter validation and approval passed, but activation was stopped by automatic approval review and awaits the owner's specific answer. No draft was activated.
 
-Keep the release status pending until these hosted checks pass. Source publication to a draft PR is not production deployment.
+Two-account multiplayer, another device, hosted mobile interaction, full recovery/rollback, and live budget-negative tests are still pending. Emulator results below are not substitutes for those checks.
+
+1. **Done:** confirm the target account, selected Free plan and limits, new-resource scope, and approved budgets; provision only the resources above.
+2. **Done:** apply the approved schema, replace the deployment D1 placeholder ID, set approved AI budgets, and install only required runtime secrets.
+3. **Done:** deploy the CI-passing runtime commit and verify HTTPS, security headers, readiness, and served asset hashes.
+4. **Partial:** owner Google sign-in, admin bootstrap, logout and resume passed. A separate teammate account, invite redemption, private projections, and a second device remain.
+5. **Pending:** live hibernation, delayed alarms, duplicate commands, redeploy/reconnect, session revocation, storage recovery, and compatible code rollback without erasing progress.
+6. **Partial:** bounded consented live AI drafts and simulation passed for all three workflows, including one failed teaching request followed by a successful manual resubmission. Hosted ledger readback, budget rejection and full latency characterization remain. No draft activated automatically; the encounter activation check awaits a specific owner answer after automatic approval review stopped it.
+
+Keep full hosted acceptance and production readiness pending until the remaining checks pass. The public URL can be used for limited team testing; the draft PR is not merged.
