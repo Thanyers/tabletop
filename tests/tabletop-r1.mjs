@@ -60,9 +60,12 @@ async function commandFrom(page, type, payload, overrides = {}) {
   }, { view, type, payload, overrides });
 }
 async function clickCommand(page, locator, type) {
-  const responsePromise = page.waitForResponse(response => response.url().endsWith('/commands') && response.request().method() === 'POST' && response.request().postDataJSON().type === type);
-  await locator.click();
-  const response = await responsePromise;
+  // Observe both promises immediately so a response timeout cannot bypass the
+  // diagnostic catch while Playwright is still trying to click a moving control.
+  const [response] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/commands') && response.request().method() === 'POST' && response.request().postDataJSON().type === type),
+    locator.click(),
+  ]);
   expect(response.status(), await response.text()).toBe(200);
   await expect(page.getByRole('button', { name: 'Refresh latest table' })).toBeEnabled();
   return response.json();
@@ -211,6 +214,10 @@ try {
   await board(dm).getByLabel('Once per character turn').check();
   await clickCommand(dm, dm.getByRole('button', { name: 'Propose rule', exact: true }), 'evolve.propose');
   await lifecycle(dm);
+  // The canvas initially focuses the board, while rule activation can add objects.
+  // Use the same navigation as a player before targeting the separate action card.
+  await dm.getByRole('button', { name: 'Fit objects', exact: true }).click();
+  await mira.getByRole('button', { name: 'Fit objects', exact: true }).click();
   await clickCommand(dm, dm.getByRole('button', { name: 'Hit Pip', exact: true }), 'encounter.declareHit');
   const playerProjection = await current(mira);
   expect(playerProjection.domain.pendingHit.roll).toBeNull();
