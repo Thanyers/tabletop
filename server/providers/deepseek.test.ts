@@ -93,7 +93,7 @@ describe('DeepSeekProvider', () => {
     const result = await provider.proposeWithUsage(input(), new AbortController().signal);
     expect(endpoint).toBe('https://api.deepseek.com/chat/completions');
     expect(requestInit?.method).toBe('POST');
-    expect(requestInit?.redirect).toBe('error');
+    expect(requestInit?.redirect).toBe('manual');
     expect(new Headers(requestInit?.headers).get('authorization')).toBe(`Bearer ${API_KEY}`);
     expect(new Headers(requestInit?.headers).get('content-type')).toBe('application/json');
 

@@ -9,6 +9,7 @@ import { WebSocket as WebSocketExport } from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CommandAck, SessionView, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import type { ApiError } from '../src/tabletop/shared/contracts.js';
+import { hashValue } from './codec.js';
 import { startServer, type StartedServer } from './start.js';
 import { MAX_HTTP_REQUESTS_PER_MINUTE } from './limits.js';
 
@@ -358,6 +359,58 @@ describe('tabletop server authority', () => {
     expect((ownerStillAuthorized.body as WorkspaceView).members).toHaveLength(1);
   });
 
+  it('lets an owner explicitly revoke a lost unused invite and issue a replacement atomically', async () => {
+    const { base, server } = await openServer();
+    const owner = await createSession(base, 'Invite owner');
+    const outsider = await createSession(base, 'Not a member');
+    const learner = await createSession(base, 'Invite recipient');
+    const workspace = await createWorkspace(base, owner, 'teaching');
+    const lostAcknowledgement = await invite(base, owner, workspace.id, 'learner-1');
+
+    const unauthorized = await call<InviteResponse>(base, `/api/workspaces/${workspace.id}/invites`, {
+      session: outsider,
+      body: { seat: 'learner-1', replaceOutstanding: true },
+    });
+    expect(unauthorized.response.status).toBe(403);
+    expect((unauthorized.body as ApiError).errorCode).toBe('MEMBERSHIP_REVOKED');
+
+    const unchangedDefault = await call<InviteResponse>(base, `/api/workspaces/${workspace.id}/invites`, {
+      session: owner,
+      body: { seat: 'learner-1' },
+    });
+    expect(unchangedDefault.response.status).toBe(409);
+    expect((unchangedDefault.body as ApiError).errorCode).toBe('SEAT_UNAVAILABLE');
+
+    const replacement = await call<InviteResponse>(base, `/api/workspaces/${workspace.id}/invites`, {
+      session: owner,
+      body: { seat: 'learner-1', replaceOutstanding: true },
+    });
+    expect(replacement.response.status).toBe(201);
+    expect(replacement.body).toMatchObject({ expiresAt: expect.any(Number) });
+    const deniedOldTicket = await call<WorkspaceView>(base, '/api/invites/redeem', {
+      session: learner,
+      body: { ticket: lostAcknowledgement.ticket },
+    });
+    expect(deniedOldTicket.response.status).toBe(403);
+    expect((deniedOldTicket.body as ApiError).errorCode).toBe('INVITE_EXPIRED');
+
+    const redeemed = await redeem(base, learner, (replacement.body as InviteResponse).ticket);
+    expect(redeemed.workspace.actor).toMatchObject({ role: 'learner', seat: 'learner-1' });
+    const occupied = await call<InviteResponse>(base, `/api/workspaces/${workspace.id}/invites`, {
+      session: owner,
+      body: { seat: 'learner-1', replaceOutstanding: true },
+    });
+    expect(occupied.response.status).toBe(403);
+    expect((occupied.body as ApiError).errorCode).toBe('INVITE_SEAT_OCCUPIED');
+
+    const hashes = await server.database.query<{ ticket_hash: string }>(
+      'SELECT ticket_hash FROM invitations WHERE workspace_id = $1', [workspace.id],
+    );
+    expect(hashes.rows).toHaveLength(2);
+    expect(hashes.rows.some((row) => row.ticket_hash === lostAcknowledgement.ticket)).toBe(false);
+    expect(hashes.rows.some((row) => row.ticket_hash === (replacement.body as InviteResponse).ticket)).toBe(false);
+  });
+
   it('serializes socket projections and skips private changes for learners', async () => {
     const { base, server } = await openServer();
     const owner = await createSession(base, 'Teacher');
@@ -522,6 +575,79 @@ describe('tabletop server authority', () => {
       [workspace.id, `%${artifactId}%`],
     );
     expect(sourceRows.rows[0]?.count).toBe(0);
+  });
+
+  it('commits model proposals only while the matching durable job is still committing', async () => {
+    const { base, server } = await openServer();
+    const owner = await createSession(base, 'Model teacher');
+    const workspace = await createWorkspace(base, owner, 'teaching');
+    const requestSocket = new Socket();
+    const request = new IncomingMessage(requestSocket);
+    request.headers.cookie = owner.cookie;
+    const authenticated = await server.authority.authenticate(request);
+    requestSocket.destroy();
+
+    const change = { kind: 'teaching', parameters: { force: 12, mass: 2, time: 2 } };
+    const commandId = randomUUID();
+    const envelope = {
+      commandId,
+      expectedRevision: workspace.revision,
+      expectedEpoch: workspace.epoch,
+      type: 'evolve.propose',
+      payload: { change },
+    };
+    const proposalHash = hashValue({
+      type: envelope.type,
+      payload: envelope.payload,
+      expectedRevision: envelope.expectedRevision,
+      expectedEpoch: envelope.expectedEpoch,
+    });
+    const jobId = 'a'.repeat(64);
+    await server.database.query(
+      `INSERT INTO model_jobs (id, workspace_id, epoch, actor_id, status, data, created_at, revoked_at)
+       VALUES ($1, $2, $3, $4, 'committing', $5::jsonb, $6, NULL)`,
+      [jobId, workspace.id, workspace.epoch, owner.actorId,
+        JSON.stringify({ commandId, expectedRevision: workspace.revision, expectedEpoch: workspace.epoch, proposalHash }),
+        Date.now()],
+    );
+
+    const committed = await server.authority.executeModelProposal(authenticated, envelope, workspace.id, jobId);
+    expect(committed.workspace.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.actorId });
+
+    const failedCommandId = randomUUID();
+    const current = committed.workspace;
+    const failedEnvelope = {
+      commandId: failedCommandId,
+      expectedRevision: current.revision,
+      expectedEpoch: current.epoch,
+      type: 'evolve.propose',
+      payload: { change: { ...change, parameters: { force: 18, mass: 2, time: 2 } } },
+    };
+    const failedProposalHash = hashValue({
+      type: failedEnvelope.type,
+      payload: failedEnvelope.payload,
+      expectedRevision: failedEnvelope.expectedRevision,
+      expectedEpoch: failedEnvelope.expectedEpoch,
+    });
+    const failedJobId = 'b'.repeat(64);
+    await server.database.query(
+      `INSERT INTO model_jobs (id, workspace_id, epoch, actor_id, status, data, created_at, revoked_at)
+       VALUES ($1, $2, $3, $4, 'failed', $5::jsonb, $6, NULL)`,
+      [failedJobId, workspace.id, current.epoch, owner.actorId,
+        JSON.stringify({ commandId: failedCommandId, expectedRevision: current.revision,
+          expectedEpoch: current.epoch, proposalHash: failedProposalHash, failure: 'MODEL_JOB_INTERRUPTED' }),
+        Date.now()],
+    );
+
+    await expect(server.authority.executeModelProposal(authenticated, failedEnvelope, workspace.id, failedJobId))
+      .rejects.toMatchObject({ code: 'MODEL_JOB_NOT_COMMITTING' });
+    const afterFailedAttempt = await server.authority.authorizeSession(authenticated, workspace.id);
+    expect(afterFailedAttempt.workspace.revision).toBe(current.revision);
+    const failedReceipt = await server.database.query<{ count: number }>(
+      'SELECT COUNT(*)::int AS count FROM commands WHERE workspace_id = $1 AND command_id = $2',
+      [workspace.id, failedCommandId],
+    );
+    expect(failedReceipt.rows[0]?.count).toBe(0);
   });
 
   it('scrubs expired workspaces in bounded batches and queues their artifact cleanup', async () => {

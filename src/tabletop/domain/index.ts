@@ -15,6 +15,10 @@ export function decideDomain(state: DomainState, command: DomainCommand, ctx: Ac
   if (typeof command.type !== 'string' || command.type.length === 0 || command.type.length > 100) {
     throw new DomainError('INVALID_COMMAND', 'Command type must be a non-empty bounded string.');
   }
+  if (state.kind === 'encounter' && state.paused !== undefined && command.type === 'evolve.activate') {
+    if (ctx.role !== 'dm') throw new DomainError('FORBIDDEN', 'Only the DM may activate encounter rules.');
+    throw new DomainError('ENCOUNTER_PAUSED', 'Resume the encounter before activating an encounter rule.');
+  }
   let decision: { state: DomainState; label: string } | null = null;
   if (state.kind === 'invoice') decision = handleInvoiceCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'teaching') decision = handleTeachingCommand(state, command.type, command.payload, ctx);

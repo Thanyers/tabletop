@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AlertTriangle, Check, CheckCircle2, ChevronRight, FileText, LoaderCircle, RotateCcw, ShieldCheck, Upload, X } from 'lucide-react';
 import type { Candidate, WorkspaceView } from '../shared/contracts';
 import type { Command, WorkbenchProps } from './types';
 import { formatMoney, summarize } from './types';
+
+const UploadCapabilityContext = createContext({ enabled: true, reason: '' });
+
+export function UploadCapabilityProvider({ enabled, reason, children }: { enabled: boolean; reason: string; children: ReactNode }) {
+  return <UploadCapabilityContext.Provider value={{ enabled, reason }}>{children}</UploadCapabilityContext.Provider>;
+}
 
 export function CandidateLifecycle({ view, onCommand, busy }: { view: WorkspaceView; onCommand: Command; busy: string | null }) {
   const candidate = view.domain.candidate;
@@ -116,6 +122,7 @@ interface UploadCardProps {
 }
 
 export function UploadCard({ kind, title, description, onUpload, busy }: UploadCardProps) {
+  const capability = useContext(UploadCapabilityContext);
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -131,13 +138,13 @@ export function UploadCard({ kind, title, description, onUpload, busy }: UploadC
     try { await onUpload(kind, file); } catch (reason) { setError(reason instanceof Error ? reason.message : 'The file could not be added.'); }
     finally { setUploading(false); if (input.current) input.current.value = ''; }
   };
-  const disabled = busy || uploading;
+  const disabled = busy || uploading || !capability.enabled;
   return (
     <div className="tt-upload-card">
       <div className="tt-upload-card__icon"><FileText size={16} /></div>
-      <div className="tt-upload-card__copy"><strong>{title}</strong><p>{description}</p><small>{kind === 'shipments' ? 'CSV · up to 5 MiB' : 'Text PDF · up to 10 MiB'}</small>{error && <span className="tt-field-error" role="alert">{error}</span>}</div>
-      <input ref={input} type="file" accept={kind === 'shipments' ? '.csv,text/csv' : kind === 'invoice' ? '.pdf,.csv,application/pdf,text/csv' : '.pdf,.txt,application/pdf,text/plain'} className="tt-visually-hidden" onChange={(event) => void chooseFile(event.currentTarget.files?.[0])} aria-label={`Choose ${title.toLowerCase()}`} />
-      <button type="button" className="tt-icon-button" disabled={disabled} onClick={() => input.current?.click()} aria-label={`Add ${title.toLowerCase()}`}>{disabled ? <LoaderCircle size={15} className="tt-spin" /> : <Upload size={15} />}</button>
+      <div className="tt-upload-card__copy"><strong>{title}</strong><p>{description}</p><small>{capability.enabled ? kind === 'shipments' ? 'CSV · up to 5 MiB' : 'Text PDF · up to 10 MiB' : capability.reason}</small>{error && <span className="tt-field-error" role="alert">{error}</span>}</div>
+      <input ref={input} type="file" accept={kind === 'shipments' ? '.csv,text/csv' : kind === 'invoice' ? '.pdf,.csv,application/pdf,text/csv' : '.pdf,.txt,application/pdf,text/plain'} className="tt-visually-hidden" disabled={!capability.enabled} onChange={(event) => void chooseFile(event.currentTarget.files?.[0])} aria-label={`Choose ${title.toLowerCase()}`} />
+      <button type="button" className="tt-icon-button" disabled={disabled} onClick={() => input.current?.click()} aria-label={capability.enabled ? `Add ${title.toLowerCase()}` : `${title} upload is disabled`} title={!capability.enabled ? capability.reason : undefined}>{disabled && capability.enabled ? <LoaderCircle size={15} className="tt-spin" /> : <Upload size={15} />}</button>
     </div>
   );
 }

@@ -14,7 +14,7 @@ npm start
 
 Open <http://127.0.0.1:4310>. Read [Local development](docs/LOCAL_DEVELOPMENT.md) for data paths, imports, sample sources, and production boundaries. The `.env.example` file is a reference; the server does not load `.env` automatically.
 
-For team review, follow the [three-workflow demo guide](docs/R1_DEMO_GUIDE.md), inspect the [implementation boundaries](docs/R1_ARCHITECTURE.md), and read the [local verification report](docs/R1_LOCAL_VERIFICATION.md). This is a **Local Verified implementation candidate**; hosting and live-model acceptance remain open.
+For team review, follow the [three-workflow demo guide](docs/R1_DEMO_GUIDE.md), inspect the [implementation boundaries](docs/R1_ARCHITECTURE.md), and read the [Cloudflare release candidate](docs/CLOUDFLARE_RELEASE.md). The Cloudflare implementation runs in a local Workers emulator; resource creation, hosted Google login, live AI acceptance, and production deployment remain pending.
 
 ## What is available
 
@@ -27,8 +27,12 @@ Uploaded evidence starts as **provided**. A person must review and verify a sour
 
 ## Capability boundaries
 
-A server-side DeepSeek Flash adapter has passed a bounded synthetic API check; see [provider verification](docs/AI_PROVIDER_VERIFICATION.md). It is not yet connected to the app's model endpoint, which remains disabled until authenticated dispatch and durable cost accounting are integrated. Public uploads are disabled in production mode until a scanner and a durable private object store are selected and integrated. Local development uses a private filesystem object store for fixture and manual testing.
+The Cloudflare runtime includes Google sign-in, persistent account membership, My tables/resume, private multiplayer projections, DM pause/resume, and an admin metadata panel. Closing a browser or expiring a login does not delete a saved Cloudflare room. The local Node runtime retains its original guest-session and seven-day workspace behavior.
 
-The Dockerfile packages the current Node/PostgreSQL implementation; it is not a deployed release. That runtime requires an external PostgreSQL database, an explicit schema migration, an HTTPS public origin, and an operator-managed host. The revised [production setup proposal](docs/PRODUCTION_SETUP.md) uses Cloudflare Workers, per-room Durable Objects, D1, and private R2, with account-based resume and runtime secrets. It records the required runtime/storage port and revised costs; the Cloudflare implementation and resource provisioning are still pending.
+DeepSeek Flash is connected to authenticated Cloudflare jobs through a durable reservation ledger. An owner, teacher, or DM can consent to a bounded request and receive a draft; simulation, validation, human approval, and activation remain separate. Configured daily/monthly budgets are required and default to zero. Local browser tests use a synthetic provider; the separate [provider verification](docs/AI_PROVIDER_VERIFICATION.md) records earlier bounded live API checks. The Node guest runtime keeps AI disabled.
+
+Public uploads remain disabled on Cloudflare until private R2 storage and scanning are integrated. The invoice sample case, manual verified-source review, deterministic calculations, and exports remain available. Local Node development supports the existing private filesystem uploads.
+
+The [production setup](docs/PRODUCTION_SETUP.md) uses Workers Static Assets/API, one SQLite Durable Object per room, D1 identity/session/directory records, and a separate Billing Durable Object. No Render or Supabase service is required. The included Dockerfile packages the alternate Node/PostgreSQL runtime and has not been deployed. See [local development](docs/LOCAL_DEVELOPMENT.md) for both test paths and [release scope](docs/CLOUDFLARE_RELEASE.md) for provisioning, costs, and remaining acceptance checks.
 
 `docs/source-baseline.json` records the approved local source snapshot. It is provenance for this checkout, not imported Sites history or a production release record.

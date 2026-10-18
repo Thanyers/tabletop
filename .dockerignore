@@ -9,6 +9,8 @@ dist
 server/.data
 coverage
 test-results
+.wrangler
+worker-build
 playwright-report
 *.tsbuildinfo
 *.log

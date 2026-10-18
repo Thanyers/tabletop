@@ -336,6 +336,116 @@ describe('R1 domain engines', () => {
     expect(state.characters.find((character) => character.id === 'pip')?.hp).toBe(6);
   });
 
+  it('freezes a pending reaction across serialized pause and restores only its remaining time', () => {
+    const baseNow = 1_800_000_000_000;
+    const dm = context('dm', 'dm-1', undefined, baseNow);
+    const at = (offset: number) => ({ ...dm, now: baseNow + offset });
+    let state = encounterState(createDomain('encounter', dm));
+    state = encounterState(step(state, 'encounter.declareHit', { target: 'pip' }, at(1_000)));
+    const beforePause = structuredClone(state.pendingHit);
+    if (!beforePause) throw new Error('Expected a pending hit.');
+    const startingRevision = state.dataRevision;
+    const startingEventCount = state.events.length;
+
+    state = encounterState(step(state, 'encounter.pause', {}, at(12_000)));
+    expect(state.paused).toEqual({ at: baseNow + 12_000, remainingReactionMs: 19_000 });
+    expect(state.pendingHit).toEqual(beforePause);
+    expect(state.dataRevision).toBe(startingRevision + 1);
+    expect(state.ruleRevision).toBe(0);
+    expect(state.events).toHaveLength(startingEventCount + 1);
+    expect(state.events.at(-1)?.text).toContain('paused');
+
+    const persisted = JSON.parse(JSON.stringify(state)) as EncounterState;
+    state = encounterState(step(persisted, 'encounter.resume', {}, at(2_000_000)));
+    expect(state.paused).toBeUndefined();
+    expect(state.pendingHit?.deadline).toBe(baseNow + 2_019_000);
+    expect(state.pendingHit?.roll).toBe(beforePause.roll);
+    expect(state.pendingHit?.damage).toBe(beforePause.damage);
+    expect(state.seed).toBe(persisted.seed);
+    expect(state.characters).toEqual(persisted.characters);
+    expect(state.dataRevision).toBe(startingRevision + 2);
+    expect(state.ruleRevision).toBe(0);
+    expect(state.events).toHaveLength(startingEventCount + 2);
+    expect(state.events.at(-1)?.text).toContain('resumed');
+  });
+
+  it('keeps expired reactions expired, enforces the 30-second cap, and handles an idle pause', () => {
+    const baseNow = 1_800_000_000_000;
+    const dm = context('dm', 'dm-1', undefined, baseNow);
+    const at = (offset: number) => ({ ...dm, now: baseNow + offset });
+    let expired = encounterState(createDomain('encounter', dm));
+    expired = encounterState(step(expired, 'encounter.declareHit', { target: 'pip' }, at(1_000)));
+    const originalDeadline = expired.pendingHit?.deadline;
+    if (originalDeadline === undefined) throw new Error('Expected a reaction deadline.');
+    expired = encounterState(step(expired, 'encounter.pause', {}, { ...dm, now: originalDeadline + 1 }));
+    expect(expired.paused?.remainingReactionMs).toBe(0);
+    expired = encounterState(step(expired, 'encounter.resume', {}, at(100_000)));
+    expect(expired.pendingHit?.deadline).toBe(baseNow + 100_000);
+    expect(() => step(expired, 'encounter.shield', { target: 'pip' }, context('player', 'mira-actor', 'mira', baseNow + 100_000)))
+      .toThrowError(expect.objectContaining({ code: 'REACTION_CLOSED' }));
+
+    let capped = encounterState(createDomain('encounter', dm));
+    capped = encounterState(step(capped, 'encounter.declareHit', { target: 'pip' }, at(1_000)));
+    if (capped.pendingHit) capped.pendingHit.deadline = baseNow + 60_000;
+    capped = encounterState(step(capped, 'encounter.pause', {}, at(2_000)));
+    expect(capped.paused?.remainingReactionMs).toBe(30_000);
+
+    let idle = encounterState(createDomain('encounter', dm));
+    idle = encounterState(step(idle, 'encounter.pause', {}, at(1)));
+    expect(idle.paused).toEqual({ at: baseNow + 1, remainingReactionMs: null });
+    idle = encounterState(step(idle, 'encounter.resume', {}, at(2)));
+    expect(idle.pendingHit).toBeNull();
+    expect(idle.paused).toBeUndefined();
+  });
+
+  it('blocks gameplay and activation while paused and rejects forged roles, states, clocks, and duplicate transitions', () => {
+    const baseNow = 1_800_000_000_000;
+    const dm = context('dm', 'dm-1', undefined, baseNow);
+    const at = (offset: number) => ({ ...dm, now: baseNow + offset });
+    let state = encounterState(createDomain('encounter', dm));
+    state = encounterState(step(state, 'evolve.propose', { change: {
+      kind: 'encounter', rule: { allyTarget: true, apCost: 1, oncePerTurn: true },
+    } }, dm));
+    state = encounterState(step(state, 'evolve.simulate', {}, dm));
+    state = encounterState(step(state, 'evolve.validate', {}, dm));
+    state = encounterState(step(state, 'evolve.approve', {}, dm));
+    state = encounterState(step(state, 'encounter.declareHit', { target: 'pip' }, at(1)));
+    state = encounterState(step(state, 'encounter.pause', {}, at(2)));
+
+    expect(() => step(state, 'encounter.declareHit', { target: 'mira' }, at(3)))
+      .toThrowError(expect.objectContaining({ code: 'ENCOUNTER_PAUSED' }));
+    expect(() => step(state, 'encounter.shield', { target: 'pip' }, context('player', 'mira-actor', 'mira', baseNow + 3)))
+      .toThrowError(expect.objectContaining({ code: 'ENCOUNTER_PAUSED' }));
+    expect(() => step(state, 'encounter.resolve', {}, at(3)))
+      .toThrowError(expect.objectContaining({ code: 'ENCOUNTER_PAUSED' }));
+    expect(() => step(state, 'encounter.endTurn', {}, at(3)))
+      .toThrowError(expect.objectContaining({ code: 'ENCOUNTER_PAUSED' }));
+    expect(() => step(state, 'evolve.activate', {}, at(3)))
+      .toThrowError(expect.objectContaining({ code: 'ENCOUNTER_PAUSED' }));
+    expect(() => step(state, 'encounter.pause', {}, at(3)))
+      .toThrowError(expect.objectContaining({ code: 'ENCOUNTER_ALREADY_PAUSED' }));
+    expect(() => step(state, 'encounter.pause', { injected: true }, at(3)))
+      .toThrowError(DomainError);
+    expect(() => step(state, 'encounter.pause', {}, context('player', 'mira-actor', 'mira', baseNow + 3)))
+      .toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+    expect(() => step(state, 'encounter.resume', {}, { ...dm, now: baseNow + 1 }))
+      .toThrowError(expect.objectContaining({ code: 'INVALID_CLOCK' }));
+    expect(() => step(state, 'encounter.resume', {}, at(3_000)))
+      .not.toThrow();
+
+    const resumed = encounterState(step(state, 'encounter.resume', {}, at(3_000)));
+    expect(() => step(resumed, 'encounter.resume', {}, at(3_001)))
+      .toThrowError(expect.objectContaining({ code: 'ENCOUNTER_NOT_PAUSED' }));
+    expect(() => step(encounterState(createDomain('encounter', dm)), 'encounter.pause', {}, { ...dm, now: Number.NaN }))
+      .toThrowError(expect.objectContaining({ code: 'INVALID_CLOCK' }));
+    const invalidPauseState = structuredClone(state);
+    if (invalidPauseState.paused) invalidPauseState.paused.remainingReactionMs = 30_001;
+    expect(() => step(invalidPauseState, 'encounter.resume', {}, at(3_000)))
+      .toThrowError(expect.objectContaining({ code: 'INVALID_PAUSE_STATE' }));
+    expect(() => step(resumed, 'evolve.activate', {}, context('player', 'mira-actor', 'mira', baseNow + 3_001)))
+      .toThrowError(expect.objectContaining({ code: 'FORBIDDEN' }));
+  });
+
   it('rejects unknown keys, unsafe amounts, and commands from the wrong role', () => {
     const owner = context('owner', 'owner-1');
     const teacher = context('teacher', 'teacher-1');

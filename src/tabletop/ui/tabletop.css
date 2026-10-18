@@ -772,6 +772,20 @@
   .tt-invite-link-row { flex-direction: column; }
 }
 
+.tt-ai-launch { min-height: 29px; gap: 6px; padding-inline: 9px; border-color: #dbe7e0; color: #416b5d; background: #f6faf7; font-size: 10px; white-space: nowrap; }
+.tt-ai-launch:hover { border-color: #c4dbcf; background: #edf6f0; }
+.tt-upload-card__copy > small { font-size: 9px; line-height: 1.45; }
+.tt-encounter-paused { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 9px 10px; border: 1px solid #ebd9b4; border-radius: 5px; color: #805f2e; background: #fff8e9; font-size: 10px; line-height: 1.45; }
+.tt-encounter-paused svg { flex: 0 0 auto; margin-top: 1px; }
+.tt-turn-pill.is-paused { border-color: #ead9b4; color: #805f2e; background: #fff8e9; }
+.tt-turn-pill.is-paused i { background: #bd8b3c; }
+.tt-reaction-window--paused { border-color: #ead9b4 !important; background: #fffaf0 !important; }
+.tt-reaction-window--paused .tt-countdown { color: #805f2e; }
+
+@media (max-width: 760px) {
+  .tt-ai-launch { min-height: 32px; padding-inline: 8px; font-size: 9px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tt-app *, .tt-app *::before, .tt-app *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .001ms !important; }
 }

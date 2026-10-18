@@ -101,7 +101,10 @@ const mimeTypes: Readonly<Record<string, string>> = {
 };
 
 const inviteRedemptionSchema = z.object({ ticket: z.string() }).strict();
-const inviteCreationSchema = z.object({ seat: z.enum(['learner-1', 'learner-2', 'mira', 'pip']) }).strict();
+const inviteCreationSchema = z.object({
+  seat: z.enum(['learner-1', 'learner-2', 'mira', 'pip']),
+  replaceOutstanding: z.boolean().optional(),
+}).strict();
 
 function normalizedOrigin(value: string): string | null {
   try {
@@ -487,7 +490,9 @@ export function createApp(options: CreateAppOptions): TabletopApp {
             const body = await readJsonBody(request, MAX_JSON_BODY_BYTES);
             const parsed = inviteCreationSchema.safeParse(body);
             if (!parsed.success) throw new AuthorityError('INVALID_REQUEST');
-            const result = await authority.createInvite(session, invitesWorkspaceId, parsed.data.seat);
+            const result = await authority.createInvite(
+              session, invitesWorkspaceId, parsed.data.seat, parsed.data.replaceOutstanding === true,
+            );
             apiJson(response, 201, result, isHttps);
             status = 201;
           } else {

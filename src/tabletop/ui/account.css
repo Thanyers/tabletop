@@ -1,0 +1,126 @@
+.tt-account-gate,
+.tt-account-gate * { box-sizing: border-box; }
+.tt-account-gate { display: grid; min-height: 100dvh; place-items: center; padding: 24px; color: #243548; background: #f2f4f5; font: 400 14px/1.55 Manrope, 'Noto Sans Thai', system-ui, sans-serif; }
+.tt-account-gate__card { display: grid; width: min(100%, 468px); gap: 18px; padding: clamp(22px, 6vw, 38px); border: 1px solid #dce5e3; border-radius: 14px; background: #fcfdfb; box-shadow: 0 18px 48px #24354812; }
+.tt-account-gate__card > .tt-brand { width: fit-content; margin-bottom: 12px; }
+.tt-account-gate__eyebrow { display: flex; align-items: center; gap: 8px; color: #24796b; font: 650 10px/1.4 'IBM Plex Mono', monospace; letter-spacing: .09em; }
+.tt-account-gate__card h1 { margin: -8px 0 -10px; color: #243548; font-size: clamp(22px, 5vw, 28px); font-weight: 750; letter-spacing: -.7px; line-height: 1.22; }
+.tt-account-gate__copy { margin: 0; color: #697987; font-size: 13px; }
+.tt-account-gate__invite { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 12px; border: 1px solid #d6e8df; border-radius: 7px; color: #416b5d; background: #f0f7f2; font-size: 12px; }
+.tt-account-gate__invite svg { flex: 0 0 auto; margin-top: 2px; }
+.tt-account-gate__notice { display: flex; align-items: flex-start; gap: 9px; padding: 10px; border: 1px solid #dce5e8; border-radius: 6px; color: #49687a; background: #f0f6f8; font-size: 12px; }
+.tt-account-gate__notice > svg { flex: 0 0 auto; margin-top: 2px; }
+.tt-account-gate__notice > span { flex: 1; }
+.tt-account-gate__notice > button { display: grid; flex: 0 0 24px; place-items: center; width: 24px; height: 24px; margin: -4px; border: 0; border-radius: 4px; color: inherit; background: transparent; font-size: 18px; }
+.tt-account-gate__notice--error { border-color: #edd8cf; color: #8e4c3e; background: #fcf3ef; }
+.tt-account-gate__notice--success { border-color: #d8e6df; color: #426957; background: #eff7f1; }
+.tt-account-gate__google { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 0 14px; border: 1px solid #d6e0de; border-radius: 7px; color: #243548; background: #fff; font-size: 13px; font-weight: 700; text-decoration: none; box-shadow: 0 2px 5px #2435480a; }
+.tt-account-gate__google:hover { border-color: #91b9ac; background: #f8fbf9; }
+.tt-account-gate__google > span:nth-child(2) { flex: 1; }
+.tt-account-gate__google > svg { color: #24796b; }
+.tt-account-gate__google-mark { display: grid; width: 23px; height: 23px; place-items: center; border: 1px solid #e4e9e8; border-radius: 50%; color: #315eb0; background: white; font-size: 13px; font-weight: 800; }
+.tt-account-gate__retry { display: flex; min-height: 38px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 6px; color: #526c68; background: transparent; font-size: 12px; font-weight: 650; }
+.tt-account-gate__retry:hover { background: #f0f5f2; }
+.tt-account-gate__retry:disabled { cursor: wait; opacity: .65; }
+.tt-account-gate__privacy { margin: 0; padding-top: 12px; border-top: 1px solid #e6ecea; color: #899692; font-size: 10px; line-height: 1.5; }
+.tt-account-gate__spin { animation: tt-account-spin .9s linear infinite; }
+@keyframes tt-account-spin { to { transform: rotate(360deg); } }
+
+.tt-account-badge { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.tt-account-badge__identity { display: grid; min-width: 0; max-width: 150px; gap: 1px; }
+.tt-account-badge__identity strong, .tt-account-badge__identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-account-badge__identity strong { color: #435650; font-size: 10px; font-weight: 700; }
+.tt-account-badge__identity small { color: #8a9691; font-size: 8px; }
+.tt-account-badge__signout { display: inline-flex; flex: 0 0 auto; min-height: 30px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #e0e7e4; border-radius: 5px; color: #657874; background: #f7f9f7; font-size: 9px; font-weight: 650; white-space: nowrap; }
+.tt-account-badge__signout:hover { border-color: #cbd8d3; background: #eef4f0; }
+.tt-account-badge__signout:disabled { cursor: wait; opacity: .55; }
+.tt-account-badge button:focus-visible, .tt-account-gate button:focus-visible, .tt-account-gate a:focus-visible { outline: 2px solid #315eb0; outline-offset: 3px; }
+
+.tt-account-tools { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.tt-account-admin-trigger { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; gap: 6px; padding: 0 9px; border: 1px solid #dce6e1; border-radius: 5px; color: #456d61; background: #f5f9f6; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.tt-account-admin-trigger:hover { border-color: #b8d2c5; background: #edf6f0; }
+.tt-account-admin-trigger:disabled { cursor: wait; opacity: .55; }
+.tt-account-tools button:focus-visible, .tt-admin-dialog button:focus-visible { outline: 2px solid #315eb0; outline-offset: 3px; }
+
+.tt-admin-backdrop { position: fixed; z-index: 200; inset: 0; display: grid; place-items: center; padding: 20px; background: #17273270; backdrop-filter: blur(2px); }
+.tt-admin-dialog { display: grid; width: min(100%, 700px); max-height: min(86dvh, 760px); grid-template-rows: auto auto minmax(0,1fr) auto; gap: 14px; overflow: hidden; padding: 22px; border: 1px solid #dce6e3; border-radius: 10px; color: #243548; background: #fbfcfa; box-shadow: 0 22px 70px #15273135; }
+.tt-admin-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.tt-admin-dialog > header h2 { margin: 6px 0 0; font-size: 20px; letter-spacing: -.3px; }
+.tt-admin-close { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid #dfe7e3; border-radius: 5px; color: #687d76; background: #fff; }
+.tt-admin-intro { margin: 0; color: #72817d; font-size: 12px; }
+.tt-admin-list { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 9px; }
+.tt-admin-row { display: grid; gap: 9px; padding: 12px; border: 1px solid #e1e8e4; border-radius: 6px; background: #fff; }
+.tt-admin-row__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tt-admin-row__head > strong { color: #334e4a; font-size: 12px; text-transform: capitalize; }
+.tt-admin-status { padding: 3px 7px; border: 1px solid #d8e7df; border-radius: 4px; color: #46715b; background: #f0f8f2; font: 600 9px/1.35 'IBM Plex Mono', monospace; text-transform: uppercase; }
+.tt-admin-status--paused { border-color: #ecdcbf; color: #946626; background: #fff8ea; }
+.tt-admin-row dl { display: grid; grid-template-columns: 1fr 1.1fr 1fr auto; gap: 9px; margin: 0; }
+.tt-admin-row dl > div { min-width: 0; display: grid; gap: 3px; }
+.tt-admin-row dt { color: #8b9994; font: 600 8px/1.4 'IBM Plex Mono', monospace; text-transform: uppercase; }
+.tt-admin-row dd { overflow-wrap: anywhere; margin: 0; color: #52645e; font-size: 10px; }
+.tt-admin-loading, .tt-admin-empty { display: flex; align-items: center; gap: 8px; min-height: 54px; margin: 0; color: #70827a; font-size: 12px; }
+.tt-admin-dialog > footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; padding-top: 11px; border-top: 1px solid #e6ece8; }
+.tt-admin-dialog > footer > span { flex: 1; color: #899792; font: 9px 'IBM Plex Mono', monospace; }
+
+.tt-ai-proposal { display: grid; gap: 11px; margin: 0 0 13px; padding: 14px; border: 1px solid #dce8e3; border-radius: 7px; background: linear-gradient(135deg, #f8fbf8 0%, #f1f7f5 100%); scroll-margin-top: 12px; }
+.tt-ai-proposal__head { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.tt-ai-proposal__icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 1px solid #c9e0d5; border-radius: 6px; color: #24796b; background: #eaf5ee; }
+.tt-ai-proposal__head h2 { margin: 2px 0 0; color: #314a43; font-size: 14px; line-height: 1.3; }
+.tt-ai-proposal__manual { margin-left: auto; color: #748780; font: 8px/1.4 'IBM Plex Mono', monospace; text-align: right; }
+.tt-ai-proposal__form { display: grid; gap: 8px; }
+.tt-ai-proposal__form > label:not(.tt-ai-proposal__consent) { display: grid; gap: 5px; color: #536d63; font-size: 10px; font-weight: 700; }
+.tt-ai-proposal__form textarea, .tt-ai-proposal__form select { width: 100%; padding: 8px 9px; border: 1px solid #dce6e2; border-radius: 5px; color: #344e46; background: #fff; font: 400 11px/1.5 Manrope, 'Noto Sans Thai', sans-serif; }
+.tt-ai-proposal__form textarea { min-height: 68px; resize: vertical; }
+.tt-ai-proposal__form textarea::placeholder { color: #a1aea8; }
+.tt-ai-proposal__source small { color: #8a9690; font-size: 9px; font-weight: 500; }
+.tt-ai-proposal__privacy { padding: 9px 10px; border-left: 2px solid #85b5a2; color: #61786e; background: #fff; }
+.tt-ai-proposal__privacy strong { display: block; margin-bottom: 3px; font: 600 9px 'IBM Plex Mono', monospace; letter-spacing: .04em; text-transform: uppercase; }
+.tt-ai-proposal__privacy p { margin: 0; font-size: 10px; line-height: 1.5; }
+.tt-ai-proposal__consent { display: flex; align-items: flex-start; gap: 7px; color: #64776f; font-size: 10px; }
+.tt-ai-proposal__consent input { margin: 2px 0 0; accent-color: #24796b; }
+.tt-ai-proposal__form > .tt-button { justify-self: start; min-height: 34px; font-size: 10px; }
+.tt-ai-proposal__unavailable, .tt-ai-proposal__error { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 9px; border: 1px solid #eadbc0; border-radius: 5px; color: #84652e; background: #fffaf0; font-size: 10px; }
+.tt-ai-proposal__unavailable svg, .tt-ai-proposal__error svg { flex: 0 0 auto; margin-top: 1px; }
+.tt-ai-proposal__job { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 9px; border: 1px solid #dce8e3; border-radius: 5px; color: #5c766c; background: #fff; }
+.tt-ai-proposal__job-mark { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; color: #8a7449; }
+.tt-ai-proposal__job-mark.is-done { border-radius: 50%; color: #25745f; background: #e7f5ec; }
+.tt-ai-proposal__job > span:nth-child(2) { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.tt-ai-proposal__job strong { color: #405b51; font-size: 10px; }
+.tt-ai-proposal__job small { color: #85948d; font-size: 9px; line-height: 1.4; }
+.tt-ai-proposal__job > .tt-button { min-height: 28px; padding-inline: 7px; font-size: 9px; }
+.tt-ai-proposal__message, .tt-ai-proposal__footer { margin: 0; color: #71837b; font-size: 9px; line-height: 1.5; }
+.tt-ai-proposal__error { border-color: #edd8cf; color: #8e4c3e; background: #fcf3ef; }
+.tt-ai-proposal__footer { padding-top: 7px; border-top: 1px solid #e1eae5; }
+
+@media (max-width: 760px) {
+  .tt-account-badge { gap: 5px; }
+  .tt-account-badge__identity { max-width: 82px; }
+  .tt-account-badge__identity small { display: none; }
+  .tt-account-badge__signout { min-height: 29px; gap: 4px; padding-inline: 6px; font-size: 8px; }
+}
+
+@media (max-width: 560px) {
+  .tt-account-tools { gap: 5px; }
+  .tt-account-admin-trigger { min-height: 29px; gap: 4px; padding: 0 6px; font-size: 9px; }
+  .tt-admin-backdrop { align-items: end; padding: 9px; }
+  .tt-admin-dialog { max-height: 90dvh; gap: 11px; padding: 16px; border-radius: 9px 9px 5px 5px; }
+  .tt-admin-row dl { grid-template-columns: 1fr 1fr; }
+  .tt-admin-dialog > footer { flex-wrap: wrap; }
+  .tt-admin-dialog > footer > span { flex-basis: 100%; }
+  .tt-ai-proposal { padding: 11px; }
+  .tt-ai-proposal__manual { max-width: 102px; font-size: 7px; }
+  .tt-ai-proposal__job { align-items: flex-start; flex-wrap: wrap; }
+  .tt-ai-proposal__job > span:nth-child(2) { min-width: calc(100% - 40px); }
+  .tt-ai-proposal__job > .tt-button { margin-left: 31px; }
+}
+
+@media (max-width: 430px) {
+  .tt-account-badge__identity { max-width: 52px; }
+  .tt-account-badge__identity strong { font-size: 8px; }
+  .tt-account-badge__signout { width: 29px; min-width: 29px; justify-content: center; padding: 0; }
+  .tt-account-badge__signout > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-account-gate *, .tt-account-gate *::before, .tt-account-gate *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .001ms !important; }
+}

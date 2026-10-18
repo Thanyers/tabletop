@@ -33,12 +33,42 @@ export interface UploadRequest {
 
 export interface ModelJob {
   id: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'complete' | 'failed';
   message?: string;
   candidateId?: string;
 }
 
+export interface TabletopCapabilities {
+  uploads: boolean;
+  model: { enabled: boolean; reason: string };
+}
+
+export interface AdminWorkspace {
+  id: string;
+  kind: WorkspaceView['kind'];
+  createdAt: string | number;
+  ownerId: string;
+  memberCount: number;
+  status: 'active' | 'paused';
+}
+
+export interface AdminWorkspacePage {
+  workspaces: AdminWorkspace[];
+  next: string | null;
+}
+
 export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline';
+
+export interface GoogleAuthUser {
+  id: string;
+  name: string;
+  email: string;
+  isAdmin: boolean;
+}
+
+export type AuthStatus =
+  | { mode: 'guest' }
+  | { mode: 'google'; authenticated: boolean; loginUrl: string; user?: GoogleAuthUser };
 
 async function readResponse<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null) as Record<string, unknown> | null;
@@ -71,7 +101,56 @@ function csrfHeaders(token: string, headers?: HeadersInit): Headers {
 
 export class TabletopClient {
   private csrfToken = '';
+  private authMode: 'guest' | 'google' = 'guest';
   private openingSession: Promise<SessionView> | null = null;
+
+  async authStatus(): Promise<AuthStatus> {
+    let response: Response;
+    try {
+      response = await fetch('/api/auth/status', { credentials: 'same-origin' });
+    } catch {
+      throw new ApiFailure('The sign-in service cannot be reached. Check your connection and try again.', 0);
+    }
+    // The local development server has no account route; keep its guest flow unchanged.
+    if (response.status === 404) {
+      this.authMode = 'guest';
+      return { mode: 'guest' };
+    }
+    const body = await readResponse<Partial<AuthStatus>>(response);
+    if (body?.mode !== 'google' || typeof body.authenticated !== 'boolean' || typeof body.loginUrl !== 'string') {
+      throw new ApiFailure('The sign-in service returned an unexpected response.', response.status || 502);
+    }
+    let loginUrl: string;
+    try {
+      const parsed = new URL(body.loginUrl, window.location.origin);
+      if (parsed.origin !== window.location.origin || parsed.username || parsed.password) throw new Error('not same-origin');
+      loginUrl = `${parsed.pathname}${parsed.search}`;
+    } catch {
+      throw new ApiFailure('The Google sign-in link could not be verified as a same-site link.', 502);
+    }
+    const user = body.user;
+    if (user && (typeof user.id !== 'string' || typeof user.name !== 'string' || typeof user.email !== 'string' || typeof user.isAdmin !== 'boolean')) {
+      throw new ApiFailure('The sign-in service returned invalid account details.', 502);
+    }
+    this.authMode = 'google';
+    return { mode: 'google', authenticated: body.authenticated, loginUrl, ...(user ? { user } : {}) };
+  }
+
+  async capabilities(): Promise<TabletopCapabilities> {
+    const response = await this.fetchResponse('/api/capabilities', 'The workspace features could not be checked.');
+    if (response.status === 404) return { uploads: true, model: { enabled: false, reason: 'AI proposals are not configured on this local server.' } };
+    const body = await readResponse<{ uploads?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    if (typeof body.uploads !== 'boolean' || typeof body.model?.enabled !== 'boolean') {
+      throw new ApiFailure('The workspace feature settings could not be read.', 502);
+    }
+    return {
+      uploads: body.uploads,
+      model: {
+        enabled: body.model.enabled,
+        reason: typeof body.model.reason === 'string' ? body.model.reason : '',
+      },
+    };
+  }
 
   async openSession(): Promise<SessionView> {
     if (this.openingSession) return this.openingSession;
@@ -88,6 +167,9 @@ export class TabletopClient {
     }
 
     if (response.status === 401) {
+      if (this.authMode === 'google') {
+        throw new ApiFailure('Your Google sign-in session has expired. Sign in again to continue.', 401);
+      }
       try {
         response = await fetch('/api/session', {
           method: 'POST',
@@ -103,6 +185,34 @@ export class TabletopClient {
     const session = await readResponse<SessionView>(response);
     this.csrfToken = session.csrfToken;
     return session;
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.postJson<unknown>('/api/auth/logout', {});
+      this.csrfToken = '';
+    } catch (error) {
+      if (error instanceof ApiFailure && error.status === 401) this.csrfToken = '';
+      throw error;
+    }
+  }
+
+  async adminWorkspaces(after?: string): Promise<AdminWorkspacePage> {
+    const suffix = after ? `?after=${encodeURIComponent(after)}` : '';
+    const body = await this.getJson<{ workspaces?: unknown; next?: unknown }>(`/api/admin/workspaces${suffix}`);
+    if (!Array.isArray(body.workspaces)) throw new ApiFailure('Workspace metadata could not be read.', 502);
+    const workspaces = body.workspaces.filter((item): item is AdminWorkspace => {
+      if (typeof item !== 'object' || item === null) return false;
+      const row = item as Partial<AdminWorkspace>;
+      return typeof row.id === 'string'
+        && (row.kind === 'invoice' || row.kind === 'teaching' || row.kind === 'encounter')
+        && (typeof row.createdAt === 'string' || typeof row.createdAt === 'number')
+        && typeof row.ownerId === 'string'
+        && typeof row.memberCount === 'number'
+        && (row.status === 'active' || row.status === 'paused');
+    });
+    if (workspaces.length !== body.workspaces.length) throw new ApiFailure('Workspace metadata contained an invalid entry.', 502);
+    return { workspaces, next: typeof body.next === 'string' ? body.next : null };
   }
 
   async createWorkspace(kind: WorkspaceView['kind'], title?: string): Promise<WorkspaceView> {
@@ -135,8 +245,8 @@ export class TabletopClient {
     return this.postWithRetry<CommandAck>(`/api/workspaces/${encodeURIComponent(view.id)}/uploads`, body);
   }
 
-  async invite(workspaceId: string, seat: string): Promise<WorkspaceInvite> {
-    return this.postJson<WorkspaceInvite>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites`, { seat });
+  async invite(workspaceId: string, seat: string, replaceOutstanding = false): Promise<WorkspaceInvite> {
+    return this.postJson<WorkspaceInvite>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites`, { seat, ...(replaceOutstanding ? { replaceOutstanding: true } : {}) });
   }
 
   async redeem(ticket: string): Promise<WorkspaceView> {
@@ -158,15 +268,24 @@ export class TabletopClient {
     return response.blob();
   }
 
-  async requestModel(view: WorkspaceView, prompt: string, sourceId: string, commandId = crypto.randomUUID()): Promise<ModelJob> {
-    return this.postWithRetry<ModelJob>(`/api/workspaces/${encodeURIComponent(view.id)}/model`, {
+  async requestModel(view: WorkspaceView, prompt: string, sourceId?: string, commandId: string = crypto.randomUUID()): Promise<ModelJob> {
+    const body: { prompt: string; sourceId?: string; consent: true; expectedRevision: string; expectedEpoch: number; commandId: string } = {
       prompt,
-      sourceId,
       consent: true,
       expectedRevision: view.revision,
       expectedEpoch: view.epoch,
       commandId,
-    });
+    };
+    if (sourceId) body.sourceId = sourceId;
+    return this.postWithRetry<ModelJob>(`/api/workspaces/${encodeURIComponent(view.id)}/model`, body);
+  }
+
+  async modelJob(workspaceId: string, jobId: string): Promise<ModelJob> {
+    const job = await this.getJson<ModelJob>(`/api/workspaces/${encodeURIComponent(workspaceId)}/model/${encodeURIComponent(jobId)}`);
+    if (typeof job.id !== 'string' || !['queued', 'running', 'completed', 'complete', 'failed'].includes(job.status)) {
+      throw new ApiFailure('The AI proposal status could not be read.', 502);
+    }
+    return job;
   }
 
   subscribe(
@@ -216,13 +335,16 @@ export class TabletopClient {
   }
 
   private async getJson<T>(path: string): Promise<T> {
-    let response: Response;
-    try {
-      response = await fetch(path, { credentials: 'same-origin' });
-    } catch {
-      throw new ApiFailure('The table could not be reached. Check your connection and try again.', 0);
-    }
+    const response = await this.fetchResponse(path, 'The table could not be reached. Check your connection and try again.');
     return readResponse<T>(response);
+  }
+
+  private async fetchResponse(path: string, failureMessage: string): Promise<Response> {
+    try {
+      return await fetch(path, { credentials: 'same-origin' });
+    } catch {
+      throw new ApiFailure(failureMessage, 0);
+    }
   }
 
   private async postJson<T>(path: string, body: unknown): Promise<T> {

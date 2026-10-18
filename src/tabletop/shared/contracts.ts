@@ -42,7 +42,8 @@ export interface TeachingState extends DomainBase { kind: 'teaching'; parameters
 export interface Character { id: 'mira' | 'pip' | 'goblin'; name: string; hp: number; maxHp: number; ap: number; turnGeneration: number; shieldUsedGeneration: number | null }
 export interface PendingHit { id: string; attacker: Character['id']; target: Character['id']; damage: number | null; roll: number | null; deadline: number; ruleRevision: number; shields: { actor: Character['id']; target: Character['id']; ruleRevision: number }[] }
 export interface EncounterEvent { id: string; text: string; createdAt: number }
-export interface EncounterState extends DomainBase { kind: 'encounter'; characters: Character[]; turn: Character['id']; phase: 'turn.start' | 'reaction.open' | 'action.resolved' | 'turn.end'; pendingHit: PendingHit | null; rule: EncounterRule; events: EncounterEvent[]; dmNote?: string; seed: number }
+export interface EncounterPausedState { at: number; remainingReactionMs: number | null }
+export interface EncounterState extends DomainBase { kind: 'encounter'; characters: Character[]; turn: Character['id']; phase: 'turn.start' | 'reaction.open' | 'action.resolved' | 'turn.end'; pendingHit: PendingHit | null; rule: EncounterRule; events: EncounterEvent[]; dmNote?: string; seed: number; paused?: EncounterPausedState }
 export type DomainState = InvoiceState | TeachingState | EncounterState;
 export interface DomainCommand { type: string; payload: unknown }
 export interface DomainDecision { state: DomainState; label: string }

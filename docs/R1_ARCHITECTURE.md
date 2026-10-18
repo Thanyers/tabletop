@@ -1,61 +1,71 @@
 # R1 implementation boundaries
 
-Status: local implementation candidate, 18 October 2026. [Local verification](R1_LOCAL_VERIFICATION.md) records the executed checks. The earlier [master plan](../handoff/Final/planning-review/TABLETOP_R1_MASTER_PLAN.md) remains a planning baseline; its hosted and live-model acceptance criteria have not all been completed.
+Status: local Cloudflare release candidate, 18 October 2026. The [release record](CLOUDFLARE_RELEASE.md) separates emulator evidence from pending hosted acceptance. The [master plan](../handoff/Final/planning-review/TABLETOP_R1_MASTER_PLAN.md) remains the product baseline.
 
-## One application, three workflows
+## Shared application and domain
 
-The React client renders invoice, teaching, and encounter workspaces through one typed capability registry and manifest compiler. The compiler validates ports, required inputs, capability versions, visibility, duplicate IDs, resource limits, and cycles before evaluating a plan. It returns no partial plan on failure. The invoice surcharge adds a review composition; physics representations derive from one model. Components are curated application code. The application does not execute model-generated JavaScript.
+The React client renders invoice, teaching, and encounter workspaces through a typed capability registry and manifest compiler. The compiler checks ports, required inputs, versions, visibility, duplicate IDs, limits, and cycles before evaluating a plan. It returns no partial plan on failure. Components are curated application code; the application does not execute model-generated JavaScript.
 
-`src/tabletop/shared/contracts.ts` defines the contracts. `src/tabletop/domain/` contains deterministic domain decisions and role projections. `src/tabletop/runtime/` compiles and evaluates the display graph. The domain can run on the server without React; the graph calculates views from a projection that has already been authorized by the server.
+`src/tabletop/shared/contracts.ts` defines the contracts. `src/tabletop/domain/` contains deterministic decisions and role projections. `src/tabletop/runtime/` calculates displays from an authorized projection. `server/authority.ts` applies the same command rules through either the PostgreSQL/PGlite repository or the Cloudflare room repository.
 
 ```mermaid
 flowchart LR
-  Browser[Canvas and focus workbench] -->|typed command + revision + idempotency key| API[Node HTTP authority]
-  API -->|transaction| SQL[(Workspace / events / approvals / outbox)]
-  SQL --> Dispatcher[Bounded outbox dispatcher]
-  Dispatcher -->|authorized snapshot| Browser
-  API --> Parser[Bounded CSV / text PDF import]
-  Parser --> Objects[(Private local source objects)]
+  Browser[Canvas and focus workbench] --> Edge[Worker: session, Origin, CSRF, limits]
+  Edge --> D1[(D1: identity, session, directory)]
+  Edge --> Room[Room Durable Object: authority]
+  Room --> SQLite[(Room SQLite: game, members, receipts, outbox)]
+  Room -->|ordered directory outbox| D1
+  Room --> Billing[Billing Durable Object: reserve, dispatch, settle]
+  Room -->|minimal consented input| DeepSeek[DeepSeek Flash]
+  Room -->|private WebSocket projection| Browser
 ```
 
-## Authority, persistence, and recovery
+## Cloudflare identity and sessions
 
-The Node service serves the built frontend, API, and WebSocket from one origin. HttpOnly SameSite cookies identify a session. Mutations require Origin and CSRF checks. The server derives role and membership from the session; client-supplied identities cannot grant authority. Invitations are one-use, seat-scoped, and expire after ten minutes, including their lost-ack retry window.
+Google OIDC in `cloudflare/auth.ts` validates state, a browser binding, PKCE, nonce, signature, issuer, audience/authorized party, token age, and verified email. Google subject identifies the stable account. The first verified login matching the configured admin email pins that subject; another account reusing the email cannot claim its privileges.
 
-Each command is bound to a workspace, epoch, opaque projected revision, and command ID. The transaction checks authority and current state before updating the domain, receipts, audit events, and outbox. Retries return the accepted receipt. A stale or changed command is refused. Approval is stored separately and bound to the exact candidate, source state, and validation proof. Rollback appends a new revision.
+An HttpOnly, SameSite cookie carries a random session token. D1 stores its hash, expiry, and revocation. Sessions idle out after 24 hours and expire after seven days. Logging in again with the same Google account recovers room membership without another invitation. Logout revokes that session; it does not erase a room or log out every other device. HTTPS uses `__Host-` cookies; loopback development uses separate cookie names.
 
-WebSockets send the latest authorized projection after commit. A private change that does not change a learner's visible projection does not send that learner an update. Per-peer sends are serialized and coalesced. The outbox dispatcher polls bounded batches; a reconnect or `/events` read resynchronizes a full snapshot. This implementation does not offer client event-by-event replay or exactly-once network delivery.
+Mutations require the configured Origin and CSRF token. The browser cannot grant itself a role or another actor ID. Room WebSockets recheck session expiry/revocation through D1 primary before private projections and on received messages. Socket attachments are references, not continuing authorization. Authentication failure blocks delivery.
 
-Local mode uses an on-disk PGlite database and a private filesystem object store. These are real local persistence, exercised across database close/reopen. Production mode requires external PostgreSQL, explicit HTTPS `PUBLIC_ORIGIN`, and a pre-applied schema. It refuses automatic production migration. Database schema version is 4; API and manifest schema versions are 1.
+## Rooms, invitations, and recovery
 
-Workspaces expire after seven days. Session idle/hard limits are 24 hours/seven days. Reset advances the epoch, revokes invited sessions, scrubs prior private content, and queues source-object deletion. Bounded expiry sweeps scrub expired workspaces, and the local bootstrap removes queued private files. Tombstones preserve only the minimal state needed to reject retries. These controls are not a backup or account-management service.
+A canonical UUID names each Room Durable Object, independently of its opaque runtime ID. SQLite persists identity, game state, membership, invitations, command receipts, approvals, snapshots, events, and outboxes. Saved Cloudflare rooms do not expire with a login or after seven days. Explicit reset advances the epoch, removes invited memberships, and scrubs previous private contents. Account deletion and configurable retention are outside this slice.
 
-## Evidence, imports, and calculations
+Invitations are one-use, seat-scoped, and valid for ten minutes. Only the room owner can invite. A pending invitation survives Google login in the same browser session and is redeemed as the verified account. Servers store bearer tickets only as hashes. An explicit revoke-and-reissue action can replace a lost unused link atomically for an unoccupied seat; it cannot evict a joined player.
 
-Invoice money uses integer satang; weight uses integer grams. Rule dates use inclusive start and exclusive end boundaries. Missing, duplicate, ambiguous, or unreviewed evidence remains unresolved. Imported shipment and invoice datasets replace their respective current rows, while source records, rules, and saved runs remain.
+Each command is bound to the room, epoch, opaque projected revision, actor, and command ID. A transaction validates authority and state before updating the domain, receipt, audit, and outbox. Matching retries return the receipt; conflicting or stale commands fail. Approval is bound to the candidate, source state, and validation proof. Rollback appends a revision.
 
-Local uploads accept bounded CSV, supported text-PDF templates, and rate-card text. Files start as `provided`; only explicit human review can mark them `verified`. Original objects have opaque immutable IDs and authenticated downloads. Exports escape HTML and neutralize spreadsheet formula prefixes. PDF parsing runs in a bounded child process with page, text, time, and memory limits. Scanned PDFs, arbitrary invoice layouts, encrypted PDFs, and active content are outside this slice.
+D1 provides discovery, not membership authority. Its directory stores opaque room references. My tables and admin metadata resolve references through current Room authorization. An ordered outbox records increasing membership sequences; D1 rejects older sequence/epoch writes. SQLite and D1 do not share a transaction. Retries repair index lag without using stale directory membership to authorize access.
 
-Public production uploads return a typed unavailable response until a private durable object store, quarantine/scanning path, and deletion/recovery workflow are integrated and tested. The local parser is not malware-scanning proof.
+Hibernating WebSockets send current authorized snapshots after commits. Hidden DM notes, rolls, and learner answers stay outside other roles' projections. Delivery is not exactly once; reconnect and view/event reads resynchronize a snapshot. Durable alarms cover pending work and reaction deadlines, and commands also check the server clock. DM pause stores remaining reaction time and blocks gameplay; resume restores that duration. Closing a tab alone does not pause an encounter.
 
-## AI boundary
+The admin panel exposes room metadata such as title, owner/members, kind, and status. It does not expose private game contents, impersonation, deletion, or support overrides.
 
-A DeepSeek Flash provider adapter now has bounded synthetic live-call evidence in [provider verification](AI_PROVIDER_VERIFICATION.md). It is not wired into the application: the UI uses manual typed rules and the HTTP model endpoint reports `MODEL_NOT_CONFIGURED`. The existing gateway's tests cover injected providers, reservation/deduplication, timeout, cancellation, and reset tombstones. Its daily reservation sum lives in scrubbed job JSON and must be replaced by a separate durable cost ledger before public AI use.
+## AI and cost control
 
-Before enabling AI in the app, connect atomic dispatch into the authority, durable accounting and quotas, source consent/preview, and the teaching/encounter adapters; then run the plan's holdout and failure tests. The owner selected live DeepSeek for this milestone; hosting budget and production resources remain pending. A proposal must still pass simulation, validation, human approval, and activation. No model can approve its own output.
+`cloudflare/ai.ts` dispatches DeepSeek Flash with explicit consent. Invoice requests include the selected verified source excerpt and relevant rules; teaching and encounter requests include bounded rule parameters. Private answers, DM notes, unrelated files, and event histories are excluded. Structured output is validated before creating a draft. The model cannot approve or activate it.
 
-## Hosting direction
+The Billing Durable Object reserves a conservative peak-price maximum before a provider call, limits concurrency and per-actor activity, and permits one dispatch per stable job ID. Valid usage settles once, including cached input charges. Unknown outcomes retain the reservation. Positive daily/monthly budgets and a provider key are required; defaults are zero. This ledger does not cover other applications using the key or Cloudflare infrastructure charges.
 
-The current implementation fits one long-running Node service with managed PostgreSQL in one region. Keeping the UI, API, and WebSocket on one origin simplifies cookie and Origin handling. The included Dockerfile packages that shape; no host, database, domain, billable service, or external migration has been created.
+Room jobs recheck epoch, revision, role, and session before committing. Duplicate commands do not redial the provider. Reset scrubs old job payloads. A failed completion-status write is reconciled against the command receipt, preserving a successfully committed draft. Uncertain provider outcomes after a restart are not automatically retried.
 
-The revised [production proposal](PRODUCTION_SETUP.md) follows the owner's preference for Cloudflare: Workers Static Assets/API, a SQLite Durable Object per room, D1 account/session/directory records, private R2 objects, and a separate Billing Durable Object. Supabase is not required. Room membership and game state remain authoritative in the room DO; the D1 room directory is a derived index. Outbox delivery and reconciliation bridge their separate transaction boundaries. Hibernating WebSockets and persisted alarm deadlines replace a continuously running Node dispatcher. These are proposed interfaces, not implemented Cloudflare behavior.
+Local browser acceptance uses a synthetic provider with the real local ledger and room commit. [Provider verification](AI_PROVIDER_VERIFICATION.md) records separate earlier bounded live API calls. Hosted latency, quotas, and quality acceptance across all workflows remain pending.
 
-The proposed directory contains opaque room references; private display metadata requires current room authorization. The room DO must revalidate session expiry/revocation against D1 primary on wake, on incoming messages, and before private projections, failing closed when verification is unavailable. Socket attachments and the initial upgrade authorization cannot grant continuing access after logout or membership revocation.
+## Evidence and uploads
 
-The current Node process, PostgreSQL locking/transactions, filesystem, and PDF child-process boundaries need deliberate adapters. Reuse of domain logic and React does not make this container a drop-in Worker. Before a hosted release, complete the Workers/storage port; account/session and role isolation; approved resource creation and schema migration; quotas and durable AI accounting; private uploads if enabled; live-model integration proof; build/served-asset parity; two-device, hibernation and delayed-alarm testing; and consistent backup/restore and code rollback. No production-readiness claim follows from the local test results.
+Invoice money uses integer satang and weight uses integer grams. Dates include the start and exclude the end. Missing, ambiguous, duplicate, or unreviewed evidence remains unresolved. Explicit human review marks a source verified. Exports require authority, escape HTML, and neutralize spreadsheet formula prefixes.
 
-## Repository validation
+Cloudflare advertises `uploads: false`; there is no public upload route or R2 binding. The sample invoice case, source review, rules, calculations, and exports remain available. Production imports require private storage, quarantine/scanning, bounded parsing, deletion, and restore testing before enablement.
 
-The validation workflow uses pinned official GitHub Actions, read-only repository permission, no deployment credentials, and no publishing step. It installs locked dependencies, checks high-confidence credential patterns, audits dependencies, runs unit/integration and browser tests, and builds the application. It retains only JSON test summaries. The publication scanner is a mistake detector, not a complete secret-audit service.
+## Alternate local Node runtime
 
-The original demo is available only at `?legacy-demo=1`. Its authored simulation and optional local Component Lab are separate from R1 authority and live-model claims. The production runtime does not mount the development Component Lab handler.
+The Node service serves the same frontend/domain using PGlite and private filesystem objects in local mode. It retains guest sessions and seven-day workspace expiry/scrubbing. Its model endpoint remains disabled. Local CSV and supported text-PDF imports work; arbitrary layouts, scans, encryption, and active content are outside this slice.
+
+The alternate Node container requires external PostgreSQL, HTTPS, and explicitly applied schema. Startup never migrates a production database. The Dockerfile is not the Cloudflare deployment path. See [local development](LOCAL_DEVELOPMENT.md).
+
+## Release limits
+
+CI uses pinned actions, read-only repository permissions, synthetic credentials, and no deployment step. It checks publication paths, dependencies, types, domain/server tests, local D1/DO tests, browser behavior, and Worker dry-run bundling.
+
+Production resource/schema approval, paid-plan readiness, hosted Google redirect, deployed asset parity, two-device resume, hibernation/logout, delayed alarms, live AI, and recoverable storage/code rollback remain release gates. Durable storage alone does not prove an application-wide backup. The legacy `?legacy-demo=1` experience and local Component Lab remain separate.

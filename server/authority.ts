@@ -20,7 +20,14 @@ import {
   MAX_WORKSPACE_TITLE_CHARS,
   WORKSPACE_TTL_MS,
 } from './limits.js';
-import type { InvitationRecord, SessionRecord, StoredMember, StoredWorkspace, WorkspaceRepository } from './repository.js';
+import type {
+  InvitationRecord,
+  ModelJobCommitGuard,
+  SessionRecord,
+  StoredMember,
+  StoredWorkspace,
+  WorkspaceRepository,
+} from './repository.js';
 
 const commandEnvelopeSchema = z.object({
   commandId: z.string().uuid(),
@@ -51,6 +58,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
   ]),
   encounter: new Set([
     'encounter.declareHit', 'encounter.shield', 'encounter.resolve', 'encounter.endTurn', 'encounter.saveNote',
+    'encounter.pause', 'encounter.resume',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
 };
@@ -90,6 +98,9 @@ export interface AuthorityOptions {
   readonly secureCookies?: boolean;
   readonly now?: () => number;
   readonly onWorkspaceChanged?: (workspaceId: string, epoch: number) => void;
+  readonly workspaceIdFactory?: () => string;
+  readonly workspaceLifetimeMs?: number;
+  readonly workspaceExpiresAt?: number;
 }
 
 function cookieToken(request: IncomingMessage): string | null {
@@ -190,12 +201,24 @@ export class CommandAuthority {
   readonly repository: WorkspaceRepository;
   private readonly secureCookies: boolean;
   private readonly now: () => number;
+  private readonly workspaceIdFactory: () => string;
+  private readonly workspaceLifetimeMs: number;
+  private readonly workspaceExpiresAt: number | null;
   private onWorkspaceChanged: (workspaceId: string, epoch: number) => void;
 
   constructor(options: AuthorityOptions) {
     this.repository = options.repository;
     this.secureCookies = options.secureCookies ?? false;
     this.now = options.now ?? Date.now;
+    this.workspaceIdFactory = options.workspaceIdFactory ?? randomId;
+    this.workspaceLifetimeMs = options.workspaceLifetimeMs ?? WORKSPACE_TTL_MS;
+    this.workspaceExpiresAt = options.workspaceExpiresAt ?? null;
+    if (!Number.isSafeInteger(this.workspaceLifetimeMs) || this.workspaceLifetimeMs <= 0) {
+      throw new Error('WORKSPACE_LIFETIME_INVALID');
+    }
+    if (this.workspaceExpiresAt !== null && (!Number.isSafeInteger(this.workspaceExpiresAt) || this.workspaceExpiresAt <= 0)) {
+      throw new Error('WORKSPACE_EXPIRY_INVALID');
+    }
     this.onWorkspaceChanged = options.onWorkspaceChanged ?? (() => undefined);
   }
 
@@ -319,7 +342,7 @@ export class CommandAuthority {
       }
     }
     const now = this.now();
-    const id = randomId();
+    const id = this.workspaceIdFactory();
     const role = primaryRole(parsed.data.kind);
     const title = parsed.data.title?.trim() || defaultWorkspaceTitle(parsed.data.kind);
     const workspace: StoredWorkspace = {
@@ -342,7 +365,7 @@ export class CommandAuthority {
       stateHash: '',
       schemaVersion: SCHEMA_VERSION,
       createdAt: now,
-      expiresAt: now + WORKSPACE_TTL_MS,
+      expiresAt: this.workspaceExpiresAt ?? now + this.workspaceLifetimeMs,
     };
     workspace.stateHash = hashValue(workspace.domainState);
     const owner: StoredMember = {
@@ -366,7 +389,12 @@ export class CommandAuthority {
     return authorized.workspace;
   }
 
-  async createInvite(session: AuthenticatedSession, workspaceId: string, seat: Seat): Promise<InviteResult> {
+  async createInvite(
+    session: AuthenticatedSession,
+    workspaceId: string,
+    seat: Seat,
+    replaceOutstanding = false,
+  ): Promise<InviteResult> {
     const placement = inviteForSeat('teaching', seat) ?? inviteForSeat('encounter', seat);
     if (!placement) throw new AuthorityError('INVITE_NOT_ALLOWED');
     const ticket = randomToken();
@@ -383,7 +411,12 @@ export class CommandAuthority {
       if (!roleSeat || roleSeat.role !== placement.role) throw new AuthorityError('INVITE_NOT_ALLOWED');
       const members = await transaction.listMembers();
       if (members.some((active) => active.seat === seat)) throw new AuthorityError('INVITE_SEAT_OCCUPIED');
-      if (await transaction.hasActiveInvitation(seat, now)) throw new AuthorityError('SEAT_UNAVAILABLE');
+      if (replaceOutstanding) {
+        await transaction.revokeOutstandingInvitations(seat, now);
+        await transaction.hasActiveInvitation(seat, now);
+      } else if (await transaction.hasActiveInvitation(seat, now)) {
+        throw new AuthorityError('SEAT_UNAVAILABLE');
+      }
       if (await transaction.countMembers() >= MAX_MEMBERS_PER_WORKSPACE) throw new AuthorityError('MEMBER_LIMIT_REACHED');
       const invitation: InvitationRecord = {
         ticketHash: sha256(ticket),
@@ -472,6 +505,28 @@ export class CommandAuthority {
     return this.executeInternal(session, workspaceId, commandFrom(rawEnvelope), null);
   }
 
+  async executeModelProposal(
+    session: AuthenticatedSession,
+    rawEnvelope: unknown,
+    workspaceId: string,
+    jobId: string,
+  ): Promise<CommandAck> {
+    const envelope = commandFrom(rawEnvelope);
+    if (envelope.type !== 'evolve.propose' || !/^[a-f0-9]{64}$/u.test(jobId)) {
+      throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
+    }
+    const guard: ModelJobCommitGuard = {
+      jobId,
+      workspaceId,
+      epoch: envelope.expectedEpoch,
+      actorId: session.record.actorId,
+      commandId: envelope.commandId,
+      expectedRevision: envelope.expectedRevision,
+      proposalHash: this.commandRequestHash(envelope),
+    };
+    return this.executeInternal(session, workspaceId, envelope, null, undefined, guard);
+  }
+
   async findTrustedReceipt(
     session: AuthenticatedSession,
     workspaceId: string,
@@ -550,6 +605,7 @@ export class CommandAuthority {
     envelope: CommandEnvelope,
     trustedOperation: 'artifact-import' | null,
     requestFingerprint?: string,
+    modelJobGuard?: ModelJobCommitGuard,
   ): Promise<CommandAck> {
     const now = this.now();
     const requestHash = requestFingerprint === undefined
@@ -567,6 +623,7 @@ export class CommandAuthority {
           if (envelope.type === 'invoice.import') throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
           throw new AuthorityError('COMMAND_NOT_ALLOWED');
         }
+        if (modelJobGuard) await transaction.assertModelJobCommitting(modelJobGuard);
         if (workspace.kind === 'teaching' && envelope.type === 'teaching.setRepresentation') {
           await this.validateTeachingTarget(transaction, envelope.payload);
         }

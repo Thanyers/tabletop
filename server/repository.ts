@@ -11,6 +11,7 @@ import type {
 import { createDomain } from '../src/tabletop/domain/index.js';
 import type { SqlDatabase, SqlExecutor } from './database.js';
 import { hashValue, isRecord, parseJsonValue, readNumber, readString, randomId, randomToken } from './codec.js';
+import { AuthorityError } from './errors.js';
 import {
   MAX_ACTIVE_WORKSPACES,
   MAX_EXPIRY_SWEEP_BATCH,
@@ -119,13 +120,25 @@ export interface CommandCommit {
   resetSessionTokenHash?: string;
 }
 
+export interface ModelJobCommitGuard {
+  jobId: string;
+  workspaceId: string;
+  epoch: number;
+  actorId: string;
+  commandId: string;
+  expectedRevision: string;
+  proposalHash: string;
+}
+
 export interface WorkspaceTransaction {
   readonly workspace: StoredWorkspace;
   getMember(actorId: string, epoch?: number): Promise<StoredMember | null>;
   listMembers(epoch?: number): Promise<StoredMember[]>;
   findCommand(actorId: string, commandId: string, epoch: number): Promise<StoredCommand | null>;
+  assertModelJobCommitting(guard: ModelJobCommitGuard): Promise<void>;
   countMembers(epoch?: number): Promise<number>;
   hasActiveInvitation(seat: Seat, now: number, epoch?: number): Promise<boolean>;
+  revokeOutstandingInvitations(seat: Seat, now: number): Promise<void>;
   getApproval(
     approvalId: string,
     epoch: number,
@@ -763,6 +776,25 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
           );
           return result.rows[0] ? mapCommand(result.rows[0]) : null;
         },
+        async assertModelJobCommitting(guard): Promise<void> {
+          if (guard.workspaceId !== workspaceId || guard.epoch !== workspace.epoch) {
+            throw new AuthorityError('MODEL_JOB_NOT_COMMITTING', 'The proposal job is no longer active.', 409);
+          }
+          const result = await transaction.query<Record<string, unknown>>(
+            `SELECT status, revoked_at, data FROM model_jobs
+             WHERE id = $1 AND workspace_id = $2 AND epoch = $3 AND actor_id = $4 FOR UPDATE`,
+            [guard.jobId, guard.workspaceId, guard.epoch, guard.actorId],
+          );
+          const row = result.rows[0];
+          const data = row ? parseJsonValue(row.data) : null;
+          if (!row || row.status !== 'committing' || row.revoked_at !== null || !isRecord(data)
+              || data.commandId !== guard.commandId
+              || data.expectedRevision !== guard.expectedRevision
+              || data.expectedEpoch !== guard.epoch
+              || data.proposalHash !== guard.proposalHash) {
+            throw new AuthorityError('MODEL_JOB_NOT_COMMITTING', 'The proposal job is no longer active.', 409);
+          }
+        },
         async countMembers(epoch = workspace.epoch): Promise<number> {
           const result = await transaction.query<{ member_count: number }>(
             `SELECT COUNT(*)::int AS member_count FROM memberships
@@ -785,6 +817,14 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
             [workspaceId, epoch, seat, now],
           );
           return result.rows.length > 0;
+        },
+        async revokeOutstandingInvitations(seat, now): Promise<void> {
+          await transaction.query(
+            `UPDATE invitations SET revoked_at = $4
+             WHERE workspace_id = $1 AND epoch = $2 AND seat = $3 AND expires_at > $4
+               AND redeemed_at IS NULL AND revoked_at IS NULL`,
+            [workspaceId, workspace.epoch, seat, now],
+          );
         },
         async getApproval(approvalId, epoch): Promise<{ actorId: string; candidateHash: string; proofHash: string; expiresAt: number; revoked: boolean } | null> {
           const result = await transaction.query<Record<string, unknown>>(

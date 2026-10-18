@@ -7,7 +7,11 @@
     "dev": "vite --host 127.0.0.1",
     "dev:api": "node --import tsx server/bootstrap.ts",
     "build": "npm run typecheck && vite build",
-    "typecheck": "tsc -b && tsc -p tsconfig.server.json",
+    "typecheck": "tsc -b && tsc -p tsconfig.server.json && tsc -p tsconfig.cloudflare.json",
+    "dev:cloudflare": "wrangler dev --local --ip 127.0.0.1 --port 8787 --var PUBLIC_ORIGIN:http://127.0.0.1:8787",
+    "test:cloudflare": "vitest run --config vitest.cloudflare.config.ts",
+    "test:cloudflare:browser": "node tests/cloudflare-browser.mjs",
+    "build:cloudflare": "wrangler deploy --dry-run --outdir worker-build",
     "start": "node --import tsx server/bootstrap.ts",
     "test:r1": "vitest run src/tabletop server",
     "test:r1:browser": "node --import tsx tests/tabletop-r1.mjs",
@@ -17,13 +21,16 @@
     "test:spatial": "node tests/spatial-learning.mjs",
     "test:constellation": "node tests/constellation-demo.mjs"
   },
-  "engines": { "node": ">=22.13.0" },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "dependencies": {
     "@electric-sql/pglite": "0.5.10",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/noto-sans-thai": "^5.2.7",
     "@xyflow/react": "^12.9.0",
+    "jose": "6.2.12",
     "lucide-react": "^0.468.0",
     "pdfjs-dist": "6.4.299",
     "pg": "8.23.1",
@@ -37,6 +44,8 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.4",
+    "@cloudflare/workers-types": "5.20261018.1",
     "@playwright/test": "^1.56.0",
     "@types/node": "^22.15.0",
     "@types/pg": "8.23.1",
@@ -44,8 +53,10 @@
     "@types/react-dom": "^19.1.0",
     "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "^4.5.0",
+    "miniflare": "5.20261012.1-beta",
     "typescript": "~5.8.3",
     "vite": "^6.3.0",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "wrangler": "4.151.1"
   }
 }

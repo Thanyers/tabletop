@@ -12,6 +12,11 @@ const noPayloadSchema = z.object({}).strict();
 const hitSchema = z.object({ target: z.enum(['mira', 'pip']) }).strict();
 const shieldSchema = z.object({ target: z.enum(['mira', 'pip']) }).strict();
 const noteSchema = z.object({ text: z.string().max(2_000) }).strict();
+const MAX_REACTION_WINDOW_MS = 30_000;
+const pausedStateSchema = z.strictObject({
+  at: z.number().int().safe().nonnegative(),
+  remainingReactionMs: z.number().int().min(0).max(MAX_REACTION_WINDOW_MS).nullable(),
+});
 
 export const encounterRuleSchema: z.ZodType<EncounterRule> = z.object({
   allyTarget: z.boolean(),
@@ -60,10 +65,73 @@ function appendEvent(state: EncounterState, ctx: ActorContext, key: unknown, tex
   state.events.push({ id: makeId(ctx, 'event', { workspaceId: ctx.workspaceId, key, time: ctx.now, ordinal: state.events.length }), text, createdAt: ctx.now });
 }
 
+function assertValidClock(now: number): void {
+  assert(Number.isSafeInteger(now) && now >= 0, 'INVALID_CLOCK', 'The server clock must be a non-negative safe integer.');
+}
+
+function assertNonRegressingClock(state: EncounterState, now: number): void {
+  assertValidClock(now);
+  const latestEventTime = state.events.reduce((latest, event) => Math.max(latest, event.createdAt), 0);
+  assert(Number.isSafeInteger(latestEventTime) && now >= latestEventTime,
+    'INVALID_CLOCK', 'The server clock cannot precede the latest encounter event.');
+}
+
+function assertNotPaused(state: EncounterState): void {
+  assert(state.paused === undefined, 'ENCOUNTER_PAUSED', 'The encounter is paused; resume it before continuing gameplay.');
+}
+
+function pauseEncounter(state: EncounterState, ctx: ActorContext): EncounterState {
+  assertNonRegressingClock(state, ctx.now);
+  assert(state.paused === undefined, 'ENCOUNTER_ALREADY_PAUSED', 'The encounter is already paused.');
+  let remainingReactionMs: number | null = null;
+  if (state.pendingHit !== null) {
+    assert(Number.isSafeInteger(state.pendingHit.deadline) && state.pendingHit.deadline >= 0,
+      'INVALID_CLOCK', 'The stored reaction deadline is outside the supported range.');
+    remainingReactionMs = Math.min(MAX_REACTION_WINDOW_MS, Math.max(0, state.pendingHit.deadline - ctx.now));
+  }
+  const next = structuredClone(state);
+  next.paused = { at: ctx.now, remainingReactionMs };
+  next.dataRevision += 1;
+  appendEvent(next, ctx, { actorId: ctx.actorId, action: 'pause' }, `${ctx.name} paused the encounter.`);
+  return next;
+}
+
+function resumeEncounter(state: EncounterState, ctx: ActorContext): EncounterState {
+  assertNonRegressingClock(state, ctx.now);
+  assert(state.paused !== undefined, 'ENCOUNTER_NOT_PAUSED', 'The encounter is not paused.');
+  const parsed = pausedStateSchema.safeParse(state.paused);
+  assert(parsed.success, 'INVALID_PAUSE_STATE', 'The stored pause state is invalid.');
+  assert(ctx.now >= parsed.data.at, 'INVALID_CLOCK', 'The server clock cannot precede the pause time.');
+  const hasPendingHit = state.pendingHit !== null;
+  assert(hasPendingHit === (parsed.data.remainingReactionMs !== null), 'INVALID_PAUSE_STATE', 'The paused reaction timer does not match the pending hit.');
+  if (hasPendingHit) {
+    assert(Number.isSafeInteger(ctx.now + parsed.data.remainingReactionMs!), 'INVALID_CLOCK', 'The resumed reaction deadline is outside the supported range.');
+  }
+  const next = structuredClone(state);
+  if (next.pendingHit && parsed.data.remainingReactionMs !== null) {
+    next.pendingHit.deadline = ctx.now + parsed.data.remainingReactionMs;
+  }
+  delete next.paused;
+  next.dataRevision += 1;
+  appendEvent(next, ctx, { actorId: ctx.actorId, action: 'resume' }, `${ctx.name} resumed the encounter.`);
+  return next;
+}
+
 export function handleEncounterCommand(state: EncounterState, type: string, payload: unknown, ctx: ActorContext): { state: EncounterState; label: string } | null {
+  if (type === 'encounter.pause') {
+    hasRole(ctx, ['dm']);
+    parsePayload(noPayloadSchema, payload);
+    return { state: pauseEncounter(state, ctx), label: 'Encounter paused; any remaining reaction time is frozen.' };
+  }
+  if (type === 'encounter.resume') {
+    hasRole(ctx, ['dm']);
+    parsePayload(noPayloadSchema, payload);
+    return { state: resumeEncounter(state, ctx), label: 'Encounter resumed with the remaining reaction time restored.' };
+  }
   if (type === 'encounter.declareHit') {
     hasRole(ctx, ['dm']);
     const input = parsePayload(hitSchema, payload);
+    assertNotPaused(state);
     assert(state.turn === 'goblin' && state.phase === 'turn.start' && state.pendingHit === null, 'ACTION_NOT_AVAILABLE', 'The goblin can declare one hit only during its own turn.');
     const next = structuredClone(state);
     const randomState = (Math.imul(next.seed, 1_664_525) + 1_013_904_223) >>> 0;
@@ -83,6 +151,7 @@ export function handleEncounterCommand(state: EncounterState, type: string, payl
   if (type === 'encounter.shield') {
     hasRole(ctx, ['player']);
     const input = parsePayload(shieldSchema, payload);
+    assertNotPaused(state);
     assert(ctx.seat === 'mira' || ctx.seat === 'pip', 'FORBIDDEN', 'The player has no server-assigned character seat.');
     assert(state.phase === 'reaction.open' && state.pendingHit !== null, 'NO_REACTION_WINDOW', 'There is no unresolved hit to shield.');
     assert(ctx.now < state.pendingHit.deadline, 'REACTION_CLOSED', 'The server reaction deadline has passed.');
@@ -102,6 +171,7 @@ export function handleEncounterCommand(state: EncounterState, type: string, payl
   if (type === 'encounter.resolve') {
     hasRole(ctx, ['dm']);
     parsePayload(noPayloadSchema, payload);
+    assertNotPaused(state);
     const currentPending = state.pendingHit;
     assert(state.phase === 'reaction.open' && currentPending !== null, 'NO_REACTION_WINDOW', 'There is no declared hit to resolve.');
     const next = structuredClone(state);
@@ -135,6 +205,7 @@ export function handleEncounterCommand(state: EncounterState, type: string, payl
   if (type === 'encounter.endTurn') {
     assert(ctx.role === 'dm' || ctx.role === 'player', 'FORBIDDEN', 'Only the DM or an active player can end this turn.');
     parsePayload(noPayloadSchema, payload);
+    assertNotPaused(state);
     assert(state.phase === 'turn.start' || state.phase === 'action.resolved', 'TURN_NOT_READY', 'Resolve or close the current action before ending the turn.');
     assert(state.pendingHit === null, 'ACTION_PENDING', 'An unresolved hit blocks ending the turn.');
     if (ctx.role === 'player') {

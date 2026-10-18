@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowDownUp, ArrowRight, BookOpen, Check, ChevronDown, CircleAlert, Clipboard, LoaderCircle, Plus, RefreshCw, RotateCcw, ShieldCheck, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowDownUp, ArrowRight, BookOpen, Check, ChevronDown, CircleAlert, Clipboard, LoaderCircle, Plus, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
 import { planForWorkspace } from './runtime';
-import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type ConnectionState, type WorkspaceInvite } from './client';
+import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { CanvasWorkspace } from './ui/CanvasWorkspace';
 import { EncounterWorkbench } from './ui/EncounterWorkbench';
 import { InvoiceWorkbench } from './ui/InvoiceWorkbench';
 import { TeachingWorkbench } from './ui/TeachingWorkbench';
-import { ConfirmDialog, MemberStrip } from './ui/WorkbenchShared';
+import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
+import { AccountBadge, AccountSignIn } from './ui/account';
+import { AIProposal } from './ui/AIProposal';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
 import './ui/tabletop.css';
@@ -17,6 +19,8 @@ type EditMode = 'use' | 'arrange';
 type InviteState = { seat: Seat; invite: WorkspaceInvite; url: string; revoked?: boolean } | null;
 
 const lastWorkspaceKey = 'tabletop.lastWorkspace';
+const pendingInviteKey = 'tabletop.pendingInvite';
+const localCapabilities: TabletopCapabilities = { uploads: true, model: { enabled: false, reason: 'Live AI proposals are not configured on this local server.' } };
 
 const caseInfo: Record<CaseKind, { title: string; subtitle: string; icon: typeof Table2 }> = {
   invoice: { title: 'Invoice check', subtitle: 'Match shipment charges with dated evidence.', icon: Table2 },
@@ -26,7 +30,8 @@ const caseInfo: Record<CaseKind, { title: string; subtitle: string; icon: typeof
 
 function errorText(error: unknown): string {
   if (error instanceof ApiFailure) {
-    if (error.status === 401 || error.status === 403) return 'This table is not available to the current session. Open a new invitation or choose another table.';
+    if (error.status === 401) return 'Your sign-in session has expired. Sign in again to continue.';
+    if (error.status === 403) return 'This table is not available to the current session. Open a new invitation or choose another table.';
     if (error.status === 404) return 'This table or invitation is no longer available. Choose another table or ask for a fresh invitation.';
     if (error.status === 413) return 'That file is larger than the table limit. Choose a smaller file.';
     if (error.status === 415) return 'This file type is not supported. Use a shipment CSV or a text PDF.';
@@ -49,7 +54,30 @@ function saveLastWorkspace(id: string | null): void {
   }
 }
 
+function savePendingInvite(ticket: string): boolean {
+  if (!ticket || ticket.length > 4096) return false;
+  try { window.sessionStorage.setItem(pendingInviteKey, ticket); return true; }
+  catch { return false; }
+}
+
+function readPendingInvite(): string | null {
+  try { return window.sessionStorage.getItem(pendingInviteKey); }
+  catch { return null; }
+}
+
+function clearPendingInvite(): void {
+  try { window.sessionStorage.removeItem(pendingInviteKey); }
+  catch { /* The ticket expires on the server if session storage is unavailable. */ }
+}
+
+function accountForHeader(authStatus: AuthStatus | null, session: SessionView): GoogleAuthUser | null {
+  if (authStatus?.mode !== 'google' || !authStatus.authenticated) return null;
+  return authStatus.user ?? { id: session.actorId, name: session.name, email: '', isAdmin: false };
+}
+
 export default function TabletopApp() {
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  const [capabilities, setCapabilities] = useState<TabletopCapabilities>(localCapabilities);
   const [session, setSession] = useState<SessionView | null>(null);
   const [view, setView] = useState<WorkspaceView | null>(null);
   const [starting, setStarting] = useState(true);
@@ -68,11 +96,22 @@ export default function TabletopApp() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const workspaceRef = useRef<WorkspaceView | null>(null);
   const projectionSequenceRef = useRef(0);
   const inspectorScrollRef = useRef<HTMLDivElement>(null);
   const previousScrollRef = useRef(0);
   const noticeTimerRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    const handleInviteFragment = () => {
+      if (!inviteFromFragment()) return;
+      setStarting(true);
+      setBootstrapAttempt((attempt) => attempt + 1);
+    };
+    window.addEventListener('hashchange', handleInviteFragment);
+    return () => window.removeEventListener('hashchange', handleInviteFragment);
+  }, []);
 
   const setWorkspace = useCallback((next: WorkspaceView | null) => {
     const previous = workspaceRef.current;
@@ -121,6 +160,12 @@ export default function TabletopApp() {
     return next;
   }, []);
 
+  const retryBootstrap = useCallback(() => {
+    setNotice(null);
+    setStarting(true);
+    setBootstrapAttempt((attempt) => attempt + 1);
+  }, []);
+
   const openWorkspace = useCallback(async (id: string) => {
     setBusy('workspace.open');
     try {
@@ -136,24 +181,92 @@ export default function TabletopApp() {
     }
   }, [setWorkspace, showNotice]);
 
+  const signOut = useCallback(async () => {
+    setBusy('auth.logout');
+    let expired = false;
+    try {
+      await tabletopClient.logout();
+    } catch (error) {
+      if (error instanceof ApiFailure && error.status === 401) expired = true;
+      else {
+        showNotice(errorText(error), 'error');
+        setBusy(null);
+        return;
+      }
+    }
+    setSession(null);
+    setWorkspace(null);
+    saveLastWorkspace(null);
+    clearPendingInvite();
+    if (inviteFromFragment()) clearInviteFragment();
+    setAuthStatus((current) => current?.mode === 'google' ? { ...current, authenticated: false, user: undefined } : current);
+    setWorkspaceMenuOpen(false);
+    setInviteOpen(false);
+    setResetOpen(false);
+    showNotice(expired ? 'Your sign-in session has expired. Sign in again to continue.' : 'You have signed out of your Google account.', expired ? 'error' : 'success');
+    setBusy(null);
+  }, [setWorkspace, showNotice]);
+
   useEffect(() => {
     let alive = true;
     const boot = async () => {
-      const inviteTicket = inviteFromFragment();
+      const fragmentTicket = inviteFromFragment();
+      const callbackUrl = new URL(window.location.href);
+      const googleLoginFailed = callbackUrl.searchParams.get('auth_error') === 'google_login_failed';
+      let currentAuth: AuthStatus | null = null;
+      if (googleLoginFailed) {
+        callbackUrl.searchParams.delete('auth_error');
+        window.history.replaceState({}, document.title, `${callbackUrl.pathname}${callbackUrl.search}${callbackUrl.hash}`);
+      }
       try {
+        currentAuth = await tabletopClient.authStatus();
+        if (!alive) return;
+        setAuthStatus(currentAuth);
+        if (googleLoginFailed) {
+          if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current);
+          noticeTimerRef.current = undefined;
+          setNotice({ text: 'Google sign-in did not complete. Try again with Google. If it continues, ask your workspace owner to check account sign-in settings.', tone: 'error' });
+        }
+        if (currentAuth.mode === 'google' && !currentAuth.authenticated) {
+          if (fragmentTicket) {
+            if (savePendingInvite(fragmentTicket)) clearInviteFragment();
+            else showNotice('This tab could not save the invitation securely. Keep the invitation link and try again after signing in.', 'error');
+          }
+          setSession(null);
+          setWorkspace(null);
+          return;
+        }
+
+        try {
+          const currentCapabilities = await tabletopClient.capabilities();
+          if (!alive) return;
+          setCapabilities(currentCapabilities);
+        } catch (error) {
+          if (!alive) return;
+          setCapabilities({ uploads: false, model: { enabled: false, reason: 'Feature access could not be checked. Refresh before adding files or requesting an AI draft.' } });
+          showNotice('Feature access could not be checked. Uploads and AI requests are disabled until you refresh.', 'error');
+          if (error instanceof ApiFailure && error.status === 401) {
+            if (currentAuth?.mode === 'google') setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
+            return;
+          }
+        }
+
         const currentSession = await tabletopClient.openSession();
         if (!alive) return;
         setSession(currentSession);
+        const inviteTicket = fragmentTicket ?? readPendingInvite();
         if (inviteTicket) {
           try {
             const joined = await tabletopClient.redeem(inviteTicket);
             clearInviteFragment();
+            clearPendingInvite();
             if (!alive) return;
             setWorkspace(joined);
             await refreshSession();
             showNotice(`You joined ${joined.title}. This invitation is now used.`, 'success');
           } catch (error) {
             clearInviteFragment();
+            clearPendingInvite();
             if (alive) showNotice(errorText(error), 'error');
           }
         } else {
@@ -166,6 +279,9 @@ export default function TabletopApp() {
           }
         }
       } catch (error) {
+        if (error instanceof ApiFailure && error.status === 401 && currentAuth?.mode === 'google') {
+          setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
+        }
         if (alive) showNotice(errorText(error), 'error');
       } finally {
         if (alive) setStarting(false);
@@ -173,7 +289,7 @@ export default function TabletopApp() {
     };
     void boot();
     return () => { alive = false; };
-  }, [refreshSession, setWorkspace, showNotice]);
+  }, [bootstrapAttempt, refreshSession, setWorkspace, showNotice]);
 
   useEffect(() => {
     if (!view) return;
@@ -236,6 +352,7 @@ export default function TabletopApp() {
   }, [latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
   const upload = useCallback(async (kind: 'shipments' | 'invoice' | 'rate-card', file: File) => {
+    if (!capabilities.uploads) throw new Error('File uploads are disabled for this workspace service. Your existing rows and manual editing remain available.');
     const current = workspaceRef.current;
     if (!current) throw new Error('Choose an invoice table before adding a source file.');
     setBusy(`upload.${kind}`);
@@ -255,7 +372,22 @@ export default function TabletopApp() {
       }
       throw new Error(errorText(error));
     } finally { setBusy(null); }
-  }, [latestAfterAck, refreshSession, setWorkspace, showNotice]);
+  }, [capabilities.uploads, latestAfterAck, refreshSession, setWorkspace, showNotice]);
+
+  const requestAI = useCallback((targetView: WorkspaceView, prompt: string, sourceId: string | undefined, commandId: string): Promise<ModelJob> => {
+    if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('AI proposals are not enabled for this workspace.', 403));
+    const roleAllowed = targetView.kind === 'invoice' ? targetView.actor.role === 'owner' : targetView.kind === 'teaching' ? targetView.actor.role === 'teacher' : targetView.actor.role === 'dm';
+    if (!roleAllowed) return Promise.reject(new ApiFailure('This seat cannot request an AI draft.', 403));
+    return tabletopClient.requestModel(targetView, prompt, sourceId, commandId);
+  }, [capabilities.model.enabled]);
+
+  const pollAI = useCallback((workspaceId: string, jobId: string) => tabletopClient.modelJob(workspaceId, jobId), []);
+  const loadAdminWorkspaces = useCallback((after?: string) => tabletopClient.adminWorkspaces(after), []);
+
+  const refreshWorkspaceProjection = useCallback(async (workspaceId: string) => {
+    const latest = await tabletopClient.workspace(workspaceId);
+    if (workspaceRef.current?.id === workspaceId) setWorkspace(latest);
+  }, [setWorkspace]);
 
   const download = useCallback(async (format: 'csv' | 'html') => {
     const current = workspaceRef.current;
@@ -276,19 +408,19 @@ export default function TabletopApp() {
     finally { setBusy(null); }
   }, [showNotice]);
 
-  const createInvite = useCallback(async (seat: Seat) => {
+  const createInvite = useCallback(async (seat: Seat, replaceOutstanding = false) => {
     const current = workspaceRef.current;
     if (!current) return;
     setInviteBusy(true);
     try {
-      const invite = await tabletopClient.invite(current.id, seat);
+      const invite = await tabletopClient.invite(current.id, seat, replaceOutstanding);
       const url = new URL(window.location.href);
       url.hash = new URLSearchParams({ invite: invite.ticket }).toString();
       setInviteState({ seat, invite, url: url.toString() });
       setPreviousInvitesRevoked(false);
       setInviteSeat(seat);
       setCopied(false);
-      showNotice(`A single-use invitation for ${seatLabel(seat)} is ready.`, 'success');
+      showNotice(`${replaceOutstanding ? 'The previous unused link is revoked. ' : ''}A single-use invitation for ${seatLabel(seat)} is ready.`, 'success');
     } catch (error) { showNotice(errorText(error), 'error'); }
     finally { setInviteBusy(false); }
   }, [showNotice]);
@@ -314,6 +446,12 @@ export default function TabletopApp() {
     if (nodeId && window.matchMedia('(max-width: 760px)').matches) setSurface('focus');
   }, []);
 
+  const focusAIProposal = useCallback(() => {
+    setSurface('focus');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.requestAnimationFrame(() => document.getElementById('tt-ai-proposal')?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' }));
+  }, []);
+
   const beginReset = useCallback(async () => {
     const result = await runCommand('workspace.reset', {});
     if (result) setResetOpen(false);
@@ -326,18 +464,22 @@ export default function TabletopApp() {
   }, [inviteState, showNotice]);
 
   if (starting) return <LoadingScreen />;
-  if (!session) return <FailureScreen onRetry={() => { setStarting(true); void tabletopClient.openSession().then((next) => { setSession(next); setNotice(null); setStarting(false); }).catch((error) => { showNotice(errorText(error), 'error'); setStarting(false); }); }} notice={notice} />;
-  if (!view) return <WorkspaceChooser session={session} busy={busy} notice={notice} onDismissNotice={() => setNotice(null)} onCreate={(kind) => void createWorkspace(kind)} onOpen={(id) => void openWorkspace(id)} />;
+  if (authStatus?.mode === 'google' && !authStatus.authenticated) return <AccountSignIn status={authStatus} notice={notice} hasPendingInvite={Boolean(readPendingInvite() || inviteFromFragment())} checking={false} onRetry={retryBootstrap} onDismissNotice={() => setNotice(null)} />;
+  if (!session) return <FailureScreen onRetry={retryBootstrap} notice={notice} />;
+  const headerAccount = accountForHeader(authStatus, session);
+  if (!view) return <WorkspaceChooser session={session} account={headerAccount} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onCreate={(kind) => void createWorkspace(kind)} onOpen={(id) => void openWorkspace(id)} />;
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const canInvite = view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
   const canReset = ['owner', 'teacher', 'dm'].includes(view.actor.role);
+  const canAskAI = (view.kind === 'invoice' && view.actor.role === 'owner') || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
   const connectedSeats = new Set(view.members.map((member) => member.seat).filter(Boolean));
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
   const remainingInviteSeats = inviteSeats.filter((seat) => !connectedSeats.has(seat) && !(inviteIsHeld && inviteState?.seat === seat));
 
   return (
+    <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
     <div className="tt-app">
       <header className="tt-topbar">
         <a className="tt-brand" href="#table" aria-label="Tabletop workspace"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
@@ -350,6 +492,7 @@ export default function TabletopApp() {
           </>}
         </div>
         <div className="tt-topbar__spacer" />
+        {headerAccount && <AccountBadge user={headerAccount} busy={busy === 'auth.logout'} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />}
         <div className="tt-connection" data-state={connection} role="status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Connected' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Connection lost' : 'Reconnecting'}</span></div>
         <span className="tt-role-chip">{view.actor.role}</span>
         {view.kind !== 'invoice' && <button type="button" className="tt-people-button" onClick={() => { setInviteOpen(true); setInviteSeat(null); setCopied(false); }} aria-label={`People at this table, ${view.members.length} connected`}><Users size={16} /><span>{view.members.length}</span></button>}
@@ -362,6 +505,7 @@ export default function TabletopApp() {
         <div className="tt-mode-switch" role="group" aria-label="Edit mode"><button type="button" aria-pressed={editMode === 'use'} className={editMode === 'use' ? 'is-active' : ''} onClick={() => setEditMode('use')}><Check size={13} /> Use</button><button type="button" aria-pressed={editMode === 'arrange'} className={editMode === 'arrange' ? 'is-active' : ''} onClick={() => setEditMode('arrange')}><ArrowDownUp size={13} /> Arrange</button></div>
         <span className="tt-layout-controls__hint">{editMode === 'use' ? 'Select a source, result, rule, or scene to work with its controls.' : 'Drag objects to arrange this canvas.'}</span>
         <div className="tt-mobile-switch" role="group" aria-label="Workspace view"><button type="button" aria-pressed={surface === 'canvas'} className={surface === 'canvas' ? 'is-active' : ''} onClick={() => setSurface('canvas')}>Canvas</button><button type="button" aria-pressed={surface === 'focus'} className={surface === 'focus' ? 'is-active' : ''} onClick={() => setSurface('focus')}>Focus table</button></div>
+        {canAskAI && capabilities.model.enabled && <button type="button" className="tt-button tt-button--quiet tt-ai-launch" onClick={focusAIProposal}><Sparkles size={13} /> Ask AI</button>}
         <span className="tt-layout-controls__revision">r{view.domain.ruleRevision} · data r{view.domain.dataRevision}</span>
       </div>
 
@@ -375,6 +519,7 @@ export default function TabletopApp() {
 
         <section className="tt-inspector-panel" aria-label="Table workbench"><div className="tt-inspector-scroll" ref={inspectorScrollRef}>
           <MemberStrip view={view} />
+          {canAskAI && <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} />}
           {selectedNode && compiled.plan && <ObjectInspector node={selectedNode} plan={compiled.plan} onClose={() => setSelectedNodeId(null)} />}
           {compiled.error && <div className="tt-inline-plan-warning" role="alert"><CircleAlert size={15} /><span>{compiled.error}</span></div>}
           {view.kind === 'invoice' && compiled.plan && <InvoiceWorkbench view={view} plan={compiled.plan} onCommand={runCommand} busy={busy} onUpload={upload} onExport={download} onFocusEvidence={focusEvidence} onBackFromEvidence={backFromEvidence} focusSourceIds={focusSourceIds} />}
@@ -383,9 +528,10 @@ export default function TabletopApp() {
         </div></section>
       </main>
 
-      {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat) => void createInvite(seat)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} />}
+      {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} />}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
+    </UploadCapabilityProvider>
   );
 }
 
@@ -397,8 +543,8 @@ function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'inf
   return <main className="tt-failure"><span className="tt-dialog__mark"><CircleAlert size={18} /></span><p className="tt-kicker">TABLETOP</p><h1>The table could not be opened</h1><p>{notice?.text ?? 'Check your connection and try again.'}</p><button type="button" className="tt-button tt-button--primary" onClick={onRetry}><RefreshCw size={14} /> Try again</button></main>;
 }
 
-function WorkspaceChooser({ session, busy, notice, onDismissNotice, onCreate, onOpen }: { session: SessionView; busy: string | null; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onCreate: (kind: CaseKind) => void; onOpen: (id: string) => void }) {
-  return <main className="tt-chooser"><header className="tt-chooser__top"><a className="tt-brand" href="#table" aria-label="Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><span className="tt-session-name">Signed in as {session.name}</span></header>
+function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, notice, onDismissNotice, onSignOut, onCreate, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onCreate: (kind: CaseKind) => void; onOpen: (id: string) => void }) {
+  return <main className="tt-chooser"><header className="tt-chooser__top"><a className="tt-brand" href="#table" aria-label="Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>
     {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={onDismissNotice}><X size={14} /></button></div>}
     <section className="tt-chooser__content"><span className="tt-kicker">YOUR WORK TABLES</span><h1>Choose a table</h1><p>Open an existing table or start a new one.</p>
       {session.workspaces.length > 0 && <div className="tt-existing-tables">{session.workspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
@@ -419,7 +565,7 @@ function ObjectInspector({ node, plan, onClose }: { node: ExecutablePlan['nodes'
   return <section className="tt-object-inspector" aria-labelledby="tt-selected-object-title"><header><span className="tt-object-inspector__glyph"><Activity size={15} /></span><div><span className="tt-kicker">SELECTED OBJECT</span><h2 id="tt-selected-object-title">{node.title}</h2></div><button type="button" aria-label="Close object details" onClick={onClose}><X size={14} /></button></header><p className="tt-object-capability">{node.capability} · version {node.version}</p><div className="tt-object-facts">{inputs.length > 0 ? inputs.map(([key, value]) => <div key={key}><span>Input · {key}</span><strong title={summarize(value)}>{summarize(value)}</strong></div>) : <div><span>Inputs</span><strong>No literal values; data comes through a connected object.</strong></div>}{outputs.map(([key, value]) => <div key={`out-${key}`}><span>Output · {key}</span><strong title={summarize(value)}>{summarize(value)}</strong></div>)}</div>{links.length > 0 && <ul className="tt-object-links">{links.slice(0, 4).map((link) => <li key={link.id}><span>{link.from.node === node.id ? 'Sends' : 'Receives'}</span><strong>{link.valueType}</strong><small>{link.from.node === node.id ? `${link.to.node} · ${link.to.port}` : `${link.from.node} · ${link.from.port}`}</small></li>)}</ul>}</section>;
 }
 
-function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousInvitesRevoked, copied, onSelectSeat, selectedSeat, onCreate, onCopy, onClose }: { view: WorkspaceView; availableSeats: Seat[]; canInvite: boolean; busy: boolean; invite: InviteState; previousInvitesRevoked: boolean; copied: boolean; onSelectSeat: (seat: Seat | null) => void; selectedSeat: Seat | null; onCreate: (seat: Seat) => void; onCopy: () => void; onClose: () => void }) {
+function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousInvitesRevoked, copied, onSelectSeat, selectedSeat, onCreate, onCopy, onClose }: { view: WorkspaceView; availableSeats: Seat[]; canInvite: boolean; busy: boolean; invite: InviteState; previousInvitesRevoked: boolean; copied: boolean; onSelectSeat: (seat: Seat | null) => void; selectedSeat: Seat | null; onCreate: (seat: Seat, replaceOutstanding?: boolean) => void; onCopy: () => void; onClose: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
@@ -451,6 +597,7 @@ function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousI
     {previousInvitesRevoked && <div className="tt-invite-status tt-invite-status--revoked"><ShieldCheck size={15} /><span><strong>Previous invitation links revoked</strong><small>The table reset invalidated links and removed the previous members.</small></span></div>}
     {invite && !invite.revoked && activeMember ? <div className="tt-invite-status tt-invite-status--joined"><Check size={15} /><span><strong>{activeMember.name} joined as {seatLabel(invite.seat)}</strong><small>This one-use invitation has been accepted.</small></span></div> : invite && !invite.revoked && expired ? <div className="tt-invite-status tt-invite-status--expired"><CircleAlert size={15} /><span><strong>Invitation expired</strong><small>Create a new one for this seat.</small></span></div> : invite && !invite.revoked ? <div className="tt-invite-created"><div className="tt-invite-status"><Activity size={15} /><span><strong>Waiting for {seatLabel(invite.seat)}</strong><small>Expires {new Date(invite.invite.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span></div><label htmlFor="tt-invite-link">One-use invitation link</label><div className="tt-invite-link-row"><input id="tt-invite-link" value={invite.url} readOnly onFocus={(event) => event.currentTarget.select()} /><button type="button" className="tt-button tt-button--primary" onClick={onCopy}><Clipboard size={14} /> {copied ? 'Copied' : 'Copy link'}</button></div><small>The link is held only in this open panel. Send it to the person taking this seat.</small></div> : null}
     {canInvite ? <div className="tt-invite-choose"><span className="tt-kicker">AVAILABLE SEATS</span>{seatChoices.length === 0 ? <p>All supported seats are filled. Reset a table to revoke access or choose another table.</p> : seatChoices.map((seat) => <button type="button" className={selectedSeat === seat ? 'is-selected' : ''} key={seat} onClick={() => onSelectSeat(seat)}><span><strong>{seatLabel(seat)}</strong><small>{view.kind === 'teaching' ? 'Learner view and private answer' : 'Player view and character actions'}</small></span>{selectedSeat === seat ? <Check size={14} /> : <ArrowRight size={14} />}</button>)}</div> : <div className="tt-invite-status"><Users size={15} /><span><strong>Table members</strong><small>Only the teacher or Dungeon Master can send invitations.</small></span></div>}
+    {canInvite && selectedSeat && !view.members.some(member => member.seat === selectedSeat) && <details className="tt-invite-recovery"><summary>Lost an unused invitation link?</summary><p>Replace the link for {seatLabel(selectedSeat)}. Any previous unused link for this seat will stop working.</p><button type="button" className="tt-button tt-button--quiet" disabled={busy} onClick={() => onCreate(selectedSeat, true)}>Revoke old link and issue new link</button></details>}
     <footer><button ref={closeButtonRef} type="button" className="tt-button tt-button--quiet" onClick={onClose}>Close</button>{canInvite && selectedSeat && (!invite || invite.seat !== selectedSeat || expired || invite.revoked || activeMember) && <button ref={createButtonRef} type="button" className="tt-button tt-button--primary" disabled={busy || view.members.some(member => member.seat === selectedSeat)} onClick={() => onCreate(selectedSeat)}>{busy ? <LoaderCircle size={14} className="tt-spin" /> : <Plus size={14} />} Create invitation for {seatLabel(selectedSeat)}</button>}</footer>
   </section></div>;
 }

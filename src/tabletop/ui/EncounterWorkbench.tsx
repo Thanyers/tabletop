@@ -11,6 +11,7 @@ interface EncounterBoard {
   turn: EncounterState['turn'];
   events: EncounterState['events'];
   rule: EncounterState['rule'];
+  paused?: { at: number; remainingReactionMs: number | null };
 }
 
 function boardFromPlan(plan: WorkbenchProps['plan']): EncounterBoard | null {
@@ -36,6 +37,7 @@ export function EncounterWorkbench(props: WorkbenchProps) {
   const characters = board?.characters ?? state.characters;
   const events = board?.events ?? state.events;
   const activeRule = board?.rule ?? state.rule;
+  const pauseState = board?.paused ?? (state as EncounterState & { paused?: EncounterBoard['paused'] }).paused;
   const [rule, setRule] = useState<EncounterRule>(state.rule);
   const [note, setNote] = useState(state.dmNote ?? '');
   const [tick, setTick] = useState(Date.now());
@@ -43,18 +45,19 @@ export function EncounterWorkbench(props: WorkbenchProps) {
   useEffect(() => setRule(state.rule), [state.rule]);
   useEffect(() => setNote(state.dmNote ?? ''), [state.dmNote]);
   useEffect(() => {
-    if (!pending) return;
+    if (!pending || pauseState) return;
     const timer = window.setInterval(() => setTick(Date.now()), 500);
     return () => window.clearInterval(timer);
-  }, [pending?.deadline]);
+  }, [pending?.deadline, Boolean(pauseState)]);
 
-  const remainingMs = pending ? Math.max(0, pending.deadline - tick) : 0;
+  const remainingMs = pending ? Math.max(0, pauseState ? pauseState.remainingReactionMs ?? 0 : pending.deadline - tick) : 0;
   const remainingSeconds = Math.ceil(remainingMs / 1000);
   const hitTarget = pending?.target ?? null;
   const canReact = view.actor.role === 'player' && !!actorId && !!pending && phase === 'reaction.open'
     && (hitTarget === actorId || activeRule.allyTarget)
-    && !pending.shields.some((intent) => intent.actor === actorId || intent.target === hitTarget);
-  const canEndTurn = (isDm || ownTurn) && (phase === 'turn.start' || phase === 'action.resolved') && !pending;
+    && !pending.shields.some((intent) => intent.actor === actorId || intent.target === hitTarget)
+    && !pauseState;
+  const canEndTurn = (isDm || ownTurn) && (phase === 'turn.start' || phase === 'action.resolved') && !pending && !pauseState;
 
   const proposeRule = () => { void onCommand('evolve.propose', { change: { kind: 'encounter', rule } }); };
   const saveNote = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); void onCommand('encounter.saveNote', { text: note }); };
@@ -65,8 +68,9 @@ export function EncounterWorkbench(props: WorkbenchProps) {
       <section className="tt-case-heading"><div><span className="tt-kicker">ENCOUNTER TABLE · {view.actor.role.toUpperCase()}</span><h1>A shared turn with a clear reaction window</h1><p>Original, simplified fantasy rules. The server records the hit and owns turn order.</p></div><span className="tt-revision-mark"><Activity size={15} /> Rules r{state.ruleRevision}</span></section>
 
       <section className="tt-encounter-board" aria-label="Encounter board with Mira, Pip, and goblin">
-        <header className="tt-encounter-board__header"><div><span className="tt-kicker">CONNECTED ENCOUNTER</span><strong>{phase.replaceAll('.', ' · ')}</strong></div><span className="tt-turn-pill"><i aria-hidden="true" /> {nameFor(activeCharacter)}’s turn</span></header>
-        <svg className="tt-encounter-map" viewBox="0 0 720 230" role="img" aria-label={`Fantasy encounter map. It is ${nameFor(activeCharacter)}'s turn.`}>
+        <header className="tt-encounter-board__header"><div><span className="tt-kicker">CONNECTED ENCOUNTER</span><strong>{pauseState ? 'Paused' : phase.replaceAll('.', ' · ')}</strong></div><span className={'tt-turn-pill' + (pauseState ? ' is-paused' : '')}><i aria-hidden="true" /> {pauseState ? 'DM paused the encounter' : `${nameFor(activeCharacter)}’s turn`}</span></header>
+        {pauseState && <p className="tt-encounter-paused" role="status"><ShieldCheck size={14} /> The Dungeon Master paused this encounter. Turn actions and the reaction timer are on hold.</p>}
+        <svg className="tt-encounter-map" viewBox="0 0 720 230" role="img" aria-label={`Fantasy encounter map. ${pauseState ? 'The encounter is paused.' : `It is ${nameFor(activeCharacter)}'s turn.`}`}>
           <defs><pattern id="tt-map-grid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#dce4dc" strokeWidth="1" /></pattern></defs>
           <rect x="0" y="0" width="720" height="230" fill="url(#tt-map-grid)" />
           <path d="M33 174 C144 119 181 134 252 170 S383 214 456 159 585 111 682 141" fill="none" stroke="#b8c9b8" strokeWidth="24" strokeLinecap="round" opacity=".48" />
@@ -92,14 +96,16 @@ export function EncounterWorkbench(props: WorkbenchProps) {
       </section>
 
       <section className="tt-section tt-action-section" aria-labelledby="tt-action-title"><header className="tt-section__header"><div><span className="tt-kicker">SERVER-AUTHORITATIVE ACTIONS</span><h2 id="tt-action-title">Current action</h2></div><span className={`tt-status-pill ${phase === 'reaction.open' ? 'tt-status-pill--pending' : 'tt-status-pill--active'}`}>{phase === 'reaction.open' ? 'Reaction open' : phase.replaceAll('.', ' ')}</span></header>
-        {phase === 'reaction.open' && pending ? <div className="tt-reaction-window"><div className="tt-reaction-window__icon"><Shield size={20} /></div><div className="tt-reaction-window__copy"><strong>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}.</strong><p>{pending.damage === null ? 'Damage stays with the DM until resolution.' : `${pending.damage} damage is pending.`} Eligible players may react before the DM resolves it.</p>{pending.shields.length > 0 && <small>{pending.shields.length} shield reaction{pending.shields.length === 1 ? '' : 's'} declared; outcomes are checked when resolved.</small>}</div><div className={`tt-countdown${remainingSeconds <= 5 ? ' is-ending' : ''}`} aria-live="polite"><Clock3 size={15} /><strong>{remainingSeconds}s</strong><span>server deadline</span></div></div> : phase === 'action.resolved' ? <div className="tt-action-summary"><Activity size={16} /><p>The action is resolved. The active character can end the turn when ready.</p></div> : <div className="tt-action-summary"><Activity size={16} /><p>{nameFor(activeCharacter)} is ready. The next action follows the active table rules.</p></div>}
+        {pauseState && pending ? <div className="tt-reaction-window tt-reaction-window--paused"><div className="tt-reaction-window__icon"><Shield size={20} /></div><div className="tt-reaction-window__copy"><strong>Reaction window paused</strong><p>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}. The remaining time is held until the DM resumes.</p>{pending.shields.length > 0 && <small>{pending.shields.length} shield reaction{pending.shields.length === 1 ? '' : 's'} declared before the pause.</small>}</div><div className="tt-countdown" aria-label={`${remainingSeconds} seconds held`}><Clock3 size={15} /><strong>{remainingSeconds}s</strong><span>held</span></div></div> : phase === 'reaction.open' && pending ? <div className="tt-reaction-window"><div className="tt-reaction-window__icon"><Shield size={20} /></div><div className="tt-reaction-window__copy"><strong>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}.</strong><p>{pending.damage === null ? 'Damage stays with the DM until resolution.' : `${pending.damage} damage is pending.`} Eligible players may react before the DM resolves it.</p>{pending.shields.length > 0 && <small>{pending.shields.length} shield reaction{pending.shields.length === 1 ? '' : 's'} declared; outcomes are checked when resolved.</small>}</div><div className={`tt-countdown${remainingSeconds <= 5 ? ' is-ending' : ''}`} aria-live="polite"><Clock3 size={15} /><strong>{remainingSeconds}s</strong><span>server deadline</span></div></div> : phase === 'action.resolved' ? <div className="tt-action-summary"><Activity size={16} /><p>The action is resolved. The active character can end the turn when ready.</p></div> : <div className="tt-action-summary"><Activity size={16} /><p>{nameFor(activeCharacter)} is ready. The next action follows the active table rules.</p></div>}
         <div className="tt-action-controls">
-          {isDm && phase === 'turn.start' && activeCharacter === 'goblin' && <div className="tt-declare-controls"><span><Target size={14} /> Goblin target</span><button type="button" className="tt-button tt-button--primary" disabled={busy !== null} onClick={() => void onCommand('encounter.declareHit', { target: 'mira' })}>Declare hit · Mira</button><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={() => void onCommand('encounter.declareHit', { target: 'pip' })}>Declare hit · Pip</button></div>}
-          {view.actor.role === 'player' && actorId && phase === 'reaction.open' && <div className="tt-shield-controls"><span><ShieldCheck size={14} /> Shield reaction</span>{canReact ? <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || remainingMs === 0} onClick={() => void onCommand('encounter.shield', { target: hitTarget })}>{hitTarget === actorId ? `Shield ${nameFor(actorId)}` : `Shield ally · ${nameFor(hitTarget)}`}</button> : <p>{actorId !== hitTarget && !activeRule.allyTarget ? 'The current rule only permits self protection.' : 'Your character has already reacted or this target is covered.'}</p>}</div>}
-          {isDm && phase === 'reaction.open' && pending && <button type="button" className="tt-button tt-button--primary" disabled={busy !== null} onClick={() => void onCommand('encounter.resolve', {})}>Resolve hit</button>}
+          {isDm && <button type="button" className={pauseState ? 'tt-button tt-button--primary' : 'tt-button tt-button--quiet'} disabled={busy !== null} onClick={() => void onCommand(pauseState ? 'encounter.resume' : 'encounter.pause', {})}><ShieldCheck size={14} /> {pauseState ? 'Resume encounter' : 'Pause encounter'}</button>}
+          {isDm && phase === 'turn.start' && activeCharacter === 'goblin' && <div className="tt-declare-controls"><span><Target size={14} /> Goblin target</span><button type="button" className="tt-button tt-button--primary" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'mira' })}>Declare hit · Mira</button><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'pip' })}>Declare hit · Pip</button></div>}
+          {view.actor.role === 'player' && actorId && phase === 'reaction.open' && <div className="tt-shield-controls"><span><ShieldCheck size={14} /> Shield reaction</span>{canReact ? <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || remainingMs === 0} onClick={() => void onCommand('encounter.shield', { target: hitTarget })}>{hitTarget === actorId ? `Shield ${nameFor(actorId)}` : `Shield ally · ${nameFor(hitTarget)}`}</button> : <p>{pauseState ? 'The Dungeon Master paused the reaction window.' : actorId !== hitTarget && !activeRule.allyTarget ? 'The current rule only permits self protection.' : 'Your character has already reacted or this target is covered.'}</p>}</div>}
+          {isDm && phase === 'reaction.open' && pending && <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.resolve', {})}>Resolve hit</button>}
           {(isDm || ownTurn) && <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || !canEndTurn} onClick={() => void onCommand('encounter.endTurn', {})}><RotateCw size={14} /> End {nameFor(activeCharacter)}’s turn</button>}
           {view.actor.role === 'player' && !ownTurn && phase !== 'reaction.open' && <p className="tt-turn-hint">You can act when your character’s turn begins.</p>}
-          {phase === 'reaction.open' && <p className="tt-turn-hint">The reaction deadline is set by the server. The DM can resolve the window at any time.</p>}
+          {pauseState && <p className="tt-turn-hint" role="status">Gameplay is paused for everyone. The remaining reaction time will continue when the DM resumes.</p>}
+          {!pauseState && phase === 'reaction.open' && <p className="tt-turn-hint">The reaction deadline is set by the server. The DM can resolve the window at any time.</p>}
         </div>
       </section>
 

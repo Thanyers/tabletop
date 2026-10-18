@@ -11,5 +11,7 @@ server/.data/
 .data/
 coverage/
 playwright-report/
+.wrangler/
+worker-build/
 *.log
 !.env.example

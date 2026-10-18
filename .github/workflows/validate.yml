@@ -44,10 +44,18 @@ jobs:
         run: npm run build
       - name: Check server secret stays out of browser assets
         run: node scripts/check-client-secrets.mjs
+      - name: Workers, D1 and Durable Object integration tests
+        run: npm run test:cloudflare -- --reporter=default --reporter=json --outputFile=test-results/cloudflare-report.json
+      - name: Bundle Cloudflare without publishing
+        env:
+          WRANGLER_SEND_METRICS: false
+        run: npm run build:cloudflare
       - name: Install test browser
         run: node node_modules/playwright/cli.js install --with-deps chromium
       - name: Seven-session local browser acceptance
         run: npm run test:r1:browser
+      - name: Account multiplayer and AI browser acceptance on Workers
+        run: npm run test:cloudflare:browser
       - name: Retain test summaries
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -55,7 +63,9 @@ jobs:
           name: local-r1-test-summaries
           path: |
             test-results/unit-report.json
+            test-results/cloudflare-report.json
             test-results/tabletop-r1/report.json
+            test-results/cloudflare-browser/report.json
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore

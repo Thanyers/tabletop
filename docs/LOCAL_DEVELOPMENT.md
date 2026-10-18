@@ -73,7 +73,7 @@ Teaching and encounter cases use their deterministic server rules and can be exp
 
 ## Model and upload status
 
-The server-side DeepSeek Flash adapter is available for a deliberate, bounded synthetic probe; see [provider verification](AI_PROVIDER_VERIFICATION.md) for results and commands. It is not wired into the application. The model capability endpoint still reports it disabled, and a model request fails closed. The manual rule editor, simulation, validation, and approval flow remain available. Keep `DEEPSEEK_KEY` in an ignored local file or the server process environment; never prefix it with `VITE_` or include it in a browser build.
+The Node guest runtime keeps its model endpoint disabled. The Cloudflare runtime connects DeepSeek Flash to authenticated jobs, consent, and a durable budget ledger. See the Cloudflare checks below and [provider verification](AI_PROVIDER_VERIFICATION.md) for separate bounded live API evidence. Keep `DEEPSEEK_KEY` in an ignored local file or server secret; never prefix it with `VITE_` or include it in a browser build.
 
 Local mode currently accepts the supported CSV and text-PDF inputs into a private filesystem object store for development. Production mode rejects public upload requests with `UPLOAD_SERVICE_NOT_CONFIGURED` until a scanner and durable private object store are selected and wired into the application. The container candidate does not add those services. Do not treat the local parser or filesystem store as an upload-security or production-storage service.
 
@@ -91,6 +91,23 @@ Production mode is a deployment candidate that requires all of the following to 
 
 Production startup does not apply database migrations; it requires the configured PostgreSQL schema to be ready. The explicit migration entrypoint is `node --import tsx server/migrate.ts --environment production`. A database owner must approve the target database, schema operation, scope, and recovery plan before anyone runs it. Do not run that command against a shared or production database as part of ordinary startup.
 
-The revised [production setup proposal](PRODUCTION_SETUP.md) uses Cloudflare Workers, Durable Objects, D1, and R2. It includes the required runtime/storage port plus account, retention, AI, credential, and cost work; no cost approval is implied. The current Node container still expects an HTTPS reverse proxy and external PostgreSQL. It does not provision them or run as a Worker without that port.
+The [Cloudflare candidate](CLOUDFLARE_RELEASE.md) uses a separate Workers entrypoint and D1/SQLite Durable Object repositories, reusing the shared domain and frontend. R2 and public uploads remain deferred. No resource or cost approval follows from a local test. The alternate Node container still expects an HTTPS reverse proxy and external PostgreSQL.
 
 The included `Dockerfile` is a multistage, non-root container candidate with a built-in Node health check. It defaults to production mode, so it will stop at startup until the production environment and required values are supplied. It has not been deployed, and its presence does not mean production readiness.
+
+## Cloudflare local checks
+
+Run the same locked Node dependencies from this checkout:
+
+```powershell
+npm run build
+npm run test:cloudflare
+npm run build:cloudflare
+npm run test:cloudflare:browser
+```
+
+The Workers test suite creates disposable local D1/SQLite databases and synthetic Google signatures. The browser test starts its own loopback Workers emulator, synthetic account sessions, and simulated DeepSeek response. It exercises actual account UI, invitations, multiplayer, admin metadata, consent, draft-only AI, and logout/resume. It makes no paid provider requests and does not prove the configured Google client works on the eventual hosted URL. The browser defaults to installed Edge on Windows; set `BROWSER_CHANNEL=chromium` where Playwright Chromium is installed, as CI does.
+
+`npm run build:cloudflare` is a dry run; it writes an ignored bundle to `worker-build/`. The D1 ID in `wrangler.jsonc` is intentionally a placeholder, and both AI budgets default to zero. Normal tests do not load the operator credential file.
+
+For manual emulator development, initialize only the local database with `npx wrangler d1 migrations apply DB --local`, then `npm run dev:cloudflare`. This binds to `http://127.0.0.1:8787` and overrides the public origin accordingly. Manual Google sign-in requires a separately registered loopback callback and local bindings; the automated fixture is the supported no-credential test path. Never add `--remote` to a routine local migration. Production provisioning requires the explicit scope in the release document.

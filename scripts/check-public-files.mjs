@@ -19,7 +19,7 @@ const credentialPatterns = [
 for (const file of files) {
   const path = resolve(root, file);
   if (lstatSync(path).isSymbolicLink()) { findings.push({ file, reason: 'Symlink requires explicit review' }); continue; }
-  if (/(?:^|\/)(?:node_modules|dist|test-results|playwright-report|\.data|\.npm-cache|\.codex|\.agents|\.aws|\.opencode)(?:\/|$)/.test(file)
+  if (/(?:^|\/)(?:node_modules|dist|worker-build|test-results|playwright-report|\.data|\.wrangler|\.npm-cache|\.codex|\.agents|\.aws|\.opencode)(?:\/|$)/.test(file)
       || (/(?:^|\/)\.env(?:\.|$)/.test(file) && !file.endsWith('/.env.example') && file !== '.env.example')
       || /(?:^|\/)\.dev\.vars(?:\.|$)/.test(file)
       || /(?:^|\/)(?:\.npmrc|\.pypirc|id_rsa|id_ed25519)$/.test(file)

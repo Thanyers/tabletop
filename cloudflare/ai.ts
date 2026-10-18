@@ -1,0 +1,401 @@
+import { z } from 'zod';
+import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
+import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
+import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
+import type { ModelInput } from '../server/model.js';
+import { DeepSeekChangeProvider, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
+import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
+import type { Env } from './contracts.js';
+
+const MAX_PROMPT_CHARS = 4_000;
+const MAX_INVOICE_INPUT_BYTES = 48_000;
+const MAX_CHANGE_INPUT_BYTES = 24_000;
+const PROVIDER_OVERHEAD_BYTES = 8_000;
+const MAX_PROVIDER_INPUT_TOKENS = 56_000;
+const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
+const CHANGE_MAX_OUTPUT_TOKENS = 512;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isWorkspaceView(value: unknown): value is WorkspaceView {
+  if (!isRecord(value) || !isRecord(value.actor) || !isRecord(value.domain) || !Array.isArray(value.members)) return false;
+  if (typeof value.id !== 'string' || typeof value.title !== 'string' || typeof value.revision !== 'string'
+    || !Number.isSafeInteger(value.epoch) || typeof value.createdAt !== 'number' || typeof value.expiresAt !== 'number') return false;
+  if (!['invoice', 'teaching', 'encounter'].includes(String(value.kind))) return false;
+  if (!['invoice', 'teaching', 'encounter'].includes(String(value.domain.kind))) return false;
+  if (value.domain.kind !== value.kind) return false;
+  if (typeof value.actor.actorId !== 'string' || typeof value.actor.name !== 'string'
+    || !['owner', 'teacher', 'learner', 'dm', 'player'].includes(String(value.actor.role))) return false;
+  return value.members.every((member) => isRecord(member)
+    && typeof member.actorId === 'string' && typeof member.name === 'string'
+    && ['owner', 'teacher', 'learner', 'dm', 'player'].includes(String(member.role)));
+}
+
+const requestSchema = z.strictObject({
+  workspace: z.custom<WorkspaceView>(isWorkspaceView),
+  actorId: ID_SCHEMA,
+  commandId: ID_SCHEMA,
+  prompt: z.string().min(3).max(MAX_PROMPT_CHARS),
+  consent: z.literal(true),
+  sourceId: z.string().min(1).max(160).optional(),
+});
+
+const teachingChangeSchema: z.ZodType<ChangeSet> = z.strictObject({
+  kind: z.literal('teaching'),
+  parameters: physicsParamsSchema,
+});
+const encounterChangeSchema: z.ZodType<ChangeSet> = z.strictObject({
+  kind: z.literal('encounter'),
+  rule: encounterRuleSchema,
+});
+const invoiceDomainSchema = z.object({
+  kind: z.literal('invoice'),
+  sources: z.array(z.object({
+    id: ID_SCHEMA,
+    kind: z.enum(['shipments', 'invoice', 'rate-card', 'excerpt']),
+    status: z.enum(['provided', 'verified', 'rejected']),
+    excerpt: z.string().max(100_000),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })).max(100),
+  rules: z.array(z.object({
+    id: ID_SCHEMA,
+    kind: z.enum(['base', 'step', 'surcharge']),
+    zone: z.union([z.enum(['bangkok', 'regional']), z.literal('*')]),
+    amountSatang: z.number().int().safe().min(0).max(MAX_SATANG),
+    from: DATE_SCHEMA,
+    to: DATE_SCHEMA.nullable(),
+    sourceId: ID_SCHEMA,
+    enabled: z.boolean(),
+  })).max(200),
+});
+const teachingDomainSchema = z.object({ kind: z.literal('teaching'), parameters: physicsParamsSchema });
+const encounterDomainSchema = z.object({ kind: z.literal('encounter'), rule: encounterRuleSchema });
+const billingUsageSchema = z.strictObject({
+  promptTokens: z.number().int().safe().nonnegative(),
+  completionTokens: z.number().int().safe().nonnegative(),
+  cacheHitTokens: z.number().int().safe().nonnegative(),
+  cacheMissTokens: z.number().int().safe().nonnegative(),
+  reasoningTokens: z.number().int().safe().nonnegative().optional(),
+});
+const billingSuccessSchema = z.strictObject({
+  ok: z.literal(true),
+  status: z.enum(['reserved', 'dispatching', 'settled', 'uncertain']).optional(),
+  claimed: z.boolean().optional(),
+  duplicate: z.boolean().optional(),
+  reservedMicroUsd: z.number().int().safe().nonnegative().optional(),
+  actualMicroUsd: z.number().int().safe().nonnegative().optional(),
+  usage: billingUsageSchema.optional(),
+});
+
+export interface AIProposalRequest {
+  workspace: WorkspaceView;
+  actorId: string;
+  commandId: string;
+  prompt: string;
+  consent: true;
+  sourceId?: string;
+}
+
+export interface AIProposalResult {
+  change: ChangeSet;
+  jobId: string;
+  usage: DeepSeekUsage;
+}
+
+type BillingBinding = BillingRequestBinding;
+
+type PreparedInput =
+  | { kind: 'invoice'; providerInput: ModelInput; hashInput: unknown; maxOutputTokens: number; maximumInputBytes: number }
+  | { kind: 'teaching' | 'encounter'; providerInput: DeepSeekChangeInput; hashInput: unknown; maxOutputTokens: number; maximumInputBytes: number };
+
+interface BillingResponse {
+  ok: boolean;
+  errorCode?: string;
+  status?: 'reserved' | 'dispatching' | 'settled' | 'uncertain';
+  claimed?: boolean;
+  duplicate?: boolean;
+  reservedMicroUsd?: number;
+  actualMicroUsd?: number;
+  usage?: BillingUsage;
+}
+
+class AIError extends DomainError {
+  constructor(code: string, message: string) { super(code, message); }
+}
+
+function fail(code: string, message: string): never {
+  throw new AIError(code, message);
+}
+
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(',')}}`;
+}
+
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function billingConfigured(env: Env): { monthly: number; daily: number } {
+  if (!env.DEEPSEEK_KEY || env.DEEPSEEK_KEY.length > 4096 || /\s/.test(env.DEEPSEEK_KEY)) {
+    fail('MODEL_NOT_CONFIGURED', 'AI proposals are not configured for this workspace.');
+  }
+  const read = (raw: string | undefined): number | null => {
+    if (!raw || !/^\d{1,12}$/.test(raw)) return null;
+    const amount = Number(raw);
+    return Number.isSafeInteger(amount) && amount > 0 && amount <= 100_000_000_000 ? amount : null;
+  };
+  const monthly = read(env.AI_MONTHLY_BUDGET_MICRO_USD);
+  const daily = env.AI_DAILY_BUDGET_MICRO_USD === undefined ? monthly : read(env.AI_DAILY_BUDGET_MICRO_USD);
+  if (monthly === null || daily === null) fail('MODEL_NOT_CONFIGURED', 'AI proposals are not configured for this workspace.');
+  return { monthly, daily };
+}
+
+function actorAndRole(request: AIProposalRequest): void {
+  const { workspace, actorId } = request;
+  const actor = workspace.actor;
+  const member = workspace.members.find((item) => item.actorId === actorId);
+  if (actor.actorId !== actorId || !member || member.role !== actor.role) {
+    fail('AI_FORBIDDEN', 'The current room membership cannot request this proposal.');
+  }
+  const requiredRole = workspace.kind === 'invoice' ? 'owner'
+    : workspace.kind === 'teaching' ? 'teacher' : 'dm';
+  if (actor.role !== requiredRole) fail('AI_FORBIDDEN', 'The current room role cannot request this proposal.');
+  if (workspace.domain.kind !== workspace.kind || !Number.isSafeInteger(workspace.epoch)
+    || workspace.epoch < 0 || typeof workspace.revision !== 'string' || workspace.revision.length > 256) {
+    fail('AI_CONTEXT_INVALID', 'The current room state is invalid.');
+  }
+}
+
+function prepareInput(request: AIProposalRequest): PreparedInput {
+  const { workspace, prompt } = request;
+  if (workspace.domain.kind === 'invoice') {
+    const state = invoiceDomainSchema.safeParse(workspace.domain);
+    if (!state.success) fail('AI_CONTEXT_INVALID', 'The current invoice state is invalid.');
+    const invoice = state.data;
+    const source = invoice.sources.find((item) => item.id === request.sourceId
+      && item.status === 'verified' && (item.kind === 'rate-card' || item.kind === 'excerpt'));
+    if (!source) fail('SOURCE_REQUIRED', 'Select a verified rate card or excerpt before requesting an invoice proposal.');
+    const providerInput = {
+      prompt,
+      sourceId: source.id,
+      excerpt: source.excerpt.slice(0, 4_000),
+      rules: structuredClone(invoice.rules),
+    };
+    return {
+      kind: 'invoice',
+      providerInput,
+      hashInput: { kind: 'invoice', prompt, source: { id: source.id, sha256: source.sha256, excerpt: providerInput.excerpt }, rules: providerInput.rules },
+      maxOutputTokens: INVOICE_MAX_OUTPUT_TOKENS,
+      maximumInputBytes: MAX_INVOICE_INPUT_BYTES,
+    };
+  }
+  if (request.sourceId !== undefined) fail('AI_INPUT_INVALID', 'This proposal type does not accept a source identifier.');
+  if (workspace.domain.kind === 'teaching') {
+    const parsed = teachingDomainSchema.safeParse(workspace.domain);
+    if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current teaching state is invalid.');
+    const providerInput: DeepSeekChangeInput = { kind: 'teaching', prompt, parameters: structuredClone(parsed.data.parameters) };
+    return {
+      kind: 'teaching',
+      providerInput,
+      hashInput: providerInput,
+      maxOutputTokens: CHANGE_MAX_OUTPUT_TOKENS,
+      maximumInputBytes: MAX_CHANGE_INPUT_BYTES,
+    };
+  }
+  const parsed = encounterDomainSchema.safeParse(workspace.domain);
+  if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current encounter state is invalid.');
+  const providerInput: DeepSeekChangeInput = { kind: 'encounter', prompt, rule: structuredClone(parsed.data.rule) };
+  return {
+    kind: 'encounter',
+    providerInput,
+    hashInput: providerInput,
+    maxOutputTokens: CHANGE_MAX_OUTPUT_TOKENS,
+    maximumInputBytes: MAX_CHANGE_INPUT_BYTES,
+  };
+}
+
+function mapUsage(usage: DeepSeekUsage): BillingUsage {
+  return {
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    cacheHitTokens: usage.cacheHitTokens,
+    cacheMissTokens: usage.cacheMissTokens,
+    ...(usage.reasoningTokens === undefined ? {} : { reasoningTokens: usage.reasoningTokens }),
+  };
+}
+
+function parseBillingResponse(raw: unknown): BillingResponse {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    fail('AI_BILLING_UNAVAILABLE', 'The billing service could not confirm this proposal.');
+  }
+  const value = raw as Record<string, unknown>;
+  if (value.ok !== true) {
+    const code = typeof value.errorCode === 'string' && /^[A-Z0-9_]{1,64}$/.test(value.errorCode)
+      ? value.errorCode : 'BILLING_UNAVAILABLE';
+    const safe = code === 'BILLING_BUDGET' ? 'The configured AI budget has been reached.'
+      : code === 'BILLING_QUOTA' ? 'The AI request limit has been reached.'
+        : code === 'MODEL_NOT_CONFIGURED' ? 'AI proposals are not configured for this workspace.'
+          : code === 'BILLING_CONFLICT' ? 'This command was already used for a different proposal.'
+            : 'The billing service could not accept this proposal.';
+    fail(code, safe);
+  }
+  const parsed = billingSuccessSchema.safeParse(value);
+  if (!parsed.success) fail('AI_BILLING_UNAVAILABLE', 'The billing service returned an invalid result.');
+  return parsed.data;
+}
+
+async function billingCall(env: Env, path: string, binding: BillingBinding, extras: Record<string, unknown> = {}): Promise<BillingResponse> {
+  try {
+    const durableObject = env.BILLING.get(env.BILLING.idFromName('global'));
+    const response = await durableObject.fetch(`https://billing.internal${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...binding, ...extras }),
+    });
+    if (!response.ok) {
+      const raw = await response.json().catch(() => null) as unknown;
+      return parseBillingResponse(raw);
+    }
+    return parseBillingResponse(await response.json() as unknown);
+  } catch (error) {
+    if (error instanceof DomainError) throw error;
+    fail('AI_BILLING_UNAVAILABLE', 'The billing service could not confirm this proposal.');
+  }
+}
+
+function safeProviderFailure(error: unknown): DomainError {
+  const allowed = new Set([
+    'MODEL_PROVIDER_INPUT_INVALID', 'MODEL_PROVIDER_INPUT_TOO_LARGE', 'MODEL_PROVIDER_OUTPUT_REJECTED',
+    'MODEL_PROVIDER_RESPONSE_INVALID', 'MODEL_PROVIDER_RESPONSE_TOO_LARGE', 'MODEL_PROVIDER_HTTP_ERROR',
+    'MODEL_PROVIDER_REQUEST_FAILED', 'MODEL_PROVIDER_TIMEOUT', 'MODEL_PROVIDER_ABORTED',
+    'MODEL_PROVIDER_NOT_CONFIGURED',
+  ]);
+  const code = error instanceof DomainError && allowed.has(error.code) ? error.code : 'MODEL_PROVIDER_REQUEST_FAILED';
+  const message = code === 'MODEL_PROVIDER_TIMEOUT' ? 'The model proposal timed out.'
+    : code === 'MODEL_PROVIDER_OUTPUT_REJECTED' ? 'The model returned a proposal that failed validation.'
+      : code === 'MODEL_PROVIDER_INPUT_TOO_LARGE' ? 'The proposal request exceeds the allowed size.'
+        : code === 'MODEL_PROVIDER_ABORTED' ? 'The model proposal was cancelled.'
+          : 'The model proposal could not be completed.';
+  return new DomainError(code, message);
+}
+
+function validateChange(kind: WorkspaceView['kind'], raw: unknown): ChangeSet {
+  const parsed = kind === 'invoice' ? invoiceChangeSchema.safeParse(raw)
+    : kind === 'teaching' ? teachingChangeSchema.safeParse(raw) : encounterChangeSchema.safeParse(raw);
+  if (!parsed.success) fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The model returned a proposal that failed validation.');
+  return parsed.data;
+}
+
+async function settleUsage(env: Env, binding: BillingBinding, usage: BillingUsage): Promise<void> {
+  try {
+    const settled = await billingCall(env, '/settle', binding, { outcome: 'settled', usage });
+    if (settled.status === 'settled') return;
+  } catch {
+    // A lost acknowledgement is resolved below through the idempotent ledger status.
+  }
+  try {
+    const current = await billingCall(env, '/status', binding);
+    if (current.status === 'settled') return;
+    const retried = await billingCall(env, '/settle', binding, { outcome: 'settled', usage });
+    if (retried.status === 'settled') return;
+  } catch {
+    // Provider usage is known, but without a confirmed settlement no draft is returned.
+  }
+  fail('AI_BILLING_UNCERTAIN', 'The billing service could not confirm the model usage; no proposal was returned.');
+}
+
+/**
+ * Returns a validated proposal only. The room authority must recheck its current session,
+ * membership, epoch, and revision before committing `change` as evolve.propose.
+ */
+export async function proposeChange(
+  env: Env,
+  rawRequest: AIProposalRequest,
+  fetchImpl?: typeof fetch,
+): Promise<AIProposalResult> {
+  const parsed = requestSchema.safeParse(rawRequest);
+  if (!parsed.success) fail('AI_INPUT_INVALID', 'Provide a bounded proposal request and explicit consent.');
+  const request = parsed.data;
+  billingConfigured(env);
+  actorAndRole(request);
+  const prepared = prepareInput(request);
+  const providerBytes = new TextEncoder().encode(canonical(prepared.providerInput)).byteLength;
+  if (providerBytes > prepared.maximumInputBytes
+    || providerBytes + PROVIDER_OVERHEAD_BYTES > MAX_PROVIDER_INPUT_TOKENS) {
+    fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The proposal request exceeds the allowed size.');
+  }
+  const maxInputTokens = Math.max(1, providerBytes + PROVIDER_OVERHEAD_BYTES);
+  const maxReservation = priceMicroUsd(maxInputTokens, prepared.maxOutputTokens);
+  if (!Number.isSafeInteger(maxReservation) || maxReservation <= 0) {
+    fail('AI_INPUT_INVALID', 'The proposal request is invalid.');
+  }
+
+  const { workspace } = request;
+  const bindingBase = {
+    actorId: request.actorId,
+    workspaceId: workspace.id,
+    epoch: workspace.epoch,
+  };
+  const commandBinding = { ...bindingBase, commandId: request.commandId };
+  const bindingText = canonical(commandBinding);
+  const [jobId, inputHash] = await Promise.all([
+    sha256(`tabletop-ai-job-v1:${bindingText}`),
+    sha256(canonical({
+      ...commandBinding,
+      revision: workspace.revision,
+      kind: workspace.kind,
+      prompt: request.prompt,
+      sourceId: request.sourceId ?? null,
+      data: prepared.hashInput,
+    })),
+  ]);
+  const binding: BillingBinding = { id: jobId, ...bindingBase, inputHash };
+  await billingCall(env, '/reserve', binding, {
+    maxInputTokens,
+    maxOutputTokens: prepared.maxOutputTokens,
+  });
+  const dispatch = await billingCall(env, '/dispatch', binding);
+  if (dispatch.claimed !== true) {
+    fail('AI_PROPOSAL_ALREADY_DISPATCHED', 'This proposal request has already been dispatched or is uncertain.');
+  }
+
+  let change: ChangeSet;
+  let usage: DeepSeekUsage;
+  try {
+    if (prepared.kind === 'invoice') {
+      const provider = new DeepSeekProvider({
+        apiKey: env.DEEPSEEK_KEY!,
+        fetch: fetchImpl,
+        maxTokens: INVOICE_MAX_OUTPUT_TOKENS,
+        timeoutMs: 30_000,
+      });
+      const result = await provider.proposeWithUsage(prepared.providerInput, new AbortController().signal);
+      change = validateChange(workspace.kind, result.change);
+      usage = result.usage;
+    } else {
+      const provider = new DeepSeekChangeProvider({ apiKey: env.DEEPSEEK_KEY!, fetch: fetchImpl, timeoutMs: 30_000 });
+      const result = await provider.propose(prepared.providerInput, new AbortController().signal);
+      change = validateChange(workspace.kind, result.change);
+      usage = result.usage;
+    }
+  } catch (error) {
+    try {
+      await billingCall(env, '/settle', binding, { outcome: 'uncertain' });
+    } catch {
+      // The active lease will expire into uncertain while its reservation remains charged.
+    }
+    throw safeProviderFailure(error);
+  }
+
+  await settleUsage(env, binding, mapUsage(usage));
+  return { change, jobId, usage };
+}
+
+export { invoiceChangeSchema, teachingChangeSchema, encounterChangeSchema };

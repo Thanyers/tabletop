@@ -217,7 +217,7 @@ async function readBoundedBody(response: Response, signal: AbortSignal): Promise
     offset += chunk.byteLength;
   }
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(joined);
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(joined);
   } catch {
     throw providerError('MODEL_PROVIDER_RESPONSE_INVALID');
   }
@@ -306,7 +306,7 @@ export class DeepSeekProvider implements ModelProvider {
     }
 
     this.#apiKey = options.apiKey;
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = options.fetch ?? fetch.bind(globalThis);
     this.maxTokens = maxTokens;
     this.timeoutMs = timeoutMs;
   }
@@ -369,7 +369,7 @@ export class DeepSeekProvider implements ModelProvider {
             accept: 'application/json',
           },
           body: requestBody,
-          redirect: 'error',
+          redirect: 'manual',
           signal: controller.signal,
         });
         void request.then((lateResponse) => {
