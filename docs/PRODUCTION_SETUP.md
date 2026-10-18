@@ -1,6 +1,6 @@
 # Tabletop production setup and resume
 
-สถานะวันที่ 18 ตุลาคม 2026: **เปิด public alpha บน Cloudflare Free แล้ว** ที่ [Tabletop](https://tabletop.ptchrr.workers.dev) มี Workers API/Static Assets, Room/Billing SQLite Durable Objects, D1 และคีย์ฝั่งเซิร์ฟเวอร์ครบ เจ้าของเลือก Free และยังไม่ได้เปิด Paid ทดสอบ Google login ของเจ้าของ, logout/login resume และ AI จริงครบสามเคสแล้ว แต่ hosted multiplayer สองบัญชีและ recovery ยังต้องตรวจ ดู [ผลทดสอบหลังเปิดระบบ](../handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md)
+สถานะวันที่ 19 ตุลาคม 2026: **เปิด public alpha บน Cloudflare Free แล้ว** ที่ [Tabletop](https://tabletop.ptchrr.workers.dev) มี Workers API/Static Assets, Room/Billing SQLite Durable Objects, D1 และคีย์ฝั่งเซิร์ฟเวอร์ครบ เจ้าของเลือก Free และยังไม่ได้เปิด Paid ทดสอบ Google login ของเจ้าของ, logout/login resume และ AI จริงครบสามเคสแล้ว กติกา Encounter r1 เปิดใช้ตามคำอนุมัติเฉพาะห้องและตรวจหลัง reload แล้ว แต่ hosted multiplayer สองบัญชีและ recovery ยังต้องตรวจ ดู [ผลทดสอบหลังเปิดระบบ](../handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md) และ [auto demo พร้อมประวัติ](AUTO_DEMO.md)
 
 ## ระบบที่ใช้
 

@@ -35,4 +35,8 @@ Public uploads remain disabled on Cloudflare until private R2 storage and scanni
 
 The [production setup](docs/PRODUCTION_SETUP.md) uses Workers Static Assets/API, one SQLite Durable Object per room, D1 identity/session/directory records, and a separate Billing Durable Object. No Render or Supabase service is required. The included Dockerfile packages the alternate Node/PostgreSQL runtime and has not been deployed. See [local development](docs/LOCAL_DEVELOPMENT.md) for both test paths and [release scope](docs/CLOUDFLARE_RELEASE.md) for provisioning, costs, and remaining acceptance checks.
 
+## Repeatable persona demos
+
+Run `npm run demo:auto` to build and execute isolated invoice, teaching, and encounter scenarios with synthetic accounts. Each run retains a separate JSON history and a self-contained HTML replay; `npm run demo:auto:view` opens a read-only local server for the latest report. Playback does not submit commands or call AI. See [Auto demo and retained history](docs/AUTO_DEMO.md) for personas, expected failures, privacy boundaries, and the separate owner-approved hosted activation record.
+
 `docs/source-baseline.json` records the approved local source snapshot. It is provenance for this checkout, not imported Sites history or a production release record.

@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Tabletop · บันทึกเล่นย้อนผลทดสอบ</title>
+  <style>
+    :root{color-scheme:light;--ink:#243548;--muted:#718079;--line:#dbe4df;--paper:#f3f4f1;--card:#fffefa;--teal:#24796b;--blue:#315eb0;--amber:#a9742e;--red:#a35045;--green:#277653;--mono:ui-monospace,"Cascadia Code",Consolas,monospace}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 "Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif}button,select{font:inherit}button,select{color:inherit}button:focus-visible,select:focus-visible{outline:3px solid #4777cb;outline-offset:3px}button:disabled{cursor:not-allowed;opacity:.45}
+    .shell{width:min(1240px,100%);margin:0 auto;padding:clamp(14px,3vw,32px)}.hero{position:relative;overflow:hidden;padding:clamp(22px,4vw,42px);border:1px solid #314756;border-radius:18px;color:#f3f5ee;background:linear-gradient(135deg,#243548,#345254 76%,#3c6459);box-shadow:0 18px 42px #263b391b}.hero:after{position:absolute;right:-48px;bottom:-96px;width:280px;height:280px;border:1px solid #ffffff1b;border-radius:50%;box-shadow:0 0 0 26px #ffffff08,0 0 0 52px #ffffff06;content:""}.eyebrow{color:#b6d8ca;font:700 11px/1.5 var(--mono);letter-spacing:.1em;text-transform:uppercase}.hero h1{max-width:780px;margin:8px 0 8px;font-size:clamp(24px,4vw,38px);line-height:1.2;letter-spacing:-.025em}.hero-copy{max-width:780px;margin:0;color:#d4e0d9;font-size:14px}.hero-note{display:inline-flex;align-items:center;gap:8px;margin-top:18px;padding:7px 11px;border:1px solid #8dbca455;border-radius:99px;color:#ddf2e5;background:#ffffff0d;font-size:12px;font-weight:700}
+    .meta-grid,.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}.meta-card,.summary-card,.panel,.hosted-panel{border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:0 6px 18px #263b3907}.meta-card,.summary-card{padding:12px 14px}.meta-card span,.summary-card span{display:block;color:var(--muted);font-size:11px}.meta-card strong,.summary-card strong{display:block;overflow-wrap:anywhere;margin-top:3px;font-size:13px}.summary-card strong{font-size:21px;line-height:1.25}.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid var(--line);border-radius:99px;color:#5d6c65;background:#f6f8f4;font-size:11px;font-weight:750;white-space:nowrap}.pill:before{width:7px;height:7px;border-radius:50%;background:currentColor;content:""}.pill--passed{border-color:#cbe3d4;color:var(--green);background:#eff8f1}.pill--failed{border-color:#e9cfc9;color:var(--red);background:#fff2ef}.pill--expected-rejection{border-color:#ecdcb9;color:#976a28;background:#fff8e9}.pill--info{border-color:#cbd8ef;color:var(--blue);background:#f0f4fc}.summary-card--failed strong{color:var(--red)}
+    .panel,.hosted-panel{margin-top:16px;padding:clamp(16px,2.8vw,24px)}.section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:15px}.section-head h2{margin:2px 0;color:#2b4444;font-size:21px;line-height:1.35}.section-head p{margin:4px 0 0;color:var(--muted);font-size:12px}.control-grid{display:grid;grid-template-columns:minmax(170px,.7fr) minmax(240px,1.3fr) auto;align-items:end;gap:10px}.field{display:grid;gap:5px;min-width:0}.field label{color:#61756c;font-size:11px;font-weight:750}.field select{width:100%;min-height:42px;padding:8px 34px 8px 10px;border:1px solid #d6e1db;border-radius:7px;background:#fff;font-size:13px}.transport{display:flex;flex-wrap:wrap;gap:6px}.transport button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:0 12px;border:1px solid #d8e2dc;border-radius:7px;background:#fff;font-size:12px;font-weight:750}.transport button:hover:not(:disabled){border-color:#9dc4b5;background:#f0f7f2}.transport .primary{border-color:#276e63;color:white;background:#276e63}.transport .primary:hover:not(:disabled){background:#1c6257}.progress-wrap{display:grid;grid-template-columns:auto minmax(80px,1fr);align-items:center;gap:12px;margin:16px 0 14px}.step-counter{min-width:104px;color:#526961;font:700 11px var(--mono)}.progress{height:7px;overflow:hidden;border-radius:99px;background:#e9eeea}.progress span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#24796b,#6da691);transition:width .18s ease}
+    .detail-grid{display:grid;grid-template-columns:minmax(250px,.78fr) minmax(0,1.45fr);gap:12px;align-items:start}.scenario-card,.step-card{min-width:0;padding:17px;border:1px solid #e1e8e3;border-radius:10px;background:#fff}.scenario-card{background:linear-gradient(160deg,#fbfcf8,#f6f8f3)}.scenario-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.scenario-card h3,.step-card h3{margin:8px 0 10px;font-size:18px;line-height:1.35}.domain-label{display:inline-flex;padding:3px 7px;border:1px solid #d3e5dc;border-radius:4px;color:#347666;background:#eff7f1;font-size:10px;font-weight:750}.persona{display:grid;gap:3px;margin:12px 0;padding:10px 11px;border-left:3px solid #72a796;border-radius:0 6px 6px 0;background:#f1f7f3}.persona strong{font-size:13px}.persona span,.persona p{margin:0;color:#66766e;font-size:12px}.copy-block{margin-top:12px}.copy-block h4,.checkpoint h4{margin:0 0 4px;color:#577169;font-size:11px;font-weight:800}.copy-block p{margin:0;color:#42534e;font-size:13px;overflow-wrap:anywhere}.expected-outcome{padding:10px;border:1px solid #d6e3ef;border-radius:7px;background:#f3f7fc}.step-card__top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.step-card__top h3{margin:0}.step-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin:7px 0 14px;color:#73817a;font-size:11px}.step-meta code{color:#53695e;font:10px var(--mono);overflow-wrap:anywhere}.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.compare{min-width:0;padding:11px;border:1px solid #e2e9e4;border-radius:7px;background:#fafbf8}.compare--observed{border-color:#d4e7dc;background:#f4f9f4}.compare strong{display:block;margin-bottom:4px;color:#65786f;font-size:11px}.compare p{margin:0;color:#334740;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}.check-list{display:grid;gap:6px;margin:12px 0 0;padding:0;list-style:none}.check-list li{display:flex;align-items:flex-start;gap:7px;padding:7px 9px;border:1px solid #e5ebe6;border-radius:6px;color:#52645c;background:#fff;font-size:11px}.check-list li:before{flex:0 0 auto;color:var(--green);font-weight:900;content:"✓"}.check-list li.is-failed{border-color:#ead6d0;color:#914c41;background:#fff5f1}.check-list li.is-failed:before{color:var(--red);content:"×"}
+    .checkpoint{margin-top:13px;padding-top:12px;border-top:1px solid #e5eae6}.checkpoint-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.revision-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.revision-chip{padding:4px 7px;border:1px solid #e1e8e4;border-radius:5px;color:#61716a;background:#f8faf7;font:10px var(--mono)}.visual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;margin-top:9px}.metric{min-width:0;padding:10px;border:1px solid #dfe8e2;border-radius:7px;background:#fbfcf9}.metric span{display:block;color:#72827a;font-size:10px}.metric strong{display:block;margin-top:3px;color:#2b544b;font-size:17px;line-height:1.3;overflow-wrap:anywhere}.metric small{display:block;margin-top:2px;color:#88958e;font-size:10px}.character-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:7px;margin-top:9px}.character{padding:10px;border:1px solid #dae6de;border-radius:7px;background:#f6faf5}.character strong{display:block;margin-bottom:7px;font-size:13px}.character-stats{display:flex;flex-wrap:wrap;gap:5px}.stat{padding:4px 6px;border:1px solid #dfe7e1;border-radius:4px;color:#52685d;background:#fff;font:700 10px var(--mono)}.no-checkpoint{margin:0;color:#88958e;font-size:12px}.timeline{display:flex;gap:7px;overflow-x:auto;margin-top:14px;padding:3px 2px 8px}.timeline button{display:grid;flex:0 0 min(190px,54vw);grid-template-columns:24px minmax(0,1fr);align-items:start;gap:7px;min-height:46px;padding:8px;border:1px solid #dfe6e1;border-radius:7px;color:#66776f;background:#fff;text-align:left;font-size:10px;line-height:1.35}.timeline button[aria-current="step"]{border-color:#6da491;color:#315e52;background:#f1f8f3;box-shadow:0 0 0 2px #5a9a7b20}.timeline-index{display:grid;width:22px;height:22px;place-items:center;border-radius:5px;color:#446b5e;background:#eaf3ed;font:700 10px var(--mono)}.timeline-label{overflow-wrap:anywhere}
+    .limitations{margin-top:14px;padding:12px 14px;border:1px solid #e7dfc9;border-radius:8px;color:#736746;background:#fffbf1}.limitations h3{margin:0 0 5px;font-size:12px}.limitations ul{margin:0;padding-left:20px;font-size:11px}.hosted-panel{border-color:#d8dce8;background:linear-gradient(145deg,#fafbff,#fffefa)}.hosted-kicker{color:#596ba0}.observed-note{margin:0 0 14px;padding:10px 12px;border-left:3px solid #7185bf;border-radius:0 6px 6px 0;color:#4f5e79;background:#f0f3fa;font-size:12px}.hosted-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}.hosted-head strong{font-size:14px}.history-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.history-card{min-width:0;padding:14px;border:1px solid #e1e5ec;border-radius:8px;background:#fff}.history-card h3{margin:0 0 8px;color:#4a5878;font-size:13px}.history-card p{margin:5px 0;color:#5d6a71;font-size:12px;overflow-wrap:anywhere}.history-card .rule-copy{padding:8px;border-radius:5px;color:#485b53;background:#f4f7f3;font-size:11px}.history-limit{margin:10px 0 0;padding-left:20px;color:#6a6e78;font-size:11px}.footer-note{margin:18px 4px 0;color:#84918b;font-size:11px;text-align:center}.mono{font-family:var(--mono);font-size:.92em;overflow-wrap:anywhere}
+    @media(max-width:920px){.control-grid{grid-template-columns:1fr 1fr}.transport{grid-column:1/-1}.meta-grid,.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-grid{grid-template-columns:1fr 1.3fr}}
+    @media(max-width:680px){.shell{padding:12px}.hero{border-radius:12px}.detail-grid,.history-grid{grid-template-columns:1fr}.section-head{display:block}.section-head>.pill{margin-top:8px}.step-card__top{align-items:flex-start}.compare-grid{grid-template-columns:1fr}.transport button{flex:1 1 calc(50% - 6px)}.control-grid{grid-template-columns:1fr}.transport{grid-column:auto}.progress-wrap{grid-template-columns:auto minmax(60px,1fr)}.meta-card,.summary-card{padding:10px}.summary-card strong{font-size:18px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="eyebrow">TABLETOP · RUN JOURNAL</div>
+      <h1>การเล่นย้อนผลทดสอบที่บันทึกไว้ / ข้อมูลจำลอง</h1>
+      <p class="hero-copy">รายงานนี้แสดงลำดับผลที่บันทึกไว้เพื่อสาธิตการทำงานของโต๊ะตรวจยอด บทเรียนฟิสิกส์ และฉากผจญภัย โดยใช้ข้อมูลจำลอง</p>
+      <div class="hero-note">REPLAY ONLY · ไม่มีการเรียก API · ไม่สามารถแก้ไขห้องจริงหรือระบบผลิต</div>
+    </header>
+    <section class="meta-grid" aria-label="ข้อมูลการทดสอบ">
+      <div class="meta-card"><span>Run ID</span><strong class="mono" id="run-id"></strong></div>
+      <div class="meta-card"><span>Source commit</span><strong class="mono" id="source-commit"></strong></div>
+      <div class="meta-card"><span>Source tree · scenario catalog</span><strong id="source-integrity"></strong></div>
+      <div class="meta-card"><span>Runtime label · synthetic identity</span><strong id="runtime-label"></strong></div>
+      <div class="meta-card"><span>AI และการแก้ไข production</span><strong id="safety-label"></strong></div>
+    </section>
+    <section class="summary-grid" aria-label="สรุปผลจำลอง">
+      <div class="summary-card"><span>Scenarios</span><strong id="summary-scenarios"></strong></div>
+      <div class="summary-card"><span>Passed</span><strong id="summary-passed"></strong></div>
+      <div class="summary-card summary-card--failed"><span>Failed</span><strong id="summary-failed"></strong></div>
+      <div class="summary-card"><span>Recorded checks</span><strong id="summary-checks"></strong></div>
+    </section>
+    <main>
+      <section class="panel" aria-labelledby="replay-heading">
+        <div class="section-head">
+          <div><div class="eyebrow">RECORDED STEPS</div><h2 id="replay-heading">เล่นดูทีละเหตุการณ์</h2><p>เริ่มหยุดไว้ที่ขั้นแรก คุณเลือกเดินหน้าหรือเล่นอัตโนมัติจนจบได้</p></div>
+          <span class="pill" id="run-status"></span>
+        </div>
+        <div class="control-grid">
+          <div class="field"><label for="domain-filter">กรองประเภท</label><select id="domain-filter" aria-label="กรองสถานการณ์ตามประเภท"></select></div>
+          <div class="field"><label for="scenario-picker">เลือกสถานการณ์</label><select id="scenario-picker" aria-label="เลือกสถานการณ์ที่บันทึกไว้"></select></div>
+          <div class="transport" aria-label="ควบคุมการเล่นย้อน">
+            <button class="primary" id="play-toggle" type="button" aria-pressed="false">เล่นต่อ</button>
+            <button id="previous-step" type="button" aria-label="ขั้นก่อนหน้า">ก่อนหน้า</button>
+            <button id="next-step" type="button" aria-label="ขั้นถัดไป">ถัดไป</button>
+            <button id="restart-replay" type="button">เริ่มใหม่</button>
+          </div>
+        </div>
+        <div class="progress-wrap"><div class="step-counter" id="step-counter" role="status" aria-live="polite"></div><div class="progress" aria-hidden="true"><span id="progress-bar"></span></div></div>
+        <div class="detail-grid">
+          <aside class="scenario-card" id="scenario-detail" aria-label="ข้อมูลผู้เล่นและเป้าหมาย"></aside>
+          <article class="step-card" id="step-detail" aria-live="polite"></article>
+        </div>
+        <nav class="timeline" id="step-timeline" aria-label="เลือกขั้นทดสอบ"></nav>
+      </section>
+      <section class="limitations" aria-labelledby="limits-heading">
+        <h3 id="limits-heading">ข้อจำกัดของชุดเล่นย้อนนี้</h3>
+        <ul id="run-limitations"></ul>
+      </section>
+      <section class="hosted-panel" id="hosted-history" hidden aria-labelledby="hosted-heading">
+        <div class="section-head">
+          <div><div class="eyebrow hosted-kicker">SEPARATE OBSERVED RECORD</div><h2 id="hosted-heading">ประวัติการเปิดใช้จากห้องบนระบบโฮสต์</h2><p>เป็นหลักฐานจากบันทึกคนละชุดกับข้อมูลจำลองด้านบน</p></div>
+          <span class="pill pill--info">OBSERVED · ไม่นับในผลทดสอบ</span>
+        </div>
+        <p class="observed-note">ส่วนนี้เป็นบันทึกเหตุการณ์ของห้องทดสอบที่มีอยู่เท่านั้น ไม่ใช่การทดสอบผู้เล่นหลายบัญชี และไม่ใช่การทดสอบ AI สด ผลด้านบนยังคงเป็นข้อมูลจำลองแยกต่างหาก</p>
+        <div id="hosted-detail"></div>
+      </section>
+    </main>
+    <p class="footer-note">ไฟล์รายงานนี้ทำงานในเบราว์เซอร์แบบออฟไลน์ · ไม่ส่งข้อมูลออกและไม่มีปุ่มที่เรียกใช้บริการ</p>
+  </div>
+  <script>const REPORT_DATA={"run":{"schemaVersion":1,"runId":"0926de9d-b570-4229-a6a9-3e10f5e2d7d8","startedAt":"2026-10-18T22:17:47.557Z","finishedAt":"2026-10-18T22:17:49.074Z","sourceCommit":"ddf93fc613f23388174fa38d5aab05a7cfd8af72","sourceDirty":true,"scenarioCatalogHash":"f5d7ce9db089c6d611ad6b979edf050e7feaee5fc8c6c29a6414967e847108b7","workerBundleSha256":"42cbc7dbbcae7d8f3234f2da4426a553e491ecf38bd56f3316852457438de116","runtime":"local-cloudflare","identity":"synthetic","ai":"not-used","productionMutations":0,"status":"passed","scenarios":[{"id":"invoice-evidence-gaps","title":"เจ้าของร้านแยกยอดที่รู้แล้วออกจากหลักฐานที่ยังขาด","domain":"invoice","persona":{"name":"คุณอ้อม","role":"เจ้าของร้าน","goal":"ตรวจยอดที่มีหลักฐานและระบุแถวพื้นที่ห่างไกลที่ยังสรุปไม่ได้"},"prompt":"ช่วยปิดยอดเฉพาะส่วนที่มีหลักฐาน และบอกว่าควรขอเอกสารอะไรเพิ่มสำหรับแถวที่ยังไม่ทราบ","expectedOutcome":"บันทึกผลกระทบยอดจาก fixture ได้ พร้อมระบุ 2 แถวที่ยังไม่ทราบเพราะไม่มีอัตราพื้นที่ห่างไกล","status":"passed","steps":[{"index":1,"label":"บันทึกผลจากหลักฐานตัวอย่างที่ตรวจแล้ว","actor":"คุณอ้อม","command":"invoice.saveRun","status":"passed","expected":"ยอดที่คำนวณได้และจำนวนแถวที่ยังไม่ทราบถูกเก็บเป็น run","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"totals":{"expectedSatang":8500,"deltaSatang":500,"unknownCount":2}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Two fixture rows remain unknown","passed":true},{"label":"Known fixture expected total is 8500 satang","passed":true},{"label":"Missing remote evidence stays explicit","passed":true}]},{"index":2,"label":"ตรวจยอดและช่องว่างหลักฐานในมุมมองเจ้าของ","actor":"คุณอ้อม","command":"GET workspace projection","status":"passed","expected":"run มี 2 unknown rows และ known expected 8500 satang","observed":"Authorized projection returned.","checkpoint":{"ruleRevision":0,"totals":{"expectedSatang":8500,"deltaSatang":500,"unknownCount":2}},"checks":[{"label":"Authorized read returned HTTP 200","passed":true},{"label":"Saved run remains available after a fresh GET","passed":true},{"label":"Known total remains 8500 satang after a fresh GET","passed":true},{"label":"Only safe aggregate checkpoint is recorded","passed":true}]}],"limitations":[]},{"id":"invoice-dated-rule-lifecycle","title":"ผู้ดูแลบิลทบทวนช่วงวันที่และส่งออกผลที่บันทึกแล้ว","domain":"invoice","persona":{"name":"คุณนก","role":"เจ้าของตาราง","goal":"ตรวจช่วงวันที่ของอัตราเดิม บันทึกผล และส่งออก CSV"},"prompt":"ทบทวนอัตรากรุงเทพฯ ก่อนวันที่ 15 ให้ตรงกับวันที่ตัวอย่างที่ทราบ แล้วจำลอง ตรวจ อนุมัติ เปิดใช้ บันทึกผล และส่งออก CSV","expectedOutcome":"กติกาช่วงวันที่ผ่านการตรวจและอนุมัติ; ผลที่บันทึกยังแสดงช่องว่างหลักฐาน 2 แถว และ CSV เปิดได้","status":"passed","steps":[{"index":1,"label":"เสนอช่วงวันที่จำกัดตามวันที่ตัวอย่างที่ทราบ","actor":"คุณนก","command":"evolve.propose","status":"passed","expected":"ผู้ดูแลบิลสร้าง candidate จากกติกาและแหล่งข้อมูลตัวอย่างที่ตรวจแล้ว","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Candidate created without changing the active rule","passed":true}]},{"index":2,"label":"จำลองผลก่อนและหลัง","actor":"คุณนก","command":"evolve.simulate","status":"passed","expected":"จำลองที่คำนวณซ้ำได้โดยยังไม่เปลี่ยนกติกาที่ใช้งาน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Simulation saved and Active unchanged","passed":true}]},{"index":3,"label":"ตรวจ candidate ด้วยชุดตรวจโดเมน","actor":"คุณนก","command":"evolve.validate","status":"passed","expected":"หลักฐานตรวจ candidate ผ่านทุกข้อ","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"All candidate validation checks passed","passed":true}]},{"index":4,"label":"เจ้าของอนุมัติ candidate ที่ตรวจแล้ว","actor":"คุณนก","command":"evolve.approve","status":"passed","expected":"มี approval ที่ผูกกับ candidate และ proof ปัจจุบัน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Human approval recorded","passed":true}]},{"index":5,"label":"เปิดใช้ช่วงวันที่ที่อนุมัติ","actor":"คุณนก","command":"evolve.activate","status":"passed","expected":"rule revision เพิ่มหนึ่งขั้นและช่วงวันที่มีจุดเริ่มกับจุดสิ้นสุด","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Rule revision incremented once","passed":true},{"label":"Bounded dates persisted","passed":true}]},{"index":6,"label":"บันทึกผลหลังเปิดใช้กติกา","actor":"คุณนก","command":"invoice.saveRun","status":"passed","expected":"ผลรวมเดิมยังแสดง unknown สองแถว เพราะ fixture ไม่มีอัตราพื้นที่ห่างไกล","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1,"totals":{"expectedSatang":8500,"deltaSatang":500,"unknownCount":2}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Saved run matches known fixture unknown count","passed":true},{"label":"Rule revision recorded in run","passed":true}]},{"index":7,"label":"ส่งออก CSV ที่ได้รับสิทธิ์","actor":"คุณนก","command":"GET invoice export CSV","status":"passed","expected":"เจ้าของได้รับ CSV ที่มีหัวคอลัมน์ shipment_id","observed":"CSV export returned with the expected header.","checks":[{"label":"Export returned HTTP 200","passed":true},{"label":"Export uses CSV content type","passed":true},{"label":"CSV header is present","passed":true}]}],"limitations":[]},{"id":"invoice-overlap-and-retry","title":"ผู้ตรวจทานหยุดกติกาซ้อนและตรวจคำสั่งซ้ำ","domain":"invoice","persona":{"name":"คุณก้อง","role":"ผู้ตรวจทาน","goal":"ตรวจข้อเสนอที่ซ้อนกับกติกาเดิมและยืนยันการลองซ้ำอย่างปลอดภัย"},"prompt":"ตรวจข้อเสนออัตราฐานกรุงเทพฯ ที่ซ้อนช่วงเดิม อย่าเปิดใช้หากผลตรวจไม่ผ่าน และลองคำสั่งบันทึกเดิมซ้ำ","expectedOutcome":"ข้อเสนอซ้อนถูกทำเครื่องหมายไม่ผ่าน; คำสั่งซ้ำได้ receipt เดิมและ payload คนละชุดถูกปฏิเสธ","status":"passed","steps":[{"index":1,"label":"เสนอช่วงที่ซ้อนกับอัตราฐานเดิม","actor":"คุณก้อง","command":"evolve.propose","status":"passed","expected":"ข้อเสนอเก็บเป็น draft เพื่อให้ validator ตรวจข้อขัดแย้ง","observed":"Command accepted by the local Worker.","checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Active rule revision stays unchanged","passed":true}]},{"index":2,"label":"จำลองข้อเสนอที่ซ้อน","actor":"คุณก้อง","command":"evolve.simulate","status":"passed","expected":"เก็บผลจำลองก่อนการตรวจข้อจำกัด","observed":"Command accepted by the local Worker.","checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Candidate simulation exists","passed":true}]},{"index":3,"label":"ปฏิเสธข้อเสนอจากข้อจำกัดของกติกา","actor":"คุณก้อง","command":"evolve.validate","status":"passed","expected":"proof ระบุว่า candidate ไม่ผ่าน และ Active ยัง revision 0","observed":"Command accepted by the local Worker.","checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Trusted proof blocks the overlapping rule","passed":true},{"label":"Active rule revision remains zero","passed":true}]},{"index":4,"label":"บันทึก run ด้วย command receipt","actor":"คุณก้อง","command":"invoice.saveRun","status":"passed","expected":"คำสั่งแรกสำเร็จและบันทึก receipt","observed":"Command accepted with a new receipt.","checkpoint":{"ruleRevision":0,"totals":{"expectedSatang":8500,"deltaSatang":500,"unknownCount":2}},"checks":[{"label":"First command committed","passed":true},{"label":"Command is not marked duplicate","passed":true}]},{"index":5,"label":"ลองคำสั่งเดิมซ้ำหลัง response แรก","actor":"คุณก้อง","command":"invoice.saveRun retry","status":"passed","expected":"ได้รับ receipt เดิมโดยไม่มี run ซ้ำ","observed":"Existing command receipt returned.","checks":[{"label":"Replay is accepted","passed":true},{"label":"Replay is marked duplicate","passed":true}]},{"index":6,"label":"ตรวจ run และ revision หลังลองซ้ำ","actor":"คุณก้อง","command":"GET workspace projection","status":"passed","expected":"มี run ใหม่เพียงหนึ่งรายการและ revision ไม่เปลี่ยนจาก receipt แรก","observed":"Fresh projection confirms the replay did not write again.","checkpoint":{"ruleRevision":0,"totals":{"expectedSatang":8500,"deltaSatang":500,"unknownCount":2}},"checks":[{"label":"Fresh GET returned HTTP 200","passed":true},{"label":"Exactly one run was added","passed":true},{"label":"Projected revision is unchanged after replay","passed":true},{"label":"Data revision is unchanged after replay","passed":true}]},{"index":7,"label":"ปฏิเสธการใช้ command ID เดิมกับ payload อื่น","actor":"คุณก้อง","command":"invoice.saveRun mismatched retry","status":"expected-rejection","expected":"ระบบปฏิเสธการใช้ command ID ซ้ำกับข้อมูลคนละชุด","observed":"Rejected with IDEMPOTENCY_MISMATCH.","checks":[{"label":"Mismatch returns HTTP 409","passed":true},{"label":"Mismatch has typed error","passed":true}]},{"index":8,"label":"ตรวจ run และ revision หลัง payload conflict","actor":"คุณก้อง","command":"GET workspace projection","status":"passed","expected":"payload ที่ขัดกับ receipt ไม่เพิ่ม run หรือเปลี่ยน revision","observed":"Fresh projection confirms the conflict left state unchanged.","checkpoint":{"ruleRevision":0,"totals":{"expectedSatang":8500,"deltaSatang":500,"unknownCount":2}},"checks":[{"label":"Fresh GET returned HTTP 200","passed":true},{"label":"Run count remains unchanged after conflict","passed":true},{"label":"Projected revision is unchanged after conflict","passed":true},{"label":"Data revision is unchanged after conflict","passed":true}]}],"limitations":[]},{"id":"teaching-private-experiments","title":"ครูเมย์กำหนดกราฟระดับสูงและแยกคำตอบผู้เรียน","domain":"teaching","persona":{"name":"ครูเมย์","role":"ครู","goal":"ให้ผู้เรียนสองคนทำโจทย์ฟิสิกส์ในมุมมองของตนเอง"},"prompt":"กำหนดโจทย์แรง มวล และเวลาเดียวกัน ให้ฟ้าดูกราฟระดับสูง แล้วให้ผู้เรียนแต่ละคนส่งคำตอบของตัวเอง","expectedOutcome":"ครูอัปเดตบทเรียนและกำหนดกราฟระดับสูงให้ฟ้าได้; คำตอบแยกตามผู้เรียน และบันทึกครูถูกซ่อนจากผู้เรียน","status":"passed","steps":[{"index":1,"label":"ครูตั้งค่าบทเรียนเดียวกันให้ทั้งห้อง","actor":"ครูเมย์","command":"teaching.setParameters","status":"passed","expected":"บทเรียน revision 1 ให้ acceleration 2, velocity 4, position 4","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1,"physics":{"force":10,"mass":5,"time":2,"acceleration":2,"velocity":4,"position":4}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Shared rule revision advances","passed":true},{"label":"Derived physics matches deterministic equation","passed":true}]},{"index":2,"label":"ครูกำหนดกราฟระดับสูงให้ผู้เรียนฟ้า","actor":"ครูเมย์","command":"teaching.setRepresentation","status":"passed","expected":"มุมมองเฉพาะตัวถูกเก็บโดยไม่เปลี่ยนค่าบทเรียน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Rule revision remains shared revision 1","passed":true}]},{"index":3,"label":"ตรวจกราฟที่ครูกำหนดในมุมมองผู้เรียน","actor":"ครูเมย์","command":"GET authorized learner projections","status":"passed","expected":"ฟ้าเห็นกราฟระดับสูงที่ครูกำหนด; ต้นยังไม่มีค่ามุมมองส่วนตัวที่ถูกกำหนดให้ฟ้า","observed":"Fresh learner projections confirm the targeted setting and peer isolation.","checkpoint":{"privateFieldsHidden":true},"checks":[{"label":"Learner one GET returned HTTP 200","passed":true},{"label":"Learner two GET returned HTTP 200","passed":true},{"label":"Learner one sees its targeted graph and advanced difficulty","passed":true},{"label":"Learner two has no setting assigned to learner one","passed":true}]},{"index":4,"label":"ครูบันทึกหมายเหตุส่วนตัว","actor":"ครูเมย์","command":"teaching.saveNote","status":"passed","expected":"หมายเหตุอยู่ในมุมมองครูและซ่อนจากผู้เรียนทั้งสองคน","observed":"Command accepted by the local Worker.","checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Teacher private note written","passed":true}]},{"index":5,"label":"ผู้เรียนฟ้าส่งคำตอบของตนเอง","actor":"ผู้เรียนฟ้า","command":"teaching.answer","status":"passed","expected":"มีคำตอบของฟ้าในมุมมองฟ้าเท่านั้น; ข้อมูลครูไม่ปรากฏ","observed":"Command accepted by the local Worker.","checkpoint":{"physics":{"force":10,"mass":5,"time":2,"acceleration":2,"velocity":4,"position":4},"privateFieldsHidden":true},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Learner one answer is visible to its actor","passed":true},{"label":"Teacher note is hidden from learner one","passed":true}]},{"index":6,"label":"ผู้เรียนต้นส่งคำตอบแยกจากฟ้า","actor":"ผู้เรียนต้น","command":"teaching.answer","status":"passed","expected":"มุมมองของต้นมีเฉพาะคำตอบของต้น","observed":"Command accepted by the local Worker.","checkpoint":{"physics":{"force":10,"mass":5,"time":2,"acceleration":2,"velocity":4,"position":4},"privateFieldsHidden":true},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Learner two answer is visible to its actor","passed":true},{"label":"Other learner answer is hidden","passed":true},{"label":"Teacher note is hidden from learner two","passed":true}]},{"index":7,"label":"ตรวจว่าคำตอบของผู้เรียนทั้งสองยังแยกกัน","actor":"ครูเมย์","command":"GET authorized projections","status":"passed","expected":"ครูเห็นคำตอบ 2 รายการโดยไม่บันทึกเนื้อหาส่วนตัวลงรายงาน","observed":"Fresh learner projections contain only each learner’s own answer; report stores visibility checks.","checkpoint":{"privateFieldsHidden":true},"checks":[{"label":"Teacher sees two answers","passed":true},{"label":"Learner one fresh GET returned HTTP 200","passed":true},{"label":"Learner two fresh GET returned HTTP 200","passed":true},{"label":"Learner one sees only its own correct answer","passed":true},{"label":"Learner two sees only its own correct answer","passed":true},{"label":"Peer answers and teacher note stay hidden","passed":true}]}],"limitations":[]},{"id":"teaching-stale-and-role-guards","title":"ผู้เรียนต้นกลับมาตอบโจทย์เก่าและถูกขอให้โหลดโจทย์ใหม่","domain":"teaching","persona":{"name":"ผู้เรียนต้น","role":"ผู้เรียน","goal":"ตรวจว่าโจทย์เก่าและการแก้กติกาที่ไม่ได้รับสิทธิ์ถูกปฏิเสธ"},"prompt":"หลังครูเปลี่ยนบทเรียน ลองส่งคำตอบด้วยรหัสโจทย์เก่า และลองเปลี่ยนค่าบทเรียนในฐานะผู้เรียน","expectedOutcome":"คำตอบโจทย์เก่าถูกปฏิเสธว่า stale และผู้เรียนไม่สามารถเปลี่ยนค่าบทเรียนได้","status":"passed","steps":[{"index":1,"label":"ครูเปลี่ยนบทเรียนหลังมีโจทย์เดิม","actor":"ครูเมย์","command":"teaching.setParameters","status":"passed","expected":"มี question ใหม่และ rule revision เพิ่ม","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1,"physics":{"force":10,"mass":5,"time":2,"acceleration":2,"velocity":4,"position":4}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Question changes after lesson update","passed":true},{"label":"Lesson rule revision is one","passed":true}]},{"index":2,"label":"ปฏิเสธคำตอบที่ใช้โจทย์เก่า","actor":"ผู้เรียนต้น","command":"teaching.answer","status":"expected-rejection","expected":"STALE_LESSON พร้อมให้ผู้เรียนโหลดโจทย์ปัจจุบัน","observed":"Rejected with STALE_LESSON (HTTP 409).","checks":[{"label":"HTTP rejection status matches","passed":true},{"label":"Typed error matches","passed":true}]},{"index":3,"label":"ปฏิเสธผู้เรียนที่พยายามแก้บทเรียน","actor":"ผู้เรียนต้น","command":"teaching.setParameters","status":"expected-rejection","expected":"ROLE_FORBIDDEN ก่อน reducer เปลี่ยน state","observed":"Rejected with ROLE_FORBIDDEN (HTTP 403).","checks":[{"label":"HTTP rejection status matches","passed":true},{"label":"Typed error matches","passed":true}]}],"limitations":[]},{"id":"teaching-invalid-physics","title":"ครูเมย์ปฏิเสธมวลศูนย์ก่อนบันทึกบทเรียน","domain":"teaching","persona":{"name":"ครูเมย์","role":"ครู","goal":"ป้องกันการหารด้วยศูนย์ในแบบจำลองฟิสิกส์"},"prompt":"ตรวจค่ามวลศูนย์และยืนยันว่าระบบไม่เขียนทับบทเรียนที่ใช้งานอยู่","expectedOutcome":"ค่ามวลศูนย์ไม่ผ่าน schema/domain validation และค่าบทเรียนเดิมยังอยู่","status":"passed","steps":[{"index":1,"label":"ปฏิเสธค่ามวลศูนย์","actor":"ครูเมย์","command":"teaching.setParameters","status":"expected-rejection","expected":"INVALID_COMMAND และ state เดิมยังคำนวณ position 10","observed":"Rejected with INVALID_COMMAND (HTTP 422).","checks":[{"label":"HTTP rejection status matches","passed":true},{"label":"Typed error matches","passed":true}]},{"index":2,"label":"ยืนยันว่า state ไม่ถูกเขียนทับ","actor":"ครูเมย์","command":"GET workspace projection","status":"passed","expected":"บทเรียนยังมีค่าเดิม force 10, mass 2, time 2 และ position 10","observed":"The original lesson values and projection were preserved.","checkpoint":{"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"Original physics output remains unchanged","passed":true},{"label":"Rule revision remains zero","passed":true}]}],"limitations":[]},{"id":"encounter-ally-shield","title":"DM วินอนุมัติกติกาเกราะและให้ Mira ช่วย Pip","domain":"encounter","persona":{"name":"DM วิน","role":"ผู้คุมเกม","goal":"อนุมัติกติกาเกราะช่วยเพื่อนที่ใช้ AP หนึ่งแต้ม"},"prompt":"จำลองกติกาให้ Mira ใช้เกราะช่วย Pip ได้หนึ่งครั้งต่อเทิร์น แล้วตรวจ HP และ AP หลังรับมือการโจมตี","expectedOutcome":"หลังอนุมัติกติกา เกราะลดความเสียหายให้ Pip เหลือ HP 8 และ Mira ใช้ AP เหลือ 1","status":"passed","steps":[{"index":1,"label":"เสนอ encounter rule","actor":"DM วิน","command":"evolve.propose","status":"passed","expected":"candidate ถูกสร้างโดยยังไม่เปลี่ยนกติกาใช้งาน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true}]},{"index":2,"label":"จำลอง encounter rule","actor":"DM วิน","command":"evolve.simulate","status":"passed","expected":"มีผลจำลองที่ตรวจซ้ำได้","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true}]},{"index":3,"label":"ตรวจ encounter rule","actor":"DM วิน","command":"evolve.validate","status":"passed","expected":"proof ผ่าน invariant และ simulation","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Validation proof passed","passed":true}]},{"index":4,"label":"เจ้าของอนุมัติ encounter rule","actor":"DM วิน","command":"evolve.approve","status":"passed","expected":"approval ผูกกับ proof ล่าสุด","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true}]},{"index":5,"label":"เปิดใช้ encounter rule","actor":"DM วิน","command":"evolve.activate","status":"passed","expected":"rule revision เพิ่มหนึ่งขั้น","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Rule revision is one","passed":true}]},{"index":6,"label":"Goblin เปิดหน้าต่างโจมตี Pip","actor":"DM วิน","command":"encounter.declareHit","status":"passed","expected":"เปิด reaction window โดยยังไม่มีการลด HP","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1,"characters":[{"name":"Mira","hp":10,"ap":2},{"name":"Pip","hp":10,"ap":2}]},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Reaction window is open","passed":true}]},{"index":7,"label":"ตรวจ projection ของ Mira ก่อนตอบโต้","actor":"ผู้เล่น Mira","command":"GET authorized player projection","status":"passed","expected":"roll และ damage ซ่อนจากผู้เล่น","observed":"Player projection masks private hit values.","checkpoint":{"privateFieldsHidden":true},"checks":[{"label":"Player roll is hidden","passed":true},{"label":"Player damage is hidden","passed":true}]},{"index":8,"label":"Mira ใช้เกราะช่วย Pip","actor":"ผู้เล่น Mira","command":"encounter.shield","status":"passed","expected":"บันทึก reaction intent ตามกติกาที่ active","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1,"characters":[{"name":"Mira","hp":10,"ap":2},{"name":"Pip","hp":10,"ap":2}]},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"One shield intent recorded","passed":true}]},{"index":9,"label":"DM วิน resolve การโจมตี","actor":"DM วิน","command":"encounter.resolve","status":"passed","expected":"Pip ลด 2 HP และ Mira ใช้ AP หนึ่งแต้ม","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1,"characters":[{"name":"Mira","hp":10,"ap":1},{"name":"Pip","hp":8,"ap":2}]},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Pip has 8 HP","passed":true},{"label":"Mira has 1 AP","passed":true}]}],"limitations":[]},{"id":"encounter-pause-and-roles","title":"DM วินพักหน้าต่างตอบโต้และปฏิเสธการกระทำระหว่างพัก","domain":"encounter","persona":{"name":"DM วิน","role":"ผู้คุมเกม","goal":"พักเกมได้โดยไม่เปิดให้ผู้เล่นหรือ DM ทำคำสั่งต่อสู้ระหว่างพัก"},"prompt":"เปิดการโจมตี พัก encounter แล้วลอง resolve ในช่วงพัก; ให้ผู้เล่น Mira ลอง resume ก่อน DM กลับมาดำเนินต่อ","expectedOutcome":"resolve ระหว่างพักและคำสั่ง resume จากผู้เล่นถูกปฏิเสธ; DM resume แล้ว resolve ได้","status":"passed","steps":[{"index":1,"label":"เปิด reaction window ให้ Mira","actor":"DM วิน","command":"encounter.declareHit","status":"passed","expected":"pending hit มีอยู่ก่อนพัก","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"characters":[{"name":"Mira","hp":10,"ap":2},{"name":"Pip","hp":10,"ap":2}]},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Reaction window is open","passed":true}]},{"index":2,"label":"DM พัก encounter","actor":"DM วิน","command":"encounter.pause","status":"passed","expected":"paused state บันทึก remaining reaction time","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"characters":[{"name":"Mira","hp":10,"ap":2},{"name":"Pip","hp":10,"ap":2}]},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Encounter is paused","passed":true},{"label":"Pending hit is preserved","passed":true}]},{"index":3,"label":"ปฏิเสธ resolve ระหว่างพัก","actor":"DM วิน","command":"encounter.resolve","status":"expected-rejection","expected":"ENCOUNTER_PAUSED; hit ยังไม่ถูก resolve","observed":"Rejected with ENCOUNTER_PAUSED (HTTP 422).","checks":[{"label":"HTTP rejection status matches","passed":true},{"label":"Typed error matches","passed":true}]},{"index":4,"label":"ปฏิเสธคำสั่ง resume จากผู้เล่น","actor":"ผู้เล่น Mira","command":"encounter.resume","status":"expected-rejection","expected":"FORBIDDEN; เฉพาะ DM ควบคุม lifecycle","observed":"Rejected with FORBIDDEN (HTTP 403).","checks":[{"label":"HTTP rejection status matches","passed":true},{"label":"Typed error matches","passed":true}]},{"index":5,"label":"DM กลับมา resume encounter","actor":"DM วิน","command":"encounter.resume","status":"passed","expected":"paused marker ถูกลบและ reaction deadline ถูกคืนค่า","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"characters":[{"name":"Mira","hp":10,"ap":2},{"name":"Pip","hp":10,"ap":2}]},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Encounter is resumed","passed":true},{"label":"Pending hit remains available","passed":true}]},{"index":6,"label":"DM resolve หลัง resume","actor":"DM วิน","command":"encounter.resolve","status":"passed","expected":"การโจมตีปิดลงและ HP ของ Mira เป็น 6","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"characters":[{"name":"Mira","hp":6,"ap":2},{"name":"Pip","hp":10,"ap":2}]},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Reaction window closes","passed":true},{"label":"Mira HP is 6","passed":true}]}],"limitations":[]},{"id":"teaching-expired-approval","title":"เจ้าของกลับมาตรวจพบการอนุมัติหมดอายุและอนุมัติใหม่","domain":"teaching","persona":{"name":"ครูเมย์","role":"ครูและผู้อนุมัติ","goal":"ไม่ใช้การอนุมัติที่หมดอายุ และออกหลักฐานอนุมัติใหม่"},"prompt":"ตรวจข้อเสนอที่การอนุมัติหมดเวลาแล้ว จากนั้นสร้างหลักฐานใหม่และเปิดใช้หลังตรวจครบ","expectedOutcome":"การอนุมัติเก่าถูกปฏิเสธ; candidate ที่ตรวจใหม่มี approval ใหม่ก่อนเปลี่ยน rule revision","status":"passed","steps":[{"index":1,"label":"เสนอ candidate","actor":"ครูเมย์","command":"evolve.propose","status":"passed","expected":"candidate ถูกสร้างจากบทเรียนปัจจุบัน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true}]},{"index":2,"label":"จำลอง candidate","actor":"ครูเมย์","command":"evolve.simulate","status":"passed","expected":"ผลจำลองถูกเก็บ","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true}]},{"index":3,"label":"ตรวจ candidate","actor":"ครูเมย์","command":"evolve.validate","status":"passed","expected":"validation proof ผ่าน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Proof passes","passed":true}]},{"index":4,"label":"อนุมัติ candidate","actor":"ครูเมย์","command":"evolve.approve","status":"passed","expected":"approval durable ถูกบันทึก","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Approval exists","passed":true}]},{"index":5,"label":"מתקדםเวลาเฉพาะ approval ในฐานข้อมูลทดสอบแบบ local","actor":"local test harness","command":"test-only local DO SQL","status":"passed","expected":"approval persisted expiry อยู่ในอดีต; domain/application source ไม่ถูกแก้","observed":"Disposable local approval row was marked expired for this scenario.","checks":[{"label":"Exactly a local approval row was updated","passed":true}]},{"index":6,"label":"ปฏิเสธ approval ที่หมดอายุ","actor":"ครูเมย์","command":"evolve.activate","status":"expected-rejection","expected":"APPROVAL_EXPIRED; Active lesson ยังไม่เปลี่ยน","observed":"Rejected with APPROVAL_EXPIRED (HTTP 403).","checks":[{"label":"HTTP rejection status matches","passed":true},{"label":"Typed error matches","passed":true}]},{"index":7,"label":"สร้าง candidate ใหม่สำหรับบทเรียนเดิม","actor":"ครูเมย์","command":"evolve.propose","status":"passed","expected":"candidate เดิมถูกแทนด้วย snapshot/proof ใหม่","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true}]},{"index":8,"label":"จำลอง candidate ใหม่","actor":"ครูเมย์","command":"evolve.simulate","status":"passed","expected":"simulation ใหม่ตรงกับ snapshot","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true}]},{"index":9,"label":"ตรวจ candidate ใหม่","actor":"ครูเมย์","command":"evolve.validate","status":"passed","expected":"proof ใหม่ผ่าน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"New proof passes","passed":true}]},{"index":10,"label":"อนุมัติใหม่","actor":"ครูเมย์","command":"evolve.approve","status":"passed","expected":"approval ใหม่บันทึกหลัง validation","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":0,"physics":{"force":10,"mass":2,"time":2,"acceleration":5,"velocity":10,"position":10}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Fresh approval exists","passed":true}]},{"index":11,"label":"เปิดใช้หลังอนุมัติใหม่","actor":"ครูเมย์","command":"evolve.activate","status":"passed","expected":"เปลี่ยน rule revision เป็น 1 ได้หลัง approval ปัจจุบัน","observed":"Command accepted by the local Worker.","checkpoint":{"ruleRevision":1,"physics":{"force":10,"mass":5,"time":2,"acceleration":2,"velocity":4,"position":4}},"checks":[{"label":"HTTP command accepted","passed":true},{"label":"Workspace acknowledgement returned","passed":true},{"label":"Rule revision advances","passed":true}]}],"limitations":[]}],"summary":{"scenarios":9,"passed":9,"failed":0,"checks":166},"limitations":["All accounts, workspaces, and commands use synthetic identities in a fresh local Miniflare D1 and Durable Object store.","Invoice evidence comes from the built-in reviewed sample fixture; this run does not test document upload or parsing.","AI is not called. The listed prompts are scenario intent; every command is a deterministic test-script action.","Approval expiry is simulated by changing one expiry value inside the disposable local Durable Object store; it is not evidence about a hosted incident.","The Worker outbound network is intercepted and blocked; no production account or hosted room is contacted.","sourceCommit and sourceDirty describe repository files but do not certify that the ignored Worker bundle is fresh; workerBundleSha256 identifies the exact bundle bytes used."]},"history":{"recordedAt":"2026-10-18T21:56:47.105Z","runtimeCommit":"a495cf5617f60af1c51087b54b6c145f0621e938","environment":"hosted-cloudflare-free","roomAlias":"Encounter Table","scope":"One existing owner-created test room; preserve existing room and history","before":{"observedAt":"2026-10-18T21:52:35.366Z","status":"APPROVED","ruleRevision":0,"dataRevision":1,"activeRule":{"allyTarget":false,"apCost":0,"oncePerTurn":false},"intendedRule":{"allyTarget":true,"apCost":1,"oncePerTurn":true}},"firstAttempt":{"result":"rejected","visibleMessage":"This table is not available to the current session. Open a new invitation or choose another table.","persistedRuleRevision":0},"recovery":{"method":"Manually reproposed the same approved rule through the existing UI, then simulated, validated, approved and activated.","additionalAiRequests":0},"after":{"observedAt":"2026-10-18T21:56:01.412Z","status":"ACTIVE","ruleRevision":1,"dataRevision":1,"activeRule":{"allyTarget":true,"apCost":1,"oncePerTurn":true},"revisionOptions":[0,1]},"reload":{"observedAt":"2026-10-18T21:56:47.105Z","passed":true,"ruleRevision":1,"candidateStatus":"ACTIVE","rule":{"allyTarget":true,"apCost":1,"oncePerTurn":true},"revisionOptions":[0,1]},"limitations":["One owner account; hosted two-account gameplay remains untested.","Initial rejection cause not established from its generic UI message.","Recorded summary is not a full Room/D1 backup."]}};</script>
+  <script>
+    (() => {
+      'use strict';
+      const run = REPORT_DATA.run;
+      const hosted = REPORT_DATA.history;
+      const labels = { passed: 'ผ่าน', failed: 'ล้มเหลว', 'expected-rejection': 'ปฏิเสธตามคาด' };
+      const domainLabels = { invoice: 'ตรวจยอดใบแจ้งหนี้', teaching: 'บทเรียนฟิสิกส์', encounter: 'ฉากผจญภัย' };
+      const fieldNames = { force: ['แรง', 'N'], mass: ['มวล', 'kg'], time: ['เวลา', 's'], acceleration: ['ความเร่ง', 'm/s²'], velocity: ['ความเร็ว', 'm/s'], position: ['ตำแหน่ง', 'm'] };
+      const elements = Object.fromEntries(['run-id','source-commit','source-integrity','runtime-label','safety-label','summary-scenarios','summary-passed','summary-failed','summary-checks','run-status','domain-filter','scenario-picker','play-toggle','previous-step','next-step','restart-replay','step-counter','progress-bar','scenario-detail','step-detail','step-timeline','run-limitations','hosted-history','hosted-detail'].map((id) => [id, document.getElementById(id)]));
+      let filteredScenarios = run.scenarios.slice();
+      let activeScenarioId = filteredScenarios[0].id;
+      let stepIndex = 0;
+      let timer = null;
+
+      function node(tag, className, value) {
+        const item = document.createElement(tag);
+        if (className) item.className = className;
+        if (value !== undefined) item.textContent = value;
+        return item;
+      }
+      function clear(element) { while (element.firstChild) element.removeChild(element.firstChild); }
+      function badge(status) {
+        const item = node('span', 'pill pill--' + status, labels[status]);
+        return item;
+      }
+      function dateLabel(value) {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short' }).format(parsed);
+      }
+      function numberLabel(value) { return new Intl.NumberFormat('th-TH', { maximumFractionDigits: 3 }).format(value); }
+      function moneyLabel(satang) {
+        if (satang === null || satang === undefined) return 'ไม่ระบุ';
+        return new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(satang / 100) + ' THB';
+      }
+      function metric(parent, label, value, hint = '') {
+        const card = node('div', 'metric');
+        card.append(node('span', '', label), node('strong', '', value));
+        if (hint) card.append(node('small', '', hint));
+        parent.append(card);
+      }
+      function ruleLabel(rule) {
+        return (rule.allyTarget ? 'ป้องกันตนเองหรือเพื่อนได้' : 'ป้องกันตนเองเท่านั้น') + ' · ' + rule.apCost + ' AP · ' + (rule.oncePerTurn ? 'ครั้งเดียวต่อเทิร์น' : 'ใช้ซ้ำได้');
+      }
+      function stopPlaying() {
+        if (timer !== null) window.clearInterval(timer);
+        timer = null;
+        elements['play-toggle'].textContent = 'เล่นต่อ';
+        elements['play-toggle'].setAttribute('aria-pressed', 'false');
+      }
+      function currentScenario() { return filteredScenarios.find((scenario) => scenario.id === activeScenarioId) ?? filteredScenarios[0]; }
+      function refreshScenarioOptions() {
+        clear(elements['scenario-picker']);
+        filteredScenarios.forEach((scenario) => {
+          const option = document.createElement('option');
+          option.value = scenario.id;
+          option.textContent = domainLabels[scenario.domain] + ' · ' + scenario.title;
+          elements['scenario-picker'].append(option);
+        });
+        elements['scenario-picker'].value = activeScenarioId;
+      }
+      function renderScenario(scenario) {
+        const details = elements['scenario-detail'];
+        clear(details);
+        const titleRow = node('div', 'scenario-title-row');
+        titleRow.append(node('span', 'domain-label', domainLabels[scenario.domain]), badge(scenario.status));
+        details.append(titleRow, node('h3', '', scenario.title));
+        const persona = node('div', 'persona');
+        persona.append(node('strong', '', scenario.persona.name), node('span', '', scenario.persona.role), node('p', '', scenario.persona.goal));
+        details.append(persona);
+        const prompt = node('div', 'copy-block');
+        prompt.append(node('h4', '', 'คำขอหรือข้อความตั้งต้น'), node('p', '', scenario.prompt));
+        const outcome = node('div', 'copy-block expected-outcome');
+        outcome.append(node('h4', '', 'ผลที่คาดหวัง'), node('p', '', scenario.expectedOutcome));
+        details.append(prompt, outcome);
+        if (scenario.limitations.length) {
+          const limited = node('div', 'copy-block');
+          limited.append(node('h4', '', 'ข้อจำกัดเฉพาะสถานการณ์'));
+          const list = node('ul', 'history-limit');
+          scenario.limitations.forEach((item) => list.append(node('li', '', item)));
+          limited.append(list);
+          details.append(limited);
+        }
+      }
+      function renderCheckpoint(parent, checkpoint) {
+        const section = node('section', 'checkpoint');
+        const head = node('div', 'checkpoint-head');
+        head.append(node('h4', '', 'ภาพสถานะที่บันทึกไว้'));
+        section.append(head);
+        const revisions = [];
+        if (checkpoint.ruleRevision !== undefined) revisions.push(['Rule revision', checkpoint.ruleRevision]);
+        if (checkpoint.dataRevision !== undefined) revisions.push(['Data revision', checkpoint.dataRevision]);
+        if (checkpoint.phase !== undefined) revisions.push(['Phase', checkpoint.phase]);
+        if (revisions.length) {
+          const row = node('div', 'revision-row');
+          revisions.forEach(([label, value]) => row.append(node('span', 'revision-chip', label + ': ' + value)));
+          section.append(row);
+        }
+        if (checkpoint.totals) {
+          const grid = node('div', 'visual-grid');
+          if (Object.hasOwn(checkpoint.totals, 'expectedSatang')) metric(grid, 'ยอดคาดหมายที่ทราบ', moneyLabel(checkpoint.totals.expectedSatang), checkpoint.totals.expectedSatang === null ? '' : checkpoint.totals.expectedSatang + ' satang');
+          if (Object.hasOwn(checkpoint.totals, 'deltaSatang')) metric(grid, 'ผลต่าง', moneyLabel(checkpoint.totals.deltaSatang), checkpoint.totals.deltaSatang === null ? '' : checkpoint.totals.deltaSatang + ' satang');
+          if (checkpoint.totals.unknownCount !== undefined) metric(grid, 'รายการที่ยังไม่ทราบ', numberLabel(checkpoint.totals.unknownCount));
+          section.append(grid);
+        }
+        if (checkpoint.physics) {
+          const grid = node('div', 'visual-grid');
+          Object.entries(fieldNames).forEach(([key, [label, unit]]) => {
+            if (checkpoint.physics[key] !== undefined) metric(grid, label, numberLabel(checkpoint.physics[key]) + ' ' + unit);
+          });
+          if (grid.childNodes.length) section.append(grid);
+        }
+        if (checkpoint.characters) {
+          const grid = node('div', 'character-grid');
+          checkpoint.characters.forEach((character) => {
+            const card = node('div', 'character');
+            card.append(node('strong', '', character.name));
+            const stats = node('div', 'character-stats');
+            stats.append(node('span', 'stat', 'HP ' + numberLabel(character.hp)), node('span', 'stat', 'AP ' + numberLabel(character.ap)));
+            card.append(stats); grid.append(card);
+          });
+          section.append(grid);
+        }
+        if (checkpoint.privateFieldsHidden !== undefined) {
+          section.append(node('p', '', checkpoint.privateFieldsHidden ? '✓ ข้อมูลส่วนตัวที่ไม่ควรเปิดเผยยังถูกซ่อนไว้' : '⚠ การตรวจข้อมูลส่วนตัวไม่ผ่าน'));
+        }
+        if (!revisions.length && !checkpoint.totals && !checkpoint.physics && !checkpoint.characters && checkpoint.privateFieldsHidden === undefined) {
+          section.append(node('p', 'no-checkpoint', 'ไม่มีภาพสถานะเชิงข้อมูลสำหรับขั้นนี้'));
+        }
+        parent.append(section);
+      }
+      function renderStep(scenario) {
+        const detail = elements['step-detail'];
+        clear(detail);
+        const step = scenario.steps[stepIndex];
+        const top = node('div', 'step-card__top');
+        top.append(node('h3', '', step.label), badge(step.status));
+        detail.append(top);
+        const meta = node('div', 'step-meta');
+        meta.append(node('span', '', 'ผู้กระทำ: ' + step.actor));
+        meta.append(node('code', '', step.command));
+        detail.append(meta);
+        const comparison = node('div', 'compare-grid');
+        const expected = node('div', 'compare');
+        expected.append(node('strong', '', 'Expected · คาดหวัง'), node('p', '', step.expected));
+        const observed = node('div', 'compare compare--observed');
+        observed.append(node('strong', '', 'Observed · ที่บันทึกได้'), node('p', '', step.observed));
+        comparison.append(expected, observed);
+        detail.append(comparison);
+        if (step.checks.length) {
+          const list = node('ul', 'check-list');
+          step.checks.forEach((check) => {
+            const item = node('li', check.passed ? '' : 'is-failed', check.label);
+            list.append(item);
+          });
+          detail.append(list);
+        }
+        if (step.checkpoint) renderCheckpoint(detail, step.checkpoint);
+        const count = scenario.steps.length;
+        elements['step-counter'].textContent = 'ขั้น ' + (stepIndex + 1) + ' / ' + count;
+        elements['progress-bar'].style.width = (((stepIndex + 1) / count) * 100) + '%';
+        elements['previous-step'].disabled = stepIndex === 0;
+        elements['next-step'].disabled = stepIndex >= count - 1;
+        elements['play-toggle'].disabled = stepIndex >= count - 1;
+        renderTimeline(scenario);
+      }
+      function renderTimeline(scenario) {
+        const timeline = elements['step-timeline'];
+        clear(timeline);
+        scenario.steps.forEach((step, index) => {
+          const button = node('button', '');
+          button.type = 'button';
+          button.setAttribute('aria-label', 'ไปขั้น ' + (index + 1) + ': ' + step.label + ' · ' + labels[step.status]);
+          if (index === stepIndex) button.setAttribute('aria-current', 'step');
+          button.append(node('span', 'timeline-index', String(index + 1)), node('span', 'timeline-label', step.label));
+          button.addEventListener('click', () => { stopPlaying(); stepIndex = index; render(); });
+          timeline.append(button);
+        });
+      }
+      function render() {
+        const scenario = currentScenario();
+        if (!scenario) return;
+        if (stepIndex >= scenario.steps.length) stepIndex = scenario.steps.length - 1;
+        renderScenario(scenario);
+        renderStep(scenario);
+      }
+      function populateDomainFilter() {
+        const domains = [...new Set(run.scenarios.map((scenario) => scenario.domain))];
+        const options = [['all', 'ทุกประเภท'], ...domains.map((domain) => [domain, domainLabels[domain]])];
+        options.forEach(([value, label]) => {
+          const option = document.createElement('option'); option.value = value; option.textContent = label;
+          elements['domain-filter'].append(option);
+        });
+      }
+      function renderHistory() {
+        if (!hosted) return;
+        elements['hosted-history'].hidden = false;
+        const root = elements['hosted-detail'];
+        const head = node('div', 'hosted-head');
+        head.append(node('strong', '', hosted.roomAlias), node('span', 'revision-chip', hosted.environment), node('span', 'revision-chip', 'บันทึก ' + dateLabel(hosted.recordedAt)));
+        root.append(head);
+        const grid = node('div', 'history-grid');
+        const before = node('article', 'history-card');
+        before.append(node('h3', '', 'ก่อนดำเนินการ · ' + hosted.before.status + ' · r' + hosted.before.ruleRevision));
+        before.append(node('p', '', 'Data revision ' + hosted.before.dataRevision + ' · ' + dateLabel(hosted.before.observedAt)));
+        before.append(node('p', 'rule-copy', 'กฎที่ใช้งาน: ' + ruleLabel(hosted.before.activeRule)));
+        before.append(node('p', 'rule-copy', 'กฎที่ต้องการ: ' + ruleLabel(hosted.before.intendedRule)));
+        before.append(node('p', '', hosted.scope));
+        const attempt = node('article', 'history-card');
+        attempt.append(node('h3', '', 'ความพยายามครั้งแรก · ปฏิเสธ'));
+        attempt.append(node('p', '', hosted.firstAttempt.visibleMessage));
+        attempt.append(node('p', '', 'หลังความพยายามนี้ rule revision ยังคงเป็น ' + hosted.firstAttempt.persistedRuleRevision));
+        const after = node('article', 'history-card');
+        after.append(node('h3', '', 'หลังเปิดใช้ · ' + hosted.after.status + ' · r' + hosted.after.ruleRevision));
+        after.append(node('p', '', 'Data revision ' + hosted.after.dataRevision + ' · ' + dateLabel(hosted.after.observedAt)));
+        after.append(node('p', 'rule-copy', 'กฎที่ใช้งาน: ' + ruleLabel(hosted.after.activeRule)));
+        after.append(node('p', '', 'เก็บ revision ไว้: ' + hosted.after.revisionOptions.join(', ')));
+        const reload = node('article', 'history-card');
+        reload.append(node('h3', '', 'ตรวจหลังโหลดใหม่ · ผ่าน'));
+        reload.append(node('p', '', 'Rule revision ' + hosted.reload.ruleRevision + ' · ' + dateLabel(hosted.reload.observedAt)));
+        reload.append(node('p', 'rule-copy', 'กฎหลังโหลดใหม่: ' + ruleLabel(hosted.reload.rule)));
+        reload.append(node('p', '', 'ส่งคำขอ AI เพิ่มระหว่างการกู้คืน: ' + hosted.recovery.additionalAiRequests));
+        reload.append(node('p', '', 'ขั้นตอนกู้คืน: ' + hosted.recovery.method));
+        grid.append(before, attempt, after, reload);
+        root.append(grid);
+        const limits = node('ul', 'history-limit');
+        hosted.limitations.forEach((item) => limits.append(node('li', '', item)));
+        root.append(limits);
+        root.append(node('p', 'footer-note', 'Runtime commit: ' + hosted.runtimeCommit + ' · ประวัติส่วนนี้ไม่ถูกรวมในจำนวน scenarios หรือ checks ด้านบน'));
+      }
+
+      elements['run-id'].textContent = run.runId;
+      elements['source-commit'].textContent = run.sourceCommit;
+      const sourceState = run.sourceDirty === undefined ? 'sourceDirty: ไม่ได้บันทึก' : 'sourceDirty: ' + (run.sourceDirty ? 'dirty' : 'clean');
+      const catalogHash = run.scenarioCatalogHash ? ' · scenarioCatalogHash: ' + run.scenarioCatalogHash : ' · scenarioCatalogHash: ไม่ได้บันทึก';
+      const bundleHash = run.workerBundleSha256 ? ' · workerBundleSha256: ' + run.workerBundleSha256 : ' · workerBundleSha256: ไม่ได้บันทึก';
+      elements['source-integrity'].textContent = sourceState + catalogHash + bundleHash;
+      elements['runtime-label'].textContent = run.runtime + ' · identity: ' + run.identity;
+      elements['safety-label'].textContent = (run.ai === 'mocked' ? 'AI จำลอง · ไม่มีการเรียก AI สด' : 'ไม่ได้ใช้ AI') + ' · production mutations: ' + run.productionMutations;
+      elements['summary-scenarios'].textContent = String(run.summary.scenarios);
+      elements['summary-passed'].textContent = String(run.summary.passed);
+      elements['summary-failed'].textContent = String(run.summary.failed);
+      elements['summary-checks'].textContent = String(run.summary.checks);
+      const runStatus = badge(run.status);
+      elements['run-status'].replaceWith(runStatus);
+      elements['run-status'] = runStatus;
+      elements['run-limitations'].replaceChildren(...run.limitations.map((item) => node('li', '', item)));
+      populateDomainFilter();
+      refreshScenarioOptions();
+      renderHistory();
+      render();
+
+      elements['play-toggle'].addEventListener('click', () => {
+        if (timer !== null) { stopPlaying(); return; }
+        const scenario = currentScenario();
+        if (stepIndex >= scenario.steps.length - 1) return;
+        elements['play-toggle'].textContent = 'หยุดชั่วคราว';
+        elements['play-toggle'].setAttribute('aria-pressed', 'true');
+        timer = window.setInterval(() => {
+          const current = currentScenario();
+          if (stepIndex >= current.steps.length - 1) { stopPlaying(); return; }
+          stepIndex += 1;
+          render();
+          if (stepIndex >= current.steps.length - 1) stopPlaying();
+        }, 1_600);
+      });
+      elements['previous-step'].addEventListener('click', () => { stopPlaying(); stepIndex = Math.max(0, stepIndex - 1); render(); });
+      elements['next-step'].addEventListener('click', () => { stopPlaying(); stepIndex = Math.min(currentScenario().steps.length - 1, stepIndex + 1); render(); });
+      elements['restart-replay'].addEventListener('click', () => { stopPlaying(); stepIndex = 0; render(); });
+      elements['scenario-picker'].addEventListener('change', () => {
+        stopPlaying(); activeScenarioId = elements['scenario-picker'].value; stepIndex = 0; render();
+      });
+      elements['domain-filter'].addEventListener('change', () => {
+        stopPlaying();
+        const domain = elements['domain-filter'].value;
+        filteredScenarios = domain === 'all' ? run.scenarios.slice() : run.scenarios.filter((scenario) => scenario.domain === domain);
+        if (!filteredScenarios.some((scenario) => scenario.id === activeScenarioId)) activeScenarioId = filteredScenarios[0].id;
+        stepIndex = 0;
+        refreshScenarioOptions();
+        render();
+      });
+    })();
+  </script>
+</body>
+</html>

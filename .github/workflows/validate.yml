@@ -52,6 +52,8 @@ jobs:
         run: npm run build:cloudflare
       - name: Install test browser
         run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Repeatable persona demos and replay report
+        run: npm run demo:auto:run
       - name: Seven-session local browser acceptance
         run: npm run test:r1:browser
       - name: Account multiplayer and AI browser acceptance on Workers
@@ -67,5 +69,16 @@ jobs:
             test-results/tabletop-r1/report.json
             test-results/cloudflare-browser/report.json
           retention-days: 7
+          include-hidden-files: false
+          if-no-files-found: ignore
+      - name: Retain sanitized auto-demo history
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: auto-demo-history
+          path: |
+            test-results/auto-demo/**/run.json
+            test-results/auto-demo/**/report.html
+          retention-days: 30
           include-hidden-files: false
           if-no-files-found: ignore
