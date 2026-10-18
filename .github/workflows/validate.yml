@@ -39,7 +39,11 @@ jobs:
       - name: Legacy local Component Lab regression tests
         run: node --import tsx --test scripts/component-lab/component-lab.test.ts
       - name: Typecheck and build
+        env:
+          DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
         run: npm run build
+      - name: Check server secret stays out of browser assets
+        run: node scripts/check-client-secrets.mjs
       - name: Install test browser
         run: node node_modules/playwright/cli.js install --with-deps chromium
       - name: Seven-session local browser acceptance

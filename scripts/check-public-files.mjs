@@ -21,6 +21,7 @@ for (const file of files) {
   if (lstatSync(path).isSymbolicLink()) { findings.push({ file, reason: 'Symlink requires explicit review' }); continue; }
   if (/(?:^|\/)(?:node_modules|dist|test-results|playwright-report|\.data|\.npm-cache|\.codex|\.agents|\.aws|\.opencode)(?:\/|$)/.test(file)
       || (/(?:^|\/)\.env(?:\.|$)/.test(file) && !file.endsWith('/.env.example') && file !== '.env.example')
+      || /(?:^|\/)\.dev\.vars(?:\.|$)/.test(file)
       || /(?:^|\/)(?:\.npmrc|\.pypirc|id_rsa|id_ed25519)$/.test(file)
       || /\.(?:pem|key|p12|pfx)$/i.test(file)) {
     findings.push({ file, reason: 'Private or generated path' });

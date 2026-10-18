@@ -73,7 +73,7 @@ Teaching and encounter cases use their deterministic server rules and can be exp
 
 ## Model and upload status
 
-No model provider has been selected or implemented for live requests. The model capability endpoint reports it disabled, and a model request fails closed. The manual rule editor, simulation, validation, and approval flow remain available.
+The server-side DeepSeek Flash adapter is available for a deliberate, bounded synthetic probe; see [provider verification](AI_PROVIDER_VERIFICATION.md) for results and commands. It is not wired into the application. The model capability endpoint still reports it disabled, and a model request fails closed. The manual rule editor, simulation, validation, and approval flow remain available. Keep `DEEPSEEK_KEY` in an ignored local file or the server process environment; never prefix it with `VITE_` or include it in a browser build.
 
 Local mode currently accepts the supported CSV and text-PDF inputs into a private filesystem object store for development. Production mode rejects public upload requests with `UPLOAD_SERVICE_NOT_CONFIGURED` until a scanner and durable private object store are selected and wired into the application. The container candidate does not add those services. Do not treat the local parser or filesystem store as an upload-security or production-storage service.
 
@@ -91,6 +91,6 @@ Production mode is a deployment candidate that requires all of the following to 
 
 Production startup does not apply database migrations; it requires the configured PostgreSQL schema to be ready. The explicit migration entrypoint is `node --import tsx server/migrate.ts --environment production`. A database owner must approve the target database, schema operation, scope, and recovery plan before anyone runs it. Do not run that command against a shared or production database as part of ordinary startup.
 
-For a future hosted service, evaluate one Node application service with managed PostgreSQL first. A Cloudflare edge layer or R2-compatible object storage may be evaluated later, but no hosting or storage provider has been selected and no cost approval is implied. The container expects an HTTPS reverse proxy and external PostgreSQL; it does not provision either one.
+The [production setup proposal](PRODUCTION_SETUP.md) recommends a Render Node service with Supabase PostgreSQL and Auth. It includes the remaining account, retention, AI, credential, and cost work; no cost approval is implied. The container expects an HTTPS reverse proxy and external PostgreSQL; it does not provision either one.
 
 The included `Dockerfile` is a multistage, non-root container candidate with a built-in Node health check. It defaults to production mode, so it will stop at startup until the production environment and required values are supplied. It has not been deployed, and its presence does not mean production readiness.

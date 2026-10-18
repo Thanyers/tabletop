@@ -57,7 +57,7 @@ Initial browser attempts exposed selector ambiguity between Canvas and Focus tab
 - Live model adapter, provider retention/cost agreement, holdout generation proof, and real provider outage/billing behavior.
 - Formal accessibility certification, exhaustive browser compatibility, and the entire legacy demo's browser suite. Current desktop/narrow interaction and keyboard checks have bounded coverage.
 
-The manual editor satisfies the locally deferred-provider scope. It does **not** satisfy the original plan's live, non-scripted model-evolution acceptance gate. The full hosted R1 milestone remains open.
+The manual editor satisfies the locally deferred-provider scope. It does **not** satisfy the original plan's live, non-scripted model-evolution acceptance gate. The full hosted R1 milestone remains open. A later [DeepSeek provider preparation check](AI_PROVIDER_VERIFICATION.md) adds isolated live synthetic calls and updated test counts; it does not change this report's original app/browser acceptance scope.
 
 ## How to recover locally
 

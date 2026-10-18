@@ -27,8 +27,8 @@ Uploaded evidence starts as **provided**. A person must review and verify a sour
 
 ## Capability boundaries
 
-No model provider is selected or implemented for live use. The model endpoint is disabled; there is no live AI proposal capability. Public uploads are disabled in production mode until a scanner and a durable private object store are selected and integrated. Local development uses a private filesystem object store for fixture and manual testing.
+A server-side DeepSeek Flash adapter has passed a bounded synthetic API check; see [provider verification](docs/AI_PROVIDER_VERIFICATION.md). It is not yet connected to the app's model endpoint, which remains disabled until authenticated dispatch and durable cost accounting are integrated. Public uploads are disabled in production mode until a scanner and a durable private object store are selected and integrated. Local development uses a private filesystem object store for fixture and manual testing.
 
-The Dockerfile is a portable production container candidate, not a release or deployment configuration. Production mode requires an external PostgreSQL database, an explicit schema migration, an HTTPS public origin, and an operator-managed host. Hosting is not selected; a Node service with managed PostgreSQL is the initial deployment shape to evaluate, with an edge service or object storage considered later if the requirements call for them.
+The Dockerfile is a portable production container candidate, not a release or deployment configuration. Production mode requires an external PostgreSQL database, an explicit schema migration, an HTTPS public origin, and an operator-managed host. The [production setup proposal](docs/PRODUCTION_SETUP.md) covers Render, Supabase, account-based resume, runtime secrets, and costs. Hosting and database provisioning remain unapproved and unexecuted.
 
 `docs/source-baseline.json` records the approved local source snapshot. It is provenance for this checkout, not imported Sites history or a production release record.

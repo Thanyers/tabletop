@@ -15,5 +15,7 @@ playwright-report
 .npm-cache
 .env*
 **/.env*
+.dev.vars*
+**/.dev.vars*
 !.env.example
 .npmrc
