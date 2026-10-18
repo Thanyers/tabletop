@@ -1,0 +1,57 @@
+name: Validate local R1 candidate
+
+on:
+  pull_request:
+  push:
+    branches: [main, feat/tabletop-r1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BROWSER_CHANNEL: chromium
+      TABLETOP_ENV: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - name: Check publication paths and credential patterns
+        run: node scripts/check-public-files.mjs
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check dependency advisories
+        run: npm audit --audit-level=high
+      - name: Unit and local SQL integration tests
+        run: npm test -- --reporter=default --reporter=json --outputFile=test-results/unit-report.json
+      - name: Legacy local Component Lab regression tests
+        run: node --import tsx --test scripts/component-lab/component-lab.test.ts
+      - name: Typecheck and build
+        run: npm run build
+      - name: Install test browser
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Seven-session local browser acceptance
+        run: npm run test:r1:browser
+      - name: Retain test summaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: local-r1-test-summaries
+          path: |
+            test-results/unit-report.json
+            test-results/tabletop-r1/report.json
+          retention-days: 7
+          include-hidden-files: false
+          if-no-files-found: ignore

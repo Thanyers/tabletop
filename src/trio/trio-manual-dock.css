@@ -1,0 +1,154 @@
+.demo-player.trio-manual-dock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 14px;
+  width: min(850px, calc(100% - 40px));
+  max-height: 180px;
+  padding: 9px 14px 7px;
+  overflow: hidden;
+}
+
+.trio-manual-dock .trio-manual-dock__label {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 29px;
+  gap: 2px;
+  padding-right: 0;
+}
+
+.trio-manual-dock .trio-manual-dock__label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trio-manual-dock .trio-manual-dock__label strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trio-manual-dock .trio-manual-dock__controls {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.trio-manual-dock .trio-manual-dock__status {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 18px;
+  color: #6c607b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.trio-manual-dock__status-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #d8cfee;
+  border-radius: 50%;
+  background: #f6f2ff;
+  color: #7055b1;
+}
+
+.trio-manual-dock .trio-manual-dock__suggestions {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.trio-manual-dock .trio-manual-dock__suggestions > button {
+  min-height: 26px;
+  padding: 4px 9px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.trio-manual-dock .trio-manual-dock__composer {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  min-width: 0;
+  height: 45px;
+  min-height: 45px;
+  gap: 9px;
+  padding: 5px 8px;
+  border-radius: 11px;
+}
+
+.trio-manual-dock__composer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 56px;
+  padding: 3px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: #40536b;
+  font: 11px/1.6 Manrope, 'Noto Sans Thai', sans-serif;
+}
+
+.trio-manual-dock__composer textarea::placeholder { color: #81798d; }
+
+.trio-manual-dock__composer textarea:focus-visible {
+  outline: 2px solid #947fd0;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.trio-manual-dock__composer .send-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.trio-manual-dock .trio-manual-dock__caption {
+  grid-column: 1 / -1;
+  grid-row: 5;
+  min-width: 0;
+  padding: 0 3px;
+  color: #81768e;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.trio-manual-dock__caption > span:first-child {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .demo-player.trio-manual-dock {
+    width: calc(100% - 18px);
+    max-height: 220px;
+    gap: 5px 8px;
+    padding: 8px 10px 6px;
+  }
+
+  .trio-manual-dock .trio-manual-dock__label {
+    min-height: 27px;
+  }
+
+  .trio-manual-dock .trio-manual-dock__label strong { font-size: 12px; }
+  .trio-manual-dock .trio-manual-dock__status { font-size: 10px; }
+  .trio-manual-dock .trio-manual-dock__suggestions { flex-wrap: wrap; }
+  .trio-manual-dock .trio-manual-dock__suggestions > button { padding: 4px 7px; font-size: 9px; }
+  .trio-manual-dock .trio-manual-dock__composer { height: 46px; min-height: 46px; }
+  .trio-manual-dock__composer textarea { font-size: 11px; }
+  .trio-manual-dock .trio-manual-dock__caption { font-size: 7px; }
+}

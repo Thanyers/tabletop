@@ -1,0 +1,146 @@
+/* A white desk with a small, consistent color vocabulary. Status colors stay semantic. */
+:root {
+  --ink: #2c2940;
+  --muted: #777286;
+  --line: #e9e5f1;
+  --accent: #6550c7;
+  --surface: #fff;
+  --desk: #f7f8fa;
+  --canvas: #f7f8fa;
+  --dark: #38304e;
+  --brand-violet: #6550c7;
+  --brand-coral: #e67562;
+  --brand-cyan: #2b9bb1;
+  --violet-wash: #f1edff;
+  --coral-wash: #fff1eb;
+  --cyan-wash: #eaf8fb;
+}
+.workspace-bar { background: #ffffffef; border-color: var(--line); }
+.brand { color: var(--ink); }
+.brand-symbol i { background: var(--brand-violet); border-radius: 2px; }
+.brand-symbol i:nth-child(2) { background: var(--brand-coral); }
+.brand-symbol i:nth-child(3) { background: var(--brand-cyan); }
+.brand-symbol i:last-child { background: #b9a9ed; }
+.brand-period,.tiny-spark,.dock-spark { color: var(--brand-coral); }
+.lens-switch,.interaction-switch { background: #faf8ff; border-color: var(--line); }
+.lens-switch button[aria-pressed=true] { color: var(--brand-violet); background: var(--violet-wash); box-shadow: none; }
+.interaction-switch button[aria-pressed=true] { color: var(--brand-violet); }
+.interaction-switch button[aria-pressed=true]:last-child { background: var(--brand-violet); color: #fff; }
+.watch-demo-top,.teach-link,.table-footer .asset-settings-link { color: var(--brand-violet); }
+.save-button,.save-button.is-saved { color: #5844ae; background: var(--violet-wash); border-color: #e1d8fb; }
+.welcome-label { color: #7b62bb; }
+.empty-workspace h1 { color: var(--ink); }
+.empty-workspace h1>span { color: var(--brand-violet); }
+.guided-starter { background: var(--brand-violet); border-color: var(--brand-violet); box-shadow: 0 7px 22px #6550c71c; }
+.guided-starter small { color: #eee8ff; }
+.primary-starter { background: #fff; border-color: #e4def2; }
+.primary-starter:hover { background: #f7f4ff; }
+.starter-icon { color: var(--brand-cyan); background: var(--cyan-wash); border-color: #c9eaf0; }
+.canvas-card { border-color: #e6e1ef; box-shadow: 0 3px 12px #49376406; }
+.canvas-card.is-selected { box-shadow: 0 0 0 2px #ae9ce6,0 10px 28px #6550c70a; }
+.card-label { color: #514761; }
+.card-label svg { color: #8c76c5; }
+.context-mark { color: #bd614e; background: var(--coral-wash); }
+.company-mark { color: var(--brand-violet); border-color: #e4dbf7; }
+.file-icon,.file-icon.blue { background: var(--cyan-wash); color: #27859a; border-color: #ccebf1; }
+.file-icon.neutral { background: #fff5e4; color: #9b7435; border-color: #f3e5c9; }
+.card-worker { background: #fff; border-color: #ded3f4; color: var(--ink); }
+.card-worker .card-header { border-color: #eee7fa; }
+.card-worker .card-label,.compact-worker strong,.worker-content h3 { color: #493762; }
+.card-worker .card-label svg,.worker-chip,.worker-link,.compact-worker button { color: #7152b3; }
+.compact-worker-icon { color: #7c57bf; background: var(--violet-wash); border-color: #e7dcfb; }
+.compact-worker small { color: #7b6f8b; }
+.compact-worker small i { background: #a48bd4; }
+.worker-version { color: #91859f; }
+.code-preview code { color: #5e5270; }
+.code-preview em { color: #94869e; }
+.code-preview { border-color: #dfd2f4; }
+.data-table th { background: #f9f7fc; border-color: #eee9f4; }
+.data-table tbody tr:hover { background: #f8f5ff; }
+.calculated-value { color: #6450ad; border-color: #c0b1e3; }
+.chart-legend i { background: #9a82cc; }
+.chart-legend>span+span i { background: #d6eaf0; }
+.card-knowledge { background: #f7f3ff; border-color: #e6dcf7; }
+.card-knowledge .card-header { border-color: #eae0f9; }
+.knowledge-content strong { color: #6349a5; }
+.knowledge-content p { color: #726482; }
+.teach-link>svg:last-child { color: var(--brand-coral); }
+.card-learning .card-header { background: var(--cyan-wash); }
+.card-overview .card-header { background: var(--coral-wash); }
+.button.teal,.arrange-notice button,.demo-player-controls>button.demo-take-over { background: var(--brand-violet); border-color: var(--brand-violet); color: #fff; }
+.button.secondary { background: #f8f5ff; border-color: #e5def3; color: #69519b; }
+.inline-diff>strong { color: #6950a7; background: var(--violet-wash); }
+.canvas-toolbar,.object-controls,.zoom-control { background: #fff; border-color: #e2dcee; }
+.canvas-toolbar>button.active,.object-controls button.active { background: var(--violet-wash); color: var(--brand-violet); }
+.mode-arrange .canvas-area { box-shadow: inset 0 0 0 2px #bca8ed; }
+.arrange-notice { background: #f7f2ff; color: #7052a9; border-color: #ddcef6; }
+.prompt-dock,.is-guided-demo .prompt-dock { background: #fff; border-color: #dcd1f3; box-shadow: 0 6px 30px #6550c70b; }
+.send-button { background: var(--brand-violet); color: #fff; }
+.send-button:disabled { background: #efe9fb; color: #a896ca; }
+.dock-suggestions>button { background: #fff; border-color: #e5def1; color: #78668f; }
+.toast { background: #6550a5; border-color: #7660b7; color: #fff; }
+.toast>button { color: #f0e9ff; }
+.demo-player,.is-guided-demo.is-constellation .demo-player { background: #fff; color: var(--ink); border-color: #e0d5f3; box-shadow: 0 9px 32px #6550c716; }
+.demo-player-label>span { color: #9e5a74; }
+.demo-player-label small,.is-guided-demo.is-constellation .demo-player-label small { color: #7b6d8c; }
+.demo-player-controls>button { color: #705696; background: #faf7ff; border-color: #e8e0f4; }
+.demo-progress { background: #f1ebfa; }
+.demo-progress i { background: var(--brand-coral); }
+.inspector { --inspector-ink: #30293e; --inspector-line: #ece6f4; --inspector-wash: #faf8fd; --inspector-teal: #7052b5; --inspector-teal-soft: #f1ebfd; }
+.asset-policy-draft { --draft-ink: #3b304f; --draft-line: #e7dff2; --draft-wash: #faf7ff; --draft-accent: #7453b1; }
+.asset-policy-draft__icon { background: var(--violet-wash); color: var(--brand-violet); }
+.asset-policy-draft__draft-tag { background: var(--coral-wash); color: #ad604d; border-color: #f1d5cb; }
+.asset-policy-draft__view-tabs { background: #faf7ff; border-color: #e8dff5; }
+.asset-policy-draft__category-tabs>button.is-active,.asset-policy-draft__filter-tabs>button.is-active { color: #6443a5; background: var(--violet-wash); border-color: #bda6e6; }
+.asset-policy-draft__create { background: var(--brand-violet); border-color: var(--brand-violet); }
+.asset-policy-draft__create:hover:not(:disabled) { background: #5842b5; }
+.asset-policy-draft__table tbody tr.is-selected { background: #f5f0ff; }
+.learning-object,.workspace-overview { --learn-ink: #322a43; --learn-line: #ece7f3; --learn-wash: #faf7ff; --learn-teal: #7052b5; }
+.learning-object__intro-icon { background: var(--cyan-wash)!important; border-color: #d5edf2!important; color: #25859b; }
+.learning-object__button--primary { background: var(--brand-violet)!important; border-color: var(--brand-violet)!important; color: #fff; }
+.workspace-overview__mark { background: var(--coral-wash); color: #bb6655; }
+.handoff-context { background: #fff7f2; border-color: #f0ded1; }
+
+/* The knowledge lens shares the white desk; category color sits in each star. */
+.canvas-area { background: var(--canvas); }
+.constellation { background: var(--canvas); color: var(--ink); }
+.constellation-explore,.constellation-detail { background: #fff; border-color: #e9e1f3; }
+.constellation h1 { color: #47315f; }
+.constellation p,.constellation-detail ul { color: #756684; }
+.constellation-eyebrow,.constellation-detail h3 { color: #8b6b9c; }
+.constellation-search { background: #faf7ff; border-color: #e6ddf2; color: #9279b1; }
+.constellation-search input { color: var(--ink); }
+.constellation-search input::placeholder { color: #9a8aaa; }
+.constellation-categories button { color: #665374; }
+.constellation-categories span { color: #9d8daa; }
+.legend-question,.kind-question { --star-color: #7987df; }
+.legend-source,.kind-source { --star-color: #43a9bc; }
+.legend-worker,.kind-worker { --star-color: #a780ce; }
+.legend-rule,.kind-rule { --star-color: #dfa64d; }
+.legend-person,.kind-person { --star-color: #da829e; }
+.legend-exception,.kind-exception { --star-color: #e48b64; }
+.legend-test,.kind-test { --star-color: #65a5d5; }
+.legend-outcome,.kind-outcome { --star-color: #809d77; }
+.knowledge-star { color: #40344f; }
+.knowledge-star small,.star-state { color: #887995; }
+.knowledge-star.dimmed { opacity: .72; }
+.star-orbit { background: color-mix(in srgb,var(--star-color) 9%,white); }
+.star-orbit i { border-color: #ffffff90; box-shadow: 0 3px 12px color-mix(in srgb,var(--star-color) 15%,transparent); }
+.knowledge-star.selected .star-orbit { background: color-mix(in srgb,var(--star-color) 16%,white); }
+.constellation-view-controls button,.constellation-world-actions button { background: #fff; color: #77598e; border-color: #ddd0ec; }
+.constellation-view-controls button[aria-pressed=true],.constellation-world-actions button[aria-pressed=true] { background: #f4edff; }
+.constellation-explore>small { color: #96859e; }
+.knowledge-status { background: #f6f1fc; border-color: #dcd0ed; color: #805ba0; }
+.knowledge-status.status-approved { background: #eef7ee; border-color: #c8dfc9; color: #507a53; }
+.knowledge-status.status-pending { background: #fff6e7; border-color: #ecd6ae; color: #946d2a; }
+.knowledge-status.status-failed,.knowledge-status.status-rejected { background: #fff0f1; border-color: #edcbd1; color: #ad5869; }
+.knowledge-questions button { color: #7e58a0; border-color: #eee6f6; }
+.knowledge-evidence code { color: #78608f; background: #f7f3fc; }
+.knowledge-neighbors button { color: #5f447a; border-color: #eee6f5; }
+.knowledge-neighbors span { color: #a18cae; }
+.knowledge-open-work { color: #fff; background: var(--brand-violet); }
+.knowledge-list button { background: #fff; border-color: #e6dcf1; color: #523c69; }
+.knowledge-list button.selected { background: #f8f3ff; border-color: #ba9fda; }
+.knowledge-list span { color: #9475a9; }
+.constellation-match-count { color: #87639b; background: #fcfbff; }
+button:focus-visible,a:focus-visible,.constellation button:focus-visible { outline: 2px solid #9a78d1; }

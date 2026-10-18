@@ -1,0 +1,30 @@
+/* Presentation follows one question and one visible consequence. */
+.demo-player-label { position:relative; padding-right:132px; min-height:42px; }
+.demo-tour-select { position:absolute; right:0; top:0; width:122px; height:29px; padding:4px 7px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:11px; cursor:pointer; }
+.demo-player-label strong { font-size:16px; color:var(--ink); }
+.demo-player-label>span { color:#625870; }
+.demo-request { color:var(--ink); font-size:15px; height:43px; }
+.demo-beat { color:#5b4b70; font-size:12px; }
+.demo-isolation-note { color:#665d74; font-size:9px; }
+.is-guided-demo .data-table td,.is-guided-demo .calculated-value { font-size:12px; }
+.is-guided-demo .data-table td small { font-size:11px; }
+.lens-switch button,.interaction-switch button,.demo-mode { color:#4f5a6d; }
+.canvas-card .card-tools button:hover { background:var(--violet-wash); color:#4c3687; }
+.is-guided-demo .asset-policy-draft__header { padding:10px 12px; }
+.is-guided-demo .asset-policy-draft__eyebrow,.is-guided-demo .asset-policy-draft__draft-tag,
+.is-guided-demo .adaptive-ui__stage-badge>span,.is-guided-demo .adaptive-ui__stage-badge>small,
+.is-guided-demo .adaptive-ui__draft-note { display:none; }
+.is-guided-demo .asset-policy-draft__source-line { font-size:10px; }
+.is-guided-demo .adaptive-ui__stage-badge { padding:8px 10px; min-height:30px; }
+.is-guided-demo .asset-policy-draft__header h3 { font-size:17px; }
+.is-guided-demo .asset-policy-draft__header p { font-size:12px; color:#62576f; }
+.is-guided-demo .asset-policy-draft input,.is-guided-demo .asset-policy-draft select { font-size:14px; }
+.is-guided-demo .inspector__header>p { display:none; }
+@media(max-width:760px){
+ .demo-player-label { padding-right:110px; min-height:37px; }
+ .demo-tour-select { width:104px; height:27px; padding:3px; font-size:10px; }
+ .demo-player-label strong { font-size:13px; }
+ .demo-request { font-size:13px; height:45px; }
+ .demo-beat { font-size:11px; }
+ .demo-isolation-note { font-size:8px; }
+}

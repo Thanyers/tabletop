@@ -1,0 +1,521 @@
+.trio-canvas {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: #344357;
+  font-family: Manrope, 'Noto Sans Thai', sans-serif;
+  isolation: isolate;
+  background: #f7f8fa;
+}
+
+/* Fallback wrapper layout. The integrated Canvas host co-applies this class
+   with .canvas-area, so it must keep .canvas-area's measured top/bottom inset. */
+.canvas-area > .trio-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.trio-canvas__flow,
+.trio-canvas .react-flow__renderer {
+  background: transparent;
+}
+
+.trio-canvas__flow .react-flow__pane {
+  cursor: default;
+}
+
+.trio-canvas__flow.is-pan-enabled .react-flow__pane {
+  cursor: grab;
+}
+
+.trio-canvas__flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.trio-canvas__flow .react-flow__node-trioStory {
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
+}
+
+.trio-canvas__flow .react-flow__node-trioStory:focus,
+.trio-canvas__flow .react-flow__node-trioStory:focus-visible {
+  outline: none;
+}
+
+.trio-canvas-node {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-height: calc(var(--trio-canvas-height, 700px) - 10px);
+  overflow: hidden;
+  color: #344357;
+  background: #fff;
+  border: 1px solid #e3e0ea;
+  border-radius: 13px;
+  box-shadow: 0 4px 15px rgb(42 48 61 / 5%), 0 1px 2px rgb(42 48 61 / 3%);
+  transition: border-color 180ms ease, box-shadow 180ms ease, opacity 220ms ease, filter 220ms ease;
+}
+
+.trio-canvas-node[data-spotlight='dimmed'] { opacity: .3; filter: saturate(.25); }
+.trio-canvas-node[data-spotlight='focused'] { border-color: var(--trio-canvas-line); box-shadow: 0 8px 28px rgb(42 48 61 / 12%); }
+.trio-canvas-node__chrome { flex-shrink: 0; }
+.trio-canvas-node__surface { min-height: 0; flex: 1 1 auto; }
+.trio-narrative-caption { display: flex; flex-shrink: 0; gap: 8px; padding: 7px 12px; color: var(--trio-canvas-accent); background: var(--trio-canvas-tint); border-bottom: 1px solid var(--trio-canvas-line); font-size: 12px; line-height: 1.5; }
+.trio-narrative-caption > span:first-child { font-size: 21px; }
+.trio-narrative-caption small { display: block; color: #777286; font-size: 9px; }
+.trio-narrative-context { display: grid; gap: 5px; padding: 10px; margin-bottom: 12px; border-left: 3px solid var(--trio-canvas-accent); background: var(--trio-canvas-tint); font-size: 12px; line-height: 1.6; }
+.trio-narrative-context span { color: #686577; font-size: 11px; }
+.trio-canvas-node .is-narrative-record { background: var(--trio-canvas-tint); box-shadow: inset 3px 0 var(--trio-canvas-accent); }
+.trio-canvas-node .trio-music-section.is-narrative-record:disabled { opacity: 1; color: var(--trio-canvas-accent); }
+.trio-canvas-node .is-narrative-record > td, .trio-canvas-node .is-narrative-record > th { background: var(--trio-canvas-tint); }
+.trio-canvas-node .is-narrative-detail { background-color: var(--trio-canvas-tint); box-shadow: inset 3px 0 var(--trio-canvas-accent); border-radius: 3px; }
+.trio-canvas-node tr:has(.is-narrative-detail) > td, .trio-canvas-node tr:has(.is-narrative-detail) > th { background-color: var(--trio-canvas-tint); }
+.trio-canvas-node tr > .is-narrative-detail { font-weight: 800; }
+.trio-canvas-node .source-preview[data-source-kind='sheet'] .is-narrative-detail,
+.trio-canvas-node .source-preview[data-source-kind='sheet'] .is-narrative-record { background-color: #edf8f0; outline: 2px solid #217346; outline-offset: -2px; box-shadow: none; }
+.trio-canvas-node tbody:has(.is-narrative-record) > tr:not(.is-narrative-record),
+.trio-canvas-node .trio-music-strip:has(.is-narrative-record) > :not(.is-narrative-record),
+.trio-canvas-node .trio-quest-route:has(.is-narrative-record) > .trio-route-stop:not(.is-narrative-record) { opacity: .42; }
+.trio-demo-controls .demo-request mark { color: #57458d; background: #f1edfb; border-radius: 3px; }
+.trio-demo-controls .demo-request mark.is-current-reference { background: #e8e0fa; box-shadow: inset 0 -2px #8c75c8; }
+.trio-canvas-node[data-spotlight='focused'] .trio-stage.trio-stage__object { max-height: min(620px, calc(var(--trio-canvas-height, 700px) - 180px)); }
+.trio-canvas-node[data-spotlight='focused'] .trio-sample[data-guided-sample='true'] { box-shadow: inset 3px 0 var(--trio-canvas-accent); }
+
+.trio-canvas-node--shipping {
+  --trio-canvas-accent: #2b91ac;
+  --trio-canvas-tint: #eaf8fb;
+  --trio-canvas-line: #ccecf2;
+}
+
+.trio-canvas-node--quest {
+  --trio-canvas-accent: #c76b60;
+  --trio-canvas-tint: #fff1eb;
+  --trio-canvas-line: #f4d8d1;
+}
+
+.trio-canvas-node--music {
+  --trio-canvas-accent: #765bc2;
+  --trio-canvas-tint: #f3efff;
+  --trio-canvas-line: #e1d8f8;
+}
+
+.trio-canvas-node.is-selected {
+  border-color: color-mix(in srgb, var(--trio-canvas-accent) 48%, #e3e0ea);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--trio-canvas-accent) 13%, transparent), 0 8px 22px rgb(42 48 61 / 7%);
+}
+
+.trio-canvas-node.is-current {
+  border-color: color-mix(in srgb, var(--trio-canvas-accent) 38%, #e3e0ea);
+}
+
+.trio-canvas-node__chrome {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #efedf2;
+  background: #fff;
+  user-select: none;
+}
+
+.trio-canvas-node[data-arrange='true'] .trio-canvas-node__chrome {
+  cursor: grab;
+}
+
+.trio-canvas-node[data-arrange='true'] .trio-canvas-node__chrome:active {
+  cursor: grabbing;
+}
+
+.trio-canvas-node__icon {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--trio-canvas-accent);
+  background: var(--trio-canvas-tint);
+  border: 1px solid var(--trio-canvas-line);
+  border-radius: 9px;
+}
+
+.trio-canvas-node__heading {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.trio-canvas-node__heading small {
+  color: #8992a0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.trio-canvas-node__heading strong {
+  overflow: hidden;
+  color: #354255;
+  font-size: 14px;
+  font-weight: 680;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trio-canvas-node__grip {
+  margin-left: auto;
+  color: #b0b4be;
+}
+
+.trio-canvas-node__surface {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* The canvas node is already the outer card. Keep MaterializeSurface as its
+   reveal layer, then remove its duplicate frame once the real UI is ready. */
+.trio-canvas-node__surface > .materialize-surface {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.trio-canvas-node__surface > .materialize-surface[data-state='ready'] {
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.trio-canvas-node__surface > .materialize-surface[data-state='ready'] > .materialize-surface__content {
+  min-height: 0;
+  align-self: stretch;
+  overflow: hidden;
+}
+
+.trio-canvas-node__surface > .materialize-surface[data-state='ready'] > .materialize-surface__content > .trio-stage__object {
+  height: 100%;
+}
+
+.trio-stage.trio-stage__object {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: min(620px, calc(var(--trio-canvas-height, 700px) - 116px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  scrollbar-color: #c8d2de transparent;
+  scrollbar-width: thin;
+}
+
+.trio-stage__object .trio-card {
+  min-width: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none !important;
+  transition: none;
+}
+
+.trio-stage__object .trio-card__head {
+  display: none;
+}
+
+.trio-stage__object .trio-card__body {
+  min-width: 0;
+  padding: 13px 15px 15px;
+}
+
+/* SourcePreview has its own frame and padding, so the hidden generic card body
+   should not add a second inset around it. */
+.trio-stage__object .trio-card__body:has(.source-preview) {
+  padding: 0;
+}
+
+.trio-stage__object .trio-shipping-board {
+  gap: 0;
+}
+
+.trio-stage__object .trio-contract-card {
+  padding-top: 12px;
+  border-top: 1px solid #edf0f4 !important;
+}
+
+.trio-stage__object .trio-contract-card .trio-card__body {
+  padding-top: 0;
+}
+
+.trio-stage__object .trio-sample {
+  scroll-margin-block: 12px;
+}
+
+/* Keep the stage as the single vertical scroll surface in the music demo. */
+.trio-canvas-node .music-lab {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+
+/* A source-origin control is provenance, not another nested card. */
+.trio-canvas-node .evidence-origin {
+  min-height: 36px;
+  margin: 0 0 4px;
+  padding: 3px 0;
+  border: 0;
+  border-bottom: 1px solid #e7ebef;
+  border-radius: 0;
+  background: transparent;
+}
+
+.trio-canvas-node .evidence-origin:hover {
+  background: #f7f8fa;
+  border-bottom-color: #d5dce4;
+}
+
+/* The game panel provides its own title and context; the generic camera
+   caption would repeat both and take height away from the encounter board. */
+.trio-canvas-node:has(.encounter-game) .trio-narrative-caption {
+  display: none;
+}
+
+.trio-canvas-node[data-spotlight='focused']:has(.encounter-game) .trio-stage.trio-stage__object {
+  max-height: min(620px, calc(var(--trio-canvas-height, 700px) - 116px));
+}
+
+.trio-canvas-node:has(.encounter-game) .evidence-origin {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: #fff;
+}
+
+/* Manual takeover can scroll the coalesced board to keep its game HUD visible.
+   Let provenance move with the content so its sticky row cannot cover HP or dice. */
+.trio-canvas-node:has(.encounter-panel--stable) .evidence-origin {
+  position: relative;
+  top: auto;
+}
+
+.trio-canvas-node:has(.encounter-game) .evidence-origin > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 7px;
+}
+
+.trio-canvas-node:has(.encounter-game) .evidence-origin strong,
+.trio-canvas-node:has(.encounter-game) .evidence-origin small {
+  display: inline;
+  line-height: 1.35;
+}
+
+.trio-canvas-node:has(.encounter-game) .evidence-origin strong {
+  font-size: 11px;
+}
+
+.trio-canvas-node:has(.encounter-game) .evidence-origin small {
+  margin: 0;
+  font-size: 10px;
+}
+
+/* Keep the complete encounter (cursors, turn/die, HP, target choice and controls)
+   inside the node scroller so narrative focus cannot clip it to the field alone. */
+.trio-canvas-node:has(.encounter-panel--stable) .trio-stage.trio-stage__object {
+  max-height: min(620px, calc(var(--trio-canvas-height, 700px) - 116px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.trio-canvas-node:has(.encounter-panel--stable) .encounter-panel--stable {
+  overflow: visible;
+}
+
+.trio-stage__object .trio-field:focus-within input,
+.trio-stage__object .trio-toggle-field:focus-within input {
+  border-color: var(--trio-accent);
+}
+
+.trio-canvas-skeleton {
+  display: grid;
+  min-height: 150px;
+  align-content: start;
+  gap: 11px;
+  padding: 17px 16px 18px;
+}
+
+.trio-canvas-skeleton__line {
+  display: block;
+  width: 76%;
+  height: 10px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #f0f2f5 0%, #f7f8fa 50%, #f0f2f5 100%);
+  background-size: 200% 100%;
+  animation: trio-canvas-loading 1.5s ease-in-out infinite;
+}
+
+.trio-canvas-skeleton__line.is-long {
+  width: 91%;
+}
+
+.trio-canvas-skeleton__line.is-short {
+  width: 48%;
+}
+
+.trio-canvas-skeleton small {
+  margin-top: 3px;
+  color: #718094;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.trio-canvas__manual-step {
+  margin-bottom: 8px;
+  pointer-events: auto;
+}
+
+.trio-canvas-node__action {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 11px;
+  border-top: 1px solid #efedf2;
+  background: #fff;
+}
+
+.trio-canvas__manual-step > button,
+.trio-canvas-node__action > button {
+  display: inline-flex;
+  min-height: 39px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 15px;
+  color: #fff;
+  background: #6550c7;
+  border: 1px solid #6550c7;
+  border-radius: 9px;
+  box-shadow: 0 5px 20px rgb(73 55 124 / 17%);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.trio-canvas__manual-step > button:hover:not(:disabled),
+.trio-canvas-node__action > button:hover:not(:disabled) {
+  background: #5944b9;
+}
+
+.trio-canvas__manual-step > button:disabled,
+.trio-canvas-node__action > button:disabled {
+  color: #778397;
+  background: #f4f6f8;
+  border-color: #e3e7ed;
+  box-shadow: none;
+}
+
+.trio-canvas__manual-step > button > span,
+.trio-canvas-node__action > button > span {
+  font-size: 18px;
+  line-height: 1;
+}
+
+@keyframes trio-canvas-loading {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (max-width: 760px) {
+  .trio-canvas-node {
+    max-height: calc(var(--trio-canvas-height, 600px) - 8px);
+    border-radius: 11px;
+  }
+
+  .trio-canvas-node__chrome {
+    min-height: 48px;
+    gap: 8px;
+    padding: 7px 10px;
+  }
+
+  .trio-canvas-node__icon {
+    width: 27px;
+    height: 27px;
+  }
+
+  .trio-canvas-node__heading strong {
+    font-size: 13px;
+  }
+
+  .trio-stage.trio-stage__object {
+    max-height: calc(var(--trio-canvas-height, 600px) - 116px);
+  }
+
+  .trio-stage__object .trio-card__body {
+    padding: 11px 12px 13px;
+  }
+
+  .trio-stage__object .trio-sample__comparison {
+    gap: 7px;
+  }
+
+  .trio-canvas__manual-step {
+    margin-bottom: 5px;
+  }
+
+  .trio-canvas__manual-step > button,
+  .trio-canvas-node__action > button {
+    min-height: 36px;
+    padding-inline: 12px;
+    font-size: 12px;
+  }
+
+  .trio-canvas-node__action {
+    padding: 6px 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trio-canvas-node,
+  .trio-canvas-skeleton__line {
+    transition: none;
+    animation-duration: .01ms;
+    animation-iteration-count: 1;
+  }
+}
+
+/* Sketch the shape being built, then reveal its live behavior in the same node. */
+.trio-build-preview__surface { display:flex; align-items:center; justify-content:center; gap:8px; height:126px; border:1px solid #ddd7f5; border-radius:10px; background:#faf9ff; overflow:hidden; }
+.trio-build-preview__surface i { display:block; background:#b8a5ed; border-radius:5px; animation:trio-build-part 480ms both; }
+.trio-build-preview__surface i:nth-child(2) { animation-delay:180ms; }
+.trio-build-preview__surface i:nth-child(3) { animation-delay:360ms; }
+.trio-build-preview__surface i:nth-child(4) { animation-delay:540ms; }
+.trio-build-preview__surface i:nth-child(5) { animation-delay:720ms; }
+.trio-build-preview__surface i:nth-child(6) { animation-delay:900ms; }
+.trio-build-preview__surface i:nth-child(7) { animation-delay:1080ms; }
+.trio-build-preview--music i { width:9%; height:35%; }
+.trio-build-preview--music i:nth-child(2n) { height:65%; }
+.trio-build-preview--music i:nth-child(3n) { height:85%; }
+.trio-build-preview--quest i { width:58px; height:58px; border-radius:50%; background:#d2dec7; box-shadow:0 0 0 6px #f2f6ed; }
+.trio-build-preview--quest i:nth-child(n+4) { display:none; }
+.trio-build-preview--quest i:nth-child(2) { transform:translateY(-20px); }
+.trio-build-preview--shipping .trio-build-preview__surface { display:grid; grid-template-columns:repeat(3,1fr); padding:14px; }
+.trio-build-preview--shipping i { height:18px; background:#c6dce9; }
+@keyframes trio-build-part { from { opacity:0; scale:.8; } to { opacity:1; scale:1; } }
+.trio-canvas-node .quest-game, .trio-canvas-node .music-lab { animation:trio-build-part 480ms both; }
+@media (prefers-reduced-motion: reduce) { .trio-build-preview__surface i, .trio-canvas-node .quest-game, .trio-canvas-node .music-lab { animation:none; } }
+/* Evidence has its own concise caption. Reserve the available height for the
+   actual excerpt instead of stacking two captions above a clipped source. */
+.trio-canvas-node:has(.source-evidence) .trio-narrative-caption { display: none; }
+.trio-canvas-node:has(.source-evidence) .trio-stage.trio-stage__object { max-height: calc(var(--trio-canvas-height, 700px) - 68px); }
+.trio-canvas-node:has(.source-evidence) .materialize-surface[data-state='ready'] { min-height: 0; }

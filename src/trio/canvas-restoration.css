@@ -1,0 +1,49 @@
+/* Preserve the original desk, chrome and spatial canvas. */
+.app .empty-workspace .trio-demo-picker{margin:20px auto 8px;text-align:left;box-shadow:0 8px 28px #30265208;width:min(420px,calc(100vw - 48px))}
+.app .empty-workspace:has(.trio-demo-picker){top:clamp(115px,15vh,190px)}
+.app .empty-workspace:has(.trio-demo-picker)>h1{font-size:clamp(30px,3.6vw,51px);line-height:1.15}
+.app .empty-workspace:has(.trio-demo-picker)>p{margin:13px 0;font-size:13px}
+.app .empty-workspace:has(.trio-demo-picker) .welcome-label{margin-bottom:16px}
+.app .empty-workspace:has(.trio-demo-picker) .demo-materials{display:none}
+.canvas-demo-picker-panel{position:relative;max-width:calc(100vw - 28px)}
+.canvas-demo-picker-close{position:absolute;right:8px;top:7px;z-index:1;background:#fff;border-radius:5px}
+.canvas-demo-picker-panel .trio-demo-picker{padding-top:38px;width:430px;max-width:calc(100vw - 28px)}
+.canvas-demo-picker-modal{z-index:200}
+.canvas-demo .canvas-area,.canvas-demo.is-guided-demo .canvas-area{top:76px;bottom:calc(var(--demo-dock-height,195px) + 36px)}
+.canvas-demo .canvas-caption{max-width:calc(100% - 120px)}
+.canvas-demo .bottom-left,.canvas-demo .bottom-right{bottom:calc(var(--demo-dock-height,195px) + 27px)}
+.canvas-demo .demo-player{bottom:12px;z-index:80}
+.canvas-demo .canvas-follow-resume{position:absolute;right:22px;top:92px;z-index:8;display:flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid #ddd7ed;border-radius:8px;color:#655290;background:#fff;font-size:11px;box-shadow:0 4px 15px #3026520c;cursor:pointer}.canvas-demo .canvas-follow-resume strong{padding:2px 6px;border-radius:4px;background:#f0eafa;font-size:10px}.canvas-demo .canvas-follow-resume[aria-pressed=false]{color:#746f7f;border-color:#e5e2e9}.canvas-demo .canvas-follow-resume[aria-pressed=false] strong{background:#f2f1f4}.canvas-demo .canvas-follow-resume:focus-visible{outline:2px solid #7056c5;outline-offset:3px}
+.canvas-demo .canvas-demo-help{position:relative;max-width:calc(100vw - 28px)}
+.canvas-demo .constellation{bottom:calc(var(--demo-dock-height,195px) + 26px)}
+.canvas-demo .toast{bottom:calc(var(--demo-dock-height,195px) + 30px);top:auto}
+.canvas-demo .workspace-switcher>button{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.canvas-demo .watch-demo-top{display:block}
+.trio-sample__compact-value{display:none}
+.canvas-demo .trio-canvas-node__surface .trio-adaptive-surface{max-height:none;overflow:visible}
+@media(max-width:760px){
+ .canvas-demo .demo-player.trio-demo-controls{grid-template-columns:minmax(0,1fr);gap:4px;padding:8px 10px 6px}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__label{grid-column:1;grid-row:1;display:flex;flex-direction:row;align-items:center;justify-content:space-between;min-height:18px;min-width:0;padding:0;gap:8px}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__label strong{font-size:12px;line-height:1.4;white-space:nowrap}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__label>span{font-size:8px;white-space:nowrap}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__buttons{grid-column:1;grid-row:2;display:flex;flex-wrap:nowrap;justify-content:space-between;width:100%;gap:3px}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__buttons>button{min-width:25px;width:25px;height:28px;padding:0}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__buttons>.demo-take-over{min-width:60px;width:auto;padding:0 5px}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__buttons>.trio-start-demo{min-width:72px;width:auto;padding:0 7px;font-size:10px}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__rail{grid-row:3;margin:0;min-height:22px;padding-block:2px}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__request{grid-row:4}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__status{grid-row:5;min-height:17px;font-size:9px}
+ .canvas-demo .trio-demo-controls .trio-demo-controls__status>small{font-size:8px}
+ .canvas-demo .demo-player.demo-player .demo-request{font-size:12px;line-height:1.55;max-height:58px;min-height:30px;padding:6px 8px;margin:0}
+ .canvas-demo .demo-request-block{gap:2px}
+ .canvas-demo .trio-stage__object .trio-sample{padding:8px}
+ .canvas-demo .trio-stage__object .trio-sample__comparison{grid-template-columns:1fr 1fr;gap:8px}
+ .canvas-demo .trio-stage__object .trio-sample__comparison>div{padding:0}
+ .canvas-demo .trio-stage__object .trio-sample__values dd{font-size:11px;line-height:1.5}
+ .canvas-demo .trio-stage__object .trio-sample__values dt{font-size:9px}
+ .canvas-demo .trio-stage__object .trio-sample__full-value{display:none}
+ .canvas-demo .trio-stage__object .trio-sample__compact-value{display:inline}
+}
+@media(max-height:760px) and (min-width:761px){.app .empty-workspace:has(.trio-demo-picker){top:100px}.app .empty-workspace:has(.trio-demo-picker)>h1{font-size:33px}.app .empty-workspace:has(.trio-demo-picker) .welcome-label{margin-bottom:9px}.app .empty-workspace .trio-demo-picker{margin-top:12px}.app .empty-workspace .trio-demo-picker__choice{min-height:47px}}
+@media(max-width:1000px){.canvas-demo .watch-demo-top{display:none}.canvas-demo .workspace-switcher>button{max-width:140px}}
+@media(max-width:760px){.canvas-demo .canvas-area,.canvas-demo.is-guided-demo .canvas-area{top:108px;bottom:calc(var(--demo-dock-height,195px) + 25px)}.canvas-demo .canvas-caption{top:116px;font-size:9px}.canvas-demo .canvas-caption>span:nth-child(2){display:none}.canvas-demo .canvas-toolbar{top:155px}.canvas-demo .canvas-follow-resume{top:117px;right:10px;font-size:9px;padding:6px}.canvas-demo .bottom-right{display:none}.canvas-demo .bottom-left{bottom:calc(var(--demo-dock-height,195px) + 14px)}.canvas-demo .demo-player{bottom:6px}.canvas-demo .constellation{bottom:calc(var(--demo-dock-height,195px) + 16px)}.app .empty-workspace:has(.trio-demo-picker){top:120px;max-height:calc(100dvh - 238px);overflow:auto;padding:10px 16px}.app .empty-workspace:has(.trio-demo-picker)>h1{font-size:29px}.app .empty-workspace:has(.trio-demo-picker)>p{font-size:11px}.app .empty-workspace:has(.trio-demo-picker) .welcome-label{display:none}.app .empty-workspace .trio-demo-picker{padding:11px;margin-top:12px}.app .empty-workspace .trio-demo-picker__heading>small{display:none}.app .empty-workspace .trio-demo-picker__choice{min-height:50px}.app .empty-workspace:has(.trio-demo-picker) .welcome-footnote{display:none}}

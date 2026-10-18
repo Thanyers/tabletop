@@ -1,0 +1,83 @@
+.demo-attention-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.demo-attention__target,
+.demo-attention__label {
+  position: fixed;
+  display: none;
+  pointer-events: none;
+}
+
+.demo-attention__target {
+  z-index: 130;
+  border: 1.5px solid #7860bd;
+  background: rgb(120 96 189 / 4%);
+}
+
+.demo-attention__label {
+  z-index: 131;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(220px, calc(100vw - 24px));
+  padding: 6px 9px;
+  border: 1px solid #e7e1f1;
+  border-radius: 7px;
+  background: #fff;
+  color: #4b3b70;
+  box-shadow: 0 3px 12px rgb(53 39 83 / 13%);
+  font: 500 11px/1.4 "Noto Sans Thai", Manrope, sans-serif;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: ellipsis;
+}
+
+.demo-attention__label::after {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1px solid #e7e1f1;
+  background: #fff;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.demo-attention__label[data-side="right"]::after {
+  top: calc(50% - 4px);
+  left: -5px;
+  border-top: 0;
+  border-right: 0;
+}
+
+.demo-attention__label[data-side="left"]::after {
+  top: calc(50% - 4px);
+  right: -5px;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+.demo-attention__label[data-side="top"]::after {
+  bottom: -5px;
+  left: calc(50% - 4px);
+  border-top: 0;
+  border-left: 0;
+}
+
+.demo-attention__label[data-side="bottom"]::after {
+  top: -5px;
+  left: calc(50% - 4px);
+  border-right: 0;
+  border-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-attention__target,
+  .demo-attention__label {
+    transition: none !important;
+    animation: none !important;
+  }
+}

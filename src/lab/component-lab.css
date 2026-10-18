@@ -1,0 +1,203 @@
+.component-lab {
+  --lab-ink: #29243b;
+  --lab-muted: #797286;
+  --lab-line: #e9e5f1;
+  --lab-wash: #faf8fd;
+  --lab-violet: #6550c7;
+  --lab-violet-soft: #f1edff;
+  --lab-coral: #e67562;
+  --lab-cyan: #2b9bb1;
+  display: flex;
+  width: 100%;
+  height: min(700px, calc(100dvh - 180px));
+  min-height: min(390px, calc(100dvh - 100px));
+  max-height: 700px;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--lab-ink);
+  background: #fff;
+  border: 1px solid #e5dfef;
+  border-radius: 16px;
+  box-shadow: 0 16px 42px rgb(51 40 78 / 13%), 0 2px 8px rgb(51 40 78 / 5%);
+  font-family: Manrope, "Noto Sans Thai", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.component-lab[hidden] { display: none; }
+.component-lab *, .component-lab *::before, .component-lab *::after { box-sizing: border-box; }
+.component-lab button, .component-lab textarea { font: inherit; }
+.component-lab button { color: inherit; }
+.component-lab :is(button, textarea, summary):focus-visible { outline: 3px solid rgb(101 80 199 / 35%); outline-offset: 2px; }
+
+.component-lab__header {
+  display: flex;
+  min-height: 63px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--lab-line);
+  background: linear-gradient(90deg, #fff 0%, #fcfbff 100%);
+}
+.component-lab__drag { cursor: grab; }
+.component-lab__drag:active { cursor: grabbing; }
+.component-lab__mark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; color: var(--lab-violet); background: var(--lab-violet-soft); border: 1px solid #e5def5; border-radius: 10px; }
+.component-lab__title { min-width: 0; flex: 1; }
+.component-lab__title > span { display: block; overflow: hidden; color: #9186a5; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-overflow: ellipsis; white-space: nowrap; }
+.component-lab__title h2 { margin: 2px 0 0; color: var(--lab-ink); font-size: 16px; font-weight: 780; letter-spacing: -.025em; line-height: 1.3; }
+.component-lab__availability { display: inline-flex; min-width: 0; align-items: center; gap: 5px; padding: 5px 8px; overflow: hidden; color: #716981; background: #f5f3f8; border: 1px solid #ede9f2; border-radius: 999px; font-size: 9px; font-weight: 750; white-space: nowrap; }
+.component-lab__availability i { width: 6px; height: 6px; flex: 0 0 auto; background: #b7b1c3; border-radius: 50%; }
+.component-lab__availability.is-ready { color: #4e6f68; background: #eef7f3; border-color: #dcece5; }
+.component-lab__availability.is-ready i { background: #5d9e81; }
+.component-lab__availability.is-unavailable { color: #9a665d; background: #fff5f1; border-color: #f4e4dc; }
+.component-lab__availability.is-unavailable i { background: var(--lab-coral); }
+.component-lab__icon-button { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; color: #756d83 !important; background: transparent; border: 0; border-radius: 9px; cursor: pointer; }
+.component-lab__icon-button:hover { color: #a95148 !important; background: #fff1ed; }
+
+.component-lab__body { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; padding: 12px 14px 14px; scrollbar-gutter: stable; }
+.component-lab__topline { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+.component-lab__working-label { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: hidden; color: #534b63; font-size: 10px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.component-lab__live-dot,.component-lab__footer-dot { width: 7px; height: 7px; flex: 0 0 auto; background: #72a88a; border-radius: 50%; box-shadow: 0 0 0 3px #eaf4ed; }
+.component-lab__seed { flex: 0 0 auto; padding: 4px 7px; color: #7b6b8c; background: #f7f4fc; border-radius: 6px; font: 500 9px "IBM Plex Mono", monospace; }
+.component-lab__tabs { display: flex; width: fit-content; max-width: 100%; gap: 3px; margin-bottom: 10px; padding: 3px; background: #f5f2fa; border: 1px solid #eee9f4; border-radius: 10px; }
+.component-lab__tabs button { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 5px 9px; color: #7c7487; background: transparent; border: 0; border-radius: 7px; font-size: 10px; font-weight: 750; cursor: pointer; }
+.component-lab__tabs button[aria-selected="true"] { color: #5d49b0; background: #fff; box-shadow: 0 1px 3px rgb(55 43 78 / 9%); }
+.component-lab__tabs button:disabled { opacity: .55; cursor: not-allowed; }
+.component-lab__tab-state { padding: 2px 5px; color: #8b7c99; background: #f1edf5; border-radius: 999px; font: 600 8px "IBM Plex Mono", monospace; }
+.component-lab__tab-state.is-good { color: #3c7b61; background: #eaf5ed; }
+
+.component-lab__stage { min-width: 0; padding: 0 0 11px; }
+.component-lab__building-caption { margin: 4px 0 12px; }
+.component-lab__building-caption strong { color: #443660; font-size: 14px; }
+.component-lab__building-caption p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 5px 0; color: #70657d; font-size: 11px; line-height: 1.6; }
+.component-lab__building-caption small { color: #897f94; font-size: 10px; }
+.component-lab__composer.is-generating { position: sticky; bottom: -14px; z-index: 2; padding: 6px 0; background: #fff; }
+.component-lab__composer.is-generating > label,
+.component-lab__composer.is-generating textarea,
+.component-lab__composer.is-generating .component-lab__suggestions { display: none; }
+.component-lab__composer.is-generating .component-lab__composer-actions { margin-top: 0; }
+.component-lab__frame-wrap { position: relative; min-height: 180px; overflow: hidden; background: #fff; border: 1px solid #e6e1ee; border-radius: 11px; }
+.component-lab .generated-component-frame { display: block; width: 100%; border: 0; background: #fff; }
+.component-lab__frame-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: #81768f; background: rgb(255 255 255 / 94%); font-size: 11px; pointer-events: none; }
+.component-lab__frame-loading svg { color: var(--lab-violet); animation: component-lab-spin 1.2s linear infinite; }
+.component-lab__empty-work { display: flex; min-height: 148px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 18px; text-align: center; background: radial-gradient(ellipse at 50% 15%, #f8f4ff, #fff 75%); border: 1px dashed #ddd5eb; border-radius: 11px; }
+.component-lab__empty-mark { display: grid; width: 38px; height: 38px; place-items: center; color: var(--lab-violet); background: #f1edff; border: 1px solid #e3dcf2; border-radius: 12px; }
+.component-lab__empty-work strong { color: #393246; font-size: 12px; }
+.component-lab__empty-work > span { max-width: 390px; color: #81788a; font-size: 10px; line-height: 1.6; }
+.component-lab__candidate-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 9px; margin: 4px 0 5px; }
+.component-lab__candidate-heading h3 { max-width: 390px; margin: 2px 0 0; overflow: hidden; color: #2e293a; font-size: 15px; font-weight: 780; text-overflow: ellipsis; white-space: nowrap; }
+.component-lab__candidate-kicker { display: inline-flex; align-items: center; gap: 5px; color: #786a91; font-size: 9px; font-weight: 750; }
+.component-lab__not-live { flex: 0 0 auto; padding: 4px 7px; color: #a85346; background: #fff1ed; border: 1px solid #f2d8d1; border-radius: 999px; font-size: 9px; font-weight: 800; }
+.component-lab__explanation { margin: 0 0 8px; color: #756d7f; font-size: 10px; line-height: 1.5; }
+.component-lab__measurement { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.component-lab__measurement > span { display: inline-flex; min-width: 0; align-items: center; gap: 5px; padding: 5px 7px; color: #71677f; background: #faf8fc; border: 1px solid #eee9f3; border-radius: 7px; }
+.component-lab__measurement svg { flex: 0 0 auto; color: #7f6ab6; }
+.component-lab__measurement small { font-size: 9px; }
+.component-lab__measurement strong { max-width: 130px; overflow: hidden; color: #4c435d; font: 600 9px "IBM Plex Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
+.component-lab__checks { margin-top: 10px; overflow: hidden; background: #fbfafc; border: 1px solid #eee9f3; border-radius: 9px; }
+.component-lab__checks-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 9px; color: #4b4358; border-bottom: 1px solid #eee9f3; font-size: 10px; }
+.component-lab__checks-title span { color: #76698a; font: 600 9px "IBM Plex Mono", monospace; }
+.component-lab__check { display: flex; align-items: flex-start; gap: 7px; padding: 6px 9px; border-top: 1px solid #f0edf3; }
+.component-lab__check:first-of-type { border-top: 0; }
+.component-lab__check > svg { flex: 0 0 auto; margin-top: 1px; }
+.component-lab__check.is-pass > svg { color: #4b8c6d; }
+.component-lab__check.is-fail > svg { color: #cc675c; }
+.component-lab__check > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.component-lab__check strong { color: #50475d; font: 600 9px "IBM Plex Mono", monospace; overflow-wrap: anywhere; }
+.component-lab__check small { color: #807787; font-size: 9px; overflow-wrap: anywhere; }
+.component-lab__candidate-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; margin-top: 9px; }
+.component-lab__activation-note { margin: 6px 0 0; color: #918899; font-size: 9px; text-align: right; }
+
+.component-lab__composer { padding: 11px 0 0; border-top: 1px solid var(--lab-line); }
+.component-lab__composer > label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.component-lab__composer > label > span { display: inline-flex; align-items: center; gap: 6px; color: #433c50; font-size: 11px; font-weight: 800; }
+.component-lab__composer > label svg { color: var(--lab-violet); }
+.component-lab__composer > label small { color: #9991a1; font-size: 9px; text-align: right; }
+.component-lab__composer textarea { display: block; width: 100%; min-height: 66px; max-height: 110px; resize: vertical; padding: 9px 10px; color: #3d3648; background: #fdfcff; border: 1px solid #e5e0ec; border-radius: 9px; font-size: 11px; line-height: 1.55; }
+.component-lab__composer textarea:focus { border-color: #b6a7de; outline: 2px solid rgb(101 80 199 / 13%); }
+.component-lab__composer textarea:disabled { color: #8a8390; background: #f7f5f9; }
+.component-lab__suggestions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.component-lab__suggestions button { min-height: 25px; padding: 4px 7px; color: #746780; background: #fff; border: 1px solid #e9e4ef; border-radius: 7px; font-size: 9px; cursor: pointer; }
+.component-lab__suggestions button:hover:not(:disabled) { color: #5d49b0; background: #f8f5ff; border-color: #cfc2e8; }
+.component-lab__suggestions button:disabled { opacity: .5; cursor: not-allowed; }
+.component-lab__composer-actions { display: flex; min-height: 39px; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
+.component-lab__local-note,.component-lab__elapsed { display: inline-flex; min-width: 0; align-items: center; gap: 6px; color: #918899; font-size: 9px; }
+.component-lab__elapsed { color: #69569e; font: 600 10px "IBM Plex Mono", monospace; }
+.component-lab__elapsed svg { color: var(--lab-violet); }
+.component-lab__availability-note { margin: 1px 0 2px; color: #a06459; font-size: 9px; }
+.component-lab__error { display: flex; align-items: flex-start; gap: 6px; margin: 7px 0 0; padding: 7px 8px; color: #a5524b; background: #fff4f1; border: 1px solid #f4e0da; border-radius: 7px; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.component-lab__error svg { flex: 0 0 auto; margin-top: 1px; }
+.component-lab__error.is-muted { color: #777184; background: #f8f6fa; border-color: #ece8f0; }
+
+.component-lab__button { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 7px; padding: 7px 11px; border: 1px solid transparent; border-radius: 8px; font-size: 10px; font-weight: 800; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+.component-lab__button:hover:not(:disabled) { transform: translateY(-1px); }
+.component-lab__button:disabled { opacity: .5; cursor: not-allowed; }
+.component-lab__button--primary { color: #fff !important; background: var(--lab-violet); border-color: var(--lab-violet); }
+.component-lab__button--primary:hover:not(:disabled) { background: #5440b1; border-color: #5440b1; }
+.component-lab__button--secondary { color: #6550a5 !important; background: #f7f4ff; border-color: #e2daf3; }
+.component-lab__button--secondary:hover:not(:disabled) { background: #f0ebfc; }
+.component-lab__button--cancel { color: #a8564b !important; background: #fff6f3; border-color: #f2dcd5; }
+.component-lab__history { margin-top: 12px; border-top: 1px solid var(--lab-line); }
+.component-lab__history > summary { display: flex; min-height: 38px; align-items: center; gap: 7px; color: #645a70; font-size: 10px; font-weight: 800; cursor: pointer; list-style: none; }
+.component-lab__history > summary::-webkit-details-marker,.component-lab__revision-detail > summary::-webkit-details-marker { display: none; }
+.component-lab__history > summary > span { padding: 2px 6px; color: #7b6c96; background: #f4f0fa; border-radius: 999px; font: 600 8px "IBM Plex Mono", monospace; }
+.component-lab__history > summary > svg:last-child { margin-left: auto; transition: transform .16s ease; }
+.component-lab__history[open] > summary > svg:last-child { transform: rotate(180deg); }
+.component-lab__history-list { display: flex; flex-direction: column; gap: 7px; }
+.component-lab__revision { padding: 9px; background: #fbfaff; border: 1px solid #ece7f3; border-radius: 9px; }
+.component-lab__revision-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 7px; }
+.component-lab__revision-top > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.component-lab__revision-top strong { overflow: hidden; color: #494153; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.component-lab__revision-top small { color: #938a9b; font-size: 8px; }
+.component-lab__active-tag { flex: 0 0 auto; padding: 3px 6px; color: #47765f; background: #edf7f0; border-radius: 999px; font-size: 8px; font-weight: 800; }
+.component-lab__revision-metrics { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 7px; color: #766d80; font: 500 8px "IBM Plex Mono", monospace; }
+.component-lab__revision-detail { margin-top: 6px; color: #756c7d; font-size: 9px; }
+.component-lab__revision-detail > summary { cursor: pointer; }
+.component-lab__revision-detail p { margin: 5px 0; padding: 6px; color: #5f5669; background: #fff; border-radius: 6px; overflow-wrap: anywhere; }
+.component-lab__revision-detail > span { display: block; padding: 2px 0; font: 500 8px "IBM Plex Mono", monospace; overflow-wrap: anywhere; }
+.component-lab__revision-detail .is-pass { color: #498465; }
+.component-lab__revision-detail .is-fail { color: #bc5e58; }
+.component-lab__rollback { display: inline-flex; min-height: 27px; align-items: center; gap: 5px; margin-top: 7px; padding: 4px 7px; color: #745d9a; background: #fff; border: 1px solid #e7e0ef; border-radius: 7px; font-size: 9px; font-weight: 750; cursor: pointer; }
+.component-lab__confirm { display: flex; align-items: center; gap: 7px; margin-top: 9px; padding: 9px; background: #fff8f4; border: 1px solid #f1dfd5; border-radius: 9px; }
+.component-lab__confirm > div { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.component-lab__confirm strong { color: #58484b; font-size: 10px; }
+.component-lab__confirm span { color: #887b7c; font-size: 9px; line-height: 1.4; }
+.component-lab__confirm .component-lab__button { min-height: 30px; padding: 5px 8px; white-space: nowrap; }
+.component-lab__footer { display: flex; min-height: 32px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 0 14px; color: #91899a; background: #fcfbfe; border-top: 1px solid #eeeaf2; font-size: 8px; }
+.component-lab__footer > span { display: inline-flex; min-width: 0; align-items: center; gap: 6px; }
+.component-lab__footer-dot { width: 5px; height: 5px; box-shadow: none; }
+.component-lab__footer svg { color: #aa9fba; }
+.is-spinning { animation: component-lab-spin 1s linear infinite; }
+@keyframes component-lab-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 520px) {
+  .component-lab { border-radius: 12px; }
+  .component-lab__header { min-height: 54px; gap: 7px; padding: 8px 9px; }
+  .component-lab__mark { width: 29px; height: 29px; border-radius: 9px; }
+  .component-lab__title > span { font-size: 7px; letter-spacing: .06em; }
+  .component-lab__title h2 { font-size: 13px; }
+  .component-lab__availability { gap: 4px; padding: 4px 6px; font-size: 8px; }
+  .component-lab__icon-button { width: 28px; height: 28px; }
+  .component-lab__body { padding: 9px 9px 11px; }
+  .component-lab__topline { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .component-lab__tabs { margin-bottom: 8px; }
+  .component-lab__composer > label { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .component-lab__composer > label small { text-align: left; }
+  .component-lab__suggestions button { flex: 1 1 calc(50% - 5px); }
+  .component-lab__footer { min-height: 29px; padding: 0 9px; font-size: 7px; }
+  .component-lab__candidate-heading { flex-direction: column; }
+  .component-lab__candidate-heading h3 { max-width: 100%; }
+  .component-lab__not-live { align-self: flex-start; }
+  .component-lab__measurement { gap: 4px; }
+  .component-lab__measurement > span { padding: 4px 5px; }
+  .component-lab__measurement strong { max-width: 75px; }
+  .component-lab__candidate-actions { justify-content: stretch; }
+  .component-lab__candidate-actions .component-lab__button { flex: 1; }
+  .component-lab__confirm { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .component-lab *, .component-lab *::before, .component-lab *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

@@ -1,0 +1,71 @@
+.source-evidence {
+  --evidence-accent: var(--brand-violet, #6550c7);
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  max-height: 350px;
+  overflow: auto;
+  padding: 7px;
+  color: var(--ink, #2c2940);
+  background: #fff;
+  border: 1px solid #e9e3f2;
+  border-radius: 9px;
+  scrollbar-width: thin;
+}
+
+/* In the source canvas the surrounding preview is already the evidence card.
+   Keep the excerpt's geometry, but remove the second inset and nested frame. */
+.source-preview--evidence .source-evidence {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.source-evidence__head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 7px; }
+.source-evidence__eyebrow { flex: 0 0 auto; color: #766b84; font-size: 10px; font-weight: 700; line-height: 1.2; }
+.source-evidence__eyebrow small { margin-left: 4px; color: #8f8799; font-size: 9px; font-weight: 500; }
+.source-evidence__rail { display: flex; min-width: 0; align-items: center; gap: 4px; }
+.source-evidence__rail i { width: 5px; height: 5px; background: #e2dceb; border-radius: 50%; }
+.source-evidence__rail i.is-active { width: 7px; height: 7px; background: #7056bd; }
+.source-evidence__rail i.is-done { background: #a895d2; }
+.source-evidence__rail b { margin-left: 2px; color: #625477; font-size: 9px; font-weight: 650; line-height: 1.2; white-space: nowrap; }
+.source-evidence__sentence { min-height: 30px; margin: 0; color: #40394e; font-size: 12px; font-weight: 600; line-height: 1.36; overflow-wrap: anywhere; }
+.source-evidence__target { position: relative; min-width: 0; overflow: hidden; border: 1px solid #ddd5eb; border-radius: 7px; background: #faf9fc; }
+.source-evidence__target-label { justify-self: end; max-width: 100%; overflow: hidden; color: #6e647b; font-size: 10px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.source-evidence__full { justify-self: end; min-height: 28px; padding: 4px 9px; color: #5e4ca2; background: #f8f5ff; border: 1px solid #e3daf3; border-radius: 6px; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; }
+
+.source-evidence__pdf-crop { width: 100%; aspect-ratio: 2.5; overflow: hidden; background: #f3f6fb; }
+.source-evidence__pdf-crop svg,.source-evidence__route-crop svg { display: block; width: 100%; height: 100%; }
+.source-evidence__route-crop { width: 100%; aspect-ratio: 2.5; overflow: hidden; background: #f8f7fb; }
+.source-evidence__json-excerpt { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 7px; min-height: 48px; padding: 6px 8px; color: #4b415c; background: #faf8fd; }
+.source-evidence__json-key { color: #6650a9; font: 700 10px/1.2 'IBM Plex Mono', monospace; }
+.source-evidence__json-text { min-width: 0; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
+.source-evidence__json-value { color: #6550a7; font: 700 10px/1.2 'IBM Plex Mono', monospace; white-space: nowrap; }
+.source-evidence__json-raw { margin: 0; padding: 4px 7px; background: #fff; border-top: 1px solid #e9e3f2; }
+.source-evidence__json-raw summary { color: #786e86; font-size: 10px; cursor: pointer; }
+.source-evidence__json-raw pre { max-height: 100px; overflow: auto; margin: 5px 0 0; font: 10px/1.4 'IBM Plex Mono', monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-evidence__wave { display: grid; gap: 3px; padding: 6px 7px; background: #faf8fd; }
+.source-evidence__wave svg { display: block; width: 100%; height: 34px; color: #785fc3; }
+.source-evidence__beats { display: grid; grid-template-columns: repeat(8,1fr); gap: 3px; }
+.source-evidence__beats i { height: 3px; background: #d7cdea; border-radius: 2px; }
+.source-evidence__beats i:nth-child(1), .source-evidence__beats i:nth-child(5) { background: #b19bde; }
+.source-evidence__wave small { color: #81788e; font-size: 10px; line-height: 1.3; }
+
+@media (max-width: 480px) {
+  .source-evidence { gap: 4px; max-height: 235px; padding: 6px; }
+  .source-evidence__eyebrow { font-size: 10px; }
+  .source-evidence__rail { gap: 3px; }
+  .source-evidence__rail b { font-size: 9px; }
+  .source-evidence__sentence { min-height: 30px; font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .source-evidence * { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+@media (max-width: 480px) {
+  .source-evidence__eyebrow small { display: none; }
+  .source-evidence { max-height: none; }
+}

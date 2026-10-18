@@ -1,0 +1,97 @@
+rowId,assetId,description,category,acquisitionDate,inServiceDate,cost,usefulLifeMonths,method,accumulatedDepreciation,recordedMonthlyDepreciation,glAccount,department
+ROW-001,FA-001,Northstar Laptop 001,Laptop,2024-09-01,2026-09-01,18000,36,straight-line,0,500,1500-LAPTOP,Finance
+ROW-002,FA-002,Northstar Laptop 002,Laptop,2024-08-01,2026-08-15,24000,36,straight-line,0,666.67,1500-LAPTOP,Operations
+ROW-003,FA-003,Northstar Laptop 003,Laptop,2026-08-20,2026-09-30,15000,36,straight-line,0,416.67,1500-LAPTOP,People
+ROW-004,FA-004,Northstar Laptop 004,Laptop,2026-08-20,2026-09-01,14999,36,straight-line,0,0,1500-LAPTOP,Technology
+ROW-005,FA-005,Northstar Laptop 005,Laptop,2022-02-09,2023-02-09,27955,36,straight-line,8386.5,776.53,1500-LAPTOP,Finance
+ROW-006,FA-006,Northstar Laptop 006,Laptop,2023-07-16,2024-07-16,31746,36,straight-line,9523.8,881.83,1500-LAPTOP,Operations
+ROW-007,FA-007,Northstar Laptop 007,Laptop,2024-12-23,2025-12-23,35537,36,straight-line,10661.1,987.14,1500-LAPTOP,People
+ROW-008,FA-008,Northstar Laptop 008,Laptop,,2022-05-03,39328,36,straight-line,11798.4,1092.44,1500-LAPTOP,Technology
+ROW-009,FA-009,Northstar Laptop 009,Laptop,2022-10-10,,43119,36,straight-line,12935.7,0,1500-LAPTOP,Finance
+ROW-010,FA-010,Northstar Laptop 010,Laptop,2026-02-30,2024-03-17,46910,36,straight-line,14073,1303.06,1500-LAPTOP,Operations
+ROW-011,FA-011,Northstar Laptop 011,Unknown,2024-08-24,2025-08-24,50701,36,straight-line,15210.3,1408.36,1500-LAPTOP,People
+ROW-012,FA-012,Northstar Laptop 012,Laptop,2021-01-04,2022-01-04,54492,36,straight-line,16347.6,1513.67,1500-LAPTOP,Technology
+ROW-013,FA-013,Northstar Laptop 013,Laptop,2022-06-11,2023-06-11,58283,36,straight-line,17484.9,1618.97,1500-LAPTOP,Finance
+ROW-014,FA-014,Northstar Laptop 014,Laptop,2023-11-18,2024-11-18,12074,36,straight-line,3622.2,0,,Operations
+ROW-015,FA-015,Northstar Laptop 015,Laptop,2024-04-25,2025-04-25,15865,36,straight-line,4759.5,440.69,9999-SUSPENSE,People
+ROW-016,FA-016,Northstar Laptop 016,Laptop,2021-09-05,2022-09-05,19656,12,straight-line,5896.8,546,1500-LAPTOP,Technology
+ROW-017,FA-017,Northstar Laptop 017,Laptop,2022-02-12,2023-02-12,23447,36,straight-line,7034.1,651.31,1500-LAPTOP,Finance
+ROW-018,FA-017,Northstar Laptop 018,Laptop,2023-07-19,2024-07-19,27238,36,straight-line,8171.4,756.61,1500-LAPTOP,Operations
+ROW-019,FA-019,Northstar Laptop 019,Laptop,2024-12-26,2025-12-26,-500,36,straight-line,9308.7,0,1500-LAPTOP,People
+ROW-020,FA-020,Northstar Laptop 020,Laptop,2021-05-06,2022-05-06,-1,36,straight-line,10446,0,1500-LAPTOP,Technology
+ROW-021,FA-021,Northstar Laptop 021,Laptop,2022-10-13,2023-10-13,38611,36,straight-line,11583.3,1072.53,1500-LAPTOP,Finance
+ROW-022,FA-022,Northstar Laptop 022,Laptop,2023-03-20,2024-03-20,42402,36,straight-line,12720.6,1177.83,1500-LAPTOP,Operations
+ROW-023,FA-023,Northstar Laptop 023,Laptop,2024-08-27,2025-08-27,46193,36,straight-line,13857.9,1283.14,1500-LAPTOP,People
+ROW-024,FA-024,Northstar Laptop 024,Laptop,2021-01-07,2022-01-07,49984,36,straight-line,14995.2,1388.44,1500-LAPTOP,Technology
+ROW-025,FA-025,Northstar Office desk 025,Furniture,2022-06-14,2023-06-14,55275,60,straight-line,16582.5,0,1510-FURNITURE,Finance
+ROW-026,FA-026,Northstar Network equipment 026,Equipment,2023-11-21,2024-11-21,75242,60,straight-line,22572.6,1254.03,1520-EQUIPMENT,Operations
+ROW-027,FA-027,Northstar Laptop 027,Equipment,2024-04-01,2025-04-01,67081,60,straight-line,20124.3,1118.02,1530-VEHICLE,People
+ROW-028,FA-028,Northstar Office desk 028,Furniture,2021-09-08,2022-09-08,60468,60,straight-line,18140.4,1007.8,1510-FURNITURE,Technology
+ROW-029,FA-029,Northstar Network equipment 029,Equipment,2022-02-15,2023-02-15,82193,60,straight-line,24657.9,1369.88,1520-EQUIPMENT,Finance
+ROW-030,FA-030,Northstar Service vehicle 030,Vehicle,2023-07-22,2024-07-22,100090,60,straight-line,30027,1668.17,1530-VEHICLE,Operations
+ROW-031,FA-031,Northstar Office desk 031,Furniture,2024-12-02,2025-12-02,19000,60,straight-line,19698.3,250,1510-FURNITURE,People
+ROW-032,FA-032,Northstar Network equipment 032,Equipment,2021-05-09,2022-05-09,89144,60,straight-line,26743.2,1485.73,1520-EQUIPMENT,Technology
+ROW-033,FA-033,Northstar Service vehicle 033,Vehicle,2022-10-16,2023-10-16,133099,60,straight-line,39929.7,2218.32,1530-VEHICLE,Finance
+ROW-034,FA-034,Northstar Office desk 034,Furniture,2023-03-23,2024-03-23,70854,60,straight-line,21256.2,1180.9,1510-FURNITURE,Operations
+ROW-035,FA-035,Northstar Network equipment 035,Equipment,2024-08-03,2025-08-03,96095,60,straight-line,28828.5,1601.58,1520-EQUIPMENT,People
+ROW-036,FA-036,Northstar Service vehicle 036,Vehicle,2021-01-10,2022-01-10,166108,60,straight-line,49832.4,2768.47,1530-VEHICLE,Technology
+ROW-037,FA-037,Northstar Office desk 037,Furniture,2022-06-17,2023-06-17,76047,60,straight-line,22814.1,1267.45,1510-FURNITURE,Finance
+ROW-038,FA-038,Northstar Network equipment 038,Equipment,2023-11-24,2024-11-24,103046,60,straight-line,30913.8,1717.43,1520-EQUIPMENT,Operations
+ROW-039,FA-039,Northstar Service vehicle 039,Vehicle,2024-04-04,2025-04-04,199117,60,straight-line,59735.1,3318.62,1530-VEHICLE,People
+ROW-040,FA-040,Northstar Office desk 040,Furniture,2021-09-11,2022-09-11,81240,60,straight-line,24372,1354,1510-FURNITURE,Technology
+ROW-041,FA-041,Northstar Network equipment 041,Equipment,2022-02-18,2023-02-18,109997,60,straight-line,32999.1,1833.28,1520-EQUIPMENT,Finance
+ROW-042,FA-042,Northstar Service vehicle 042,Vehicle,2023-07-25,2024-07-25,232126,60,straight-line,69637.8,3868.77,1530-VEHICLE,Operations
+ROW-043,FA-043,Northstar Office desk 043,Furniture,2024-12-05,2025-12-05,86433,60,straight-line,25929.9,1440.55,1510-FURNITURE,People
+ROW-044,FA-044,Northstar Network equipment 044,Equipment,2021-05-12,2022-05-12,116948,60,straight-line,35084.4,1949.13,1520-EQUIPMENT,Technology
+ROW-045,FA-045,Northstar Service vehicle 045,Vehicle,2022-10-19,2023-10-19,265135,60,straight-line,79540.5,4418.92,1530-VEHICLE,Finance
+ROW-046,FA-046,Northstar Office desk 046,Furniture,2023-03-26,2024-03-26,91626,60,straight-line,27487.8,1527.1,1510-FURNITURE,Operations
+ROW-047,FA-047,Northstar Network equipment 047,Equipment,2024-08-06,2025-08-06,123899,60,straight-line,37169.7,2064.98,1520-EQUIPMENT,People
+ROW-048,FA-048,Northstar Service vehicle 048,Vehicle,2021-01-13,2022-01-13,298144,60,straight-line,89443.2,4969.07,1530-VEHICLE,Technology
+ROW-049,FA-049,Northstar Office desk 049,Furniture,2022-06-20,2023-06-20,96819,60,straight-line,29045.7,1613.65,1510-FURNITURE,Finance
+ROW-050,FA-050,Northstar Network equipment 050,Equipment,2023-11-27,2024-11-27,20850,60,straight-line,6255,347.5,1520-EQUIPMENT,Operations
+ROW-051,FA-051,Northstar Service vehicle 051,Vehicle,2024-04-07,2025-04-07,66153,60,straight-line,19845.9,1102.55,1530-VEHICLE,People
+ROW-052,FA-052,Northstar Office desk 052,Furniture,2021-09-14,2022-09-14,14012,60,straight-line,4203.6,0,1510-FURNITURE,Technology
+ROW-053,FA-053,Northstar Network equipment 053,Equipment,2022-02-21,2023-02-21,27801,60,straight-line,8340.3,463.35,1520-EQUIPMENT,Finance
+ROW-054,FA-054,Northstar Service vehicle 054,Vehicle,2023-07-01,2024-07-01,99162,60,straight-line,29748.6,1652.7,1530-VEHICLE,Operations
+ROW-055,FA-055,Northstar Office desk 055,Furniture,2024-12-08,2025-12-08,19205,60,straight-line,5761.5,0,1510-FURNITURE,People
+ROW-056,FA-056,Northstar Network equipment 056,Equipment,2021-05-15,2022-05-15,34752,60,straight-line,10425.6,579.2,1520-EQUIPMENT,Technology
+ROW-057,FA-057,Northstar Service vehicle 057,Vehicle,2022-10-22,2023-10-22,132171,60,straight-line,39651.3,2202.85,1530-VEHICLE,Finance
+ROW-058,FA-058,Northstar Office desk 058,Furniture,2023-03-02,2024-03-02,24398,60,straight-line,7319.4,406.63,1510-FURNITURE,Operations
+ROW-059,FA-059,Northstar Network equipment 059,Equipment,2024-08-09,2025-08-09,41703,60,straight-line,12510.9,695.05,1520-EQUIPMENT,People
+ROW-060,FA-060,Northstar Service vehicle 060,Vehicle,2021-01-16,2022-01-16,165180,60,straight-line,49554,2753,1530-VEHICLE,Technology
+ROW-061,FA-061,Northstar Office desk 061,Furniture,2022-06-23,2023-06-23,29591,60,straight-line,8877.3,493.18,1510-FURNITURE,Finance
+ROW-062,FA-062,Northstar Network equipment 062,Equipment,2023-11-03,2024-11-03,48654,60,straight-line,14596.2,810.9,1520-EQUIPMENT,Operations
+ROW-063,FA-063,Northstar Service vehicle 063,Vehicle,2024-04-10,2025-04-10,198189,60,straight-line,59456.7,3303.15,1530-VEHICLE,People
+ROW-064,FA-064,Northstar Office desk 064,Furniture,2021-09-17,2022-09-17,34784,60,straight-line,10435.2,579.73,1510-FURNITURE,Technology
+ROW-065,FA-065,Northstar Network equipment 065,Equipment,2022-02-24,2023-02-24,55605,60,straight-line,16681.5,926.75,1520-EQUIPMENT,Finance
+ROW-066,FA-066,Northstar Service vehicle 066,Vehicle,2023-07-04,2024-07-04,231198,60,straight-line,69359.4,3853.3,1530-VEHICLE,Operations
+ROW-067,FA-067,Northstar Office desk 067,Furniture,2024-12-11,2025-12-11,39977,60,straight-line,11993.1,666.28,1510-FURNITURE,People
+ROW-068,FA-068,Northstar Network equipment 068,Equipment,2021-05-18,2022-05-18,62556,60,straight-line,18766.8,1042.6,1520-EQUIPMENT,Technology
+ROW-069,FA-069,Northstar Service vehicle 069,Vehicle,2022-10-25,2023-10-25,264207,60,straight-line,79262.1,4403.45,1530-VEHICLE,Finance
+ROW-070,FA-070,Northstar Office desk 070,Furniture,2023-03-05,2024-03-05,45170,60,straight-line,13551,752.83,1510-FURNITURE,Operations
+ROW-071,FA-071,Northstar Network equipment 071,Equipment,2024-08-12,2025-08-12,69507,60,straight-line,20852.1,1158.45,1520-EQUIPMENT,People
+ROW-072,FA-072,Northstar Service vehicle 072,Vehicle,2021-01-19,2022-01-19,297216,60,straight-line,89164.8,4953.6,1530-VEHICLE,Technology
+ROW-073,FA-073,Northstar Office desk 073,Furniture,2022-06-26,2023-06-26,50363,60,straight-line,15108.9,839.38,1510-FURNITURE,Finance
+ROW-074,FA-074,Northstar Network equipment 074,Equipment,2023-11-06,2024-11-06,76458,60,straight-line,22937.4,1274.3,1520-EQUIPMENT,Operations
+ROW-075,FA-075,Northstar Service vehicle 075,Vehicle,2024-04-13,2025-04-13,65225,60,straight-line,19567.5,1087.08,1530-VEHICLE,People
+ROW-076,FA-076,Northstar Office desk 076,Furniture,2021-09-20,2022-09-20,55556,60,straight-line,16666.8,925.93,1510-FURNITURE,Technology
+ROW-077,FA-077,Northstar Network equipment 077,Equipment,2022-02-27,2023-02-27,83409,60,straight-line,25022.7,1390.15,1520-EQUIPMENT,Finance
+ROW-078,FA-078,Northstar Service vehicle 078,Vehicle,2023-07-07,2024-07-07,98234,60,straight-line,29470.2,1637.23,1530-VEHICLE,Operations
+ROW-079,FA-079,Northstar Office desk 079,Furniture,2024-12-14,2025-12-14,60749,60,straight-line,18224.7,1012.48,1510-FURNITURE,People
+ROW-080,FA-080,Northstar Network equipment 080,Equipment,2021-05-21,2022-05-21,90360,60,straight-line,27108,1506,1520-EQUIPMENT,Technology
+ROW-081,FA-081,Northstar Service vehicle 081,Vehicle,2022-10-01,2023-10-01,131243,60,straight-line,39372.9,2187.38,1530-VEHICLE,Finance
+ROW-082,FA-082,Northstar Office desk 082,Furniture,2023-03-08,2024-03-08,65942,60,straight-line,19782.6,1099.03,1510-FURNITURE,Operations
+ROW-083,FA-083,Northstar Network equipment 083,Equipment,2024-08-15,2025-08-15,97311,60,straight-line,29193.3,1621.85,1520-EQUIPMENT,People
+ROW-084,FA-084,Northstar Service vehicle 084,Vehicle,2021-01-22,2022-01-22,164252,60,straight-line,49275.6,2737.53,1530-VEHICLE,Technology
+ROW-085,FA-085,Northstar Office desk 085,Furniture,2022-06-02,2023-06-02,71135,60,straight-line,21340.5,1185.58,1510-FURNITURE,Finance
+ROW-086,FA-086,Northstar Network equipment 086,Equipment,2023-11-09,2024-11-09,104262,60,straight-line,31278.6,1737.7,1520-EQUIPMENT,Operations
+ROW-087,FA-087,Northstar Service vehicle 087,Vehicle,2024-04-16,2025-04-16,197261,60,straight-line,59178.3,3287.68,1530-VEHICLE,People
+ROW-088,FA-088,Northstar Office desk 088,Furniture,2021-09-23,2022-09-23,76328,60,straight-line,22898.4,1272.13,1510-FURNITURE,Technology
+ROW-089,FA-089,Northstar Network equipment 089,Equipment,2022-02-03,2023-02-03,111213,60,straight-line,33363.9,1853.55,1520-EQUIPMENT,Finance
+ROW-090,FA-090,Northstar Service vehicle 090,Vehicle,2023-07-10,2024-07-10,230270,60,straight-line,69081,3837.83,1530-VEHICLE,Operations
+ROW-091,FA-091,Northstar Office desk 091,Furniture,2024-12-17,2025-12-17,81521,60,straight-line,24456.3,1358.68,1510-FURNITURE,People
+ROW-092,FA-092,Northstar Network equipment 092,Equipment,2021-05-24,2022-05-24,118164,60,straight-line,35449.2,1969.4,1520-EQUIPMENT,Technology
+ROW-093,FA-093,Northstar Service vehicle 093,Vehicle,2022-10-04,2023-10-04,263279,60,straight-line,78983.7,4387.98,1530-VEHICLE,Finance
+ROW-094,FA-094,Northstar Office desk 094,Furniture,2023-03-11,2024-03-11,86714,60,straight-line,26014.2,1445.23,1510-FURNITURE,Operations
+ROW-095,FA-095,Northstar Network equipment 095,Equipment,2024-08-18,2025-08-18,15115,60,straight-line,4534.5,0,1520-EQUIPMENT,People
+ROW-096,FA-096,Northstar Service vehicle 096,Vehicle,2026-09-01,2026-09-01,296288,60,straight-line,0,0,1530-VEHICLE,Technology

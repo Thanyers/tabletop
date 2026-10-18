@@ -1,0 +1,8 @@
+.evidence-origin { display:flex; align-items:center; gap:9px; width:100%; min-width:0; margin:0 0 10px; padding:10px 12px; border:1px solid #ddd9f2; border-radius:10px; background:#f9f8ff; color:#6850b0; text-align:left; cursor:pointer; font:inherit; }
+.evidence-origin > span { min-width:0; flex:1; }
+.evidence-origin strong,.evidence-origin small { display:block; overflow-wrap:anywhere; }
+.evidence-origin strong { font-size:12px; font-weight:650; color:#423657; line-height:1.5; }
+.evidence-origin small { font-size:10px; line-height:1.5; color:#776d88; margin-top:2px; }
+.evidence-origin > svg { flex-shrink:0; }
+.evidence-origin:hover { background:#f0ecfc; border-color:#ae9cdd; }
+.evidence-origin:focus-visible { outline:2px solid #8162ce; outline-offset:2px; }

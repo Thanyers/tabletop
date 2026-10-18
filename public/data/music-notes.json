@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "fixtureType": "synthetic-rehearsal-notes-and-media",
+  "sourceFile": "music-rehearsal.csv",
+  "title": "100 BPM Rehearsal Phrase",
+  "bpm": 100,
+  "beats": 8,
+  "audioFile": "music-rehearsal.wav",
+  "videoFile": "music-rehearsal.webm",
+  "durationSeconds": 4.8,
+  "mediaDescription": "Deterministic synthesized rehearsal phrase and matching beat-timeline visualization; not a human recording or audio analysis.",
+  "sections": [
+    {
+      "id": "MU-001",
+      "section": "intro",
+      "bpm": 100,
+      "beats": 4,
+      "feedback": "เข้าพร้อมกัน"
+    },
+    {
+      "id": "MU-002",
+      "section": "verse-1",
+      "bpm": 100,
+      "beats": 16,
+      "feedback": "เล่นได้ต่อเนื่อง"
+    },
+    {
+      "id": "MU-003",
+      "section": "pre-chorus",
+      "bpm": 100,
+      "beats": 8,
+      "feedback": "ยังไม่ต้องเปลี่ยน"
+    },
+    {
+      "id": "MU-004",
+      "section": "chorus",
+      "bpm": 100,
+      "beats": 8,
+      "feedback": "คนซ้อมกดบันทึกว่าเข้าช้า"
+    },
+    {
+      "id": "MU-005",
+      "section": "verse-2",
+      "bpm": 100,
+      "beats": 16,
+      "feedback": "เล่นได้ต่อเนื่อง"
+    },
+    {
+      "id": "MU-006",
+      "section": "bridge",
+      "bpm": 100,
+      "beats": 8,
+      "feedback": "ยังไม่ต้องเปลี่ยน"
+    },
+    {
+      "id": "MU-007",
+      "section": "outro",
+      "bpm": 100,
+      "beats": 4,
+      "feedback": "ยังไม่ต้องเปลี่ยน"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "NOTE-MU-004-LATE",
+      "sectionId": "MU-004",
+      "section": "chorus",
+      "kind": "synthetic-human-marked-note",
+      "timing": "late-entry",
+      "note": "The rehearsal note marks the chorus entry as late; this is a fixture annotation, not a measured audio offset."
+    }
+  ],
+  "synthetic": true
+}

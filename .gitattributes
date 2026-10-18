@@ -1,0 +1,9 @@
+# PDF cross-reference offsets must survive Windows checkouts byte-for-byte.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.xlsx binary
+*.wav binary
+*.webm binary
+*.zip binary

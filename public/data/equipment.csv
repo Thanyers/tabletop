@@ -1,0 +1,4 @@
+id,name,category,owner,warrantyUntil,condition,location
+EQ-001,ThinkPad X1 Carbon,Laptop,N. Suriya,2026-11-20,working,Bangkok / Finance
+EQ-003,Network switch 48-port,Network,IT Service Desk,2026-10-10,working,Bangkok / Server room
+EQ-005,Conference room display,Display,Facilities,2026-12-15,needs-repair,Bangkok / Meeting room 2

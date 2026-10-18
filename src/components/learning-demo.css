@@ -1,0 +1,235 @@
+.learning-object--guided {
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  overflow-x: hidden;
+}
+
+.learning-demo-proof {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #d8d0ef;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #fff 0%, #f7f4ff 72%, #eff9fb 100%);
+  color: var(--learn-ink, #322a43);
+}
+
+.learning-demo-proof__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brand-violet, #6550c7);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .1em;
+}
+
+.learning-demo-proof__eyebrow > span {
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid #e6def5;
+  border-radius: 999px;
+  background: #fff;
+  color: #6f5ba2;
+  font-size: 8px;
+  letter-spacing: .04em;
+}
+
+.learning-demo-proof h2 {
+  margin: 0;
+  color: #302641;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -.035em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.learning-demo-proof__comparison {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #e7e0f2;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.learning-demo-proof__comparison > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.learning-demo-proof__comparison > div > span,
+.learning-demo-proof__single > span {
+  color: #6e6878;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.learning-demo-proof__comparison > div > strong,
+.learning-demo-proof__single > strong {
+  color: #3d2c68;
+  font: 750 clamp(17px, 5.8vw, 23px)/1.2 "IBM Plex Mono", monospace;
+  letter-spacing: -.055em;
+  overflow-wrap: anywhere;
+}
+
+.learning-demo-proof__comparison > svg {
+  color: #8c79b8;
+}
+
+.learning-demo-proof__single {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid #e7e0f2;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.learning-demo-proof p {
+  margin: 0;
+  color: #514b5e;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.learning-demo-proof > small {
+  color: #766f81;
+  font-size: 9px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.learning-demo-proof[data-focus="approved"] {
+  border-color: #cde4d8;
+  background: linear-gradient(145deg, #fff 0%, #f2fbf6 100%);
+}
+
+.learning-demo-proof[data-focus="approved"] .learning-demo-proof__eyebrow {
+  color: #3c866d;
+}
+
+.learning-demo-proof[data-focus="experiment"] {
+  border-color: #d4e5ef;
+  background: linear-gradient(145deg, #fff 0%, #f1f9fc 100%);
+}
+
+.learning-demo-proof[data-focus="experiment"] .learning-demo-proof__eyebrow {
+  color: #347f95;
+}
+
+.learning-object--guided > .learning-object__lab--guided {
+  margin: 0;
+  padding: 11px;
+}
+
+.learning-object__experiment-details {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid #e3e8ec;
+}
+
+.learning-object__experiment-details > summary {
+  min-height: 28px;
+  color: #465367;
+  font-size: 9px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.learning-object__experiment-details[open] > summary {
+  margin-bottom: 6px;
+}
+
+.learning-demo-evidence {
+  min-width: 0;
+  border-top: 1px solid var(--learn-line, #ece7f3);
+}
+
+.learning-demo-evidence > summary {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 7px;
+  color: #51466d;
+  font-size: 10px;
+  font-weight: 800;
+  list-style: none;
+  cursor: pointer;
+}
+
+.learning-demo-evidence > summary::-webkit-details-marker {
+  display: none;
+}
+
+.learning-demo-evidence > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: #746394;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.learning-demo-evidence[open] > summary::after {
+  content: "−";
+}
+
+.learning-demo-evidence > :not(summary) {
+  min-width: 0;
+}
+
+.learning-object--guided .learning-object__intro {
+  padding-top: 7px;
+}
+
+@media (max-width: 380px) {
+  .learning-object--guided {
+    padding: 8px;
+  }
+
+  .learning-demo-proof {
+    gap: 4px;
+    padding: 7px;
+  }
+
+  .learning-demo-proof h2 {
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .learning-demo-proof p {
+    line-height: 1.3;
+  }
+
+  .learning-demo-proof__comparison {
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .learning-demo-proof__comparison > div > strong,
+  .learning-demo-proof__single > strong {
+    font-size: clamp(15px, 5.1vw, 19px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .learning-demo-proof {
+    animation: learning-proof-enter 180ms ease-out both;
+  }
+
+  @keyframes learning-proof-enter {
+    from { opacity: .82; transform: translateY(3px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}

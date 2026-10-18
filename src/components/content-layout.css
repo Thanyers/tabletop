@@ -1,0 +1,98 @@
+/* Keep canvas card content measured against the card's local (pre-camera) size. */
+.card-body {
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.card-body > :is(
+  .context-content,
+  .source-content,
+  .worker-content,
+  .table-content,
+  .dashboard-content,
+  .exception-content,
+  .knowledge-content,
+  .proposal-content,
+  .evaluation-content,
+  .equipment-dashboard,
+  .intake-card,
+  .learning-object,
+  .workspace-overview
+) {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.card-body > :is(.table-content, .dashboard-content) { min-height: 0; }
+.card-body > .source-content { min-height: 100%; height: auto; }
+.card-body > .source-content .source-files { flex: 1 0 auto; min-width: 0; }
+.card-body > .knowledge-content { min-height: 100%; height: auto; }
+
+/* Tables keep their horizontal scroll local, while their header/footer stay in the card. */
+.card-body .table-content { min-width: 0; max-width: 100%; }
+.card-body .table-scroll,
+.inspector__table-wrap,
+.asset-policy-draft__table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overscroll-behavior: contain;
+}
+
+.card-body .table-scroll { flex: 1 1 auto; }
+.card-body .table-tools,
+.card-body .table-footer { min-width: 0; max-width: 100%; }
+.card-body .table-footer { flex-wrap: wrap; }
+.card-body .table-footer > * { min-width: 0; }
+.card-body .table-footer > span:first-child { flex: 1 1 auto; white-space: normal; overflow-wrap: anywhere; }
+
+.card-body .category-chart { min-width: 0; max-width: 100%; }
+.card-body .source-company > div,
+.card-body .source-file > span:nth-child(2),
+.card-body .context-content > div,
+.card-body .learning-object__intro-copy,
+.card-body .workspace-overview__hero > div:last-child,
+.card-body .workspace-overview__section,
+.card-body .workspace-overview__actions > button > span {
+  min-width: 0;
+}
+
+.card-body .learning-object,
+.card-body .workspace-overview { width: 100%; overflow-wrap: anywhere; }
+.card-body .learning-object__compare { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); }
+.card-body .learning-object__compare .learning-object__delta { flex-wrap: wrap; }
+.card-body .learning-object__compare strong,
+.card-body .workspace-overview__object-list strong { white-space: normal; overflow-wrap: anywhere; }
+.card-body .workspace-overview__section-title > span { min-width: 0; flex: 1 1 auto; }
+
+.card-table .card-body { container: canvas-table / inline-size; }
+.card-learning .card-body,
+.card-overview .card-body { container: canvas-explanation / inline-size; }
+
+@container canvas-table (max-width: 360px) {
+  .table-tools { flex-wrap: wrap; justify-content: flex-start; gap: 7px; padding: 9px 10px; }
+  .table-search { flex: 1 1 100%; }
+  .table-search input { width: 100%; }
+  .table-tools > select { min-width: 0; flex: 1 1 95px; }
+  .table-tools > .filter-button { flex: 0 0 auto; }
+  .table-footer { gap: 6px 8px; padding-inline: 10px; }
+}
+
+@container canvas-explanation (max-width: 360px) {
+  .learning-object__intro { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+  .learning-object__intro-icon,
+  .workspace-overview__mark { width: 28px; height: 28px; }
+  .learning-object__status { grid-column: 1 / -1; max-width: 100%; white-space: normal; }
+  .learning-object__key-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .learning-object__compare { grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr); }
+  .learning-object__compare .learning-object__delta { align-items: flex-start; }
+  .workspace-overview__hero { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+  .workspace-overview__section-title { align-items: flex-start; }
+}
+
+.inspector__content { min-width: 0; min-height: 0; }
+.inspector__form,
+.inspector__form > *,
+.inspector__field { min-width: 0; max-width: 100%; }
+.connections-panel__body { min-width: 0; min-height: 0; }

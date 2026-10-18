@@ -1,0 +1,22 @@
+{
+  "title": "One-round encounter · authored demo",
+  "rules": {
+    "shieldTarget": "self",
+    "shieldReduction": 2
+  },
+  "actors": [
+    "Mira · shield",
+    "Pip · archer",
+    "Goblin"
+  ],
+  "trace": {
+    "id": "TURN-01",
+    "rolls": [
+      14,
+      12,
+      16
+    ],
+    "observation": "Mira ยกโล่ แต่โล่เดิมช่วยเฉพาะคนถือ เมื่อก๊อบลินโจมตี Pip จึงโดนเต็มจำนวน"
+  },
+  "request": "ให้โล่ช่วยเพื่อนได้ ลดความเสียหาย 2 HP"
+}
