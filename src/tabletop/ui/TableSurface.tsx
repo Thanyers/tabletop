@@ -27,6 +27,7 @@ export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   inspectorScrollRef?: RefObject<HTMLDivElement | null>;
   onReload?: () => void;
   persistLayout?: boolean;
+  preparedDemoArt?: boolean;
   visibleNodeIds?: readonly string[];
   focusNodeId?: string | null;
   focusRequestKey?: string | number;
@@ -60,6 +61,7 @@ export function TableSurface({
   inspectorScrollRef,
   onReload,
   persistLayout,
+  preparedDemoArt,
   visibleNodeIds,
   focusNodeId,
   focusRequestKey,
@@ -106,6 +108,7 @@ export function TableSurface({
             onFocusEvidence={onFocusEvidence}
             focusSourceIds={focusSourceIds}
             persistLayout={persistLayout}
+            preparedDemoArt={preparedDemoArt}
             visibleNodeIds={visibleNodeIds}
             focusNodeId={focusNodeId}
             focusRequestKey={focusRequestKey}

@@ -32,6 +32,7 @@ interface PlanCanvasNodeData extends CanvasNodeBaseData {
   onExport: WorkbenchProps['onExport'];
   onFocusEvidence: WorkbenchProps['onFocusEvidence'];
   focusSourceIds: string[];
+  preparedDemoArt: boolean;
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
@@ -176,7 +177,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         </button>
       </header>
       <div className="tt-canvas-node__body nodrag nopan">
-        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} expanded={data.opened} />
+        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
       </div>
     </article>
   );
@@ -198,6 +199,7 @@ interface CanvasWorkspaceProps {
   onFocusEvidence: WorkbenchProps['onFocusEvidence'];
   focusSourceIds: string[];
   persistLayout?: boolean;
+  preparedDemoArt?: boolean;
   visibleNodeIds?: readonly string[];
   focusNodeId?: string | null;
   focusRequestKey?: string | number;
@@ -207,7 +209,7 @@ interface CanvasWorkspaceProps {
   onOpenObject?: (id: string | null) => void;
 }
 
-function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
+function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, Edge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
@@ -295,6 +297,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           onExport,
           onFocusEvidence,
           focusSourceIds,
+          preparedDemoArt,
           localPhysics,
           onLocalPhysicsChange: changeLocalPhysics,
           onResetLocalPhysics: resetLocalPhysics,
@@ -320,7 +323,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject]);
+  }, [workspaceKey, persistLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;

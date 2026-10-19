@@ -25,6 +25,7 @@ interface CanvasObjectContentProps {
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
+  preparedDemoArt?: boolean;
   expanded?: boolean;
 }
 
@@ -206,7 +207,7 @@ function ParameterField({ label, unit, min, max, step, value, onChange }: { labe
   return <label className="tt-parameter-field"><span>{label}<small>{unit}</small></span><div><input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} aria-label={label + ', ' + unit} /><input type="number" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} aria-label={label + ' value in ' + unit} /></div></label>;
 }
 
-function LessonScene({ view, node, localPhysics }: CanvasObjectContentProps) {
+function LessonScene({ view, node, localPhysics, preparedDemoArt = false }: CanvasObjectContentProps) {
   if (view.domain.kind !== 'teaching') return null;
   const state: TeachingState = view.domain;
   const learner = view.actor.role === 'learner';
@@ -215,15 +216,20 @@ function LessonScene({ view, node, localPhysics }: CanvasObjectContentProps) {
   const params = learner ? localPhysics : state.parameters;
   const typed = node.inputs.physics as PhysicsResult | undefined;
   const result = learner ? calculatePhysics(params) : typed ?? calculatePhysics(params);
-  const cartX = Math.min(430, Math.max(0, result.position * 14));
+  const cartX = Math.min(preparedDemoArt ? 360 : 430, Math.max(0, result.position * 14));
   return <div className="tt-canvas-inline tt-canvas-inline--scene">
     <InlineHeading eyebrow="SCENE · SI UNITS" title="Horizontal cart" status={learner ? 'Teacher’s lesson' : 'Shared'} />
     {learner && representation === 'text' ? <div className="tt-model-text"><span className="tt-kicker">TEXT VIEW · {difficulty.toUpperCase()}</span><p>Acceleration equals force divided by mass. Velocity grows with time; position follows half the acceleration multiplied by time squared.</p><code>a = F ÷ m</code><code>v = a × t</code><code>x = ½at²</code></div> : <>
       <svg className="tt-track-svg tt-inline-track" viewBox="0 0 560 140" role="img" aria-label={'Cart travels ' + number(result.position) + ' meters in ' + number(params.time) + ' seconds'}>
         <path d="M28 103H532" stroke="#aebbbc" strokeWidth="2" /><path d="M28 105H532V117H28Z" fill="#e6eeeb" />
         {Array.from({ length: 15 }, (_, index) => <path key={index} d={'M' + (28 + index * 36) + ' 105v8'} stroke="#aebbbc" strokeWidth="1" />)}
-        <path d={'M35 51H' + Math.max(35, 78 + cartX)} stroke="#5f9a8a" strokeWidth="2" strokeDasharray="5 5" />
-        <g transform={'translate(' + cartX + ' 0)'}><path d="M79 79 90 60h55l14 19Z" fill="#dce9e6" stroke="#4f8177" strokeWidth="2" /><path d="M91 60 101 49h34l10 11Z" fill="#f5f8f6" stroke="#4f8177" strokeWidth="2" /><circle cx="97" cy="83" r="7" fill="#31515a" /><circle cx="143" cy="83" r="7" fill="#31515a" /><path d="M117 45V28m-6 8 6-8 6 8" fill="none" stroke="#315eb0" strokeWidth="2" /></g>
+        <path d={'M35 51H' + Math.max(35, (preparedDemoArt ? 50 : 78) + cartX)} stroke="#5f9a8a" strokeWidth="2" strokeDasharray="5 5" />
+        <g transform={'translate(' + cartX + ' 0)'}>
+          {preparedDemoArt ? <image className="tt-prepared-demo-art" href="/demo-art/physics-cart-v1.png" x="50" y="45" width="120" height="60" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" /> : <>
+            <path d="M79 79 90 60h55l14 19Z" fill="#dce9e6" stroke="#4f8177" strokeWidth="2" /><path d="M91 60 101 49h34l10 11Z" fill="#f5f8f6" stroke="#4f8177" strokeWidth="2" /><circle cx="97" cy="83" r="7" fill="#31515a" /><circle cx="143" cy="83" r="7" fill="#31515a" />
+          </>}
+          <path d={preparedDemoArt ? 'M110 57V28m-6 8 6-8 6 8' : 'M117 45V28m-6 8 6-8 6 8'} fill="none" stroke="#315eb0" strokeWidth="2" />
+        </g>
         <text x="28" y="22" className="tt-scene-force">F {number(params.force)} N</text><text x="28" y="39" className="tt-scene-mass">m {number(params.mass)} kg</text><text x="450" y="22" className="tt-scene-mass">t {number(params.time)} s</text><text x="475" y="133" className="tt-scene-mass">Position</text>
       </svg>
       <div className="tt-physics-readout"><div><span>a</span><strong>{number(result.acceleration)} m/s²</strong></div><div><span>v at t</span><strong>{number(result.velocity)} m/s</strong></div><div><span>x at t</span><strong>{number(result.position)} m</strong></div></div>
@@ -302,7 +308,7 @@ interface EncounterBoard {
   paused?: EncounterState['paused'];
 }
 
-function EncounterBoardObject({ view, node }: CanvasObjectContentProps) {
+function EncounterBoardObject({ view, node, preparedDemoArt = false }: CanvasObjectContentProps) {
   if (view.domain.kind !== 'encounter') return null;
   const board = node.inputs.board as EncounterBoard | undefined;
   if (!board) return <div className="tt-canvas-inline"><InlineHeading eyebrow="SHARED TABLE" title="Encounter board" /><div className="tt-canvas-inline__empty">The current board is not available. Refresh this table.</div></div>;
@@ -312,7 +318,8 @@ function EncounterBoardObject({ view, node }: CanvasObjectContentProps) {
   return <div className="tt-canvas-inline tt-canvas-inline--encounter">
     <InlineHeading eyebrow="SHARED TABLE" title="Encounter board" status={paused ? 'Paused by DM' : nameFor(board.turn) + '’s turn'} />
     {paused && <p className="tt-encounter-paused" role="status"><ShieldCheck size={14} /> The Dungeon Master paused turns and reactions for everyone.</p>}
-    <div className="tt-inline-board">
+    <div className={'tt-inline-board' + (preparedDemoArt ? ' tt-inline-board--prepared' : '')}>
+      {preparedDemoArt && <img className="tt-prepared-demo-art tt-inline-board__art" src="/demo-art/encounter-terrain-v1.png" alt="" aria-hidden="true" decoding="async" />}
       <svg viewBox="0 0 480 155" role="img" aria-label={'Encounter scene. ' + nameFor(board.turn) + ' has the turn.'}>
         <defs><pattern id="tt-inline-grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#dce4dc" strokeWidth="1" /></pattern></defs><rect width="480" height="155" fill="url(#tt-inline-grid)" /><path d="M24 113 C104 78 142 91 193 108 S286 130 326 91 410 64 456 90" fill="none" stroke="#b8c9b8" strokeWidth="17" strokeLinecap="round" opacity=".48" /><path d="M216 48l11-12 11 12-6 21h-10Z" fill="#e4cf9f" stroke="#9d8451" strokeWidth="1.5" />
         {board.characters.map((character) => {
