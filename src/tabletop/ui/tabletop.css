@@ -1017,6 +1017,7 @@
 .tt-canvas-node.is-expanded { width: min(760px, calc(100vw - 48px)); max-width: min(94vw, 760px); border-color: #72a89a; box-shadow: 0 0 0 3px #24796b20, 0 16px 38px #263f3b20; }
 .tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: min(52dvh, 380px); overflow: auto; overscroll-behavior: contain; }
 .tt-canvas-node--auxiliary { width: 440px; }
+.tt-canvas-node--auxiliary:not(.is-expanded) .tt-canvas-node__body { max-height: 280px; overflow: auto; overscroll-behavior: contain; }
 .tt-canvas-object-dock {
   position: absolute;
   bottom: 10px;

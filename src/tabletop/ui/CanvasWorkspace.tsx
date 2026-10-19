@@ -274,6 +274,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
         type: 'tabletopObject',
         position: (isNewWorkspace ? storedLayout?.positions[spec.id] : undefined) ?? previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec),
         selected: spec.id === selectedNodeId,
+        zIndex: activeOpenedId === spec.id ? 20 : spec.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'plan',
           id: spec.id,
@@ -302,6 +303,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
         type: 'tabletopObject',
         position: (isNewWorkspace ? storedLayout?.positions[object.id] : undefined) ?? previousPositions.get(object.id) ?? workspacePositionsRef.current[object.id] ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 },
         selected: object.id === selectedNodeId,
+        zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'auxiliary',
           id: object.id,
@@ -439,6 +441,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           nodesDraggable={arrange}
           nodesConnectable={false}
           elementsSelectable
+          elevateNodesOnSelect={false}
           minZoom={0.25}
           maxZoom={1.7}
           panOnDrag

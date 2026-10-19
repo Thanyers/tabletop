@@ -29,6 +29,10 @@ export async function verifyInteractiveDemo(page, origin, output) {
     await expect(editor).toHaveAttribute('data-canvas-object', id);
     await expect(editor).toBeVisible();
     await expect(canvas).toBeVisible();
+    await expect.poll(() => editor.evaluate(element => {
+      const card = element.getBoundingClientRect(), area = element.closest('.tt-flow-wrap').getBoundingClientRect();
+      return card.left >= area.left - 2 && card.right <= area.right + 2 && card.top >= area.top - 2 && card.bottom <= area.bottom + 2;
+    })).toBe(true);
   }
   async function finish() {
     for (let index = 0; index < 45; index++) {
@@ -155,6 +159,23 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(independent.getByTestId('practice-empty-canvas')).toBeVisible();
   await expect(independent.locator('[data-canvas-object]')).toHaveCount(0);
   await independent.close();
+
+  await fresh('teaching-physics'); await finish();
+  await page.getByRole('button', { name:'Fit objects', exact:true }).click();
+  await expect.poll(() => page.locator('[data-canvas-object]').evaluateAll(elements => {
+    const cards = elements.map(element => ({ id:element.getAttribute('data-canvas-object'), rect:element.getBoundingClientRect() }));
+    const overlaps = [];
+    for (let a = 0; a < cards.length; a++) for (let b = a + 1; b < cards.length; b++) {
+      const left = cards[a].rect, right = cards[b].rect;
+      if (Math.min(left.right,right.right) - Math.max(left.left,right.left) > 2 && Math.min(left.bottom,right.bottom) - Math.max(left.top,right.top) > 2) overlaps.push([cards[a].id,cards[b].id]);
+    }
+    return overlaps;
+  })).toEqual([]);
+  await open('lesson.rules');
+  await expect(editor).toContainText('a = F ÷ m');
+  await editor.getByRole('button', { name:'Open force and mass controls', exact:true }).click();
+  await expect(editor).toHaveAttribute('data-canvas-object', 'lesson.source');
+  await expect(editor.getByLabel('Mass value in kg', { exact:true })).toHaveValue('5');
 
   // A local file selected by one role cannot finish importing as another role.
   await fresh('teaching-physics');
