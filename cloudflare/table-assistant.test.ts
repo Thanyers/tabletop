@@ -192,6 +192,23 @@ describe('Cloudflare table assistant', () => {
     expect(bill?.status).toBe('settled');
   });
 
+  it('asks for clarification when translated wording cannot identify an exact action, without applying it', async () => {
+    const input = await assistantInput(createWorkspace(), {
+      prompt: 'ช่วยเตรียมยืมกล้อง camera ให้ฉันตรวจและยืนยันเองก่อน',
+    });
+    const before = JSON.stringify(input.workspace.domain);
+    const response = await respondToTablePrompt(testEnv, input, providerFetch({
+      kind: 'action-proposal', text: 'Untrusted proposed text', actionId: 'borrow', inputs: { item: 'camera' },
+    }));
+    expect(response.result).toMatchObject({ kind: 'clarification' });
+    expect(response.result.text).toContain('กรุณาระบุชื่อคำสั่ง');
+    expect(response.result.text).not.toContain('Untrusted proposed text');
+    expect(response.result).not.toHaveProperty('actionId');
+    expect(response.result).not.toHaveProperty('confirmationRequired');
+    expect(JSON.stringify(input.workspace.domain)).toBe(before);
+    expect((await billingRow(input.jobId))?.status).toBe('settled');
+  });
+
   it('rejects an invalid action proposal after settling known provider usage', async () => {
     const participant: Member = { actorId: participantId, name: participantName, role: 'participant', seat: 'member-1' };
     const input = await assistantInput(createWorkspace(participant), { prompt: 'Prepare return for camera.' });

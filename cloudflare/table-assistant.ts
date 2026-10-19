@@ -529,7 +529,12 @@ function publicResult(
     const action = safeProgram.actions.find((item: TableAction) => item.id === raw.actionId);
     if (!action || !action.roles.includes(context.role)) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The requested action is not available to this role.');
     if (!explicitlyRequestsAction(currentPrompt, action, raw.inputs, safeProgram, safeRecords)) {
-      return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The current prompt did not request one exact action with its required inputs.');
+      return tableAssistantResultSchema.parse({
+        kind: 'clarification',
+        text: /\p{Script=Thai}/u.test(currentPrompt)
+          ? 'ยังจับคู่ข้อความกับคำสั่งและค่าที่ต้องใช้ได้ไม่ครบ กรุณาระบุชื่อคำสั่งตามที่แสดงในกฎที่ใช้อยู่ พร้อมค่าของแต่ละช่อง หรือเล่นผ่านปุ่มบน Canvas ได้เลย ยังไม่มีการทำรายการ'
+          : 'I could not verify one exact action and all required inputs from your message. Please name the action as shown in Active rules and include each input, or use the Canvas controls. No action was applied.',
+      });
     }
     const canonicalInputs: Record<string, TableValue> = { ...raw.inputs };
     for (const parameter of action.parameters) {

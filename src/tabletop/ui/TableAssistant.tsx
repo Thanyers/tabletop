@@ -455,12 +455,6 @@ function TableConversation({
     {tableAssistantAvailable && !capabilities.model.enabled && <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />{capabilities.model.reason || 'The table assistant is unavailable right now.'}</p>}
     {readOnly && <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />This table is temporarily read-only. You can still review its rules and records.</p>}
 
-    <div className="tt-table-chat__links" aria-label="Open table tools">
-      <button type="button" onClick={() => onOpenObject('table.actions')} disabled={!view.domain.program}><ArrowRight size={14} />Open actions</button>
-      <button type="button" onClick={() => onOpenObject('table.rules')}><BookOpen size={14} />View active rules</button>
-    </div>
-    <div className="tt-table-chat__turn"><span>Current turn</span><strong>{currentTurnLabel(view, view.domain.turn)}</strong></div>
-
     {view.actor.role === 'participant' && <p className="tt-table-chat__privacy-note">The owner manages private files and rule drafts. Your message uses the shared table view and your seat only.</p>}
 
     {!tableAssistantAvailable ? <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />{tableAssistantUnavailableReason}</p> : <>
@@ -510,7 +504,8 @@ function AssistantResultCard({ entry, view, readOnly, onOpenObject, onConfirm, o
   const result = job?.result;
   if (!job || !result) return null;
   const action = result.kind === 'action-proposal' ? view.domain.program?.actions.find((item) => item.id === result.actionId) : undefined;
-  const turnAllowed = action ? action.roles.includes(view.actor.role as 'owner' | 'participant') && (!action.requireTurn || view.domain.turn === view.actor.seat) : false;
+  const actorSeat = view.actor.role === 'owner' ? 'host' : view.actor.seat;
+  const turnAllowed = action ? action.roles.includes(view.actor.role as 'owner' | 'participant') && (!action.requireTurn || view.domain.turn === actorSeat) : false;
   const confirmationStatus = job.confirmationStatus;
   const terminalConfirmationMessage = confirmationStatus === 'stale'
     ? job.message || 'The table changed before confirmation. This proposal was not applied.'
@@ -548,8 +543,9 @@ export function TableAssistant({
   onOpenSources, onOpenRules, onOpenActions, onReviewDraft,
   onChatRequest, onChatPoll, onChatHistory, onChatConfirm, onChatRefresh, onOpenObject,
 }: TableAssistantProps) {
-  const initiallyBlankOwner = view.actor.role === 'owner' && !readOnly && view.domain.kind === 'table' && !view.domain.program && !view.domain.candidate;
-  const [mode, setMode] = useState<AssistantMode>(initiallyBlankOwner ? 'rules' : 'chat');
+  const initiallyReviewingRules = view.actor.role === 'owner' && !readOnly && view.domain.kind === 'table'
+    && (!view.domain.program || Boolean(view.domain.candidate && view.domain.candidate.status !== 'active'));
+  const [mode, setMode] = useState<AssistantMode>(initiallyReviewingRules ? 'rules' : 'chat');
   const hadActiveProgram = useRef(Boolean(view.domain.kind === 'table' && view.domain.program));
 
   useEffect(() => {
@@ -576,7 +572,6 @@ export function TableAssistant({
     {readOnly && <p className="tt-table-assistant__notice" role="status"><AlertCircle size={14} />This table is temporarily read-only. You can still review its rules and records.</p>}
 
     {isOwner && mode === 'rules' ? <div className="tt-table-assistant__rules-mode">
-      {pendingDraft && <div className="tt-table-assistant__draft-link"><span>A rule draft is awaiting review.</span><button type="button" className="tt-button tt-button--quiet" onClick={onReviewDraft}>Review draft</button></div>}
       <AIProposal
         view={view}
         capabilities={capabilities}
@@ -597,7 +592,6 @@ export function TableAssistant({
       </div>
       <div className="tt-table-assistant__turn"><span>Current turn</span><strong>{currentTurnLabel(view, view.domain.turn)}</strong></div>
       {!view.domain.program && <p className="tt-table-assistant__waiting">Shared rules are not active yet. The owner can add a source and prepare a draft in Change rules.</p>}
-      {!isOwner && <p className="tt-table-assistant__guidance">The owner manages private files and rule drafts. You can use shared actions when their requirements and the current turn allow it.</p>}
       <TableConversation
         view={view}
         capabilities={capabilities}
