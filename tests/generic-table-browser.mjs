@@ -289,7 +289,7 @@ async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
   const editor = page.getByTestId('canvas-object-editor');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.actions');
   const form = editor.locator('form.tt-table-action').filter({ hasText: actionTitle });
-  for (const [label, value] of Object.entries(inputs)) await form.getByLabel(label, { exact: true }).selectOption(value);
+  for (const [label, value] of Object.entries(inputs)) await form.getByLabel(label, { exact: false }).selectOption(value);
   const responsePromise = page.waitForResponse((response) => isCommandResponse(response, 'table.act'));
   await form.getByRole('button', { name: actionTitle, exact: true }).click();
   const response = await responsePromise;
