@@ -347,7 +347,7 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
   return chat;
 }
 
-async function seedConversationPage({ page, tableId, profile, setAssistantReply }) {
+async function seedConversationPage({ page, tableId, profile, api, setAssistantReply }) {
   const created = [];
   for (let index = 0; index < 21; index += 1) {
     const number = String(index).padStart(2, '0');
@@ -439,7 +439,7 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   expect((await api(owner, `/api/workspaces/${tableId}`)).body.revision).toBe(ownerProfile.revision);
 
   const providerCallsBeforeArchive = getProviderCalls();
-  const archived = await seedConversationPage({ page: member, tableId, profile: afterFollowup, setAssistantReply });
+  const archived = await seedConversationPage({ page: member, tableId, profile: afterFollowup, api, setAssistantReply });
   expect(getProviderCalls()).toBe(providerCallsBeforeArchive + archived.length);
   await member.reload();
   const restored = member.getByTestId('table-chat');
