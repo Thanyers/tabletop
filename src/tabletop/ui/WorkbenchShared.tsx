@@ -10,6 +10,10 @@ export function UploadCapabilityProvider({ enabled, reason, children }: { enable
   return <UploadCapabilityContext.Provider value={{ enabled, reason }}>{children}</UploadCapabilityContext.Provider>;
 }
 
+export function useUploadCapability() {
+  return useContext(UploadCapabilityContext);
+}
+
 export function CandidateLifecycle({ view, onCommand, busy }: { view: WorkspaceView; onCommand: Command; busy: string | null }) {
   const candidate = view.domain.candidate;
   const [rollbackRevision, setRollbackRevision] = useState('');

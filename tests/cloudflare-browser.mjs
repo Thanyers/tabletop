@@ -82,6 +82,12 @@ try {
       return { status: response.status, body: await response.json() };
     }, { path, body });
   }
+  async function openCanvasObject(page, id) {
+    await expect(page.getByRole('button', { name: 'Canvas', exact:true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('canvas-object-dock').getByTestId(`open-canvas-${id}`).click();
+    await expect(page.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', id);
+    await expect(page.getByTestId('canvas-object-editor')).toBeVisible();
+  }
   const anonymous = await newPage();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
   await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
@@ -117,7 +123,7 @@ try {
   expect(await identityCounts()).toEqual(beforeDemo);
   expect(await demoContext.cookies()).toEqual([]);
   expect(providerCalls).toBe(0);
-  mark('Interactive Auto demo uses the actual tables and domain commands; pause, manual edits, persona changes, isolation and narrow layout work without API calls or server state');
+  mark('Canvas demo starts empty, imports by drag/drop, opens rules on canvas and supports takeover, role isolation and narrow layout without API calls or persistent storage');
   await demo.setViewportSize({ width: 1440, height: 1000 });
   await demo.goto(`${origin}/demo/replay?legacy-demo=1`);
   await expect(demo.getByTestId('public-auto-demo')).toBeVisible();
@@ -196,7 +202,8 @@ try {
   expect(miraInvite.status).toBe(201); expect(pipInvite.status).toBe(201);
   // The first response is intentionally ignored by the owner UI, like a lost acknowledgement.
   const lostTicket = miraInvite.body.ticket;
-  await dm.getByRole('button', { name: 'Invite', exact: true }).click();
+  await openCanvasObject(dm, 'workspace.people');
+  await dm.getByTestId('canvas-object-editor').getByRole('button', { name: 'Invite someone', exact: true }).click();
   const inviteDialog = dm.getByRole('dialog', { name: 'People at this table' });
   await inviteDialog.getByRole('button', { name: /Mira.*Player view/ }).click();
   await inviteDialog.getByText('Lost an unused invitation link?', { exact: true }).click();
@@ -229,6 +236,7 @@ try {
     return result;
   }
   expect((await command(dm, 'encounter.saveNote', { text: 'PRIVATE_DM_CF_BROWSER_MARKER' })).status).toBe(200);
+  await openCanvasObject(dm, 'encounter.actions');
   const action = dm.waitForResponse(response => response.url().endsWith('/commands') && response.request().postDataJSON()?.type === 'encounter.declareHit');
   await dm.getByRole('button', { name: 'Hit Pip', exact: true }).click();
   expect((await action).status()).toBe(200);
@@ -237,6 +245,8 @@ try {
   expect(pipProjection.domain.pendingHit.roll).toBeNull();
   expect(pipProjection.domain.pendingHit.damage).toBeNull();
   expect(JSON.stringify(pipProjection)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
+  await openCanvasObject(pip, 'encounter.actions');
+  await expect(pip.getByTestId('canvas-object-editor').getByRole('button', { name:'Resolve hit', exact:true })).toHaveCount(0);
   expect((await command(pip, 'encounter.resolve')).status).toBe(403);
   expect((await command(dm, 'encounter.pause')).status).toBe(200);
   const pausedAction = await command(pip, 'encounter.shield', { target: 'pip' });
@@ -265,7 +275,7 @@ try {
   await dm.getByRole('button', { name: 'Close admin panel' }).click();
   mark('Admin sees room metadata; an unrelated account cannot read the room or admin directory');
 
-  await dm.getByRole('button', { name: 'Focus table', exact: true }).click();
+  await openCanvasObject(dm, 'workspace.ai');
   await dm.getByLabel('What should the draft change or explain?').fill('Allow a shield for an ally, with one AP cost and once each turn.');
   const askAI = dm.getByRole('button', { name: 'Ask AI for a draft', exact: true });
   await expect(askAI).toBeDisabled();
@@ -278,6 +288,7 @@ try {
   expect(proposed.domain.candidate.change.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
   expect(providerCalls).toBe(1);
   await expect(pip.getByLabel('What should the draft change or explain?')).toHaveCount(0);
+  await expect(pip.getByTestId('canvas-object-dock').getByTestId('open-canvas-workspace.ai')).toHaveCount(0);
   mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; creates a draft without activating it');
 
   const logoutResponse = pip.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
@@ -298,7 +309,8 @@ try {
   mark('Logout revokes the old cookie; a new session for the same account resumes its existing seat');
   await dm.screenshot({ path: join(output, 'dm-desktop.png'), fullPage: true });
   await pip.setViewportSize({ width: 390, height: 844 }); await pip.reload();
-  await expect(pip.getByRole('button', { name: 'Focus table', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(pip.locator('.tt-canvas-panel')).toBeVisible();
   await pip.screenshot({ path: join(output, 'player-mobile.png'), fullPage: true });
   expect(errors).toEqual([]);
   mark('Desktop and mobile render without uncaught browser errors');

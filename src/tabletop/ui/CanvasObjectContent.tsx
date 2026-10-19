@@ -5,7 +5,7 @@ import type { EncounterRule, EncounterState, InvoiceResult, InvoiceState, Physic
 import type { PhysicsResult } from '../domain/physics';
 import { calculatePhysics } from '../domain/physics';
 import type { PlanNode, ReviewItem } from '../runtime';
-import { CandidateLifecycle, EvidenceList, UploadCard } from './WorkbenchShared';
+import { CandidateLifecycle, EvidenceList, UploadCard, useUploadCapability } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { formatMoney } from './types';
 import { usePracticeClock } from './PracticeClock';
@@ -17,11 +17,13 @@ interface CanvasObjectContentProps {
   busy: string | null;
   onCommand: Command;
   onUpload: WorkbenchProps['onUpload'];
+  onExport: WorkbenchProps['onExport'];
   onFocusEvidence: (sourceIds: string[]) => void;
   focusSourceIds: string[];
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
+  expanded?: boolean;
 }
 
 export function CanvasObjectContent(props: CanvasObjectContentProps) {
@@ -46,58 +48,78 @@ function InlineHeading({ eyebrow, title, status }: { eyebrow: string; title: str
 }
 
 function InvoiceSources(props: CanvasObjectContentProps) {
+  const practiceMode = usePracticeClock() !== null;
+  const uploadCapability = useUploadCapability();
   if (props.view.domain.kind !== 'invoice') return null;
-  const { view, onUpload, busy, focusSourceIds, onCommand, onFocusEvidence } = props;
+  const { view, onUpload, busy, focusSourceIds, onCommand, onFocusEvidence, expanded = false } = props;
   const state = view.domain as InvoiceState;
   return <div className="tt-canvas-inline tt-canvas-inline--invoice">
     <InlineHeading eyebrow="SOURCE FILES" title="Documents and evidence" status={state.sources.length + ' files'} />
-    {view.actor.role === 'owner' && state.shipments.length === 0 && state.invoiceLines.length === 0 && <div className="tt-inline-empty-actions"><span>No invoice rows yet</span><button type="button" className="tt-button tt-button--primary" disabled={busy !== null} onClick={() => void onCommand('invoice.sample', {})}><FileText size={13} /> Load included example</button></div>}
-    {view.actor.role === 'owner' ? <div className="tt-inline-upload-grid">
-      <UploadCard kind="shipments" title="Shipment CSV" description="Dates, zone, and weight." onUpload={onUpload} busy={busy !== null} />
-      <UploadCard kind="invoice" title="Invoice PDF" description="Text PDF in the supported layout." onUpload={onUpload} busy={busy !== null} />
-      <UploadCard kind="rate-card" title="Rate card PDF" description="Dated rates for review." onUpload={onUpload} busy={busy !== null} />
-    </div> : <p className="tt-canvas-inline__note">The table owner can add files. Open a source below to inspect its extracted text.</p>}
-    {view.actor.role === 'owner' && <><p className="tt-canvas-inline__note">A new import replaces the current shipment or invoice rows; saved runs, source documents, and approved rates stay available for the next period.</p><nav className="tt-inline-samples" aria-label="Download sample files"><a href="/samples/r1/shipments.csv" download>Shipment CSV sample</a><a href="/samples/r1/invoice.pdf" download>Invoice PDF sample</a><a href="/samples/r1/rate-card.pdf" download>Rate card PDF sample</a></nav></>}
-    <EvidenceList view={view} focusSourceIds={focusSourceIds} onFocusEvidence={onFocusEvidence} onCommand={onCommand} busy={busy} />
-  </div>;
-}
-
-function InvoiceTable({ node, onFocusEvidence }: CanvasObjectContentProps) {
-  const result = node.inputs.result as InvoiceResult | undefined;
-  const rows = result?.rows ?? [];
-  const hasSurcharge = rows.some((row) => row.surchargeSatang !== null && row.surchargeSatang > 0);
-  return <div className="tt-canvas-inline tt-canvas-inline--wide">
-    <InlineHeading eyebrow="ACTIVE RESULT" title="Shipment reconciliation" status={(result?.unknownCount ?? 0) + ' unknown'} />
-    {!result ? <div className="tt-canvas-inline__empty">Add shipment and invoice sources or load the example to calculate this table.</div> : rows.length === 0 ? <div className="tt-canvas-inline__empty">No shipment rows yet. Add a shipment CSV and invoice PDF.</div> : <>
-      <div className="tt-inline-kpis"><span>Expected <strong>{formatMoney(result.knownExpectedSatang)}</strong></span><span>Billed <strong>{formatMoney(result.knownBilledSatang)}</strong></span><span>Difference <strong>{formatSignedMoney(result.deltaSatang)}</strong></span></div>
-      <div className="tt-inline-table-scroll"><table className="tt-inline-table"><caption className="tt-visually-hidden">Select a shipment to open its exact source evidence</caption><thead><tr><th scope="col">Shipment</th><th scope="col">Billed</th><th scope="col">Expected</th>{hasSurcharge && <th scope="col">Extra</th>}<th scope="col">Check</th></tr></thead><tbody>
-        {rows.slice(0, 6).map((row) => {
-          const needsReview = row.expectedSatang === null || row.billedSatang === null || row.reasons.length > 0 || row.deltaSatang !== 0;
-          return <tr key={row.key} tabIndex={0} onClick={() => onFocusEvidence(row.sourceIds)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onFocusEvidence(row.sourceIds); } }} aria-label={row.shipmentId + ', ' + (needsReview ? 'needs review' : 'matches') + ', open evidence'}>
-            <th scope="row"><strong>{row.shipmentId}</strong><small>{row.zone ?? 'Zone unknown'} · {row.date || 'Date unknown'}</small></th>
-            <td>{row.billedSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.billedSatang)}</td>
-            <td>{row.expectedSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.expectedSatang)}</td>
-            {hasSurcharge && <td>{row.surchargeSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.surchargeSatang)}</td>}
-            <td><span className={'tt-row-status' + (needsReview ? ' is-review' : ' is-clear')}>{row.expectedSatang === null || row.billedSatang === null ? 'Unknown' : needsReview ? 'Review' : 'Matches'}</span></td>
-          </tr>;
-        })}
-      </tbody></table></div>
-      {rows.length > 6 && <p className="tt-canvas-inline__note">Showing 6 of {rows.length} rows. Open the focused table for the full result.</p>}
-      {result.gaps.length > 0 && <div className="tt-inline-gaps"><strong>{result.gaps.length} evidence request{result.gaps.length === 1 ? '' : 's'}</strong>{result.gaps.slice(0, 3).map((gap) => <span key={gap.id}>{gap.documentType}: {gap.whyNeeded}</span>)}</div>}
+    {!expanded ? <>
+      {state.sources.length > 0 ? <div className="tt-source-summary" aria-label="Source files">{state.sources.slice(0, 4).map((source) => <button key={source.id} type="button" onClick={() => onFocusEvidence([source.id])}><span><strong>{source.filename}</strong><small>{source.kind} · {source.pages.length} page{source.pages.length === 1 ? '' : 's'}</small></span><b data-status={source.status}>{source.status}</b></button>)}</div> : <p className="tt-canvas-inline__note">No documents yet. Open this object to add a file or use an available example.</p>}
+      {state.sources.length > 4 && <p className="tt-canvas-inline__note">{state.sources.length - 4} more files · open this object to browse them all.</p>}
+      <p className="tt-canvas-inline__note">Open this object to add files and review source text.</p>
+    </> : <>
+      {!practiceMode && view.actor.role === 'owner' && state.shipments.length === 0 && state.invoiceLines.length === 0 && <div className="tt-inline-empty-actions"><span>No invoice rows yet</span><button type="button" className="tt-button tt-button--primary" disabled={busy !== null} onClick={() => void onCommand('invoice.sample', {})}><FileText size={13} /> Load included example</button></div>}
+      {practiceMode ? <p className="tt-canvas-inline__note">Practice files stay in this browser tab. PDF upload is unavailable here; use the Files object to add local CSV or text data.</p> : view.actor.role === 'owner' && uploadCapability.enabled ? <div className="tt-inline-upload-grid">
+        <UploadCard kind="shipments" title="Shipment CSV" description="Dates, zone, and weight." onUpload={onUpload} busy={busy !== null} />
+        <UploadCard kind="invoice" title="Invoice PDF" description="Text PDF in the supported layout." onUpload={onUpload} busy={busy !== null} />
+        <UploadCard kind="rate-card" title="Rate card PDF" description="Dated rates for review." onUpload={onUpload} busy={busy !== null} />
+      </div> : view.actor.role === 'owner' ? <p className="tt-canvas-inline__note">{uploadCapability.reason || 'File uploads are not available for this table. The current sources and manual edits remain available.'}</p> : <p className="tt-canvas-inline__note">The table owner can add files. Open a source below to inspect its extracted text.</p>}
+      {!practiceMode && view.actor.role === 'owner' && <><p className="tt-canvas-inline__note">A new import replaces the current shipment or invoice rows; saved runs, source documents, and approved rates stay available for the next period.</p><nav className="tt-inline-samples" aria-label="Download sample files"><a href="/samples/r1/shipments.csv" download>Shipment CSV sample</a><a href="/samples/r1/invoice.pdf" download>Invoice PDF sample</a><a href="/samples/r1/rate-card.pdf" download>Rate card PDF sample</a></nav></>}
+      <EvidenceList view={view} focusSourceIds={focusSourceIds} onFocusEvidence={onFocusEvidence} onCommand={onCommand} busy={busy} />
+      {focusSourceIds.length > 0 && <button type="button" className="tt-text-button" onClick={() => onFocusEvidence([])}>Close selected source</button>}
     </>}
   </div>;
 }
 
-function InvoiceReview({ node, onFocusEvidence }: CanvasObjectContentProps) {
-  const items = (node.inputs.items as ReviewItem[] | undefined) ?? [];
-  return <div className="tt-canvas-inline">
-    <InlineHeading eyebrow="DERIVED REVIEW" title="Rows needing evidence" status={items.length + ' items'} />
-    {items.length === 0 ? <div className="tt-canvas-inline__empty"><CheckCircle2 size={15} /> No linked review items in this result.</div> : <div className="tt-inline-review-list">{items.slice(0, 8).map((item) => <button type="button" key={item.id} onClick={() => onFocusEvidence(item.sourceIds)}><span><strong>{item.shipmentId}</strong><small>{item.reason}</small></span><FileText size={14} aria-hidden="true" /></button>)}</div>}
-    {items.length > 8 && <p className="tt-canvas-inline__note">Showing 8 of {items.length} linked review items.</p>}
+function InvoiceTable({ view, node, onCommand, onExport, busy, onFocusEvidence, expanded = false }: CanvasObjectContentProps) {
+  const result = node.inputs.result as InvoiceResult | undefined;
+  const rows = result?.rows ?? [];
+  const state = view.domain.kind === 'invoice' ? view.domain as InvoiceState : null;
+  const hasSurcharge = state?.rules.some((rule) => rule.kind === 'surcharge' && rule.enabled) ?? false;
+  return <div className="tt-canvas-inline tt-canvas-inline--wide">
+    <InlineHeading eyebrow="ACTIVE RESULT" title="Shipment reconciliation" status={`${rows.length} rows · ${result?.unknownCount ?? 0} unknown`} />
+    {result && <div className="tt-inline-kpis"><span>Expected <strong>{formatMoney(result.knownExpectedSatang)}</strong></span><span>Billed <strong>{formatMoney(result.knownBilledSatang)}</strong></span><span>Difference <strong>{formatSignedMoney(result.deltaSatang)}</strong></span></div>}
+    {!expanded ? <p className="tt-canvas-inline__note">Open this object to review every shipment, save a run, and export the result.</p> : <>
+      <div className="tt-inline-action-row tt-invoice-canvas-actions">
+        {view.actor.role === 'owner' && <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || !result} onClick={() => void onCommand('invoice.saveRun', {})}><Save size={13} /> Save run</button>}
+        <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || !result} onClick={() => void onExport('csv')}><FileText size={13} /> CSV</button>
+        <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || !result} onClick={() => void onExport('html')}><FileText size={13} /> Report</button>
+      </div>
+      {!result ? <div className="tt-canvas-inline__empty">Add shipment and invoice sources or load the example to calculate this table.</div> : rows.length === 0 ? <div className="tt-canvas-inline__empty">No shipment rows yet. Add a shipment CSV and invoice PDF.</div> : <>
+      <div className="tt-inline-table-scroll"><table className="tt-inline-table"><caption className="tt-visually-hidden">Select a shipment to open its exact source evidence</caption><thead><tr><th scope="col">Shipment</th><th scope="col">Service date</th><th scope="col">Zone</th><th scope="col">Weight</th><th scope="col">Billed</th><th scope="col">Expected</th>{hasSurcharge && <th scope="col">Extra</th>}<th scope="col">Difference</th><th scope="col">Check</th></tr></thead><tbody>
+        {rows.map((row) => {
+          const needsReview = row.expectedSatang === null || row.billedSatang === null || row.reasons.length > 0 || row.deltaSatang !== 0;
+          return <tr key={row.key} tabIndex={0} onClick={() => onFocusEvidence(row.sourceIds)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onFocusEvidence(row.sourceIds); } }} aria-label={row.shipmentId + ', ' + (needsReview ? 'needs review' : 'matches') + ', open evidence'}>
+            <th scope="row"><strong>{row.shipmentId}</strong><small>{row.zone ?? 'Zone unknown'} · {row.date || 'Date unknown'}</small></th>
+            <td>{row.date || 'Unknown'}</td><td>{row.zone ?? 'Unknown'}</td><td>{row.weightGram === null ? <span className="tt-unknown">Unknown</span> : `${row.weightGram.toLocaleString()} g`}</td>
+            <td>{row.billedSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.billedSatang)}</td>
+            <td>{row.expectedSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.expectedSatang)}</td>
+            {hasSurcharge && <td>{row.surchargeSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.surchargeSatang)}</td>}
+            <td className={row.deltaSatang ? 'tt-difference' : ''}>{row.deltaSatang === null ? <span className="tt-unknown">Unknown</span> : formatSignedMoney(row.deltaSatang)}</td>
+            <td><span className={'tt-row-status' + (needsReview ? ' is-review' : ' is-clear')}>{row.expectedSatang === null || row.billedSatang === null ? 'Unknown' : needsReview ? 'Review' : 'Matches'}</span></td>
+          </tr>;
+        })}
+      </tbody></table></div>
+      {result.gaps.length > 0 && <div className="tt-inline-gaps"><strong>{result.gaps.length} evidence request{result.gaps.length === 1 ? '' : 's'}</strong>{result.gaps.slice(0, 3).map((gap) => <span key={gap.id}>{gap.documentType}: {gap.whyNeeded}</span>)}</div>}
+    </>}
+    {expanded && state && <section className="tt-inline-history" aria-labelledby="tt-invoice-runs-title"><header><strong id="tt-invoice-runs-title">Saved reconciliation runs</strong><span>{state.runs.length}</span></header>{state.runs.length === 0 ? <p className="tt-canvas-inline__note">Saved results will appear here and remain available when you load a later period.</p> : <ol>{[...state.runs].reverse().map((run) => <li key={run.id}><span><strong>Rules r{run.ruleRevision} · Data r{run.dataRevision}</strong><small>{new Date(run.createdAt).toLocaleString()} · {run.result.rows.length} rows · {run.sourceIds.length} sources</small></span><b>{run.result.unknownCount} unknown · {formatSignedMoney(run.result.deltaSatang)}</b></li>)}</ol>}</section>}
+    </>}
   </div>;
 }
 
-function InvoiceRules({ view, onCommand, busy }: CanvasObjectContentProps) {
+function InvoiceReview({ node, onFocusEvidence, expanded = false }: CanvasObjectContentProps) {
+  const items = (node.inputs.items as ReviewItem[] | undefined) ?? [];
+  const visibleItems = expanded ? items : items.slice(0, 8);
+  return <div className="tt-canvas-inline">
+    <InlineHeading eyebrow="DERIVED REVIEW" title="Rows needing evidence" status={items.length + ' items'} />
+    {items.length === 0 ? <div className="tt-canvas-inline__empty"><CheckCircle2 size={15} /> No linked review items in this result.</div> : <div className="tt-inline-review-list">{visibleItems.map((item) => <button type="button" key={item.id} onClick={() => onFocusEvidence(item.sourceIds)}><span><strong>{item.shipmentId}</strong><small>{item.reason}</small></span><FileText size={14} aria-hidden="true" /></button>)}</div>}
+    {!expanded && items.length > visibleItems.length && <p className="tt-canvas-inline__note">Showing {visibleItems.length} of {items.length} linked review items. Open this object to see every item.</p>}
+  </div>;
+}
+
+function InvoiceRules({ view, onCommand, busy, expanded = false }: CanvasObjectContentProps) {
   const state = view.domain as InvoiceState;
   const verifiedRates = state.sources.filter((source) => source.status === 'verified' && (source.kind === 'rate-card' || source.kind === 'excerpt'));
   const [family, setFamily] = useState<'base' | 'step' | 'surcharge'>('base');
@@ -108,6 +130,7 @@ function InvoiceRules({ view, onCommand, busy }: CanvasObjectContentProps) {
   const [sourceId, setSourceId] = useState('');
   const [error, setError] = useState('');
   const [existingId, setExistingId] = useState('');
+  const [disableError, setDisableError] = useState('');
   const canEdit = view.actor.role === 'owner';
   const propose = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -118,25 +141,33 @@ function InvoiceRules({ view, onCommand, busy }: CanvasObjectContentProps) {
     if (!sourceId) { setError('Choose a verified rate card or excerpt.'); return; }
     void onCommand('evolve.propose', { change: { kind: 'invoice', operations: [{ op: family === 'base' ? 'setZoneBase' : family === 'step' ? 'setWeightStep' : 'setSurcharge', id: existingId || 'rule-' + crypto.randomUUID(), zone, amountSatang: satang, from, to: to || null, sourceId }] } });
   };
+  const proposeDisable = (ruleId: string) => {
+    setDisableError('');
+    void onCommand('evolve.propose', { change: { kind: 'invoice', operations: [{ op: 'disableRule', id: ruleId }] } }).then((result) => {
+      if (!result) setDisableError('The disable proposal could not be created. Check the table notice and try again.');
+    });
+  };
+  const visibleRules = expanded ? state.rules : state.rules.filter((rule) => rule.enabled).slice(0, 4);
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow="ACTIVE RATE RULES" title="Dated rate rules" status={'Active r' + state.ruleRevision} />
-    <span className="tt-inline-ai-status">Manual rules · live AI not configured</span>
-    {state.rules.length === 0 ? <div className="tt-canvas-inline__empty">No rate rules are active. Load the example or draft a rule from verified evidence.</div> : <div className="tt-inline-rule-list">{state.rules.filter((rule) => rule.enabled).slice(0, 4).map((rule) => <div key={rule.id}><span><strong>{rule.kind === 'base' ? 'Zone base' : rule.kind === 'step' ? 'Extra kg' : 'Remote surcharge'} · {rule.zone}</strong><small>{rule.from} to {rule.to ?? 'open end'}</small></span><b>{formatMoney(rule.amountSatang)}</b></div>)}</div>}
-    {!canEdit ? <p className="tt-canvas-inline__note">Only the table owner can change these rules.</p> : <form className="tt-inline-rule-form" onSubmit={propose}>
+    {state.rules.length === 0 ? <div className="tt-canvas-inline__empty">No rate rules are active. Load the example or draft a rule from verified evidence.</div> : <div className="tt-inline-rule-list">{visibleRules.map((rule) => <div key={rule.id} className={!rule.enabled ? 'is-disabled' : ''}><span><strong>{rule.kind === 'base' ? 'Zone base' : rule.kind === 'step' ? 'Extra kg' : 'Remote surcharge'} · {rule.zone}</strong><small>{rule.from} to {rule.to ?? 'open end'} · {rule.enabled ? 'Active' : 'Disabled'}</small></span><b>{formatMoney(rule.amountSatang)}</b>{expanded && canEdit && rule.enabled && <button className="tt-button tt-button--quiet" type="button" disabled={busy !== null} onClick={() => proposeDisable(rule.id)}>Propose disable</button>}</div>)}</div>}
+    {!expanded && state.rules.filter((rule) => rule.enabled).length > visibleRules.length && <p className="tt-canvas-inline__note">Open this canvas object to see all rules and history.</p>}
+    {!canEdit ? <p className="tt-canvas-inline__note">Only the table owner can change these rules.</p> : expanded ? <form className="tt-inline-rule-form" onSubmit={propose}>
       <label>Rate family<select value={family} onChange={(event) => setFamily(event.target.value as typeof family)}><option value="base">Zone base</option><option value="step">Each started extra kg</option><option value="surcharge">Remote surcharge</option></select></label>
       <label>Existing rule<select value={existingId} onChange={(event) => { const id = event.target.value; setExistingId(id); const rule = state.rules.find((item) => item.id === id); if (rule) { setFamily(rule.kind); setZone(rule.zone); setAmount(String(rule.amountSatang)); setFrom(rule.from); setTo(rule.to ?? ''); setSourceId(rule.sourceId); } }}><option value="">Add a new dated rule</option>{state.rules.map((rule) => <option key={rule.id} value={rule.id}>{rule.kind} · {rule.zone} · {rule.from}</option>)}</select></label>
       <div className="tt-inline-rule-row"><label>Zone<select value={zone} onChange={(event) => setZone(event.target.value as Zone | '*')}><option value="bangkok">Bangkok</option><option value="regional">Regional</option><option value="*">All zones</option></select></label><label>Amount (satang)<input type="number" inputMode="numeric" min="0" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} required /></label></div>
       <div className="tt-inline-rule-row"><label>Start · inclusive<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} required /></label><label>End · exclusive<input type="date" min={from} value={to} onChange={(event) => setTo(event.target.value)} /></label></div>
       <label>Verified rate evidence<select value={sourceId} onChange={(event) => setSourceId(event.target.value)}><option value="">Choose source</option>{verifiedRates.map((source) => <option key={source.id} value={source.id}>{source.filename}</option>)}</select></label>
       {error && <span className="tt-field-error" role="alert">{error}</span>}
+      {disableError && <span className="tt-field-error" role="alert">{disableError}</span>}
       {verifiedRates.length === 0 && <p className="tt-canvas-inline__note">Verify a rate card or excerpt in the source object before drafting a rule.</p>}
       <button type="submit" className="tt-button tt-button--primary" disabled={busy !== null || verifiedRates.length === 0}><Plus size={13} /> Propose dated rule</button>
-    </form>}
-    {canEdit && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />}
+    </form> : <p className="tt-canvas-inline__note">Open this object to propose a dated rate rule, disable an existing rule, or restore a compatible revision.</p>}
+    {canEdit && expanded && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />}
   </div>;
 }
 
-function LessonSource({ view, busy, onCommand, localPhysics, onLocalPhysicsChange, onResetLocalPhysics }: CanvasObjectContentProps) {
+function LessonSource({ view, busy, onCommand, localPhysics, onLocalPhysicsChange, onResetLocalPhysics, expanded = false }: CanvasObjectContentProps) {
   const state = view.domain as TeachingState;
   const isLearner = view.actor.role === 'learner';
   const [draft, setDraft] = useState<PhysicsParams>(state.parameters);
@@ -147,11 +178,16 @@ function LessonSource({ view, busy, onCommand, localPhysics, onLocalPhysicsChang
     : setDraft((current) => ({ ...current, [key]: next }));
   return <div className={'tt-canvas-inline' + (isLearner ? ' tt-canvas-inline--private' : '')}>
     <InlineHeading eyebrow={isLearner ? 'LOCAL EXPERIMENT' : 'SHARED LESSON'} title="Force, mass, and time" status={isLearner ? 'Private' : 'Lesson r' + state.ruleRevision} />
-    <ParameterFields value={value} onChange={change} />
-    {isLearner ? <><p className="tt-canvas-inline__note">These values stay on this device. Your teacher’s lesson is unchanged.</p><button className="tt-text-button" type="button" onClick={onResetLocalPhysics}><RotateCcw size={13} /> Reset to teacher values</button></> : <div className="tt-inline-action-row">
-      <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || sameParams(draft, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('teaching.setParameters', draft)}><Save size={13} /> Update lesson</button>
-      <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || sameParams(draft, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('evolve.propose', { change: { kind: 'teaching', parameters: draft } })}><Sigma size={13} /> Propose review</button>
-    </div>}
+    {!expanded ? <>
+      <div className="tt-lesson-rule-values"><span><small>Force</small><strong>{number(value.force)} N</strong></span><span><small>Mass</small><strong>{number(value.mass)} kg</strong></span><span><small>Time</small><strong>{number(value.time)} s</strong></span></div>
+      <p className="tt-canvas-inline__note">{isLearner ? 'Private experiment · open to adjust your local values.' : 'Open to edit shared lesson values or propose a review.'}</p>
+    </> : <>
+      <ParameterFields value={value} onChange={change} />
+      {isLearner ? <><p className="tt-canvas-inline__note">These values stay on this device. Your teacher’s lesson is unchanged.</p><button className="tt-text-button" type="button" onClick={onResetLocalPhysics}><RotateCcw size={13} /> Reset to teacher values</button></> : <div className="tt-inline-action-row">
+        <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || sameParams(draft, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('teaching.setParameters', draft)}><Save size={13} /> Update lesson</button>
+        <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || sameParams(draft, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('evolve.propose', { change: { kind: 'teaching', parameters: draft } })}><Sigma size={13} /> Propose review</button>
+      </div>}
+    </>}
   </div>;
 }
 
@@ -211,7 +247,7 @@ function LessonGraph({ view, node, localPhysics }: CanvasObjectContentProps) {
   </div>;
 }
 
-function LessonQuestion({ view, busy, onCommand }: CanvasObjectContentProps) {
+function LessonQuestion({ view, busy, onCommand, expanded = false }: CanvasObjectContentProps) {
   const state = view.domain as TeachingState;
   const isTeacher = view.actor.role === 'teacher';
   const isLearner = view.actor.role === 'learner';
@@ -230,14 +266,15 @@ function LessonQuestion({ view, busy, onCommand }: CanvasObjectContentProps) {
   const visibleAnswers = state.answers.filter((item) => isTeacher || item.actorId === view.actor.actorId);
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow={isTeacher ? 'TEACHER PANEL' : 'PRIVATE QUESTION'} title={isLearner ? 'Check your understanding' : 'Learner views and responses'} status={'Revision ' + state.ruleRevision} />
+    {!expanded ? <div className="tt-canvas-inline__empty">{isLearner ? 'Open this object to answer privately and see your feedback.' : `${view.members.filter((member) => member.role === 'learner').length} learners · ${visibleAnswers.length} private response${visibleAnswers.length === 1 ? '' : 's'}. Open to adjust views and add a teacher-only note.`}</div> : <>
     {isLearner && <section className="tt-inline-question"><p>Where will the cart be after {number(state.parameters.time)} seconds? Use the teacher’s shared values.</p><form className="tt-answer-form" onSubmit={submit}><label htmlFor="tt-canvas-answer">Position in meters</label><div><input id="tt-canvas-answer" type="number" step="any" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="For example, 10" required /><button className="tt-button tt-button--primary" type="submit" disabled={busy !== null || !answer}><Send size={13} /> Check answer</button></div><small>Your response is private to you and your teacher.</small></form>{visibleAnswers.slice(-1).map((item) => <AnswerCard key={item.questionId + '-' + item.submittedAt} item={item} name="Your response" />)}</section>}
     {isTeacher && <>
       <div className="tt-inline-learners">{view.members.filter((member) => member.role === 'learner').map((member) => <LearnerViewRow key={member.actorId} member={member} representation={state.representations[member.actorId] ?? 'scene'} difficulty={state.difficulties[member.actorId] ?? 'beginner'} disabled={busy !== null} onSave={(representation, difficulty) => void onCommand('teaching.setRepresentation', { actorId: member.actorId, representation, difficulty })} />)}</div>
-      <div className="tt-inline-answers"><strong>{visibleAnswers.length} learner response{visibleAnswers.length === 1 ? '' : 's'}</strong>{visibleAnswers.length === 0 ? <span>Responses appear here after learners submit.</span> : visibleAnswers.slice(-3).map((item) => <AnswerCard key={item.actorId + '-' + item.questionId + '-' + item.submittedAt} item={item} name={view.members.find((member) => member.actorId === item.actorId)?.name ?? 'Learner'} />)}</div>
+      <div className="tt-inline-answers"><strong>{visibleAnswers.length} learner response{visibleAnswers.length === 1 ? '' : 's'}</strong>{visibleAnswers.length === 0 ? <span>Responses appear here after learners submit.</span> : (expanded ? visibleAnswers : visibleAnswers.slice(-3)).map((item) => <AnswerCard key={item.actorId + '-' + item.questionId + '-' + item.submittedAt} item={item} name={view.members.find((member) => member.actorId === item.actorId)?.name ?? 'Learner'} />)}</div>
       <form className="tt-note-form tt-inline-note-form" onSubmit={saveNote}><label htmlFor="tt-canvas-teacher-note">Private teacher note</label><textarea id="tt-canvas-teacher-note" maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="A note only you can see…" /><div><small>Teacher only · {note.length}/2000</small><button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || note === (state.teacherNote ?? '')}><Save size={13} /> Save note</button></div></form>
-      <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />
     </>}
     {!isTeacher && !isLearner && <div className="tt-canvas-inline__empty"><BookOpenCheck size={15} /> This table view does not have question controls.</div>}
+    </>}
   </div>;
 }
 
@@ -288,7 +325,7 @@ function EncounterBoardObject({ view, node }: CanvasObjectContentProps) {
   </div>;
 }
 
-function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentProps) {
+function EncounterActions({ view, node, onCommand, busy, expanded = false }: CanvasObjectContentProps) {
   const state = view.domain as EncounterState;
   const board = node.inputs.board as EncounterBoard | undefined;
   const [tick, setTick] = useState(Date.now());
@@ -298,6 +335,7 @@ function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentPr
   const phase = board?.phase ?? state.phase;
   const chars = board?.characters ?? state.characters;
   const active = board?.turn ?? state.turn;
+  const events = board?.events ?? state.events;
   const rule = board?.rule ?? state.rule;
   const pauseState = board?.paused ?? state.paused;
   const actorId = view.actor.seat === 'mira' || view.actor.seat === 'pip' ? view.actor.seat : null;
@@ -321,6 +359,7 @@ function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentPr
   const reactReason = pauseState ? 'The Dungeon Master paused all encounter actions.' : !actor ? 'This seat does not control a character.' : actor.ap < rule.apCost ? 'You need ' + rule.apCost + ' AP to shield; you have ' + actor.ap + '.' : rule.oncePerTurn && actor.shieldUsedGeneration === actor.turnGeneration ? 'You already used a shield this turn.' : pending?.target !== actorId && !rule.allyTarget ? 'The current rule allows self protection only.' : pending?.shields.some((intent) => intent.target === pending.target) ? 'This character is already covered by a shield.' : 'Your character has already submitted a reaction.';
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow={practiceMode ? 'PRACTICE ACTION' : 'SERVER-TIMED ACTION'} title="Current action" status={pauseState ? 'Paused' : phase.replaceAll('.', ' · ')} />
+    {!expanded ? <div className="tt-inline-action-summary"><Activity size={14} /><span><strong>{pauseState ? 'Paused by the Dungeon Master' : phase === 'reaction.open' ? `${nameFor(pending?.attacker ?? active)} has opened a reaction` : phase === 'action.resolved' ? 'The action is resolved' : `${nameFor(active)} is ready to act`}</strong><small>Open this object to act, react, pause, or browse the full encounter history.</small></span></div> : <>
     {pauseState && <p className="tt-encounter-paused" role="status"><ShieldCheck size={14} /> The Dungeon Master paused this encounter. Actions and timers are on hold.</p>}
     {pending && phase === 'reaction.open' && pauseState ? <div className="tt-inline-reaction tt-reaction-window--paused"><span className="tt-reaction-window__icon"><Shield size={17} /></span><div><strong>Reaction window paused</strong><small>{nameFor(pending.attacker)} targeted {nameFor(pending.target)}. Remaining time is held until the Dungeon Master resumes.</small></div><span className="tt-countdown" aria-label={`${Math.ceil(deadline / 1000)} seconds held`}><Clock3 size={13} /><strong>{Math.ceil(deadline / 1000)}s</strong></span></div> : pending && phase === 'reaction.open' ? <div className="tt-inline-reaction"><span className="tt-reaction-window__icon"><Shield size={17} /></span><div><strong>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}</strong><small>{pending.damage === null ? 'Damage stays with the DM until resolution; you may react now.' : `${pending.damage} damage is pending; eligible players may react before it is resolved.`}</small></div><span className={'tt-countdown' + (deadline <= 5000 ? ' is-ending' : '')} aria-live="polite"><Clock3 size={13} /><strong>{Math.ceil(deadline / 1000)}s</strong></span></div> : <div className="tt-inline-action-summary"><Activity size={14} /><span>{phase === 'action.resolved' ? 'The action is resolved. End the current turn when ready.' : nameFor(active) + ' is ready to act.'}</span></div>}
     {view.actor.role === 'dm' && <button type="button" className={pauseState ? 'tt-button tt-button--primary' : 'tt-button tt-button--quiet'} disabled={busy !== null} onClick={() => void onCommand(pauseState ? 'encounter.resume' : 'encounter.pause', {})}><ShieldCheck size={13} /> {pauseState ? 'Resume encounter' : 'Pause encounter'}</button>}
@@ -331,10 +370,12 @@ function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentPr
     {view.actor.role === 'player' && !ownTurn && phase !== 'reaction.open' && <p className="tt-canvas-inline__note">You can act when your character’s turn begins.</p>}
     {pauseState && <p className="tt-canvas-inline__note" role="status">Actions are disabled for everyone until the Dungeon Master resumes.</p>}
     {!pauseState && pending && <p className="tt-canvas-inline__note">{practiceMode ? 'The practice clock holds while you read. The DM can resolve the reaction window at any time.' : 'The deadline is server-set. The DM can resolve the reaction window at any time.'}</p>}
+    <section className="tt-inline-history" aria-labelledby="tt-encounter-history-title"><header><strong id="tt-encounter-history-title">Encounter history</strong><span>{events.length}</span></header>{events.length === 0 ? <p className="tt-canvas-inline__note">Turns and reactions will appear here as they are resolved.</p> : <ol>{[...events].reverse().map((event) => <li key={event.id}><span><strong>{event.text}</strong><small>{new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span></li>)}</ol>}</section>
+    </>}
   </div>;
 }
 
-function EncounterSource({ view, onCommand, busy }: CanvasObjectContentProps) {
+function EncounterSource({ view, onCommand, busy, expanded = false }: CanvasObjectContentProps) {
   const state = view.domain as EncounterState;
   const isDm = view.actor.role === 'dm';
   const [rule, setRule] = useState<EncounterRule>(state.rule);
@@ -346,7 +387,7 @@ function EncounterSource({ view, onCommand, busy }: CanvasObjectContentProps) {
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow={isDm ? 'DM ONLY · PRIVATE NOTE' : 'TABLE RULES'} title="Shield rules and table notes" status={'Active r' + state.ruleRevision} />
     <div className="tt-rule-summary"><span>SHIELD RULE</span><strong>{state.rule.allyTarget ? 'Self or ally' : 'Self only'} · {state.rule.apCost} AP{state.rule.oncePerTurn ? ' · once per turn' : ''}</strong></div>
-    {isDm ? <>
+    {!expanded ? <p className="tt-canvas-inline__note">{isDm ? 'Open this object to edit the shield rule, manage its lifecycle, or add a private DM note.' : 'The Dungeon Master manages shield rules and private notes. Your character actions are in the encounter object.'}</p> : isDm ? <>
       <div className="tt-encounter-rule-editor">
         <label className="tt-toggle-row"><span><strong>Allow shielding an ally</strong><small>When off, only self protection is allowed.</small></span><input type="checkbox" checked={rule.allyTarget} onChange={(event) => setRule((current) => ({ ...current, allyTarget: event.target.checked }))} /></label>
         <label className="tt-toggle-row"><span><strong>Shield cost</strong><small>Spent by the reacting character.</small></span><select value={rule.apCost} onChange={(event) => setRule((current) => ({ ...current, apCost: Number(event.target.value) as 0 | 1 }))}><option value={0}>No AP</option><option value={1}>1 AP</option></select></label>

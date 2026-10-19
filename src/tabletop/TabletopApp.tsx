@@ -7,6 +7,7 @@ import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/Workb
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { TableSurface } from './ui/TableSurface';
+import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
 import './ui/tabletop.css';
@@ -82,9 +83,12 @@ export default function TabletopApp() {
   const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [surface, setSurface] = useState<SurfaceMode>(() => window.matchMedia('(max-width: 760px)').matches ? 'focus' : 'canvas');
+  const [surface, setSurface] = useState<SurfaceMode>('canvas');
   const [editMode, setEditMode] = useState<EditMode>('use');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+  const [focusRequestKey, setFocusRequestKey] = useState(0);
+  const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
   const [focusSourceIds, setFocusSourceIds] = useState<string[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteSeat, setInviteSeat] = useState<Seat | null>(null);
@@ -97,7 +101,6 @@ export default function TabletopApp() {
   const workspaceRef = useRef<WorkspaceView | null>(null);
   const projectionSequenceRef = useRef(0);
   const inspectorScrollRef = useRef<HTMLDivElement>(null);
-  const previousScrollRef = useRef(0);
   const noticeTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -117,7 +120,10 @@ export default function TabletopApp() {
     if (next) projectionSequenceRef.current += 1;
     setView(next);
     if (changedTable) {
+      setSurface('canvas');
       setSelectedNodeId(null);
+      setFocusNodeId(null);
+      setOpenedObjectId(null);
       setFocusSourceIds([]);
     }
     if (previous?.id !== next?.id) {
@@ -422,32 +428,38 @@ export default function TabletopApp() {
     finally { setInviteBusy(false); }
   }, [showNotice]);
 
+  const openInviteDialog = useCallback(() => {
+    setInviteOpen(true);
+    setInviteSeat(null);
+    setCopied(false);
+  }, []);
+
+  const requestCanvasFocus = useCallback((nodeId: string, open = true) => {
+    setSurface('canvas');
+    setSelectedNodeId(nodeId);
+    setFocusNodeId(nodeId);
+    setFocusRequestKey((key) => key + 1);
+    if (open) setOpenedObjectId(nodeId);
+  }, []);
+
   const focusEvidence = useCallback((sourceIds: string[]) => {
-    if (!view) return;
-    if (inspectorScrollRef.current) previousScrollRef.current = inspectorScrollRef.current.scrollTop;
+    if (!view || view.kind !== 'invoice') return;
     setFocusSourceIds(sourceIds);
-    setSurface('focus');
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.requestAnimationFrame(() => document.getElementById('tt-evidence-section')?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' }));
-  }, [view]);
+    requestCanvasFocus('invoice.source');
+  }, [requestCanvasFocus, view]);
 
   const backFromEvidence = useCallback(() => {
     setFocusSourceIds([]);
-    window.requestAnimationFrame(() => {
-      if (inspectorScrollRef.current) inspectorScrollRef.current.scrollTop = previousScrollRef.current;
-    });
-  }, []);
+    requestCanvasFocus('invoice.table');
+  }, [requestCanvasFocus]);
 
   const selectCanvasNode = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId);
-    if (nodeId && window.matchMedia('(max-width: 760px)').matches) setSurface('focus');
   }, []);
 
   const focusAIProposal = useCallback(() => {
-    setSurface('focus');
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.requestAnimationFrame(() => document.getElementById('tt-ai-proposal')?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' }));
-  }, []);
+    requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.ai);
+  }, [requestCanvasFocus]);
 
   const beginReset = useCallback(async () => {
     const result = await runCommand('workspace.reset', {});
@@ -474,6 +486,7 @@ export default function TabletopApp() {
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
   const remainingInviteSeats = inviteSeats.filter((seat) => !connectedSeats.has(seat) && !(inviteIsHeld && inviteState?.seat === seat));
+  const aiContent = canAskAI ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} /> : undefined;
 
   return (
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
@@ -493,8 +506,8 @@ export default function TabletopApp() {
         {headerAccount && <AccountBadge user={headerAccount} busy={busy === 'auth.logout'} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />}
         <div className="tt-connection" data-state={connection} role="status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Connected' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Connection lost' : 'Reconnecting'}</span></div>
         <span className="tt-role-chip">{view.actor.role}</span>
-        {view.kind !== 'invoice' && <button type="button" className="tt-people-button" onClick={() => { setInviteOpen(true); setInviteSeat(null); setCopied(false); }} aria-label={`People at this table, ${view.members.length} connected`}><Users size={16} /><span>{view.members.length}</span></button>}
-        {canInvite && <button type="button" className="tt-button tt-button--quiet tt-invite-button" onClick={() => { setInviteOpen(true); setInviteSeat(null); setCopied(false); }}><Plus size={14} /> Invite</button>}
+        {view.kind !== 'invoice' && <button type="button" className="tt-people-button" onClick={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} aria-label={`People at this table, ${view.members.length} connected`}><Users size={16} /><span>{view.members.length}</span></button>}
+        {canInvite && <button type="button" className="tt-button tt-button--quiet tt-invite-button" onClick={openInviteDialog}><Plus size={14} /> Invite</button>}
         {canReset && <button type="button" className="tt-topbar-icon" title="Reset table" aria-label="Reset table" onClick={() => setResetOpen(true)}><RotateCcw size={15} /></button>}
         <button type="button" className="tt-topbar-icon" title="Refresh latest table" aria-label="Refresh latest table" disabled={busy !== null} onClick={() => void openWorkspace(view.id)}><RefreshCw size={15} className={busy === 'workspace.open' ? 'tt-spin' : ''} /></button>
       </header>
@@ -526,8 +539,14 @@ export default function TabletopApp() {
         focusSourceIds={focusSourceIds}
         inspectorScrollRef={inspectorScrollRef}
         onReload={() => void openWorkspace(view.id)}
+        onInvite={canInvite ? openInviteDialog : undefined}
+        onFocusObject={requestCanvasFocus}
+        aiContent={aiContent}
+        focusNodeId={focusNodeId}
+        focusRequestKey={focusRequestKey}
+        openedObjectId={openedObjectId}
+        onOpenObject={setOpenedObjectId}
         inspectorContent={<>
-          {canAskAI && <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} />}
           {selectedNode && compiled.plan && <ObjectInspector node={selectedNode} plan={compiled.plan} onClose={() => setSelectedNodeId(null)} />}
         </>}
       />

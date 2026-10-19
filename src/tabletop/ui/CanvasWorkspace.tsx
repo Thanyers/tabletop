@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Workflow } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
@@ -6,15 +6,29 @@ import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
 import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
+import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
 
-interface CanvasNodeData extends Record<string, unknown> {
+export { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds };
+
+interface CanvasNodeBaseData extends Record<string, unknown> {
+  kind: 'plan' | 'auxiliary';
+  id: string;
+  title: string;
+  capability: string;
+  selected: boolean;
+  opened: boolean;
+  onToggleOpen: (id: string) => void;
+}
+
+interface PlanCanvasNodeData extends CanvasNodeBaseData {
+  kind: 'plan';
   spec: PlanNode;
   outputs: Record<string, unknown>;
-  selected: boolean;
   view: WorkspaceView;
   busy: string | null;
   onCommand: WorkbenchProps['onCommand'];
   onUpload: WorkbenchProps['onUpload'];
+  onExport: WorkbenchProps['onExport'];
   onFocusEvidence: WorkbenchProps['onFocusEvidence'];
   focusSourceIds: string[];
   localPhysics: PhysicsParams;
@@ -22,7 +36,22 @@ interface CanvasNodeData extends Record<string, unknown> {
   onResetLocalPhysics: () => void;
 }
 
+interface AuxiliaryCanvasNodeData extends CanvasNodeBaseData {
+  kind: 'auxiliary';
+  auxiliary: CanvasAuxiliaryObject;
+}
+
+type CanvasNodeData = PlanCanvasNodeData | AuxiliaryCanvasNodeData;
 type CanvasNode = Node<CanvasNodeData, 'tabletopObject'>;
+
+export interface CanvasAuxiliaryObject {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  position?: { x: number; y: number };
+  content?: ReactNode;
+  renderContent?: (expanded: boolean) => ReactNode;
+}
 
 interface SavedCanvasLayout {
   positions: Record<string, { x: number; y: number }>;
@@ -81,21 +110,72 @@ function defaultCanvasPosition(kind: WorkspaceView['kind'], spec: PlanNode) {
 }
 
 function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+
+  if (data.kind === 'auxiliary') {
+    return (
+      <article
+        className={'tt-canvas-node tt-canvas-node--auxiliary' + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+        data-canvas-object={data.id}
+        data-canvas-editor
+        data-testid={data.opened ? 'canvas-object-editor' : undefined}
+        data-object-id={data.opened ? data.id : undefined}
+        aria-label={data.title}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && data.opened) {
+            event.preventDefault();
+            event.stopPropagation();
+            data.onToggleOpen(data.id);
+            window.requestAnimationFrame(() => openButtonRef.current?.focus());
+          }
+        }}
+      >
+        <header className="tt-canvas-node__head">
+          <span className="tt-object-glyph" aria-hidden="true"><Workflow size={15} /></span>
+          <span className="tt-canvas-node__title">{data.title}</span>
+          <span className="tt-canvas-node__capability">{data.auxiliary.eyebrow ?? 'TABLE TOOL'}</span>
+          <button ref={openButtonRef} className="tt-canvas-node__open nodrag nopan" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
+            {data.opened ? 'Close' : 'Open'}
+          </button>
+        </header>
+        <div className="tt-canvas-node__body nodrag nopan">{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</div>
+      </article>
+    );
+  }
+
   const inputPorts = Object.keys(data.spec.inputs);
   const outputPorts = Object.keys(data.outputs);
   const capability = data.spec.capability.split('.').slice(-1)[0]?.replaceAll('-', ' ') ?? 'component';
 
   return (
-    <article className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + (selected ? ' is-selected' : '')} aria-label={data.spec.title + ', ' + capability}>
+    <article
+      className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+        data-canvas-object={data.id}
+        data-canvas-editor
+        data-testid={data.opened ? 'canvas-object-editor' : undefined}
+        data-object-id={data.opened ? data.id : undefined}
+      aria-label={data.spec.title + ', ' + capability}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && data.opened) {
+          event.preventDefault();
+          event.stopPropagation();
+          data.onToggleOpen(data.id);
+          window.requestAnimationFrame(() => openButtonRef.current?.focus());
+        }
+      }}
+    >
       {inputPorts.map((port, index) => <Handle key={`in-${port}`} type="target" position={Position.Left} id={port} style={portStyle(index, inputPorts.length)} />)}
       {outputPorts.map((port, index) => <Handle key={`out-${port}`} type="source" position={Position.Right} id={port} style={portStyle(index, outputPorts.length)} />)}
       <header className="tt-canvas-node__head">
         <span className="tt-object-glyph" aria-hidden="true"><Workflow size={15} /></span>
         <span className="tt-canvas-node__title">{data.spec.title}</span>
         <span className="tt-canvas-node__capability">{capability}</span>
+        <button ref={openButtonRef} className="tt-canvas-node__open nodrag nopan" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.spec.title}`} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
+          {data.opened ? 'Close' : 'Open'}
+        </button>
       </header>
       <div className="tt-canvas-node__body nodrag nopan">
-        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} />
+        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} expanded={data.opened} />
       </div>
     </article>
   );
@@ -112,11 +192,20 @@ interface CanvasWorkspaceProps {
   onCommand: WorkbenchProps['onCommand'];
   busy: string | null;
   onUpload: WorkbenchProps['onUpload'];
+  onExport: WorkbenchProps['onExport'];
   onFocusEvidence: WorkbenchProps['onFocusEvidence'];
   focusSourceIds: string[];
+  persistLayout?: boolean;
+  visibleNodeIds?: readonly string[];
+  focusNodeId?: string | null;
+  focusRequestKey?: string | number;
+  auxiliaryObjects?: readonly CanvasAuxiliaryObject[];
+  emptyContent?: ReactNode;
+  openedObjectId?: string | null;
+  onOpenObject?: (id: string | null) => void;
 }
 
-function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onFocusEvidence, focusSourceIds }: CanvasWorkspaceProps) {
+function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, Edge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
@@ -129,8 +218,14 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
   const localPhysicsDirty = useRef(false);
   const localPhysicsWorkspace = useRef('');
   const teachingParams = view.domain.kind === 'teaching' ? view.domain.parameters : null;
-  const visiblePlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false), [plan.nodes]);
-  const visibleIds = useMemo(() => new Set(visiblePlanNodes.map((spec) => spec.id)), [visiblePlanNodes]);
+  const allowedNodeIds = useMemo(() => visibleNodeIds ? new Set(visibleNodeIds) : null, [visibleNodeIds]);
+  const visiblePlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds]);
+  const planIds = useMemo(() => new Set(plan.nodes.map((spec) => spec.id)), [plan.nodes]);
+  const visibleAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds]);
+  const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
+  const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
+  const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
+  const lastFocusRequestRef = useRef<string | null>(null);
 
   useEffect(() => {
     const workspaceKey = view.id + ':' + view.epoch;
@@ -148,10 +243,24 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     localPhysicsDirty.current = false;
     if (view.domain.kind === 'teaching') setLocalPhysics(view.domain.parameters);
   }, [view]);
+  const toggleOpenObject = useCallback((id: string) => {
+    const nextId = activeOpenedId === id ? null : id;
+    if (openedObjectId === undefined) setInternalOpenedId(nextId);
+    onOpenObject?.(nextId);
+    onSelectNode(id);
+    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: 160 }));
+  }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode, flow]);
+  const openObject = useCallback((id: string) => {
+    if (!nodes.some((node) => node.id === id)) return;
+    if (openedObjectId === undefined) setInternalOpenedId(id);
+    onOpenObject?.(id);
+    onSelectNode(id);
+    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: 160 }));
+  }, [flow, nodes, onOpenObject, openedObjectId, onSelectNode]);
 
   useEffect(() => {
     const isNewWorkspace = layoutWorkspaceRef.current !== workspaceKey;
-    const storedLayout = isNewWorkspace ? readCanvasLayout(workspaceKey) : null;
+    const storedLayout = isNewWorkspace && persistLayout ? readCanvasLayout(workspaceKey) : null;
     if (isNewWorkspace) {
       layoutWorkspaceRef.current = workspaceKey;
       workspacePositionsRef.current = storedLayout?.positions ?? {};
@@ -160,12 +269,18 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     }
     setNodes((existing) => {
       const previousPositions = new Map(existing.map((node) => [node.id, node.position]));
-      return visiblePlanNodes.map((spec): CanvasNode => ({
+      const planNodes = visiblePlanNodes.map((spec): CanvasNode => ({
         id: spec.id,
         type: 'tabletopObject',
         position: (isNewWorkspace ? storedLayout?.positions[spec.id] : undefined) ?? previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec),
         selected: spec.id === selectedNodeId,
         data: {
+          kind: 'plan',
+          id: spec.id,
+          title: spec.title,
+          capability: spec.capability,
+          opened: activeOpenedId === spec.id,
+          onToggleOpen: toggleOpenObject,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
           selected: spec.id === selectedNodeId,
@@ -173,6 +288,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           busy,
           onCommand,
           onUpload,
+          onExport,
           onFocusEvidence,
           focusSourceIds,
           localPhysics,
@@ -180,26 +296,47 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           onResetLocalPhysics: resetLocalPhysics,
         },
       }));
+      const maxY = visiblePlanNodes.reduce((maximum, spec) => Math.max(maximum, (previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec)).y), 0);
+      const auxiliaryNodes = visibleAuxiliaryObjects.map((object, index): CanvasNode => ({
+        id: object.id,
+        type: 'tabletopObject',
+        position: (isNewWorkspace ? storedLayout?.positions[object.id] : undefined) ?? previousPositions.get(object.id) ?? workspacePositionsRef.current[object.id] ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 },
+        selected: object.id === selectedNodeId,
+        data: {
+          kind: 'auxiliary',
+          id: object.id,
+          title: object.title,
+          capability: object.eyebrow ?? 'table tool',
+          opened: activeOpenedId === object.id,
+          onToggleOpen: toggleOpenObject,
+          selected: object.id === selectedNodeId,
+          auxiliary: object,
+        },
+      }));
+      return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, visiblePlanNodes, plan.outputs, selectedNodeId, setNodes, view, busy, onCommand, onUpload, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics]);
+  }, [workspaceKey, persistLayout, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject]);
 
   useEffect(() => {
-    if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
+    if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
     initialViewPendingRef.current = false;
     const savedViewport = pendingViewportRef.current;
     pendingViewportRef.current = undefined;
-    const preferredId = view.kind === 'invoice' ? 'invoice.table' : view.kind === 'teaching' ? nodes.find((node) => node.id === 'lesson.scene' || node.id === 'lesson.graph')?.id : 'encounter.board';
+    const preferredId = view.kind === 'invoice' ? 'invoice.source' : view.kind === 'teaching' ? nodes.find((node) => node.id === 'lesson.scene' || node.id === 'lesson.graph')?.id : 'encounter.board';
     const targetId = preferredId && nodes.some((node) => node.id === preferredId) ? preferredId : nodes[0]?.id;
     requestAnimationFrame(() => {
-      if (savedViewport) {
+      if (focusNodeId && nodes.some((node) => node.id === focusNodeId)) {
+        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.14, minZoom: 0.62, maxZoom: 1, duration: 0 });
+      } else if (savedViewport) {
         flow.setCenter(savedViewport.centerX, savedViewport.centerY, { zoom: savedViewport.zoom, duration: 0 });
       } else if (targetId) {
-        flow.fitView({ nodes: [{ id: targetId }], padding: 0.16, minZoom: 0.85, maxZoom: 0.95, duration: 0 });
+        flow.fitView({ nodes: [{ id: targetId }], padding: 0.16, minZoom: 0.62, maxZoom: 0.95, duration: 0 });
       }
     });
-  }, [workspaceKey, nodes, view.id, view.kind, flow]);
+  }, [workspaceKey, nodes, view.id, view.kind, flow, focusNodeId]);
 
   const persistViewport = useCallback((_event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
+    if (!persistLayout) return;
     const bounds = flowWrapRef.current?.getBoundingClientRect();
     if (!bounds || bounds.width <= 0 || bounds.height <= 0 || viewport.zoom <= 0) return;
     const current = readCanvasLayout(workspaceKey);
@@ -209,19 +346,29 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
       zoom: viewport.zoom,
     };
     writeCanvasLayout(workspaceKey, current);
-  }, [workspaceKey]);
+  }, [workspaceKey, persistLayout]);
 
   const persistPosition = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
+    const position = { x: node.position.x, y: node.position.y };
+    workspacePositionsRef.current = { ...workspacePositionsRef.current, [node.id]: position };
+    if (!persistLayout) return;
     const current = readCanvasLayout(workspaceKey);
-    current.positions[node.id] = { x: node.position.x, y: node.position.y };
-    workspacePositionsRef.current = { ...workspacePositionsRef.current, [node.id]: current.positions[node.id] };
+    current.positions[node.id] = position;
     writeCanvasLayout(workspaceKey, current);
-  }, [workspaceKey]);
+  }, [workspaceKey, persistLayout]);
 
   const focusSelected = useCallback(() => {
     if (!selectedNodeId) return;
     flow.fitView({ nodes: [{ id: selectedNodeId }], padding: 0.14, minZoom: 0.85, maxZoom: 1, duration: 180 });
   }, [flow, selectedNodeId]);
+
+  useEffect(() => {
+    if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId)) return;
+    const requestKey = `${focusNodeId}:${String(focusRequestKey ?? '')}`;
+    if (lastFocusRequestRef.current === requestKey) return;
+    lastFocusRequestRef.current = requestKey;
+        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.14, minZoom: 0.62, maxZoom: 1, duration: 180 });
+  }, [focusNodeId, focusRequestKey, nodes, flow]);
 
   const edges = useMemo(() => {
     const result: Edge[] = [];
@@ -266,13 +413,18 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     })));
   }, [selectedNodeId, setNodes]);
 
+  const objectTitles = useMemo(() => [
+    ...visiblePlanNodes.map((spec) => ({ id: spec.id, title: spec.title })),
+    ...visibleAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title })),
+  ], [visiblePlanNodes, visibleAuxiliaryObjects]);
+  const hasVisibleObjects = objectTitles.length > 0;
+
   return (
-    <div className="tt-flow-wrap" ref={flowWrapRef}>
-      {plan.nodes.length === 0 ? (
+    <div className="tt-flow-wrap" ref={flowWrapRef} data-canvas-editor data-testid="canvas-object-workspace">
+      {!hasVisibleObjects ? (
         <div className="tt-canvas-empty">
           <span><Workflow size={19} /></span>
-        <strong>This table is ready for its first object</strong>
-          <p>Add a source or start the sample workflow from the table panel.</p>
+          {emptyContent ?? <><strong>This table is ready for its first object</strong><p>Add a source or start the sample workflow from the table panel.</p></>}
         </div>
       ) : (
         <ReactFlow<CanvasNode, Edge>
@@ -299,11 +451,15 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           <Controls position="bottom-right" showInteractive={false} />
         </ReactFlow>
       )}
+      {hasVisibleObjects && <nav className="tt-canvas-object-dock" aria-label="Objects on this canvas" data-testid="canvas-object-dock">
+        <span className="tt-canvas-object-dock__label">OPEN AN OBJECT</span>
+        <div>{objectTitles.map((object) => <button key={object.id} type="button" data-testid={`open-canvas-${object.id}`} aria-label={`Open ${object.title}`} aria-expanded={activeOpenedId === object.id} onClick={() => openObject(object.id)}>{object.title}</button>)}</div>
+      </nav>}
       <div className="tt-canvas-stamp" aria-hidden="true">
-        <span>WORKSPACE FLOW</span><i />{visiblePlanNodes.length} object{visiblePlanNodes.length === 1 ? '' : 's'}<i />{edges.length} visible connection{edges.length === 1 ? '' : 's'}
+        <span>WORKSPACE FLOW</span><i />{objectTitles.length} object{objectTitles.length === 1 ? '' : 's'}<i />{edges.length} visible connection{edges.length === 1 ? '' : 's'}
       </div>
       <div className="tt-canvas-actions">
-        <button type="button" onClick={focusSelected} disabled={!selectedNodeId}>Focus object</button>
+        <button type="button" onClick={focusSelected} disabled={!selectedNodeId || !nodes.some((node) => node.id === selectedNodeId)}>Focus object</button>
         <button type="button" onClick={() => flow.fitView({ padding: 0.28, duration: 0 })}>Fit objects</button>
       </div>
     </div>

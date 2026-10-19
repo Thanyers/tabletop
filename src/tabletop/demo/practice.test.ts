@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as domain from '../domain';
 import { DomainError, type EncounterState, type InvoiceState, type TeachingState } from '../shared/contracts';
 import { calculatePhysics, reconcileInvoice } from '../domain';
+import { PRACTICE_SAMPLE_FILES } from './sample-files';
 import { PracticeRuntime, PRACTICE_REPLAY_INTERVAL_MS } from './practice';
 import { PRACTICE_SCENARIOS } from './scenarios';
 
@@ -32,13 +33,12 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asArray(value: unknown): unknown[] {
   if (!Array.isArray(value)) throw new Error('Expected an array in the exported practice transcript.');
-  return value as unknown[];
+  return value;
 }
 
-function runEveryStep(runtime: PracticeRuntime): void {
-  const snapshot = runtime.getSnapshot();
-  const stepCount = snapshot.scenario.steps.length - snapshot.stepIndex;
-  for (let index = 0; index < stepCount; index += 1) runtime.next();
+async function runEveryStep(runtime: PracticeRuntime): Promise<void> {
+  const stepCount = runtime.getSnapshot().scenario.steps.length - runtime.getSnapshot().stepIndex;
+  for (let index = 0; index < stepCount; index += 1) await runtime.next();
 }
 
 afterEach(() => {
@@ -47,19 +47,37 @@ afterEach(() => {
 });
 
 describe('public practice runtime', () => {
-  it('runs the dated invoice rule through simulation, validation, approval, activation and a saved reconciliation', () => {
+  it('starts with a genuinely empty invoice Canvas and imports sample rows through invoice.import', async () => {
     const runtime = new PracticeRuntime('invoice-rules');
-    const initialSnapshot = runtime.getSnapshot();
+    const initial = runtime.getSnapshot();
+    expect(runtime.getSnapshot()).toBe(initial);
+    expect(initial.visibleNodeIds).toEqual([]);
+    expect(initial.files).toEqual([]);
+    expect(invoiceView(runtime)).toMatchObject({ shipments: [], invoiceLines: [], sources: [], rules: [], runs: [] });
 
-    expect(runtime.getSnapshot()).toBe(initialSnapshot);
-    expect(initialSnapshot.view.members.map((member) => member.actorId)).toEqual(['practice-owner']);
+    await runtime.next();
+    const imported = runtime.getSnapshot();
+    const state = invoiceView(runtime);
+    expect(imported.stepIndex).toBe(1);
+    expect(imported.files).toHaveLength(1);
+    expect(imported.files[0]).toMatchObject({ filename: 'october-shipments.csv', kind: 'invoice', fileKind: 'shipments' });
+    expect(imported.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(imported.visibleNodeIds).toEqual(['practice.files', 'invoice.source']);
+    expect(imported.focusNodeId).toBe('practice.files');
+    expect(state.shipments).toHaveLength(4);
+    expect(state.invoiceLines).toHaveLength(0);
+    expect(state.sources[0]).toMatchObject({ status: 'provided', kind: 'shipments', filename: 'october-shipments.csv' });
+    runtime.dispose();
+  });
 
-    runEveryStep(runtime);
+  it('runs the invoice files and dated rule through review, approval, activation and saved reconciliation', async () => {
+    const runtime = new PracticeRuntime('invoice-rules');
+    await runEveryStep(runtime);
 
     const snapshot = runtime.getSnapshot();
     const state = invoiceView(runtime);
     const result = reconcileInvoice(state);
-    const movedBoundary = state.rules.find((rule) => rule.id === 'base-bangkok-from-15');
+    const movedBoundary = state.rules.find((rule) => rule.kind === 'base' && rule.zone === 'bangkok' && rule.from === '2026-10-14');
     const affectedLine = result.rows.find((row) => row.shipmentId === 'S-BKK-1000');
 
     expect(snapshot.mode).toBe('complete');
@@ -70,37 +88,44 @@ describe('public practice runtime', () => {
     expect(result.knownExpectedSatang).toBe(8_000);
     expect(result.unknownCount).toBe(2);
     expect(state.runs).toHaveLength(1);
+    expect(snapshot.history).toHaveLength(snapshot.stepIndex);
     expect(snapshot.history.every((event) => event.outcome === 'applied')).toBe(true);
-    expect(snapshot.view.revision).toBe(`practice-${snapshot.view.epoch}-${PRACTICE_SCENARIOS[0].steps.length}`);
+    expect(snapshot.visibleNodeIds).toContain('invoice.rules');
+    expect(snapshot.visibleNodeIds).toContain('workspace.history');
+    expect(snapshot.view.revision).toBe(`practice-${snapshot.view.epoch}-${snapshot.scenario.steps.length}`);
     expect(runtime.exportHistory()).toContain('currentView');
     runtime.dispose();
   });
 
-  it('updates the shared physics lesson, records separate answers, and applies role projections', () => {
+  it('imports a local file into the same reducers and rejects malformed files without data mutation', async () => {
+    const runtime = new PracticeRuntime('invoice-rules');
+    const imported = await runtime.ingestFile(PRACTICE_SAMPLE_FILES[0].filename, PRACTICE_SAMPLE_FILES[0].text);
+    expect(imported?.domain.kind).toBe('invoice');
+    expect(invoiceView(runtime).shipments).toHaveLength(4);
+    const before = structuredClone(invoiceView(runtime));
+
+    const rejected = await runtime.ingestFile('bad.csv', 'nope\n');
+    expect(rejected).toBeNull();
+    expect(invoiceView(runtime)).toEqual(before);
+    expect(runtime.getSnapshot().history.at(-1)).toMatchObject({ outcome: 'rejected', type: 'practice.ingestFile' });
+    runtime.dispose();
+  });
+
+  it('updates the shared lesson, records separate answers, and applies role projections', async () => {
     const runtime = new PracticeRuntime('teaching-physics');
-
-    runtime.next();
-    expect(runtime.getSnapshot().mode).toBe('paused');
-    expect(runtime.getSnapshot().stepIndex).toBe(1);
-    expect(calculatePhysics(teachingView(runtime).parameters).position).toBe(4);
-    expect(runtime.getSnapshot().view.members.map((member) => member.actorId)).toEqual([
-      'practice-teacher', 'practice-learner-1', 'practice-learner-2',
-    ]);
-
-    runEveryStep(runtime);
+    await runEveryStep(runtime);
 
     const completed = runtime.getSnapshot();
     expect(completed.mode).toBe('complete');
-    expect(completed.history.at(-1)).toMatchObject({ outcome: 'rejected', type: 'teaching.setParameters' });
-    expect(completed.view.actor.actorId).toBe('practice-learner-2');
-    expect(teachingView(runtime).answers.map((answer) => answer.actorId)).toEqual(['practice-learner-2']);
-    expect('teacherNote' in teachingView(runtime)).toBe(false);
+    expect(teachingView(runtime).parameters).toEqual({ force: 10, mass: 5, time: 2 });
+    expect(completed.history.find((event) => event.type === 'teaching.setParameters' && event.outcome === 'rejected')).toBeDefined();
+    expect(completed.visibleNodeIds).toContain('lesson.question');
+    expect(completed.visibleNodeIds).toContain('lesson.rules');
+    expect(completed.visibleNodeIds).toContain('workspace.history');
+    expect(teachingView(runtime).answers.map((answer) => answer.actorId)).toEqual(['practice-learner-1', 'practice-learner-2']);
 
     runtime.selectActor('practice-teacher');
     expect(runtime.getSnapshot().mode).toBe('manual');
-    expect(teachingView(runtime).answers.map((answer) => answer.actorId)).toEqual([
-      'practice-learner-1', 'practice-learner-2',
-    ]);
     expect(teachingView(runtime).teacherNote).toBe('คำตอบอ้างอิง: 4 เมตร');
 
     runtime.selectActor('practice-learner-1');
@@ -111,10 +136,11 @@ describe('public practice runtime', () => {
     runtime.dispose();
   });
 
-  it('supports manual lesson edits and answers through the same reducer while preserving role denial', async () => {
+  it('supports staged manual physics edits and learner answers through the same domain reducer', async () => {
     const runtime = new PracticeRuntime('teaching-physics');
-    runtime.next();
+    await runtime.next();
     runtime.takeOver();
+    expect(runtime.addObject('lesson.rules')).toBe(true);
 
     const edited = await runtime.command('teaching.setParameters', { force: 12, mass: 3, time: 2 });
     expect(edited?.domain.kind).toBe('teaching');
@@ -139,9 +165,9 @@ describe('public practice runtime', () => {
     runtime.dispose();
   });
 
-  it('evolves the encounter shield, resolves Mira protecting Pip, then lets the DM advance the turn', async () => {
+  it('evolves the encounter shield from the imported plan and resolves the hit with the domain state', async () => {
     const runtime = new PracticeRuntime('encounter-shield');
-    runEveryStep(runtime);
+    await runEveryStep(runtime);
 
     const completed = runtime.getSnapshot();
     const state = encounterView(runtime);
@@ -150,9 +176,10 @@ describe('public practice runtime', () => {
     expect(state.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
     expect(state.phase).toBe('action.resolved');
     expect(state.pendingHit).toBeNull();
-    expect(state.characters.find((character) => character.id === 'pip')).toMatchObject({ hp: 8, ap: 2 });
-    expect(state.characters.find((character) => character.id === 'mira')).toMatchObject({ hp: 10, ap: 1 });
+    expect(state.characters.find((character) => character.id === 'pip')?.hp).toBe(8);
+    expect(state.characters.find((character) => character.id === 'mira')?.ap).toBe(1);
     expect(completed.history.find((event) => event.actor === 'Mira' && event.type === 'encounter.shield')?.outcome).toBe('applied');
+    expect(completed.visibleNodeIds).toContain('workspace.history');
 
     const advanced = await runtime.command('encounter.endTurn', {});
     expect(advanced?.domain.kind).toBe('encounter');
@@ -160,14 +187,14 @@ describe('public practice runtime', () => {
     runtime.dispose();
   });
 
-  it('stops on an unexpected reducer rejection without committing state or accepting more scripted steps', () => {
+  it('stops on an unexpected reducer rejection without committing state or accepting more scripted steps', async () => {
     const runtime = new PracticeRuntime('invoice-rules');
     const initialState = structuredClone(invoiceView(runtime));
     vi.spyOn(domain, 'decideDomain').mockImplementationOnce(() => {
       throw new DomainError('PRACTICE_TEST_REJECTION', 'controlled reducer failure');
     });
 
-    runtime.next();
+    await runtime.next();
 
     const blocked = runtime.getSnapshot();
     expect(blocked.mode).toBe('blocked');
@@ -175,7 +202,7 @@ describe('public practice runtime', () => {
     expect(blocked.history).toHaveLength(1);
     expect(blocked.history[0]).toMatchObject({ outcome: 'rejected', step: 1 });
     expect(invoiceView(runtime)).toEqual(initialState);
-    runtime.next();
+    await runtime.next();
     expect(runtime.getSnapshot().stepIndex).toBe(0);
     expect(invoiceView(runtime)).toEqual(initialState);
     runtime.dispose();
@@ -183,10 +210,10 @@ describe('public practice runtime', () => {
 
   it('exports a bounded all-role transcript with aligned events and commands plus the selected projection', async () => {
     const runtime = new PracticeRuntime('teaching-physics');
-    const teacherCommandCount = 204;
+    const commandCount = 204;
     const historyLimit = 200;
 
-    for (let index = 0; index < teacherCommandCount; index += 1) {
+    for (let index = 0; index < commandCount; index += 1) {
       await runtime.command('teaching.setParameters', { force: 10, mass: 2, time: 2 });
     }
     runtime.selectActor('practice-learner-1');
@@ -228,8 +255,9 @@ describe('public practice runtime', () => {
     runtime.dispose();
   });
 
-  it('cancels queued playback on pause, actor takeover, restart and dispose', () => {
+  it('cancels queued playback and in-flight imports on pause, actor takeover, restart and dispose', async () => {
     vi.useFakeTimers();
+    vi.spyOn(globalThis.crypto.subtle, 'digest').mockResolvedValue(new ArrayBuffer(32));
     vi.setSystemTime(new Date('2026-10-19T00:00:00.000Z'));
     const runtime = new PracticeRuntime('teaching-physics');
     const listener = vi.fn();
@@ -246,7 +274,7 @@ describe('public practice runtime', () => {
     expect(listener).toHaveBeenCalledTimes(callsAtPause);
 
     runtime.play();
-    vi.advanceTimersByTime(PRACTICE_REPLAY_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(PRACTICE_REPLAY_INTERVAL_MS);
     expect(runtime.getSnapshot().stepIndex).toBe(1);
     runtime.selectActor('practice-learner-1');
     const takenOver = runtime.getSnapshot();
@@ -255,16 +283,21 @@ describe('public practice runtime', () => {
     vi.advanceTimersByTime(PRACTICE_REPLAY_INTERVAL_MS * 2);
     expect(runtime.getSnapshot()).toBe(takenOver);
     expect(listener).toHaveBeenCalledTimes(callsAtTakeover);
-    runtime.next();
+    await runtime.next();
     expect(runtime.getSnapshot().stepIndex).toBe(1);
     expect(runtime.getSnapshot().mode).toBe('manual');
 
+    const inFlight = runtime.ingestFile('shared-physics-lesson.json', PRACTICE_SAMPLE_FILES[3].text);
     runtime.restart('invoice-rules');
+    expect(await inFlight).toBeNull();
     const restarted = runtime.getSnapshot();
     expect(restarted.mode).toBe('ready');
     expect(restarted.stepIndex).toBe(0);
     expect(restarted.history).toHaveLength(0);
+    expect(restarted.files).toHaveLength(0);
+    expect(restarted.visibleNodeIds).toEqual([]);
     expect(restarted.view.kind).toBe('invoice');
+    expect(invoiceView(runtime).shipments).toHaveLength(0);
     expect(restarted.view.epoch).toBe(takenOver.view.epoch + 1);
     expect(restarted.view.id).not.toBe(takenOver.view.id);
 

@@ -367,3 +367,5 @@
   .tt-public-demo__playback-foot { font-size: 10px; }
   .tt-public-demo__footer { flex-wrap: wrap; font-size: 10px; }
 }
+.tt-public-demo__canvas-link { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 14px; border: 1px solid #2b7662; border-radius: 6px; background: #226a59; color: #fff; font-weight: 700; text-decoration: none; }
+.tt-public-demo__canvas-link:hover { background: #185544; }

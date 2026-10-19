@@ -119,9 +119,10 @@ export default function PublicDemo() {
     <section className="tt-public-demo__intro" aria-labelledby="tt-public-demo-title">
       <div className="tt-public-demo__intro-mark" aria-hidden="true"><span>✦</span><i /><i /></div>
       <div>
-        <p className="tt-public-demo__eyebrow">TABLETOP · AUTO DEMO</p>
+        <p className="tt-public-demo__eyebrow">TABLETOP · REPLAY ARCHIVE</p>
         <h1 id="tt-public-demo-title">ดูการทำงานผ่านเรื่องราวที่บันทึกไว้</h1>
-        <p>เลือกหนึ่งในสามโต๊ะ แล้วเล่นทีละจังหวะเพื่อดูข้อมูลที่เปลี่ยนไปตามการบันทึก</p>
+        <p>หน้านี้เก็บบันทึกทดสอบเดิม หากต้องการลากไฟล์ สร้างโต๊ะ และหยุดแก้เอง ให้เปิด Canvas ทดลอง</p>
+        <a className="tt-public-demo__canvas-link" href="/demo">เปิด Canvas ทดลอง · เริ่มจากโต๊ะว่าง <ArrowRight size={16} /></a>
       </div>
       <span className="tt-public-demo__recorded"><i aria-hidden="true" /> บันทึกแล้ว</span>
     </section>

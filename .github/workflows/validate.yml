@@ -74,6 +74,9 @@ jobs:
             test-results/cloudflare-browser/interactive-demo-encounter.png
             test-results/cloudflare-browser/interactive-demo-narrow.png
             test-results/cloudflare-browser/interactive-demo-manual-state.json
+            test-results/cloudflare-browser/canvas-demo-empty.png
+            test-results/cloudflare-browser/canvas-demo-dragged.png
+            test-results/cloudflare-browser/canvas-demo-invoice.png
             test-results/cloudflare-browser/failure-*.png
           retention-days: 7
           include-hidden-files: false

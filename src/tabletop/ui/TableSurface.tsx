@@ -1,11 +1,12 @@
-import type { ReactNode, RefObject } from 'react';
+import { useMemo, type ReactNode, type RefObject } from 'react';
 import { AlertCircle } from 'lucide-react';
 import type { CaseKind } from '../shared/contracts';
-import { CanvasWorkspace } from './CanvasWorkspace';
+import { CanvasWorkspace, type CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { EncounterWorkbench } from './EncounterWorkbench';
 import { InvoiceWorkbench } from './InvoiceWorkbench';
 import { TeachingWorkbench } from './TeachingWorkbench';
 import { MemberStrip } from './WorkbenchShared';
+import { createCanvasAuxiliaryObjects } from './CanvasAuxiliaryObjects';
 import type { ExecutablePlan, WorkbenchProps } from './types';
 
 const tableTitles: Record<CaseKind, string> = {
@@ -24,6 +25,17 @@ export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   inspectorContent?: ReactNode;
   inspectorScrollRef?: RefObject<HTMLDivElement | null>;
   onReload?: () => void;
+  persistLayout?: boolean;
+  visibleNodeIds?: readonly string[];
+  focusNodeId?: string | null;
+  focusRequestKey?: string | number;
+  auxiliaryObjects?: readonly CanvasAuxiliaryObject[];
+  emptyContent?: ReactNode;
+  openedObjectId?: string | null;
+  onOpenObject?: (id: string | null) => void;
+  onInvite?: () => void;
+  aiContent?: ReactNode;
+  onFocusObject?: (id: string) => void;
 }
 
 export function TableSurface({
@@ -44,8 +56,28 @@ export function TableSurface({
   inspectorContent,
   inspectorScrollRef,
   onReload,
+  persistLayout,
+  visibleNodeIds,
+  focusNodeId,
+  focusRequestKey,
+  auxiliaryObjects,
+  emptyContent,
+  openedObjectId,
+  onOpenObject,
+  onInvite,
+  aiContent,
+  onFocusObject,
 }: TableSurfaceProps) {
-  const objectCount = plan?.nodes.length ?? 0;
+  const focusCanvasObject = useMemo(() => onFocusObject ?? (onOpenObject ? (id: string) => { onSelectNode(id); onOpenObject(id); } : undefined), [onFocusObject, onOpenObject, onSelectNode]);
+  const mergedAuxiliaryObjects = useMemo(() => {
+    const merged = new Map(createCanvasAuxiliaryObjects({ view, onCommand, busy, onInvite, aiContent, onFocusObject: focusCanvasObject }).map((object) => [object.id, object]));
+    for (const object of auxiliaryObjects ?? []) merged.set(object.id, object);
+    return [...merged.values()];
+  }, [view, onCommand, busy, onInvite, aiContent, focusCanvasObject, auxiliaryObjects]);
+  const planIds = new Set(plan?.nodes.map((node) => node.id) ?? []);
+  const visiblePlanCount = plan?.nodes.filter((node) => node.visible !== false && (!visibleNodeIds || visibleNodeIds.includes(node.id))).length ?? 0;
+  const visibleAuxiliaryCount = plan ? mergedAuxiliaryObjects.filter((object) => !planIds.has(object.id) && (!visibleNodeIds || visibleNodeIds.includes(object.id))).length : 0;
+  const objectCount = visiblePlanCount + visibleAuxiliaryCount;
 
   return (
     <main className={`tt-main tt-main--${surface}`}>
@@ -64,8 +96,17 @@ export function TableSurface({
             onCommand={onCommand}
             busy={busy}
             onUpload={onUpload}
+            onExport={onExport}
             onFocusEvidence={onFocusEvidence}
             focusSourceIds={focusSourceIds}
+            persistLayout={persistLayout}
+            visibleNodeIds={visibleNodeIds}
+            focusNodeId={focusNodeId}
+            focusRequestKey={focusRequestKey}
+            auxiliaryObjects={mergedAuxiliaryObjects}
+            emptyContent={emptyContent}
+            openedObjectId={openedObjectId}
+            onOpenObject={onOpenObject}
           />
         ) : (
           <div className="tt-plan-error" role="alert">
@@ -77,7 +118,7 @@ export function TableSurface({
         )}
       </section>
 
-      <section className="tt-inspector-panel" aria-label="Table workbench">
+      {surface === 'focus' && <section className="tt-inspector-panel" aria-label="Table workbench">
         <div className="tt-inspector-scroll" ref={inspectorScrollRef}>
           <MemberStrip view={view} />
           {inspectorContent}
@@ -86,7 +127,7 @@ export function TableSurface({
           {plan && view.kind === 'teaching' && <TeachingWorkbench view={view} plan={plan} onCommand={onCommand} busy={busy} onUpload={onUpload} onExport={onExport} onFocusEvidence={onFocusEvidence} onBackFromEvidence={onBackFromEvidence} focusSourceIds={focusSourceIds} />}
           {plan && view.kind === 'encounter' && <EncounterWorkbench view={view} plan={plan} onCommand={onCommand} busy={busy} onUpload={onUpload} onExport={onExport} onFocusEvidence={onFocusEvidence} onBackFromEvidence={onBackFromEvidence} focusSourceIds={focusSourceIds} />}
         </div>
-      </section>
+      </section>}
     </main>
   );
 }

@@ -999,3 +999,95 @@
   .tt-character-grid { grid-template-columns: 1fr; }
   .tt-workbench-body .tt-data-table { min-width: 760px; }
 }
+
+/* Object navigation and in-canvas expansion keep working controls attached to their canvas object. */
+.tt-canvas-node__open {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid #d8e2df;
+  border-radius: 5px;
+  color: #426b61;
+  background: #f8fbf9;
+  font: 700 11px Manrope, 'Noto Sans Thai', sans-serif;
+}
+.tt-canvas-node__open:hover { border-color: #a8c6bb; background: #eef6f1; }
+.tt-canvas-node__open:focus-visible,
+.tt-canvas-object-dock button:focus-visible { outline: 3px solid #315eb0; outline-offset: 2px; }
+.tt-canvas-node.is-expanded { width: min(760px, calc(100vw - 48px)); max-width: min(94vw, 760px); border-color: #72a89a; box-shadow: 0 0 0 3px #24796b20, 0 16px 38px #263f3b20; }
+.tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: min(52dvh, 380px); overflow: auto; overscroll-behavior: contain; }
+.tt-canvas-node--auxiliary { width: 440px; }
+.tt-canvas-object-dock {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 7;
+  display: grid;
+  max-width: min(76vw, 700px);
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid #d7e2de;
+  border-radius: 8px;
+  background: #fbfcfaed;
+  box-shadow: 0 3px 14px #233c3812;
+}
+.tt-canvas-object-dock__label { color: #748680; font: 700 9px 'IBM Plex Mono', monospace; letter-spacing: .06em; }
+.tt-canvas-object-dock > div { display: flex; max-width: 100%; gap: 5px; overflow-x: auto; scrollbar-width: thin; }
+.tt-canvas-object-dock button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  max-width: 220px;
+  overflow: hidden;
+  padding: 0 10px;
+  border: 1px solid #d7e2de;
+  border-radius: 5px;
+  color: #526b65;
+  background: #fff;
+  font: 650 11px Manrope, 'Noto Sans Thai', sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tt-canvas-object-dock button[aria-pressed='true'] { border-color: #6fa496; color: #205e52; background: #edf6f1; }
+.tt-inline-history { display: grid; gap: 7px; min-width: 0; padding: 10px; border: 1px solid #e1e9e5; border-radius: 6px; background: #fbfcfa; }
+.tt-inline-history > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #3f5f57; font-size: 12px; }
+.tt-inline-history > header > span { color: #748680; font: 10px 'IBM Plex Mono', monospace; }
+.tt-inline-history > ol { display: grid; max-height: 300px; gap: 5px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.tt-inline-history > ol > li { display: flex; justify-content: space-between; gap: 12px; padding: 8px; border: 1px solid #e8eeeb; border-radius: 5px; background: #fff; font-size: 11px; }
+.tt-inline-history > ol > li > span { display: grid; min-width: 0; gap: 3px; }
+.tt-inline-history > ol strong { color: #3d5651; font-size: 11px; }
+.tt-inline-history > ol small { color: #7c8a86; font-size: 10px; }
+.tt-inline-history > ol b { flex: 0 0 auto; color: #627772; font-size: 10px; }
+.tt-invoice-canvas-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.tt-inline-rule-list > div.is-disabled { opacity: .7; background: #f5f6f5; }
+.tt-inline-rule-list > div > button { flex: 0 0 auto; min-height: 36px; padding-inline: 9px; font-size: 11px !important; }
+.tt-lesson-rule-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tt-lesson-rule-values > span { display: grid; min-width: 0; gap: 3px; padding: 8px; border: 1px solid #e3ebe7; border-radius: 5px; background: #fbfcfa; }
+.tt-lesson-rule-values small { color: #788a84; font-size: 10px; }
+.tt-lesson-rule-values strong { overflow: hidden; color: #375d53; font: 600 12px var(--tt-mono); text-overflow: ellipsis; white-space: nowrap; }
+.tt-source-summary { display: grid; max-height: 180px; gap: 5px; overflow: auto; }
+.tt-source-summary > button { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 42px; padding: 6px 8px; border: 1px solid #e3eae7; border-radius: 5px; color: #415b55; background: #fff; text-align: left; }
+.tt-source-summary > button:hover { border-color: #b9d0c6; background: #f5faf6; }
+.tt-source-summary > button > span { display: grid; flex: 1 1 auto; min-width: 0; gap: 2px; }
+.tt-source-summary strong, .tt-source-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-source-summary strong { font-size: 11px; font-weight: 700; }
+.tt-source-summary small { color: #788985; font-size: 10px; }
+.tt-source-summary b { flex: 0 0 auto; padding: 3px 5px; border-radius: 4px; color: #637a70; background: #eef4f0; font: 600 9px var(--tt-mono); text-transform: capitalize; }
+.tt-source-summary b[data-status='provided'] { color: #88662f; background: #faf4e5; }
+.tt-source-summary b[data-status='rejected'] { color: #945347; background: #faefec; }
+.tt-inline-action-summary { display: flex; align-items: flex-start; gap: 9px; padding: 10px; border: 1px solid #e1e9e5; border-radius: 6px; color: #54736a; background: #f8fbf8; }
+.tt-inline-action-summary > svg { flex: 0 0 auto; margin-top: 2px; }
+.tt-inline-action-summary > span { display: grid; gap: 3px; min-width: 0; }
+.tt-inline-action-summary strong { color: #3e5d54; font-size: 11px; }
+.tt-inline-action-summary small { color: #73837e; font-size: 10px; line-height: 1.45; }
+
+@media (max-width: 760px) {
+  .tt-canvas-node.is-expanded { width: calc(100vw - 24px); max-width: calc(100vw - 24px); }
+  .tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: min(52dvh, 380px); }
+  .tt-canvas-object-dock { right: 8px; bottom: 8px; left: 8px; max-width: none; }
+  .tt-canvas-object-dock__label { font-size: 10px; }
+  .tt-canvas-object-dock button { min-height: 40px; max-width: 190px; font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-canvas-node { transition: none; }
+}
