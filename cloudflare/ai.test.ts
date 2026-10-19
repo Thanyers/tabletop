@@ -1,8 +1,11 @@
 import { env } from 'cloudflare:workers';
+import { runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createDomain } from '../src/tabletop/domain/index.js';
 import type { ActorContext, CaseKind, ChangeSet, Member, WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { proposeChange, type AIProposalRequest } from './ai.js';
+import { measureDeepSeekChangeRequest, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
 import type { Env } from './contracts.js';
 
 const testEnv = env as Env;
@@ -17,7 +20,7 @@ function testHash(value: unknown): string {
 }
 
 function workspace(kind: CaseKind, actorId = `actor-${kind}`): WorkspaceView {
-  const role: Member['role'] = kind === 'invoice' ? 'owner' : kind === 'teaching' ? 'teacher' : 'dm';
+  const role: Member['role'] = kind === 'invoice' || kind === 'table' ? 'owner' : kind === 'teaching' ? 'teacher' : 'dm';
   const member: Member = { actorId, name: `Trusted ${role}`, role };
   const id = `workspace-${kind}-${crypto.randomUUID()}`;
   const context: ActorContext = {
@@ -54,6 +57,14 @@ function workspace(kind: CaseKind, actorId = `actor-${kind}`): WorkspaceView {
       correct: false,
       feedback: 'LEARNER_ANSWER_PRIVATE_SENTINEL',
       submittedAt: context.now,
+    });
+  } else if (domain.kind === 'table') {
+    domain.sources.push({
+      id: 'source_fixture',
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+      sha256: 'a'.repeat(64),
+      createdAt: context.now,
     });
   } else {
     domain.dmNote = 'DM_NOTE_PRIVATE_SENTINEL';
@@ -102,6 +113,7 @@ function proposal(kind: CaseKind): ChangeSet {
     };
   }
   if (kind === 'teaching') return { kind, parameters: { force: 12, mass: 2, time: 2 } };
+  if (kind === 'table') return equipmentChange('source_fixture');
   return { kind, rule: { allyTarget: true, apCost: 1, oncePerTurn: true } };
 }
 
@@ -177,6 +189,84 @@ describe('Cloudflare AI proposal helper', () => {
     expect(result.change).toEqual(proposal('encounter'));
     expect(observed).not.toContain('DM_NOTE_PRIVATE_SENTINEL');
     expect(observed).not.toContain('ENCOUNTER_EVENT_PRIVATE_SENTINEL');
+  });
+
+  it('sends every table source and current program under the reserved 8192-token output cap', async () => {
+    const input = request('table');
+    const table = input.workspace.domain;
+    if (table.kind !== 'table') throw new Error('Expected table fixture.');
+    const measuredInput: DeepSeekChangeInput = {
+      kind: 'table', prompt: input.prompt,
+      sources: table.sources.map(({ id, filename, text }) => ({ id, filename, text })),
+      program: table.program, turn: table.turn,
+    };
+    const requestBytes = measureDeepSeekChangeRequest(measuredInput);
+    let observed = '';
+    const result = await proposeChange(testEnv, input, providerFetch(proposal('table'), (content, body) => {
+      observed = content;
+      expect(body.max_tokens).toBe(8_192);
+      const sent = JSON.parse(content) as {
+        kind: string;
+        sources: Array<{ id: string; filename: string; text: string }>;
+        program: unknown;
+        turn: string | null;
+      };
+      expect(sent).toEqual({
+        kind: 'table',
+        prompt: input.prompt,
+        sources: [{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
+        program: null,
+        turn: null,
+      });
+    }));
+    expect(result.change).toEqual(proposal('table'));
+    const observedRequest = JSON.parse(observed) as { sources: Array<{ text: string }> };
+    expect(observedRequest.sources[0]?.text).toBe(tableScenarioSources.equipment.text);
+    const billingStub = testEnv.BILLING.get(testEnv.BILLING.idFromName('global'));
+    const reservation = await runInDurableObject(billingStub, (_instance, state) => state.storage.sql
+      .exec<{ max_input_tokens: number; max_output_tokens: number }>(
+        'SELECT max_input_tokens, max_output_tokens FROM billing_jobs WHERE id = ?', result.jobId,
+      ).toArray()[0]);
+    expect(reservation?.max_input_tokens).toBeGreaterThanOrEqual(requestBytes);
+    expect(reservation?.max_output_tokens).toBe(8_192);
+
+    const member: Member = { ...input.workspace.actor, role: 'participant', seat: 'member-1' };
+    const participantInput: AIProposalRequest = {
+      ...input,
+      workspace: { ...input.workspace, actor: member, members: [member] },
+    };
+    let calls = 0;
+    const deniedFetch: typeof fetch = async () => { calls += 1; throw new Error('Provider must not run for a participant.'); };
+    await expect(proposeChange(testEnv, participantInput, deniedFetch)).rejects.toMatchObject({ code: 'AI_FORBIDDEN' });
+    expect(calls).toBe(0);
+  });
+
+  it('rejects complete table source sets above the bounded model input before reserving or calling the provider', async () => {
+    const input = request('table');
+    const domain = input.workspace.domain;
+    if (domain.kind !== 'table') throw new Error('Expected table fixture.');
+    domain.sources = Array.from({ length: 4 }, (_, index) => ({
+      id: `source_${index}`,
+      filename: `source-${index}.txt`,
+      text: 'x'.repeat(15_000),
+      sha256: 'b'.repeat(64),
+      createdAt: input.workspace.createdAt,
+    }));
+    let calls = 0;
+    const deniedFetch: typeof fetch = async () => { calls += 1; throw new Error('Oversized input must not reach provider.'); };
+    await expect(proposeChange(testEnv, input, deniedFetch))
+      .rejects.toMatchObject({ code: 'MODEL_PROVIDER_INPUT_TOO_LARGE' });
+    expect(calls).toBe(0);
+  });
+
+  it('requires at least one uploaded source before proposing table rules', async () => {
+    const input = request('table');
+    if (input.workspace.domain.kind !== 'table') throw new Error('Expected table fixture.');
+    input.workspace.domain.sources = [];
+    let calls = 0;
+    const deniedFetch: typeof fetch = async () => { calls += 1; throw new Error('A source is required before provider use.'); };
+    await expect(proposeChange(testEnv, input, deniedFetch)).rejects.toMatchObject({ code: 'SOURCE_REQUIRED' });
+    expect(calls).toBe(0);
   });
 
   it('reserves and dispatches each stable command once, rejecting replay and changed input', async () => {

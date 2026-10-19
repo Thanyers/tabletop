@@ -11,6 +11,7 @@ export interface WorkbenchProps {
   onCommand: Command;
   busy: string | null;
   onUpload: (kind: 'shipments' | 'invoice' | 'rate-card', file: File) => Promise<void>;
+  onTableImport?: (view: WorkspaceView, file: File) => Promise<WorkspaceView>;
   onExport: (format: 'csv' | 'html') => Promise<void>;
   onFocusEvidence: (sourceIds: string[]) => void;
   onBackFromEvidence: () => void;

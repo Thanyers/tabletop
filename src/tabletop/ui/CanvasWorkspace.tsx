@@ -28,6 +28,7 @@ interface PlanCanvasNodeData extends CanvasNodeBaseData {
   busy: string | null;
   onCommand: WorkbenchProps['onCommand'];
   onUpload: WorkbenchProps['onUpload'];
+  onTableImport: WorkbenchProps['onTableImport'];
   onExport: WorkbenchProps['onExport'];
   onFocusEvidence: WorkbenchProps['onFocusEvidence'];
   focusSourceIds: string[];
@@ -175,7 +176,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         </button>
       </header>
       <div className="tt-canvas-node__body nodrag nopan">
-        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} expanded={data.opened} />
+        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} expanded={data.opened} />
       </div>
     </article>
   );
@@ -192,6 +193,7 @@ interface CanvasWorkspaceProps {
   onCommand: WorkbenchProps['onCommand'];
   busy: string | null;
   onUpload: WorkbenchProps['onUpload'];
+  onTableImport: WorkbenchProps['onTableImport'];
   onExport: WorkbenchProps['onExport'];
   onFocusEvidence: WorkbenchProps['onFocusEvidence'];
   focusSourceIds: string[];
@@ -205,7 +207,7 @@ interface CanvasWorkspaceProps {
   onOpenObject?: (id: string | null) => void;
 }
 
-function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
+function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, Edge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
@@ -289,6 +291,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           busy,
           onCommand,
           onUpload,
+          onTableImport,
           onExport,
           onFocusEvidence,
           focusSourceIds,
@@ -317,7 +320,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject]);
+  }, [workspaceKey, persistLayout, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;

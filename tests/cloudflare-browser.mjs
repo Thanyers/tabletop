@@ -6,6 +6,7 @@ import { createServer } from 'node:net';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { verifyInteractiveDemo } from './interactive-demo.mjs';
+import { verifyGenericTableBrowser } from './generic-table-browser.mjs';
 
 const listener = createServer();
 await new Promise(resolveReady => listener.listen(0, '127.0.0.1', resolveReady));
@@ -16,6 +17,7 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 const csrf = token => createHash('sha256').update(`tabletop-csrf-v1:${token}`).digest('base64url');
 const output = resolve('test-results/cloudflare-browser');
 let providerCalls = 0;
+let tableAIReply = null;
 const modelStatuses = [];
 await mkdir(output, { recursive: true });
 const mf = new Miniflare(convertV4MiniflareOptions({
@@ -35,8 +37,21 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     const body = await request.json();
     expect(JSON.stringify(body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
     expect(body.model).toBe('deepseek-flash');
+    const input = JSON.parse(body.messages?.[1]?.content ?? '{}');
+    let change;
+    if (input.kind === 'table') {
+      if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
+      expect(input.sources).toHaveLength(1);
+      expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);
+      expect(input.sources[0].text).toBe(tableAIReply.expectedText);
+      expect(typeof input.prompt).toBe('string');
+      change = tableAIReply.change;
+      tableAIReply = null;
+    } else {
+      change = { kind: 'encounter', rule: { allyTarget: true, apCost: 1, oncePerTurn: true } };
+    }
     return Response.json({ model: 'deepseek-flash',
-      choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify({ kind: 'encounter', rule: { allyTarget: true, apCost: 1, oncePerTurn: true } }) } }],
+      choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(change) } }],
       usage: { prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 30, completion_tokens_details: { reasoning_tokens: 0 } },
     });
   },
@@ -52,11 +67,15 @@ const mark = value => { checks.push(value); console.log('PASS ' + value); };
 try {
   await mf.ready;
   const db = await mf.getD1Database('DB');
-  const schema = await readFile('cloudflare/migrations/0001_identity.sql', 'utf8');
-  await db.batch(schema.replace(/^--.*$/gmu, '').split(';').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
+  for (const migration of ['0001_identity.sql', '0002_table_kind.sql']) {
+    const schema = await readFile(`cloudflare/migrations/${migration}`, 'utf8');
+    await db.batch(schema.replace(/^--.*$/gmu, '').split(';').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
+  }
   const actors = ['DM', 'Mira', 'Pip', 'Outsider'].map((name, i) => ({ id: randomUUID(), name, token: String.fromCharCode(65 + i).repeat(43) }));
+  const genericOwners = ['Equipment Owner', 'Shift Owner', 'Game Owner'].map((name, i) => ({ id: randomUUID(), name, token: String.fromCharCode(69 + i).repeat(43) }));
+  const genericMembers = ['Table Member', 'Second Member'].map((name, i) => ({ id: randomUUID(), name, token: String.fromCharCode(72 + i).repeat(43) }));
   const now = Date.now();
-  for (const actor of actors) await db.batch([
+  for (const actor of [...actors, ...genericOwners, ...genericMembers]) await db.batch([
     db.prepare('INSERT INTO users(id,provider_sub,email,name,is_admin,created_at) VALUES(?,?,?,?,?,?)')
       .bind(actor.id, `fixture:${actor.id}`, `${actor.name.toLowerCase()}@example.test`, actor.name, actor.name === 'DM' ? 1 : 0, now),
     db.prepare('INSERT INTO web_sessions(token_hash,csrf_hash,user_id,created_at,last_seen_at,expires_at) VALUES(?,?,?,?,?,?)')
@@ -307,6 +326,13 @@ try {
   const resumed = (await api(pip, `/api/workspaces/${room.id}`)).body;
   expect(resumed.actor.seat).toBe('pip');
   mark('Logout revokes the old cookie; a new session for the same account resumes its existing seat');
+  await verifyGenericTableBrowser({
+    actors: { owners: genericOwners, members: genericMembers },
+    newPage,
+    api,
+    setTableReply: value => { tableAIReply = value; },
+    mark,
+  });
   await dm.screenshot({ path: join(output, 'dm-desktop.png'), fullPage: true });
   await pip.setViewportSize({ width: 390, height: 844 }); await pip.reload();
   await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');

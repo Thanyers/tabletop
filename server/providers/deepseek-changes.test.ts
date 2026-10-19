@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DomainError } from '../../src/tabletop/shared/contracts.js';
-import { DeepSeekChangeProvider, type DeepSeekChangeInput } from './deepseek-changes.js';
+import { tableScenarioSources, equipmentChange } from '../../src/tabletop/testing/table-scenarios.js';
+import { DeepSeekChangeProvider, measureDeepSeekChangeRequest, type DeepSeekChangeInput } from './deepseek-changes.js';
 
 const API_KEY = 'test-only-deepseek-key';
 
@@ -69,7 +70,7 @@ describe('DeepSeekChangeProvider', () => {
   it('rejects unknown request/output fields, malformed output, and out-of-bound domain values', async () => {
     let calls = 0;
     const invalidInput = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => { calls++; return response('{}'); } });
-    await expect(invalidInput.propose({ ...input(), answers: ['private'] } as DeepSeekChangeInput, new AbortController().signal))
+    await expect(invalidInput.propose({ ...input(), answers: ['private'] } as unknown as DeepSeekChangeInput, new AbortController().signal))
       .rejects.toMatchObject({ code: 'MODEL_PROVIDER_INPUT_INVALID' });
     expect(calls).toBe(0);
 
@@ -83,6 +84,83 @@ describe('DeepSeekChangeProvider', () => {
       const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(content) });
       await expect(provider.propose(input(), new AbortController().signal)).rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
     }
+  });
+
+  it('sends all bounded table sources with the declarative schema and rejects unsupported operators', async () => {
+    const tableChange = equipmentChange('source_equipment');
+    const tableInput: DeepSeekChangeInput = {
+      kind: 'table',
+      prompt: 'Make equipment borrowing safe.',
+      sources: [{ id: 'source_equipment', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
+      program: null,
+      turn: null,
+    };
+    const captured: { body?: Record<string, unknown> } = {};
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async (_url, options) => {
+        captured.body = JSON.parse(String(options?.body)) as Record<string, unknown>;
+        return response(JSON.stringify(tableChange));
+      },
+    });
+    await expect(provider.propose(tableInput, new AbortController().signal))
+      .resolves.toMatchObject({ change: tableChange });
+    const body = captured.body;
+    if (!body) throw new Error('Provider request body was not captured.');
+    expect(body?.max_tokens).toBe(8_192);
+    expect(measureDeepSeekChangeRequest(tableInput)).toBe(new TextEncoder().encode(JSON.stringify(body)).byteLength);
+    const messages = body?.messages as Array<{ role: string; content: string }>;
+    expect(messages[0]?.content).toContain('"properties"');
+    expect(messages[0]?.content).toContain('"contains"');
+    expect(messages[0]?.content).toContain('exact existing source id');
+    expect(messages[0]?.content).toContain('compare distinct selected rows with {"input":"first"} neq {"input":"second"}');
+    expect(messages[0]?.content).toContain('{"record":"first","field":"name"} must use a field declared');
+    expect(messages[0]?.content).toContain('The row id is metadata, never an implicit field');
+    expect(messages[0]?.content).toContain('exact contiguous substring of the raw source text');
+    expect(messages[0]?.content).toContain('never parse, reserialize, normalize, or reconstruct it to make a quote');
+    expect(messages[0]?.content).toContain('Invariants express composite uniqueness only');
+    expect(messages[0]?.content).toContain('Put numeric bounds on the field min and max');
+    expect(messages[0]?.content).toContain('Conditions are all ANDed');
+    expect(messages[0]?.content).toContain('The system actor is an opaque account id');
+    expect(messages[0]?.content).toContain('Never compare actor to seat');
+    expect(messages[0]?.content).toContain('requireTurn checks that the acting seat equals the current turn');
+    expect(messages[0]?.content).toContain('advanceTurn cycles through turnOrder');
+    expect(messages[0]?.content).toContain('use an empty turnOrder when actions have no turn order');
+    expect(messages[0]?.content).toContain('Resolve every effect against the state before the action');
+    expect(messages[0]?.content).toContain('commit all effects atomically');
+    const userInput = JSON.parse(messages[1]!.content) as { sources: Array<{ text: string }> };
+    expect(userInput.sources).toEqual([{ id: 'source_equipment', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }]);
+
+    const unsupportedOutput = structuredClone(tableChange);
+    unsupportedOutput.program.actions[0]!.effects[0]!.op = 'execute' as 'set';
+    const rejecting = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async () => response(JSON.stringify(unsupportedOutput)),
+    });
+    await expect(rejecting.propose(tableInput, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+  });
+
+  it('rejects a table proposal whose complete input exceeds the provider budget before fetch', async () => {
+    let calls = 0;
+    const oversized: DeepSeekChangeInput = {
+      kind: 'table',
+      prompt: 'Create a table from all source files.',
+      sources: Array.from({ length: 4 }, (_, index) => ({
+        id: `source_${index}`,
+        filename: `source-${index}.txt`,
+        text: 'x'.repeat(15_000),
+      })),
+      program: null,
+      turn: null,
+    };
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async () => { calls += 1; return response('{}'); },
+    });
+    await expect(provider.propose(oversized, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'MODEL_PROVIDER_INPUT_TOO_LARGE' });
+    expect(calls).toBe(0);
   });
 
   it('rejects malformed envelopes, bad usage, provider errors, and oversized bodies without leaking details', async () => {

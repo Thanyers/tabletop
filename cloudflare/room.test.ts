@@ -6,7 +6,8 @@ import type { Room } from './room.js';
 import type { Env } from './contracts.js';
 import { csrfForToken } from './auth.js';
 import { canonicalJson, sha256 } from '../server/codec.js';
-import type { CommandAck, WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { DomainError, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import type { PendingDirectoryChange } from './room-repository.js';
 import { proposeChange } from './ai.js';
 import type { AIProposalRequest, AIProposalResult } from './ai.js';
@@ -17,6 +18,7 @@ vi.mock('./ai.js', async (importOriginal) => {
 });
 
 const runtime = env as Env;
+const migrationEnv = env as Env & { TEST_MIGRATION: string };
 const ORIGIN = 'https://tabletop.test';
 const MODEL_RECOVERY_DELAY_MS = 120_000;
 const MODEL_TEST_DELAY_MS = 100;
@@ -68,14 +70,37 @@ function roomStub(roomId: string): DurableObjectStub<Room> {
   return runtime.ROOMS.get(runtime.ROOMS.idFromName(roomId)) as DurableObjectStub<Room>;
 }
 
+async function enableTableReadOnly(stub: DurableObjectStub<Room>): Promise<void> {
+  const updated = await runInDurableObject(stub, (instance) => {
+    const current = Reflect.get(instance, 'env');
+    if (typeof current !== 'object' || current === null) return false;
+    const readOnlyEnv = new Proxy(current, {
+      get(target, property, receiver) {
+        return property === 'TABLE_READ_ONLY' ? 'true' : Reflect.get(target, property, receiver);
+      },
+    });
+    return Reflect.set(instance, 'env', readOnlyEnv);
+  });
+  if (!updated) throw new Error('TABLE_READ_ONLY_TEST_ENV_UNAVAILABLE');
+}
+
 function modelJobId(workspaceId: string, epoch: number, actorId: string, commandId: string): string {
   return sha256(`tabletop-ai-job-v1:${canonicalJson({ actorId, workspaceId, epoch, commandId })}`);
 }
 
 function modelResult(request: AIProposalRequest): AIProposalResult {
+  let change: AIProposalResult['change'];
+  if (request.workspace.kind === 'table') {
+    if (request.workspace.domain.kind !== 'table' || !request.workspace.domain.sources[0]) {
+      throw new Error('Table proposal fixture requires an imported source.');
+    }
+    change = equipmentChange(request.workspace.domain.sources[0].id);
+  } else {
+    change = { kind: 'teaching', parameters: { force: 12, mass: 2, time: 2 } };
+  }
   return {
     jobId: modelJobId(request.workspace.id, request.workspace.epoch, request.actorId, request.commandId),
-    change: { kind: 'teaching', parameters: { force: 12, mass: 2, time: 2 } },
+    change,
     usage: { promptTokens: 100, completionTokens: 20, cacheHitTokens: 0, cacheMissTokens: 100 },
   };
 }
@@ -131,7 +156,7 @@ async function call<T>(
   return { response, body: await response.json() as T };
 }
 
-async function createRoom(actor: TestActor, kind: 'invoice' | 'teaching' | 'encounter' = 'teaching') {
+async function createRoom(actor: TestActor, kind: 'invoice' | 'teaching' | 'encounter' | 'table' = 'teaching') {
   const roomId = randomUUID();
   const stub = roomStub(roomId);
   const result = await call<WorkspaceView>(stub, '/internal/create', actor, {
@@ -169,9 +194,262 @@ async function inspectRoom<T>(stub: DurableObjectStub<Room>, query: string): Pro
   return runInDurableObject(stub, (instance) => instance.repository.storage.sql.exec<T & Record<string, SqlStorageValue>>(query).toArray());
 }
 
+function migrationStatements(raw: string, appendFailure = false): string[] {
+  const isolated = raw
+    .replaceAll('room_members_legacy', '__LEGACY_MEMBERS__')
+    .replaceAll('rooms_legacy', '__LEGACY_ROOMS__')
+    .replaceAll('room_members', 'table_migration_room_members')
+    .replaceAll('rooms', 'table_migration_rooms')
+    .replaceAll('users', 'table_migration_users')
+    .replaceAll('__LEGACY_MEMBERS__', 'table_migration_room_members_legacy')
+    .replaceAll('__LEGACY_ROOMS__', 'table_migration_rooms_legacy');
+  const statements = isolated.replace(/^--.*$/gmu, '').split(';').map((statement) => statement.trim()).filter(Boolean);
+  return appendFailure ? [...statements, 'SELECT missing_column FROM table_migration_rooms'] : statements;
+}
+
 describe('Cloudflare room Durable Object', () => {
   beforeEach(async () => {
     vi.mocked(proposeChange).mockReset();
+  });
+
+  it('rebuilds the D1 room-kind constraint without losing room or membership rows and rolls back a failed batch', async () => {
+    await runtime.DB.batch([
+      runtime.DB.prepare('CREATE TABLE table_migration_users (id TEXT PRIMARY KEY)'),
+      runtime.DB.prepare(`CREATE TABLE table_migration_rooms (
+        id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES table_migration_users(id),
+        kind TEXT NOT NULL CHECK (kind IN ('invoice', 'teaching', 'encounter')), created_at INTEGER NOT NULL
+      )`),
+      runtime.DB.prepare(`CREATE TABLE table_migration_room_members (
+        user_id TEXT NOT NULL REFERENCES table_migration_users(id),
+        room_id TEXT NOT NULL REFERENCES table_migration_rooms(id), epoch INTEGER NOT NULL,
+        active INTEGER NOT NULL CHECK (active IN (0, 1)), directory_sequence INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(user_id, room_id)
+      )`),
+      runtime.DB.prepare('CREATE INDEX table_migration_room_members_room_idx ON table_migration_room_members(room_id, active)'),
+      runtime.DB.prepare('INSERT INTO table_migration_users(id) VALUES (?)').bind('legacy-owner'),
+      runtime.DB.prepare('INSERT INTO table_migration_rooms(id, owner_id, kind, created_at) VALUES (?, ?, ?, ?)')
+        .bind('legacy-room', 'legacy-owner', 'invoice', 10),
+      runtime.DB.prepare('INSERT INTO table_migration_room_members(user_id, room_id, epoch, active, directory_sequence) VALUES (?, ?, ?, ?, ?)')
+        .bind('legacy-owner', 'legacy-room', 4, 1, 12),
+    ]);
+
+    try {
+      const failed = migrationStatements(migrationEnv.TEST_MIGRATION, true);
+      await expect(runtime.DB.batch(failed.map((statement) => runtime.DB.prepare(statement)))).rejects.toThrow();
+      const beforeRetry = await runtime.DB.prepare(
+        'SELECT kind FROM table_migration_rooms WHERE id = ?',
+      ).bind('legacy-room').first<{ kind: string }>();
+      expect(beforeRetry?.kind).toBe('invoice');
+      const priorMembers = await runtime.DB.prepare(
+        'SELECT user_id, room_id, epoch, active, directory_sequence FROM table_migration_room_members',
+      ).all<{ user_id: string; room_id: string; epoch: number; active: number; directory_sequence: number }>();
+      expect(priorMembers.results).toEqual([{
+        user_id: 'legacy-owner', room_id: 'legacy-room', epoch: 4, active: 1, directory_sequence: 12,
+      }]);
+
+      const statements = migrationStatements(migrationEnv.TEST_MIGRATION);
+      await runtime.DB.batch(statements.map((statement) => runtime.DB.prepare(statement)));
+      const migratedRoom = await runtime.DB.prepare(
+        'SELECT kind FROM table_migration_rooms WHERE id = ?',
+      ).bind('legacy-room').first<{ kind: string }>();
+      expect(migratedRoom?.kind).toBe('invoice');
+      const migratedMember = await runtime.DB.prepare(
+        'SELECT user_id, room_id, epoch, active, directory_sequence FROM table_migration_room_members',
+      ).all<{ user_id: string; room_id: string; epoch: number; active: number; directory_sequence: number }>();
+      expect(migratedMember.results).toEqual([{
+        user_id: 'legacy-owner', room_id: 'legacy-room', epoch: 4, active: 1, directory_sequence: 12,
+      }]);
+      await runtime.DB.prepare('INSERT INTO table_migration_rooms(id, owner_id, kind, created_at) VALUES (?, ?, ?, ?)')
+        .bind('new-table-room', 'legacy-owner', 'table', 20).run();
+      const foreignKeyErrors = await runtime.DB.prepare('PRAGMA foreign_key_check(table_migration_room_members)').all();
+      expect(foreignKeyErrors.results).toHaveLength(0);
+    } finally {
+      await runtime.DB.batch([
+        runtime.DB.prepare('DROP TABLE IF EXISTS table_migration_room_members_legacy'),
+        runtime.DB.prepare('DROP TABLE IF EXISTS table_migration_rooms_legacy'),
+        runtime.DB.prepare('DROP TABLE IF EXISTS table_migration_room_members'),
+        runtime.DB.prepare('DROP TABLE IF EXISTS table_migration_rooms'),
+        runtime.DB.prepare('DROP TABLE IF EXISTS table_migration_users'),
+      ]);
+    }
+  });
+
+  it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with private sources intact', async () => {
+    const owner = newActor('Table owner');
+    const firstMember = newActor('First participant');
+    const secondMember = newActor('Second participant');
+    await Promise.all([saveActor(owner), saveActor(firstMember), saveActor(secondMember)]);
+    const { roomId, stub } = await createRoom(owner, 'table');
+
+    for (const [actor, seat] of [[firstMember, 'member-1'], [secondMember, 'member-2']] as const) {
+      const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+        method: 'POST', body: { seat }, mutation: true,
+      });
+      expect(invitation.response.status).toBe(201);
+      const ticket = invitation.body.ticket.slice(`${roomId}_`.length);
+      const redeemed = await call<WorkspaceView>(stub, '/internal/redeem', actor, {
+        method: 'POST', body: { ticket }, mutation: true,
+      });
+      expect(redeemed.response.status).toBe(200);
+      expect(redeemed.body.actor).toMatchObject({ role: 'participant', seat });
+    }
+
+    const ownerStart = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    const privateText = `${tableScenarioSources.equipment.text}\nPRIVATE_TABLE_SOURCE_SENTINEL`;
+    const imported = await issueCommand(stub, ownerStart.body, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: privateText,
+    });
+    expect(imported.response.status).toBe(200);
+    if (!('ok' in imported.body) || !imported.body.ok || imported.body.workspace.domain.kind !== 'table') {
+      throw new Error('Expected owner table import acknowledgement.');
+    }
+    const sourceId = imported.body.workspace.domain.sources[0]?.id;
+    expect(sourceId).toBeTruthy();
+
+    const participantStart = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
+    expect(JSON.stringify(participantStart.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    if (participantStart.body.domain.kind !== 'table') throw new Error('Expected participant table projection.');
+    expect(participantStart.body.domain.sources).toEqual([]);
+    const ownerOnlyImport = await issueCommand(stub, participantStart.body, firstMember, 'table.import', {
+      filename: 'another.txt', text: 'This must be rejected for participants.',
+    });
+    expect(ownerOnlyImport.response.status).toBe(403);
+
+    const eventRows = await inspectRoom<{ event_data: SqlStorageValue }>(stub,
+      "SELECT event_data FROM room_events WHERE event_type = 'table.import'");
+    expect(eventRows).toHaveLength(1);
+    expect(String(eventRows[0]?.event_data)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(String(eventRows[0]?.event_data)).toContain('sourceId');
+
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => modelResult(request));
+    const ownerInput = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    const proposalInput = {
+      commandId: randomUUID(),
+      expectedRevision: ownerInput.body.revision,
+      expectedEpoch: ownerInput.body.epoch,
+      prompt: 'Set up a safe community equipment lending table.',
+      consent: true,
+    };
+    const expectedJobId = modelJobId(roomId, ownerInput.body.epoch, owner.id, proposalInput.commandId);
+    const queued = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: proposalInput, mutation: true,
+    });
+    expect(queued.response.status).toBe(202);
+    const proposalJob = await waitForModelJob(stub, expectedJobId, owner.id, roomId, ownerInput.body.epoch);
+    expect(proposalJob.status).toBe('completed');
+    expect(JSON.stringify(proposalJob.data)).not.toContain(privateText);
+
+    let ownerView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(ownerView.body.domain.candidate).toMatchObject({ status: 'draft' });
+    const participantDraft = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
+    expect(participantDraft.body.domain.candidate).toBeNull();
+    expect(JSON.stringify(participantDraft.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) {
+      const step = await issueCommand(stub, ownerView.body, owner, type, {});
+      expect(step.response.status).toBe(200);
+      if (!('ok' in step.body) || !step.body.ok) throw new Error(`Expected ${type} acknowledgement.`);
+      ownerView = { response: ownerView.response, body: step.body.workspace };
+    }
+
+    const firstView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
+    const secondView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, secondMember);
+    const racedActions = await Promise.all([
+      issueCommand(stub, firstView.body, firstMember, 'table.act', { actionId: 'borrow', inputs: { item: 'camera' } }),
+      issueCommand(stub, secondView.body, secondMember, 'table.act', { actionId: 'borrow', inputs: { item: 'camera' } }),
+    ]);
+    expect(racedActions.filter((result) => result.response.status === 200)).toHaveLength(1);
+    expect(racedActions.filter((result) => result.response.status === 409)).toHaveLength(1);
+
+    const loser = racedActions[0]!.response.status === 409 ? firstMember : secondMember;
+    const loserView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, loser);
+    const duplicateReservation = await issueCommand(stub, loserView.body, loser, 'table.act', { actionId: 'borrow', inputs: { item: 'camera' } });
+    expect(duplicateReservation.response.status).toBe(422);
+    expect((duplicateReservation.body as PublicError).errorCode).toBe('TABLE_CONDITION');
+
+    expect(await evictDurableObject(stub)).toBeUndefined();
+    const resumedOwner = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    const resumedParticipant = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
+    expect(resumedOwner.response.status).toBe(200);
+    expect(resumedOwner.body.domain.kind).toBe('table');
+    if (resumedOwner.body.domain.kind !== 'table') throw new Error('Expected resumed owner table.');
+    expect(resumedOwner.body.domain.sources[0]?.text).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(resumedOwner.body.domain.records.equipment?.find((row) => row.id === 'camera')?.values.available).toBe(false);
+    expect(JSON.stringify(resumedParticipant.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+
+    const lateParticipant = newActor('Late participant');
+    await saveActor(lateParticipant);
+    const pendingInvite = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-3' }, mutation: true,
+    });
+    expect(pendingInvite.response.status).toBe(201);
+    await enableTableReadOnly(stub);
+
+    const ownerWhileReadOnly = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    const participantWhileReadOnly = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
+    expect(ownerWhileReadOnly.response.status).toBe(200);
+    expect(ownerWhileReadOnly.body.domain).toEqual(resumedOwner.body.domain);
+    expect(participantWhileReadOnly.response.status).toBe(200);
+    expect(participantWhileReadOnly.body.domain.kind).toBe('table');
+    if (participantWhileReadOnly.body.domain.kind !== 'table') throw new Error('Expected read-only participant table.');
+    expect(participantWhileReadOnly.body.domain.sources).toEqual([]);
+    expect(participantWhileReadOnly.body.domain.records).toEqual(resumedParticipant.body.domain.kind === 'table'
+      ? resumedParticipant.body.domain.records : {});
+
+    const rejectedCommands = await Promise.all([
+      issueCommand(stub, ownerWhileReadOnly.body, owner, 'table.import', {
+        filename: 'late-source.txt', text: 'This change must be blocked.',
+      }),
+      issueCommand(stub, ownerWhileReadOnly.body, owner, 'evolve.propose', {
+        change: equipmentChange(sourceId!),
+      }),
+      issueCommand(stub, ownerWhileReadOnly.body, owner, 'workspace.reset', {}),
+    ]);
+    for (const rejected of rejectedCommands) {
+      expect(rejected.response.status).toBe(403);
+      expect(rejected.body).toMatchObject({ ok: false, errorCode: 'TABLE_READ_ONLY' });
+    }
+
+    const rejectedInvite = await call<PublicError>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-4' }, mutation: true,
+    });
+    expect(rejectedInvite.response.status).toBe(403);
+    expect(rejectedInvite.body.errorCode).toBe('TABLE_READ_ONLY');
+    const rejectedRedemption = await call<PublicError>(stub, '/internal/redeem', lateParticipant, {
+      method: 'POST', body: { ticket: pendingInvite.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(rejectedRedemption.response.status).toBe(403);
+    expect(rejectedRedemption.body.errorCode).toBe('TABLE_READ_ONLY');
+    const rejectedProposal = await call<PublicError>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', mutation: true,
+      body: { commandId: randomUUID(), expectedRevision: ownerWhileReadOnly.body.revision,
+        expectedEpoch: ownerWhileReadOnly.body.epoch, prompt: 'Suggest a safe table rule.', consent: true },
+    });
+    expect(rejectedProposal.response.status).toBe(403);
+    expect(rejectedProposal.body.errorCode).toBe('TABLE_READ_ONLY');
+    const afterReadOnlyAttempts = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(afterReadOnlyAttempts.body.domain).toEqual(ownerWhileReadOnly.body.domain);
+    expect(afterReadOnlyAttempts.body.members).toHaveLength(3);
+
+    const newOwner = newActor('Read-only table creation owner');
+    await saveActor(newOwner);
+    const newRoomId = randomUUID();
+    const newStub = roomStub(newRoomId);
+    await enableTableReadOnly(newStub);
+    const rejectedCreation = await call<PublicError>(newStub, '/internal/create', newOwner, {
+      method: 'POST', body: { id: newRoomId, kind: 'table' }, mutation: true,
+    });
+    expect(rejectedCreation.response.status).toBe(403);
+    expect(rejectedCreation.body.errorCode).toBe('TABLE_READ_ONLY');
+
+    const teachingOwner = newActor('Teaching remains writable');
+    await saveActor(teachingOwner);
+    const teaching = await createRoom(teachingOwner, 'teaching');
+    await enableTableReadOnly(teaching.stub);
+    const teachingUpdate = await issueCommand(teaching.stub, teaching.workspace, teachingOwner, 'teaching.setParameters', {
+      force: 12, mass: 2, time: 2,
+    });
+    expect(teachingUpdate.response.status).toBe(200);
   });
 
   it('creates in its canonical named DO, isolates actors, and rejects forged target room IDs', async () => {
@@ -574,6 +852,138 @@ describe('Cloudflare room Durable Object', () => {
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${expectedId}`, owner);
     expect(poll.response.status).toBe(200);
     expect(poll.body).toMatchObject({ status: 'completed', candidateId });
+  });
+
+  it('maps failed model jobs to actionable safe messages without exposing provider details', async () => {
+    const owner = newActor('Table proposal owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    vi.mocked(proposeChange).mockRejectedValue(new DomainError(
+      'MODEL_PROVIDER_INPUT_TOO_LARGE', 'PRIVATE_PROVIDER_TEXT_SENTINEL',
+    ));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a safe lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const queued = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(queued.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('failed');
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    expect(visible.body.message).toMatch(/shorten them or remove a file/iu);
+    expect(JSON.stringify(visible.body)).not.toContain('PRIVATE_PROVIDER_TEXT_SENTINEL');
+  });
+
+  it('settles an in-flight table proposal but blocks its commit after read-only mode is enabled', async () => {
+    const owner = newActor('Read-only mid-proposal owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: emptyWorkspace } = await createRoom(owner, 'table');
+    const imported = await issueCommand(stub, emptyWorkspace, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    expect(imported.response.status).toBe(200);
+    const readyWorkspace = (imported.body as CommandAck).workspace;
+    if (readyWorkspace.domain.kind !== 'table' || readyWorkspace.domain.sources.length !== 1) {
+      throw new Error('Expected one imported table source.');
+    }
+    const sourceId = readyWorkspace.domain.sources[0]!.id;
+
+    let providerIsWaiting = false;
+    let releaseProvider = () => {};
+    const waitForProvider = new Promise<void>((resolve) => { releaseProvider = resolve; });
+    const fixtureUsage = { promptTokens: 100, completionTokens: 20, cacheHitTokens: 25, cacheMissTokens: 75 };
+    try {
+      vi.mocked(proposeChange).mockImplementation(async (_environment, request) => {
+        providerIsWaiting = true;
+        await waitForProvider;
+        return { ...modelResult(request), usage: fixtureUsage };
+      });
+
+      const input = {
+        commandId: randomUUID(),
+        expectedRevision: readyWorkspace.revision,
+        expectedEpoch: readyWorkspace.epoch,
+        prompt: 'Create a borrowing and return program from the imported equipment source.',
+        consent: true,
+      };
+      const jobId = modelJobId(roomId, readyWorkspace.epoch, owner.id, input.commandId);
+      const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+        method: 'POST', body: input, mutation: true,
+      });
+      expect(accepted.response.status).toBe(202);
+      await waitForCondition(() => providerIsWaiting);
+
+      await enableTableReadOnly(stub);
+
+      const billingStub = runtime.BILLING.get(runtime.BILLING.idFromName('global'));
+      const binding = {
+        id: jobId,
+        actorId: owner.id,
+        workspaceId: roomId,
+        epoch: readyWorkspace.epoch,
+        inputHash: sha256(canonicalJson({ commandId: input.commandId, prompt: input.prompt })),
+      };
+      const billingRequest = async (path: '/reserve' | '/dispatch' | '/settle', body: unknown): Promise<void> => {
+        const response = await billingStub.fetch(`https://billing.internal${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        expect(response.status).toBe(200);
+      };
+      await billingRequest('/reserve', { ...binding, maxInputTokens: 65_000, maxOutputTokens: 8_192 });
+      await billingRequest('/dispatch', binding);
+      await billingRequest('/settle', { ...binding, outcome: 'settled', usage: fixtureUsage });
+
+      releaseProvider();
+
+      const job = await waitForModelJob(stub, jobId, owner.id, roomId, readyWorkspace.epoch);
+      expect(job.status).toBe('failed');
+      expect(job.data.failure).toBe('TABLE_READ_ONLY');
+      const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+      expect(visible.body.message).toMatch(/read-only/iu);
+
+      const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+      expect(current.body.domain).toEqual(readyWorkspace.domain);
+      const receipt = await runInDurableObject(stub, (instance) => instance.repository.findCommandReceipt(
+        roomId, readyWorkspace.epoch, owner.id, input.commandId,
+      ));
+      expect(receipt).toBeNull();
+
+      const billingJob = await runInDurableObject(billingStub, (_instance, state) => state.storage.sql
+        .exec<{
+          status: string;
+          max_input_tokens: number;
+          max_output_tokens: number;
+          reserved_micro_usd: number;
+          actual_micro_usd: number | null;
+          prompt_tokens: number | null;
+          completion_tokens: number | null;
+          cache_hit_tokens: number | null;
+          cache_miss_tokens: number | null;
+        }>(`SELECT status, max_input_tokens, max_output_tokens, reserved_micro_usd, actual_micro_usd,
+                   prompt_tokens, completion_tokens, cache_hit_tokens, cache_miss_tokens
+            FROM billing_jobs WHERE id = ?`, jobId).toArray()[0] ?? null);
+      expect(billingJob).toMatchObject({
+        status: 'settled',
+        max_output_tokens: 8_192,
+        prompt_tokens: fixtureUsage.promptTokens,
+        completion_tokens: fixtureUsage.completionTokens,
+        cache_hit_tokens: fixtureUsage.cacheHitTokens,
+        cache_miss_tokens: fixtureUsage.cacheMissTokens,
+      });
+      if (!billingJob || billingJob.actual_micro_usd === null) throw new Error('Expected settled provider usage.');
+      expect(billingJob.max_input_tokens).toBeGreaterThan(0);
+      expect(billingJob.actual_micro_usd).toBeGreaterThan(0);
+      expect(billingJob.actual_micro_usd).toBeLessThanOrEqual(billingJob.reserved_micro_usd);
+    } finally {
+      releaseProvider();
+    }
   });
 
   it('reconciles a committed proposal when the first completed-job write fails', async () => {

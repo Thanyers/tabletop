@@ -102,7 +102,10 @@ const mimeTypes: Readonly<Record<string, string>> = {
 
 const inviteRedemptionSchema = z.object({ ticket: z.string() }).strict();
 const inviteCreationSchema = z.object({
-  seat: z.enum(['learner-1', 'learner-2', 'mira', 'pip']),
+  seat: z.enum([
+    'learner-1', 'learner-2', 'mira', 'pip',
+    'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7',
+  ]),
   replaceOutstanding: z.boolean().optional(),
 }).strict();
 

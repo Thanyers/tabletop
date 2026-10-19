@@ -14,11 +14,11 @@ export function useUploadCapability() {
   return useContext(UploadCapabilityContext);
 }
 
-export function CandidateLifecycle({ view, onCommand, busy }: { view: WorkspaceView; onCommand: Command; busy: string | null }) {
+export function CandidateLifecycle({ view, onCommand, busy, readOnly = false }: { view: WorkspaceView; onCommand: Command; busy: string | null; readOnly?: boolean }) {
   const candidate = view.domain.candidate;
   const [rollbackRevision, setRollbackRevision] = useState('');
   const run = (type: string, payload: unknown = {}) => { void onCommand(type, payload); };
-  const isBusy = busy?.startsWith('evolve.') ?? false;
+  const isBusy = readOnly || (busy?.startsWith('evolve.') ?? false);
 
   return (
     <section className="tt-section tt-lifecycle" aria-labelledby="tt-lifecycle-title">
@@ -27,7 +27,7 @@ export function CandidateLifecycle({ view, onCommand, busy }: { view: WorkspaceV
         <span className={`tt-status-pill tt-status-pill--${candidate?.status ?? 'idle'}`}>{candidate?.status ?? 'No draft'}</span>
       </header>
       {!candidate ? (
-        <div className="tt-empty-note"><ShieldCheck size={17} /><p>Make a bounded edit to create a draft. The Active table keeps its current rules until activation.</p></div>
+        <div className="tt-empty-note"><ShieldCheck size={17} /><p>{readOnly ? 'Editing is temporarily paused. The current active rules remain available to inspect.' : 'Make a bounded edit to create a draft. The Active table keeps its current rules until activation.'}</p></div>
       ) : (
         <>
           <div className="tt-candidate-meta">
@@ -49,7 +49,7 @@ export function CandidateLifecycle({ view, onCommand, busy }: { view: WorkspaceV
             {candidate.status === 'active' && view.domain.revisions.length > 0 && (
               <div className="tt-rollback">
                 <label htmlFor="tt-rollback-revision">Restore a compatible revision</label>
-                <div><select id="tt-rollback-revision" value={rollbackRevision} onChange={(event) => setRollbackRevision(event.target.value)}><option value="">Choose a revision</option>{view.domain.revisions.map((record) => <option value={record.revision} key={record.revision}>Revision {record.revision}</option>)}</select><button type="button" disabled={!rollbackRevision || isBusy} onClick={() => run('evolve.rollback', { revision: Number(rollbackRevision) })}><RotateCcw size={14} /> Restore</button></div>
+                <div><select id="tt-rollback-revision" value={rollbackRevision} disabled={isBusy} onChange={(event) => setRollbackRevision(event.target.value)}><option value="">Choose a revision</option>{view.domain.revisions.map((record) => <option value={record.revision} key={record.revision}>Revision {record.revision}</option>)}</select><button type="button" disabled={!rollbackRevision || isBusy} onClick={() => run('evolve.rollback', { revision: Number(rollbackRevision) })}><RotateCcw size={14} /> Restore</button></div>
               </div>
             )}
             {candidate.status === 'active' && <span className="tt-lifecycle-complete"><CheckCircle2 size={14} /> Active revision {view.domain.ruleRevision}</span>}
@@ -57,7 +57,8 @@ export function CandidateLifecycle({ view, onCommand, busy }: { view: WorkspaceV
           {candidate.proof && <p className="tt-proof-note">Validation proof {candidate.proof.passed ? 'passed' : 'failed'} · {candidate.proof.hash.slice(0, 12)}</p>}
         </>
       )}
-      {isBusy && <span className="tt-inline-progress" role="status"><LoaderCircle size={13} className="tt-spin" /> Updating draft…</span>}
+      {readOnly && candidate && <p className="tt-table-readonly-inline" role="status">Editing and rule changes are temporarily paused. This draft cannot be advanced.</p>}
+      {!readOnly && isBusy && <span className="tt-inline-progress" role="status"><LoaderCircle size={13} className="tt-spin" /> Updating draft…</span>}
     </section>
   );
 }

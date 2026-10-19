@@ -1,4 +1,5 @@
 import type { DomainState, EncounterState, InvoiceState, PhysicsParams, TeachingState, WorkspaceView } from '../shared/contracts';
+import type { TableState } from '../shared/table-contracts';
 import { calculatePhysics, reconcileInvoice } from '../domain';
 import { z } from 'zod';
 
@@ -17,6 +18,7 @@ const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFi
 const object = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const stateKind = (value: unknown, kind: DomainState['kind']) => object(value) && value.kind === kind && Number.isSafeInteger(value.dataRevision) && Number.isSafeInteger(value.ruleRevision);
 const validators: Record<string, (value: unknown) => boolean> = {
+  TableStateV1: v => stateKind(v, 'table'), TableRowsV1: v => Array.isArray(v) && v.length <= 100 && v.every(r => object(r) && typeof r.id === 'string' && object(r.values)), RuleRevisionV1: v => Number.isSafeInteger(v) && Number(v) >= 0,
   InvoiceStateV1: v => stateKind(v, 'invoice'), TeachingStateV1: v => stateKind(v, 'teaching'), EncounterStateV1: v => stateKind(v, 'encounter'),
   InvoiceResultV1: v => object(v) && Array.isArray(v.rows) && Array.isArray(v.gaps) && finite(v.knownExpectedSatang) && finite(v.unknownCount),
   'ReviewItemV1[]': v => Array.isArray(v) && v.every(x => object(x) && typeof x.id === 'string' && typeof x.shipmentId === 'string' && typeof x.reason === 'string' && Array.isArray(x.sourceIds)),
@@ -25,10 +27,10 @@ const validators: Record<string, (value: unknown) => boolean> = {
   EncounterBoardV1: v => object(v) && Array.isArray(v.characters) && typeof v.phase === 'string',
 };
 const identity = (key: string) => (inputs: Record<string, unknown>) => ({ [key]: inputs[key] });
-const identifierSchema = z.string().regex(/^[a-z][a-z0-9.-]{0,159}$/);
+const identifierSchema = z.string().regex(/^[a-z][a-z0-9._-]{0,159}$/);
 const endpointSchema = z.strictObject({ node: identifierSchema, port: z.string().regex(/^[a-z][a-zA-Z0-9]{0,79}$/) });
 const manifestSchema = z.strictObject({
-  version: z.literal(1), kind: z.enum(['invoice', 'teaching', 'encounter']),
+  version: z.literal(1), kind: z.enum(['invoice', 'teaching', 'encounter', 'table']),
   nodes: z.array(z.strictObject({
     id: identifierSchema.max(80), capability: identifierSchema, title: z.string().min(1).max(160),
     position: z.strictObject({ x: z.number().finite(), y: z.number().finite() }),
@@ -38,6 +40,10 @@ const manifestSchema = z.strictObject({
   bindings: z.array(z.strictObject({ id: z.string().min(1).max(300), from: endpointSchema, to: endpointSchema, valueType: z.string().min(1).max(80) })).max(96),
 });
 export const capabilityRegistry: Readonly<Record<string, Capability>> = {
+  'table.sources': { version: 1, inputs: { state: port('TableStateV1', 'private') }, outputs: {}, evaluate: () => ({}) },
+  'table.rules': { version: 1, inputs: { state: port('TableStateV1', 'private') }, outputs: { revision: port('RuleRevisionV1') }, evaluate: i => ({ revision: (i.state as TableState).ruleRevision }) },
+  'table.collection': { version: 1, inputs: { rows: port('TableRowsV1'), revision: port('RuleRevisionV1') }, outputs: { rows: port('TableRowsV1') }, evaluate: identity('rows') },
+  'table.actions': { version: 1, inputs: { revision: port('RuleRevisionV1') }, outputs: {}, evaluate: () => ({}) },
   'invoice.source': { version: 1, inputs: { state: port('InvoiceStateV1', 'private') }, outputs: { invoice: port('InvoiceStateV1', 'private') }, evaluate: i => ({ invoice: i.state }) },
   'invoice.reconcile': { version: 1, inputs: { invoice: port('InvoiceStateV1', 'private') }, outputs: { result: port('InvoiceResultV1', 'private'), exceptions: port('ReviewItemV1[]', 'private'), surchargeExceptions: port('ReviewItemV1[]', 'private') }, evaluate: i => {
     const result = reconcileInvoice(i.invoice as InvoiceState);
@@ -68,7 +74,7 @@ export function compileManifest(rawManifest: unknown, registry: Readonly<Record<
   const nodes = new Map<string, PlanNode>();
   const incoming = new Map<string, Binding>(); const edges = new Map<string, string[]>();
   for (const node of manifest.nodes) {
-    if (!/^[a-z][a-z0-9.-]{0,79}$/.test(node.id) || nodes.has(node.id)) fail('DUPLICATE_ID', 'Node IDs must be unique bounded identifiers', node.id);
+    if (!/^[a-z][a-z0-9._-]{0,79}$/.test(node.id) || nodes.has(node.id)) fail('DUPLICATE_ID', 'Node IDs must be unique bounded identifiers', node.id);
     nodes.set(node.id, node); edges.set(node.id, []);
     const cap = registry[node.capability];
     if (!cap || cap.version !== node.version) { fail('CAPABILITY', 'Unknown capability or incompatible version', node.id); continue }
@@ -113,6 +119,21 @@ const node = (id: string, capability: string, title: string, x: number, y: numbe
 const binding = (from: string, output: string, to: string, input: string, valueType: string): Binding => ({ id: `${from}.${output}-${to}.${input}`, from: { node: from, port: output }, to: { node: to, port: input }, valueType });
 export function manifestForWorkspace(view: WorkspaceView): Manifest {
   const state = view.domain;
+  if (state.kind === 'table') {
+    const nodes = [node('table.rules', 'table.rules', 'กฎและข้อเสนอ', 40, 480, { state }, 'private')];
+    if (view.actor.role === 'owner') nodes.unshift(node('table.sources', 'table.sources', 'ไฟล์ของโต๊ะ', 40, 40, { state }, 'private'));
+    const bindings: Binding[] = [];
+    for (const [index, collection] of (state.program?.collections ?? []).entries()) {
+      const collectionNode = `table.collection.${collection.id}`;
+      nodes.push(node(collectionNode, 'table.collection', collection.title, 580 + Math.floor(index / 2) * 540, 40 + index % 2 * 520, { rows: state.records[collection.id] ?? [] }));
+      bindings.push(binding('table.rules', 'revision', collectionNode, 'revision', 'RuleRevisionV1'));
+    }
+    if (state.program) {
+      nodes.push(node('table.actions', 'table.actions', 'เล่นและทำรายการ', 580 + Math.ceil(state.program.collections.length / 2) * 540, 40));
+      bindings.push(binding('table.rules', 'revision', 'table.actions', 'revision', 'RuleRevisionV1'));
+    }
+    return { version: 1, kind: 'table', nodes, bindings };
+  }
   if (state.kind === 'invoice') {
     const nodes = [node('invoice.source', 'invoice.source', 'เอกสารและหลักฐาน', 40, 40, { state }, 'private'), node('invoice.reconcile', 'invoice.reconcile', 'ตรวจยอดตามหลักฐาน', 460, 40, {}, 'private', false), node('invoice.table', 'invoice.table', 'รายการตรวจยอด', 460, 40, {}, 'private'), node('invoice.rules', 'invoice.rules', 'กฎที่ใช้และข้อเสนอ', 1240, 40, { state }, 'private')];
     const bindings = [binding('invoice.source', 'invoice', 'invoice.reconcile', 'invoice', 'InvoiceStateV1'), binding('invoice.reconcile', 'result', 'invoice.table', 'result', 'InvoiceResultV1')];

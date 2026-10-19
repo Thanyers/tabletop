@@ -140,21 +140,23 @@ const TABLES = [
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 function primaryRole(kind: CaseKind): Role {
-  if (kind === 'invoice') return 'owner';
+  if (kind === 'invoice' || kind === 'table') return 'owner';
   return kind === 'teaching' ? 'teacher' : 'dm';
 }
 
 function isKind(value: unknown): value is CaseKind {
-  return value === 'invoice' || value === 'teaching' || value === 'encounter';
+  return value === 'invoice' || value === 'teaching' || value === 'encounter' || value === 'table';
 }
 
 function isRole(value: unknown): value is Role {
   return value === 'owner' || value === 'teacher' || value === 'learner'
-    || value === 'dm' || value === 'player';
+    || value === 'dm' || value === 'player' || value === 'participant';
 }
 
 function isSeat(value: unknown): value is Seat {
-  return value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip';
+  return value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip'
+    || value === 'member-1' || value === 'member-2' || value === 'member-3' || value === 'member-4'
+    || value === 'member-5' || value === 'member-6' || value === 'member-7';
 }
 
 function nullableNumber(value: unknown, field: string): number | null {
@@ -203,7 +205,7 @@ function mapMember(row: SqlRow): StoredMember {
 }
 
 function mapInvitation(row: SqlRow): InvitationRecord {
-  if ((row.role !== 'learner' && row.role !== 'player') || !isSeat(row.seat)) {
+  if ((row.role !== 'learner' && row.role !== 'player' && row.role !== 'participant') || !isSeat(row.seat)) {
     throw new Error('DATABASE_FIELD_INVALID:invitation');
   }
   return {
@@ -566,7 +568,9 @@ export class RoomRepository implements WorkspaceRepository {
       }
       if (invitation.epoch !== workspace.epoch) throw new AuthorityError('STALE_EPOCH');
       if (memberRow) throw new AuthorityError('INVITE_ALREADY_USED');
-      const expectedRole = workspace.kind === 'teaching' && (invitation.seat === 'learner-1' || invitation.seat === 'learner-2')
+      const expectedRole = workspace.kind === 'table' && invitation.seat.startsWith('member-')
+        ? 'participant'
+        : workspace.kind === 'teaching' && (invitation.seat === 'learner-1' || invitation.seat === 'learner-2')
         ? 'learner'
         : workspace.kind === 'encounter' && (invitation.seat === 'mira' || invitation.seat === 'pip')
           ? 'player'

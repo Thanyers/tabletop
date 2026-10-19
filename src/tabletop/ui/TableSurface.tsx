@@ -13,6 +13,7 @@ const tableTitles: Record<CaseKind, string> = {
   invoice: 'Invoice check',
   teaching: 'Physics lesson',
   encounter: 'Shared encounter',
+  table: 'Shared data table',
 };
 
 export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
@@ -49,6 +50,7 @@ export function TableSurface({
   onCommand,
   busy,
   onUpload,
+  onTableImport,
   onExport,
   onFocusEvidence,
   onBackFromEvidence,
@@ -96,6 +98,7 @@ export function TableSurface({
             onCommand={onCommand}
             busy={busy}
             onUpload={onUpload}
+            onTableImport={onTableImport}
             onExport={onExport}
             onFocusEvidence={onFocusEvidence}
             focusSourceIds={focusSourceIds}

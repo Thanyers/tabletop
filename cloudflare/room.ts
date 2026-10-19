@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
-import type { CommandAck, WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { DomainError } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
@@ -9,6 +10,7 @@ import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import { authenticateHash, authenticateRequest, isAdminSession, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
 import type { Env } from './contracts.js';
+import { requireWorkspaceWritable } from './table-mode.js';
 import { RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
@@ -28,7 +30,7 @@ const MODEL_JOB_ID_PATTERN = /^[a-f0-9]{64}$/u;
 
 interface CreateInput {
   id: string;
-  kind: 'invoice' | 'teaching' | 'encounter';
+  kind: 'invoice' | 'teaching' | 'encounter' | 'table';
   title?: string;
 }
 
@@ -132,12 +134,18 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BODY_BYTES): Promi
 
 function parseCreateInput(value: unknown): CreateInput {
   if (!isRecord(value) || typeof value.id !== 'string' || !ROOM_ID_PATTERN.test(value.id)
-      || (value.kind !== 'invoice' && value.kind !== 'teaching' && value.kind !== 'encounter')
+      || (value.kind !== 'invoice' && value.kind !== 'teaching' && value.kind !== 'encounter' && value.kind !== 'table')
       || (value.title !== undefined && (typeof value.title !== 'string' || value.title.length > 120))
       || Object.keys(value).some((key) => key !== 'id' && key !== 'kind' && key !== 'title')) {
     throw new AuthorityError('INVALID_REQUEST');
   }
   return { id: value.id, kind: value.kind, ...(typeof value.title === 'string' ? { title: value.title } : {}) };
+}
+
+function isInviteSeat(value: unknown): value is Seat {
+  return value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip'
+    || value === 'member-1' || value === 'member-2' || value === 'member-3' || value === 'member-4'
+    || value === 'member-5' || value === 'member-6' || value === 'member-7';
 }
 
 function parseRedeemInput(value: unknown): RedeemInput {
@@ -171,13 +179,54 @@ function parseModelInput(value: unknown): ModelInput {
 
 function modelJobView(job: RoomModelJob): PublicModelJob {
   if (job.status === 'revoked') return { id: job.id, status: 'failed', message: 'This proposal was cancelled.' };
-  if (job.status === 'failed') return { id: job.id, status: 'failed', message: 'The proposal could not be completed.' };
+  if (job.status === 'failed') return { id: job.id, status: 'failed', message: modelFailureMessage(job.data.failure) };
   if (job.status === 'running' || job.status === 'committing') return { id: job.id, status: 'running' };
   return {
     id: job.id,
     status: 'completed',
     ...(typeof job.data.candidateId === 'string' ? { candidateId: job.data.candidateId } : {}),
   };
+}
+
+function modelFailureMessage(failure: unknown): string {
+  if (failure === 'SOURCE_REQUIRED') return 'Import a source file before asking for a proposal.';
+  if (failure === 'TABLE_READ_ONLY') return 'This table workspace is currently read-only. The proposal was not applied.';
+  if (failure === 'MODEL_PROVIDER_INPUT_TOO_LARGE') return 'The files and request are too large. Shorten them or remove a file, then try again.';
+  if (failure === 'MODEL_PROVIDER_OUTPUT_REJECTED' || (typeof failure === 'string' && failure.startsWith('TABLE_'))) {
+    return 'The proposed table rules did not pass validation. Review the sources or revise the request, then try again.';
+  }
+  if (failure === 'MODEL_PROVIDER_TIMEOUT') return 'The proposal timed out. Try again.';
+  if (failure === 'MODEL_NOT_CONFIGURED' || failure === 'MODEL_PROVIDER_NOT_CONFIGURED') {
+    return 'AI proposals are not configured for this workspace.';
+  }
+  if (failure === 'BILLING_BUDGET') return 'The configured AI budget has been reached.';
+  if (failure === 'BILLING_QUOTA') return 'The AI request limit has been reached. Try again later.';
+  if (failure === 'AI_BILLING_UNCERTAIN' || failure === 'AI_BILLING_UNAVAILABLE') {
+    return 'The billing service could not confirm this proposal. No draft was created.';
+  }
+  if (failure === 'STALE_WORKSPACE') return 'The workspace changed while the proposal was running. Review the latest state and try again.';
+  if (failure === 'MODEL_JOB_INTERRUPTED' || failure === 'MODEL_PROPOSAL_FAILED') {
+    return 'The proposal could not be completed. Review the files and request, then try again.';
+  }
+  return 'The proposal could not be completed.';
+}
+
+function safeModelFailureCode(error: unknown): string {
+  if (error instanceof AuthorityError && error.code === 'TABLE_READ_ONLY') return error.code;
+  if (error instanceof DomainError) {
+    const code = error.code;
+    if (code === 'SOURCE_REQUIRED' || code === 'MODEL_PROVIDER_INPUT_TOO_LARGE'
+        || code === 'TABLE_READ_ONLY'
+        || code === 'MODEL_PROVIDER_OUTPUT_REJECTED' || code === 'MODEL_PROVIDER_TIMEOUT'
+        || code === 'MODEL_PROVIDER_INPUT_INVALID' || code === 'MODEL_PROVIDER_RESPONSE_INVALID'
+        || code === 'MODEL_PROVIDER_RESPONSE_TOO_LARGE' || code === 'MODEL_PROVIDER_HTTP_ERROR'
+        || code === 'MODEL_PROVIDER_REQUEST_FAILED' || code === 'MODEL_PROVIDER_ABORTED'
+        || code === 'MODEL_PROVIDER_NOT_CONFIGURED' || code === 'MODEL_NOT_CONFIGURED'
+        || code === 'BILLING_BUDGET' || code === 'BILLING_QUOTA'
+        || code === 'AI_BILLING_UNCERTAIN' || code === 'AI_BILLING_UNAVAILABLE') return code;
+    if (code.startsWith('TABLE_')) return 'MODEL_PROVIDER_OUTPUT_REJECTED';
+  }
+  return 'MODEL_PROPOSAL_FAILED';
 }
 
 function parsePeerAttachment(value: unknown): PeerAttachment | null {
@@ -226,6 +275,7 @@ export class Room extends DurableObject<Env> {
     const session = await authenticateRequest(request, this.env);
     requireMutation(request, this.env, session);
     const parsed = parseCreateInput(input);
+    requireWorkspaceWritable(this.env, parsed.kind);
     if (!this.ctx.id.equals(this.env.ROOMS.idFromName(parsed.id))) throw new AuthorityError('WORKSPACE_NOT_FOUND');
     this.repository.bindRoomId(parsed.id);
     this.requireRoomId(parsed.id);
@@ -242,6 +292,8 @@ export class Room extends DurableObject<Env> {
     requireMutation(request, this.env, session);
     if (!INVITE_TOKEN_PATTERN.test(rawTicket)) throw new AuthorityError('INVITE_INVALID');
     const roomId = this.requireBoundRoomId();
+    const workspace = await this.repository.getWorkspace(roomId);
+    if (workspace) requireWorkspaceWritable(this.env, workspace.kind);
     await this.repository.redeemRoomInvitation(sha256(rawTicket), session.record.actorId, session.record.name, Date.now());
     const authorized = await this.authority.authorizeSession(session, roomId);
     this.scheduleDirectorySync();
@@ -312,6 +364,7 @@ export class Room extends DurableObject<Env> {
       if (request.method === 'POST' && suffix === 'commands') {
         const authorized = await this.authorize(request, workspaceId);
         requireMutation(request, this.env, authorized.session);
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
         const envelope = await readJson(request, MAX_COMMAND_BODY_BYTES);
         const result = await this.authority.execute(authorized.session, envelope, workspaceId);
         this.scheduleDirectorySync();
@@ -320,9 +373,9 @@ export class Room extends DurableObject<Env> {
       if (request.method === 'POST' && suffix === 'invites') {
         const authorized = await this.authorize(request, workspaceId);
         requireMutation(request, this.env, authorized.session);
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
         const body = await readJson(request);
-        if (!isRecord(body) || (body.seat !== 'learner-1' && body.seat !== 'learner-2'
-            && body.seat !== 'mira' && body.seat !== 'pip')
+        if (!isRecord(body) || !isInviteSeat(body.seat)
             || (body.replaceOutstanding !== undefined && typeof body.replaceOutstanding !== 'boolean')
             || Object.keys(body).some((key) => key !== 'seat' && key !== 'replaceOutstanding')) {
           throw new AuthorityError('INVALID_REQUEST');
@@ -335,7 +388,8 @@ export class Room extends DurableObject<Env> {
       if (request.method === 'POST' && suffix === 'model') {
         const authorized = await this.authorize(request, workspaceId);
         requireMutation(request, this.env, authorized.session);
-        const requiredModelRole = authorized.workspace.kind === 'invoice' ? 'owner'
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
+        const requiredModelRole = authorized.workspace.kind === 'invoice' || authorized.workspace.kind === 'table' ? 'owner'
           : authorized.workspace.kind === 'teaching' ? 'teacher' : 'dm';
         if (authorized.member.role !== requiredModelRole) throw new AuthorityError('ROLE_FORBIDDEN');
         const input = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
@@ -543,6 +597,7 @@ export class Room extends DurableObject<Env> {
       }
       let job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
       if (!job || job.status !== 'running') return;
+      requireWorkspaceWritable(this.env, authorized.workspace.kind);
 
       const proposal = await proposeChange(this.env, {
         workspace: authorized.workspace,
@@ -566,6 +621,7 @@ export class Room extends DurableObject<Env> {
       }
       job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
       if (!job || job.status !== 'running') return;
+      requireWorkspaceWritable(this.env, authorized.workspace.kind);
 
       const envelope = {
         commandId: input.commandId,
@@ -599,6 +655,7 @@ export class Room extends DurableObject<Env> {
         input.jobId, input.actorId, input.workspaceId, input.expectedEpoch,
       );
       if (!stillCommitting || stillCommitting.status !== 'committing') return;
+      requireWorkspaceWritable(this.env, authorized.workspace.kind);
       commandMayHaveCommitted = true;
       const acknowledgement = await this.authority.executeModelProposal(
         session, envelope, input.workspaceId, input.jobId,
@@ -606,7 +663,7 @@ export class Room extends DurableObject<Env> {
       const candidateId = acknowledgement.workspace.domain.candidate?.id;
       await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
         input.actorId, 'completed', { ...committingData, ...(candidateId ? { candidateId } : {}) });
-    } catch {
+    } catch (error) {
       try {
         const job = await this.repository.getModelJob(
           input.jobId, input.actorId, input.workspaceId, input.expectedEpoch,
@@ -620,7 +677,7 @@ export class Room extends DurableObject<Env> {
           return;
         }
         await this.repository.failModelJobAfterReceiptCheck(
-          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'MODEL_PROPOSAL_FAILED',
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, safeModelFailureCode(error),
         );
       } catch {
         try { await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS); } catch { /* retry on the next room alarm */ }

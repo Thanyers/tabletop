@@ -16,6 +16,14 @@ const completed = (job: ModelJob) => job.status === 'completed' || job.status ==
 const waiting = (job: ModelJob) => job.status === 'queued' || job.status === 'running';
 const pause = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
+function proposalErrorMessage(reason: unknown, kind: WorkspaceView['kind']): string {
+  const error = reason as { code?: unknown; message?: unknown } | null;
+  if (kind === 'table' && error?.code === 'MODEL_PROVIDER_INPUT_TOO_LARGE') {
+    return 'This request exceeds the AI input limit. Shorten or remove unused source text, or shorten the request; nothing was activated.';
+  }
+  return typeof error?.message === 'string' ? error.message : 'The AI request could not be sent.';
+}
+
 export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh }: AIProposalProps) {
   const [prompt, setPrompt] = useState('');
   const [sourceId, setSourceId] = useState('');
@@ -32,6 +40,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh }:
       ? view.domain.sources.filter((source) => source.status === 'verified' && (source.kind === 'rate-card' || source.kind === 'excerpt'))
       : []
     : [];
+  const tableSources = view.kind === 'table' && view.domain.kind === 'table' ? view.domain.sources : [];
 
   useEffect(() => {
     generation.current += 1;
@@ -97,7 +106,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh }:
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!prompt.trim() || !consent || (view.kind === 'invoice' && !sourceId) || !capabilities.model.enabled) return;
+    if (!prompt.trim() || !consent || (view.kind === 'invoice' && !sourceId) || (view.kind === 'table' && tableSources.length === 0) || !capabilities.model.enabled) return;
     const token = ++generation.current;
     const commandId = crypto.randomUUID();
     setRequesting(true);
@@ -117,7 +126,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh }:
         void pollInBackground(accepted.id, token);
       }
     } catch (reason) {
-      if (generation.current === token) setError(reason instanceof Error ? reason.message : 'The AI request could not be sent.');
+      if (generation.current === token) setError(proposalErrorMessage(reason, view.kind));
       setMessage('');
     } finally {
       if (generation.current === token) setRequesting(false);
@@ -135,7 +144,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh }:
   };
 
   const waitingNow = job ? waiting(job) : false;
-  const canSubmit = capabilities.model.enabled && !requesting && consent && prompt.trim().length > 0 && (view.kind !== 'invoice' || Boolean(sourceId));
+  const canSubmit = capabilities.model.enabled && !requesting && consent && prompt.trim().length > 0 && (view.kind !== 'invoice' || Boolean(sourceId)) && (view.kind !== 'table' || tableSources.length > 0);
 
   return <section className="tt-ai-proposal" id="tt-ai-proposal" aria-labelledby="tt-ai-title">
     <header className="tt-ai-proposal__head"><span className="tt-ai-proposal__icon"><Sparkles size={15} /></span><div><span className="tt-kicker">OPTIONAL ASSISTANCE</span><h2 id="tt-ai-title">Ask AI for a draft</h2></div><span className="tt-ai-proposal__manual">Manual rules stay available</span></header>
@@ -149,8 +158,9 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh }:
           {sources.length === 0 && <small>Review a rate card or excerpt as verified before asking for an invoice draft.</small>}
         </label>}
         <label htmlFor="tt-ai-prompt">What should the draft change or explain?</label>
-        <textarea id="tt-ai-prompt" value={prompt} maxLength={1200} rows={3} onChange={(event) => setPrompt(event.target.value)} placeholder={view.kind === 'invoice' ? 'Describe the rate change to compare against this verified evidence…' : view.kind === 'teaching' ? 'Describe a teaching adjustment for the current lesson…' : 'Describe a bounded shield-rule proposal for this encounter…'} />
-        <div className="tt-ai-proposal__privacy"><strong>Before you send</strong><p>Only your prompt and the relevant current rules or parameters will be sent. For an invoice, the verified excerpt you select is included. Private notes and learner answers are excluded.</p></div>
+        <textarea id="tt-ai-prompt" value={prompt} maxLength={1200} rows={3} onChange={(event) => setPrompt(event.target.value)} placeholder={view.kind === 'invoice' ? 'Describe the rate change to compare against this verified evidence…' : view.kind === 'teaching' ? 'Describe a teaching adjustment for the current lesson…' : view.kind === 'table' ? 'Describe the collections, fields and safe actions people need…' : 'Describe a bounded shield-rule proposal for this encounter…'} />
+        <div className="tt-ai-proposal__privacy"><strong>Before you send</strong><p>{view.kind === 'table' ? `After you consent, the AI provider receives your prompt, current rules, and every source file on this table (${tableSources.length} total). Shared records and member activity are excluded. Source files and drafts remain private to the owner; active rules and records are shared with members.` : <>Only your prompt and relevant current rules or parameters are sent. {view.kind === 'invoice' ? 'The verified excerpt you select is included.' : ''} Private notes and learner answers are excluded.</>}</p></div>
+        {view.kind === 'table' && tableSources.length === 0 && <small className="tt-ai-proposal__source-hint">Add at least one source file before asking for a table proposal.</small>}
         <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>I agree to send this request for an AI draft.</span></label>
         <button type="submit" className="tt-button tt-button--primary" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />} Ask AI for a draft</button>
       </form>

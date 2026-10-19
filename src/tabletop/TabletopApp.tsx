@@ -18,20 +18,25 @@ type InviteState = { seat: Seat; invite: WorkspaceInvite; url: string; revoked?:
 
 const lastWorkspaceKey = 'tabletop.lastWorkspace';
 const pendingInviteKey = 'tabletop.pendingInvite';
-const localCapabilities: TabletopCapabilities = { uploads: true, model: { enabled: false, reason: 'Live AI proposals are not configured on this local server.' } };
+const localCapabilities: TabletopCapabilities = { uploads: true, tableReadOnly: false, model: { enabled: false, reason: 'Live AI proposals are not configured on this local server.' } };
 
 const caseInfo: Record<CaseKind, { title: string; subtitle: string; icon: typeof Table2 }> = {
   invoice: { title: 'Invoice check', subtitle: 'Match shipment charges with dated evidence.', icon: Table2 },
   teaching: { title: 'Physics lesson', subtitle: 'Teach one model through text, scene, and graph.', icon: BookOpen },
   encounter: { title: 'Shared encounter', subtitle: 'Run turns and reactions with a Dungeon Master.', icon: Users },
+  table: { title: 'Shared data table', subtitle: 'Build collections and actions from your own files.', icon: Table2 },
 };
 
 function errorText(error: unknown): string {
   if (error instanceof ApiFailure) {
     if (error.status === 401) return 'Your sign-in session has expired. Sign in again to continue.';
+    if (error.status === 403 && error.code === 'TABLE_READ_ONLY') return 'Editing this shared table is temporarily paused. You can still inspect its current records and rules.';
     if (error.status === 403) return 'This table is not available to the current session. Open a new invitation or choose another table.';
     if (error.status === 404) return 'This table or invitation is no longer available. Choose another table or ask for a fresh invitation.';
+    if (error.status === 413 && error.code === 'TABLE_LIMIT') return 'A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.';
+    if (error.status === 413 && error.code === 'TABLE_FILE_SIZE') return 'Each table source file must be 32 KiB or smaller.';
     if (error.status === 413) return 'That file is larger than the table limit. Choose a smaller file.';
+    if (error.status === 415 && error.code === 'TABLE_FILE') return 'Use a UTF-8 CSV, JSON, TXT or Markdown file. PDF and binary files are not supported.';
     if (error.status === 415) return 'This file type is not supported. Use a shipment CSV or a text PDF.';
     if (error.status === 0) return error.message;
     return error.message;
@@ -310,6 +315,11 @@ export default function TabletopApp() {
   }, [view]);
 
   const createWorkspace = useCallback(async (kind: CaseKind) => {
+    if (kind === 'table' && capabilities.tableReadOnly) {
+      showNotice('New shared tables are temporarily paused. You can still open existing tables and inspect their records.', 'info');
+      setWorkspaceMenuOpen(false);
+      return;
+    }
     setBusy('workspace.create');
     try {
       const next = await tabletopClient.createWorkspace(kind);
@@ -319,11 +329,15 @@ export default function TabletopApp() {
     } catch (error) {
       showNotice(errorText(error), 'error');
     } finally { setBusy(null); setWorkspaceMenuOpen(false); }
-  }, [refreshSession, setWorkspace, showNotice]);
+  }, [capabilities.tableReadOnly, refreshSession, setWorkspace, showNotice]);
 
   const runCommand = useCallback(async (type: string, payload: unknown): Promise<WorkspaceView | null> => {
     const current = workspaceRef.current;
     if (!current) return null;
+    if (current.kind === 'table' && capabilities.tableReadOnly) {
+      showNotice('Editing this table is temporarily paused. You can still inspect its current records and rules.', 'info');
+      return null;
+    }
     const requestSequence = projectionSequenceRef.current;
     setBusy(type);
     try {
@@ -352,7 +366,7 @@ export default function TabletopApp() {
       } else showNotice(errorText(error), 'error');
       return null;
     } finally { setBusy(null); }
-  }, [latestAfterAck, refreshSession, setWorkspace, showNotice]);
+  }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
   const upload = useCallback(async (kind: 'shipments' | 'invoice' | 'rate-card', file: File) => {
     if (!capabilities.uploads) throw new Error('File uploads are disabled for this workspace service. Your existing rows and manual editing remain available.');
@@ -377,12 +391,55 @@ export default function TabletopApp() {
     } finally { setBusy(null); }
   }, [capabilities.uploads, latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
+  const importTableFile = useCallback(async (targetView: WorkspaceView, file: File): Promise<WorkspaceView> => {
+    if (capabilities.tableReadOnly) throw new ApiFailure('Editing this table is temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY');
+    const identity = { id: targetView.id, epoch: targetView.epoch, actorId: targetView.actor.actorId };
+    const activeTarget = () => {
+      const current = workspaceRef.current;
+      return current && current.id === identity.id && current.epoch === identity.epoch && current.actor.actorId === identity.actorId && current.kind === 'table' && current.domain.kind === 'table' ? current : null;
+    };
+    if (!activeTarget()) throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
+    if (!/\.(csv|json|txt|md)$/iu.test(file.name)) throw new ApiFailure('Use a UTF-8 CSV, JSON, TXT or Markdown file. PDF and binary files are not supported.', 415, 'TABLE_FILE');
+    if (file.size < 1 || file.size > 32 * 1024) throw new ApiFailure('Each source file must contain between 1 byte and 32 KiB.', 413, 'TABLE_FILE_SIZE');
+
+    let text: string;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
+    catch { throw new ApiFailure('This file is not valid UTF-8 text. Save it as UTF-8 and try again.', 415, 'TABLE_FILE'); }
+    const current = activeTarget();
+    if (!current || current.domain.kind !== 'table') throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
+    const nextBytes = new TextEncoder().encode(text).byteLength;
+    const existingBytes = current.domain.sources.reduce((sum, source) => sum + new TextEncoder().encode(source.text).byteLength, 0);
+    if (current.domain.sources.length >= 4 || existingBytes + nextBytes > 64 * 1024) throw new ApiFailure('A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.', 413, 'TABLE_LIMIT');
+
+    const requestSequence = projectionSequenceRef.current;
+    setBusy('table.import');
+    try {
+      const ack = await tabletopClient.importTableSource(current, file.name, text);
+      if (!activeTarget()) throw new ApiFailure(`${file.name} was added to ${targetView.title}, but the current table changed before it finished. The current view was left alone.`, 0);
+      const latest = await latestAfterAck(ack, current.id, requestSequence);
+      const stillCurrent = activeTarget();
+      if (!stillCurrent) throw new ApiFailure(`${file.name} was added to ${targetView.title}, but you switched tables before it finished. The current view was left alone.`, 0);
+      setWorkspace(latest);
+      showNotice(`${file.name} was added to ${targetView.title}. Review the source before using it in a rule change.`, 'success');
+      await refreshSession().catch(() => undefined);
+      return latest;
+    } catch (error) {
+      if (error instanceof ApiFailure && error.conflict) {
+        const fresh = await tabletopClient.workspace(current.id).catch(() => null);
+        if (fresh && activeTarget()) setWorkspace(fresh);
+        showNotice('This table changed while the file was being added. The latest version is loaded; choose the file again if it still belongs here.', 'error');
+      } else showNotice(errorText(error), 'error');
+      throw new Error(errorText(error));
+    } finally { setBusy(null); }
+  }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
+
   const requestAI = useCallback((targetView: WorkspaceView, prompt: string, sourceId: string | undefined, commandId: string): Promise<ModelJob> => {
+    if (targetView.kind === 'table' && capabilities.tableReadOnly) return Promise.reject(new ApiFailure('AI proposals for shared tables are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('AI proposals are not enabled for this workspace.', 403));
-    const roleAllowed = targetView.kind === 'invoice' ? targetView.actor.role === 'owner' : targetView.kind === 'teaching' ? targetView.actor.role === 'teacher' : targetView.actor.role === 'dm';
+    const roleAllowed = targetView.kind === 'invoice' || targetView.kind === 'table' ? targetView.actor.role === 'owner' : targetView.kind === 'teaching' ? targetView.actor.role === 'teacher' : targetView.actor.role === 'dm';
     if (!roleAllowed) return Promise.reject(new ApiFailure('This seat cannot request an AI draft.', 403));
     return tabletopClient.requestModel(targetView, prompt, sourceId, commandId);
-  }, [capabilities.model.enabled]);
+  }, [capabilities.model.enabled, capabilities.tableReadOnly]);
 
   const pollAI = useCallback((workspaceId: string, jobId: string) => tabletopClient.modelJob(workspaceId, jobId), []);
   const loadAdminWorkspaces = useCallback((after?: string) => tabletopClient.adminWorkspaces(after), []);
@@ -414,6 +471,10 @@ export default function TabletopApp() {
   const createInvite = useCallback(async (seat: Seat, replaceOutstanding = false) => {
     const current = workspaceRef.current;
     if (!current) return;
+    if (current.kind === 'table' && capabilities.tableReadOnly) {
+      showNotice('Invitations for shared tables are temporarily paused. Current members can still inspect the table.', 'info');
+      return;
+    }
     setInviteBusy(true);
     try {
       const invite = await tabletopClient.invite(current.id, seat, replaceOutstanding);
@@ -426,7 +487,7 @@ export default function TabletopApp() {
       showNotice(`${replaceOutstanding ? 'The previous unused link is revoked. ' : ''}A single-use invitation for ${seatLabel(seat)} is ready.`, 'success');
     } catch (error) { showNotice(errorText(error), 'error'); }
     finally { setInviteBusy(false); }
-  }, [showNotice]);
+  }, [capabilities.tableReadOnly, showNotice]);
 
   const openInviteDialog = useCallback(() => {
     setInviteOpen(true);
@@ -476,17 +537,19 @@ export default function TabletopApp() {
   if (authStatus?.mode === 'google' && !authStatus.authenticated) return <AccountSignIn status={authStatus} notice={notice} hasPendingInvite={Boolean(readPendingInvite() || inviteFromFragment())} checking={false} onRetry={retryBootstrap} onDismissNotice={() => setNotice(null)} />;
   if (!session) return <FailureScreen onRetry={retryBootstrap} notice={notice} />;
   const headerAccount = accountForHeader(authStatus, session);
-  if (!view) return <WorkspaceChooser session={session} account={headerAccount} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onCreate={(kind) => void createWorkspace(kind)} onOpen={(id) => void openWorkspace(id)} />;
+  if (!view) return <WorkspaceChooser session={session} account={headerAccount} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onCreate={(kind) => void createWorkspace(kind)} onOpen={(id) => void openWorkspace(id)} />;
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const canInvite = view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
-  const canReset = ['owner', 'teacher', 'dm'].includes(view.actor.role);
-  const canAskAI = (view.kind === 'invoice' && view.actor.role === 'owner') || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
+  const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
+  const canInvite = view.kind === 'table' ? view.actor.role === 'owner' && !tableReadOnly : view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
+  const canReset = ['owner', 'teacher', 'dm'].includes(view.actor.role) && !tableReadOnly;
+  const canAskAI = ((view.kind === 'invoice' || view.kind === 'table') && view.actor.role === 'owner') || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
   const connectedSeats = new Set(view.members.map((member) => member.seat).filter(Boolean));
-  const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : [];
+  const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : view.kind === 'table' ? ['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
   const remainingInviteSeats = inviteSeats.filter((seat) => !connectedSeats.has(seat) && !(inviteIsHeld && inviteState?.seat === seat));
-  const aiContent = canAskAI ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} /> : undefined;
+  const aiContent = canAskAI && !tableReadOnly ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} /> : undefined;
+  const surfaceBusy = tableReadOnly ? 'table.readOnly' : busy;
 
   return (
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
@@ -498,7 +561,7 @@ export default function TabletopApp() {
           <button type="button" className="tt-workspace-picker__button" aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><small>TABLE</small><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
           {workspaceMenuOpen && <>
             <button className="tt-menu-dismiss" type="button" aria-label="Close table menu" onClick={() => setWorkspaceMenuOpen(false)} />
-            <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span>{(['invoice', 'teaching', 'encounter'] as const).map((kind) => <button role="menuitem" type="button" key={kind} onClick={() => void createWorkspace(kind)}><Plus size={15} /><span><strong>{caseInfo[kind].title}</strong><small>{caseInfo[kind].subtitle}</small></span><ArrowRight size={14} /></button>)}<hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
+            <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span>{(['invoice', 'teaching', 'encounter', 'table'] as const).map((kind) => <button role="menuitem" type="button" key={kind} disabled={kind === 'table' && capabilities.tableReadOnly === true} title={kind === 'table' && capabilities.tableReadOnly ? 'Creating shared tables is temporarily paused.' : undefined} onClick={() => void createWorkspace(kind)}><Plus size={15} /><span><strong>{caseInfo[kind].title}</strong><small>{kind === 'table' && capabilities.tableReadOnly ? 'Temporarily paused' : caseInfo[kind].subtitle}</small></span><ArrowRight size={14} /></button>)}<hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
           </>}
         </div>
         <div className="tt-topbar__spacer" />
@@ -516,9 +579,11 @@ export default function TabletopApp() {
         <div className="tt-mode-switch" role="group" aria-label="Edit mode"><button type="button" aria-pressed={editMode === 'use'} className={editMode === 'use' ? 'is-active' : ''} onClick={() => setEditMode('use')}><Check size={13} /> Use</button><button type="button" aria-pressed={editMode === 'arrange'} className={editMode === 'arrange' ? 'is-active' : ''} onClick={() => setEditMode('arrange')}><ArrowDownUp size={13} /> Arrange</button></div>
         <span className="tt-layout-controls__hint">{editMode === 'use' ? 'Select a source, result, rule, or scene to work with its controls.' : 'Drag objects to arrange this canvas.'}</span>
         <div className="tt-mobile-switch" role="group" aria-label="Workspace view"><button type="button" aria-pressed={surface === 'canvas'} className={surface === 'canvas' ? 'is-active' : ''} onClick={() => setSurface('canvas')}>Canvas</button><button type="button" aria-pressed={surface === 'focus'} className={surface === 'focus' ? 'is-active' : ''} onClick={() => setSurface('focus')}>Focus table</button></div>
-        {canAskAI && capabilities.model.enabled && <button type="button" className="tt-button tt-button--quiet tt-ai-launch" onClick={focusAIProposal}><Sparkles size={13} /> Ask AI</button>}
+        {canAskAI && !tableReadOnly && capabilities.model.enabled && <button type="button" className="tt-button tt-button--quiet tt-ai-launch" onClick={focusAIProposal}><Sparkles size={13} /> Ask AI</button>}
         <span className="tt-layout-controls__revision">r{view.domain.ruleRevision} · data r{view.domain.dataRevision}</span>
       </div>
+
+      {tableReadOnly && <div className="tt-notice tt-notice--info tt-table-readonly-notice" role="status"><span><ShieldCheck size={15} /></span><p>Editing this shared table is temporarily paused. Existing records and rules remain available to inspect.</p></div>}
 
       {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
 
@@ -531,8 +596,9 @@ export default function TabletopApp() {
         selectedNodeId={selectedNodeId}
         onSelectNode={selectCanvasNode}
         onCommand={runCommand}
-        busy={busy}
+        busy={surfaceBusy}
         onUpload={upload}
+        onTableImport={tableReadOnly ? undefined : importTableFile}
         onExport={download}
         onFocusEvidence={focusEvidence}
         onBackFromEvidence={backFromEvidence}
@@ -566,12 +632,12 @@ function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'inf
   return <main className="tt-failure"><span className="tt-dialog__mark"><CircleAlert size={18} /></span><p className="tt-kicker">TABLETOP</p><h1>The table could not be opened</h1><p>{notice?.text ?? 'Check your connection and try again.'}</p><button type="button" className="tt-button tt-button--primary" onClick={onRetry}><RefreshCw size={14} /> Try again</button></main>;
 }
 
-function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, notice, onDismissNotice, onSignOut, onCreate, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onCreate: (kind: CaseKind) => void; onOpen: (id: string) => void }) {
+function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onCreate, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onCreate: (kind: CaseKind) => void; onOpen: (id: string) => void }) {
   return <main className="tt-chooser"><header className="tt-chooser__top"><a className="tt-brand" href="#table" aria-label="Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>
     {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={onDismissNotice}><X size={14} /></button></div>}
     <section className="tt-chooser__content"><span className="tt-kicker">YOUR WORK TABLES</span><h1>Choose a table</h1><p>Open an existing table or start a new one.</p>
       {session.workspaces.length > 0 && <div className="tt-existing-tables">{session.workspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
-      <div className="tt-start-table"><span className="tt-kicker">START A TABLE</span>{(['invoice', 'teaching', 'encounter'] as const).map((kind) => <button className="tt-case-choice" type="button" key={kind} disabled={busy !== null} onClick={() => onCreate(kind)}><CaseIcon kind={kind} /><span><strong>{caseInfo[kind].title}</strong><small>{caseInfo[kind].subtitle}</small></span>{busy === 'workspace.create' ? <LoaderCircle size={15} className="tt-spin" /> : <Plus size={15} />}</button>)}</div>
+      <div className="tt-start-table"><span className="tt-kicker">START A TABLE</span>{tableReadOnly && <p className="tt-table-readonly-chooser-note" role="status">Creating shared data tables is temporarily paused. Existing tables remain available above.</p>}{(['invoice', 'teaching', 'encounter', 'table'] as const).map((kind) => <button className="tt-case-choice" type="button" key={kind} disabled={busy !== null || kind === 'table' && tableReadOnly} title={kind === 'table' && tableReadOnly ? 'Creating shared tables is temporarily paused.' : undefined} onClick={() => onCreate(kind)}><CaseIcon kind={kind} /><span><strong>{caseInfo[kind].title}</strong><small>{kind === 'table' && tableReadOnly ? 'Temporarily paused' : caseInfo[kind].subtitle}</small></span>{busy === 'workspace.create' ? <LoaderCircle size={15} className="tt-spin" /> : <Plus size={15} />}</button>)}</div>
     </section>
   </main>;
 }
@@ -619,7 +685,7 @@ function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousI
     <span className="tt-dialog__mark"><Users size={17} /></span><h2 id="tt-invite-title">People at this table</h2><p>Only invited seats can join. Each invitation works once and expires after ten minutes.</p><MemberStrip view={view} />
     {previousInvitesRevoked && <div className="tt-invite-status tt-invite-status--revoked"><ShieldCheck size={15} /><span><strong>Previous invitation links revoked</strong><small>The table reset invalidated links and removed the previous members.</small></span></div>}
     {invite && !invite.revoked && activeMember ? <div className="tt-invite-status tt-invite-status--joined"><Check size={15} /><span><strong>{activeMember.name} joined as {seatLabel(invite.seat)}</strong><small>This one-use invitation has been accepted.</small></span></div> : invite && !invite.revoked && expired ? <div className="tt-invite-status tt-invite-status--expired"><CircleAlert size={15} /><span><strong>Invitation expired</strong><small>Create a new one for this seat.</small></span></div> : invite && !invite.revoked ? <div className="tt-invite-created"><div className="tt-invite-status"><Activity size={15} /><span><strong>Waiting for {seatLabel(invite.seat)}</strong><small>Expires {new Date(invite.invite.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span></div><label htmlFor="tt-invite-link">One-use invitation link</label><div className="tt-invite-link-row"><input id="tt-invite-link" value={invite.url} readOnly onFocus={(event) => event.currentTarget.select()} /><button type="button" className="tt-button tt-button--primary" onClick={onCopy}><Clipboard size={14} /> {copied ? 'Copied' : 'Copy link'}</button></div><small>The link is held only in this open panel. Send it to the person taking this seat.</small></div> : null}
-    {canInvite ? <div className="tt-invite-choose"><span className="tt-kicker">AVAILABLE SEATS</span>{seatChoices.length === 0 ? <p>All supported seats are filled. Reset a table to revoke access or choose another table.</p> : seatChoices.map((seat) => <button type="button" className={selectedSeat === seat ? 'is-selected' : ''} key={seat} onClick={() => onSelectSeat(seat)}><span><strong>{seatLabel(seat)}</strong><small>{view.kind === 'teaching' ? 'Learner view and private answer' : 'Player view and character actions'}</small></span>{selectedSeat === seat ? <Check size={14} /> : <ArrowRight size={14} />}</button>)}</div> : <div className="tt-invite-status"><Users size={15} /><span><strong>Table members</strong><small>Only the teacher or Dungeon Master can send invitations.</small></span></div>}
+    {canInvite ? <div className="tt-invite-choose"><span className="tt-kicker">AVAILABLE SEATS</span>{seatChoices.length === 0 ? <p>All supported seats are filled. Reset a table to revoke access or choose another table.</p> : seatChoices.map((seat) => <button type="button" className={selectedSeat === seat ? 'is-selected' : ''} key={seat} onClick={() => onSelectSeat(seat)}><span><strong>{seatLabel(seat)}</strong><small>{view.kind === 'teaching' ? 'Learner view and private answer' : view.kind === 'encounter' ? 'Player view and character actions' : 'Shared active records and table actions'}</small></span>{selectedSeat === seat ? <Check size={14} /> : <ArrowRight size={14} />}</button>)}</div> : <div className="tt-invite-status"><Users size={15} /><span><strong>Table members</strong><small>{view.kind === 'table' ? 'Only the table owner can send invitations.' : 'Only the teacher or Dungeon Master can send invitations.'}</small></span></div>}
     {canInvite && selectedSeat && !view.members.some(member => member.seat === selectedSeat) && <details className="tt-invite-recovery"><summary>Lost an unused invitation link?</summary><p>Replace the link for {seatLabel(selectedSeat)}. Any previous unused link for this seat will stop working.</p><button type="button" className="tt-button tt-button--quiet" disabled={busy} onClick={() => onCreate(selectedSeat, true)}>Revoke old link and issue new link</button></details>}
     <footer><button ref={closeButtonRef} type="button" className="tt-button tt-button--quiet" onClick={onClose}>Close</button>{canInvite && selectedSeat && (!invite || invite.seat !== selectedSeat || expired || invite.revoked || activeMember) && <button ref={createButtonRef} type="button" className="tt-button tt-button--primary" disabled={busy || view.members.some(member => member.seat === selectedSeat)} onClick={() => onCreate(selectedSeat)}>{busy ? <LoaderCircle size={14} className="tt-spin" /> : <Plus size={14} />} Create invitation for {seatLabel(selectedSeat)}</button>}</footer>
   </section></div>;
@@ -628,7 +694,9 @@ function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousI
 function seatLabel(seat: Seat): string {
   if (seat === 'learner-1') return 'Learner 1';
   if (seat === 'learner-2') return 'Learner 2';
-  return seat === 'mira' ? 'Mira' : 'Pip';
+  if (seat === 'mira') return 'Mira';
+  if (seat === 'pip') return 'Pip';
+  return `Member ${seat.slice('member-'.length)}`;
 }
 
 function inferredMime(filename: string): string {

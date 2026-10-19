@@ -1,6 +1,7 @@
-export type CaseKind = 'invoice' | 'teaching' | 'encounter';
-export type Role = 'owner' | 'teacher' | 'learner' | 'dm' | 'player';
-export type Seat = 'learner-1' | 'learner-2' | 'mira' | 'pip';
+import type { TableChange, TableProgram, TableState } from './table-contracts';
+export type CaseKind = 'invoice' | 'teaching' | 'encounter' | 'table';
+export type Role = 'owner' | 'teacher' | 'learner' | 'dm' | 'player' | 'participant';
+export type Seat = 'learner-1' | 'learner-2' | 'mira' | 'pip' | 'member-1' | 'member-2' | 'member-3' | 'member-4' | 'member-5' | 'member-6' | 'member-7';
 export interface ActorContext { actorId: string; name: string; role: Role; seat?: Seat; workspaceId: string; epoch: number; now: number; hash(value: unknown): string }
 export interface Member { actorId: string; name: string; role: Role; seat?: Seat }
 export interface SourcePage { number: number; text: string }
@@ -22,7 +23,7 @@ export type RuleOperation =
   | { op: 'disableRule'; id: string };
 export interface PhysicsParams { force: number; mass: number; time: number }
 export interface EncounterRule { allyTarget: boolean; apCost: 0 | 1; oncePerTurn: boolean }
-export type ChangeSet = { kind: 'invoice'; operations: RuleOperation[] } | { kind: 'teaching'; parameters: PhysicsParams } | { kind: 'encounter'; rule: EncounterRule };
+export type ChangeSet = { kind: 'invoice'; operations: RuleOperation[] } | { kind: 'teaching'; parameters: PhysicsParams } | { kind: 'encounter'; rule: EncounterRule } | TableChange;
 export interface ValidationCheck { id: string; passed: boolean; message: string }
 export interface Candidate {
   id: string; change: ChangeSet; baseDataRevision: number; baseRuleRevision: number;
@@ -32,7 +33,7 @@ export interface Candidate {
   proof: { hash: string; candidateHash: string; sourceHash: string; passed: boolean; createdAt: number } | null;
   approval: { id: string; actorId: string; candidateHash: string; proofHash: string; epoch: number; expiresAt: number; revoked: boolean } | null;
 }
-export interface RevisionRecord { revision: number; change: ChangeSet; activatedAt: number; actorId: string; candidateHash: string; snapshot: { kind: 'invoice'; rules: RateRule[] } | { kind: 'teaching'; parameters: PhysicsParams } | { kind: 'encounter'; rule: EncounterRule } }
+export interface RevisionRecord { revision: number; change: ChangeSet; activatedAt: number; actorId: string; candidateHash: string; snapshot: { kind: 'invoice'; rules: RateRule[] } | { kind: 'teaching'; parameters: PhysicsParams } | { kind: 'encounter'; rule: EncounterRule } | { kind: 'table'; program: TableProgram } }
 export interface DomainBase { dataRevision: number; ruleRevision: number; candidate: Candidate | null; revisions: RevisionRecord[] }
 export interface InvoiceRun { id: string; createdAt: number; dataRevision: number; ruleRevision: number; result: InvoiceResult; sourceIds: string[] }
 export interface InvoiceState extends DomainBase { kind: 'invoice'; shipments: Shipment[]; invoiceLines: InvoiceLine[]; sources: Artifact[]; rules: RateRule[]; runs: InvoiceRun[] }
@@ -44,7 +45,7 @@ export interface PendingHit { id: string; attacker: Character['id']; target: Cha
 export interface EncounterEvent { id: string; text: string; createdAt: number }
 export interface EncounterPausedState { at: number; remainingReactionMs: number | null }
 export interface EncounterState extends DomainBase { kind: 'encounter'; characters: Character[]; turn: Character['id']; phase: 'turn.start' | 'reaction.open' | 'action.resolved' | 'turn.end'; pendingHit: PendingHit | null; rule: EncounterRule; events: EncounterEvent[]; dmNote?: string; seed: number; paused?: EncounterPausedState }
-export type DomainState = InvoiceState | TeachingState | EncounterState;
+export type DomainState = InvoiceState | TeachingState | EncounterState | TableState;
 export interface DomainCommand { type: string; payload: unknown }
 export interface DomainDecision { state: DomainState; label: string }
 export interface CommandEnvelope extends DomainCommand { commandId: string; expectedRevision: string; expectedEpoch: number }

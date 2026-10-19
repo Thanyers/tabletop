@@ -38,7 +38,7 @@ const commandEnvelopeSchema = z.object({
 }).strict();
 
 const workspaceInputSchema = z.object({
-  kind: z.enum(['invoice', 'teaching', 'encounter']),
+  kind: z.enum(['invoice', 'teaching', 'encounter', 'table']),
   title: z.string().max(MAX_WORKSPACE_TITLE_CHARS).optional(),
 }).strict();
 
@@ -59,6 +59,10 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
   encounter: new Set([
     'encounter.declareHit', 'encounter.shield', 'encounter.resolve', 'encounter.endTurn', 'encounter.saveNote',
     'encounter.pause', 'encounter.resume',
+    'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+  ]),
+  table: new Set([
+    'table.import', 'table.removeSource', 'table.act',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
 };
@@ -138,14 +142,15 @@ function parseName(value: unknown): string {
 }
 
 function primaryRole(kind: CaseKind): Role {
-  if (kind === 'invoice') return 'owner';
+  if (kind === 'invoice' || kind === 'table') return 'owner';
   if (kind === 'teaching') return 'teacher';
   return 'dm';
 }
 
-function inviteForSeat(kind: CaseKind, seat: Seat): { role: 'learner' | 'player'; seat: Seat } | null {
+function inviteForSeat(kind: CaseKind, seat: Seat): { role: 'learner' | 'player' | 'participant'; seat: Seat } | null {
   if (kind === 'teaching' && (seat === 'learner-1' || seat === 'learner-2')) return { role: 'learner', seat };
   if (kind === 'encounter' && (seat === 'mira' || seat === 'pip')) return { role: 'player', seat };
+  if (kind === 'table' && seat.startsWith('member-')) return { role: 'participant', seat };
   return null;
 }
 
@@ -395,7 +400,7 @@ export class CommandAuthority {
     seat: Seat,
     replaceOutstanding = false,
   ): Promise<InviteResult> {
-    const placement = inviteForSeat('teaching', seat) ?? inviteForSeat('encounter', seat);
+    const placement = inviteForSeat('teaching', seat) ?? inviteForSeat('encounter', seat) ?? inviteForSeat('table', seat);
     if (!placement) throw new AuthorityError('INVITE_NOT_ALLOWED');
     const ticket = randomToken();
     const now = this.now();
@@ -752,9 +757,18 @@ export class CommandAuthority {
     const view = this.toWorkspaceView(nextWorkspace, member, projected, members);
     const ack: CommandAck = { ok: true, commandId: envelope.commandId, duplicate: false, workspace: view };
     const eventId = randomId();
+    let eventPayload: unknown = envelope.payload;
+    if (envelope.type === 'table.import'
+        && workspace.domainState.kind === 'table' && decision.state.kind === 'table') {
+      const previousSources = workspace.domainState.sources;
+      const source = decision.state.sources.find((item) => !previousSources.some((prior) => prior.id === item.id));
+      eventPayload = source
+        ? { sourceId: source.id, filename: source.filename, sha256: source.sha256 }
+        : { redacted: true };
+    }
     const eventData = {
       type: envelope.type,
-      payload: envelope.payload,
+      payload: eventPayload,
       label: decision.label,
       beforeRevision: String(workspace.revision),
       afterRevision: String(nextWorkspace.revision),
@@ -918,5 +932,6 @@ function isEmptyPayload(payload: unknown): boolean {
 function defaultWorkspaceTitle(kind: CaseKind): string {
   if (kind === 'invoice') return 'Invoice Review';
   if (kind === 'teaching') return 'Physics Lesson';
+  if (kind === 'table') return 'Shared Table';
   return 'Encounter Table';
 }

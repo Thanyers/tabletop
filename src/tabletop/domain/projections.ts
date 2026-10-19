@@ -2,6 +2,17 @@ import { DomainError, type ActorContext, type DomainState, type EncounterState, 
 import { clone } from './helpers';
 
 export function projectDomain(state: DomainState, ctx: ActorContext): DomainState {
+  if (state.kind === 'table') {
+    if (ctx.role !== 'owner' && ctx.role !== 'participant') throw new DomainError('FORBIDDEN', 'Only room members may read this table.');
+    const projected = clone(state);
+    if (ctx.role === 'participant') {
+      projected.sources = []; projected.candidate = null; projected.revisions = [];
+      if (projected.program) projected.program.evidence = [];
+      // Owner-only source/draft mutations must not reveal even their count through a revision.
+      projected.dataRevision = (projected.actionRevision ?? 0) + projected.ruleRevision;
+    }
+    return projected;
+  }
   if (state.kind === 'invoice') {
     if (ctx.role !== 'owner') throw new DomainError('FORBIDDEN', 'Only the invoice owner can read invoice evidence and results.');
     return clone(state);

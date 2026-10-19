@@ -9,6 +9,7 @@ import { CandidateLifecycle, EvidenceList, UploadCard, useUploadCapability } fro
 import type { Command, WorkbenchProps } from './types';
 import { formatMoney } from './types';
 import { usePracticeClock } from './PracticeClock';
+import { TableCanvasObject } from './TableCanvasObjects';
 
 interface CanvasObjectContentProps {
   view: WorkspaceView;
@@ -17,6 +18,7 @@ interface CanvasObjectContentProps {
   busy: string | null;
   onCommand: Command;
   onUpload: WorkbenchProps['onUpload'];
+  onTableImport?: WorkbenchProps['onTableImport'];
   onExport: WorkbenchProps['onExport'];
   onFocusEvidence: (sourceIds: string[]) => void;
   focusSourceIds: string[];
@@ -27,6 +29,7 @@ interface CanvasObjectContentProps {
 }
 
 export function CanvasObjectContent(props: CanvasObjectContentProps) {
+  if (props.node.id.startsWith('table.')) return <TableCanvasObject {...props} />;
   switch (props.node.id) {
     case 'invoice.source': return <InvoiceSources {...props} />;
     case 'invoice.table': return <InvoiceTable {...props} />;

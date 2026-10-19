@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions (hard_expires_at, las
 CREATE TABLE IF NOT EXISTS workspaces (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('invoice', 'teaching', 'encounter')),
+  kind TEXT NOT NULL CHECK (kind IN ('invoice', 'teaching', 'encounter', 'table')),
   owner_actor_id TEXT NOT NULL,
   epoch INTEGER NOT NULL CHECK (epoch > 0),
   revision BIGINT NOT NULL CHECK (revision > 0),
@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS workspaces (
 CREATE INDEX IF NOT EXISTS workspaces_expiry_idx ON workspaces (expires_at);
 CREATE INDEX IF NOT EXISTS workspaces_owner_idx ON workspaces (owner_actor_id);
 
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS workspaces_kind_check;
+ALTER TABLE workspaces ADD CONSTRAINT workspaces_kind_check
+  CHECK (kind IN ('invoice', 'teaching', 'encounter', 'table'));
+
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS projection_salt TEXT;
 UPDATE workspaces SET projection_salt = gen_random_uuid()::text WHERE projection_salt IS NULL;
 ALTER TABLE workspaces ALTER COLUMN projection_salt SET NOT NULL;
@@ -58,12 +62,19 @@ CREATE TABLE IF NOT EXISTS memberships (
   epoch INTEGER NOT NULL,
   actor_id TEXT NOT NULL,
   actor_name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('owner', 'teacher', 'learner', 'dm', 'player')),
-  seat TEXT CHECK (seat IS NULL OR seat IN ('learner-1', 'learner-2', 'mira', 'pip')),
+  role TEXT NOT NULL CHECK (role IN ('owner', 'teacher', 'learner', 'dm', 'player', 'participant')),
+  seat TEXT CHECK (seat IS NULL OR seat IN ('learner-1', 'learner-2', 'mira', 'pip', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7')),
   created_at BIGINT NOT NULL,
   revoked_at BIGINT,
   PRIMARY KEY (workspace_id, epoch, actor_id)
 );
+
+ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_role_check;
+ALTER TABLE memberships ADD CONSTRAINT memberships_role_check
+  CHECK (role IN ('owner', 'teacher', 'learner', 'dm', 'player', 'participant'));
+ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_seat_check;
+ALTER TABLE memberships ADD CONSTRAINT memberships_seat_check
+  CHECK (seat IS NULL OR seat IN ('learner-1', 'learner-2', 'mira', 'pip', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'));
 
 CREATE UNIQUE INDEX IF NOT EXISTS memberships_active_seat_idx
   ON memberships (workspace_id, epoch, seat)
@@ -75,8 +86,8 @@ CREATE TABLE IF NOT EXISTS invitations (
   ticket_hash TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id),
   epoch INTEGER NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('learner', 'player')),
-  seat TEXT NOT NULL CHECK (seat IN ('learner-1', 'learner-2', 'mira', 'pip')),
+  role TEXT NOT NULL CHECK (role IN ('learner', 'player', 'participant')),
+  seat TEXT NOT NULL CHECK (seat IN ('learner-1', 'learner-2', 'mira', 'pip', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7')),
   created_by TEXT NOT NULL,
   created_at BIGINT NOT NULL,
   expires_at BIGINT NOT NULL,
@@ -84,6 +95,13 @@ CREATE TABLE IF NOT EXISTS invitations (
   redeemed_by TEXT,
   revoked_at BIGINT
 );
+
+ALTER TABLE invitations DROP CONSTRAINT IF EXISTS invitations_role_check;
+ALTER TABLE invitations ADD CONSTRAINT invitations_role_check
+  CHECK (role IN ('learner', 'player', 'participant'));
+ALTER TABLE invitations DROP CONSTRAINT IF EXISTS invitations_seat_check;
+ALTER TABLE invitations ADD CONSTRAINT invitations_seat_check
+  CHECK (seat IN ('learner-1', 'learner-2', 'mira', 'pip', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'));
 
 CREATE UNIQUE INDEX IF NOT EXISTS invitations_active_seat_idx
   ON invitations (workspace_id, epoch, seat)

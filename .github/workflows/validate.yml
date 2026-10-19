@@ -82,6 +82,7 @@ jobs:
             test-results/cloudflare-browser/canvas-demo-empty.png
             test-results/cloudflare-browser/canvas-demo-dragged.png
             test-results/cloudflare-browser/canvas-demo-invoice.png
+            test-results/cloudflare-browser/generic-table-*.png
             test-results/cloudflare-browser/failure-*.png
           retention-days: 7
           include-hidden-files: false

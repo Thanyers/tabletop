@@ -59,7 +59,7 @@ export interface InvitationRecord {
   ticketHash: string;
   workspaceId: string;
   epoch: number;
-  role: 'learner' | 'player';
+  role: 'learner' | 'player' | 'participant';
   seat: Seat;
   createdBy: string;
   createdAt: number;
@@ -258,18 +258,20 @@ const workspaceColumns = `id, title, kind, owner_actor_id, epoch, revision, proj
 const objectKeyPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 function mapKind(value: unknown): CaseKind {
-  if (value === 'invoice' || value === 'teaching' || value === 'encounter') return value;
+  if (value === 'invoice' || value === 'teaching' || value === 'encounter' || value === 'table') return value;
   throw new Error('DATABASE_FIELD_INVALID:kind');
 }
 
 function mapRole(value: unknown): Role {
-  if (value === 'owner' || value === 'teacher' || value === 'learner' || value === 'dm' || value === 'player') return value;
+  if (value === 'owner' || value === 'teacher' || value === 'learner' || value === 'dm' || value === 'player' || value === 'participant') return value;
   throw new Error('DATABASE_FIELD_INVALID:role');
 }
 
 function mapSeat(value: unknown): Seat | undefined {
   if (value === null || value === undefined) return undefined;
-  if (value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip') return value;
+  if (value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip'
+      || value === 'member-1' || value === 'member-2' || value === 'member-3' || value === 'member-4'
+      || value === 'member-5' || value === 'member-6' || value === 'member-7') return value;
   throw new Error('DATABASE_FIELD_INVALID:seat');
 }
 
@@ -330,7 +332,9 @@ function mapMember(row: MemberRow): StoredMember {
 function mapInvitation(row: InvitationRow): InvitationRecord {
   const role = mapRole(row.role);
   const seat = mapSeat(row.seat);
-  if ((role !== 'learner' && role !== 'player') || seat === undefined) throw new Error('DATABASE_INVITATION_INVALID');
+  if ((role !== 'learner' && role !== 'player' && role !== 'participant') || seat === undefined) {
+    throw new Error('DATABASE_INVITATION_INVALID');
+  }
   return {
     ticketHash: readString(row.ticket_hash, 'ticket_hash'),
     workspaceId: readString(row.workspace_id, 'workspace_id'),
@@ -446,7 +450,8 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
           [workspace.id, workspace.ownerActorId],
         );
 
-        const role = workspace.kind === 'invoice' ? 'owner' : workspace.kind === 'teaching' ? 'teacher' : 'dm';
+        const role = workspace.kind === 'invoice' || workspace.kind === 'table' ? 'owner'
+          : workspace.kind === 'teaching' ? 'teacher' : 'dm';
         const scrubbedContext: ActorContext = {
           actorId: 'expired',
           name: 'Expired',

@@ -16,11 +16,13 @@ import { encounterRuleSchema } from './encounter';
 import { calculatePhysics, physicsParamsSchema } from './physics';
 import { assert, canonicalJson, hash, hasRole, parsePayload } from './helpers';
 import { makeTeachingQuestionId } from './teaching';
+import { applyTableChange, tableChangeIssues, tableChangeSchema } from './table';
 
 const changeSchema = z.discriminatedUnion('kind', [
   invoiceChangeSchema,
   z.object({ kind: z.literal('teaching'), parameters: physicsParamsSchema }).strict(),
   z.object({ kind: z.literal('encounter'), rule: encounterRuleSchema }).strict(),
+  tableChangeSchema,
 ]);
 const proposeSchema = z.object({ change: changeSchema }).strict();
 const noPayloadSchema = z.object({}).strict();
@@ -29,6 +31,7 @@ const PROOF_SUITE = 'tabletop-domain-validation-v1';
 const APPROVAL_TTL_MS = 15 * 60_000;
 
 function sourceHash(state: DomainState, ctx: ActorContext): string {
+  if (state.kind === 'table') return hash(ctx, { dataRevision: state.dataRevision, sources: state.sources, program: state.program, records: state.records, turn: state.turn });
   if (state.kind === 'invoice') return invoiceSourceHash(state, ctx);
   if (state.kind === 'teaching') return hash(ctx, { dataRevision: state.dataRevision, parameters: state.parameters, questionId: state.questionId, answers: state.answers });
   return hash(ctx, {
@@ -43,6 +46,7 @@ function sourceHash(state: DomainState, ctx: ActorContext): string {
 }
 
 function planDelta(change: ChangeSet): unknown {
+  if (change.kind === 'table') return { version: 1, kind: 'table', collections: change.program.collections, actions: change.program.actions.map(a => a.id) };
   if (change.kind !== 'invoice' || !change.operations.some((operation) => operation.op === 'setSurcharge')) return { version: 1, kind: 'none' };
   return {
     version: 1,
@@ -71,7 +75,7 @@ function hashCandidate(ctx: ActorContext, candidate: Pick<Candidate, 'change' | 
 }
 
 function requireCaseRole(state: DomainState, ctx: ActorContext): void {
-  const role = state.kind === 'invoice' ? 'owner' : state.kind === 'teaching' ? 'teacher' : 'dm';
+  const role = state.kind === 'invoice' || state.kind === 'table' ? 'owner' : state.kind === 'teaching' ? 'teacher' : 'dm';
   hasRole(ctx, [role]);
 }
 
@@ -119,7 +123,12 @@ function simulateEncounter(rule: EncounterRule): { target: 'pip'; preHitHp: 10; 
   return { target: 'pip', preHitHp: 10, hitDamage: 4, shieldActor: 'mira', hpAfter: Math.max(0, 10 - damage), shieldApplied, shieldUsedThisTurn: alreadyUsedThisTurn };
 }
 
-function simulationFor(state: DomainState, change: ChangeSet): { before: unknown; after: unknown; checks: ValidationCheck[] } {
+function simulationFor(state: DomainState, change: ChangeSet, ctx: ActorContext): { before: unknown; after: unknown; checks: ValidationCheck[] } {
+  if (state.kind === 'table' && change.kind === 'table') {
+    const after = applyTableChange(state, change);
+    const summarize = (s: typeof state) => ({ collections: s.program?.collections.length ?? 0, actions: s.program?.actions.length ?? 0, rowCount: Object.values(s.records).reduce((n, rows) => n + rows.length, 0), turn: s.turn, recordsHash: hash(ctx, s.records) });
+    return { before: summarize(state), after: summarize(after), checks: [] };
+  }
   if (state.kind === 'invoice' && change.kind === 'invoice') {
     const changed: InvoiceState = { ...structuredClone(state), rules: applyInvoiceOperations(state, change.operations) };
     const before = reconcileInvoice(state);
@@ -142,6 +151,7 @@ function simulationFor(state: DomainState, change: ChangeSet): { before: unknown
 
 function semanticIssues(state: DomainState, change: ChangeSet): string[] {
   try {
+    if (state.kind === 'table' && change.kind === 'table') return tableChangeIssues(state, change);
     if (state.kind === 'invoice' && change.kind === 'invoice') {
       const rules = applyInvoiceOperations(state, change.operations);
       const issues = validateRuleSet(rules, state.sources);
@@ -193,7 +203,7 @@ function checksFor(state: DomainState, candidate: Candidate, currentSource: stri
   const issues = semanticIssues(state, candidate.change);
   let simulationMatches = false;
   try {
-    const recomputed = simulationFor(state, candidate.change);
+    const recomputed = simulationFor(state, candidate.change, ctx);
     simulationMatches = candidate.simulation !== null
       && canonicalJson({ before: candidate.simulation.before, after: candidate.simulation.after }) === canonicalJson({ before: recomputed.before, after: recomputed.after });
   } catch {
@@ -216,17 +226,19 @@ function checksFor(state: DomainState, candidate: Candidate, currentSource: stri
 }
 
 function makeRevision(state: DomainState, candidate: Candidate, ctx: ActorContext, revision: number): RevisionRecord {
+  if (state.kind === 'table' && state.program) return { revision, change: { kind: 'table', program: structuredClone(state.program), initialRecords: {} }, activatedAt: ctx.now, actorId: ctx.actorId, candidateHash: candidate.hash, snapshot: { kind: 'table', program: structuredClone(state.program) } };
   if (state.kind === 'invoice') {
     return { revision, change: structuredClone(candidate.change), activatedAt: ctx.now, actorId: ctx.actorId, candidateHash: candidate.hash, snapshot: { kind: 'invoice', rules: structuredClone(state.rules) } };
   }
   if (state.kind === 'teaching') {
     return { revision, change: structuredClone(candidate.change), activatedAt: ctx.now, actorId: ctx.actorId, candidateHash: candidate.hash, snapshot: { kind: 'teaching', parameters: structuredClone(state.parameters) } };
   }
-  return { revision, change: structuredClone(candidate.change), activatedAt: ctx.now, actorId: ctx.actorId, candidateHash: candidate.hash, snapshot: { kind: 'encounter', rule: structuredClone(state.rule) } };
+  if (state.kind === 'encounter') return { revision, change: structuredClone(candidate.change), activatedAt: ctx.now, actorId: ctx.actorId, candidateHash: candidate.hash, snapshot: { kind: 'encounter', rule: structuredClone(state.rule) } };
+  throw new DomainError('TABLE_INACTIVE', 'A table needs an active program before saving a revision.');
 }
 
 function nextStateWithChange(state: DomainState, candidate: Candidate, ctx: ActorContext): DomainState {
-  const next = structuredClone(state);
+  const next = state.kind === 'table' && candidate.change.kind === 'table' ? applyTableChange(state, candidate.change) : structuredClone(state);
   if (next.kind === 'invoice' && candidate.change.kind === 'invoice') next.rules = applyInvoiceOperations(next, candidate.change.operations);
   if (next.kind === 'teaching' && candidate.change.kind === 'teaching') {
     next.parameters = structuredClone(candidate.change.parameters);
@@ -256,6 +268,10 @@ function nextStateWithChange(state: DomainState, candidate: Candidate, ctx: Acto
   const revision = next.ruleRevision + 1;
   next.ruleRevision = revision;
   next.revisions.push(makeRevision(next, candidate, ctx, revision));
+  if (next.kind === 'table') {
+    next.revisions = next.revisions.slice(-20);
+    while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
+  }
   if (next.candidate) next.candidate.status = 'active';
   return next;
 }
@@ -288,6 +304,7 @@ function restoreRevision(state: DomainState, revision: number): ChangeSet {
   }
   if (state.kind === 'teaching' && record.snapshot.kind === 'teaching') return { kind: 'teaching', parameters: structuredClone(record.snapshot.parameters) };
   if (state.kind === 'encounter' && record.snapshot.kind === 'encounter') return { kind: 'encounter', rule: structuredClone(record.snapshot.rule) };
+  if (state.kind === 'table' && record.snapshot.kind === 'table') return { kind: 'table', program: structuredClone(record.snapshot.program), initialRecords: {} };
   throw new DomainError('ROLLBACK_INCOMPATIBLE', 'The selected revision snapshot cannot be applied to this workspace type.');
 }
 
@@ -311,7 +328,7 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     const candidate = structuredClone(state.candidate);
     assertCandidateCurrent(state, ctx, candidate);
     const next = structuredClone(state);
-    const simulation = simulationFor(state, candidate.change);
+    const simulation = simulationFor(state, candidate.change, ctx);
     candidate.status = 'simulated';
     candidate.simulation = simulation;
     candidate.proof = null;

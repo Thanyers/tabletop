@@ -1,20 +1,24 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
+import { tableChangeIssues, tableChangeSchema, tableProgramSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
+import { DeepSeekChangeProvider, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
+const MAX_TABLE_INPUT_BYTES = 48_000;
 const PROVIDER_OVERHEAD_BYTES = 8_000;
-const MAX_PROVIDER_INPUT_TOKENS = 56_000;
+const MAX_STANDARD_PROVIDER_INPUT_TOKENS = 56_000;
+const MAX_PROVIDER_INPUT_TOKENS = 65_000;
 const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
 const CHANGE_MAX_OUTPUT_TOKENS = 512;
+const TABLE_MAX_OUTPUT_TOKENS = 8_192;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -24,14 +28,14 @@ function isWorkspaceView(value: unknown): value is WorkspaceView {
   if (!isRecord(value) || !isRecord(value.actor) || !isRecord(value.domain) || !Array.isArray(value.members)) return false;
   if (typeof value.id !== 'string' || typeof value.title !== 'string' || typeof value.revision !== 'string'
     || !Number.isSafeInteger(value.epoch) || typeof value.createdAt !== 'number' || typeof value.expiresAt !== 'number') return false;
-  if (!['invoice', 'teaching', 'encounter'].includes(String(value.kind))) return false;
-  if (!['invoice', 'teaching', 'encounter'].includes(String(value.domain.kind))) return false;
+  if (!['invoice', 'teaching', 'encounter', 'table'].includes(String(value.kind))) return false;
+  if (!['invoice', 'teaching', 'encounter', 'table'].includes(String(value.domain.kind))) return false;
   if (value.domain.kind !== value.kind) return false;
   if (typeof value.actor.actorId !== 'string' || typeof value.actor.name !== 'string'
-    || !['owner', 'teacher', 'learner', 'dm', 'player'].includes(String(value.actor.role))) return false;
+    || !['owner', 'teacher', 'learner', 'dm', 'player', 'participant'].includes(String(value.actor.role))) return false;
   return value.members.every((member) => isRecord(member)
     && typeof member.actorId === 'string' && typeof member.name === 'string'
-    && ['owner', 'teacher', 'learner', 'dm', 'player'].includes(String(member.role)));
+    && ['owner', 'teacher', 'learner', 'dm', 'player', 'participant'].includes(String(member.role)));
 }
 
 const requestSchema = z.strictObject({
@@ -73,6 +77,17 @@ const invoiceDomainSchema = z.object({
 });
 const teachingDomainSchema = z.object({ kind: z.literal('teaching'), parameters: physicsParamsSchema });
 const encounterDomainSchema = z.object({ kind: z.literal('encounter'), rule: encounterRuleSchema });
+const tableDomainSchema = z.object({
+  kind: z.literal('table'),
+  sources: z.array(z.object({
+    id: z.string().min(1).max(100),
+    filename: z.string().min(1).max(120),
+    text: z.string().min(1).max(TABLE_FILE_BYTES),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })).max(4),
+  program: tableProgramSchema.nullable(),
+  turn: z.string().max(40).nullable(),
+});
 const billingUsageSchema = z.strictObject({
   promptTokens: z.number().int().safe().nonnegative(),
   completionTokens: z.number().int().safe().nonnegative(),
@@ -109,7 +124,7 @@ type BillingBinding = BillingRequestBinding;
 
 type PreparedInput =
   | { kind: 'invoice'; providerInput: ModelInput; hashInput: unknown; maxOutputTokens: number; maximumInputBytes: number }
-  | { kind: 'teaching' | 'encounter'; providerInput: DeepSeekChangeInput; hashInput: unknown; maxOutputTokens: number; maximumInputBytes: number };
+  | { kind: 'teaching' | 'encounter' | 'table'; providerInput: DeepSeekChangeInput; hashInput: unknown; maxOutputTokens: number; maximumInputBytes: number };
 
 interface BillingResponse {
   ok: boolean;
@@ -165,7 +180,7 @@ function actorAndRole(request: AIProposalRequest): void {
     fail('AI_FORBIDDEN', 'The current room membership cannot request this proposal.');
   }
   const requiredRole = workspace.kind === 'invoice' ? 'owner'
-    : workspace.kind === 'teaching' ? 'teacher' : 'dm';
+    : workspace.kind === 'table' ? 'owner' : workspace.kind === 'teaching' ? 'teacher' : 'dm';
   if (actor.role !== requiredRole) fail('AI_FORBIDDEN', 'The current room role cannot request this proposal.');
   if (workspace.domain.kind !== workspace.kind || !Number.isSafeInteger(workspace.epoch)
     || workspace.epoch < 0 || typeof workspace.revision !== 'string' || workspace.revision.length > 256) {
@@ -207,6 +222,27 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
       hashInput: providerInput,
       maxOutputTokens: CHANGE_MAX_OUTPUT_TOKENS,
       maximumInputBytes: MAX_CHANGE_INPUT_BYTES,
+    };
+  }
+  if (workspace.domain.kind === 'table') {
+    const parsed = tableDomainSchema.safeParse(workspace.domain);
+    if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current table state is invalid.');
+    if (parsed.data.sources.length === 0) fail('SOURCE_REQUIRED', 'Import a source file before requesting table rules.');
+    const sourceBytes = parsed.data.sources.reduce((total, source) => total + new TextEncoder().encode(source.text).byteLength, 0);
+    if (sourceBytes > TABLE_TOTAL_SOURCE_BYTES) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The table sources exceed the allowed proposal size.');
+    const providerInput: DeepSeekChangeInput = {
+      kind: 'table',
+      prompt,
+      sources: parsed.data.sources.map(({ id, filename, text }) => ({ id, filename, text })),
+      program: structuredClone(parsed.data.program),
+      turn: parsed.data.turn,
+    };
+    return {
+      kind: 'table',
+      providerInput,
+      hashInput: providerInput,
+      maxOutputTokens: TABLE_MAX_OUTPUT_TOKENS,
+      maximumInputBytes: MAX_TABLE_INPUT_BYTES,
     };
   }
   const parsed = encounterDomainSchema.safeParse(workspace.domain);
@@ -288,7 +324,8 @@ function safeProviderFailure(error: unknown): DomainError {
 
 function validateChange(kind: WorkspaceView['kind'], raw: unknown): ChangeSet {
   const parsed = kind === 'invoice' ? invoiceChangeSchema.safeParse(raw)
-    : kind === 'teaching' ? teachingChangeSchema.safeParse(raw) : encounterChangeSchema.safeParse(raw);
+    : kind === 'teaching' ? teachingChangeSchema.safeParse(raw)
+      : kind === 'table' ? tableChangeSchema.safeParse(raw) : encounterChangeSchema.safeParse(raw);
   if (!parsed.success) fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The model returned a proposal that failed validation.');
   return parsed.data;
 }
@@ -327,11 +364,21 @@ export async function proposeChange(
   actorAndRole(request);
   const prepared = prepareInput(request);
   const providerBytes = new TextEncoder().encode(canonical(prepared.providerInput)).byteLength;
-  if (providerBytes > prepared.maximumInputBytes
-    || providerBytes + PROVIDER_OVERHEAD_BYTES > MAX_PROVIDER_INPUT_TOKENS) {
+  if (providerBytes > prepared.maximumInputBytes) {
     fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The proposal request exceeds the allowed size.');
   }
-  const maxInputTokens = Math.max(1, providerBytes + PROVIDER_OVERHEAD_BYTES);
+  let maxInputTokens: number;
+  if (prepared.kind === 'table') {
+    try {
+      maxInputTokens = measureDeepSeekChangeRequest(prepared.providerInput) + TABLE_REQUEST_TOKEN_MARGIN;
+    } catch (error) {
+      throw safeProviderFailure(error);
+    }
+  } else {
+    maxInputTokens = Math.max(1, providerBytes + PROVIDER_OVERHEAD_BYTES);
+  }
+  const inputTokenLimit = prepared.kind === 'table' ? MAX_PROVIDER_INPUT_TOKENS : MAX_STANDARD_PROVIDER_INPUT_TOKENS;
+  if (maxInputTokens > inputTokenLimit) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The proposal request exceeds the allowed size.');
   const maxReservation = priceMicroUsd(maxInputTokens, prepared.maxOutputTokens);
   if (!Number.isSafeInteger(maxReservation) || maxReservation <= 0) {
     fail('AI_INPUT_INVALID', 'The proposal request is invalid.');
@@ -383,6 +430,10 @@ export async function proposeChange(
       const provider = new DeepSeekChangeProvider({ apiKey: env.DEEPSEEK_KEY!, fetch: fetchImpl, timeoutMs: 30_000 });
       const result = await provider.propose(prepared.providerInput, new AbortController().signal);
       change = validateChange(workspace.kind, result.change);
+      if (workspace.domain.kind === 'table' && change.kind === 'table'
+          && tableChangeIssues(workspace.domain, change).length > 0) {
+        fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The model returned table rules that do not fit the current sources and active records.');
+      }
       usage = result.usage;
     }
   } catch (error) {

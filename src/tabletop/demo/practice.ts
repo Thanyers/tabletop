@@ -23,7 +23,9 @@ const PRACTICE_HISTORY_LIMIT = 200;
 const PRACTICE_EVENT_MESSAGE_LIMIT = 600;
 const PRACTICE_EXPORTED_INPUT_LIMIT = 12_000;
 const PRACTICE_IMPORTED_FILE_LIMIT = 20;
-const PRACTICE_OBJECT_IDS: Record<CaseKind, readonly string[]> = {
+type PracticeCaseKind = Exclude<CaseKind, 'table'>;
+
+const PRACTICE_OBJECT_IDS: Record<PracticeCaseKind, readonly string[]> = {
   invoice: ['invoice.source', 'invoice.table', 'invoice.rules', 'invoice.review', 'workspace.history', 'workspace.people'],
   teaching: ['lesson.source', 'lesson.scene', 'lesson.graph', 'lesson.question', 'lesson.rules', 'workspace.history', 'workspace.people'],
   encounter: ['encounter.source', 'encounter.board', 'encounter.actions', 'workspace.history', 'workspace.people'],
@@ -82,7 +84,7 @@ interface PracticeImportInput {
 
 export const PRACTICE_REPLAY_INTERVAL_MS = PRACTICE_PLAY_INTERVAL_MS;
 
-const SYNTHETIC_MEMBERS: Record<CaseKind, readonly Member[]> = {
+const SYNTHETIC_MEMBERS: Record<PracticeCaseKind, readonly Member[]> = {
   invoice: [{ actorId: 'practice-owner', name: 'คุณอ้อม', role: 'owner' }],
   teaching: [
     { actorId: 'practice-teacher', name: 'ครูเมย์', role: 'teacher' },

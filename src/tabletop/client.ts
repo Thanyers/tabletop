@@ -40,6 +40,7 @@ export interface ModelJob {
 
 export interface TabletopCapabilities {
   uploads: boolean;
+  tableReadOnly?: boolean;
   model: { enabled: boolean; reason: string };
 }
 
@@ -139,12 +140,13 @@ export class TabletopClient {
   async capabilities(): Promise<TabletopCapabilities> {
     const response = await this.fetchResponse('/api/capabilities', 'The workspace features could not be checked.');
     if (response.status === 404) return { uploads: true, model: { enabled: false, reason: 'AI proposals are not configured on this local server.' } };
-    const body = await readResponse<{ uploads?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
-    if (typeof body.uploads !== 'boolean' || typeof body.model?.enabled !== 'boolean') {
+    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    if (typeof body.uploads !== 'boolean' || typeof body.model?.enabled !== 'boolean' || body.tableReadOnly !== undefined && typeof body.tableReadOnly !== 'boolean') {
       throw new ApiFailure('The workspace feature settings could not be read.', 502);
     }
     return {
       uploads: body.uploads,
+      ...(typeof body.tableReadOnly === 'boolean' ? { tableReadOnly: body.tableReadOnly } : {}),
       model: {
         enabled: body.model.enabled,
         reason: typeof body.model.reason === 'string' ? body.model.reason : '',
@@ -205,7 +207,7 @@ export class TabletopClient {
       if (typeof item !== 'object' || item === null) return false;
       const row = item as Partial<AdminWorkspace>;
       return typeof row.id === 'string'
-        && (row.kind === 'invoice' || row.kind === 'teaching' || row.kind === 'encounter')
+        && (row.kind === 'invoice' || row.kind === 'teaching' || row.kind === 'encounter' || row.kind === 'table')
         && (typeof row.createdAt === 'string' || typeof row.createdAt === 'number')
         && typeof row.ownerId === 'string'
         && typeof row.memberCount === 'number'
@@ -243,6 +245,10 @@ export class TabletopClient {
       commandId,
     };
     return this.postWithRetry<CommandAck>(`/api/workspaces/${encodeURIComponent(view.id)}/uploads`, body);
+  }
+
+  async importTableSource(view: WorkspaceView, filename: string, text: string, commandId = crypto.randomUUID()): Promise<CommandAck> {
+    return this.command(view, 'table.import', { filename, text }, commandId);
   }
 
   async invite(workspaceId: string, seat: string, replaceOutstanding = false): Promise<WorkspaceInvite> {

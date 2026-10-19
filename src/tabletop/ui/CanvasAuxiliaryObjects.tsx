@@ -65,14 +65,16 @@ function CanvasHistoryContainer({ view, expanded }: { view: WorkspaceView; expan
     ? [...view.domain.runs].reverse().map((run) => ({ id: run.id, title: `Saved run · rules r${run.ruleRevision} · data r${run.dataRevision}`, detail: `${run.result.rows.length} rows · ${run.result.unknownCount} unknown · difference ${formatMoney(run.result.deltaSatang)}`, at: run.createdAt }))
     : view.domain.kind === 'teaching'
       ? [...view.domain.answers].reverse().map((answer) => ({ id: `${answer.actorId}-${answer.questionId}-${answer.submittedAt}`, title: `${answer.name} · ${answer.correct ? 'correct' : 'needs another try'}`, detail: `Lesson r${answer.lessonRevision} · ${answer.value} m`, at: answer.submittedAt }))
-      : [...view.domain.events].reverse().map((event) => ({ id: event.id, title: event.text, detail: new Date(event.createdAt).toLocaleString(), at: event.createdAt }));
+      : view.domain.kind === 'encounter'
+        ? [...view.domain.events].reverse().map((event) => ({ id: event.id, title: event.text, detail: new Date(event.createdAt).toLocaleString(), at: event.createdAt }))
+        : [...view.domain.activity].reverse().map((event, index) => ({ id: `${event.actorId}-${event.at}-${index}`, title: event.action, detail: `${view.members.find((member) => member.actorId === event.actorId)?.name ?? 'Table member'} · ${new Date(event.at).toLocaleString()}`, at: event.at }));
   const revisions = [...view.domain.revisions].reverse();
   const visibleEntries = expanded ? entries : entries.slice(0, 3);
   const visibleRevisions = expanded ? revisions : revisions.slice(0, 3);
   return <div className="tt-canvas-inline">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">RECENT ACTIVITY</span><strong>{entries.length + revisions.length} recorded items</strong><small>{expanded ? 'Complete history for this table view' : `Latest ${visibleEntries.length + visibleRevisions.length} entries · open for all`}</small></div>
     {entries.length === 0 && revisions.length === 0 ? <div className="tt-canvas-inline__empty">Saved runs, answers, turns, and activated rule changes will appear here.</div> : <>
-      {visibleEntries.length > 0 && <section className="tt-inline-history" aria-label="Recent table activity"><header><strong>{view.kind === 'invoice' ? 'Saved runs' : view.kind === 'teaching' ? 'Lesson responses' : 'Encounter events'}</strong><span>{entries.length}</span></header><ol>{visibleEntries.map((entry) => <li key={entry.id}><span><strong>{entry.title}</strong><small>{entry.detail}</small></span><time dateTime={new Date(entry.at).toISOString()}>{new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></li>)}</ol></section>}
+      {visibleEntries.length > 0 && <section className="tt-inline-history" aria-label="Recent table activity"><header><strong>{view.kind === 'invoice' ? 'Saved runs' : view.kind === 'teaching' ? 'Lesson responses' : view.kind === 'table' ? 'Table actions' : 'Encounter events'}</strong><span>{entries.length}</span></header><ol>{visibleEntries.map((entry) => <li key={entry.id}><span><strong>{entry.title}</strong><small>{entry.detail}</small></span><time dateTime={new Date(entry.at).toISOString()}>{new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></li>)}</ol></section>}
       {visibleRevisions.length > 0 && <section className="tt-inline-history" aria-label="Activated revisions"><header><strong>Activated rule changes</strong><span>{view.domain.ruleRevision}</span></header><ol>{visibleRevisions.map((record) => <li key={record.revision}><span><strong>Revision {record.revision} · {revisionDescription(record.change)}</strong><small>{view.members.find((member) => member.actorId === record.actorId)?.name ?? 'Table member'} · {new Date(record.activatedAt).toLocaleString()}</small></span></li>)}</ol></section>}
     </>}
   </div>;
@@ -81,5 +83,6 @@ function CanvasHistoryContainer({ view, expanded }: { view: WorkspaceView; expan
 function revisionDescription(change: WorkspaceView['domain']['revisions'][number]['change']): string {
   if (change.kind === 'invoice') return `${change.operations.length} dated rate ${change.operations.length === 1 ? 'change' : 'changes'}`;
   if (change.kind === 'teaching') return `Force ${change.parameters.force} N · mass ${change.parameters.mass} kg · time ${change.parameters.time} s`;
-  return `${change.rule.allyTarget ? 'Self or ally' : 'Self only'} · ${change.rule.apCost} AP shield`;
+  if (change.kind === 'encounter') return `${change.rule.allyTarget ? 'Self or ally' : 'Self only'} · ${change.rule.apCost} AP shield`;
+  return `${change.program.collections.length} collections · ${change.program.actions.length} actions`;
 }

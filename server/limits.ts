@@ -4,7 +4,7 @@ export const WORKSPACE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const INVITE_TTL_MS = 10 * 60 * 1000;
 
 export const MAX_ACTIVE_WORKSPACES = 20;
-export const MAX_MEMBERS_PER_WORKSPACE = 3;
+export const MAX_MEMBERS_PER_WORKSPACE = 8;
 export const MAX_JSON_BODY_BYTES = 256 * 1024;
 export const MAX_WEBSOCKET_MESSAGE_BYTES = 64 * 1024;
 export const MAX_HTTP_REQUESTS_PER_MINUTE = 120;
@@ -37,6 +37,6 @@ export const STATIC_ASSET_CACHE_SECONDS = 31_536_000;
 export const SESSION_COOKIE_NAME = 'tabletop_session';
 export const SCHEMA_VERSION = 1;
 export const API_SCHEMA_VERSION = 1;
-export const DATABASE_SCHEMA_VERSION = 4;
+export const DATABASE_SCHEMA_VERSION = 5;
 export const DEFAULT_PORT = 4310;
 export const DEFAULT_HOST = '127.0.0.1';

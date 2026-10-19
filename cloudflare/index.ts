@@ -4,13 +4,14 @@ import { randomId } from '../server/codec.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { accountForSession, authenticateRequest, authStatus, finishGoogle, limit, logout, primary, publicOrigin, requireMutation, requireOrigin, startGoogle } from './auth.js';
 import { GOOGLE_CALLBACK_PATH, type DirectoryReference, type Env } from './contracts.js';
+import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
 export { Room } from './room.js';
 export { Billing } from './billing.js';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|socket|events|model(?:/[a-f0-9]{64})?|export|uploads|sources/[0-9a-f-]{36}))?$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
-const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter']), title: z.string().max(120).optional() }).strict();
+const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
 const redeemSchema = z.object({ ticket: z.string().max(100) }).strict();
 
 async function smallJson(request: Request): Promise<unknown> {
@@ -105,7 +106,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'POST' && path === '/api/auth/logout') return logout(request, env);
   if (method === 'GET' && path === '/api/capabilities') {
     const enabled = Boolean(env.DEEPSEEK_KEY) && Number(env.AI_MONTHLY_BUDGET_MICRO_USD) > 0 && Number(env.AI_DAILY_BUDGET_MICRO_USD) > 0;
-    return Response.json({ uploads: false, model: { enabled,
+    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), model: { enabled,
       reason: enabled ? 'DeepSeek Flash proposes changes for your review.' : 'AI is awaiting a configured spending allowance.' } });
   }
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);
@@ -119,6 +120,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'POST' && path === '/api/workspaces') {
     const input = createSchema.safeParse(await smallJson(request));
     if (!input.success) throw new AuthorityError('INVALID_REQUEST');
+    requireWorkspaceWritable(env, input.data.kind);
     await limit(env, `create:${session.record.actorId}`, 20, 86_400_000);
     const id = randomId();
     return room(env, id).fetch(internalRequest(request, '/internal/create', { id, ...input.data }));

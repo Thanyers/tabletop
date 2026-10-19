@@ -12,6 +12,7 @@ export interface Env {
   DEEPSEEK_KEY?: string;
   AI_MONTHLY_BUDGET_MICRO_USD?: string;
   AI_DAILY_BUDGET_MICRO_USD?: string;
+  TABLE_READ_ONLY?: string;
 }
 
 export interface Account {

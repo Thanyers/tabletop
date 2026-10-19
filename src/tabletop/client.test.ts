@@ -54,6 +54,14 @@ describe('TabletopClient access boundaries', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/capabilities');
   });
 
+  it('reads the table read-only feature flag when the server publishes it', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(response({ uploads: true, tableReadOnly: true, model: { enabled: true, reason: '' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new TabletopClient();
+
+    await expect(client.capabilities()).resolves.toEqual({ uploads: true, tableReadOnly: true, model: { enabled: true, reason: '' } });
+  });
+
   it('preserves enabled local uploads when the legacy capabilities route is absent', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(response(null, 404));
     vi.stubGlobal('fetch', fetchMock);

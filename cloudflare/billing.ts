@@ -3,8 +3,8 @@ import { z } from 'zod';
 import type { Env } from './contracts.js';
 
 const MAX_BUDGET_MICRO_USD = 100_000_000_000;
-const MAX_INPUT_TOKENS = 56_000;
-const MAX_OUTPUT_TOKENS = 2_048;
+const MAX_INPUT_TOKENS = 65_000;
+const MAX_OUTPUT_TOKENS = 8_192;
 const MAX_BODY_BYTES = 16_384;
 const RESERVED_LEASE_MS = 5 * 60_000;
 const DISPATCH_LEASE_MS = 2 * 60_000;

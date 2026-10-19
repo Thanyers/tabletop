@@ -12,6 +12,7 @@ import type { ApiError } from '../src/tabletop/shared/contracts.js';
 import { hashValue } from './codec.js';
 import { startServer, type StartedServer } from './start.js';
 import { MAX_HTTP_REQUESTS_PER_MINUTE } from './limits.js';
+import { tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 
 interface TestSession {
   cookie: string;
@@ -75,7 +76,7 @@ async function createSession(base: string, name: string): Promise<TestSession> {
   return { cookie: cookie ?? '', csrfToken: session.csrfToken, actorId: session.actorId };
 }
 
-async function createWorkspace(base: string, session: TestSession, kind: 'invoice' | 'teaching' | 'encounter' = 'teaching'): Promise<WorkspaceView> {
+async function createWorkspace(base: string, session: TestSession, kind: 'invoice' | 'teaching' | 'encounter' | 'table' = 'teaching'): Promise<WorkspaceView> {
   const { response, body } = await call<WorkspaceView>(base, '/api/workspaces', { session, body: { kind } });
   expect(response.status).toBe(201);
   return body as WorkspaceView;
@@ -168,6 +169,38 @@ afterEach(async () => {
 });
 
 describe('tabletop server authority', () => {
+  it('creates table owners, redeems participant seats, and keeps imported source text out of participant projections', async () => {
+    const { base } = await openServer();
+    const owner = await createSession(base, 'Table owner');
+    const participant = await createSession(base, 'Table participant');
+    const workspace = await createWorkspace(base, owner, 'table');
+    expect(workspace.actor).toMatchObject({ role: 'owner' });
+
+    const invitation = await invite(base, owner, workspace.id, 'member-1');
+    const redeemed = await redeem(base, participant, invitation.ticket);
+    expect(redeemed.workspace.actor).toMatchObject({ role: 'participant', seat: 'member-1' });
+
+    const text = `${tableScenarioSources.equipment.text}\nLOCAL_TABLE_SOURCE_SENTINEL`;
+    const currentOwnerView = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: owner });
+    const imported = await command(base, owner, currentOwnerView.body as WorkspaceView, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text,
+    });
+    expect(imported.response.status).toBe(200);
+    const ownerView = (imported.body as CommandAck).workspace;
+    expect(ownerView.domain.kind).toBe('table');
+    const participantView = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: redeemed.session });
+    expect(JSON.stringify(participantView.body)).not.toContain('LOCAL_TABLE_SOURCE_SENTINEL');
+    if ((participantView.body as WorkspaceView).domain.kind !== 'table') throw new Error('Expected participant table projection.');
+    expect(((participantView.body as WorkspaceView).domain as Extract<WorkspaceView['domain'], { kind: 'table' }>).sources).toEqual([]);
+
+    const denied = await command(base, redeemed.session, participantView.body as WorkspaceView, 'table.import', {
+      filename: 'second.txt', text: 'participants cannot add sources',
+    });
+    expect(denied.response.status).toBe(403);
+    expect((denied.body as ApiError).errorCode).toBe('FORBIDDEN');
+  });
+
   it('isolates sessions, projects private notes, rejects learner teacher actions, and enforces command idempotency/CAS', async () => {
     const { base } = await openServer();
     const teacher = await createSession(base, 'Teacher');
