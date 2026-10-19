@@ -47,6 +47,9 @@
 .tt-brand__mark i:last-child { border-radius: 50%; background: #d49a47; }
 .tt-topbar__divider { height: 23px; width: 1px; flex: 0 0 auto; background: var(--tt-line); }
 .tt-topbar__spacer { flex: 1 1 auto; }
+.tt-auto-demo-link, .tt-chooser-demo-link { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 30px; padding: 0 8px; border: 1px solid #dce8e0; border-radius: 5px; color: #4f7867; background: #f5faf6; font-size: 10px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.tt-auto-demo-link:hover, .tt-chooser-demo-link:hover { border-color: #b6d1c3; background: #edf6ef; }
+.tt-auto-demo-link small, .tt-chooser-demo-link small { margin-left: -3px; color: #83958b; font-size: 8px; }
 .tt-workspace-picker { position: relative; min-width: 0; }
 .tt-workspace-picker__button { display: flex; align-items: center; gap: 14px; max-width: min(390px, 34vw); min-height: 40px; padding: 3px 4px; text-align: left; border: 0; background: transparent; }
 .tt-workspace-picker__button > span { display: grid; min-width: 0; gap: 1px; }
@@ -57,13 +60,14 @@
 .tt-workspace-menu { position: absolute; z-index: 31; top: calc(100% + 10px); left: -7px; width: min(360px, calc(100vw - 28px)); max-height: min(70vh, 540px); overflow: auto; padding: 12px 9px 9px; border: 1px solid #d7e0df; border-radius: 10px; background: #fff; box-shadow: 0 16px 48px #20363c1c; }
 .tt-kicker { display: block; color: #83918f; font: 650 8px/1.4 var(--tt-mono); letter-spacing: .11em; text-transform: uppercase; }
 .tt-workspace-menu > .tt-kicker { padding: 7px 9px; }
-.tt-workspace-menu > button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 9px; border: 0; border-radius: 6px; background: transparent; text-align: left; }
-.tt-workspace-menu > button:hover, .tt-workspace-menu > button.is-current { background: #f1f5f3; }
-.tt-workspace-menu > button > span:nth-child(2) { flex: 1 1 auto; min-width: 0; }
-.tt-workspace-menu > button strong, .tt-workspace-menu > button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tt-workspace-menu > button strong { font-size: 11px; font-weight: 650; }
-.tt-workspace-menu > button small { margin-top: 2px; color: #7a8988; font-size: 9px; }
-.tt-workspace-menu > button > svg { color: #738987; }
+.tt-workspace-menu > button, .tt-workspace-menu > a { display: flex; width: 100%; align-items: center; gap: 10px; padding: 9px; border: 0; border-radius: 6px; background: transparent; text-align: left; text-decoration: none; }
+.tt-workspace-menu > button:hover, .tt-workspace-menu > button.is-current, .tt-workspace-menu > a:hover { background: #f1f5f3; }
+.tt-workspace-menu > button > span:nth-child(2), .tt-workspace-menu > a > span:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+.tt-workspace-menu > button strong, .tt-workspace-menu > button small, .tt-workspace-menu > a strong, .tt-workspace-menu > a small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-workspace-menu > button strong, .tt-workspace-menu > a strong { font-size: 11px; font-weight: 650; }
+.tt-workspace-menu > button small, .tt-workspace-menu > a small { margin-top: 2px; color: #7a8988; font-size: 9px; }
+.tt-workspace-menu > button > svg, .tt-workspace-menu > a > svg { color: #738987; }
+.tt-workspace-menu__demo > svg:first-child { color: #3e806d !important; }
 .tt-workspace-menu > hr { height: 1px; margin: 8px 4px; border: 0; background: var(--tt-line); }
 .tt-connection { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: #71817d; font-size: 9px; white-space: nowrap; }
 .tt-connection > i { width: 6px; height: 6px; border-radius: 50%; background: #7e9c8a; }
@@ -668,6 +672,8 @@
   .tt-workspace-picker__button strong { font-size: 9px; }
   .tt-workspace-picker__button > svg { width: 12px; }
   .tt-connection { display: none; }
+  .tt-auto-demo-link { width: 30px; min-width: 30px; height: 30px; justify-content: center; padding: 0; }
+  .tt-auto-demo-link > span, .tt-auto-demo-link > small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
   .tt-role-chip { padding: 3px 5px; font-size: 7px; }
   .tt-people-button, .tt-topbar-icon { min-width: 29px; height: 29px; }
   .tt-invite-button { width: 29px; min-width: 29px; min-height: 29px !important; padding: 0 !important; overflow: hidden; font-size: 0 !important; }
@@ -737,7 +743,11 @@
 }
 
 @media (max-width: 430px) {
+  .tt-chooser__top { gap: 7px; padding-inline: 10px; }
+  .tt-chooser-demo-link { gap: 4px; min-height: 29px; padding-inline: 6px; font-size: 9px; }
+  .tt-chooser-demo-link small { display: none; }
   .tt-topbar { gap: 6px; padding-inline: 8px; }
+  .tt-topbar > .tt-auto-demo-link { display: none; }
   .tt-brand { font-size: 13px; }
   .tt-workspace-picker__button strong { max-width: 145px; }
   .tt-role-chip { display: none; }

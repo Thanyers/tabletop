@@ -33,6 +33,7 @@ export function AccountSignIn({ status, notice, hasPendingInvite, checking, onRe
         {checking ? 'Checking sign-in…' : 'Already signed in? Check again'}
       </button>
       <p className="tt-account-gate__privacy">Table access is checked for every workspace. Invitation links are single-use and expire.</p>
+      <a className="tt-account-gate__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><span>Auto demo</span><small>opens in a new tab</small><ArrowRight size={14} /></a>
     </section>
   </main>;
 }

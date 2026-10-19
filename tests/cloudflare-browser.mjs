@@ -83,8 +83,85 @@ try {
   }
   const anonymous = await newPage();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
+  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
   expect((await api(anonymous, '/api/session')).status).toBe(401);
   mark('Anonymous browser is gated by Google sign-in; no guest account is created');
+
+  // Public playback is a static recording, never an anonymous application session.
+  const publicDemoRequests = []; const publicDemoSockets = [];
+  const demoContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const demo = await demoContext.newPage(); pages.push(demo);
+  demo.on('pageerror', error => errors.push(error.message));
+  demo.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin !== origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/internal/')) {
+      publicDemoRequests.push({ method: request.method(), pathname: url.pathname });
+    }
+  });
+  demo.on('websocket', socket => publicDemoSockets.push(socket.url()));
+  await demo.route(url => url.origin !== origin, route => route.abort());
+  const identityCounts = async () => ({
+    users: (await db.prepare('SELECT COUNT(*) AS n FROM users').first()).n,
+    sessions: (await db.prepare('SELECT COUNT(*) AS n FROM web_sessions').first()).n,
+    rooms: (await db.prepare('SELECT COUNT(*) AS n FROM rooms').first()).n,
+  });
+  const beforeDemo = await identityCounts();
+  await demo.goto(`${origin}/demo?legacy-demo=1`);
+  await expect(demo.getByTestId('public-auto-demo')).toBeVisible();
+  await expect(demo.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
+  const demoCounter = demo.getByTestId('demo-step-counter');
+  const firstDemoStep = await demoCounter.innerText();
+  await demo.getByRole('button', { name: 'เล่นเรื่องนี้', exact: true }).click();
+  await expect.poll(() => demoCounter.innerText(), { timeout: 12_000 }).not.toBe(firstDemoStep);
+  // The first invoice story has two steps and must stop at its end.
+  await expect(demo.getByRole('button', { name: 'หยุดเล่นชั่วคราว', exact: true })).toHaveCount(0);
+  await demo.getByRole('button', { name: 'เริ่มใหม่', exact: true }).click();
+  await expect(demoCounter).toHaveText(firstDemoStep);
+  await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await expect(demoCounter).not.toHaveText(firstDemoStep);
+  await demo.getByRole('button', { name: 'ย้อนหนึ่งจังหวะ', exact: true }).click();
+  await expect(demoCounter).toHaveText(firstDemoStep);
+  await demo.getByRole('button', { name: 'บทเรียน', exact: true }).click();
+  await demo.getByRole('button', { name: 'โจทย์ร่วม คำตอบแยกคน', exact: true }).click();
+  await expect(demo.getByTestId('demo-checkpoint')).toContainText('มวล');
+  await demo.getByRole('button', { name: 'เล่นเรื่องนี้', exact: true }).click();
+  await demo.getByRole('button', { name: 'หยุดเล่นชั่วคราว', exact: true }).click();
+  await expect(demo.getByRole('button', { name: 'เล่นเรื่องนี้', exact: true })).toBeVisible();
+  await demo.getByRole('button', { name: 'กลับมาตอบโจทย์เก่า', exact: true }).click();
+  await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await expect(demo.getByTestId('public-auto-demo')).toContainText('ระบบให้โหลดโจทย์ปัจจุบันก่อนตอบใหม่');
+  await demo.getByRole('button', { name: 'การผจญภัย', exact: true }).click();
+  await demo.getByRole('button', { name: 'ช่วยเพื่อนด้วยโล่', exact: true }).click();
+  for (let step = 1; step < 9; step++) await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await expect(demo.getByTestId('demo-checkpoint')).toContainText('Pip');
+  await expect(demo.getByTestId('demo-checkpoint')).toContainText('Mira');
+  await expect(demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true })).toBeDisabled();
+  await demo.getByRole('button', { name: 'ทุกโต๊ะ', exact: true }).click();
+  for (const title of ['บิลที่ยังขาดหลักฐาน', 'อัตราที่ใช้ได้เฉพาะช่วงวันที่', 'กติกาซ้อนและการกดซ้ำ',
+    'โจทย์ร่วม คำตอบแยกคน', 'กลับมาตอบโจทย์เก่า', 'มวลศูนย์ที่คำนวณไม่ได้',
+    'ช่วยเพื่อนด้วยโล่', 'พักเกมแล้วกลับมาเล่นต่อ', 'คำอนุมัติที่หมดอายุ']) {
+    await expect(demo.getByRole('button', { name: title, exact: true })).toBeVisible();
+    await demo.getByRole('button', { name: title, exact: true }).click();
+    await expect(demo.getByRole('button', { name: 'ย้อนหนึ่งจังหวะ', exact: true })).toBeDisabled();
+    await demo.getByRole('list', { name: 'ลำดับการเล่น' }).getByRole('button').last().click();
+    await expect(demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true })).toBeDisabled();
+    await expect(demo.getByRole('button', { name: 'เล่นเรื่องนี้อีกครั้ง', exact: true })).toBeEnabled();
+  }
+  await demo.screenshot({ path: join(output, 'public-demo-desktop.png'), fullPage: true });
+  await demo.setViewportSize({ width: 304, height: 844 });
+  await demo.reload();
+  await expect(demo.getByTestId('public-auto-demo')).toBeVisible();
+  expect(await demo.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await demo.getByRole('button', { name: 'ย้อนหนึ่งจังหวะ', exact: true }).click();
+  await demo.screenshot({ path: join(output, 'public-demo-narrow.png'), fullPage: true });
+  expect(publicDemoRequests).toEqual([]); expect(publicDemoSockets).toEqual([]);
+  expect(await identityCounts()).toEqual(beforeDemo);
+  expect(await demoContext.cookies()).toEqual([]);
+  expect(providerCalls).toBe(0);
+  await demoContext.close();
+  mark('Public Auto demo plays nine recorded stories without sign-in, API calls, sockets, cookies, AI or room creation; narrow controls and reload work');
 
   const dm = await newPage(actors[0]);
   dm.on('response', async response => {
@@ -94,12 +171,14 @@ try {
     }
   });
   await expect(dm.getByRole('heading', { name: 'Choose a table' })).toBeVisible();
+  await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   await dm.getByRole('button', { name: /Shared encounter.*Run turns/ }).click();
   const createdResponse = await created;
   expect(createdResponse.status()).toBe(201);
   let room = await createdResponse.json();
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
   let miraInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'mira' });
   const pipInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'pip' });
   expect(miraInvite.status).toBe(201); expect(pipInvite.status).toBe(201);

@@ -23,6 +23,11 @@
 .tt-account-gate__retry:hover { background: #f0f5f2; }
 .tt-account-gate__retry:disabled { cursor: wait; opacity: .65; }
 .tt-account-gate__privacy { margin: 0; padding-top: 12px; border-top: 1px solid #e6ecea; color: #899692; font-size: 10px; line-height: 1.5; }
+.tt-account-gate__demo { display: flex; min-height: 38px; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid #e0e8e3; border-radius: 5px; color: #557366; background: #f7faf7; text-decoration: none; }
+.tt-account-gate__demo:hover { border-color: #b8d1c4; background: #f0f7f1; }
+.tt-account-gate__demo > span { font-size: 11px; font-weight: 700; }
+.tt-account-gate__demo > small { flex: 1; color: #899a91; font-size: 9px; }
+.tt-account-gate__demo > svg { color: #53826d; }
 .tt-account-gate__spin { animation: tt-account-spin .9s linear infinite; }
 @keyframes tt-account-spin { to { transform: rotate(360deg); } }
 
