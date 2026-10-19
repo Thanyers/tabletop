@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Background, BackgroundVariant, Controls, Handle, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Workflow } from 'lucide-react';
+import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
+import { Activity, ArrowRight, BookOpenCheck, ChartLine, Database, ListChecks, Play, Scale, Swords, Table2, Workflow } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
 import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
+import { dedupeVisibleCanvasConnections } from './canvas-flow';
+import './canvas-visual-flow.css';
 
 export { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds };
 
@@ -45,6 +47,7 @@ interface AuxiliaryCanvasNodeData extends CanvasNodeBaseData {
 
 type CanvasNodeData = PlanCanvasNodeData | AuxiliaryCanvasNodeData;
 type CanvasNode = Node<CanvasNodeData, 'tabletopObject'>;
+type CanvasEdge = Edge<{ relationshipLabel: string }>;
 
 export interface CanvasAuxiliaryObject {
   id: string;
@@ -100,6 +103,77 @@ function portStyle(index: number, length: number): React.CSSProperties {
   return { top };
 }
 
+function canvasMotionDuration(duration: number) {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : duration;
+}
+
+type CanvasRole = 'source' | 'rules' | 'compute' | 'result' | 'actions' | 'auxiliary';
+
+function capabilityLeaf(capability: string) {
+  return capability.split('.').at(-1)?.toLowerCase() ?? capability.toLowerCase();
+}
+
+function canvasRole(capability: string, kind: CanvasNodeData['kind']): CanvasRole {
+  if (kind === 'auxiliary') return 'auxiliary';
+  const leaf = capabilityLeaf(capability);
+  if (leaf === 'source' || leaf === 'sources') return 'source';
+  if (leaf === 'rules') return 'rules';
+  if (leaf === 'reconcile' || leaf === 'model' || leaf === 'merge') return 'compute';
+  if (leaf === 'actions' || leaf === 'question') return 'actions';
+  if (leaf === 'table' || leaf === 'collection' || leaf === 'scene' || leaf === 'graph' || leaf === 'board' || leaf === 'review') return 'result';
+  return 'compute';
+}
+
+function capabilityLabel(capability: string, kind: CanvasNodeData['kind']) {
+  if (kind === 'auxiliary') return 'TABLE TOOL';
+  const labels: Record<string, string> = {
+    source: 'SOURCE', sources: 'SOURCE FILES', rules: 'RULES', reconcile: 'RECONCILIATION', model: 'MODEL', merge: 'REVIEW MERGE',
+    table: 'RESULT TABLE', collection: 'DATA COLLECTION', scene: 'MOTION SCENE', graph: 'MOTION GRAPH', board: 'ENCOUNTER BOARD',
+    actions: 'ACTIONS', question: 'LEARNING PROMPT', review: 'REVIEW QUEUE',
+  };
+  return labels[capabilityLeaf(capability)] ?? capabilityLeaf(capability).replaceAll('-', ' ').toUpperCase();
+}
+
+function capabilityGlyph(capability: string, kind: CanvasNodeData['kind']) {
+  if (kind === 'auxiliary') return <Workflow size={16} />;
+  const leaf = capabilityLeaf(capability);
+  if (leaf === 'source' || leaf === 'sources') return <Database size={16} />;
+  if (leaf === 'rules') return <Scale size={16} />;
+  if (leaf === 'reconcile' || leaf === 'model' || leaf === 'merge') return <Workflow size={16} />;
+  if (leaf === 'table' || leaf === 'collection') return <Table2 size={16} />;
+  if (leaf === 'scene') return <Activity size={16} />;
+  if (leaf === 'graph') return <ChartLine size={16} />;
+  if (leaf === 'board') return <Swords size={16} />;
+  if (leaf === 'review') return <ListChecks size={16} />;
+  if (leaf === 'question') return <BookOpenCheck size={16} />;
+  if (leaf === 'actions') return <Play size={16} />;
+  return <Workflow size={16} />;
+}
+
+const valueTypeLabels: Record<string, string> = {
+  'InvoiceStateV1': 'Invoice data',
+  'InvoiceResultV1': 'Calculated result',
+  'ReviewItemV1[]': 'Review items',
+  'PhysicsParametersV1': 'Motion settings',
+  'PhysicsResultV1': 'Motion result',
+  'EncounterBoardV1': 'Encounter state',
+  'TableRowsV1': 'Table rows',
+  'RuleRevisionV1': 'Active rule revision',
+};
+
+function relationshipLabel(valueType: string) {
+  return valueTypeLabels[valueType]
+    ?? valueType.replace(/\[\]$/, '').replace(/V\d+$/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+}
+
+function roleColor(role: CanvasRole) {
+  if (role === 'source') return '#315eb0';
+  if (role === 'rules') return '#946626';
+  if (role === 'result') return '#24796b';
+  if (role === 'actions') return '#426179';
+  return '#738681';
+}
+
 function defaultCanvasPosition(kind: WorkspaceView['kind'], spec: PlanNode) {
   if (kind === 'invoice') {
     if (spec.id === 'invoice.table' || spec.id === 'invoice.review') return { x: 540, y: spec.id === 'invoice.table' ? 40 : 760 };
@@ -117,11 +191,12 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
   if (data.kind === 'auxiliary') {
     return (
       <article
-        className={'tt-canvas-node tt-canvas-node--auxiliary' + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+        className={'tt-canvas-node tt-canvas-node--auxiliary tt-canvas-node--role-auxiliary' + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
         data-canvas-editor
         data-testid={data.opened ? 'canvas-object-editor' : undefined}
         data-object-id={data.opened ? data.id : undefined}
+        data-canvas-role="auxiliary"
         aria-label={data.title}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && data.opened) {
@@ -133,9 +208,8 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         }}
       >
         <header className="tt-canvas-node__head">
-          <span className="tt-object-glyph" aria-hidden="true"><Workflow size={15} /></span>
-          <span className="tt-canvas-node__title">{data.title}</span>
-          <span className="tt-canvas-node__capability">{data.auxiliary.eyebrow ?? 'TABLE TOOL'}</span>
+          <span className="tt-object-glyph" aria-hidden="true">{capabilityGlyph(data.capability, data.kind)}</span>
+          <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span><span className="tt-canvas-node__capability">{data.auxiliary.eyebrow ?? capabilityLabel(data.capability, data.kind)}</span></span>
           <button ref={openButtonRef} className="tt-canvas-node__open nodrag nopan" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
             {data.opened ? 'Close' : 'Open'}
           </button>
@@ -148,14 +222,16 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
   const inputPorts = Object.keys(data.spec.inputs);
   const outputPorts = Object.keys(data.outputs);
   const capability = data.spec.capability.split('.').slice(-1)[0]?.replaceAll('-', ' ') ?? 'component';
+  const role = canvasRole(data.capability, data.kind);
 
   return (
     <article
-      className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+      className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + ' tt-canvas-node--role-' + role + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
         data-canvas-editor
         data-testid={data.opened ? 'canvas-object-editor' : undefined}
         data-object-id={data.opened ? data.id : undefined}
+        data-canvas-role={role}
       aria-label={data.spec.title + ', ' + capability}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && data.opened) {
@@ -169,9 +245,8 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
       {inputPorts.map((port, index) => <Handle key={`in-${port}`} type="target" position={Position.Left} id={port} style={portStyle(index, inputPorts.length)} />)}
       {outputPorts.map((port, index) => <Handle key={`out-${port}`} type="source" position={Position.Right} id={port} style={portStyle(index, outputPorts.length)} />)}
       <header className="tt-canvas-node__head">
-        <span className="tt-object-glyph" aria-hidden="true"><Workflow size={15} /></span>
-        <span className="tt-canvas-node__title">{data.spec.title}</span>
-        <span className="tt-canvas-node__capability">{capability}</span>
+        <span className="tt-object-glyph" aria-hidden="true">{capabilityGlyph(data.capability, data.kind)}</span>
+        <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.spec.title}</span><span className="tt-canvas-node__capability">{capabilityLabel(data.capability, data.kind)}</span></span>
         <button ref={openButtonRef} className="tt-canvas-node__open nodrag nopan" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.spec.title}`} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
           {data.opened ? 'Close' : 'Open'}
         </button>
@@ -211,7 +286,7 @@ interface CanvasWorkspaceProps {
 
 function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
-  const flow = useReactFlow<CanvasNode, Edge>();
+  const flow = useReactFlow<CanvasNode, CanvasEdge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
   const workspaceKey = view.id + ':' + view.epoch;
   const layoutWorkspaceRef = useRef('');
@@ -225,11 +300,14 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
   const allowedNodeIds = useMemo(() => visibleNodeIds ? new Set(visibleNodeIds) : null, [visibleNodeIds]);
   const visiblePlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds]);
   const planIds = useMemo(() => new Set(plan.nodes.map((spec) => spec.id)), [plan.nodes]);
+  const planNodesById = useMemo(() => new Map(plan.nodes.map((spec) => [spec.id, spec])), [plan.nodes]);
   const visibleAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds]);
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
   const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
   const lastFocusRequestRef = useRef<string | null>(null);
+  const lastDomainRevisionRef = useRef<{ workspaceKey: string; data: number; rules: number } | null>(null);
+  const [revisionNotice, setRevisionNotice] = useState<{ key: string; message: string } | null>(null);
 
   useEffect(() => {
     const workspaceKey = view.id + ':' + view.epoch;
@@ -247,19 +325,39 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     localPhysicsDirty.current = false;
     if (view.domain.kind === 'teaching') setLocalPhysics(view.domain.parameters);
   }, [view]);
+
+  useEffect(() => {
+    const current = { workspaceKey, data: view.domain.dataRevision, rules: view.domain.ruleRevision };
+    const previous = lastDomainRevisionRef.current;
+    lastDomainRevisionRef.current = current;
+    if (!previous || previous.workspaceKey !== workspaceKey) {
+      setRevisionNotice(null);
+      return;
+    }
+
+    const changed = [
+      previous.data !== current.data ? `Data r${previous.data} → r${current.data}` : '',
+      previous.rules !== current.rules ? `Rules r${previous.rules} → r${current.rules}` : '',
+    ].filter(Boolean);
+    if (changed.length === 0) return;
+
+    setRevisionNotice({ key: `${workspaceKey}:${current.data}:${current.rules}`, message: changed.join(' · ') });
+    const timeout = window.setTimeout(() => setRevisionNotice(null), 2100);
+    return () => window.clearTimeout(timeout);
+  }, [workspaceKey, view.domain.dataRevision, view.domain.ruleRevision]);
   const toggleOpenObject = useCallback((id: string) => {
     const nextId = activeOpenedId === id ? null : id;
     if (openedObjectId === undefined) setInternalOpenedId(nextId);
     onOpenObject?.(nextId);
     onSelectNode(id);
-    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: 160 }));
+    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: canvasMotionDuration(160) }));
   }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode, flow]);
   const openObject = useCallback((id: string) => {
     if (!nodes.some((node) => node.id === id)) return;
     if (openedObjectId === undefined) setInternalOpenedId(id);
     onOpenObject?.(id);
     onSelectNode(id);
-    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: 160 }));
+    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: canvasMotionDuration(160) }));
   }, [flow, nodes, onOpenObject, openedObjectId, onSelectNode]);
 
   useEffect(() => {
@@ -367,7 +465,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
 
   const focusSelected = useCallback(() => {
     if (!selectedNodeId) return;
-    flow.fitView({ nodes: [{ id: selectedNodeId }], padding: 0.14, minZoom: 0.85, maxZoom: 1, duration: 180 });
+    flow.fitView({ nodes: [{ id: selectedNodeId }], padding: 0.14, minZoom: 0.85, maxZoom: 1, duration: canvasMotionDuration(180) });
   }, [flow, selectedNodeId]);
 
   useEffect(() => {
@@ -375,27 +473,32 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     const requestKey = `${focusNodeId}:${String(focusRequestKey ?? '')}`;
     if (lastFocusRequestRef.current === requestKey) return;
     lastFocusRequestRef.current = requestKey;
-        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.14, minZoom: 0.62, maxZoom: 1, duration: 180 });
+        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.14, minZoom: 0.62, maxZoom: 1, duration: canvasMotionDuration(180) });
   }, [focusNodeId, focusRequestKey, nodes, flow]);
 
   const edges = useMemo(() => {
-    const result: Edge[] = [];
+    const projected: Array<{
+      id: string;
+      source: string;
+      sourcePort: string;
+      target: string;
+      targetHandle: string;
+      valueType: string;
+      depth: number;
+    }> = [];
+    const isRevisionPulse = revisionNotice !== null;
     const walk = (binding: Binding, source: string, sourcePort: string, depth: number, path: Set<string>) => {
       if (path.has(binding.id)) return;
       const nextPath = new Set(path).add(binding.id);
       if (visibleIds.has(binding.to.node)) {
-        result.push({
+        projected.push({
           id: `${source}.${sourcePort}-${binding.to.node}.${binding.to.port}-${[...nextPath].join('.')}`,
           source,
-          sourceHandle: sourcePort,
+          sourcePort,
           target: binding.to.node,
           targetHandle: binding.to.port,
-          label: depth === 0 ? binding.valueType : `Derived · ${depth} step${depth === 1 ? '' : 's'}`,
-          type: 'smoothstep',
-          style: { stroke: '#78a99d', strokeWidth: 1.8 },
-          labelStyle: { fill: '#4f766e', fontSize: 10, fontWeight: 600 },
-          labelBgStyle: { fill: '#f4f8f7', fillOpacity: 0.96 },
-          labelBgPadding: [5, 3],
+          valueType: binding.valueType,
+          depth,
         });
         return;
       }
@@ -406,8 +509,27 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     for (const binding of plan.bindings) {
       if (visibleIds.has(binding.from.node)) walk(binding, binding.from.node, binding.from.port, 0, new Set());
     }
-    return result;
-  }, [plan.bindings, visibleIds]);
+    return dedupeVisibleCanvasConnections(projected).map((connection): CanvasEdge => {
+      const targetRole = canvasRole(planNodesById.get(connection.target)?.capability ?? '', 'plan');
+      const markerColor = roleColor(targetRole);
+      const sourceTitle = planNodesById.get(connection.source)?.title ?? connection.source;
+      const targetTitle = planNodesById.get(connection.target)?.title ?? connection.target;
+      const label = relationshipLabel(connection.valueType);
+      return {
+        id: connection.id,
+        source: connection.source,
+        sourceHandle: connection.sourcePort,
+        target: connection.target,
+        targetHandle: connection.targetHandle,
+        type: 'smoothstep',
+        animated: isRevisionPulse,
+        ariaLabel: `${sourceTitle} feeds ${targetTitle} with ${label}${connection.depth > 0 ? ` through ${connection.depth} intermediate plan step${connection.depth === 1 ? '' : 's'}` : ''}. Type: ${connection.valueType}.`,
+        data: { relationshipLabel: label },
+        markerEnd: { type: MarkerType.ArrowClosed, color: markerColor },
+        style: { stroke: markerColor, strokeWidth: 2.2 },
+      };
+    });
+  }, [plan.bindings, planNodesById, revisionNotice, visibleIds]);
 
   const choose = useCallback((event: React.MouseEvent, node: CanvasNode) => {
     // A content control may have navigated to another object. Do not select its
@@ -430,7 +552,26 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     ...visiblePlanNodes.map((spec) => ({ id: spec.id, title: spec.title })),
     ...visibleAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title })),
   ], [visiblePlanNodes, visibleAuxiliaryObjects]);
+  const lineageItems = useMemo(() => edges.flatMap((edge) => {
+    const source = objectTitles.find((object) => object.id === edge.source);
+    const target = objectTitles.find((object) => object.id === edge.target);
+    if (!source || !target) return [];
+    const sourceSpec = planNodesById.get(source.id);
+    const targetSpec = planNodesById.get(target.id);
+    return [{
+      id: edge.id,
+      source,
+      target,
+      label: edge.data?.relationshipLabel ?? 'Connected data',
+      sourceRole: sourceSpec ? canvasRole(sourceSpec.capability, 'plan') : 'auxiliary' as CanvasRole,
+      targetRole: targetSpec ? canvasRole(targetSpec.capability, 'plan') : 'auxiliary' as CanvasRole,
+    }];
+  }), [edges, objectTitles, planNodesById]);
   const hasVisibleObjects = objectTitles.length > 0;
+  const focusConnection = useCallback((sourceId: string, targetId: string) => {
+    onSelectNode(targetId);
+    flow.fitView({ nodes: [{ id: sourceId }, { id: targetId }], padding: 0.3, minZoom: 0.55, maxZoom: 1, duration: canvasMotionDuration(200) });
+  }, [flow, onSelectNode]);
 
   return (
     <div className="tt-flow-wrap" ref={flowWrapRef} data-canvas-editor data-testid="canvas-object-workspace">
@@ -440,7 +581,7 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           {emptyContent ?? <><strong>This table is ready for its first object</strong><p>Add a source or start the sample workflow from the table panel.</p></>}
         </div>
       ) : (
-        <ReactFlow<CanvasNode, Edge>
+        <ReactFlow<CanvasNode, CanvasEdge>
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
@@ -465,16 +606,40 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           <Controls position="bottom-right" showInteractive={false} />
         </ReactFlow>
       )}
+      <div className="tt-canvas-tools">
+        {lineageItems.length > 0 && <nav className="tt-canvas-lineage" aria-label="Connected plan flow" data-testid="canvas-flow-overview">
+          <span className="tt-canvas-lineage__label"><Workflow size={14} aria-hidden="true" /><span>FLOW</span><small>{lineageItems.length}</small></span>
+          <div className="tt-canvas-lineage__paths">
+            {lineageItems.map((item) => <button
+              key={item.id}
+              className="tt-canvas-lineage__path"
+              type="button"
+              data-from-role={item.sourceRole}
+              data-to-role={item.targetRole}
+              aria-label={`Show how ${item.source.title} feeds ${item.target.title} with ${item.label}`}
+              aria-current={selectedNodeId === item.target.id ? 'location' : undefined}
+              title={`${item.source.title} → ${item.target.title} · ${item.label}`}
+              onClick={() => focusConnection(item.source.id, item.target.id)}
+            >
+              <span className="tt-canvas-lineage__endpoints"><span>{item.source.title}</span><ArrowRight size={13} aria-hidden="true" /><span>{item.target.title}</span></span>
+              <small>{item.label}</small>
+            </button>)}
+          </div>
+        </nav>}
+        <div className="tt-canvas-actions">
+          <button type="button" onClick={focusSelected} disabled={!selectedNodeId || !nodes.some((node) => node.id === selectedNodeId)}>Focus object</button>
+          <button type="button" onClick={() => flow.fitView({ padding: 0.28, duration: 0 })}>Fit objects</button>
+        </div>
+        {revisionNotice && <div key={revisionNotice.key} className="tt-canvas-revision-change" role="status" aria-live="polite" aria-atomic="true">
+          <Activity size={14} aria-hidden="true" /><span>Revision changed</span><b>{revisionNotice.message}</b>
+        </div>}
+      </div>
       {hasVisibleObjects && <nav className="tt-canvas-object-dock" aria-label="Objects on this canvas" data-testid="canvas-object-dock">
         <span className="tt-canvas-object-dock__label">OPEN AN OBJECT</span>
         <div>{objectTitles.map((object) => <button key={object.id} type="button" data-testid={`open-canvas-${object.id}`} aria-label={`Open ${object.title}`} aria-expanded={activeOpenedId === object.id} onClick={() => openObject(object.id)}>{object.title}</button>)}</div>
       </nav>}
       <div className="tt-canvas-stamp" aria-hidden="true">
         <span>WORKSPACE FLOW</span><i />{objectTitles.length} object{objectTitles.length === 1 ? '' : 's'}<i />{edges.length} visible connection{edges.length === 1 ? '' : 's'}
-      </div>
-      <div className="tt-canvas-actions">
-        <button type="button" onClick={focusSelected} disabled={!selectedNodeId || !nodes.some((node) => node.id === selectedNodeId)}>Focus object</button>
-        <button type="button" onClick={() => flow.fitView({ padding: 0.28, duration: 0 })}>Fit objects</button>
       </div>
     </div>
   );
