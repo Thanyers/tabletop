@@ -47,16 +47,20 @@ jobs:
       - name: Workers, D1 and Durable Object integration tests
         run: npm run test:cloudflare -- --reporter=default --reporter=json --outputFile=test-results/cloudflare-report.json
       - name: Bundle Cloudflare without publishing
+        id: bundle_worker
         env:
           WRANGLER_SEND_METRICS: false
         run: npm run build:cloudflare
       - name: Install test browser
+        id: install_browser
         run: node node_modules/playwright/cli.js install --with-deps chromium
       - name: Repeatable persona demos and replay report
         run: npm run demo:auto:run
       - name: Seven-session local browser acceptance
         run: npm run test:r1:browser
       - name: Account multiplayer and AI browser acceptance on Workers
+        # This independent fixture can report its failures even when Node browser checks fail.
+        if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
         run: npm run test:cloudflare:browser
       - name: Retain test summaries
         if: always()

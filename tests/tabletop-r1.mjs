@@ -85,8 +85,9 @@ async function closeExpandedObjects(page) {
   const editors = board(page).locator('.tt-canvas-node.is-expanded');
   while (await editors.count()) {
     const editor = editors.first();
+    const objectId = await editor.getAttribute('data-canvas-object');
     await editor.getByRole('button', { name: 'Close object', exact: true }).click();
-    await expect(editor).not.toHaveClass(/is-expanded/);
+    await expect(board(page).locator(`.tt-canvas-node[data-canvas-object="${objectId}"]`)).not.toHaveClass(/is-expanded/);
   }
 }
 async function upload(page, label, filename) {
@@ -99,7 +100,7 @@ async function upload(page, label, filename) {
 }
 async function verifySource(page, filename) {
   const editor = await openObject(page, 'invoice.source');
-  const card = editor.locator('.tt-source-card').filter({ has: editor.locator('strong', { hasText: filename }) }).filter({ hasText: 'provided' });
+  const card = editor.locator('.tt-source-card').filter({ hasText: filename }).filter({ hasText: 'provided' });
   if (await card.locator('.tt-source-preview').count() === 0) await card.locator('.tt-source-card__open').click();
   await clickCommand(page, card.getByRole('button', { name: 'Verify', exact: true }), 'invoice.reviewSource');
   await expect(card).toHaveCount(0);

@@ -190,7 +190,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await fresh('encounter-shield'); await finish();
   await open('encounter.board'); await expect(editor).toContainText('8/10 HP');
   await fresh('encounter-shield');
-  for (let index = 0; index < 30 && await node('encounter.actions').locator('.tt-countdown').count() === 0; index++) await next();
+  for (let index = 0; index < 30 && await node('encounter.actions').getByText(/has opened a reaction/).count() === 0; index++) await next();
   await page.getByRole('button', { name: 'หยุดแล้วลองเอง', exact: true }).click();
   await page.getByLabel('ลองเป็น', { exact: true }).selectOption('practice-mira'); await open('encounter.actions');
   const clock = editor.locator('.tt-countdown'), held = await clock.innerText();
