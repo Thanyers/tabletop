@@ -455,7 +455,7 @@ function TableConversation({
     {tableAssistantAvailable && !capabilities.model.enabled && <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />{capabilities.model.reason || 'The table assistant is unavailable right now.'}</p>}
     {readOnly && <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />This table is temporarily read-only. You can still review its rules and records.</p>}
 
-    {view.actor.role === 'participant' && <p className="tt-table-chat__privacy-note">The owner manages private files and rule drafts. Your message uses the shared table view and your seat only.</p>}
+    {view.actor.role === 'participant' && <p className="tt-table-chat__privacy-note">The owner manages private source files and rule drafts. Your message uses the shared table view and your seat only.</p>}
 
     {!tableAssistantAvailable ? <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />{tableAssistantUnavailableReason}</p> : <>
     <div className="tt-table-chat__history-tools">
@@ -484,7 +484,7 @@ function TableConversation({
       <label className="tt-table-chat__consent"><input type="checkbox" checked={consent} disabled={readOnly || !capabilities.model.enabled || !historyLoaded || Boolean(historyError) || busy || pendingAction || uncertainRequest} onChange={(event) => setConsent(event.target.checked)} /><span>I agree to send this message and the shared table context to the AI provider.</span></label>
       {uncertainRequest && latest && <p className="tt-table-chat__notice" role="status">The request may have reached the provider. Retry only with the same request ID, or wait before starting another request.</p>}
       {pendingAction && <p className="tt-table-chat__notice" role="status">Review or dismiss the pending action proposal before starting another assistant request.</p>}
-      {latest?.job?.status === 'completed' && latest.job.result?.kind === 'action-proposal' && isStale(latest.job, view) && <p className="tt-table-chat__notice" role="status">The table changed after this proposal. It cannot be confirmed; review the latest rules and ask again.</p>}
+      {latest?.job?.status === 'completed' && latest.job.confirmationStatus === 'available' && latest.job.result?.kind === 'action-proposal' && isStale(latest.job, view) && <p className="tt-table-chat__notice" role="status">The table changed after this proposal. It cannot be confirmed; review the latest rules and ask again.</p>}
       <button type="submit" className="tt-button tt-button--primary" disabled={!canSend}>{busy ? <LoaderCircle size={14} className="tt-spin" /> : <Send size={14} />}Send to assistant</button>
     </form>
     <p className="tt-table-chat__boundary">Answers do not change the table. Every proposed action requires your separate confirmation and is checked against current rules and turn.</p>

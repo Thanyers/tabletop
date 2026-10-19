@@ -410,7 +410,7 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(member.getByTestId('table-chat')).toContainText(firstText);
   const followup = 'Does that apply to every item in the list?';
   const followupReply = {
-    result: { kind: 'explanation', text: 'Yes. Each equipment row follows the same active availability check.', references: [{ kind: 'rule', id: 'borrow-available' }] },
+    result: { kind: 'explanation', text: 'Yes. Each equipment row follows the same active availability check.', references: [{ kind: 'field', collectionId: 'equipment', id: 'available' }] },
     expectedRole: 'participant', expectedSeat: 'member-1', expectedConversationCount: 1,
     expectedConversationContains: [firstPrompt, firstText], expectedPromptContains: followup,
     forbiddenTexts: forbidden,
