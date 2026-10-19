@@ -3,6 +3,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronRight, FileText, LoaderCircl
 import type { Candidate, WorkspaceView } from '../shared/contracts';
 import type { Command, WorkbenchProps } from './types';
 import { formatMoney, summarize } from './types';
+import './change-journey.css';
 
 const UploadCapabilityContext = createContext({ enabled: true, reason: '' });
 
@@ -30,8 +31,9 @@ export function CandidateLifecycle({ view, onCommand, busy, readOnly = false }: 
         <div className="tt-empty-note"><ShieldCheck size={17} /><p>{readOnly ? 'Editing is temporarily paused. The current active rules remain available to inspect.' : 'Make a bounded edit to create a draft. The Active table keeps its current rules until activation.'}</p></div>
       ) : (
         <>
+          <ChangeJourney candidate={candidate} activeRevision={view.domain.ruleRevision} />
           <div className="tt-candidate-meta">
-            <span>Draft by {candidate.createdBy}</span>
+            <span>Draft by {view.members.find(member => member.actorId === candidate.createdBy)?.name ?? 'the table owner'}</span>
             <span>Data r{candidate.baseDataRevision} · Rules r{candidate.baseRuleRevision}</span>
             <small title={candidate.hash}>Candidate {candidate.hash.slice(0, 12)}</small>
           </div>
@@ -63,6 +65,21 @@ export function CandidateLifecycle({ view, onCommand, busy, readOnly = false }: 
   );
 }
 
+function ChangeJourney({ candidate, activeRevision }: { candidate: Candidate; activeRevision: number }) {
+  const steps = [
+    { id: 'draft', title: 'Draft' }, { id: 'simulated', title: 'Simulate' },
+    { id: 'validated', title: 'Validate' }, { id: 'approved', title: 'Approve' }, { id: 'active', title: 'Activate' },
+  ];
+  const current = steps.findIndex(step => step.id === candidate.status);
+  return <div className="tt-change-journey" aria-label="Rule change progress">
+    <div className="tt-change-journey__state"><span><i aria-hidden="true" /> Active rules <b>r{activeRevision}</b></span><strong>{candidate.status === 'active' ? 'This change is live' : 'Reviewing a draft'}</strong></div>
+    <ol>{steps.map((step, index) => <li key={step.id} className={index < current ? 'is-complete' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}>
+      <span aria-hidden="true">{index < current ? <Check size={11} /> : index === 0 ? <FileText size={11} /> : index}</span><b>{step.title}</b><small className="tt-visually-hidden">{index < current ? 'Complete' : index === current ? 'Current step' : 'Pending'}</small>
+    </li>)}</ol>
+    {candidate.status !== 'active' && <p>The table keeps using r{activeRevision} until you activate this draft.</p>}
+  </div>;
+}
+
 function SimulationComparison({ simulation }: { simulation: NonNullable<Candidate['simulation']> }) {
   const before = comparisonFacts(simulation.before);
   const after = comparisonFacts(simulation.after);
@@ -91,7 +108,7 @@ function comparisonFacts(value: unknown): { primary: string; secondary: string }
       ? ((record.surface as { columns: unknown[] }).columns.length)
       : null;
     return {
-      primary: 'Expected ' + formatMoney(nestedResult.knownExpectedSatang),
+      primary: 'Supported expected ' + formatMoney(nestedResult.knownExpectedSatang),
       secondary: 'Difference ' + formatMoney(Math.abs(delta)) + ' · ' + rows + ' rows · ' + unknown + ' unknown' + (columns === null ? '' : ' · ' + columns + ' columns'),
     };
   }

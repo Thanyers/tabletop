@@ -10,6 +10,7 @@ import type { Command, WorkbenchProps } from './types';
 import { formatMoney } from './types';
 import { usePracticeClock } from './PracticeClock';
 import { TableCanvasObject } from './TableCanvasObjects';
+import { InvoiceResultSummary } from './InvoiceResultSummary';
 
 interface CanvasObjectContentProps {
   view: WorkspaceView;
@@ -84,7 +85,8 @@ function InvoiceTable({ view, node, onCommand, onExport, busy, onFocusEvidence, 
   const hasSurcharge = state?.rules.some((rule) => rule.kind === 'surcharge' && rule.enabled) ?? false;
   return <div className="tt-canvas-inline tt-canvas-inline--wide">
     <InlineHeading eyebrow="ACTIVE RESULT" title="Shipment reconciliation" status={`${rows.length} rows · ${result?.unknownCount ?? 0} unknown`} />
-    {result && <div className="tt-inline-kpis"><span>Expected <strong>{formatMoney(result.knownExpectedSatang)}</strong></span><span>Billed <strong>{formatMoney(result.knownBilledSatang)}</strong></span><span>Difference <strong>{formatSignedMoney(result.deltaSatang)}</strong></span></div>}
+    {result && <div className="tt-inline-kpis"><span>Expected · supported <strong>{formatMoney(result.knownExpectedSatang)}</strong></span><span>Billed · verified <strong>{formatMoney(result.knownBilledSatang)}</strong></span><span>Difference · comparable <strong>{formatSignedMoney(result.deltaSatang)}</strong></span></div>}
+    {result && <InvoiceResultSummary result={result} />}
     {!expanded ? <p className="tt-canvas-inline__note">Open this object to review every shipment, save a run, and export the result.</p> : <>
       <div className="tt-inline-action-row tt-invoice-canvas-actions">
         {view.actor.role === 'owner' && <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || !result} onClick={() => void onCommand('invoice.saveRun', {})}><Save size={13} /> Save run</button>}
@@ -102,7 +104,7 @@ function InvoiceTable({ view, node, onCommand, onExport, busy, onFocusEvidence, 
             <td>{row.expectedSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.expectedSatang)}</td>
             {hasSurcharge && <td>{row.surchargeSatang === null ? <span className="tt-unknown">Unknown</span> : formatMoney(row.surchargeSatang)}</td>}
             <td className={row.deltaSatang ? 'tt-difference' : ''}>{row.deltaSatang === null ? <span className="tt-unknown">Unknown</span> : formatSignedMoney(row.deltaSatang)}</td>
-            <td><span className={'tt-row-status' + (needsReview ? ' is-review' : ' is-clear')}>{row.expectedSatang === null || row.billedSatang === null ? 'Unknown' : needsReview ? 'Review' : 'Matches'}</span></td>
+            <td><span className={'tt-row-status' + (needsReview ? ' is-review' : ' is-clear')}>{row.deltaSatang === null ? 'Unknown' : needsReview ? 'Review' : 'Matches'}</span></td>
           </tr>;
         })}
       </tbody></table></div>
@@ -116,9 +118,11 @@ function InvoiceTable({ view, node, onCommand, onExport, busy, onFocusEvidence, 
 function InvoiceReview({ node, onFocusEvidence, expanded = false }: CanvasObjectContentProps) {
   const items = (node.inputs.items as ReviewItem[] | undefined) ?? [];
   const visibleItems = expanded ? items : items.slice(0, 8);
+  const reasons: Record<string, string> = { missing_or_ambiguous_remote_surcharge: 'Needs a verified remote-area surcharge', missing_or_ambiguous_base_rule: 'Needs an applicable base rate' };
+  const reasonLabel = (reason: string) => reasons[reason] ?? reason.replaceAll('_', ' ');
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow="DERIVED REVIEW" title="Rows needing evidence" status={items.length + ' items'} />
-    {items.length === 0 ? <div className="tt-canvas-inline__empty"><CheckCircle2 size={15} /> No linked review items in this result.</div> : <div className="tt-inline-review-list">{visibleItems.map((item) => <button type="button" key={item.id} onClick={() => onFocusEvidence(item.sourceIds)}><span><strong>{item.shipmentId}</strong><small>{item.reason}</small></span><FileText size={14} aria-hidden="true" /></button>)}</div>}
+    {items.length === 0 ? <div className="tt-canvas-inline__empty"><CheckCircle2 size={15} /> No linked review items in this result.</div> : <div className="tt-inline-review-list">{visibleItems.map((item) => <button type="button" key={item.id} onClick={() => onFocusEvidence(item.sourceIds)}><span><strong>{item.shipmentId}</strong><small>{reasonLabel(item.reason)}</small></span><FileText size={14} aria-hidden="true" /></button>)}</div>}
     {!expanded && items.length > visibleItems.length && <p className="tt-canvas-inline__note">Showing {visibleItems.length} of {items.length} linked review items. Open this object to see every item.</p>}
   </div>;
 }
@@ -154,6 +158,7 @@ function InvoiceRules({ view, onCommand, busy, expanded = false }: CanvasObjectC
   const visibleRules = expanded ? state.rules : state.rules.filter((rule) => rule.enabled).slice(0, 4);
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow="ACTIVE RATE RULES" title="Dated rate rules" status={'Active r' + state.ruleRevision} />
+    {canEdit && expanded && state.candidate && state.candidate.status !== 'active' && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />}
     {state.rules.length === 0 ? <div className="tt-canvas-inline__empty">No rate rules are active. Load the example or draft a rule from verified evidence.</div> : <div className="tt-inline-rule-list">{visibleRules.map((rule) => <div key={rule.id} className={!rule.enabled ? 'is-disabled' : ''}><span><strong>{rule.kind === 'base' ? 'Zone base' : rule.kind === 'step' ? 'Extra kg' : 'Remote surcharge'} · {rule.zone}</strong><small>{rule.from} to {rule.to ?? 'open end'} · {rule.enabled ? 'Active' : 'Disabled'}</small></span><b>{formatMoney(rule.amountSatang)}</b>{expanded && canEdit && rule.enabled && <button className="tt-button tt-button--quiet" type="button" disabled={busy !== null} onClick={() => proposeDisable(rule.id)}>Propose disable</button>}</div>)}</div>}
     {!expanded && state.rules.filter((rule) => rule.enabled).length > visibleRules.length && <p className="tt-canvas-inline__note">Open this canvas object to see all rules and history.</p>}
     {!canEdit ? <p className="tt-canvas-inline__note">Only the table owner can change these rules.</p> : expanded ? <form className="tt-inline-rule-form" onSubmit={propose}>
@@ -167,7 +172,7 @@ function InvoiceRules({ view, onCommand, busy, expanded = false }: CanvasObjectC
       {verifiedRates.length === 0 && <p className="tt-canvas-inline__note">Verify a rate card or excerpt in the source object before drafting a rule.</p>}
       <button type="submit" className="tt-button tt-button--primary" disabled={busy !== null || verifiedRates.length === 0}><Plus size={13} /> Propose dated rule</button>
     </form> : <p className="tt-canvas-inline__note">Open this object to propose a dated rate rule, disable an existing rule, or restore a compatible revision.</p>}
-    {canEdit && expanded && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />}
+    {canEdit && expanded && (!state.candidate || state.candidate.status === 'active') && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />}
   </div>;
 }
 

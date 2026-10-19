@@ -41,7 +41,7 @@ function validValue(field: Pick<TableField, 'type' | 'required' | 'min' | 'max' 
   if (field.type === 'list') return Array.isArray(v) && v.every(x => typeof x === 'string');
   if (field.type === 'number') return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e9 && (field.min === undefined || v >= field.min) && (field.max === undefined || v <= field.max);
   if (field.type === 'boolean') return typeof v === 'boolean';
-  return typeof v === 'string' && (!field.choices || field.choices.includes(v));
+  return typeof v === 'string' && (!field.required || v.trim().length > 0) && (!field.choices || field.choices.includes(v));
 }
 function checkRows(program: TableProgram, records: Record<string, TableRecord[]>) {
   assert(bytes(JSON.stringify(records)) <= 128 * 1024, 'TABLE_LIMIT', 'The records exceed the 128 KiB table limit. No action was applied.');

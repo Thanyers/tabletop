@@ -19,6 +19,12 @@
   font: 400 13px/1.55 Manrope, 'Noto Sans Thai', system-ui, sans-serif;
 }
 
+body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-account-gate) { margin: 0; }
+
+/* A hidden inspector must not reserve a second column at tablet breakpoints. */
+.tt-app .tt-main--canvas:not(.tt-main--with-assistant),
+.tt-app .tt-main--focus:not(.tt-main--with-assistant) { grid-template-columns: minmax(0, 1fr); }
+
 .tt-app *, .tt-chooser *, .tt-loading *, .tt-failure * { box-sizing: border-box; }
 .tt-app button, .tt-chooser button, .tt-failure button { color: inherit; font: inherit; cursor: pointer; touch-action: manipulation; }
 .tt-app button:disabled, .tt-chooser button:disabled { cursor: not-allowed; opacity: .48; }

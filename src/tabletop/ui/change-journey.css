@@ -1,0 +1,17 @@
+.tt-change-journey { padding: 13px; border: 1px solid #dce5e1; border-radius: 9px; background: #f7faf8; }
+.tt-change-journey__state { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; margin-bottom: 15px; font-size: 10px; }
+.tt-change-journey__state > span { display: inline-flex; align-items: center; gap: 6px; color: #496c60; }
+.tt-change-journey__state i { width: 6px; height: 6px; border-radius: 50%; background: #24796b; }
+.tt-change-journey__state > strong { color: #5e7181; font-size: 10px; font-weight: 600; }
+.tt-change-journey ol { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 0; margin: 0; padding: 0; list-style: none; }
+.tt-change-journey li { position: relative; display: grid; justify-items: center; align-content: start; gap: 5px; color: #7f8d92; text-align: center; }
+.tt-change-journey li:not(:last-child)::after { content: ''; position: absolute; top: 11px; left: calc(50% + 14px); width: calc(100% - 28px); height: 2px; background: #dce4e1; }
+.tt-change-journey li > span { z-index: 1; display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid #d5dfdc; border-radius: 50%; background: #fff; font: 500 10px 'IBM Plex Mono',monospace; }
+.tt-change-journey li > b { font-size: 9px; font-weight: 600; }
+.tt-change-journey li.is-complete { color: #24796b; }
+.tt-change-journey li.is-complete > span, .tt-change-journey li.is-complete::after { color: #fff; border-color: #24796b; background: #24796b; }
+.tt-change-journey li.is-current { color: #315eb0; }
+.tt-change-journey li.is-current > span { border-color: #315eb0; background: #eef3fb; box-shadow: 0 0 0 3px #315eb013; animation: tt-journey-arrive .4s ease-out both; }
+.tt-change-journey > p { margin: 12px 0 0; color: #657872; font-size: 10px; }
+@keyframes tt-journey-arrive { from { transform: scale(.85); box-shadow: 0 0 0 0 #315eb029; } to { transform: scale(1); box-shadow: 0 0 0 3px #315eb013; } }
+@media (prefers-reduced-motion:reduce) { .tt-change-journey li.is-current > span { animation: none; } }
