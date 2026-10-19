@@ -15,7 +15,7 @@
 
 `/demo` และ `/demo/replay` เป็นเส้นทางใน Worker เดียวกับแอป ไม่มีบริการ hosting แยก ส่วน localhost ใช้ได้เฉพาะเครื่องที่รัน ไม่ใช่ deployment สำหรับให้ทีมเปิดผ่านอินเทอร์เน็ต
 
-GitHub repository เป็น **public**: [Thanyers/tabletop](https://github.com/Thanyers/tabletop/tree/feat/tabletop-r1) source ที่ deploy มาจาก `feat/tabletop-r1`; งาน review อยู่ใน [draft PR #2](https://github.com/Thanyers/tabletop/pull/2) การ push เอกสารใหม่ไม่ได้เปลี่ยน Worker โดยอัตโนมัติ CI ตรวจโค้ดและ build แต่ไม่มีขั้น deploy
+GitHub repository เป็น **public**: [Thanyers/tabletop](https://github.com/Thanyers/tabletop/tree/main) source ที่ deploy เดิมมาจาก `feat/tabletop-r1` และรวมเข้า `main` ผ่าน [PR #2](https://github.com/Thanyers/tabletop/pull/2) แล้ว ให้ทีมเริ่มงานใหม่จาก main การ push หรือ merge เอกสารไม่ได้เปลี่ยน Worker โดยอัตโนมัติ CI ตรวจโค้ดและ build แต่ไม่มีขั้น deploy
 
 ## สิ่งที่ใช้และค่าใช้จ่าย
 

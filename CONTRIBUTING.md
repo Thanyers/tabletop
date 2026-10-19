@@ -4,10 +4,10 @@
 
 ## Checkout และ runtime
 
-งานปัจจุบันและ source ของ deployment อยู่ที่ `feat/tabletop-r1` ดู [สถานะ release](docs/DEPLOYMENTS.md) สำหรับ commit ที่เปิดใช้อยู่ ให้สร้าง branch งานของตัวเองจาก branch นี้:
+งาน implementation และเอกสารรวมเข้า `main` แล้ว ดู [สถานะ release](docs/DEPLOYMENTS.md) สำหรับ commit ที่เปิดใช้อยู่ ให้สร้าง branch งานของตัวเองจาก main:
 
 ```powershell
-git clone --branch feat/tabletop-r1 https://github.com/Thanyers/tabletop.git
+git clone --branch main https://github.com/Thanyers/tabletop.git
 cd tabletop
 git switch -c docs-or-feature-name
 npm ci
@@ -57,7 +57,7 @@ CI ใน [validate.yml](.github/workflows/validate.yml) ยังตรวจ d
 2. คง server authority, private projections, explicit AI consent และ human confirmation ไม่เพิ่ม scenario-name switch เพื่อให้เคสตัวอย่างผ่าน
 3. เพิ่มหรือปรับการตรวจที่ปกป้องพฤติกรรมที่เปลี่ยน การแก้เอกสารเล็กน้อยให้ตรวจลิงก์/ข้อเท็จจริงตามสัดส่วน ไม่จำเป็นต้องเขียน unit test เลียนแบบข้อความ
 4. ก่อน commit ตรวจ `git status`, diff และ staged paths ใช้รายชื่อไฟล์ที่ตั้งใจส่ง ห้ามส่ง `.env*`, `.dev.vars*`, raw account/session evidence, private receipts หรือ state จาก `test-results/`, `.wrangler/`, `server/.data/`
-5. เปิด PR กลับ `feat/tabletop-r1` ระหว่างที่ integration ยังอยู่ branch นี้ พร้อมผลตรวจและข้อจำกัด หากทีมย้ายฐานไป main แล้วให้ตามมติใน PR หลัก
+5. เปิด PR กลับ `main` พร้อมผลตรวจและข้อจำกัด แล้ว review ก่อน merge
 6. อัปเดตคู่มือเมื่อเปลี่ยนขั้นตอนผู้ใช้หรือข้อจำกัด อัปเดต Deployment เฉพาะเมื่อ deploy และตรวจจริงแล้ว
 
 ผู้ส่ง bug ควรระบุ URL/environment, เวลา, ขั้นตอน, ผลที่คาด/ผลที่เห็น, browser และภาพที่ลบข้อมูลส่วนตัวแล้ว ไม่แนบ token, invite link ที่ยังใช้ได้, cookie หรือข้อมูล source ส่วนตัว
