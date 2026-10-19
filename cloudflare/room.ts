@@ -9,14 +9,31 @@ import { exportInvoice } from '../server/exports.js';
 import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import { authenticateHash, authenticateRequest, isAdminSession, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
+import { respondToTablePrompt } from './table-assistant.js';
 import type { Env } from './contracts.js';
 import { requireWorkspaceWritable } from './table-mode.js';
-import { RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
+import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
+import {
+  tableAssistantConfirmationSchema,
+  tableAssistantRequestSchema,
+  tableAssistantResultSchema,
+  type TableAssistantJob,
+  type TableAssistantConversationEntry,
+  type TableAssistantHistoryPage,
+  type TableAssistantInput,
+  type TableAssistantRequest,
+} from '../src/tabletop/shared/table-assistant-contracts.js';
+import { decideDomain } from '../src/tabletop/domain/index.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
 const MAX_JSON_DEPTH_LIMIT = 40;
 const MAX_MODEL_PROMPT_CHARS = 4_000;
+const MAX_TABLE_ASSISTANT_PROMPT_CHARS = 4_000;
+const TABLE_ASSISTANT_CONTEXT_TURNS = 6;
+const TABLE_ASSISTANT_CONTEXT_MAX_BYTES = 16_384;
+const TABLE_ASSISTANT_HISTORY_DEFAULT_PAGE_SIZE = 20;
+const TABLE_ASSISTANT_HISTORY_MAX_PAGE_SIZE = 50;
 const DIRECTORY_BATCH_SIZE = 100;
 const RETRY_DELAY_MS = 5_000;
 const MODEL_JOB_RECOVERY_MS = 120_000;
@@ -55,6 +72,14 @@ interface PublicModelJob {
 }
 
 interface RunModelJobInput extends ModelInput {
+  jobId: string;
+  requestHash: string;
+  workspaceId: string;
+  actorId: string;
+  sessionHash: string;
+}
+
+interface RunTableAssistantJobInput extends TableAssistantRequest, Pick<TableAssistantInput, 'conversation' | 'conversationOmittedCount'> {
   jobId: string;
   requestHash: string;
   workspaceId: string;
@@ -174,6 +199,102 @@ function parseModelInput(value: unknown): ModelInput {
     prompt: value.prompt,
     consent: true,
     ...(typeof value.sourceId === 'string' ? { sourceId: value.sourceId } : {}),
+  };
+}
+
+function parseTableAssistantRequest(value: unknown): TableAssistantRequest {
+  const parsed = tableAssistantRequestSchema.safeParse(value);
+  if (!parsed.success || Array.from(parsed.data.prompt).length > MAX_TABLE_ASSISTANT_PROMPT_CHARS) {
+    throw new AuthorityError('INVALID_REQUEST');
+  }
+  return parsed.data;
+}
+
+function parseTableAssistantHistoryQuery(url: URL): { before?: string; limit: number } {
+  const beforeValues = url.searchParams.getAll('before');
+  const limitValues = url.searchParams.getAll('limit');
+  if ([...url.searchParams.keys()].some((key) => key !== 'before' && key !== 'limit')
+      || beforeValues.length > 1 || limitValues.length > 1
+      || (beforeValues[0] !== undefined && !MODEL_JOB_ID_PATTERN.test(beforeValues[0]))) {
+    throw new AuthorityError('INVALID_REQUEST');
+  }
+  const limit = limitValues[0] === undefined ? TABLE_ASSISTANT_HISTORY_DEFAULT_PAGE_SIZE : Number(limitValues[0]);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > TABLE_ASSISTANT_HISTORY_MAX_PAGE_SIZE) {
+    throw new AuthorityError('INVALID_REQUEST');
+  }
+  return { ...(beforeValues[0] === undefined ? {} : { before: beforeValues[0] }), limit };
+}
+
+function tableAssistantFailureMessage(failure: unknown): string {
+  if (failure === 'STALE_WORKSPACE' || failure === 'STALE_REVISION') {
+    return 'The table changed while the response was being prepared. Refresh and ask again.';
+  }
+  if (failure === 'TABLE_READ_ONLY') return 'This table is read-only right now. No action was applied.';
+  if (failure === 'ACTION_REJECTED') return 'The suggested action is not valid for the current table state.';
+  return 'The table assistant could not complete this request. Review the table and try again.';
+}
+
+function tableAssistantConfirmationMessage(status: unknown, failure: unknown): string | undefined {
+  if (failure === 'IDEMPOTENCY_MISMATCH') {
+    return 'This confirmation conflicted with an earlier command. No suggested action was applied. Ask for a fresh suggestion.';
+  }
+  if (failure === 'CONFIRMATION_INTERRUPTED') {
+    return 'The confirmation expired before the action could be applied. Ask for a fresh suggestion.';
+  }
+  if (status === 'stale') return 'The table changed before this suggestion was confirmed. Ask again for an updated suggestion.';
+  if (status === 'rejected') return 'The table rules rejected this action. The suggestion was not applied.';
+  return undefined;
+}
+
+function tableAssistantJobView(job: RoomModelJob): TableAssistantJob {
+  const expectedRevision = typeof job.data.expectedRevision === 'string' ? job.data.expectedRevision : '';
+  const prompt = typeof job.data.prompt === 'string' ? job.data.prompt : '';
+  if (!MODEL_JOB_ID_PATTERN.test(job.id) || !PROJECTION_CURSOR_PATTERN.test(expectedRevision)
+      || job.data.expectedEpoch !== job.epoch || prompt.length === 0
+      || prompt.length > MAX_TABLE_ASSISTANT_PROMPT_CHARS) throw new AuthorityError('INTERNAL_ERROR');
+  if (job.status === 'failed' || job.status === 'revoked') {
+    return {
+      id: job.id,
+      createdAt: job.createdAt,
+      prompt,
+      status: 'failed',
+      expectedRevision,
+      expectedEpoch: job.epoch,
+      message: tableAssistantFailureMessage(job.data.failure),
+    };
+  }
+  if (job.status === 'running') return {
+    id: job.id,
+    createdAt: job.createdAt,
+    prompt,
+    status: 'running',
+    expectedRevision,
+    expectedEpoch: job.epoch,
+  };
+  const parsed = tableAssistantResultSchema.safeParse(job.data.result);
+  if (!parsed.success) throw new AuthorityError('INTERNAL_ERROR');
+  return {
+    id: job.id,
+    createdAt: job.createdAt,
+    prompt,
+    status: 'completed',
+    expectedRevision,
+    expectedEpoch: job.epoch,
+    result: parsed.data,
+    ...(typeof job.data.serverOmittedConversationEntries === 'number'
+      ? { serverOmittedConversationEntries: job.data.serverOmittedConversationEntries } : {}),
+    ...(typeof job.data.providerOmittedConversationEntries === 'number'
+      ? { providerOmittedConversationEntries: job.data.providerOmittedConversationEntries } : {}),
+    ...(parsed.data.kind === 'action-proposal'
+      ? {
+        confirmationStatus: job.data.confirmationStatus === 'confirmed' ? 'confirmed' as const
+          : job.data.confirmationStatus === 'stale' ? 'stale' as const
+            : job.data.confirmationStatus === 'rejected' ? 'rejected' as const
+              : job.status === 'committing' ? 'processing' as const : 'available' as const,
+        ...(tableAssistantConfirmationMessage(job.data.confirmationStatus, job.data.confirmationFailure)
+          ? { message: tableAssistantConfirmationMessage(job.data.confirmationStatus, job.data.confirmationFailure) } : {}),
+      }
+      : {}),
   };
 }
 
@@ -336,7 +457,7 @@ export class Room extends DurableObject<Env> {
             : workspace.domainState.kind === 'encounter' && workspace.domainState.paused ? 'paused' : 'active',
         }, { 'x-request-id': requestId });
       }
-      const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|events|socket|model(?:\/[a-f0-9]{64})?|export))?$/iu.exec(url.pathname);
+      const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu.exec(url.pathname);
       if (!route || this.roomId === null || route[1] !== this.roomId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
       const workspaceId = route[1];
       const suffix = route[2] ?? '';
@@ -412,12 +533,16 @@ export class Room extends DurableObject<Env> {
           jobId, authorized.session.record.actorId, workspaceId, input.expectedEpoch,
         );
         if (existing) {
+          if (existing.data.kind !== undefined) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           if (existing.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           const reconciled = await this.reconcileModelJob(existing);
           return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
             modelJobView(reconciled), { 'x-request-id': requestId });
         }
         if (input.expectedRevision !== authorized.workspace.revision) throw new AuthorityError('STALE_REVISION');
+        const context = await this.tableAssistantConversation(
+          workspaceId, input.expectedEpoch, authorized.session.record.actorId,
+        );
         const reservation = await this.repository.reserveModelJob({
           id: jobId,
           workspaceId,
@@ -429,6 +554,7 @@ export class Room extends DurableObject<Env> {
           now: Date.now(),
         });
         if (!reservation.created) {
+          if (reservation.job.data.kind !== undefined) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           if (reservation.job.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           const reconciled = await this.reconcileModelJob(reservation.job);
           return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
@@ -457,10 +583,270 @@ export class Room extends DurableObject<Env> {
         const job = await this.repository.getModelJob(
           jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch,
         );
-        if (!job) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+        if (!job || job.data.kind !== undefined) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
         const reconciled = await this.reconcileModelJob(job);
         return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
           modelJobView(reconciled), { 'x-request-id': requestId });
+      }
+      if (request.method === 'GET' && suffix === 'assistant') {
+        const authorized = await this.authorize(request, workspaceId);
+        if (authorized.workspace.kind !== 'table' || authorized.workspace.domain.kind !== 'table') {
+          throw new AuthorityError('COMMAND_NOT_ALLOWED');
+        }
+        const query = parseTableAssistantHistoryQuery(url);
+        const page = await this.repository.listTableAssistantJobs({
+          workspaceId,
+          epoch: authorized.workspace.epoch,
+          actorId: authorized.session.record.actorId,
+          ...(query.before === undefined ? {} : { before: query.before }),
+          limit: query.limit,
+        });
+        const items = await Promise.all(page.jobs.map(async (job) =>
+          tableAssistantJobView(await this.reconcileTableAssistantJob(job))));
+        const payload: TableAssistantHistoryPage = {
+          items,
+          nextBefore: page.hasMore ? (page.jobs.at(-1)?.id ?? null) : null,
+          limit: query.limit,
+          contextTurns: TABLE_ASSISTANT_CONTEXT_TURNS,
+          contextMaxBytes: TABLE_ASSISTANT_CONTEXT_MAX_BYTES,
+          storageJobCap: MAX_TABLE_ASSISTANT_JOBS_PER_ROOM,
+        };
+        return json(200, payload, { 'x-request-id': requestId });
+      }
+      if (request.method === 'POST' && suffix === 'assistant') {
+        const authorized = await this.authorize(request, workspaceId);
+        requireMutation(request, this.env, authorized.session);
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
+        if (authorized.workspace.kind !== 'table' || authorized.workspace.domain.kind !== 'table') {
+          throw new AuthorityError('COMMAND_NOT_ALLOWED');
+        }
+        if (authorized.member.role !== 'owner' && authorized.member.role !== 'participant') {
+          throw new AuthorityError('ROLE_FORBIDDEN');
+        }
+        const input = parseTableAssistantRequest(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
+        const requestHash = sha256(canonicalJson({
+          commandId: input.commandId,
+          expectedRevision: input.expectedRevision,
+          expectedEpoch: input.expectedEpoch,
+          prompt: input.prompt,
+          consent: input.consent,
+        }));
+        const jobId = sha256(`tabletop-assistant-job-v1:${canonicalJson({
+          actorId: authorized.session.record.actorId,
+          workspaceId,
+          epoch: input.expectedEpoch,
+          commandId: input.commandId,
+        })}`);
+        const existing = await this.repository.getModelJob(
+          jobId, authorized.session.record.actorId, workspaceId, input.expectedEpoch,
+        );
+        if (existing) {
+          if (existing.data.kind !== 'table-assistant' || existing.data.requestHash !== requestHash) {
+            throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+          }
+          const reconciled = await this.reconcileTableAssistantJob(existing);
+          const view = tableAssistantJobView(reconciled);
+          return json(view.status === 'running' ? 202 : 200, view, { 'x-request-id': requestId });
+        }
+        if (input.expectedRevision !== authorized.workspace.revision) throw new AuthorityError('STALE_REVISION');
+        const context = await this.tableAssistantConversation(
+          workspaceId, input.expectedEpoch, authorized.session.record.actorId,
+        );
+        const reservation = await this.repository.reserveModelJob({
+          id: jobId,
+          workspaceId,
+          epoch: input.expectedEpoch,
+          actorId: authorized.session.record.actorId,
+          commandId: input.commandId,
+          expectedRevision: input.expectedRevision,
+          requestHash,
+          now: Date.now(),
+          kind: 'table-assistant',
+          prompt: input.prompt,
+        });
+        if (!reservation.created) {
+          if (reservation.job.data.kind !== 'table-assistant'
+              || reservation.job.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+          const reconciled = await this.reconcileTableAssistantJob(reservation.job);
+          const view = tableAssistantJobView(reconciled);
+          return json(view.status === 'running' ? 202 : 200, view, { 'x-request-id': requestId });
+        }
+        this.ctx.waitUntil(this.runTableAssistantJob({
+          ...input,
+          jobId,
+          requestHash,
+          workspaceId,
+          actorId: authorized.session.record.actorId,
+          sessionHash: authorized.session.record.tokenHash,
+          conversation: context.conversation,
+          conversationOmittedCount: context.omittedCount,
+        }));
+        await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
+        return json(202, tableAssistantJobView(reservation.job), { 'x-request-id': requestId });
+      }
+      if (request.method === 'GET' && /^assistant\/[a-f0-9]{64}$/u.test(suffix)) {
+        const authorized = await this.authorize(request, workspaceId);
+        const jobId = suffix.slice('assistant/'.length);
+        const job = await this.repository.getModelJob(
+          jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch,
+        );
+        if (!job || job.data.kind !== 'table-assistant') throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+        const reconciled = await this.reconcileTableAssistantJob(job);
+        const view = tableAssistantJobView(reconciled);
+        return json(view.status === 'running' ? 202 : 200, view, { 'x-request-id': requestId });
+      }
+      if (request.method === 'POST' && /^assistant\/[a-f0-9]{64}\/confirm$/u.test(suffix)) {
+        const authorized = await this.authorize(request, workspaceId);
+        requireMutation(request, this.env, authorized.session);
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
+        if (authorized.workspace.kind !== 'table' || authorized.workspace.domain.kind !== 'table') {
+          throw new AuthorityError('COMMAND_NOT_ALLOWED');
+        }
+        if (authorized.member.role !== 'owner' && authorized.member.role !== 'participant') {
+          throw new AuthorityError('ROLE_FORBIDDEN');
+        }
+        const parsed = tableAssistantConfirmationSchema.safeParse(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        if (!parsed.success) throw new AuthorityError('INVALID_REQUEST');
+        const jobId = suffix.slice('assistant/'.length, -'/confirm'.length);
+        let job = await this.repository.getModelJob(
+          jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch,
+        );
+        if (!job || job.data.kind !== 'table-assistant') throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+        job = await this.reconcileTableAssistantJob(job);
+        const result = tableAssistantResultSchema.safeParse(job.data.result);
+        if (!result.success || result.data.kind !== 'action-proposal') throw new AuthorityError('COMMAND_NOT_ALLOWED');
+        if (parsed.data.expectedEpoch !== job.epoch) throw new AuthorityError('STALE_EPOCH');
+        if (parsed.data.expectedRevision !== result.data.expectedRevision
+            || parsed.data.expectedRevision !== job.data.expectedRevision) throw new AuthorityError('STALE_REVISION');
+
+        const envelope = {
+          commandId: parsed.data.commandId,
+          expectedRevision: result.data.expectedRevision,
+          expectedEpoch: job.epoch,
+          type: 'table.act',
+          payload: { actionId: result.data.actionId, inputs: result.data.inputs },
+        };
+        const proposalHash = hashValue({
+          type: envelope.type,
+          payload: envelope.payload,
+          expectedRevision: envelope.expectedRevision,
+          expectedEpoch: envelope.expectedEpoch,
+        });
+        if (job.status === 'committing'
+            || (job.status === 'completed' && job.data.confirmationStatus === 'confirmed')) {
+          if (job.data.confirmCommandId !== parsed.data.commandId
+              || job.data.proposalHash !== proposalHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+          const receipt = await this.repository.findCommandReceipt(
+            workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+          );
+          if (receipt) {
+            if (receipt.payloadHash !== proposalHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+            await this.repository.completeTableAssistantConfirmation(
+              job.id, workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+              { ...job.data, confirmationStatus: 'confirmed' },
+            );
+            return json(200, { ...receipt.response, duplicate: true }, { 'x-request-id': requestId });
+          }
+          if (job.status === 'completed') throw new AuthorityError('INTERNAL_ERROR');
+        } else if (job.status !== 'completed' || job.data.confirmationStatus !== 'available') {
+          throw new AuthorityError('STALE_REVISION');
+        }
+
+        const claim = await this.repository.claimTableAssistantConfirmation({
+          id: jobId,
+          workspaceId,
+          epoch: job.epoch,
+          actorId: authorized.session.record.actorId,
+          commandId: parsed.data.commandId,
+          expectedRevision: parsed.data.expectedRevision,
+          proposalHash,
+          startedAt: Date.now(),
+        });
+        if (!claim.claimed) {
+          const receipt = await this.repository.findCommandReceipt(
+            workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+          );
+          if (receipt && receipt.payloadHash === proposalHash) {
+            await this.repository.completeTableAssistantConfirmation(
+              jobId, workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+              { ...claim.job.data, confirmationStatus: 'confirmed' },
+            );
+            return json(200, { ...receipt.response, duplicate: true }, { 'x-request-id': requestId });
+          }
+        }
+
+        try {
+          await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
+          const acknowledgement = await this.authority.executeTableAssistantAction(
+            authorized.session, envelope, workspaceId, jobId,
+          );
+          const latest = await this.repository.getModelJob(jobId, authorized.session.record.actorId, workspaceId, job.epoch);
+          if (latest && latest.data.kind === 'table-assistant') {
+            await this.repository.completeTableAssistantConfirmation(
+              jobId, workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+              { ...latest.data, confirmationStatus: 'confirmed' },
+            );
+          }
+          return json(200, acknowledgement, { 'x-request-id': requestId });
+        } catch (error) {
+          const receipt = await this.repository.findCommandReceipt(
+            workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+          ).catch(async () => {
+            await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS);
+            throw new AuthorityError('DATABASE_UNAVAILABLE');
+          });
+          if (receipt && receipt.payloadHash === proposalHash) {
+            const latest = await this.repository.getModelJob(jobId, authorized.session.record.actorId, workspaceId, job.epoch);
+            if (latest && latest.data.kind === 'table-assistant') {
+              await this.repository.completeTableAssistantConfirmation(
+                jobId, workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+                { ...latest.data, confirmationStatus: 'confirmed' },
+              );
+            }
+            return json(200, { ...receipt.response, duplicate: true }, { 'x-request-id': requestId });
+          }
+          if (receipt) {
+            await this.repository.settleTableAssistantConfirmationFailure({
+              id: jobId, workspaceId, epoch: job.epoch, actorId: authorized.session.record.actorId,
+              commandId: parsed.data.commandId, proposalHash,
+              confirmationStatus: 'rejected', failure: 'IDEMPOTENCY_MISMATCH',
+            }).catch(async () => {
+              await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS);
+              throw new AuthorityError('DATABASE_UNAVAILABLE');
+            });
+            throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+          }
+          if (error instanceof AuthorityError && error.status < 500) {
+            const stale = error.code === 'STALE_REVISION' || error.code === 'STALE_EPOCH';
+            const status = await this.repository.settleTableAssistantConfirmationFailure({
+              id: jobId,
+              workspaceId,
+              epoch: job.epoch,
+              actorId: authorized.session.record.actorId,
+              commandId: parsed.data.commandId,
+              proposalHash,
+              confirmationStatus: stale ? 'stale' : 'rejected',
+              failure: stale ? 'STALE_WORKSPACE' : 'ACTION_REJECTED',
+            }).catch(async () => {
+              await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS);
+              return 'inactive' as const;
+            });
+            if (status === 'confirmed') {
+              const committed = await this.repository.findCommandReceipt(
+                workspaceId, job.epoch, authorized.session.record.actorId, parsed.data.commandId,
+              );
+              if (committed && committed.payloadHash === proposalHash) {
+                return json(200, { ...committed.response, duplicate: true }, { 'x-request-id': requestId });
+              }
+              await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS);
+              throw new AuthorityError('DATABASE_UNAVAILABLE');
+            }
+            throw error;
+          }
+          await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS);
+          throw new AuthorityError('DATABASE_UNAVAILABLE');
+        }
       }
       if (request.method === 'GET' && suffix === 'export') {
         const authorized = await this.authorize(request, workspaceId);
@@ -565,6 +951,189 @@ export class Room extends DurableObject<Env> {
 
   private scheduleDirectorySync(): void {
     this.ctx.waitUntil(this.syncDirectory().catch(async () => { await this.scheduleAlarm(); }));
+  }
+
+  private async tableAssistantConversation(
+    workspaceId: string,
+    epoch: number,
+    actorId: string,
+  ): Promise<{ conversation: TableAssistantConversationEntry[]; omittedCount: number }> {
+    const jobs = await this.repository.listRecentCompletedTableAssistantJobs(
+      workspaceId, epoch, actorId, TABLE_ASSISTANT_CONTEXT_TURNS,
+    );
+    const conversation: TableAssistantConversationEntry[] = [];
+    for (const job of jobs.reverse()) {
+      const prompt = job.data.prompt;
+      const expectedRevision = job.data.expectedRevision;
+      const result = tableAssistantResultSchema.safeParse(job.data.result);
+      if (typeof prompt !== 'string' || prompt.length === 0 || prompt.length > MAX_TABLE_ASSISTANT_PROMPT_CHARS
+          || typeof expectedRevision !== 'string' || !PROJECTION_CURSOR_PATTERN.test(expectedRevision)
+          || !result.success) continue;
+      conversation.push({
+        prompt,
+        result: { kind: result.data.kind, text: result.data.text },
+        expectedRevision,
+        ...(result.data.kind === 'action-proposal'
+          && (job.data.confirmationStatus === 'available'
+            || job.data.confirmationStatus === 'processing'
+            || job.data.confirmationStatus === 'confirmed'
+            || job.data.confirmationStatus === 'stale'
+            || job.data.confirmationStatus === 'rejected')
+          ? { confirmationStatus: job.data.confirmationStatus } : {}),
+      });
+    }
+    const selectedCount = conversation.length;
+    const byteLength = (): number => new TextEncoder().encode(JSON.stringify(conversation)).byteLength;
+    while (conversation.length > 0 && byteLength() > TABLE_ASSISTANT_CONTEXT_MAX_BYTES) conversation.shift();
+    return { conversation, omittedCount: selectedCount - conversation.length };
+  }
+
+  private async runTableAssistantJob(input: RunTableAssistantJobInput): Promise<void> {
+    const initialData = {
+      kind: 'table-assistant',
+      requestHash: input.requestHash,
+      commandId: input.commandId,
+      expectedRevision: input.expectedRevision,
+      expectedEpoch: input.expectedEpoch,
+      prompt: input.prompt,
+    };
+    try {
+      let session = await authenticateHash(input.sessionHash, this.env);
+      if (session.record.actorId !== input.actorId) throw new AuthorityError('SESSION_EXPIRED');
+      let authorized = await this.authority.authorizeSession(session, input.workspaceId);
+      if (authorized.workspace.kind !== 'table' || authorized.workspace.domain.kind !== 'table') {
+        throw new AuthorityError('COMMAND_NOT_ALLOWED');
+      }
+      if (authorized.member.role !== 'owner' && authorized.member.role !== 'participant') {
+        throw new AuthorityError('ROLE_FORBIDDEN');
+      }
+      if (authorized.workspace.epoch !== input.expectedEpoch
+          || authorized.workspace.revision !== input.expectedRevision) {
+        await this.repository.finishTableAssistantJob(
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'failed',
+          { ...initialData, failure: 'STALE_WORKSPACE' },
+        );
+        return;
+      }
+      requireWorkspaceWritable(this.env, authorized.workspace.kind);
+      const job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
+      if (!job || job.status !== 'running' || job.data.kind !== 'table-assistant') return;
+
+      const response = await respondToTablePrompt(this.env, {
+        workspace: authorized.workspace,
+        actorId: input.actorId,
+        jobId: input.jobId,
+        commandId: input.commandId,
+        prompt: input.prompt,
+        consent: true,
+        conversation: input.conversation,
+        conversationOmittedCount: input.conversationOmittedCount,
+      });
+      if (response.jobId !== input.jobId) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+      const result = tableAssistantResultSchema.safeParse(response.result);
+      if (!result.success) throw new AuthorityError('TABLE_ASSISTANT_OUTPUT_REJECTED');
+
+      session = await authenticateHash(input.sessionHash, this.env);
+      if (session.record.actorId !== input.actorId) throw new AuthorityError('SESSION_EXPIRED');
+      authorized = await this.authority.authorizeSession(session, input.workspaceId);
+      if (authorized.workspace.kind !== 'table' || authorized.workspace.domain.kind !== 'table'
+          || (authorized.member.role !== 'owner' && authorized.member.role !== 'participant')) {
+        throw new AuthorityError('COMMAND_NOT_ALLOWED');
+      }
+      if (authorized.workspace.epoch !== input.expectedEpoch
+          || authorized.workspace.revision !== input.expectedRevision) {
+        await this.repository.finishTableAssistantJob(
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'failed',
+          { ...initialData, failure: 'STALE_WORKSPACE' },
+        );
+        return;
+      }
+      requireWorkspaceWritable(this.env, authorized.workspace.kind);
+
+      if (result.data.kind === 'action-proposal') {
+        if (result.data.expectedRevision !== authorized.workspace.revision
+            || result.data.expectedRuleRevision !== authorized.workspace.domain.ruleRevision
+            || result.data.expectedActionRevision !== authorized.workspace.domain.actionRevision) {
+          await this.repository.finishTableAssistantJob(
+            input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'failed',
+            { ...initialData, failure: 'STALE_WORKSPACE' },
+          );
+          return;
+        }
+        try {
+          decideDomain(structuredClone(authorized.workspace.domain), {
+            type: 'table.act',
+            payload: { actionId: result.data.actionId, inputs: result.data.inputs },
+          }, authorized.context);
+        } catch {
+          await this.repository.finishTableAssistantJob(
+            input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'failed',
+            { ...initialData, failure: 'ACTION_REJECTED' },
+          );
+          return;
+        }
+      }
+
+      const data = {
+        ...initialData,
+        result: result.data,
+        serverOmittedConversationEntries: response.serverOmittedConversationEntries,
+        providerOmittedConversationEntries: response.providerOmittedConversationEntries,
+        ...(result.data.kind === 'action-proposal' ? { confirmationStatus: 'available' } : {}),
+      };
+      await this.repository.finishTableAssistantJob(
+        input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'completed', data,
+      );
+    } catch (error) {
+      const failure = error instanceof AuthorityError && error.code === 'TABLE_READ_ONLY'
+        ? 'TABLE_READ_ONLY'
+        : 'ASSISTANT_FAILED';
+      await this.repository.finishTableAssistantJob(
+        input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'failed',
+        { ...initialData, failure },
+      ).catch(() => false);
+    }
+  }
+
+  private async reconcileTableAssistantJob(job: RoomModelJob): Promise<RoomModelJob> {
+    if (job.data.kind !== 'table-assistant' || (job.status !== 'running' && job.status !== 'committing')) return job;
+    const commandId = typeof job.data.confirmCommandId === 'string' ? job.data.confirmCommandId : '';
+    const proposalHash = typeof job.data.proposalHash === 'string' ? job.data.proposalHash : '';
+    const receipt = commandId && proposalHash
+      ? await this.repository.findCommandReceipt(job.workspaceId, job.epoch, job.actorId, commandId)
+      : null;
+    if (job.status === 'committing') {
+      if (receipt && receipt.payloadHash === proposalHash) {
+        await this.repository.completeTableAssistantConfirmation(
+          job.id, job.workspaceId, job.epoch, job.actorId, commandId,
+          { ...job.data, confirmationStatus: 'confirmed' },
+        );
+      } else {
+        const startedAt = typeof job.data.confirmationStartedAt === 'number'
+          && Number.isSafeInteger(job.data.confirmationStartedAt)
+          ? job.data.confirmationStartedAt : job.createdAt;
+        if (receipt || Date.now() - startedAt >= MODEL_JOB_RECOVERY_MS) {
+          await this.repository.settleTableAssistantConfirmationFailure({
+            id: job.id,
+            workspaceId: job.workspaceId,
+            epoch: job.epoch,
+            actorId: job.actorId,
+            commandId,
+            proposalHash,
+            confirmationStatus: 'rejected',
+            failure: 'CONFIRMATION_INTERRUPTED',
+          });
+        }
+      }
+      return (await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch)) ?? job;
+    }
+    if (Date.now() - job.createdAt >= MODEL_JOB_RECOVERY_MS) {
+      await this.repository.finishTableAssistantJob(
+        job.id, job.workspaceId, job.epoch, job.actorId, 'failed',
+        { ...job.data, failure: 'ASSISTANT_INTERRUPTED' },
+      );
+    }
+    return (await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch)) ?? job;
   }
 
   private async scheduleAlarm(): Promise<void> {
@@ -713,7 +1282,10 @@ export class Room extends DurableObject<Env> {
 
   private async recoverStaleModelJobs(): Promise<void> {
     const stale = await this.repository.listStaleRunningModelJobs(Date.now() - MODEL_JOB_RECOVERY_MS);
-    for (const job of stale) await this.reconcileModelJob(job);
+    for (const job of stale) {
+      if (job.data.kind === 'table-assistant') await this.reconcileTableAssistantJob(job);
+      else await this.reconcileModelJob(job);
+    }
   }
 
   private async syncDirectory(): Promise<void> {
@@ -756,8 +1328,8 @@ export class Room extends DurableObject<Env> {
 
   private async drainOutbox(): Promise<void> {
     const pending = this.repository.listPendingOutbox();
-    if (pending.length === 0) return;
     await this.broadcastAuthorizedProjections();
+    if (pending.length === 0) return;
     await this.repository.markOutboxDelivered(pending.map((item) => item.outboxId), Date.now());
     if (this.repository.pendingOutboxCount() > 0) await this.scheduleAlarm();
   }

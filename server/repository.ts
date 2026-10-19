@@ -559,7 +559,12 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
 
   async listWorkspaceReferences(actorId: string, now: number): Promise<WorkspaceReference[]> {
     const result = await this.database.query<Record<string, unknown>>(
-      `SELECT w.id, w.title, w.kind, m.role
+      `SELECT w.id,
+              CASE WHEN w.kind = 'table'
+                THEN COALESCE(NULLIF(BTRIM(w.domain_state #>> '{program,title}'), ''), w.title)
+                ELSE w.title
+              END AS title,
+              w.kind, m.role
        FROM workspaces w
        JOIN memberships m ON m.workspace_id = w.id AND m.epoch = w.epoch
        WHERE m.actor_id = $1 AND m.revoked_at IS NULL AND w.expires_at > $2

@@ -72,7 +72,12 @@ export interface ReserveRoomModelJobInput {
   expectedRevision: string;
   requestHash: string;
   now: number;
+  kind?: 'table-assistant';
+  prompt?: string;
 }
+
+export const MAX_TABLE_ASSISTANT_JOBS_PER_ROOM = 500;
+const MAX_ACTIVE_TABLE_ASSISTANT_JOBS_PER_ROOM = 8;
 
 const TABLES = [
   `CREATE TABLE IF NOT EXISTS room_identity (
@@ -370,7 +375,10 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec('DELETE FROM room_invitations WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec('DELETE FROM room_approvals WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec(
-        `UPDATE model_jobs SET status = 'revoked', data = '{}', revoked_at = COALESCE(revoked_at, ?)
+        `UPDATE model_jobs SET status = 'revoked',
+           data = CASE WHEN json_extract(data, '$.kind') = 'table-assistant'
+             THEN '{"kind":"table-assistant","failure":"ROOM_RESET"}' ELSE '{}' END,
+           revoked_at = COALESCE(revoked_at, ?)
          WHERE workspace_id = ? AND epoch < ?`,
         event.createdAt, workspace.id, workspace.epoch,
       );
@@ -618,7 +626,9 @@ export class RoomRepository implements WorkspaceRepository {
         if (existing.workspaceId !== input.workspaceId || existing.epoch !== input.epoch || existing.actorId !== input.actorId) {
           throw new AuthorityError('IDEMPOTENCY_MISMATCH');
         }
-        if (existing.data.requestHash !== input.requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+        if (existing.data.requestHash !== input.requestHash || existing.data.kind !== input.kind) {
+          throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+        }
         return { created: false, job: existing };
       }
 
@@ -636,11 +646,36 @@ export class RoomRepository implements WorkspaceRepository {
       )[0];
       if (receipt) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
 
+      if (input.kind === 'table-assistant') {
+        if (typeof input.prompt !== 'string' || input.prompt.length === 0 || input.prompt.length > 4_000) {
+          throw new AuthorityError('INVALID_REQUEST');
+        }
+        const totalRow = this.rows<{ job_count: SqlStorageValue }>(
+          `SELECT COUNT(*) AS job_count FROM model_jobs
+           WHERE workspace_id = ? AND json_extract(data, '$.kind') = 'table-assistant'`,
+          input.workspaceId,
+        )[0];
+        if (readNumber(totalRow?.job_count ?? 0, 'job_count') >= MAX_TABLE_ASSISTANT_JOBS_PER_ROOM) {
+          throw new AuthorityError('TABLE_ASSISTANT_HISTORY_LIMIT', 'The table assistant has reached this room’s saved history limit. You can keep playing directly; no new assistant job was started.', 409);
+        }
+        const activeRow = this.rows<{ job_count: SqlStorageValue }>(
+          `SELECT COUNT(*) AS job_count FROM model_jobs
+           WHERE workspace_id = ? AND json_extract(data, '$.kind') = 'table-assistant'
+             AND status IN ('running', 'committing') AND revoked_at IS NULL`,
+          input.workspaceId,
+        )[0];
+        if (readNumber(activeRow?.job_count ?? 0, 'job_count') >= MAX_ACTIVE_TABLE_ASSISTANT_JOBS_PER_ROOM) {
+          throw new AuthorityError('TOO_MANY_REQUESTS');
+        }
+      }
+
       const data = {
+        ...(input.kind === undefined ? {} : { kind: input.kind }),
         requestHash: input.requestHash,
         commandId: input.commandId,
         expectedRevision: input.expectedRevision,
         expectedEpoch: input.epoch,
+        ...(input.kind === 'table-assistant' ? { prompt: input.prompt } : {}),
       };
       this.storage.transactionSync(() => {
         this.storage.sql.exec(
@@ -673,6 +708,57 @@ export class RoomRepository implements WorkspaceRepository {
       )[0];
       return row ? mapModelJob(row) : null;
     });
+  }
+
+  async listTableAssistantJobs(input: {
+    workspaceId: string;
+    epoch: number;
+    actorId: string;
+    before?: string;
+    limit: number;
+  }): Promise<{ jobs: RoomModelJob[]; hasMore: boolean }> {
+    return this.serialized(async () => {
+      let anchor: { created_at: SqlStorageValue; id: SqlStorageValue } | undefined;
+      if (input.before !== undefined) {
+        anchor = this.rows<{ created_at: SqlStorageValue; id: SqlStorageValue }>(
+          `SELECT created_at, id FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ?
+           AND json_extract(data, '$.kind') = 'table-assistant'`,
+          input.before, input.workspaceId, input.epoch, input.actorId,
+        )[0];
+        if (!anchor) throw new AuthorityError('WORKSPACE_NOT_FOUND');
+      }
+      const rows = anchor
+        ? this.rows(
+          `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? AND actor_id = ?
+           AND json_extract(data, '$.kind') = 'table-assistant'
+           AND (created_at < ? OR (created_at = ? AND id < ?))
+           ORDER BY created_at DESC, id DESC LIMIT ?`,
+          input.workspaceId, input.epoch, input.actorId,
+          readNumber(anchor.created_at, 'created_at'), readNumber(anchor.created_at, 'created_at'),
+          readString(anchor.id, 'id'), input.limit + 1,
+        )
+        : this.rows(
+          `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? AND actor_id = ?
+           AND json_extract(data, '$.kind') = 'table-assistant'
+           ORDER BY created_at DESC, id DESC LIMIT ?`,
+          input.workspaceId, input.epoch, input.actorId, input.limit + 1,
+        );
+      return { jobs: rows.slice(0, input.limit).map(mapModelJob), hasMore: rows.length > input.limit };
+    });
+  }
+
+  async listRecentCompletedTableAssistantJobs(
+    workspaceId: string,
+    epoch: number,
+    actorId: string,
+    limit: number,
+  ): Promise<RoomModelJob[]> {
+    return this.serialized(async () => this.rows(
+      `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? AND actor_id = ?
+       AND json_extract(data, '$.kind') = 'table-assistant' AND status = 'completed'
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+      workspaceId, epoch, actorId, Math.max(1, Math.min(6, Math.trunc(limit))),
+    ).map(mapModelJob));
   }
 
   async findCommandReceipt(
@@ -715,6 +801,171 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
+  async finishTableAssistantJob(
+    id: string,
+    workspaceId: string,
+    epoch: number,
+    actorId: string,
+    status: 'completed' | 'failed',
+    data: Record<string, unknown>,
+  ): Promise<boolean> {
+    return this.serialized(async () => {
+      this.storage.transactionSync(() => {
+        this.storage.sql.exec(
+          `UPDATE model_jobs SET status = ?, data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
+           AND actor_id = ? AND status = 'running' AND revoked_at IS NULL
+           AND json_extract(data, '$.kind') = 'table-assistant'`,
+          status, JSON.stringify(data), id, workspaceId, epoch, actorId,
+        );
+      });
+      const row = this.rows(
+        `SELECT status FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ?
+         AND json_extract(data, '$.kind') = 'table-assistant'`,
+        id, workspaceId, epoch, actorId,
+      )[0];
+      return row?.status === status;
+    });
+  }
+
+  async claimTableAssistantConfirmation(input: {
+    id: string;
+    workspaceId: string;
+    epoch: number;
+    actorId: string;
+    commandId: string;
+    expectedRevision: string;
+    proposalHash: string;
+    startedAt: number;
+  }): Promise<{ job: RoomModelJob; claimed: boolean }> {
+    return this.serialized(async () => this.storage.transactionSync(() => {
+      const row = this.rows(
+        `SELECT * FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ?`,
+        input.id, input.workspaceId, input.epoch, input.actorId,
+      )[0];
+      if (!row) throw new AuthorityError('WORKSPACE_NOT_FOUND');
+      const current = mapModelJob(row);
+      if (current.data.kind !== 'table-assistant') throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+      if (current.status === 'committing'
+          || (current.status === 'completed' && current.data.confirmationStatus === 'confirmed')) {
+        if (current.data.confirmCommandId !== input.commandId
+            || current.data.proposalHash !== input.proposalHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+        return { job: current, claimed: false };
+      }
+      if (current.status !== 'completed' || current.data.confirmationStatus !== 'available') {
+        throw new AuthorityError('STALE_REVISION');
+      }
+      if (current.data.expectedRevision !== input.expectedRevision) throw new AuthorityError('STALE_REVISION');
+      if (current.data.expectedEpoch !== input.epoch) throw new AuthorityError('STALE_EPOCH');
+      const existingReceipt = this.rows(
+        `SELECT command_id FROM room_commands WHERE workspace_id = ? AND epoch = ? AND actor_id = ? AND command_id = ?`,
+        input.workspaceId, input.epoch, input.actorId, input.commandId,
+      )[0];
+      if (existingReceipt) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+
+      const data = {
+        ...current.data,
+        assistantRequestCommandId: current.data.commandId,
+        commandId: input.commandId,
+        confirmCommandId: input.commandId,
+        proposalHash: input.proposalHash,
+        confirmationStatus: 'processing',
+        confirmationStartedAt: input.startedAt,
+      };
+      this.storage.sql.exec(
+        `UPDATE model_jobs SET status = 'committing', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
+         AND actor_id = ? AND status = 'completed' AND revoked_at IS NULL`,
+        JSON.stringify(data), input.id, input.workspaceId, input.epoch, input.actorId,
+      );
+      const claimed = this.rows(
+        `SELECT * FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ?`,
+        input.id, input.workspaceId, input.epoch, input.actorId,
+      )[0];
+      if (!claimed) throw new AuthorityError('WORKSPACE_NOT_FOUND');
+      const job = mapModelJob(claimed);
+      if (job.status !== 'committing' || job.data.confirmCommandId !== input.commandId) {
+        throw new AuthorityError('STALE_REVISION');
+      }
+      return { job, claimed: true };
+    }));
+  }
+
+  async completeTableAssistantConfirmation(
+    id: string,
+    workspaceId: string,
+    epoch: number,
+    actorId: string,
+    commandId: string,
+    data: Record<string, unknown>,
+  ): Promise<boolean> {
+    return this.serialized(async () => {
+      this.storage.transactionSync(() => {
+        this.storage.sql.exec(
+          `UPDATE model_jobs SET status = 'completed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
+           AND actor_id = ? AND status = 'committing' AND revoked_at IS NULL
+           AND json_extract(data, '$.kind') = 'table-assistant'
+           AND json_extract(data, '$.confirmCommandId') = ?`,
+          JSON.stringify(data), id, workspaceId, epoch, actorId, commandId,
+        );
+      });
+      const row = this.rows(
+        `SELECT status FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ?
+         AND json_extract(data, '$.kind') = 'table-assistant'`,
+        id, workspaceId, epoch, actorId,
+      )[0];
+      return row?.status === 'completed';
+    });
+  }
+
+  async settleTableAssistantConfirmationFailure(input: {
+    id: string;
+    workspaceId: string;
+    epoch: number;
+    actorId: string;
+    commandId: string;
+    proposalHash: string;
+    confirmationStatus: 'stale' | 'rejected';
+    failure: string;
+  }): Promise<'confirmed' | 'stale' | 'rejected' | 'inactive'> {
+    return this.serialized(async () => this.storage.transactionSync(() => {
+      const row = this.rows(
+        `SELECT * FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ?`,
+        input.id, input.workspaceId, input.epoch, input.actorId,
+      )[0];
+      if (!row) return 'inactive';
+      const job = mapModelJob(row);
+      if (job.data.kind !== 'table-assistant' || job.status !== 'committing'
+          || job.revokedAt !== null) return 'inactive';
+      if (job.data.confirmCommandId !== input.commandId || job.data.proposalHash !== input.proposalHash) {
+        throw new AuthorityError('IDEMPOTENCY_MISMATCH');
+      }
+      const receiptRow = this.rows(
+        `SELECT workspace_id, epoch, actor_id, command_id, payload_hash, response, event_id, created_at
+         FROM room_commands WHERE workspace_id = ? AND epoch = ? AND actor_id = ? AND command_id = ?`,
+        input.workspaceId, input.epoch, input.actorId, input.commandId,
+      )[0];
+      if (receiptRow && mapCommand(receiptRow).payloadHash === input.proposalHash) {
+        this.storage.sql.exec(
+          `UPDATE model_jobs SET status = 'completed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
+           AND actor_id = ? AND status = 'committing' AND revoked_at IS NULL`,
+          JSON.stringify({ ...job.data, confirmationStatus: 'confirmed' }),
+          input.id, input.workspaceId, input.epoch, input.actorId,
+        );
+        return 'confirmed';
+      }
+      // A receipt for another command is immutable. End only this assistant
+      // confirmation so recovery cannot retry the same collision forever.
+      const confirmationStatus = receiptRow ? 'rejected' : input.confirmationStatus;
+      const failure = receiptRow ? 'IDEMPOTENCY_MISMATCH' : input.failure;
+      this.storage.sql.exec(
+        `UPDATE model_jobs SET status = 'completed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
+         AND actor_id = ? AND status = 'committing' AND revoked_at IS NULL`,
+        JSON.stringify({ ...job.data, confirmationStatus, confirmationFailure: failure }),
+        input.id, input.workspaceId, input.epoch, input.actorId,
+      );
+      return confirmationStatus;
+    }));
+  }
+
   async failModelJobAfterReceiptCheck(
     id: string,
     workspaceId: string,
@@ -744,7 +995,9 @@ export class RoomRepository implements WorkspaceRepository {
       if (receiptRow && proposalHash && readString(receiptRow.payload_hash, 'payload_hash') === proposalHash) {
         const receipt = mapCommand(receiptRow);
         const candidateId = receipt.response.workspace.domain.candidate?.id;
-        const completedData = { ...job.data, ...(candidateId ? { candidateId } : {}) };
+        const completedData = job.data.kind === 'table-assistant'
+          ? { ...job.data, confirmationStatus: 'confirmed' }
+          : { ...job.data, ...(candidateId ? { candidateId } : {}) };
         this.storage.sql.exec(
           `UPDATE model_jobs SET status = 'completed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
            AND actor_id = ? AND status IN ('running', 'committing') AND revoked_at IS NULL`,
@@ -787,7 +1040,10 @@ export class RoomRepository implements WorkspaceRepository {
 
   async listStaleRunningModelJobs(before: number, limit = 100): Promise<RoomModelJob[]> {
     return this.serialized(async () => this.rows(
-      `SELECT * FROM model_jobs WHERE status IN ('running', 'committing') AND revoked_at IS NULL AND created_at <= ?
+      `SELECT * FROM model_jobs WHERE revoked_at IS NULL AND (
+         (status IN ('running', 'committing') AND created_at <= ?)
+         OR (status = 'committing' AND json_extract(data, '$.kind') = 'table-assistant')
+       )
        ORDER BY created_at, id LIMIT ?`,
       before, Math.max(1, Math.min(500, Math.trunc(limit))),
     ).map(mapModelJob));
@@ -795,7 +1051,11 @@ export class RoomRepository implements WorkspaceRepository {
 
   nextModelJobRecoveryAt(recoveryMs: number): number | null {
     const row = this.rows(
-      `SELECT MIN(created_at) AS oldest_created_at FROM model_jobs
+      `SELECT MIN(CASE
+        WHEN status = 'committing' AND json_extract(data, '$.kind') = 'table-assistant'
+          THEN COALESCE(json_extract(data, '$.confirmationStartedAt'), created_at)
+        ELSE created_at
+       END) AS oldest_created_at FROM model_jobs
        WHERE status IN ('running', 'committing') AND revoked_at IS NULL`,
     )[0];
     return row?.oldest_created_at === null || row?.oldest_created_at === undefined

@@ -121,6 +121,7 @@ export interface AIProposalResult {
 }
 
 type BillingBinding = BillingRequestBinding;
+export type AIBillingBinding = BillingBinding;
 
 type PreparedInput =
   | { kind: 'invoice'; providerInput: ModelInput; hashInput: unknown; maxOutputTokens: number; maximumInputBytes: number }
@@ -346,6 +347,43 @@ async function settleUsage(env: Env, binding: BillingBinding, usage: BillingUsag
     // Provider usage is known, but without a confirmed settlement no draft is returned.
   }
   fail('AI_BILLING_UNCERTAIN', 'The billing service could not confirm the model usage; no proposal was returned.');
+}
+
+/** Reserve one bounded provider attempt in the existing global ledger. */
+export async function reserveAIUsage(
+  env: Env,
+  binding: AIBillingBinding,
+  maxInputTokens: number,
+  maxOutputTokens: number,
+): Promise<void> {
+  billingConfigured(env);
+  if (!Number.isSafeInteger(maxInputTokens) || maxInputTokens < 1 || maxInputTokens > MAX_PROVIDER_INPUT_TOKENS
+    || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > TABLE_MAX_OUTPUT_TOKENS) {
+    fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The model request exceeds the allowed size.');
+  }
+  const maxReservation = priceMicroUsd(maxInputTokens, maxOutputTokens);
+  if (!Number.isSafeInteger(maxReservation) || maxReservation <= 0) {
+    fail('AI_INPUT_INVALID', 'The model request is invalid.');
+  }
+  await billingCall(env, '/reserve', binding, { maxInputTokens, maxOutputTokens });
+  const dispatch = await billingCall(env, '/dispatch', binding);
+  if (dispatch.claimed !== true) {
+    fail('AI_REQUEST_ALREADY_DISPATCHED', 'This model request has already been attempted or is uncertain.');
+  }
+}
+
+/** Settle a completed provider attempt using the provider-reported token usage. */
+export async function settleAIUsage(env: Env, binding: AIBillingBinding, usage: BillingUsage): Promise<void> {
+  await settleUsage(env, binding, usage);
+}
+
+/** Mark an attempt uncertain when the provider outcome or usage cannot be confirmed. */
+export async function markAIUsageUncertain(env: Env, binding: AIBillingBinding): Promise<void> {
+  try {
+    await billingCall(env, '/settle', binding, { outcome: 'uncertain' });
+  } catch {
+    // If the ledger cannot be reached, its dispatch lease will expire as uncertain.
+  }
 }
 
 /**

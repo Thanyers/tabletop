@@ -45,21 +45,36 @@ describe('TabletopClient access boundaries', () => {
     expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: 'POST' });
   });
 
-  it('honors disabled production upload capability and requires valid capability fields', async () => {
+  it('honors disabled uploads and defaults an absent table assistant capability to unavailable', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(response({ uploads: false, model: { enabled: false, reason: 'Turn off uploads.' } }));
     vi.stubGlobal('fetch', fetchMock);
     const client = new TabletopClient();
 
-    await expect(client.capabilities()).resolves.toEqual({ uploads: false, model: { enabled: false, reason: 'Turn off uploads.' } });
+    await expect(client.capabilities()).resolves.toEqual({
+      uploads: false,
+      tableAssistant: { available: false, reason: 'Conversation is not available in this local workspace. You can continue using the Canvas and reviewing rules.' },
+      model: { enabled: false, reason: 'Turn off uploads.' },
+    });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/capabilities');
   });
 
   it('reads the table read-only feature flag when the server publishes it', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(response({ uploads: true, tableReadOnly: true, model: { enabled: true, reason: '' } }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(response({ uploads: true, tableReadOnly: true, tableAssistant: { available: true }, model: { enabled: true, reason: '' } }));
     vi.stubGlobal('fetch', fetchMock);
     const client = new TabletopClient();
 
-    await expect(client.capabilities()).resolves.toEqual({ uploads: true, tableReadOnly: true, model: { enabled: true, reason: '' } });
+    await expect(client.capabilities()).resolves.toEqual({ uploads: true, tableReadOnly: true, tableAssistant: { available: true }, model: { enabled: true, reason: '' } });
+  });
+
+  it('honors an explicit unavailable table assistant reason and rejects malformed capability values', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ uploads: true, tableAssistant: { available: false, reason: 'Use the Canvas here.' }, model: { enabled: true, reason: '' } }))
+      .mockResolvedValueOnce(response({ uploads: true, tableAssistant: { available: 'yes' }, model: { enabled: true, reason: '' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new TabletopClient();
+
+    await expect(client.capabilities()).resolves.toMatchObject({ tableAssistant: { available: false, reason: 'Use the Canvas here.' } });
+    await expect(client.capabilities()).rejects.toMatchObject({ status: 502 });
   });
 
   it('preserves enabled local uploads when the legacy capabilities route is absent', async () => {
@@ -67,7 +82,7 @@ describe('TabletopClient access boundaries', () => {
     vi.stubGlobal('fetch', fetchMock);
     const client = new TabletopClient();
 
-    await expect(client.capabilities()).resolves.toMatchObject({ uploads: true, model: { enabled: false } });
+    await expect(client.capabilities()).resolves.toMatchObject({ uploads: true, tableAssistant: { available: false }, model: { enabled: false } });
   });
 
   it('keeps model command identity stable and omits an unselected source', async () => {

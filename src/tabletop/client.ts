@@ -1,4 +1,5 @@
 import type { CommandAck, CommandEnvelope, SessionView, WorkspaceView } from './shared/contracts';
+import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
 
 export class ApiFailure extends Error {
   constructor(
@@ -41,6 +42,7 @@ export interface ModelJob {
 export interface TabletopCapabilities {
   uploads: boolean;
   tableReadOnly?: boolean;
+  tableAssistant?: { available: boolean; reason?: string };
   model: { enabled: boolean; reason: string };
 }
 
@@ -100,6 +102,26 @@ function csrfHeaders(token: string, headers?: HeadersInit): Headers {
   return result;
 }
 
+function readTableAssistantJob(value: unknown): TableAssistantJob {
+  const parsed = tableAssistantJobSchema.safeParse(value);
+  if (!parsed.success
+      || (parsed.data.status === 'completed') !== (parsed.data.result !== undefined)
+      || (parsed.data.result?.kind === 'action-proposal'
+        && parsed.data.confirmationStatus === undefined)
+      || (parsed.data.result?.kind !== 'action-proposal'
+        && parsed.data.confirmationStatus !== undefined)) {
+    throw new ApiFailure('The table assistant response could not be verified.', 502);
+  }
+  return parsed.data;
+}
+
+function readTableAssistantHistoryPage(value: unknown): TableAssistantHistoryPage {
+  const parsed = tableAssistantHistoryPageSchema.safeParse(value);
+  if (!parsed.success) throw new ApiFailure('The table assistant history could not be verified.', 502);
+  const items = parsed.data.items.map(readTableAssistantJob);
+  return { ...parsed.data, items };
+}
+
 export class TabletopClient {
   private csrfToken = '';
   private authMode: 'guest' | 'google' = 'guest';
@@ -139,14 +161,31 @@ export class TabletopClient {
 
   async capabilities(): Promise<TabletopCapabilities> {
     const response = await this.fetchResponse('/api/capabilities', 'The workspace features could not be checked.');
-    if (response.status === 404) return { uploads: true, model: { enabled: false, reason: 'AI proposals are not configured on this local server.' } };
-    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
-    if (typeof body.uploads !== 'boolean' || typeof body.model?.enabled !== 'boolean' || body.tableReadOnly !== undefined && typeof body.tableReadOnly !== 'boolean') {
+    const unavailableAssistantReason = 'Conversation is not available in this local workspace. You can continue using the Canvas and reviewing rules.';
+    if (response.status === 404) return {
+      uploads: true,
+      tableAssistant: { available: false, reason: unavailableAssistantReason },
+      model: { enabled: false, reason: 'AI proposals are not configured on this local server.' },
+    };
+    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; tableAssistant?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    const tableAssistant = body.tableAssistant;
+    const validTableAssistant = tableAssistant === undefined || (
+      typeof tableAssistant === 'object'
+      && tableAssistant !== null
+      && !Array.isArray(tableAssistant)
+      && typeof (tableAssistant as { available?: unknown }).available === 'boolean'
+      && ((tableAssistant as { reason?: unknown }).reason === undefined || typeof (tableAssistant as { reason?: unknown }).reason === 'string')
+    );
+    if (typeof body.uploads !== 'boolean' || typeof body.model?.enabled !== 'boolean' || body.tableReadOnly !== undefined && typeof body.tableReadOnly !== 'boolean' || !validTableAssistant) {
       throw new ApiFailure('The workspace feature settings could not be read.', 502);
     }
+    const assistantCapability = tableAssistant as { available: boolean; reason?: string } | undefined;
     return {
       uploads: body.uploads,
       ...(typeof body.tableReadOnly === 'boolean' ? { tableReadOnly: body.tableReadOnly } : {}),
+      tableAssistant: assistantCapability
+        ? { available: assistantCapability.available, ...(assistantCapability.reason ? { reason: assistantCapability.reason } : {}) }
+        : { available: false, reason: unavailableAssistantReason },
       model: {
         enabled: body.model.enabled,
         reason: typeof body.model.reason === 'string' ? body.model.reason : '',
@@ -292,6 +331,48 @@ export class TabletopClient {
       throw new ApiFailure('The AI proposal status could not be read.', 502);
     }
     return job;
+  }
+
+  async requestTableAssistant(view: WorkspaceView, prompt: string, commandId = crypto.randomUUID()): Promise<TableAssistantJob> {
+    const body: TableAssistantRequest = {
+      commandId,
+      expectedRevision: view.revision,
+      expectedEpoch: view.epoch,
+      prompt,
+      consent: true,
+    };
+    return readTableAssistantJob(await this.postJson<unknown>(
+      `/api/workspaces/${encodeURIComponent(view.id)}/assistant`, body,
+    ));
+  }
+
+  async tableAssistantJob(workspaceId: string, jobId: string): Promise<TableAssistantJob> {
+    const body = await this.getJson<unknown>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/assistant/${encodeURIComponent(jobId)}`,
+    );
+    return readTableAssistantJob(body);
+  }
+
+  async tableAssistantHistory(workspaceId: string, before?: string, limit = 20): Promise<TableAssistantHistoryPage> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (before) params.set('before', before);
+    const body = await this.getJson<unknown>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/assistant?${params.toString()}`,
+    );
+    return readTableAssistantHistoryPage(body);
+  }
+
+  async confirmTableAssistantAction(
+    workspaceId: string,
+    jobId: string,
+    expectedRevision: string,
+    expectedEpoch: number,
+    commandId = crypto.randomUUID(),
+  ): Promise<CommandAck> {
+    const body: TableAssistantConfirmation = { commandId, expectedRevision, expectedEpoch };
+    return this.postJson<CommandAck>(
+      `/api/workspaces/${encodeURIComponent(workspaceId)}/assistant/${encodeURIComponent(jobId)}/confirm`, body,
+    );
   }
 
   subscribe(

@@ -532,6 +532,28 @@ export class CommandAuthority {
     return this.executeInternal(session, workspaceId, envelope, null, undefined, guard);
   }
 
+  async executeTableAssistantAction(
+    session: AuthenticatedSession,
+    rawEnvelope: unknown,
+    workspaceId: string,
+    jobId: string,
+  ): Promise<CommandAck> {
+    const envelope = commandFrom(rawEnvelope);
+    if (envelope.type !== 'table.act' || !/^[a-f0-9]{64}$/u.test(jobId)) {
+      throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
+    }
+    const guard: ModelJobCommitGuard = {
+      jobId,
+      workspaceId,
+      epoch: envelope.expectedEpoch,
+      actorId: session.record.actorId,
+      commandId: envelope.commandId,
+      expectedRevision: envelope.expectedRevision,
+      proposalHash: this.commandRequestHash(envelope),
+    };
+    return this.executeInternal(session, workspaceId, envelope, null, undefined, guard);
+  }
+
   async findTrustedReceipt(
     session: AuthenticatedSession,
     workspaceId: string,

@@ -12,7 +12,7 @@ import type { ApiError } from '../src/tabletop/shared/contracts.js';
 import { hashValue } from './codec.js';
 import { startServer, type StartedServer } from './start.js';
 import { MAX_HTTP_REQUESTS_PER_MINUTE } from './limits.js';
-import { tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { gameChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 
 interface TestSession {
   cookie: string;
@@ -539,6 +539,45 @@ describe('tabletop server authority', () => {
     const denied = await call<ApiError>(base, '/api/workspaces', { session: joined.session, body: { kind: 'encounter' } });
     expect(denied.response.status).toBe(409);
     expect((denied.body as ApiError).errorCode).toBe('SESSION_ALREADY_BOUND');
+  });
+
+  it('uses the active public table title in owner and member directories while keeping source names private', async () => {
+    const { base } = await openServer();
+    const owner = await createSession(base, 'Table owner');
+    const member = await createSession(base, 'Table member');
+    let workspace = await createWorkspace(base, owner, 'table');
+
+    const beforeActivation = await call<SessionView>(base, '/api/session', { session: owner });
+    expect((beforeActivation.body as SessionView).workspaces.find((item) => item.id === workspace.id)?.title).toBe('Shared Table');
+
+    const imported = await command(base, owner, workspace, 'table.import', {
+      filename: 'owner-private-source-name.txt', text: tableScenarioSources.game.text,
+    });
+    expect(imported.response.status).toBe(200);
+    workspace = (imported.body as CommandAck).workspace;
+    if (workspace.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    const sourceId = workspace.domain.sources[0]?.id;
+    if (!sourceId) throw new Error('Expected an imported source.');
+
+    const change = gameChange(sourceId);
+    for (const type of ['evolve.propose', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) {
+      const result = await command(base, owner, workspace, type,
+        type === 'evolve.propose' ? { change } : {});
+      expect(result.response.status).toBe(200);
+      workspace = (result.body as CommandAck).workspace;
+    }
+
+    const ownerDirectory = await call<SessionView>(base, '/api/session', { session: owner });
+    const ownerReference = (ownerDirectory.body as SessionView).workspaces.find((item) => item.id === workspace.id);
+    expect(ownerReference).toMatchObject({ title: 'River Race', kind: 'table' });
+    expect(JSON.stringify(ownerDirectory.body)).not.toContain('owner-private-source-name.txt');
+
+    const ticket = await invite(base, owner, workspace.id, 'member-1');
+    const joined = await redeem(base, member, ticket.ticket);
+    const memberDirectory = await call<SessionView>(base, '/api/session', { session: joined.session });
+    const memberReference = (memberDirectory.body as SessionView).workspaces.find((item) => item.id === workspace.id);
+    expect(memberReference).toMatchObject({ title: 'River Race', kind: 'table' });
+    expect(JSON.stringify(memberDirectory.body)).not.toContain('owner-private-source-name.txt');
   });
 
   it('rejects lost-ack invite replay after the single-use ticket expires', async () => {

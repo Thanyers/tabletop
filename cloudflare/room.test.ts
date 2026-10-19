@@ -5,16 +5,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Room } from './room.js';
 import type { Env } from './contracts.js';
 import { csrfForToken } from './auth.js';
-import { canonicalJson, sha256 } from '../server/codec.js';
+import { canonicalJson, hashValue, sha256 } from '../server/codec.js';
 import { DomainError, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import type { PendingDirectoryChange } from './room-repository.js';
 import { proposeChange } from './ai.js';
 import type { AIProposalRequest, AIProposalResult } from './ai.js';
+import { respondToTablePrompt } from './table-assistant.js';
+import type { TableAssistantInput, TableAssistantResult } from '../src/tabletop/shared/table-assistant-contracts.js';
+import type { TableAssistantResponse } from './table-assistant.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
   return { ...actual, proposeChange: vi.fn(actual.proposeChange) };
+});
+
+vi.mock('./table-assistant.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./table-assistant.js')>();
+  return { ...actual, respondToTablePrompt: vi.fn(actual.respondToTablePrompt) };
 });
 
 const runtime = env as Env;
@@ -25,6 +33,9 @@ const MODEL_TEST_DELAY_MS = 100;
 const MODEL_RACE_DELAY_MS = MODEL_TEST_DELAY_MS * 4;
 const MODEL_WAIT_ATTEMPTS = 50;
 const MODEL_WAIT_INTERVAL_MS = 10;
+const SOCKET_PROJECTION_TIMEOUT_MS = 1_000;
+const ASSISTANT_WAIT_ATTEMPTS = 50;
+const ASSISTANT_WAIT_INTERVAL_MS = 10;
 
 interface TestActor {
   id: string;
@@ -45,9 +56,36 @@ interface TestModelJob {
   candidateId?: string;
 }
 
+interface TestTableAssistantJob {
+  id: string;
+  createdAt: number;
+  prompt: string;
+  status: 'running' | 'completed' | 'failed';
+  expectedRevision: string;
+  expectedEpoch: number;
+  message?: string;
+  result?: TableAssistantResult;
+  confirmationStatus?: 'available' | 'processing' | 'confirmed' | 'stale' | 'rejected';
+  serverOmittedConversationEntries?: number;
+  providerOmittedConversationEntries?: number;
+}
+
+interface TestTableAssistantHistoryPage {
+  items: TestTableAssistantJob[];
+  nextBefore: string | null;
+  limit: number;
+  contextTurns: 6;
+  contextMaxBytes: 16_384;
+  storageJobCap: 500;
+}
+
 interface RoomDirectoryTestAccess {
   syncDirectory(): Promise<void>;
   syncDirectoryChange(change: PendingDirectoryChange): Promise<void>;
+}
+
+interface ProjectionObserver {
+  waitFor(predicate: (workspace: WorkspaceView) => boolean): Promise<WorkspaceView>;
 }
 
 function newActor(name: string): TestActor {
@@ -86,6 +124,62 @@ async function enableTableReadOnly(stub: DurableObjectStub<Room>): Promise<void>
 
 function modelJobId(workspaceId: string, epoch: number, actorId: string, commandId: string): string {
   return sha256(`tabletop-ai-job-v1:${canonicalJson({ actorId, workspaceId, epoch, commandId })}`);
+}
+
+function tableAssistantJobId(workspaceId: string, epoch: number, actorId: string, commandId: string): string {
+  return sha256(`tabletop-assistant-job-v1:${canonicalJson({ actorId, workspaceId, epoch, commandId })}`);
+}
+
+function assistantResponse(input: TableAssistantInput, result: TableAssistantResult): TableAssistantResponse {
+  return {
+    result,
+    jobId: input.jobId,
+    usage: { promptTokens: 1, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 1 },
+    serverOmittedConversationEntries: input.conversationOmittedCount,
+    providerConversationLimitOmittedEntries: 0,
+    providerRequestLimitOmittedEntries: 0,
+    providerOmittedConversationEntries: 0,
+  };
+}
+
+async function waitForTableAssistantJob(
+  stub: DurableObjectStub<Room>,
+  workspaceId: string,
+  actor: TestActor,
+  jobId: string,
+): Promise<TestTableAssistantJob> {
+  for (let attempt = 0; attempt < ASSISTANT_WAIT_ATTEMPTS; attempt += 1) {
+    const result = await call<TestTableAssistantJob>(stub, `/api/workspaces/${workspaceId}/assistant/${jobId}`, actor);
+    if (result.response.status !== 202) return result.body;
+    await new Promise<void>((resolve) => setTimeout(resolve, ASSISTANT_WAIT_INTERVAL_MS));
+  }
+  throw new Error('TABLE_ASSISTANT_JOB_DID_NOT_FINISH');
+}
+
+async function createActiveEquipmentTable(owner: TestActor) {
+  const { roomId, stub, workspace: created } = await createRoom(owner, 'table');
+  const imported = await issueCommand(stub, created, owner, 'table.import', {
+    filename: tableScenarioSources.equipment.filename,
+    text: tableScenarioSources.equipment.text,
+  });
+  if (!('ok' in imported.body) || !imported.body.ok || imported.body.workspace.domain.kind !== 'table') {
+    throw new Error('TABLE_ASSISTANT_TEST_SOURCE_IMPORT_FAILED');
+  }
+  const sourceId = imported.body.workspace.domain.sources[0]?.id;
+  if (!sourceId) throw new Error('TABLE_ASSISTANT_TEST_SOURCE_MISSING');
+  let current = imported.body.workspace;
+  for (const [type, payload] of [
+    ['evolve.propose', { change: equipmentChange(sourceId) }],
+    ['evolve.simulate', {}],
+    ['evolve.validate', {}],
+    ['evolve.approve', {}],
+    ['evolve.activate', {}],
+  ] as const) {
+    const result = await issueCommand(stub, current, owner, type, payload);
+    if (!('ok' in result.body) || !result.body.ok) throw new Error(`TABLE_ASSISTANT_TEST_${type.toUpperCase()}_FAILED`);
+    current = result.body.workspace;
+  }
+  return { roomId, stub, workspace: current };
 }
 
 function modelResult(request: AIProposalRequest): AIProposalResult {
@@ -127,6 +221,80 @@ async function waitForCondition(condition: () => boolean): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(resolve, MODEL_WAIT_INTERVAL_MS));
   }
   throw new Error('MODEL_RACE_POINT_NOT_REACHED');
+}
+
+function observeProjections(socket: WebSocket): ProjectionObserver {
+  const queued: WorkspaceView[] = [];
+  const waiters: Array<{
+    predicate: (workspace: WorkspaceView) => boolean;
+    resolve: (workspace: WorkspaceView) => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }> = [];
+
+  socket.addEventListener('message', (event) => {
+    if (typeof event.data !== 'string') return;
+    let parsed: unknown;
+    try { parsed = JSON.parse(event.data) as unknown; } catch { return; }
+    if (typeof parsed !== 'object' || parsed === null || !('type' in parsed) || parsed.type !== 'projection'
+      || !('workspace' in parsed) || !isWorkspaceView(parsed.workspace)) return;
+    const workspace = parsed.workspace;
+    const matchingIndex = waiters.findIndex((waiter) => waiter.predicate(workspace));
+    if (matchingIndex < 0) {
+      queued.push(workspace);
+      return;
+    }
+    const [waiter] = waiters.splice(matchingIndex, 1);
+    if (!waiter) return;
+    clearTimeout(waiter.timer);
+    waiter.resolve(workspace);
+  });
+
+  return {
+    waitFor(predicate) {
+      const matchingIndex = queued.findIndex(predicate);
+      if (matchingIndex >= 0) {
+        const [workspace] = queued.splice(matchingIndex, 1);
+        if (workspace) return Promise.resolve(workspace);
+      }
+      return new Promise<WorkspaceView>((resolve, reject) => {
+        const waiter = {
+          predicate,
+          resolve,
+          reject,
+          timer: setTimeout(() => {
+            const waiterIndex = waiters.indexOf(waiter);
+            if (waiterIndex >= 0) waiters.splice(waiterIndex, 1);
+            reject(new Error('SOCKET_PROJECTION_TIMEOUT'));
+          }, SOCKET_PROJECTION_TIMEOUT_MS),
+        };
+        waiters.push(waiter);
+      });
+    },
+  };
+}
+
+function isWorkspaceView(value: unknown): value is WorkspaceView {
+  if (typeof value !== 'object' || value === null) return false;
+  return 'id' in value && typeof value.id === 'string'
+    && 'revision' in value && typeof value.revision === 'string'
+    && 'epoch' in value && typeof value.epoch === 'number'
+    && 'members' in value && Array.isArray(value.members)
+    && 'domain' in value && typeof value.domain === 'object' && value.domain !== null;
+}
+
+async function connectProjectionSocket(
+  stub: DurableObjectStub<Room>,
+  workspaceId: string,
+  actor: TestActor,
+): Promise<{ socket: WebSocket; projections: ProjectionObserver }> {
+  const response = await stub.fetch(new Request(`${ORIGIN}/api/workspaces/${workspaceId}/socket`, {
+    headers: { ...Object.fromEntries(headers(actor)), Upgrade: 'websocket', Connection: 'Upgrade' },
+  }));
+  if (response.status !== 101 || !response.webSocket) throw new Error('SOCKET_CONNECT_FAILED');
+  const socket = response.webSocket;
+  socket.accept();
+  return { socket, projections: observeProjections(socket) };
 }
 
 function headers(actor: TestActor, mutation = false): Headers {
@@ -210,6 +378,7 @@ function migrationStatements(raw: string, appendFailure = false): string[] {
 describe('Cloudflare room Durable Object', () => {
   beforeEach(async () => {
     vi.mocked(proposeChange).mockReset();
+    vi.mocked(respondToTablePrompt).mockReset();
   });
 
   it('rebuilds the D1 room-kind constraint without losing room or membership rows and rolls back a failed batch', async () => {
@@ -272,6 +441,606 @@ describe('Cloudflare room Durable Object', () => {
         runtime.DB.prepare('DROP TABLE IF EXISTS table_migration_users'),
       ]);
     }
+  });
+
+  it('keeps table assistant history actor-scoped, returns exact lost-ack retries, and applies actions only after confirmed CAS', async () => {
+    const owner = newActor('Assistant table owner');
+    const participant = newActor('Assistant table participant');
+    await Promise.all([saveActor(owner), saveActor(participant)]);
+    const { roomId, stub } = await createActiveEquipmentTable(owner);
+    const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-1' }, mutation: true,
+    });
+    const joined = await call<WorkspaceView>(stub, '/internal/redeem', participant, {
+      method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(joined.response.status).toBe(200);
+
+    const observedInputs: TableAssistantInput[] = [];
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) => {
+      observedInputs.push(structuredClone(input));
+      if (input.prompt === 'Return the camera I borrowed.') {
+        if (input.workspace.domain.kind !== 'table') throw new Error('TABLE_ASSISTANT_EXPECTED_TABLE');
+        return assistantResponse(input, {
+          kind: 'action-proposal',
+          text: 'Return the camera to the shared equipment list.',
+          actionId: 'return',
+          inputs: { item: 'camera' },
+          expectedRevision: input.workspace.revision,
+          expectedRuleRevision: input.workspace.domain.ruleRevision,
+          expectedActionRevision: input.workspace.domain.actionRevision,
+          confirmationRequired: true,
+        });
+      }
+      if (input.prompt === 'What does this table allow?') {
+        return assistantResponse(input, {
+          kind: 'explanation', text: 'Available equipment can be borrowed.',
+          references: [{ kind: 'action', id: 'borrow', label: 'Borrow equipment' }],
+        });
+      }
+      return assistantResponse(input, { kind: 'clarification', text: 'Which table rule should I explain?' });
+    });
+
+    const ownerView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    const ownerCommandId = randomUUID();
+    const ownerRequest = {
+      commandId: ownerCommandId,
+      expectedRevision: ownerView.body.revision,
+      expectedEpoch: ownerView.body.epoch,
+      prompt: 'What does this table allow?',
+      consent: true,
+    };
+    const ownerJobId = tableAssistantJobId(roomId, ownerView.body.epoch, owner.id, ownerCommandId);
+    const ownerAccepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: ownerRequest, mutation: true,
+    });
+    expect(ownerAccepted.response.status).toBe(202);
+    const ownerCompleted = await waitForTableAssistantJob(stub, roomId, owner, ownerJobId);
+    expect(ownerCompleted).toMatchObject({ status: 'completed', prompt: ownerRequest.prompt, result: { kind: 'explanation' } });
+    const afterExplanation = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(afterExplanation.body.revision).toBe(ownerView.body.revision);
+
+    const participantCannotPollOwnerJob = await call<PublicError>(stub,
+      `/api/workspaces/${roomId}/assistant/${ownerJobId}`, participant);
+    expect(participantCannotPollOwnerJob.response.status).toBe(404);
+    const ownerHistory = await call<TestTableAssistantHistoryPage>(stub, `/api/workspaces/${roomId}/assistant`, owner);
+    const participantHistoryBeforeAsk = await call<TestTableAssistantHistoryPage>(stub,
+      `/api/workspaces/${roomId}/assistant`, participant);
+    expect(ownerHistory.body.items.map((item) => item.id)).toEqual([ownerJobId]);
+    expect(participantHistoryBeforeAsk.body.items).toEqual([]);
+
+    const participantView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, participant);
+    const borrowed = await issueCommand(stub, participantView.body, participant, 'table.act', {
+      actionId: 'borrow', inputs: { item: 'camera' },
+    });
+    expect(borrowed.response.status).toBe(200);
+    const lostAckRetry = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: ownerRequest, mutation: true,
+    });
+    expect(lostAckRetry.response.status).toBe(200);
+    expect(lostAckRetry.body.id).toBe(ownerJobId);
+    expect(vi.mocked(respondToTablePrompt)).toHaveBeenCalledTimes(1);
+    const ownerHistoryAfterRetry = await call<TestTableAssistantHistoryPage>(stub,
+      `/api/workspaces/${roomId}/assistant`, owner);
+    expect(ownerHistoryAfterRetry.body.items).toHaveLength(1);
+    const mismatchedRetry = await call<PublicError>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: { ...ownerRequest, prompt: 'Explain another rule.' }, mutation: true,
+    });
+    expect(mismatchedRetry.response.status).toBe(409);
+    expect((mismatchedRetry.body as PublicError).errorCode).toBe('IDEMPOTENCY_MISMATCH');
+
+    const participantAfterBorrow = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, participant);
+    if (participantAfterBorrow.body.domain.kind !== 'table') throw new Error('EXPECTED_TABLE_DOMAIN');
+    const cameraBeforeConfirm = participantAfterBorrow.body.domain.records.equipment?.find((row) => row.id === 'camera');
+    expect(cameraBeforeConfirm?.values).toMatchObject({ available: false, borrower: participant.id });
+    const actionCommandId = randomUUID();
+    const actionRequest = {
+      commandId: actionCommandId,
+      expectedRevision: participantAfterBorrow.body.revision,
+      expectedEpoch: participantAfterBorrow.body.epoch,
+      prompt: 'Return the camera I borrowed.',
+      consent: true,
+    };
+    const actionJobId = tableAssistantJobId(roomId, actionRequest.expectedEpoch, participant.id, actionCommandId);
+    const actionAccepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, participant, {
+      method: 'POST', body: actionRequest, mutation: true,
+    });
+    expect(actionAccepted.response.status).toBe(202);
+    const actionCompleted = await waitForTableAssistantJob(stub, roomId, participant, actionJobId);
+    expect(actionCompleted).toMatchObject({
+      status: 'completed', confirmationStatus: 'available', result: { kind: 'action-proposal' },
+    });
+    const unchangedBeforeConfirmation = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, participant);
+    if (unchangedBeforeConfirmation.body.domain.kind !== 'table') throw new Error('EXPECTED_TABLE_DOMAIN');
+    expect(unchangedBeforeConfirmation.body.domain.records.equipment?.find((row) => row.id === 'camera')?.values)
+      .toMatchObject({ available: false, borrower: participant.id });
+
+    const ownerCannotConfirmParticipantJob = await call<PublicError>(stub,
+      `/api/workspaces/${roomId}/assistant/${actionJobId}/confirm`, owner, {
+        method: 'POST', body: { commandId: randomUUID(), expectedRevision: actionRequest.expectedRevision,
+          expectedEpoch: actionRequest.expectedEpoch }, mutation: true,
+      });
+    expect(ownerCannotConfirmParticipantJob.response.status).toBe(404);
+
+    const ownerBeforeStaleConfirm = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    const interveningAction = await issueCommand(stub, ownerBeforeStaleConfirm.body, owner, 'table.act', {
+      actionId: 'borrow', inputs: { item: 'tripod' },
+    });
+    expect(interveningAction.response.status).toBe(200);
+    const staleConfirmation = { commandId: randomUUID(), expectedRevision: actionRequest.expectedRevision,
+      expectedEpoch: actionRequest.expectedEpoch };
+    const stale = await call<PublicError>(stub,
+      `/api/workspaces/${roomId}/assistant/${actionJobId}/confirm`, participant, {
+        method: 'POST', body: staleConfirmation, mutation: true,
+      });
+    expect(stale.response.status).toBe(409);
+    expect((stale.body as PublicError).errorCode).toBe('STALE_REVISION');
+    const preservedStaleProposal = await call<TestTableAssistantJob>(stub,
+      `/api/workspaces/${roomId}/assistant/${actionJobId}`, participant);
+    expect(preservedStaleProposal.body).toMatchObject({
+      status: 'completed', confirmationStatus: 'stale', result: { kind: 'action-proposal' },
+    });
+
+    const participantAfterInterveningAction = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, participant);
+    const currentActionCommandId = randomUUID();
+    const currentActionRequest = {
+      commandId: currentActionCommandId,
+      expectedRevision: participantAfterInterveningAction.body.revision,
+      expectedEpoch: participantAfterInterveningAction.body.epoch,
+      prompt: actionRequest.prompt,
+      consent: true,
+    };
+    const currentActionJobId = tableAssistantJobId(roomId, currentActionRequest.expectedEpoch,
+      participant.id, currentActionCommandId);
+    const currentActionAccepted = await call<TestTableAssistantJob>(stub,
+      `/api/workspaces/${roomId}/assistant`, participant, {
+        method: 'POST', body: currentActionRequest, mutation: true,
+      });
+    expect(currentActionAccepted.response.status).toBe(202);
+    const currentActionCompleted = await waitForTableAssistantJob(stub, roomId, participant, currentActionJobId);
+    expect(currentActionCompleted).toMatchObject({
+      status: 'completed', confirmationStatus: 'available', result: { kind: 'action-proposal' },
+    });
+    expect(observedInputs[2]?.conversation).toEqual([{
+      prompt: actionRequest.prompt,
+      result: { kind: 'action-proposal', text: 'Return the camera to the shared equipment list.' },
+      expectedRevision: actionRequest.expectedRevision,
+      confirmationStatus: 'stale',
+    }]);
+
+    const confirmation = { commandId: randomUUID(), expectedRevision: currentActionRequest.expectedRevision,
+      expectedEpoch: currentActionRequest.expectedEpoch };
+    const confirmed = await call<CommandAck>(stub,
+      `/api/workspaces/${roomId}/assistant/${currentActionJobId}/confirm`, participant, {
+        method: 'POST', body: confirmation, mutation: true,
+      });
+    expect(confirmed.response.status).toBe(200);
+    expect(confirmed.body.ok).toBe(true);
+    const duplicateConfirmation = await call<CommandAck & { duplicate: true }>(stub,
+      `/api/workspaces/${roomId}/assistant/${currentActionJobId}/confirm`, participant, {
+        method: 'POST', body: confirmation, mutation: true,
+      });
+    expect(duplicateConfirmation.response.status).toBe(200);
+    expect(duplicateConfirmation.body.duplicate).toBe(true);
+    const differentConfirmation = await call<PublicError>(stub,
+      `/api/workspaces/${roomId}/assistant/${currentActionJobId}/confirm`, participant, {
+        method: 'POST', body: { ...confirmation, commandId: randomUUID() }, mutation: true,
+      });
+    expect(differentConfirmation.response.status).toBe(409);
+    expect((differentConfirmation.body as PublicError).errorCode).toBe('IDEMPOTENCY_MISMATCH');
+
+    const participantHistory = await call<TestTableAssistantHistoryPage>(stub,
+      `/api/workspaces/${roomId}/assistant`, participant);
+    expect(participantHistory.body.items).toHaveLength(2);
+    expect(participantHistory.body.items[0]).toMatchObject({
+      id: currentActionJobId, prompt: currentActionRequest.prompt, confirmationStatus: 'confirmed',
+    });
+    expect(participantHistory.body.items[1]).toMatchObject({ id: actionJobId, confirmationStatus: 'stale' });
+    expect(observedInputs[1]?.conversation).toEqual([]);
+    expect(observedInputs[1]?.actorId).toBe(participant.id);
+
+    const participantAfterConfirmation = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, participant);
+    const followUpCommandId = randomUUID();
+    const followUp = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, participant, {
+      method: 'POST', body: { commandId: followUpCommandId,
+        expectedRevision: participantAfterConfirmation.body.revision,
+        expectedEpoch: participantAfterConfirmation.body.epoch,
+        prompt: 'What changed after the return?', consent: true }, mutation: true,
+    });
+    expect(followUp.response.status).toBe(202);
+    await waitForTableAssistantJob(stub, roomId, participant,
+      tableAssistantJobId(roomId, participantAfterConfirmation.body.epoch, participant.id, followUpCommandId));
+    expect(observedInputs[3]?.conversation.map((entry) => ({ prompt: entry.prompt, status: entry.confirmationStatus })))
+      .toEqual([
+        { prompt: actionRequest.prompt, status: 'stale' },
+        { prompt: currentActionRequest.prompt, status: 'confirmed' },
+      ]);
+
+    const resetView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    const reset = await issueCommand(stub, resetView.body, owner, 'workspace.reset', {});
+    expect(reset.response.status).toBe(200);
+    const historyAfterReset = await call<TestTableAssistantHistoryPage>(stub,
+      `/api/workspaces/${roomId}/assistant`, owner);
+    expect(historyAfterReset.body.items).toEqual([]);
+    const scrubbedJobs = await inspectRoom<{ status: SqlStorageValue; data: SqlStorageValue }>(stub,
+      'SELECT status, data FROM model_jobs');
+    expect(scrubbedJobs).toHaveLength(4);
+    for (const row of scrubbedJobs) {
+      expect(row.status).toBe('revoked');
+      expect(String(row.data)).not.toContain(ownerRequest.prompt);
+      expect(String(row.data)).not.toContain(actionRequest.prompt);
+      expect(String(row.data)).not.toContain('Return the camera to the shared equipment list.');
+    }
+  });
+
+  it('bounds table assistant continuity to six completed entries and whole-entry 16 KiB pruning', async () => {
+    const owner = newActor('Bounded history owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const observedInputs: TableAssistantInput[] = [];
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) => {
+      observedInputs.push(structuredClone(input));
+      return assistantResponse(input, { kind: 'explanation', text: 'x'.repeat(7_000), references: [] });
+    });
+    let current = workspace;
+    for (let index = 0; index < 6; index += 1) {
+      const prompt = `Explain table rule ${index}.`;
+      const commandId = randomUUID();
+      const jobId = tableAssistantJobId(roomId, current.epoch, owner.id, commandId);
+      const accepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+        method: 'POST', body: { commandId, expectedRevision: current.revision, expectedEpoch: current.epoch,
+          prompt, consent: true }, mutation: true,
+      });
+      expect(accepted.response.status).toBe(202);
+      const completed = await waitForTableAssistantJob(stub, roomId, owner, jobId);
+      expect(completed.status).toBe('completed');
+      const refreshed = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+      current = refreshed.body;
+    }
+    const nextCommandId = randomUUID();
+    const nextJobId = tableAssistantJobId(roomId, current.epoch, owner.id, nextCommandId);
+    const next = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: { commandId: nextCommandId, expectedRevision: current.revision, expectedEpoch: current.epoch,
+        prompt: 'Summarize the recent questions.', consent: true }, mutation: true,
+    });
+    expect(next.response.status).toBe(202);
+    await waitForTableAssistantJob(stub, roomId, owner, nextJobId);
+    const lastInput = observedInputs.at(-1);
+    expect(lastInput?.conversation.length).toBeGreaterThan(0);
+    expect(lastInput?.conversation.length).toBeLessThan(6);
+    expect(lastInput?.conversationOmittedCount).toBeGreaterThan(0);
+    const serializedBytes = new TextEncoder().encode(JSON.stringify(lastInput?.conversation ?? [])).byteLength;
+    expect(serializedBytes).toBeLessThanOrEqual(16_384);
+    expect(lastInput?.conversation.map((entry) => entry.prompt)).not.toContain('Explain table rule 0.');
+    const page = await call<TestTableAssistantHistoryPage>(stub, `/api/workspaces/${roomId}/assistant?limit=3`, owner);
+    expect(page.body.items).toHaveLength(3);
+    expect(page.body.nextBefore).toBeTruthy();
+    expect(page.body.contextTurns).toBe(6);
+    expect(page.body.contextMaxBytes).toBe(16_384);
+    expect(page.body.storageJobCap).toBe(500);
+  });
+
+  it.each(['before claim', 'legacy committing'] as const)(
+    'handles a reused confirmation command ID (%s) without changing its receipt or blocking chat', async (phase) => {
+      const owner = newActor('Command collision owner');
+      await saveActor(owner);
+      const { roomId, stub, workspace } = await createActiveEquipmentTable(owner);
+      const receipts = await inspectRoom<{ command_id: SqlStorageValue }>(stub,
+        'SELECT command_id FROM room_commands ORDER BY created_at LIMIT 1');
+      const reusedCommandId = String(receipts[0]?.command_id);
+      const originalReceipt = await runInDurableObject(stub, (instance) =>
+        instance.repository.findCommandReceipt(roomId, workspace.epoch, owner.id, reusedCommandId));
+      expect(originalReceipt).not.toBeNull();
+      vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) => {
+        if (input.workspace.domain.kind !== 'table') throw new Error('TABLE_ASSISTANT_EXPECTED_TABLE');
+        return assistantResponse(input, {
+          kind: 'action-proposal', text: 'Borrow the camera.', actionId: 'borrow', inputs: { item: 'camera' },
+          expectedRevision: input.workspace.revision,
+          expectedRuleRevision: input.workspace.domain.ruleRevision,
+          expectedActionRevision: input.workspace.domain.actionRevision,
+          confirmationRequired: true,
+        });
+      });
+      const requestCommandId = randomUUID();
+      const jobId = tableAssistantJobId(roomId, workspace.epoch, owner.id, requestCommandId);
+      const accepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+        method: 'POST', mutation: true,
+        body: { commandId: requestCommandId, expectedRevision: workspace.revision,
+          expectedEpoch: workspace.epoch, prompt: 'Borrow the camera.', consent: true },
+      });
+      expect(accepted.response.status).toBe(202);
+      const proposed = await waitForTableAssistantJob(stub, roomId, owner, jobId);
+      const envelope = { type: 'table.act', payload: { actionId: 'borrow', inputs: { item: 'camera' } },
+        expectedRevision: workspace.revision, expectedEpoch: workspace.epoch };
+      const proposalHash = hashValue(envelope);
+      expect(originalReceipt?.payloadHash).not.toBe(proposalHash);
+
+      if (phase === 'before claim') {
+        const rejected = await call<PublicError>(stub, `/api/workspaces/${roomId}/assistant/${jobId}/confirm`, owner, {
+          method: 'POST', mutation: true,
+          body: { commandId: reusedCommandId, expectedRevision: workspace.revision, expectedEpoch: workspace.epoch },
+        });
+        expect(rejected.response.status).toBe(409);
+        expect(rejected.body.errorCode).toBe('IDEMPOTENCY_MISMATCH');
+        const stillAvailable = await call<TestTableAssistantJob>(stub,
+          `/api/workspaces/${roomId}/assistant/${jobId}`, owner);
+        expect(stillAvailable.body).toMatchObject({ status: 'completed', confirmationStatus: 'available', result: proposed.result });
+        const unchanged = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+        expect(unchanged.body.revision).toBe(workspace.revision);
+        const confirmed = await call<CommandAck>(stub, `/api/workspaces/${roomId}/assistant/${jobId}/confirm`, owner, {
+          method: 'POST', mutation: true,
+          body: { commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch },
+        });
+        expect(confirmed.response.status).toBe(200);
+      } else {
+        // Reproduce a persisted confirmation created before the collision guard.
+        await runInDurableObject(stub, (instance) => {
+          const expiredAt = Date.now() - MODEL_RECOVERY_DELAY_MS - 1_000;
+          instance.repository.storage.sql.exec(
+            `UPDATE model_jobs SET status = 'committing', created_at = ?, data = json_set(data,
+             '$.assistantRequestCommandId', ?, '$.commandId', ?, '$.confirmCommandId', ?,
+             '$.proposalHash', ?, '$.confirmationStatus', 'processing', '$.confirmationStartedAt', ?)
+             WHERE id = ?`,
+            expiredAt, requestCommandId, reusedCommandId, reusedCommandId, proposalHash, expiredAt, jobId,
+          );
+        });
+        await runDurableObjectAlarm(stub);
+        const recovered = await call<TestTableAssistantJob>(stub,
+          `/api/workspaces/${roomId}/assistant/${jobId}`, owner);
+        expect(recovered.body).toMatchObject({
+          status: 'completed', confirmationStatus: 'rejected', result: proposed.result,
+          message: 'This confirmation conflicted with an earlier command. No suggested action was applied. Ask for a fresh suggestion.',
+        });
+        expect(await runInDurableObject(stub, (instance) =>
+          instance.repository.nextModelJobRecoveryAt(MODEL_RECOVERY_DELAY_MS))).toBeNull();
+        const session = await runInDurableObject(stub, async (instance) =>
+          (await instance.authorize(new Request(`${ORIGIN}/api/workspaces/${roomId}`, { headers: headers(owner) }), roomId)).session);
+        await expect(runInDurableObject(stub, (instance) => instance.authority.executeTableAssistantAction(
+          session, { ...envelope, commandId: reusedCommandId }, roomId, jobId,
+        ))).rejects.toMatchObject({ code: 'MODEL_JOB_NOT_COMMITTING' });
+        const unchanged = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+        expect(unchanged.body.revision).toBe(workspace.revision);
+      }
+      expect(await runInDurableObject(stub, (instance) =>
+        instance.repository.findCommandReceipt(roomId, workspace.epoch, owner.id, reusedCommandId))).toEqual(originalReceipt);
+
+      const latest = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+      vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) =>
+        assistantResponse(input, { kind: 'explanation', text: 'Chat can continue.', references: [] }));
+      const nextCommandId = randomUUID();
+      const next = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+        method: 'POST', mutation: true,
+        body: { commandId: nextCommandId, expectedRevision: latest.body.revision,
+          expectedEpoch: latest.body.epoch, prompt: 'What is the current state?', consent: true },
+      });
+      expect(next.response.status).toBe(202);
+      await expect(waitForTableAssistantJob(stub, roomId, owner,
+        tableAssistantJobId(roomId, latest.body.epoch, owner.id, nextCommandId)))
+        .resolves.toMatchObject({ status: 'completed', result: { kind: 'explanation' } });
+      expect(vi.mocked(respondToTablePrompt)).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('terminalizes an expired orphan confirmation and blocks any late action commit', async () => {
+    const owner = newActor('Confirmation recovery owner');
+    await saveActor(owner);
+    const { roomId, stub } = await createActiveEquipmentTable(owner);
+    const workspace = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) => {
+      if (input.workspace.domain.kind !== 'table') throw new Error('TABLE_ASSISTANT_EXPECTED_TABLE');
+      return assistantResponse(input, {
+        kind: 'action-proposal',
+        text: 'Borrow the camera.',
+        actionId: 'borrow',
+        inputs: { item: 'camera' },
+        expectedRevision: input.workspace.revision,
+        expectedRuleRevision: input.workspace.domain.ruleRevision,
+        expectedActionRevision: input.workspace.domain.actionRevision,
+        confirmationRequired: true,
+      });
+    });
+    const requestId = randomUUID();
+    const jobId = tableAssistantJobId(roomId, workspace.body.epoch, owner.id, requestId);
+    const request = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: { commandId: requestId, expectedRevision: workspace.body.revision,
+        expectedEpoch: workspace.body.epoch, prompt: 'Borrow the camera.', consent: true }, mutation: true,
+    });
+    expect(request.response.status).toBe(202);
+    await waitForTableAssistantJob(stub, roomId, owner, jobId);
+
+    const confirmation = { commandId: randomUUID(), expectedRevision: workspace.body.revision,
+      expectedEpoch: workspace.body.epoch };
+    const envelope = {
+      type: 'table.act',
+      payload: { actionId: 'borrow', inputs: { item: 'camera' } },
+      expectedRevision: workspace.body.revision,
+      expectedEpoch: workspace.body.epoch,
+    };
+    const proposalHash = hashValue(envelope);
+    const confirmationStartedAt = Date.now();
+    const claim = await runInDurableObject(stub, (instance) => instance.repository.claimTableAssistantConfirmation({
+      id: jobId,
+      workspaceId: roomId,
+      epoch: workspace.body.epoch,
+      actorId: owner.id,
+      commandId: confirmation.commandId,
+      expectedRevision: confirmation.expectedRevision,
+      proposalHash,
+      startedAt: confirmationStartedAt,
+    }));
+    expect(claim.claimed).toBe(true);
+    expect(await runInDurableObject(stub, (instance) =>
+      instance.repository.nextModelJobRecoveryAt(MODEL_RECOVERY_DELAY_MS)))
+      .toBe(confirmationStartedAt + MODEL_RECOVERY_DELAY_MS);
+    await runInDurableObject(stub, (instance) => {
+      const expiredAt = Date.now() - MODEL_RECOVERY_DELAY_MS - 1_000;
+      instance.repository.storage.sql.exec(
+        `UPDATE model_jobs SET created_at = ?, data = json_set(data, '$.confirmationStartedAt', ?)
+         WHERE id = ?`,
+        expiredAt,
+        expiredAt,
+        jobId,
+      );
+    });
+
+    await runDurableObjectAlarm(stub);
+    const afterAlarm = await runInDurableObject(stub, (instance) =>
+      instance.repository.getModelJob(jobId, owner.id, roomId, workspace.body.epoch));
+    expect(afterAlarm).toMatchObject({
+      status: 'completed',
+      data: { confirmationStatus: 'rejected', confirmationFailure: 'CONFIRMATION_INTERRUPTED' },
+    });
+
+    const reconciled = await call<TestTableAssistantJob>(stub,
+      `/api/workspaces/${roomId}/assistant/${jobId}`, owner);
+    expect(reconciled.body).toMatchObject({
+      status: 'completed',
+      confirmationStatus: 'rejected',
+      message: 'The confirmation expired before the action could be applied. Ask for a fresh suggestion.',
+      result: { kind: 'action-proposal', actionId: 'borrow' },
+    });
+
+    const session = await runInDurableObject(stub, async (instance) => {
+      const authorized = await instance.authorize(new Request(`${ORIGIN}/api/workspaces/${roomId}`, {
+        headers: headers(owner),
+      }), roomId);
+      return authorized.session;
+    });
+    await expect(runInDurableObject(stub, (instance) =>
+      instance.authority.executeTableAssistantAction(session, { ...envelope, commandId: confirmation.commandId }, roomId, jobId),
+    )).rejects.toMatchObject({ code: 'MODEL_JOB_NOT_COMMITTING' });
+    expect(await runInDurableObject(stub, (instance) => instance.repository.findCommandReceipt(
+      roomId, workspace.body.epoch, owner.id, confirmation.commandId,
+    ))).toBeNull();
+    const unchanged = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    if (unchanged.body.domain.kind !== 'table') throw new Error('EXPECTED_TABLE_DOMAIN');
+    expect(unchanged.body.domain.records.equipment?.find((row) => row.id === 'camera')?.values.available).toBe(true);
+
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) =>
+      assistantResponse(input, { kind: 'explanation', text: 'The camera remains available.', references: [] }));
+    const nextCommandId = randomUUID();
+    const nextRequest = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST',
+      body: { commandId: nextCommandId, expectedRevision: unchanged.body.revision,
+        expectedEpoch: unchanged.body.epoch, prompt: 'Can I still borrow it?', consent: true },
+      mutation: true,
+    });
+    expect(nextRequest.response.status).toBe(202);
+    await expect(waitForTableAssistantJob(stub, roomId, owner,
+      tableAssistantJobId(roomId, unchanged.body.epoch, owner.id, nextCommandId)))
+      .resolves.toMatchObject({ status: 'completed', result: { kind: 'explanation' } });
+    expect(vi.mocked(respondToTablePrompt)).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers a receipt committed before the confirmation timeout without replaying the action', async () => {
+    const owner = newActor('Receipt-first confirmation owner');
+    await saveActor(owner);
+    const { roomId, stub } = await createActiveEquipmentTable(owner);
+    const workspace = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) => {
+      if (input.workspace.domain.kind !== 'table') throw new Error('TABLE_ASSISTANT_EXPECTED_TABLE');
+      return assistantResponse(input, {
+        kind: 'action-proposal',
+        text: 'Borrow the camera.',
+        actionId: 'borrow',
+        inputs: { item: 'camera' },
+        expectedRevision: input.workspace.revision,
+        expectedRuleRevision: input.workspace.domain.ruleRevision,
+        expectedActionRevision: input.workspace.domain.actionRevision,
+        confirmationRequired: true,
+      });
+    });
+    const requestCommandId = randomUUID();
+    const jobId = tableAssistantJobId(roomId, workspace.body.epoch, owner.id, requestCommandId);
+    const request = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: { commandId: requestCommandId, expectedRevision: workspace.body.revision,
+        expectedEpoch: workspace.body.epoch, prompt: 'Borrow the camera.', consent: true }, mutation: true,
+    });
+    expect(request.response.status).toBe(202);
+    await waitForTableAssistantJob(stub, roomId, owner, jobId);
+
+    const confirmation = { commandId: randomUUID(), expectedRevision: workspace.body.revision,
+      expectedEpoch: workspace.body.epoch };
+    const envelope = {
+      commandId: confirmation.commandId,
+      expectedRevision: confirmation.expectedRevision,
+      expectedEpoch: confirmation.expectedEpoch,
+      type: 'table.act',
+      payload: { actionId: 'borrow', inputs: { item: 'camera' } },
+    };
+    const proposalHash = hashValue({
+      type: envelope.type,
+      payload: envelope.payload,
+      expectedRevision: envelope.expectedRevision,
+      expectedEpoch: envelope.expectedEpoch,
+    });
+    const startedAt = Date.now();
+    const claim = await runInDurableObject(stub, (instance) => instance.repository.claimTableAssistantConfirmation({
+      id: jobId,
+      workspaceId: roomId,
+      epoch: workspace.body.epoch,
+      actorId: owner.id,
+      commandId: confirmation.commandId,
+      expectedRevision: confirmation.expectedRevision,
+      proposalHash,
+      startedAt,
+    }));
+    expect(claim.claimed).toBe(true);
+    const session = await runInDurableObject(stub, async (instance) => {
+      const authorized = await instance.authorize(new Request(`${ORIGIN}/api/workspaces/${roomId}`, {
+        headers: headers(owner),
+      }), roomId);
+      return authorized.session;
+    });
+    const committed = await runInDurableObject(stub, (instance) =>
+      instance.authority.executeTableAssistantAction(session, envelope, roomId, jobId));
+    expect(committed.ok).toBe(true);
+
+    await runInDurableObject(stub, (instance) => {
+      const expiredAt = Date.now() - MODEL_RECOVERY_DELAY_MS - 1_000;
+      instance.repository.storage.sql.exec(
+        `UPDATE model_jobs SET created_at = ?, data = json_set(data, '$.confirmationStartedAt', ?)
+         WHERE id = ?`,
+        expiredAt,
+        expiredAt,
+        jobId,
+      );
+    });
+    await runDurableObjectAlarm(stub);
+    const recovered = await call<TestTableAssistantJob>(stub,
+      `/api/workspaces/${roomId}/assistant/${jobId}`, owner);
+    expect(recovered.body).toMatchObject({ status: 'completed', confirmationStatus: 'confirmed' });
+    expect(await runInDurableObject(stub, (instance) => instance.repository.findCommandReceipt(
+      roomId, workspace.body.epoch, owner.id, confirmation.commandId,
+    ))).toMatchObject({ payloadHash: proposalHash });
+    const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    if (current.body.domain.kind !== 'table') throw new Error('EXPECTED_TABLE_DOMAIN');
+    expect(current.body.domain.records.equipment?.find((row) => row.id === 'camera')?.values.available).toBe(false);
+    expect(vi.mocked(respondToTablePrompt)).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed at the cumulative assistant history cap without invoking the provider', async () => {
+    const owner = newActor('History limit owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    await runInDurableObject(stub, (instance) => {
+      const now = Date.now();
+      for (let index = 0; index < 500; index += 1) {
+        instance.repository.storage.sql.exec(
+          `INSERT INTO model_jobs(id, workspace_id, epoch, actor_id, status, data, created_at, revoked_at)
+           VALUES (?, ?, ?, ?, 'revoked', ?, ?, ?)`,
+          sha256(`table-assistant-cap-${index}`), roomId, workspace.epoch, owner.id,
+          JSON.stringify({ kind: 'table-assistant', failure: 'ROOM_RESET' }), now + index, now,
+        );
+      }
+    });
+    const result = await call<PublicError>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: { commandId: randomUUID(), expectedRevision: workspace.revision,
+        expectedEpoch: workspace.epoch, prompt: 'Explain the table status.', consent: true }, mutation: true,
+    });
+    expect(result.response.status).toBe(409);
+    expect(result.body.errorCode).toBe('TABLE_ASSISTANT_HISTORY_LIMIT');
+    expect(vi.mocked(respondToTablePrompt)).not.toHaveBeenCalled();
   });
 
   it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with private sources intact', async () => {
@@ -1202,6 +1971,75 @@ describe('Cloudflare room Durable Object', () => {
     expect(stale.response.status).toBe(409);
     expect((stale.body as PublicError).errorCode).toBe('STALE_REVISION');
     expect(await inspectRoom(stub, 'SELECT * FROM model_jobs')).toHaveLength(0);
+  });
+
+  it('pushes membership revisions to connected actors with their own private projection', async () => {
+    const owner = newActor('Socket owner');
+    const firstLearner = newActor('Socket first learner');
+    const secondLearner = newActor('Socket second learner');
+    await Promise.all([saveActor(owner), saveActor(firstLearner), saveActor(secondLearner)]);
+    const { roomId, stub, workspace } = await createRoom(owner);
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => modelResult(request));
+    const note = await issueCommand(stub, workspace, owner, 'teaching.saveNote', { text: 'private teacher context' });
+    expect(note.response.status).toBe(200);
+    if (!('ok' in note.body) || !note.body.ok) throw new Error('OWNER_NOTE_SAVE_FAILED');
+
+    const firstInvite = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'learner-1' }, mutation: true,
+    });
+    const firstJoin = await call<WorkspaceView>(stub, '/internal/redeem', firstLearner, {
+      method: 'POST', body: { ticket: firstInvite.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(firstJoin.response.status).toBe(200);
+
+    const ownerSocket = await connectProjectionSocket(stub, roomId, owner);
+    const learnerSocket = await connectProjectionSocket(stub, roomId, firstLearner);
+    try {
+      const ownerInitial = await ownerSocket.projections.waitFor((view) => view.members.length === 2);
+      const learnerInitial = await learnerSocket.projections.waitFor((view) => view.members.length === 2);
+      expect(ownerInitial.domain).toHaveProperty('teacherNote', 'private teacher context');
+      expect(learnerInitial.domain).not.toHaveProperty('teacherNote');
+
+      const secondInvite = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+        method: 'POST', body: { seat: 'learner-2' }, mutation: true,
+      });
+      const secondJoin = await call<WorkspaceView>(stub, '/internal/redeem', secondLearner, {
+        method: 'POST', body: { ticket: secondInvite.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+      });
+      expect(secondJoin.response.status).toBe(200);
+
+      const ownerUpdated = await ownerSocket.projections.waitFor((view) => view.members.length === 3);
+      const learnerUpdated = await learnerSocket.projections.waitFor((view) => view.members.length === 3);
+      expect(ownerUpdated.revision).not.toBe(ownerInitial.revision);
+      expect(learnerUpdated.revision).not.toBe(learnerInitial.revision);
+      expect(ownerUpdated.members.some((member) => member.actorId === secondLearner.id && member.seat === 'learner-2')).toBe(true);
+      expect(learnerUpdated.members.some((member) => member.actorId === secondLearner.id && member.seat === 'learner-2')).toBe(true);
+      expect(ownerUpdated.domain).toHaveProperty('teacherNote', 'private teacher context');
+      expect(learnerUpdated.domain).not.toHaveProperty('teacherNote');
+
+      const proposalInput = {
+        commandId: randomUUID(),
+        expectedRevision: ownerUpdated.revision,
+        expectedEpoch: ownerUpdated.epoch,
+        prompt: 'Suggest a small lesson adjustment after a learner joins.',
+        consent: true,
+      };
+      const proposal = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+        method: 'POST', body: proposalInput, mutation: true,
+      });
+      expect(proposal.response.status).toBe(202);
+      const proposalId = modelJobId(roomId, ownerUpdated.epoch, owner.id, proposalInput.commandId);
+      const completedProposal = await waitForModelJob(stub, proposalId, owner.id, roomId, ownerUpdated.epoch);
+      expect(completedProposal.status).toBe('completed');
+      const ownerAfterAction = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+      const learnerAfterAction = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstLearner);
+      expect(ownerAfterAction.body.domain).toHaveProperty('teacherNote', 'private teacher context');
+      expect(ownerAfterAction.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.id });
+      expect(learnerAfterAction.body.domain).not.toHaveProperty('teacherNote');
+    } finally {
+      ownerSocket.socket.close(1000, 'Test complete');
+      learnerSocket.socket.close(1000, 'Test complete');
+    }
   });
 
   it('revalidates hibernated socket identity before sending a private projection', async () => {

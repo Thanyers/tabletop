@@ -19,7 +19,9 @@ export function featureRoutes(options: { objects: PrivateObjectStore; localUploa
   return async context => {
     const { request, response, url, authority } = context;
     if (url.pathname === '/api/capabilities' && request.method === 'GET') {
-      context.json(200, { uploads: options.localUploads, model: { enabled: false, reason: 'Provider and budget will be selected after local validation.' } });
+      context.json(200, { uploads: options.localUploads,
+        tableAssistant: { available: false, reason: 'Conversation is not available in this local workspace. You can continue using the Canvas and reviewing rules.' },
+        model: { enabled: false, reason: 'Provider and budget will be selected after local validation.' } });
       return true;
     }
     const match = /^\/api\/workspaces\/([0-9a-f-]{36})\/(uploads|export|model|sources\/([0-9a-f-]{36}))$/i.exec(url.pathname);

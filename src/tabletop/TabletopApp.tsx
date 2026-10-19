@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowDownUp, ArrowRight, BookOpen, Check, ChevronDown, CircleAlert, Clipboard, LoaderCircle, Play, Plus, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
+import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
+import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
+import { TableAssistant } from './ui/TableAssistant';
 import { TableSurface } from './ui/TableSurface';
 import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
@@ -18,7 +21,12 @@ type InviteState = { seat: Seat; invite: WorkspaceInvite; url: string; revoked?:
 
 const lastWorkspaceKey = 'tabletop.lastWorkspace';
 const pendingInviteKey = 'tabletop.pendingInvite';
-const localCapabilities: TabletopCapabilities = { uploads: true, tableReadOnly: false, model: { enabled: false, reason: 'Live AI proposals are not configured on this local server.' } };
+const localCapabilities: TabletopCapabilities = {
+  uploads: true,
+  tableReadOnly: false,
+  tableAssistant: { available: false, reason: 'Conversation is not available in this local workspace. You can continue using the Canvas and reviewing rules.' },
+  model: { enabled: false, reason: 'Live AI proposals are not configured on this local server.' },
+};
 
 const caseInfo: Record<CaseKind, { title: string; subtitle: string; icon: typeof Table2 }> = {
   invoice: { title: 'Invoice check', subtitle: 'Match shipment charges with dated evidence.', icon: Table2 },
@@ -44,8 +52,28 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : 'The table could not be updated. Try again.';
 }
 
+function sameWorkspaceActor(current: WorkspaceView | null, expected: WorkspaceView): boolean {
+  return current !== null
+    && current.id === expected.id
+    && current.epoch === expected.epoch
+    && current.actor.actorId === expected.actor.actorId
+    && current.kind === expected.kind;
+}
+
+function isTableWorkspaceView(view: WorkspaceView): view is WorkspaceView & { kind: 'table'; domain: TableState } {
+  return view.kind === 'table' && view.domain.kind === 'table';
+}
+
+function workspaceDisplayTitle(workspace: WorkspaceView): string {
+  if (workspace.kind === 'table' && workspace.domain.kind === 'table') {
+    const programTitle = workspace.domain.program?.title.trim();
+    if (programTitle) return programTitle;
+  }
+  return workspace.title;
+}
+
 function workspaceLabel(workspace: WorkspaceView): string {
-  return `${caseInfo[workspace.kind].title} · ${workspace.title}`;
+  return `${caseInfo[workspace.kind].title} · ${workspaceDisplayTitle(workspace)}`;
 }
 
 function saveLastWorkspace(id: string | null): void {
@@ -251,7 +279,11 @@ export default function TabletopApp() {
           setCapabilities(currentCapabilities);
         } catch (error) {
           if (!alive) return;
-          setCapabilities({ uploads: false, model: { enabled: false, reason: 'Feature access could not be checked. Refresh before adding files or requesting an AI draft.' } });
+          setCapabilities({
+            uploads: false,
+            tableAssistant: { available: false, reason: 'Chat availability could not be checked. Refresh before starting a conversation; you can keep using the Canvas and reviewing rules.' },
+            model: { enabled: false, reason: 'Feature access could not be checked. Refresh before adding files or requesting an AI draft.' },
+          });
           showNotice('Feature access could not be checked. Uploads and AI requests are disabled until you refresh.', 'error');
           if (error instanceof ApiFailure && error.status === 401) {
             if (currentAuth?.mode === 'google') setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
@@ -442,6 +474,68 @@ export default function TabletopApp() {
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
 
   const pollAI = useCallback((workspaceId: string, jobId: string) => tabletopClient.modelJob(workspaceId, jobId), []);
+  const requestTableAssistant = useCallback((targetView: WorkspaceView, prompt: string, commandId: ReturnType<typeof crypto.randomUUID>): Promise<TableAssistantJob> => {
+    const current = workspaceRef.current;
+    if (!current || !sameWorkspaceActor(current, targetView) || current.kind !== 'table' || !['owner', 'participant'].includes(current.actor.role)) {
+      return Promise.reject(new ApiFailure('This table seat changed. Open the current table before sending another request.', 409, 'STALE_EPOCH'));
+    }
+    if (capabilities.tableReadOnly) return Promise.reject(new ApiFailure('Assistant requests for this table are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
+    if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('The table assistant is not enabled for this service.', 403));
+    if (current.revision !== targetView.revision) return Promise.reject(new ApiFailure('The table changed. Review its current state and send your question again.', 409, 'STALE_REVISION'));
+    return tabletopClient.requestTableAssistant(current, prompt, commandId);
+  }, [capabilities.model.enabled, capabilities.tableReadOnly]);
+
+  const pollTableAssistant = useCallback((targetView: WorkspaceView, jobId: string): Promise<TableAssistantJob> => {
+    if (!sameWorkspaceActor(workspaceRef.current, targetView)) return Promise.reject(new ApiFailure('This table seat changed. The response belongs to the previous seat.', 409, 'STALE_EPOCH'));
+    return tabletopClient.tableAssistantJob(targetView.id, jobId);
+  }, []);
+
+  const loadTableAssistantHistory = useCallback((targetView: WorkspaceView, before?: string): Promise<TableAssistantHistoryPage> => {
+    if (!sameWorkspaceActor(workspaceRef.current, targetView)) return Promise.reject(new ApiFailure('This table seat changed. Its assistant history belongs to the previous seat.', 409, 'STALE_EPOCH'));
+    return tabletopClient.tableAssistantHistory(targetView.id, before, 20);
+  }, []);
+
+  const refreshTableAssistant = useCallback(async (targetView: WorkspaceView) => {
+    if (!sameWorkspaceActor(workspaceRef.current, targetView)) return;
+    const fresh = await tabletopClient.workspace(targetView.id);
+    if (sameWorkspaceActor(workspaceRef.current, targetView)) setWorkspace(fresh);
+  }, [setWorkspace]);
+
+  const confirmTableAssistantAction = useCallback(async (targetView: WorkspaceView, job: TableAssistantJob, commandId: ReturnType<typeof crypto.randomUUID>): Promise<void> => {
+    const current = workspaceRef.current;
+    if (!sameWorkspaceActor(current, targetView) || !current || current.kind !== 'table' || current.domain.kind !== 'table' || targetView.domain.kind !== 'table') {
+      throw new ApiFailure('This table seat changed. Open the current table before confirming an action.', 409, 'STALE_EPOCH');
+    }
+    if (capabilities.tableReadOnly) throw new ApiFailure('Actions for this table are temporarily paused.', 403, 'TABLE_READ_ONLY');
+    if (!['owner', 'participant'].includes(current.actor.role)) throw new ApiFailure('This seat cannot confirm table actions.', 403);
+    if (busy !== null) throw new ApiFailure('Finish the current table update, then review this proposal again.', 409, 'STALE_REVISION');
+    const proposal = job.result;
+    if (job.status !== 'completed' || proposal?.kind !== 'action-proposal' || !proposal.confirmationRequired) throw new ApiFailure('This assistant response does not contain a confirmable action.', 409, 'STALE_REVISION');
+    if (current.revision !== job.expectedRevision || current.epoch !== job.expectedEpoch || proposal.expectedRevision !== current.revision || proposal.expectedRuleRevision !== current.domain.ruleRevision || proposal.expectedActionRevision !== current.domain.actionRevision) {
+      const fresh = await tabletopClient.workspace(current.id).catch(() => null);
+      if (fresh && sameWorkspaceActor(workspaceRef.current, current)) setWorkspace(fresh);
+      throw new ApiFailure('The table changed after this proposal. Review the latest rules and ask again.', 409, 'STALE_REVISION');
+    }
+
+    const requestSequence = projectionSequenceRef.current;
+    setBusy('assistant.confirm');
+    try {
+      const ack = await tabletopClient.confirmTableAssistantAction(current.id, job.id, job.expectedRevision, job.expectedEpoch, commandId);
+      if (!sameWorkspaceActor(workspaceRef.current, current)) return;
+      const latest = await latestAfterAck(ack, current.id, requestSequence);
+      if (sameWorkspaceActor(workspaceRef.current, current)) setWorkspace(latest);
+      await refreshSession().catch(() => undefined);
+      showNotice('The confirmed action was applied to the shared table.', 'success');
+    } catch (error) {
+      if (error instanceof ApiFailure && error.conflict) {
+        const fresh = await tabletopClient.workspace(current.id).catch(() => null);
+        if (fresh && sameWorkspaceActor(workspaceRef.current, current)) setWorkspace(fresh);
+        showNotice('The table changed before this action could be confirmed. Its latest state is loaded; ask again if the action still applies.', 'error');
+      } else showNotice(errorText(error), 'error');
+      throw error;
+    } finally { setBusy(null); }
+  }, [busy, capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
+
   const loadAdminWorkspaces = useCallback((after?: string) => tabletopClient.adminWorkspaces(after), []);
 
   const refreshWorkspaceProjection = useCallback(async (workspaceId: string) => {
@@ -548,7 +642,27 @@ export default function TabletopApp() {
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : view.kind === 'table' ? ['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
   const remainingInviteSeats = inviteSeats.filter((seat) => !connectedSeats.has(seat) && !(inviteIsHeld && inviteState?.seat === seat));
-  const aiContent = canAskAI && !tableReadOnly ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} /> : undefined;
+  const aiContent = canAskAI && view.kind !== 'table' && !tableReadOnly ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} /> : undefined;
+  const tableAssistant = isTableWorkspaceView(view) ? <TableAssistant
+    key={`${view.id}:${view.epoch}:${view.actor.actorId}`}
+    view={view}
+    capabilities={capabilities}
+    readOnly={tableReadOnly}
+    onRequest={requestAI}
+    onPoll={pollAI}
+    onRefresh={refreshWorkspaceProjection}
+    onAttachFile={tableReadOnly ? undefined : importTableFile}
+    onOpenSources={() => requestCanvasFocus('table.sources')}
+    onOpenRules={() => requestCanvasFocus('table.rules')}
+    onOpenActions={() => requestCanvasFocus('table.actions')}
+    onReviewDraft={() => requestCanvasFocus('table.rules')}
+    onChatRequest={requestTableAssistant}
+    onChatPoll={pollTableAssistant}
+    onChatHistory={loadTableAssistantHistory}
+    onChatConfirm={confirmTableAssistantAction}
+    onChatRefresh={refreshTableAssistant}
+    onOpenObject={requestCanvasFocus}
+  /> : undefined;
   const surfaceBusy = tableReadOnly ? 'table.readOnly' : busy;
 
   return (
@@ -578,8 +692,8 @@ export default function TabletopApp() {
       <div className="tt-layout-controls">
         <div className="tt-mode-switch" role="group" aria-label="Edit mode"><button type="button" aria-pressed={editMode === 'use'} className={editMode === 'use' ? 'is-active' : ''} onClick={() => setEditMode('use')}><Check size={13} /> Use</button><button type="button" aria-pressed={editMode === 'arrange'} className={editMode === 'arrange' ? 'is-active' : ''} onClick={() => setEditMode('arrange')}><ArrowDownUp size={13} /> Arrange</button></div>
         <span className="tt-layout-controls__hint">{editMode === 'use' ? 'Select a source, result, rule, or scene to work with its controls.' : 'Drag objects to arrange this canvas.'}</span>
-        <div className="tt-mobile-switch" role="group" aria-label="Workspace view"><button type="button" aria-pressed={surface === 'canvas'} className={surface === 'canvas' ? 'is-active' : ''} onClick={() => setSurface('canvas')}>Canvas</button><button type="button" aria-pressed={surface === 'focus'} className={surface === 'focus' ? 'is-active' : ''} onClick={() => setSurface('focus')}>Focus table</button></div>
-        {canAskAI && !tableReadOnly && capabilities.model.enabled && <button type="button" className="tt-button tt-button--quiet tt-ai-launch" onClick={focusAIProposal}><Sparkles size={13} /> Ask AI</button>}
+        {view.kind !== 'table' && <div className="tt-mobile-switch" role="group" aria-label="Workspace view"><button type="button" aria-pressed={surface === 'canvas'} className={surface === 'canvas' ? 'is-active' : ''} onClick={() => setSurface('canvas')}>Canvas</button><button type="button" aria-pressed={surface === 'focus'} className={surface === 'focus' ? 'is-active' : ''} onClick={() => setSurface('focus')}>Focus table</button></div>}
+        {view.kind !== 'table' && canAskAI && !tableReadOnly && capabilities.model.enabled && <button type="button" className="tt-button tt-button--quiet tt-ai-launch" onClick={focusAIProposal}><Sparkles size={13} /> Ask AI</button>}
         <span className="tt-layout-controls__revision">r{view.domain.ruleRevision} · data r{view.domain.dataRevision}</span>
       </div>
 
@@ -608,6 +722,7 @@ export default function TabletopApp() {
         onInvite={canInvite ? openInviteDialog : undefined}
         onFocusObject={requestCanvasFocus}
         aiContent={aiContent}
+        assistantContent={tableAssistant}
         focusNodeId={focusNodeId}
         focusRequestKey={focusRequestKey}
         openedObjectId={openedObjectId}

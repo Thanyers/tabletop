@@ -18,6 +18,7 @@ const csrf = token => createHash('sha256').update(`tabletop-csrf-v1:${token}`).d
 const output = resolve('test-results/cloudflare-browser');
 let providerCalls = 0;
 let tableAIReply = null;
+let tableAssistantReply = null;
 const modelStatuses = [];
 await mkdir(output, { recursive: true });
 const mf = new Miniflare(convertV4MiniflareOptions({
@@ -39,7 +40,26 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     expect(body.model).toBe('deepseek-flash');
     const input = JSON.parse(body.messages?.[1]?.content ?? '{}');
     let change;
-    if (input.kind === 'table') {
+    if (input.kind === 'table-assistant') {
+      if (!tableAssistantReply) throw new Error('Unexpected table assistant request without an armed synthetic response.');
+      expect(Object.keys(input).sort()).toEqual(['context', 'kind', 'prompt']);
+      expect(Object.keys(input.context).sort()).toEqual(['conversation', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(Array.isArray(input.context.conversation)).toBe(true);
+      expect(input.context.conversation.length).toBeLessThanOrEqual(6);
+      if (input.context.program) {
+        expect(input.context.program).not.toHaveProperty('evidence');
+        expect(input.context.program).not.toHaveProperty('assumptions');
+      }
+      if (tableAssistantReply.expectedRole) expect(input.context.role).toBe(tableAssistantReply.expectedRole);
+      if (tableAssistantReply.expectedSeat) expect(input.context.seat).toBe(tableAssistantReply.expectedSeat);
+      for (const marker of tableAssistantReply.forbiddenTexts ?? []) expect(JSON.stringify(input)).not.toContain(marker);
+      for (const marker of tableAssistantReply.expectedConversationContains ?? []) expect(JSON.stringify(input.context.conversation)).toContain(marker);
+      if (tableAssistantReply.expectedConversationCount !== undefined) expect(input.context.conversation).toHaveLength(tableAssistantReply.expectedConversationCount);
+      expect(typeof input.prompt).toBe('string');
+      if (tableAssistantReply.expectedPromptContains) expect(input.prompt).toContain(tableAssistantReply.expectedPromptContains);
+      change = tableAssistantReply.result;
+      tableAssistantReply = null;
+    } else if (input.kind === 'table') {
       if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
       expect(input.sources).toHaveLength(1);
       expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);
@@ -331,6 +351,8 @@ try {
     newPage,
     api,
     setTableReply: value => { tableAIReply = value; },
+    setAssistantReply: value => { tableAssistantReply = value; },
+    getProviderCalls: () => providerCalls,
     mark,
   });
   await dm.screenshot({ path: join(output, 'dm-desktop.png'), fullPage: true });

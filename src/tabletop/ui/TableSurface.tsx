@@ -36,6 +36,7 @@ export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   onOpenObject?: (id: string | null) => void;
   onInvite?: () => void;
   aiContent?: ReactNode;
+  assistantContent?: ReactNode;
   onFocusObject?: (id: string) => void;
 }
 
@@ -68,6 +69,7 @@ export function TableSurface({
   onOpenObject,
   onInvite,
   aiContent,
+  assistantContent,
   onFocusObject,
 }: TableSurfaceProps) {
   const focusCanvasObject = useMemo(() => onFocusObject ?? (onOpenObject ? (id: string) => { onSelectNode(id); onOpenObject(id); } : undefined), [onFocusObject, onOpenObject, onSelectNode]);
@@ -80,9 +82,10 @@ export function TableSurface({
   const visiblePlanCount = plan?.nodes.filter((node) => node.visible !== false && (!visibleNodeIds || visibleNodeIds.includes(node.id))).length ?? 0;
   const visibleAuxiliaryCount = plan ? mergedAuxiliaryObjects.filter((object) => !planIds.has(object.id) && (!visibleNodeIds || visibleNodeIds.includes(object.id))).length : 0;
   const objectCount = visiblePlanCount + visibleAuxiliaryCount;
+  const layoutSurface = view.kind === 'table' && assistantContent ? 'canvas' : surface;
 
   return (
-    <main className={`tt-main tt-main--${surface}`}>
+    <main className={`tt-main tt-main--${layoutSurface}${view.kind === 'table' && assistantContent ? ' tt-main--with-assistant' : ''}`}>
       <section className="tt-canvas-panel" aria-label="Table objects canvas">
         <div className="tt-canvas-panel__head">
           <div><span className="tt-kicker">TABLE WORK AREA</span><strong>{tableTitles[view.kind]}</strong></div>
@@ -121,7 +124,7 @@ export function TableSurface({
         )}
       </section>
 
-      {surface === 'focus' && <section className="tt-inspector-panel" aria-label="Table workbench">
+      {surface === 'focus' && view.kind !== 'table' && <section className="tt-inspector-panel" aria-label="Table workbench">
         <div className="tt-inspector-scroll" ref={inspectorScrollRef}>
           <MemberStrip view={view} />
           {inspectorContent}
@@ -131,6 +134,10 @@ export function TableSurface({
           {plan && view.kind === 'encounter' && <EncounterWorkbench view={view} plan={plan} onCommand={onCommand} busy={busy} onUpload={onUpload} onExport={onExport} onFocusEvidence={onFocusEvidence} onBackFromEvidence={onBackFromEvidence} focusSourceIds={focusSourceIds} />}
         </div>
       </section>}
+
+      {view.kind === 'table' && assistantContent && <aside className="tt-table-assistant-panel" data-testid="table-assistant-panel" aria-label="Table assistant">
+        {assistantContent}
+      </aside>}
     </main>
   );
 }

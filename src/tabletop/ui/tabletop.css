@@ -1186,3 +1186,146 @@
 @media (prefers-reduced-motion: reduce) {
   .tt-canvas-node { transition: none; }
 }
+
+.tt-main--with-assistant,
+.tt-main--with-assistant.tt-main--canvas,
+.tt-main--with-assistant.tt-main--focus { grid-template-columns: minmax(0, 1fr) minmax(320px, 370px); }
+.tt-main--with-assistant .tt-canvas-panel { border-right: 0; }
+.tt-table-assistant-panel { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid #dce4e3; background: #fbfcfa; }
+.tt-ai-proposal--table { gap: 13px; margin: 0; padding: 16px; border: 0; border-radius: 0; background: transparent; }
+.tt-ai-proposal--table .tt-ai-proposal__head { align-items: flex-start; }
+.tt-ai-proposal--table .tt-ai-proposal__head h2,
+.tt-table-assistant__participant h2 { color: #314a43; font-size: 17px; line-height: 1.25; }
+.tt-ai-proposal--table .tt-ai-proposal__manual { max-width: 100px; padding-top: 5px; color: #70837a; font-size: 9px; }
+.tt-table-assistant__files { display: grid; gap: 9px; padding: 11px; border: 1px solid #dce7e0; border-radius: 7px; background: #fff; }
+.tt-table-assistant__files > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #456357; font-size: 12px; }
+.tt-table-assistant__files > header > span { color: #84928b; font: 10px var(--tt-mono); }
+.tt-table-assistant__files > p { margin: 0; color: #78877f; font-size: 11px; }
+.tt-table-assistant__files > ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tt-table-assistant__files > ul > li { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid #dbe8df; border-radius: 999px; color: #456557; background: #f4f9f5; font-size: 10px; }
+.tt-table-assistant__files > ul > li > svg { flex: 0 0 auto; color: #648d78; }
+.tt-table-assistant__files > ul > li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-table-assistant__file-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.tt-table-assistant__file-actions .tt-button { min-height: 36px; gap: 6px; padding-inline: 10px; font-size: 11px; }
+.tt-table-assistant__file-actions .tt-button:first-of-type { border-color: #c9ddd1; color: #416b5d; background: #f1f8f3; }
+.tt-table-assistant__file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.tt-table-assistant__files > small { color: #7b8b83; font-size: 10px; line-height: 1.45; }
+.tt-ai-proposal--table .tt-ai-proposal__form { gap: 10px; }
+.tt-ai-proposal--table .tt-ai-proposal__form > label:not(.tt-ai-proposal__consent) { font-size: 12px; }
+.tt-ai-proposal--table .tt-ai-proposal__form textarea { min-height: 88px; font-size: 13px; }
+.tt-ai-proposal--table .tt-ai-proposal__privacy { padding: 10px 11px; border-radius: 4px; }
+.tt-ai-proposal--table .tt-ai-proposal__privacy strong { font-size: 10px; }
+.tt-ai-proposal--table .tt-ai-proposal__privacy p { font-size: 11px; line-height: 1.55; }
+.tt-ai-proposal--table .tt-ai-proposal__consent { gap: 8px; font-size: 11px; line-height: 1.45; }
+.tt-ai-proposal--table .tt-ai-proposal__form > .tt-button { min-height: 40px; gap: 7px; padding-inline: 15px; font-size: 12px; }
+.tt-ai-proposal--table .tt-ai-proposal__source-hint { color: #7d8b84; font-size: 10px; }
+.tt-ai-proposal--table .tt-ai-proposal__unavailable,
+.tt-ai-proposal--table .tt-ai-proposal__error,
+.tt-table-assistant__notice { padding: 10px 11px; font-size: 11px; line-height: 1.5; }
+.tt-ai-proposal--table .tt-ai-proposal__footer { font-size: 10px; }
+.tt-table-assistant__status { display: grid; gap: 8px; padding: 11px; border: 1px solid #d7e6dc; border-radius: 6px; color: #4f6f5e; background: #f5faf6; }
+.tt-table-assistant__status > strong { color: #375d4a; font-size: 12px; }
+.tt-table-assistant__status > div { display: grid; gap: 3px; }
+.tt-table-assistant__status small { color: #778b7f; font: 600 9px/1.4 var(--tt-mono); text-transform: uppercase; }
+.tt-table-assistant__status p { margin: 0; color: #5e7166; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.tt-table-assistant__status > .tt-button { min-height: 36px; justify-self: start; font-size: 11px; }
+.tt-table-assistant__participant { display: grid; align-content: start; gap: 14px; min-height: 100%; padding: 16px; }
+.tt-table-assistant__head { display: flex; align-items: center; gap: 10px; }
+.tt-table-assistant__head > div { display: grid; gap: 3px; }
+.tt-table-assistant__head h2 { margin: 0; }
+.tt-table-assistant__mark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid #c9e0d5; border-radius: 7px; color: #24796b; background: #eaf5ee; }
+.tt-table-assistant__guidance, .tt-table-assistant__waiting { margin: 0; color: #62736b; font-size: 12px; line-height: 1.6; }
+.tt-table-assistant__turn { display: grid; gap: 4px; padding: 11px; border: 1px solid #dce7e0; border-radius: 6px; background: #fff; }
+.tt-table-assistant__turn > span { color: #819088; font: 600 9px/1.4 var(--tt-mono); text-transform: uppercase; }
+.tt-table-assistant__turn > strong { color: #416a55; font-size: 13px; }
+.tt-table-assistant__waiting { padding: 10px; border-left: 2px solid #d4b572; color: #7b6847; background: #fbf8f0; font-size: 11px; }
+.tt-table-assistant__links { display: grid; gap: 8px; }
+.tt-table-assistant__links > button { display: flex; min-height: 40px; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #d9e5de; border-radius: 5px; color: #456b5b; background: #fff; text-align: left; font-size: 12px; font-weight: 650; }
+.tt-table-assistant__links > button:hover { border-color: #bad4c5; background: #f4f9f5; }
+.tt-table-assistant__links > button:disabled { opacity: .52; cursor: not-allowed; }
+.tt-table-assistant__links > button > svg { color: #668e79; }
+
+@media (max-width: 760px) {
+  .tt-main--with-assistant,
+  .tt-main--with-assistant.tt-main--canvas,
+  .tt-main--with-assistant.tt-main--focus { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(260px, 1fr) minmax(220px, 32dvh); }
+  .tt-main--with-assistant .tt-table-assistant-panel { border-top: 1px solid #dce4e3; border-left: 0; }
+  .tt-ai-proposal--table, .tt-table-assistant__participant { gap: 11px; padding: 11px; }
+  .tt-ai-proposal--table .tt-ai-proposal__manual { max-width: 90px; font-size: 8px; }
+  .tt-table-assistant__file-actions .tt-button { min-height: 38px; }
+}
+
+.tt-table-assistant { display: grid; align-content: start; gap: 13px; min-width: 0; padding: 15px; }
+.tt-table-assistant__modes { display: flex; gap: 5px; padding: 4px; border: 1px solid #e1e8e4; border-radius: 7px; background: #f3f7f4; }
+.tt-table-assistant__modes > button { display: inline-flex; min-width: 0; min-height: 36px; flex: 1 1 0; align-items: center; justify-content: center; gap: 6px; padding: 0 9px; border: 1px solid transparent; border-radius: 5px; color: #6f7f76; background: transparent; font: 650 11px/1.3 Manrope, 'Noto Sans Thai', sans-serif; cursor: pointer; }
+.tt-table-assistant__modes > button.is-active { border-color: #d4e3da; color: #315d4d; background: #fff; box-shadow: 0 1px 2px #2435480a; }
+.tt-table-assistant__rules-mode { min-width: 0; }
+.tt-table-assistant__draft-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 14px 9px; padding: 9px 10px; border: 1px solid #e6dbc1; border-radius: 5px; color: #7f6335; background: #fbf7ed; font-size: 11px; line-height: 1.45; }
+.tt-table-assistant__draft-link .tt-button { min-height: 33px; flex: 0 0 auto; font-size: 10px; }
+.tt-table-assistant__direct-links { display: grid; gap: 7px; }
+.tt-table-assistant__direct-links > button { display: flex; min-height: 38px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #d9e5de; border-radius: 5px; color: #456b5b; background: #fff; text-align: left; font: 650 11px/1.35 Manrope, 'Noto Sans Thai', sans-serif; cursor: pointer; }
+.tt-table-assistant__direct-links > button:disabled { opacity: .52; cursor: not-allowed; }
+.tt-table-assistant__direct-links > button:hover:not(:disabled) { border-color: #bad4c5; background: #f4f9f5; }
+.tt-table-chat { display: grid; align-content: start; gap: 11px; min-width: 0; }
+.tt-table-chat__intro { display: grid; gap: 4px; }
+.tt-table-chat__intro h3 { margin: 0; color: #314a43; font-size: 13px; line-height: 1.35; }
+.tt-table-chat__intro p, .tt-table-chat__boundary, .tt-table-chat__privacy-note { margin: 0; color: #687970; font-size: 11px; line-height: 1.5; }
+.tt-table-chat__links { display: flex; flex-wrap: wrap; gap: 6px; }
+.tt-table-chat__links > button { display: inline-flex; min-height: 34px; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid #d9e5de; border-radius: 5px; color: #456b5b; background: #fff; font: 650 10px/1.3 Manrope, 'Noto Sans Thai', sans-serif; cursor: pointer; }
+.tt-table-chat__links > button:disabled { opacity: .5; cursor: not-allowed; }
+.tt-table-chat__turn { display: grid; gap: 3px; padding: 9px 10px; border: 1px solid #dce7e0; border-radius: 6px; background: #fff; }
+.tt-table-chat__turn > span { color: #819088; font: 600 9px/1.4 var(--tt-mono); text-transform: uppercase; }
+.tt-table-chat__turn > strong { color: #416a55; font-size: 12px; }
+.tt-table-chat__privacy-note { padding: 8px 9px; border-left: 2px solid #d5e2d8; background: #f6f9f6; }
+.tt-table-chat__thread { display: grid; gap: 8px; max-height: min(34vh, 340px); min-height: 90px; overflow: auto; padding: 8px; border: 1px solid #e1e8e4; border-radius: 6px; background: #f6f8f6; }
+.tt-table-chat__empty { display: flex; align-items: flex-start; gap: 8px; color: #87948c; }
+.tt-table-chat__empty svg { flex: 0 0 auto; margin-top: 2px; color: #7e9a8a; }
+.tt-table-chat__empty p { margin: 0; font-size: 11px; line-height: 1.5; }
+.tt-table-chat__exchange { display: grid; min-width: 0; gap: 7px; }
+.tt-table-chat__user { display: grid; gap: 3px; justify-items: end; }
+.tt-table-chat__user > span { color: #87948c; font: 600 9px/1.3 var(--tt-mono); text-transform: uppercase; }
+.tt-table-chat__user > p { max-width: 94%; margin: 0; padding: 7px 9px; border: 1px solid #d9e8df; border-radius: 7px 7px 2px 7px; color: #405d4f; background: #eff7f1; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.tt-table-chat__answer { display: grid; gap: 7px; min-width: 0; padding: 9px; border: 1px solid #e0e7e2; border-radius: 7px 7px 7px 2px; color: #4a5d53; background: #fff; }
+.tt-table-chat__answer.is-proposal { border-color: #d5e2d8; background: #fbfdfb; }
+.tt-table-chat__answer-label { display: flex; align-items: center; gap: 6px; color: #64816f; }
+.tt-table-chat__answer-label > strong { font-size: 10px; }
+.tt-table-chat__answer > p { margin: 0; color: #465a50; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.tt-table-chat__references { display: flex; flex-wrap: wrap; gap: 5px; }
+.tt-table-chat__references > button { display: inline-flex; min-height: 30px; align-items: center; gap: 5px; padding: 3px 7px; border: 1px solid #dce7e0; border-radius: 999px; color: #496c58; background: #f7faf7; font: 600 10px/1.35 Manrope, 'Noto Sans Thai', sans-serif; cursor: pointer; }
+.tt-table-chat__references > button:hover { border-color: #b9d1c1; background: #eff7f1; }
+.tt-table-chat__action-preview { display: grid; gap: 5px; padding: 8px; border: 1px solid #dce6df; border-radius: 5px; background: #f7faf7; }
+.tt-table-chat__action-preview > strong { color: #365947; font-size: 11px; }
+.tt-table-chat__action-preview > div { display: flex; justify-content: space-between; gap: 8px; color: #728078; font-size: 10px; line-height: 1.4; }
+.tt-table-chat__action-preview > div b { color: #405d4f; font-weight: 700; text-align: right; overflow-wrap: anywhere; }
+.tt-table-chat__action-preview > p { margin: 0; color: #7f6335; font-size: 10px; line-height: 1.45; }
+.tt-table-chat__action-preview > .tt-table-chat__confirm-note { padding-top: 5px; border-top: 1px solid #e2eae4; color: #718078; }
+.tt-table-chat__answer-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.tt-table-chat__answer-actions .tt-button { min-height: 36px; gap: 5px; padding-inline: 9px; font-size: 10px; }
+.tt-table-chat__pending, .tt-table-chat__error { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px; border-radius: 5px; font-size: 10px; line-height: 1.45; }
+.tt-table-chat__pending { color: #567361; background: #f0f7f1; }
+.tt-table-chat__error { color: #9a4d3e; background: #fcf2ef; }
+.tt-table-chat__error > svg { flex: 0 0 auto; }
+.tt-table-chat__error > span { flex: 1 1 130px; }
+.tt-table-chat__error .tt-button { min-height: 32px; font-size: 10px; }
+.tt-table-chat__substatus { margin: 0; color: #7a6847; font-size: 10px; line-height: 1.45; }
+.tt-table-chat__check { min-height: 32px; justify-self: start; font-size: 10px; }
+.tt-table-chat__form { display: grid; gap: 8px; }
+.tt-table-chat__form > label:first-child { color: #456357; font-size: 11px; font-weight: 700; }
+.tt-table-chat__form textarea { width: 100%; min-height: 76px; padding: 9px; border: 1px solid #d7e2dc; border-radius: 5px; color: var(--tt-ink); background: #fff; font: 12px/1.5 Manrope, 'Noto Sans Thai', sans-serif; resize: vertical; }
+.tt-table-chat__form textarea:focus-visible { outline: 2px solid var(--tt-blue); outline-offset: 1px; }
+.tt-table-chat__privacy { border: 1px solid #e0e8e2; border-radius: 5px; background: #f8faf8; }
+.tt-table-chat__privacy > summary { padding: 7px 9px; color: #668074; font-size: 10px; font-weight: 700; cursor: pointer; }
+.tt-table-chat__privacy > p { margin: 0; padding: 0 9px 9px; color: #64756b; font-size: 10px; line-height: 1.5; }
+.tt-table-chat__consent { display: flex; align-items: flex-start; gap: 7px; color: #5f7167; font-size: 10px; line-height: 1.45; cursor: pointer; }
+.tt-table-chat__consent input { width: 15px; height: 15px; flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--tt-moss); }
+.tt-table-chat__form > .tt-button { min-height: 40px; justify-content: center; gap: 6px; font-size: 11px; }
+.tt-table-chat__notice { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 8px 9px; border: 1px solid #e9dfc8; border-radius: 5px; color: #7c6841; background: #fbf8f0; font-size: 10px; line-height: 1.5; }
+.tt-table-chat__notice > svg { flex: 0 0 auto; margin-top: 1px; }
+.tt-table-chat__boundary { padding-top: 1px; color: #79877e; font-size: 10px; }
+
+@media (max-width: 760px) {
+  .tt-table-assistant { gap: 11px; padding: 12px; }
+  .tt-table-assistant__modes > button { min-height: 40px; font-size: 12px; }
+  .tt-table-chat__thread { max-height: 240px; }
+  .tt-table-chat__links > button { min-height: 38px; font-size: 11px; }
+}
