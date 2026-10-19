@@ -264,3 +264,106 @@
 @media (prefers-reduced-motion: reduce) {
   .tt-public-demo *, .tt-public-demo *::before, .tt-public-demo *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Keep Thai copy and controls comfortable at small widths. */
+.tt-public-demo__eyebrow { font-size: 10px; }
+.tt-public-demo__intro p:not(.tt-public-demo__eyebrow) { font-size: 13px; }
+.tt-public-demo__scenario { min-height: 72px; }
+.tt-public-demo__scenario-copy small { font-size: 10px; }
+.tt-public-demo__scenario-copy strong { font-size: 13px; }
+.tt-public-demo__scenario-copy > span { font-size: 11px; white-space: normal; }
+.tt-public-demo__catalog-head > span,
+.tt-public-demo__stage-title .tt-public-demo__eyebrow,
+.tt-public-demo__outcome,
+.tt-public-demo__state-tag,
+.tt-public-demo__snapshot-head,
+.tt-public-demo__invoice-state > div > span,
+.tt-public-demo__invoice-rule,
+.tt-public-demo__physics-state > div > span,
+.tt-public-demo__expected > span,
+.tt-public-demo__snapshot-head small { font-size: 10px; }
+.tt-public-demo__persona strong { font-size: 13px; }
+.tt-public-demo__persona > div > span { font-size: 11px; white-space: normal; }
+.tt-public-demo__story-copy > span,
+.tt-public-demo__prompt > span { font-size: 10px; }
+.tt-public-demo__story-copy p,
+.tt-public-demo__prompt p,
+.tt-public-demo__expected p { font-size: 13px; }
+.tt-public-demo__actor-line { flex-wrap: wrap; font-size: 13px; }
+.tt-public-demo__actor-line > span:last-child { flex: 1 1 100%; overflow: visible; font-size: 13px; white-space: normal; }
+.tt-public-demo__snapshot-head { min-height: 38px; }
+.tt-public-demo__snapshot-head small { font-family: 'IBM Plex Mono', monospace; }
+.tt-public-demo__revision-line span { font-size: 10px; }
+.tt-public-demo__revision-line strong { font-size: 10px; }
+.tt-public-demo__no-state { font-size: 12px; }
+.tt-public-demo__invoice-state > div > span { overflow-wrap: anywhere; line-height: 1.4; }
+.tt-public-demo__invoice-rule { flex-wrap: wrap; }
+.tt-public-demo__physics-state > div > strong small { font-size: 10px; }
+.tt-public-demo__character > div > strong { font-size: 12px; }
+.tt-public-demo__character > div > span { font-size: 11px; }
+.tt-public-demo__character b { font-size: 10px; }
+.tt-public-demo__privacy-mark { font-size: 11px; }
+.tt-public-demo__filters button { min-height: 42px; font-size: 12px; }
+.tt-public-demo__filters button > small { min-width: 20px; height: 20px; font-size: 10px; }
+.tt-public-demo__play-row { flex-wrap: wrap; row-gap: 7px; }
+.tt-public-demo__play { min-height: 44px; }
+.tt-public-demo__transport { width: 42px; min-height: 42px; }
+.tt-public-demo__restart { min-height: 42px; font-size: 11px; }
+.tt-public-demo__timeline { width: 100%; max-width: 100%; min-width: 0; }
+.tt-public-demo__timeline button { min-height: 48px; }
+.tt-public-demo__timeline button > span { font-size: 10px; }
+.tt-public-demo__timeline button > small { font-size: 10px; }
+.tt-public-demo__playback-foot { flex-wrap: wrap; font-size: 10px; }
+.tt-public-demo__footer { font-size: 10px; }
+
+@media (max-width: 680px) {
+  .tt-public-demo__topbar { flex-wrap: wrap; min-height: 0; gap: 4px 10px; padding: 8px 0; }
+  .tt-public-demo__top-note { order: 3; flex: 1 0 100%; margin-right: 0; padding-bottom: 3px; font-size: 11px; }
+  .tt-public-demo__home { min-height: 42px; font-size: 11px !important; }
+  .tt-public-demo__intro p:not(.tt-public-demo__eyebrow) { font-size: 13px; }
+  .tt-public-demo__story-copy p,
+  .tt-public-demo__prompt p,
+  .tt-public-demo__expected p { font-size: 13px; }
+  .tt-public-demo__scenario { min-height: 76px; }
+  .tt-public-demo__stage-heading { flex-wrap: wrap; align-items: flex-start; }
+  .tt-public-demo__story { grid-template-columns: minmax(100px, .7fr) minmax(130px, 1fr); }
+  .tt-public-demo__actor-line > span:last-child { flex-basis: 100%; }
+}
+@media (max-width: 380px) {
+  .tt-public-demo { padding-inline: 8px; }
+  .tt-public-demo__topbar { gap: 4px 8px; }
+  .tt-public-demo__brand { font-size: 15px; }
+  .tt-public-demo__top-note { font-size: 11px; }
+  .tt-public-demo__home { min-height: 42px; font-size: 11px !important; }
+  .tt-public-demo__intro { grid-template-columns: 39px minmax(0, 1fr); gap: 10px; }
+  .tt-public-demo__intro h1 { font-size: 18px; }
+  .tt-public-demo__intro p:not(.tt-public-demo__eyebrow) { font-size: 13px; }
+  .tt-public-demo__filters { gap: 5px; }
+  .tt-public-demo__filters button { min-height: 42px; gap: 5px; padding-inline: 7px; font-size: 11px; }
+  .tt-public-demo__stage-heading { gap: 8px; padding: 10px 9px; }
+  .tt-public-demo__stage-title { flex: 1 1 100%; gap: 7px; }
+  .tt-public-demo__stage-title h2 { max-width: 100%; font-size: 14px; white-space: normal; overflow-wrap: anywhere; }
+  .tt-public-demo__state-tag { min-height: 30px; font-size: 10px; }
+  .tt-public-demo__story { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 11px 9px; }
+  .tt-public-demo__prompt { padding: 8px 0 0; border-top: 1px solid #e7ece9; border-left: 0; }
+  .tt-public-demo__prompt p,
+  .tt-public-demo__story-copy p,
+  .tt-public-demo__expected p { font-size: 13px; }
+  .tt-public-demo__record { padding-inline: 9px; }
+  .tt-public-demo__record-head { flex-wrap: wrap; }
+  .tt-public-demo__record-head h3 { font-size: 14px; }
+  .tt-public-demo__outcome { min-height: 30px; font-size: 10px; }
+  .tt-public-demo__invoice-state { grid-template-columns: 1.25fr .8fr .9fr; gap: 5px; margin: 6px; padding: 8px 6px; }
+  .tt-public-demo__invoice-state > div > span { font-size: 10px; }
+  .tt-public-demo__invoice-state > div > strong { font-size: 12px; }
+  .tt-public-demo__invoice-state .tt-public-demo__invoice-total > strong { font-size: 14px; }
+  .tt-public-demo__physics-state { gap: 8px; margin: 6px; padding-inline: 8px; }
+  .tt-public-demo__characters { margin-inline: 6px; }
+  .tt-public-demo__playback { padding-inline: 8px; }
+  .tt-public-demo__play { min-width: 84px; }
+  .tt-public-demo__restart { margin-left: 0; padding-inline: 7px; }
+  .tt-public-demo__timeline { overflow-x: auto; }
+  .tt-public-demo__timeline button > span { font-size: 10px; }
+  .tt-public-demo__playback-foot { font-size: 10px; }
+  .tt-public-demo__footer { flex-wrap: wrap; font-size: 10px; }
+}

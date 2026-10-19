@@ -199,7 +199,7 @@ function RecordedState({ scenario, stepIndex }: { scenario: PublicDemoScenario; 
         {checkpoint.totals.expectedSatang !== undefined && <div className="tt-public-demo__invoice-total"><span>ยอดที่คาดไว้</span><strong>฿{money(checkpoint.totals.expectedSatang)}</strong></div>}
         {checkpoint.totals.deltaSatang !== undefined && <div><span>ผลต่าง</span><strong className={checkpoint.totals.deltaSatang === 0 ? 'is-zero' : 'is-delta'}>{signedMoney(checkpoint.totals.deltaSatang)}</strong></div>}
         {checkpoint.totals.unknownCount !== undefined && <div><span>รายการที่ยังไม่ทราบ</span><strong>{checkpoint.totals.unknownCount}</strong></div>}
-        <div className="tt-public-demo__invoice-rule"><span>ข้อมูลจริงแสดงตามที่มีในบันทึก</span><i aria-hidden="true" /></div>
+        <div className="tt-public-demo__invoice-rule"><span>แสดงเฉพาะค่าจากบันทึกตัวอย่าง</span><i aria-hidden="true" /></div>
       </div>}
       {scenario.domain === 'teaching' && checkpoint.physics && <div className="tt-public-demo__physics-state" aria-label="ค่าฟิสิกส์ที่บันทึก">
         {([['แรง', checkpoint.physics.force, 'N'], ['มวล', checkpoint.physics.mass, 'kg'], ['เวลา', checkpoint.physics.time, 's'], ['ความเร่ง', checkpoint.physics.acceleration, 'm/s²'], ['ความเร็ว', checkpoint.physics.velocity, 'm/s'], ['ระยะทาง', checkpoint.physics.position, 'm']] as const).filter(([, value]) => value !== undefined).map(([label, value, unit]) => <div key={label}><span>{label}</span><strong>{value}<small>{unit}</small></strong></div>)}

@@ -68,6 +68,8 @@ jobs:
             test-results/cloudflare-report.json
             test-results/tabletop-r1/report.json
             test-results/cloudflare-browser/report.json
+            test-results/cloudflare-browser/public-demo-desktop.png
+            test-results/cloudflare-browser/public-demo-narrow.png
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore
