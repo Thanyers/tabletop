@@ -90,7 +90,7 @@ D1 กับ DO ไม่อยู่ใน transaction เดียวกัน
 
 ## ส่งรุ่นใหม่และกู้คืน
 
-1. เปิด branch งานจาก `feat/tabletop-r1` ตาม [CONTRIBUTING](../CONTRIBUTING.md) ตรวจ diff และ CI ก่อนขอ review; การ merge main ต้องเป็นการตัดสินใจของผู้ดูแล repo
+1. เปิด branch งานจาก `main` ตาม [CONTRIBUTING](../CONTRIBUTING.md) ตรวจ diff และ CI ก่อนขอ review แล้วจึง merge ผ่าน PR
 2. ก่อน deploy ให้ operator ตรวจ Worker/D1/DO เป้าหมาย, current version, bindings, secrets ที่มี, migration ที่ใช้แล้ว และ source commit อย่าคัดลอก ID หรือ secret ลงไฟล์ tracked
 3. ถ้าจะเขียนฐานหรือเปลี่ยน schema ถาวร ต้องระบุ environment/table/operation/ขอบเขต/จำนวนแถวและแผนกู้คืนเพื่อขออนุมัติก่อน จากนั้นใช้ scope เดิมและตรวจผล ไม่ถือว่าคำขอแก้ UI อนุมัติ migration ด้วย
 4. ทดลอง staging ด้วยข้อมูลจำลอง ตรวจ served asset hashes, health/readiness/capabilities และ UI จริงที่เปลี่ยน แล้วจึงส่ง commit ที่ตรวจแล้วขึ้น production ภายใต้ขอบเขตที่อนุมัติ

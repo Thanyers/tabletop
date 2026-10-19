@@ -4,7 +4,7 @@
 
 **สถานะ 19 ตุลาคม 2026:** รุ่นทดสอบเปิดใช้งานบน Cloudflare แล้ว รองรับไฟล์ของผู้ใช้, Google login, multiplayer, แชท AI และกลับมาเล่นต่อ มีเดโมสาธารณะที่หยุดแล้วลองเองได้
 
-**ทีมที่รับงานต่อให้เริ่มจาก branch [`feat/tabletop-r1`](https://github.com/Thanyers/tabletop/tree/feat/tabletop-r1)** ซึ่งมี source ของรุ่นที่ deploy อยู่และเอกสารชุดนี้ การพิจารณารวมเข้า `main` อยู่ใน [draft PR #2](https://github.com/Thanyers/tabletop/pull/2)
+**ทีมที่รับงานต่อให้เริ่มจาก branch [`main`](https://github.com/Thanyers/tabletop/tree/main)** งาน implementation และเอกสารชุดนี้รวมเข้า main ผ่าน [PR #2](https://github.com/Thanyers/tabletop/pull/2) แล้ว ส่วน commit ที่เปิดใช้งานจริงตรวจได้จาก [Deployment](docs/DEPLOYMENTS.md)
 
 ## เปิดใช้งานที่ไหน
 
@@ -56,7 +56,7 @@ AI สร้างข้อเสนอที่อาจต้องแก้�
 ใช้ Node.js **22.23.2** ตาม CI และ npm จากนั้นรันจาก root ของ repo:
 
 ```powershell
-git clone --branch feat/tabletop-r1 https://github.com/Thanyers/tabletop.git
+git clone --branch main https://github.com/Thanyers/tabletop.git
 cd tabletop
 npm ci
 npm run build

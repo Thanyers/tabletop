@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 2026-10-19 — team handoff
 
 - เพิ่มคู่มือภาษาไทยสำหรับผู้เล่นและผู้พัฒนา ภาพหน้าจอ public demo ไฟล์ตัวอย่างสามโจทย์ และดัชนี deployment เอกสารเปลี่ยนได้โดยไม่ deploy แอปใหม่
+- รวม implementation และเอกสารเข้า `main` ผ่าน [PR #2](https://github.com/Thanyers/tabletop/pull/2) แล้ว และปรับวิธี clone/ส่ง PR ให้เริ่มจาก main
 
 ## 2026-10-19 — prepared demo art (`f1725c8`)
 
