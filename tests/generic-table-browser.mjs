@@ -113,6 +113,30 @@ function buildChange(kind, sourceId) {
   ] } };
 }
 
+const expectedRules = {
+  equipment: [
+    { action: 'Borrow equipment', rows: [
+      { predicate: 'Item · Available equals Yes', message: 'This item is already reserved.' },
+    ] },
+    { action: 'Return equipment', rows: [
+      { predicate: 'Item · Borrower equals the acting member', message: 'Only the borrower may return this item.' },
+    ] },
+  ],
+  shifts: [
+    { action: 'Swap shifts', rows: [
+      { predicate: 'First person does not equal Second person', message: 'Select two different people.' },
+      { predicate: 'First person · Seat equals the current seat', message: 'Start with your own shift.' },
+      { predicate: 'First person · Available shifts contains Second person · Shift', message: 'The first person is unavailable for that shift.' },
+      { predicate: 'Second person · Available shifts contains First person · Shift', message: 'The second person is unavailable for that shift.' },
+    ] },
+  ],
+  game: [
+    { action: 'Advance boat', rows: [
+      { predicate: 'Your boat · Seat equals the current seat', message: 'Choose your own boat.' },
+    ] },
+  ],
+};
+
 function isCommandResponse(response, type) {
   if (!response.url().endsWith('/commands') || response.request().method() !== 'POST') return false;
   try { return response.request().postDataJSON()?.type === type; }
@@ -193,11 +217,23 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   return current;
 }
 
-async function progressThroughLifecycle(owner, tableId, api) {
+async function progressThroughLifecycle(owner, tableId, api, rules) {
   await owner.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.rules').click();
   const editor = owner.getByTestId('canvas-object-editor');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
-  await expect(editor.locator('.tt-table-rule-list')).toContainText('equals');
+  const proposedRules = editor.getByRole('region', { name: 'Proposed rules', exact: true });
+  await expect(proposedRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
+  for (const rule of rules) {
+    const action = proposedRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
+    await expect(action).toHaveCount(1);
+    const conditionRows = action.locator('.tt-table-rule-list li');
+    await expect(conditionRows).toHaveCount(rule.rows.length);
+    for (let index = 0; index < rule.rows.length; index += 1) {
+      const row = conditionRows.nth(index);
+      await expect(row.locator('strong')).toHaveText(rule.rows[index].predicate);
+      await expect(row.locator('span')).toHaveText(rule.rows[index].message);
+    }
+  }
   const proposedRows = editor.locator('.tt-table-proposed-records').first();
   await expect(proposedRows).toBeVisible();
   await proposedRows.locator('summary').click();
@@ -265,7 +301,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   const room = await openNewTable(owner, api);
   const source = await addSource(owner, room.id, fixtures.equipment, api);
   await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api);
-  let active = await progressThroughLifecycle(owner, room.id, api);
+  let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
   const firstInvite = await inviteMember(owner, 1);
@@ -298,7 +334,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   const room = await openNewTable(owner, api);
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
   await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api);
-  await progressThroughLifecycle(owner, room.id, api);
+  await progressThroughLifecycle(owner, room.id, api, expectedRules.shifts);
   const invite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
   await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
@@ -319,7 +355,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, mark }
   const room = await openNewTable(owner, api);
   const source = await addSource(owner, room.id, fixtures.game, api);
   await requestProposal(owner, room.id, source, buildChange('game', source.id), setTableReply, api);
-  let active = await progressThroughLifecycle(owner, room.id, api);
+  let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
   expect(active.domain.turn).toBe('host');
   const invite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
@@ -348,7 +384,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, mark }
   revisedProgram.actions.find((action) => action.id === 'advance').effects[0].value = literal(3);
   const revisedChange = { kind: 'table', program: revisedProgram, initialRecords: {} };
   await requestProposal(owner, room.id, source, revisedChange, setTableReply, api);
-  active = await progressThroughLifecycle(owner, room.id, api);
+  active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);
   expect(active.domain.turn).toBe('host');
