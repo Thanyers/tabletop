@@ -120,7 +120,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   const heldTime = await workbench.locator('.tt-countdown').innerText();
   // Practice lets a person read and switch roles beyond the live reaction limit.
   await page.waitForTimeout(31_100);
-  await expect(workbench.locator('.tt-countdown')).toHaveText(heldTime);
+  await expect(workbench.locator('.tt-countdown')).toHaveText(heldTime, { useInnerText: true });
   await workbench.getByRole('button', { name: 'Shield ally · Pip', exact: true }).click();
   await page.getByLabel('ลองเป็น', { exact: true }).selectOption('practice-dm');
   await workbench.getByRole('button', { name: 'Resolve hit', exact: true }).click();
