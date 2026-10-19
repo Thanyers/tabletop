@@ -189,7 +189,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(forceField).toHaveValue('13');
 
   await fresh('encounter-shield'); await next(); await open('encounter.source');
-  const allyControl = editor.getByLabel('Allow shielding an ally', { exact:true });
+  const allyControl = editor.getByRole('checkbox', { name:/^Allow shielding an ally/ });
   const allyBefore = await allyControl.isChecked();
   await page.getByRole('button', { name:'เล่นเดโม', exact:true }).click();
   await allyControl.click();
