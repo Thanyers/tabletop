@@ -1,0 +1,8 @@
+{
+  "policy": "Swap two different people only when both are available for their new slot. Each slot can have only one person. You may initiate a swap only for your own seat.",
+  "people": [
+    { "id": "ada", "name": "Ada", "seat": "host", "slot": "morning", "available": ["morning", "evening"] },
+    { "id": "bo", "name": "Bo", "seat": "member-1", "slot": "evening", "available": ["morning", "evening"] },
+    { "id": "cy", "name": "Cy", "seat": "member-2", "slot": "night", "available": ["night"] }
+  ]
+}

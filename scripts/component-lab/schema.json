@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "explanation", "html", "css", "js", "settings"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1, "maxLength": 90 },
+    "explanation": { "type": "string", "minLength": 1, "maxLength": 900 },
+    "html": { "type": "string", "minLength": 1, "maxLength": 16000 },
+    "css": { "type": "string", "maxLength": 16000 },
+    "js": { "type": "string", "minLength": 1, "maxLength": 24000 },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bpm", "toleranceMs", "splitHands", "appearance"],
+      "properties": {
+        "bpm": { "type": "integer", "minimum": 30, "maximum": 240 },
+        "toleranceMs": { "type": "integer", "minimum": 10, "maximum": 1000 },
+        "splitHands": { "type": "boolean" },
+        "appearance": { "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    }
+  }
+}

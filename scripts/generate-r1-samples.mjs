@@ -1,0 +1,14 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { makeTextPdf } from '../tests/pdf-fixture.mjs';
+const folder = new URL('../public/samples/r1/', import.meta.url);
+await mkdir(folder, { recursive: true });
+const shipments = 'shipment_id,zone,service_date,weight_gram,remote\nALT-BKK-20,bangkok,2026-10-20,1100,true\nALT-REG-20,regional,2026-10-20,1100,true\nALT-BOUNDARY,bangkok,2026-10-14,1000,false\n';
+const invoice = ['TABLETOP INVOICE V1', 'shipment_id,billed_thb,currency', 'ALT-BKK-20,52.50,THB', 'ALT-REG-20,62.50,THB', 'ALT-BOUNDARY,40.00,THB'];
+const rate = ['TABLETOP SAMPLE RATE CARD - synthetic review evidence', 'Currency: THB. Service date uses Asia/Bangkok calendar dates.', 'Base before 2026-10-15: Bangkok 40.00, regional 50.00.', 'Base from 2026-10-15: Bangkok 35.00, regional 45.00.', 'Each started kilogram above 1000 grams adds 10.00.', 'Remote-area addendum: add 7.50 on and after 2026-10-20.', 'Remote-area addendum applies to Bangkok and regional zones.', 'No end date is specified. These are fictional training rates.'];
+await writeFile(new URL('shipments.csv', folder), shipments);
+await writeFile(new URL('invoice.csv', folder), invoice.slice(1).join('\n') + '\n');
+await writeFile(new URL('invoice.pdf', folder), makeTextPdf(invoice));
+await writeFile(new URL('rate-card.pdf', folder), makeTextPdf(rate));
+await writeFile(new URL('rate-card.txt', folder), rate.join('\n'));
+process.stdout.write(`Created synthetic sample files in ${fileURLToPath(folder)}\n`);

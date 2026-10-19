@@ -1,0 +1,372 @@
+// Disposable local Workers runtime. All accounts and session tokens below are synthetic.
+import { Miniflare, Log, LogLevel, convertV4MiniflareOptions } from 'miniflare';
+import { chromium, expect } from '@playwright/test';
+import { createHash, randomUUID } from 'node:crypto';
+import { createServer } from 'node:net';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
+import { verifyInteractiveDemo } from './interactive-demo.mjs';
+import { verifyGenericTableBrowser } from './generic-table-browser.mjs';
+
+const listener = createServer();
+await new Promise(resolveReady => listener.listen(0, '127.0.0.1', resolveReady));
+const port = listener.address().port;
+await new Promise(resolveClosed => listener.close(resolveClosed));
+const origin = `http://127.0.0.1:${port}`;
+const hash = text => createHash('sha256').update(text).digest('hex');
+const csrf = token => createHash('sha256').update(`tabletop-csrf-v1:${token}`).digest('base64url');
+const output = resolve('test-results/cloudflare-browser');
+let providerCalls = 0;
+let tableAIReply = null;
+let tableAssistantReply = null;
+const modelStatuses = [];
+await mkdir(output, { recursive: true });
+const mf = new Miniflare(convertV4MiniflareOptions({
+  host: '127.0.0.1', port,
+  log: new Log(LogLevel.ERROR),
+  workers: [{
+  name: 'tabletop-local-browser-fixture',
+  modules: true, scriptPath: resolve('worker-build/index.js'),
+  compatibilityDate: '2026-10-18', compatibilityFlags: ['nodejs_compat'],
+  d1Databases: ['DB'],
+  durableObjects: { ROOMS: { className: 'Room', useSQLite: true }, BILLING: { className: 'Billing', useSQLite: true } },
+  bindings: { PUBLIC_ORIGIN: origin, GOOGLE_OAUTH_CLIENT_ID: 'synthetic-client', GOOGLE_OAUTH_CLIENT_SECRET: 'synthetic-secret',
+    DEEPSEEK_KEY: 'synthetic-provider-key', AI_MONTHLY_BUDGET_MICRO_USD: '1000000', AI_DAILY_BUDGET_MICRO_USD: '1000000' },
+  outboundService: async request => {
+    if (request.url !== 'https://api.deepseek.com/chat/completions') throw new Error('Unexpected external request in isolated browser test');
+    providerCalls++;
+    const body = await request.json();
+    expect(JSON.stringify(body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
+    expect(body.model).toBe('deepseek-flash');
+    const input = JSON.parse(body.messages?.[1]?.content ?? '{}');
+    let change;
+    if (input.kind === 'table-assistant') {
+      if (!tableAssistantReply) throw new Error('Unexpected table assistant request without an armed synthetic response.');
+      expect(Object.keys(input).sort()).toEqual(['context', 'kind', 'prompt']);
+      expect(Object.keys(input.context).sort()).toEqual(['conversation', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(Array.isArray(input.context.conversation)).toBe(true);
+      expect(input.context.conversation.length).toBeLessThanOrEqual(6);
+      if (input.context.program) {
+        expect(input.context.program).not.toHaveProperty('evidence');
+        expect(input.context.program).not.toHaveProperty('assumptions');
+      }
+      if (tableAssistantReply.expectedRole) expect(input.context.role).toBe(tableAssistantReply.expectedRole);
+      if (tableAssistantReply.expectedSeat) expect(input.context.seat).toBe(tableAssistantReply.expectedSeat);
+      for (const marker of tableAssistantReply.forbiddenTexts ?? []) expect(JSON.stringify(input)).not.toContain(marker);
+      for (const marker of tableAssistantReply.expectedConversationContains ?? []) expect(JSON.stringify(input.context.conversation)).toContain(marker);
+      if (tableAssistantReply.expectedConversationCount !== undefined) expect(input.context.conversation).toHaveLength(tableAssistantReply.expectedConversationCount);
+      expect(typeof input.prompt).toBe('string');
+      if (tableAssistantReply.expectedPromptContains) expect(input.prompt).toContain(tableAssistantReply.expectedPromptContains);
+      change = tableAssistantReply.result;
+      tableAssistantReply = null;
+    } else if (input.kind === 'table') {
+      if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
+      expect(input.sources).toHaveLength(1);
+      expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);
+      expect(input.sources[0].text).toBe(tableAIReply.expectedText);
+      expect(typeof input.prompt).toBe('string');
+      change = tableAIReply.change;
+      tableAIReply = null;
+    } else {
+      change = { kind: 'encounter', rule: { allyTarget: true, apCost: 1, oncePerTurn: true } };
+    }
+    return Response.json({ model: 'deepseek-flash',
+      choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(change) } }],
+      usage: { prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 30, completion_tokens_details: { reasoning_tokens: 0 } },
+    });
+  },
+  assets: { directory: resolve('dist'), binding: 'ASSETS',
+    run_worker_first: ['/api/*', '/healthz', '/readyz', '/internal/*'],
+    routerConfig: { has_user_worker: true },
+    assetConfig: { not_found_handling: 'single-page-application' } },
+  }],
+}));
+const checks = []; const errors = []; const pages = [];
+let browser;
+const mark = value => { checks.push(value); console.log('PASS ' + value); };
+try {
+  await mf.ready;
+  const db = await mf.getD1Database('DB');
+  for (const migration of ['0001_identity.sql', '0002_table_kind.sql']) {
+    const schema = await readFile(`cloudflare/migrations/${migration}`, 'utf8');
+    await db.batch(schema.replace(/^--.*$/gmu, '').split(';').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
+  }
+  const actors = ['DM', 'Mira', 'Pip', 'Outsider'].map((name, i) => ({ id: randomUUID(), name, token: String.fromCharCode(65 + i).repeat(43) }));
+  const genericOwners = ['Equipment Owner', 'Shift Owner', 'Game Owner'].map((name, i) => ({ id: randomUUID(), name, token: String.fromCharCode(69 + i).repeat(43) }));
+  const genericMembers = ['Table Member', 'Second Member'].map((name, i) => ({ id: randomUUID(), name, token: String.fromCharCode(72 + i).repeat(43) }));
+  const now = Date.now();
+  for (const actor of [...actors, ...genericOwners, ...genericMembers]) await db.batch([
+    db.prepare('INSERT INTO users(id,provider_sub,email,name,is_admin,created_at) VALUES(?,?,?,?,?,?)')
+      .bind(actor.id, `fixture:${actor.id}`, `${actor.name.toLowerCase()}@example.test`, actor.name, actor.name === 'DM' ? 1 : 0, now),
+    db.prepare('INSERT INTO web_sessions(token_hash,csrf_hash,user_id,created_at,last_seen_at,expires_at) VALUES(?,?,?,?,?,?)')
+      .bind(hash(actor.token), hash(csrf(actor.token)), actor.id, now, now, now + 7 * 86_400_000),
+  ]);
+  const probe = await fetch(`${origin}/api/auth/status`);
+  if (!probe.ok) throw new Error(`Fixture auth readiness: ${probe.status} ${(await probe.text()).slice(0, 1600)}`);
+  browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
+  async function newPage(actor, url = origin) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    if (actor) await context.addCookies([{ name: 'tabletop_local_session', value: actor.token, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+    const page = await context.newPage(); pages.push(page);
+    page.on('pageerror', error => errors.push(error.message));
+    // The fixture cannot contact a real identity or model provider from the browser.
+    await page.route(/https:\/\/(accounts\.google\.com|api\.deepseek\.com)\//, route => route.abort());
+    await page.goto(url); await page.waitForLoadState('networkidle');
+    return page;
+  }
+  async function api(page, path, body) {
+    return page.evaluate(async ({ path, body }) => {
+      const session = await (await fetch('/api/session')).json();
+      const response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken }, body: JSON.stringify(body) });
+      return { status: response.status, body: await response.json() };
+    }, { path, body });
+  }
+  async function openCanvasObject(page, id) {
+    await expect(page.getByRole('button', { name: 'Canvas', exact:true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('canvas-object-dock').getByTestId(`open-canvas-${id}`).click();
+    await expect(page.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', id);
+    await expect(page.getByTestId('canvas-object-editor')).toBeVisible();
+  }
+  const anonymous = await newPage();
+  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
+  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
+  expect((await api(anonymous, '/api/session')).status).toBe(401);
+  mark('Anonymous browser is gated by Google sign-in; no guest account is created');
+
+  // Both public experiences must stay separate from authenticated application sessions.
+  const publicDemoRequests = []; const publicDemoSockets = [];
+  const demoContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const demo = await demoContext.newPage(); pages.push(demo);
+  demo.on('pageerror', error => errors.push(error.message));
+  demoContext.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin !== origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/internal/')) {
+      publicDemoRequests.push({ method: request.method(), pathname: url.pathname });
+    }
+  });
+  demo.on('websocket', socket => publicDemoSockets.push(socket.url()));
+  demoContext.on('page', page => {
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('websocket', socket => publicDemoSockets.push(socket.url()));
+  });
+  await demo.route(url => url.origin !== origin, route => route.abort());
+  const identityCounts = async () => ({
+    users: (await db.prepare('SELECT COUNT(*) AS n FROM users').first()).n,
+    sessions: (await db.prepare('SELECT COUNT(*) AS n FROM web_sessions').first()).n,
+    rooms: (await db.prepare('SELECT COUNT(*) AS n FROM rooms').first()).n,
+  });
+  const beforeDemo = await identityCounts();
+  await verifyInteractiveDemo(demo, origin, output);
+  expect(publicDemoRequests).toEqual([]); expect(publicDemoSockets).toEqual([]);
+  expect(await identityCounts()).toEqual(beforeDemo);
+  expect(await demoContext.cookies()).toEqual([]);
+  expect(providerCalls).toBe(0);
+  mark('Canvas demo starts empty, imports by drag/drop, opens rules on canvas and supports takeover, role isolation and narrow layout without API calls or persistent storage');
+  await demo.setViewportSize({ width: 1440, height: 1000 });
+  await demo.goto(`${origin}/demo/replay?legacy-demo=1`);
+  await expect(demo.getByTestId('public-auto-demo')).toBeVisible();
+  await expect(demo.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
+  const demoCounter = demo.getByTestId('demo-step-counter');
+  const firstDemoStep = await demoCounter.innerText();
+  await demo.getByRole('button', { name: 'เล่นเรื่องนี้', exact: true }).click();
+  await expect.poll(() => demoCounter.innerText(), { timeout: 12_000 }).not.toBe(firstDemoStep);
+  // The first invoice story has two steps and must stop at its end.
+  await expect(demo.getByRole('button', { name: 'หยุดเล่นชั่วคราว', exact: true })).toHaveCount(0);
+  await demo.getByRole('button', { name: 'เริ่มใหม่', exact: true }).click();
+  await expect(demoCounter).toHaveText(firstDemoStep);
+  await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await expect(demoCounter).not.toHaveText(firstDemoStep);
+  await demo.getByRole('button', { name: 'ย้อนหนึ่งจังหวะ', exact: true }).click();
+  await expect(demoCounter).toHaveText(firstDemoStep);
+  await demo.getByRole('button', { name: 'บทเรียน', exact: true }).click();
+  await demo.getByRole('button', { name: 'โจทย์ร่วม คำตอบแยกคน', exact: true }).click();
+  await expect(demo.getByTestId('demo-checkpoint')).toContainText('มวล');
+  await demo.getByRole('button', { name: 'เล่นเรื่องนี้', exact: true }).click();
+  await demo.getByRole('button', { name: 'หยุดเล่นชั่วคราว', exact: true }).click();
+  await expect(demo.getByRole('button', { name: 'เล่นเรื่องนี้', exact: true })).toBeVisible();
+  await demo.getByRole('button', { name: 'กลับมาตอบโจทย์เก่า', exact: true }).click();
+  await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await expect(demo.getByTestId('public-auto-demo')).toContainText('ระบบให้โหลดโจทย์ปัจจุบันก่อนตอบใหม่');
+  await demo.getByRole('button', { name: 'การผจญภัย', exact: true }).click();
+  await demo.getByRole('button', { name: 'ช่วยเพื่อนด้วยโล่', exact: true }).click();
+  for (let step = 1; step < 9; step++) await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await expect(demo.getByTestId('demo-checkpoint')).toContainText('Pip');
+  await expect(demo.getByTestId('demo-checkpoint')).toContainText('Mira');
+  await expect(demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true })).toBeDisabled();
+  await demo.getByRole('button', { name: 'ทุกโต๊ะ', exact: true }).click();
+  for (const title of ['บิลที่ยังขาดหลักฐาน', 'อัตราที่ใช้ได้เฉพาะช่วงวันที่', 'กติกาซ้อนและการกดซ้ำ',
+    'โจทย์ร่วม คำตอบแยกคน', 'กลับมาตอบโจทย์เก่า', 'มวลศูนย์ที่คำนวณไม่ได้',
+    'ช่วยเพื่อนด้วยโล่', 'พักเกมแล้วกลับมาเล่นต่อ', 'คำอนุมัติที่หมดอายุ']) {
+    await expect(demo.getByRole('button', { name: title, exact: true })).toBeVisible();
+    await demo.getByRole('button', { name: title, exact: true }).click();
+    await expect(demo.getByRole('button', { name: 'ย้อนหนึ่งจังหวะ', exact: true })).toBeDisabled();
+    await demo.getByRole('list', { name: 'ลำดับการเล่น' }).getByRole('button').last().click();
+    await expect(demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true })).toBeDisabled();
+    await expect(demo.getByRole('button', { name: 'เล่นเรื่องนี้อีกครั้ง', exact: true })).toBeEnabled();
+  }
+  await demo.screenshot({ path: join(output, 'public-demo-desktop.png'), fullPage: true });
+  await demo.setViewportSize({ width: 304, height: 844 });
+  await demo.reload();
+  await expect(demo.getByTestId('public-auto-demo')).toBeVisible();
+  expect(await demo.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await demo.getByRole('button', { name: 'ไปจังหวะถัดไป', exact: true }).click();
+  await demo.getByRole('button', { name: 'ย้อนหนึ่งจังหวะ', exact: true }).click();
+  await demo.screenshot({ path: join(output, 'public-demo-narrow.png'), fullPage: true });
+  expect(publicDemoRequests).toEqual([]); expect(publicDemoSockets).toEqual([]);
+  expect(await identityCounts()).toEqual(beforeDemo);
+  expect(await demoContext.cookies()).toEqual([]);
+  expect(providerCalls).toBe(0);
+  await demoContext.close();
+  mark('Public Auto demo plays nine recorded stories without sign-in, API calls, sockets, cookies, AI or room creation; narrow controls and reload work');
+
+  const dm = await newPage(actors[0]);
+  dm.on('response', async response => {
+    if (/\/model(?:\/[a-f0-9]{64})?$/.test(new URL(response.url()).pathname)) {
+      const body = await response.json().catch(() => null);
+      modelStatuses.push({ http: response.status(), body });
+    }
+  });
+  await expect(dm.getByRole('heading', { name: 'Choose a table' })).toBeVisible();
+  await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
+  const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
+  await dm.getByRole('button', { name: /Shared encounter.*Run turns/ }).click();
+  const createdResponse = await created;
+  expect(createdResponse.status()).toBe(201);
+  let room = await createdResponse.json();
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
+  let miraInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'mira' });
+  const pipInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'pip' });
+  expect(miraInvite.status).toBe(201); expect(pipInvite.status).toBe(201);
+  // The first response is intentionally ignored by the owner UI, like a lost acknowledgement.
+  const lostTicket = miraInvite.body.ticket;
+  await openCanvasObject(dm, 'workspace.people');
+  await dm.getByTestId('canvas-object-editor').getByRole('button', { name: 'Invite someone', exact: true }).click();
+  const inviteDialog = dm.getByRole('dialog', { name: 'People at this table' });
+  await inviteDialog.getByRole('button', { name: /Mira.*Player view/ }).click();
+  await inviteDialog.getByText('Lost an unused invitation link?', { exact: true }).click();
+  const inviteReplacement = dm.waitForResponse(response => response.url().endsWith(`/workspaces/${room.id}/invites`) && response.request().method() === 'POST');
+  await inviteDialog.getByRole('button', { name: 'Revoke old link and issue new link' }).click();
+  const replacementResponse = await inviteReplacement;
+  expect(replacementResponse.status()).toBe(201);
+  miraInvite = { status: 201, body: await replacementResponse.json() };
+  expect(miraInvite.body.ticket).not.toBe(lostTicket);
+  await expect(inviteDialog.getByLabel('One-use invitation link')).toHaveValue(new RegExp(miraInvite.body.ticket));
+  await inviteDialog.getByRole('button', { name: 'Close', exact: true }).click();
+  mark('Owner recovers a lost invitation through explicit revoke-and-reissue in the UI');
+  // Simulate the return from verified Google login. The actual OAuth exchange is tested in auth.test.ts.
+  await anonymous.goto(`${origin}/#invite=${miraInvite.body.ticket}`);
+  await expect(anonymous.getByText('Your invitation is saved in this tab and will be used after sign-in.')).toBeVisible();
+  expect(new URL(anonymous.url()).hash).toBe('');
+  await anonymous.context().addCookies([{ name: 'tabletop_local_session', value: actors[1].token, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  await anonymous.goto(origin);
+  const mira = anonymous;
+  await expect(mira.locator('.tt-canvas-panel')).toBeVisible();
+  const pip = await newPage(actors[2], `${origin}/#invite=${pipInvite.body.ticket}`);
+  await expect(pip.locator('.tt-canvas-panel')).toBeVisible();
+  expect(await mira.evaluate(() => sessionStorage.getItem('tabletop.pendingInvite'))).toBeNull();
+  await expect.poll(async () => (await api(dm, `/api/workspaces/${room.id}`)).body.members.length).toBe(3);
+  mark('Three separate accounts join assigned seats; invitation survives the sign-in round trip');
+
+  async function command(page, type, payload = {}) {
+    const current = await api(page, `/api/workspaces/${room.id}`);
+    const result = await api(page, `/api/workspaces/${room.id}/commands`, { commandId: randomUUID(), expectedRevision: current.body.revision, expectedEpoch: current.body.epoch, type, payload });
+    return result;
+  }
+  expect((await command(dm, 'encounter.saveNote', { text: 'PRIVATE_DM_CF_BROWSER_MARKER' })).status).toBe(200);
+  await openCanvasObject(dm, 'encounter.actions');
+  const action = dm.waitForResponse(response => response.url().endsWith('/commands') && response.request().postDataJSON()?.type === 'encounter.declareHit');
+  await dm.getByRole('button', { name: 'Hit Pip', exact: true }).click();
+  expect((await action).status()).toBe(200);
+  await expect.poll(async () => (await api(pip, `/api/workspaces/${room.id}`)).body.domain.phase).toBe('reaction.open');
+  const pipProjection = (await api(pip, `/api/workspaces/${room.id}`)).body;
+  expect(pipProjection.domain.pendingHit.roll).toBeNull();
+  expect(pipProjection.domain.pendingHit.damage).toBeNull();
+  expect(JSON.stringify(pipProjection)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
+  await openCanvasObject(pip, 'encounter.actions');
+  await expect(pip.getByTestId('canvas-object-editor').getByRole('button', { name:'Resolve hit', exact:true })).toHaveCount(0);
+  expect((await command(pip, 'encounter.resolve')).status).toBe(403);
+  expect((await command(dm, 'encounter.pause')).status).toBe(200);
+  const pausedAction = await command(pip, 'encounter.shield', { target: 'pip' });
+  expect(pausedAction.status).toBe(422);
+  expect(pausedAction.body.errorCode).toBe('ENCOUNTER_PAUSED');
+  await dm.reload();
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  expect((await api(dm, `/api/workspaces/${room.id}`)).body.domain.paused).toBeTruthy();
+  expect((await command(dm, 'encounter.resume')).status).toBe(200);
+  expect((await command(pip, 'encounter.shield', { target: 'pip' })).status).toBe(200);
+  expect((await command(dm, 'encounter.resolve')).status).toBe(200);
+  await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
+  await pip.reload();
+  await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
+  mark('Live multiplayer respects DM/player privacy; pause/resume and committed HP survive browser reload');
+
+  const outsider = await newPage(actors[3]);
+  expect((await api(outsider, `/api/workspaces/${room.id}`)).status).toBe(403);
+  expect((await api(outsider, '/api/admin/workspaces')).status).toBe(403);
+  const metadata = await api(dm, '/api/admin/workspaces');
+  expect(metadata.status).toBe(200);
+  expect(JSON.stringify(metadata.body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
+  expect(metadata.body.workspaces.some(item => item.id === room.id)).toBe(true);
+  await dm.getByRole('button', { name: 'Admin', exact: true }).click();
+  await expect(dm.getByRole('dialog', { name: 'Table metadata' })).toContainText(room.id);
+  await dm.getByRole('button', { name: 'Close admin panel' }).click();
+  mark('Admin sees room metadata; an unrelated account cannot read the room or admin directory');
+
+  await openCanvasObject(dm, 'workspace.ai');
+  await dm.getByLabel('What should the draft change or explain?').fill('Allow a shield for an ally, with one AP cost and once each turn.');
+  const askAI = dm.getByRole('button', { name: 'Ask AI for a draft', exact: true });
+  await expect(askAI).toBeDisabled();
+  await dm.getByLabel('I agree to send this request for an AI draft.').check();
+  await askAI.click();
+  await expect(dm.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
+  const proposed = (await api(dm, `/api/workspaces/${room.id}`)).body;
+  expect(proposed.domain.candidate.status).toBe('draft');
+  expect(proposed.domain.rule).toEqual({ allyTarget: false, apCost: 0, oncePerTurn: false });
+  expect(proposed.domain.candidate.change.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
+  expect(providerCalls).toBe(1);
+  await expect(pip.getByLabel('What should the draft change or explain?')).toHaveCount(0);
+  await expect(pip.getByTestId('canvas-object-dock').getByTestId('open-canvas-workspace.ai')).toHaveCount(0);
+  mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; creates a draft without activating it');
+
+  const logoutResponse = pip.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
+  await pip.getByRole('button', { name: 'Sign out of Google account' }).click();
+  expect((await logoutResponse).status()).toBe(200);
+  await expect(pip.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  const stale = await mf.dispatchFetch(`${origin}/api/workspaces/${room.id}`, { headers: { Cookie: `tabletop_local_session=${actors[2].token}` } });
+  expect(stale.status).toBe(401);
+  // A fresh login for the same stable account recovers the seat without reusing the invitation.
+  const replacement = 'Z'.repeat(43);
+  await db.prepare('INSERT INTO web_sessions(token_hash,csrf_hash,user_id,created_at,last_seen_at,expires_at) VALUES(?,?,?,?,?,?)')
+    .bind(hash(replacement), hash(csrf(replacement)), actors[2].id, Date.now(), Date.now(), Date.now() + 7 * 86_400_000).run();
+  await pip.context().addCookies([{ name: 'tabletop_local_session', value: replacement, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  await pip.goto(origin);
+  await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
+  const resumed = (await api(pip, `/api/workspaces/${room.id}`)).body;
+  expect(resumed.actor.seat).toBe('pip');
+  mark('Logout revokes the old cookie; a new session for the same account resumes its existing seat');
+  await verifyGenericTableBrowser({
+    actors: { owners: genericOwners, members: genericMembers },
+    newPage,
+    api,
+    setTableReply: value => { tableAIReply = value; },
+    setAssistantReply: value => { tableAssistantReply = value; },
+    getProviderCalls: () => providerCalls,
+    mark,
+  });
+  await dm.screenshot({ path: join(output, 'dm-desktop.png'), fullPage: true });
+  await pip.setViewportSize({ width: 390, height: 844 }); await pip.reload();
+  await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(pip.locator('.tt-canvas-panel')).toBeVisible();
+  await pip.screenshot({ path: join(output, 'player-mobile.png'), fullPage: true });
+  expect(errors).toEqual([]);
+  mark('Desktop and mobile render without uncaught browser errors');
+  await writeFile(join(output, 'report.json'), JSON.stringify({ checks, errors, runtime: 'local Cloudflare Workers, D1 and SQLite Durable Objects', googleLogin: 'synthetic session fixtures; OAuth verified separately', ai: 'synthetic outbound provider, real local ledger and room commit; no paid calls', providerCalls }, null, 2));
+} catch (error) {
+  for (let i = 0; i < pages.length; i++) if (!pages[i].isClosed()) await pages[i].screenshot({ path: join(output, `failure-${i}.png`) }).catch(() => {});
+  await writeFile(join(output, 'report.json'), JSON.stringify({ checks, errors, providerCalls, modelStatuses, failure: String(error) }, null, 2));
+  throw error;
+} finally {
+  await browser?.close(); await mf.dispose();
+}

@@ -1,0 +1,250 @@
+.connections-panel__backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 18px;
+  background: rgb(44 41 64 / 8%);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.connections-panel__backdrop--guided {
+  inset: 84px 0 236px;
+  align-items: flex-start;
+  overflow: hidden;
+  padding: 0 18px;
+}
+
+.connections-panel__backdrop--guided .connections-panel {
+  height: fit-content;
+  align-self: flex-start;
+}
+
+.connections-panel {
+  display: flex;
+  width: min(690px, 100%);
+  height: min(760px, calc(100dvh - 48px));
+  max-height: 100%;
+  align-self: center;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--ink, #2c2940);
+  background: var(--surface, #fff);
+  border: 1px solid #e8e2f0;
+  border-radius: 16px;
+  box-shadow: 0 18px 55px rgb(54 39 82 / 18%), 0 2px 6px rgb(54 39 82 / 6%);
+  font-family: Manrope, "Noto Sans Thai", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.connections-panel *,
+.connections-panel *::before,
+.connections-panel *::after { box-sizing: border-box; }
+
+.connections-panel button,
+.connections-panel input { font: inherit; }
+
+.connections-panel button { color: inherit; }
+
+.connections-panel__header {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 68px;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line, #e9e5f1);
+}
+
+.connections-panel__brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--brand-violet, #6550c7);
+  background: var(--violet-wash, #f1edff);
+  border: 1px solid #e5def4;
+  border-radius: 10px;
+}
+
+.connections-panel__heading { min-width: 0; flex: 1; }
+.connections-panel__heading > span { color: #8c7ca5; font-size: 10px; font-weight: 850; letter-spacing: .14em; }
+.connections-panel__heading h2 { margin: 2px 0 0; color: var(--ink, #2c2940); font-size: 18px; font-weight: 760; letter-spacing: -.025em; line-height: 1.25; }
+.connections-panel__heading p { margin: 3px 0 0; color: var(--muted, #777286); font-size: 12px; line-height: 1.4; }
+
+.connections-panel__close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #766d84 !important;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.connections-panel__close:hover { color: var(--ink, #2c2940) !important; background: #f5f2fa; }
+.connections-panel :is(button, a, input):focus-visible { outline: 3px solid rgb(101 80 199 / 32%); outline-offset: 2px; }
+
+.connections-panel__steps {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 51px;
+  align-items: center;
+  padding: 7px 19px;
+  border-bottom: 1px solid #f0edf4;
+  background: #fdfcff;
+}
+
+.connections-panel__step-wrap { display: flex; min-width: 0; flex: 1; align-items: center; }
+.connections-panel__step-wrap:last-child { flex: 0 0 auto; }
+.connections-panel__step { display: inline-flex; min-width: 0; align-items: center; gap: 7px; padding: 5px 7px; color: #888194; background: transparent; border: 1px solid transparent; border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.connections-panel__step[aria-disabled="false"] { cursor: pointer; }
+.connections-panel__step[aria-disabled="true"] { cursor: default; }
+.connections-panel__step-icon { display: grid; width: 23px; height: 23px; flex: 0 0 auto; place-items: center; color: #897ca1; background: #f2eff7; border: 1px solid #e7e1ee; border-radius: 50%; }
+.connections-panel__step.is-active { color: #4d3b91; background: var(--violet-wash, #f1edff); border-color: #e5ddf5; }
+.connections-panel__step.is-active .connections-panel__step-icon { color: #fff; background: var(--brand-violet, #6550c7); border-color: var(--brand-violet, #6550c7); }
+.connections-panel__step.is-complete:not(.is-active) { color: #5b6f7a; }
+.connections-panel__step.is-complete:not(.is-active) .connections-panel__step-icon { color: #287f91; background: var(--cyan-wash, #eaf8fb); border-color: #d4edf2; }
+.connections-panel__step-line { width: clamp(15px, 8vw, 72px); height: 1px; flex: 0 1 auto; margin: 0 6px; background: #e5e0ec; }
+.connections-panel__step-line.is-complete { background: #c6b9e7; }
+
+.connections-panel__body { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 13px 18px 16px; scrollbar-color: #d7cfea transparent; scrollbar-width: thin; }
+.connections-panel__body::-webkit-scrollbar { width: 7px; }
+.connections-panel__body::-webkit-scrollbar-thumb { background: #d7cfea; border: 2px solid #fff; border-radius: 99px; }
+.connections-panel__stage { display: flex; flex-direction: column; gap: 10px; padding: 13px; background: #fff; border: 1px solid #e9e4f0; border-radius: 12px; }
+.connections-panel__stage[data-demo-spotlight="true"] { outline: 2px solid #9c84d6; outline-offset: 3px; box-shadow: 0 0 0 7px #f0eaff; }
+.connections-panel__stage-heading { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.connections-panel__stage-heading > div:nth-child(2) { min-width: 0; flex: 1; }
+.connections-panel__source-icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 8px; }
+.connections-panel__source-icon--violet { color: #6650bb; background: var(--violet-wash, #f1edff); border-color: #e7ddfa; }
+.connections-panel__source-icon--cyan { color: #238ba1; background: var(--cyan-wash, #eaf8fb); border-color: #d2eef3; }
+.connections-panel__stage-heading h3 { margin: 0; color: #38304e; font-size: 12px; font-weight: 780; line-height: 1.35; }
+.connections-panel__stage-heading p { margin: 3px 0 0; color: #777286; font-size: 11px; line-height: 1.4; }
+.connections-panel__source-badge { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 4px 6px; color: #777286; background: #f7f5f9; border: 1px solid #eeeaf2; border-radius: 999px; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.connections-panel__source-badge--connected { color: #367b83; background: #eef9fa; border-color: #d4edef; }
+
+.connections-panel__resource { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 9px; padding: 7px 9px; background: #faf9fc; border: 1px solid #f0edf4; border-radius: 7px; }
+.connections-panel__resource > span { color: #9389a0; font-size: 10px; font-weight: 850; letter-spacing: .09em; }
+.connections-panel__resource code { overflow: hidden; color: #61557b; font: 650 8px "IBM Plex Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
+.connections-panel__explain { padding: 9px 10px; background: #fbfaff; border: 1px solid #f0edf7; border-radius: 8px; }
+.connections-panel__explain strong { color: #4e4269; font-size: 12px; font-weight: 750; }
+.connections-panel__explain p { margin: 4px 0 0; color: #777286; font-size: 11px; line-height: 1.5; }
+.connections-panel__explain code { color: #584c70; font: 650 8px "IBM Plex Mono", monospace; }
+.connections-panel__count { display: flex; align-items: baseline; gap: 7px; padding: 0 2px; }
+.connections-panel__count strong { color: #41365f; font: 700 15px "IBM Plex Mono", monospace; }
+.connections-panel__count span { color: #7a7385; font-size: 11px; }
+
+.connections-panel__sample-rows { display: grid; border: 1px solid #ece8f1; border-radius: 8px; overflow: hidden; }
+.connections-panel__sample-row { display: grid; grid-template-columns: minmax(65px, 1fr) minmax(70px, 1fr) auto; align-items: center; gap: 8px; padding: 7px 9px; color: #706a7b; background: #fff; border-bottom: 1px solid #f1eef5; font-size: 11px; }
+.connections-panel__sample-row:last-child { border-bottom: 0; }
+.connections-panel__sample-row strong { overflow: hidden; color: #44395f; font: 650 8px "IBM Plex Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
+.connections-panel__sample-row code { overflow: hidden; color: #8b8395; font: 7px "IBM Plex Mono", monospace; text-overflow: ellipsis; white-space: nowrap; }
+.connections-panel__sample-row > span { color: #625875; font: 650 8px "IBM Plex Mono", monospace; white-space: nowrap; }
+.connections-panel__empty { margin: 0; color: #877f91; font-size: 11px; }
+
+.connections-panel__mapping { display: flex; flex-wrap: wrap; gap: 5px; }
+.connections-panel__mapping > span { display: inline-flex; min-width: 0; align-items: center; gap: 4px; padding: 4px 6px; color: #786f85; background: #faf9fc; border: 1px solid #efebf4; border-radius: 6px; font-size: 10px; }
+.connections-panel__mapping code { color: #62557d; font: 650 7px "IBM Plex Mono", monospace; }
+.connections-panel__mapping svg { flex: 0 0 auto; color: #b198d6; }
+.connections-panel__mapping strong { color: #625c6c; font-size: 10px; font-weight: 700; }
+
+.connections-panel__download { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 8px 9px; color: #4f4472; background: #f8f5ff; border: 1px solid #e9e1f8; border-radius: 8px; text-decoration: none; }
+.connections-panel__download > svg:first-child { flex: 0 0 auto; color: #6650c7; }
+.connections-panel__download > span { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.connections-panel__download strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.connections-panel__download small { color: #827994; font-size: 10px; }
+.connections-panel__download > svg:last-child { flex: 0 0 auto; color: #9a8bb4; }
+.connections-panel__upload { position: relative; display: flex; min-height: 33px; align-items: center; gap: 7px; padding: 6px 9px; color: #6d6380; background: #fff; border: 1px dashed #dcd4e8; border-radius: 7px; cursor: pointer; }
+.connections-panel__upload input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.connections-panel__upload > svg { flex: 0 0 auto; color: #8169bd; }
+.connections-panel__upload > span { font-size: 11px; font-weight: 750; }
+.connections-panel__upload > small { margin-left: auto; color: #91889f; font-size: 10px; }
+.connections-panel__upload:focus-within { outline: 3px solid rgb(101 80 199 / 32%); outline-offset: 2px; }
+
+.connections-panel__notice { display: flex; align-items: center; gap: 7px; padding: 8px 9px; color: #886747; background: #fff8ef; border: 1px solid #f3e6d6; border-radius: 8px; font-size: 11px; }
+.connections-panel__notice > svg { flex: 0 0 auto; color: #be8351; }
+.connections-panel__notice > span { min-width: 0; flex: 1; }
+.connections-panel__notice button { padding: 3px 5px; color: #795d44; background: #fff; border: 1px solid #eedfcc; border-radius: 5px; font-size: 10px; font-weight: 750; }
+
+.connections-panel__actions { position: sticky; bottom: -16px; display: flex; min-height: 42px; align-items: center; gap: 9px; margin: 1px -2px -5px; padding: 7px 2px 1px; background: linear-gradient(180deg, rgb(255 255 255 / 88%), #fff 35%); }
+.connections-panel__button { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 7px; padding: 7px 11px; border: 1px solid transparent; border-radius: 8px; font-size: 11px; font-weight: 780; cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.connections-panel__button:active:not(:disabled) { transform: translateY(1px); }
+.connections-panel__button:disabled { cursor: not-allowed; opacity: .65; }
+.connections-panel__button--primary { color: #fff !important; background: var(--brand-violet, #6550c7); border-color: var(--brand-violet, #6550c7); box-shadow: 0 3px 9px rgb(101 80 199 / 16%); }
+.connections-panel__button--primary:hover:not(:disabled) { background: #5843b4; border-color: #5843b4; }
+.connections-panel__busy { display: inline-flex; align-items: center; gap: 5px; color: #746a83; font-size: 11px; }
+.connections-panel__spin { animation: connections-spin .9s linear infinite; }
+
+.connections-panel__ready-mark { display: grid; width: 36px; height: 36px; place-items: center; color: #21899d; background: var(--cyan-wash, #eaf8fb); border: 1px solid #d4edf1; border-radius: 11px; }
+.connections-panel__stage > .connections-panel__ready-mark + h3 { margin: -3px 0 0; color: #3d325a; font-size: 13px; font-weight: 780; }
+.connections-panel__ready-copy { max-width: 470px; margin: -5px 0 0; color: #777286; font-size: 12px; line-height: 1.55; }
+.connections-panel__ready-copy code { padding: 2px 4px; color: #5e4c91; background: #f3effb; border-radius: 4px; font: 650 8px "IBM Plex Mono", monospace; }
+.connections-panel__ready-sources { display: grid; gap: 6px; }
+.connections-panel__ready-sources > div { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 8px 9px; background: #fbfaff; border: 1px solid #eee9f4; border-radius: 8px; }
+.connections-panel__ready-sources > div > svg { flex: 0 0 auto; color: #7d68b3; }
+.connections-panel__ready-sources > div > span { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.connections-panel__ready-sources strong { color: #4c4260; font-size: 11px; }
+.connections-panel__ready-sources small { overflow: hidden; color: #8b8395; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.connections-panel__ready-sources b { color: #53476d; font: 650 10px "IBM Plex Mono", monospace; }
+.connections-panel__no-results { margin: 0; padding: 7px 8px; color: #726a7c; background: #f6f4f9; border-radius: 6px; font-size: 11px; }
+
+.connections-panel__error { display: flex; flex: 0 0 auto; align-items: flex-start; gap: 7px; margin: 0 16px 9px; padding: 8px 9px; color: #a34846; background: #fff2f1; border: 1px solid #f5dddd; border-radius: 7px; font-size: 11px; line-height: 1.45; }
+.connections-panel__error svg { flex: 0 0 auto; margin-top: 1px; }
+.connections-panel__footer { display: flex; min-height: 29px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 16px; color: #948ca0; border-top: 1px solid #f0edf4; font-size: 10px; }
+.connections-panel__footer > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.connections-panel__footer-dot { width: 6px; height: 6px; flex: 0 0 auto; background: #56a7b4; border-radius: 50%; }
+
+@keyframes connections-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 600px) {
+  .connections-panel__backdrop { padding: 8px; }
+  .connections-panel__backdrop--guided { inset: 110px 0 210px; align-items: flex-start; padding: 0 8px; }
+  .connections-panel { border-radius: 13px; }
+  .connections-panel__backdrop--manual .connections-panel { height: calc(100dvh - 16px); }
+  .connections-panel__header { min-height: 58px; flex: 0 0 auto; gap: 8px; padding: 8px 10px; }
+  .connections-panel__brand-mark { width: 29px; height: 29px; border-radius: 8px; }
+  .connections-panel__heading h2 { font-size: 13px; }
+  .connections-panel__heading p { font-size: 11px; }
+  .connections-panel__steps { min-height: 44px; padding: 5px 7px; }
+  .connections-panel__step { gap: 5px; padding: 4px 5px; font-size: 11px; }
+  .connections-panel__step-icon { width: 20px; height: 20px; }
+  .connections-panel__step-line { min-width: 8px; margin: 0 3px; }
+  .connections-panel__body { padding: 9px 9px 12px; }
+  .connections-panel__stage { gap: 8px; padding: 9px; }
+  .connections-panel__stage-heading { align-items: flex-start; gap: 7px; }
+  .connections-panel__source-icon { width: 26px; height: 26px; }
+  .connections-panel__stage-heading h3 { font-size: 12px; }
+  .connections-panel__stage-heading p { font-size: 10px; }
+  .connections-panel__source-badge { padding: 3px 5px; font-size: 9px; }
+  .connections-panel__resource { padding: 6px 7px; }
+  .connections-panel__sample-row { gap: 5px; padding: 6px 7px; }
+  .connections-panel__actions { bottom: -12px; }
+  .connections-panel__footer { min-height: 25px; padding: 4px 10px; font-size: 9px; }
+  .connections-panel__error { margin-right: 9px; margin-left: 9px; }
+}
+
+@media (max-width: 340px) {
+  .connections-panel__step { gap: 4px; padding: 3px 4px; font-size: 10px; }
+  .connections-panel__step-icon { width: 18px; height: 18px; }
+  .connections-panel__step-line { min-width: 6px; margin: 0 2px; }
+  .connections-panel__source-badge { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+  .connections-panel__mapping { gap: 3px; }
+  .connections-panel__mapping > span { gap: 3px; padding: 3px 4px; font-size: 9px; }
+  .connections-panel__mapping code,.connections-panel__mapping strong { font-size: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connections-panel__spin { animation: none; }
+  .connections-panel__button { transition: none; }
+}

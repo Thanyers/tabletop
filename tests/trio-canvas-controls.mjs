@@ -1,0 +1,33 @@
+import {chromium,expect} from '@playwright/test';
+import {mkdir,writeFile} from 'node:fs/promises';
+const root=process.env.TRIO_REPORT_DIR||'test-results/canvas-controls',base=process.env.TRIO_URL||'http://127.0.0.1:5173/';
+await mkdir(root,{recursive:true});
+const browser=await chromium.launch({channel:'msedge',headless:true});
+const context=await browser.newContext({viewport:{width:1600,height:900}}),page=await context.newPage(),checks=[],errors=[];
+page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+const node=step=>page.locator(`.react-flow__node[data-id="trio-shipping-${step}"]`);
+const position=async step=>node(step).evaluate(el=>el.style.transform);
+const drag=async(step,dx,dy)=>{const r=await page.getByTestId(`canvas-object-${step}`).locator('.trio-canvas-node__chrome').boundingBox();expect(r).toBeTruthy();await page.mouse.move(r.x+r.width*.55,r.y+r.height*.5);await page.mouse.down();await page.mouse.move(r.x+r.width*.55+dx,r.y+r.height*.5+dy,{steps:12});await page.mouse.up();await page.waitForTimeout(350);};
+try{
+ await page.goto(base);await page.getByTestId('case-shipping').click();await page.getByLabel('Story playback speed',{exact:true}).selectOption('4');await page.getByLabel('Start demo',{exact:true}).click();
+ await expect(page.getByTestId('trio-player')).toHaveAttribute('data-phase','complete',{timeout:45000});
+ await expect(page.locator('[data-trio-object]')).toHaveCount(8);checks.push('All eight functional objects remain on the original spatial Canvas');
+ await page.getByLabel('Take over workspace',{exact:true}).click();await expect(page.getByTestId('trio-player')).toHaveAttribute('data-guided','false');
+ const before=await position('handoff');await drag('handoff',45,25);expect(await position('handoff')).toBe(before);checks.push('Use mode pans without moving the card');
+ await page.getByLabel('Fit to work',{exact:true}).click();await page.waitForTimeout(600);
+ await page.getByLabel('Arrange workspace',{exact:true}).click();await drag('handoff',80,30);
+ const moved=await position('handoff');expect(moved).not.toBe(before);checks.push('Arrange moves the actual Canvas node');
+ await page.getByLabel('Save workspace',{exact:true}).click();
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('procedural.trio.manual.v1.shipping')));expect(saved.snapshot.layout.handoff).toBeTruthy();expect(saved.snapshot.active.shipping.bangkok).toBe(35);checks.push('Save retains arranged layout and active rules together');
+ await page.getByLabel('Back to stories',{exact:true}).click();await expect(page.getByTestId('trio-demo-picker')).toBeVisible();
+ await page.locator('.workspace-switcher > button').click();await page.getByRole('button',{name:'เปิดงานที่บันทึกไว้ · ค่าจัดส่ง',exact:true}).click();
+ await expect(page.getByTestId('trio-player')).toHaveAttribute('data-guided','false');await page.waitForTimeout(650);expect(await position('handoff')).toBe(moved);checks.push('Original workspace menu reopens the same arranged saved Canvas');
+ await page.getByRole('button',{name:'Constellation',exact:true}).click();await expect(page.locator('.constellation')).toBeVisible();await expect(page.locator('.constellation')).toContainText('SH-006');await expect(page.locator('.constellation')).not.toContainText('FA-001');checks.push('Original Constellation renders the selected story evidence without accounting claims');
+ await page.screenshot({path:`${root}/constellation.png`});
+ await page.getByRole('button',{name:'Work',exact:true}).click();await page.getByRole('button',{name:'Learn',exact:true}).click();await page.waitForTimeout(650);
+ await page.getByLabel('กรุงเทพฯ · Bangkok base',{exact:true}).fill('34');await expect(page.getByLabel('Approve tested rule',{exact:true})).toBeDisabled();checks.push('Editing a taught candidate invalidates approval in the same workspace');
+ await page.locator('.trio-manual-dock').getByRole('button',{name:'Run example checks',exact:true}).click();await page.waitForTimeout(400);await expect(page.getByTestId('canvas-object-verify')).toContainText(/ไม่ผ่าน/);await expect(page.getByLabel('Approve tested rule',{exact:true})).toBeDisabled();checks.push('A failing current candidate cannot approve');
+ await page.getByLabel('Save workspace',{exact:true}).click();const active=await page.evaluate(()=>JSON.parse(localStorage.getItem('procedural.trio.manual.v1.shipping')).snapshot.active.shipping.bangkok);expect(active).toBe(35);checks.push('Failed candidate preserves the approved active price');
+ await page.screenshot({path:`${root}/manual.png`});
+ expect(errors).toEqual([]);await writeFile(`${root}/report.json`,JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({checks:checks.length,errors}));
+}catch(error){await page.screenshot({path:`${root}/failure.png`});await writeFile(`${root}/failure.json`,JSON.stringify({error:String(error),checks,errors,dom:await page.locator('body').innerText()},null,2));throw error;}finally{await browser.close();}

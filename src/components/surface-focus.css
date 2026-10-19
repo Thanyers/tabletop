@@ -1,0 +1,86 @@
+/* Reading focus remains visible after construction settles. */
+.is-guided-demo.is-presenting .canvas-card.construction-target {
+  border-color: #8060ce;
+  outline: 2px solid #8060ce;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 7px rgb(128 96 206 / 11%), 0 12px 32px rgb(77 53 122 / 12%);
+}
+
+.app.is-guided-demo.is-presenting:has(.inspector[data-guided-teach="true"]) .canvas-card.construction-target {
+  border-color: #e3deed;
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: 0 8px 24px rgb(39 34 53 / 10%);
+}
+
+.is-guided-demo .inspector [data-demo-focus-active="true"] {
+  outline: 2px solid #8060ce;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 5px rgb(128 96 206 / 10%);
+}
+
+.is-guided-demo .inspector[data-guided-teach="true"] [data-demo-focus-active="true"] {
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.is-guided-demo .inspector[data-guided-teach="true"] .asset-policy-draft__field[data-demo-focus-active="true"] {
+  position: relative;
+  z-index: auto;
+  margin: 0 -8px;
+  padding: 0 8px 0 10px;
+  border-inline-start: 2px solid #8060ce;
+  border-radius: 5px;
+  background: #f8f5fd;
+}
+
+.is-guided-demo .inspector[data-guided-teach="true"] .asset-policy-draft__category-tabs[data-demo-focus-active="true"] .is-active {
+  border-color: #8060ce;
+  color: #5c468a;
+  background: #f5f1fb;
+}
+
+.is-guided-demo .inspector[data-guided-teach="true"] .asset-policy-draft__preview[data-demo-focus-active="true"] {
+  border-color: #d3c5eb;
+}
+
+.is-guided-demo .inspector[data-guided-teach="true"] .adaptive-ui__browse-controls[data-demo-focus-active="true"] {
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid #8060ce;
+}
+
+.demo-player.demo-player .demo-request {
+  height: auto;
+  min-height: 42px;
+  max-height: 84px;
+}
+
+@media (max-width: 760px) {
+  .app:not(.is-guided-demo) .inspector {
+    bottom: 12px;
+  }
+
+  .app:not(.is-guided-demo) .inspector textarea {
+    min-height: 112px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .demo-player.demo-player .demo-request {
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .prompt-dock > input:not([type="file"]) {
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app.is-guided-demo .inspector[data-guided-teach="true"] { transition: none; }
+}

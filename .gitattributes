@@ -1,0 +1,12 @@
+# PDF cross-reference offsets must survive Windows checkouts byte-for-byte.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.xlsx binary
+*.wav binary
+*.webm binary
+*.zip binary
+
+# Retained demo artifacts keep the bytes used by their recorded SHA-256 values.
+handoff/Final/auto-demo/** text eol=lf

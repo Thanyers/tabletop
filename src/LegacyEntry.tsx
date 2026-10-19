@@ -1,0 +1,10 @@
+import App from './App';
+import './styles.css';
+import './trio/boot.css';
+import './workspace-v3.css';
+import './theme.css';
+import './components/presentation-motion.css';
+import './components/demo-clarity.css';
+import './components/empty-workspace-fit.css';
+import './components/surface-focus.css';
+export default App;

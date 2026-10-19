@@ -1,0 +1,100 @@
+name: Validate local R1 candidate
+
+on:
+  pull_request:
+  push:
+    branches: [main, feat/tabletop-r1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BROWSER_CHANNEL: chromium
+      TABLETOP_ENV: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - name: Check publication paths and credential patterns
+        run: node scripts/check-public-files.mjs
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check dependency advisories
+        run: npm audit --audit-level=high
+      - name: Unit and local SQL integration tests
+        run: npm test -- --reporter=default --reporter=json --outputFile=test-results/unit-report.json
+      - name: Legacy local Component Lab regression tests
+        run: node --import tsx --test scripts/component-lab/component-lab.test.ts
+      - name: Typecheck and build
+        env:
+          DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
+        run: npm run build
+      - name: Check server secret stays out of browser assets
+        run: node scripts/check-client-secrets.mjs
+      - name: Workers, D1 and Durable Object integration tests
+        run: npm run test:cloudflare -- --reporter=default --reporter=json --outputFile=test-results/cloudflare-report.json
+      - name: Bundle Cloudflare without publishing
+        id: bundle_worker
+        env:
+          WRANGLER_SEND_METRICS: false
+        run: npm run build:cloudflare
+      - name: Install test browser
+        id: install_browser
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Repeatable persona demos and replay report
+        run: npm run demo:auto:run
+      - name: Seven-session local browser acceptance
+        run: npm run test:r1:browser
+      - name: Account multiplayer and AI browser acceptance on Workers
+        # This independent fixture can report its failures even when Node browser checks fail.
+        if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
+        run: npm run test:cloudflare:browser
+      - name: Retain test summaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: local-r1-test-summaries
+          path: |
+            test-results/unit-report.json
+            test-results/cloudflare-report.json
+            test-results/tabletop-r1/report.json
+            test-results/tabletop-r1/failure-*.png
+            test-results/cloudflare-browser/report.json
+            test-results/cloudflare-browser/public-demo-desktop.png
+            test-results/cloudflare-browser/public-demo-narrow.png
+            test-results/cloudflare-browser/interactive-demo-teaching.png
+            test-results/cloudflare-browser/interactive-demo-encounter.png
+            test-results/cloudflare-browser/interactive-demo-narrow.png
+            test-results/cloudflare-browser/interactive-demo-manual-state.json
+            test-results/cloudflare-browser/canvas-demo-empty.png
+            test-results/cloudflare-browser/canvas-demo-dragged.png
+            test-results/cloudflare-browser/canvas-demo-invoice.png
+            test-results/cloudflare-browser/generic-table-*.png
+            test-results/cloudflare-browser/failure-*.png
+          retention-days: 7
+          include-hidden-files: false
+          if-no-files-found: ignore
+      - name: Retain sanitized auto-demo history
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: auto-demo-history
+          path: |
+            test-results/auto-demo/**/run.json
+            test-results/auto-demo/**/report.html
+          retention-days: 30
+          include-hidden-files: false
+          if-no-files-found: ignore

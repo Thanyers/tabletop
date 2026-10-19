@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tabletop",
+  "main": "cloudflare/index.ts",
+  "compatibility_date": "2026-10-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/healthz", "/readyz", "/internal/*"]
+  },
+  "vars": {
+    "PUBLIC_ORIGIN": "https://tabletop.ptchrr.workers.dev",
+    "AI_MONTHLY_BUDGET_MICRO_USD": "0",
+    "AI_DAILY_BUDGET_MICRO_USD": "0"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "tabletop-production",
+    "database_id": "00000000-0000-0000-0000-000000000000",
+    "migrations_dir": "cloudflare/migrations"
+  }],
+  "durable_objects": { "bindings": [
+    { "name": "ROOMS", "class_name": "Room" },
+    { "name": "BILLING", "class_name": "Billing" }
+  ] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Billing"] }],
+  "triggers": { "crons": ["17 * * * *"] },
+  "limits": { "cpu_ms": 50 },
+  "observability": { "enabled": false }
+}

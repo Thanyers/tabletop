@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "fixtureType": "synthetic-quest-playtest",
+  "sourceFile": "quest-playtest.csv",
+  "title": "สวนแห่งแสง - เส้นทางทดลองเล่น",
+  "description": "แผนภาพเส้นทางประกอบด้วยด่านตามลำดับในบันทึกตัวอย่าง ไม่มีการเก็บข้อมูลผู้เล่นจริง",
+  "stations": [
+    {
+      "id": "garden",
+      "label": "ด่านสวน",
+      "englishLabel": "Garden Gate",
+      "elapsedSeconds": 75,
+      "observation": "ผ่านโดยไม่ต้องใช้คำใบ้"
+    },
+    {
+      "id": "library",
+      "label": "ด่านห้องสมุด",
+      "englishLabel": "Lantern Library",
+      "elapsedSeconds": 220,
+      "observation": "ยังติดและอยากได้คำใบ้ทีละนิด"
+    },
+    {
+      "id": "treasure",
+      "label": "ด่านกล่องสมบัติ",
+      "englishLabel": "Treasure Grove",
+      "elapsedSeconds": 480,
+      "observation": "ไม่อยากให้เฉลยเอง"
+    }
+  ],
+  "route": [
+    {
+      "from": "garden",
+      "to": "library"
+    },
+    {
+      "from": "library",
+      "to": "treasure"
+    }
+  ],
+  "synthetic": true
+}

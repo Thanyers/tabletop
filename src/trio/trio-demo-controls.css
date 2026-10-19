@@ -1,0 +1,231 @@
+.trio-demo-picker {
+  width: min(100%, 420px);
+  padding: 16px;
+  border: 1px solid #e4e2ea;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 14px 38px rgb(42 35 68 / 10%);
+  color: #302d38;
+}
+
+.trio-demo-picker__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 1px 10px;
+}
+
+.trio-demo-picker__heading > span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.trio-demo-picker__heading > small {
+  color: #817b8b;
+  font-size: 10px;
+}
+
+.trio-demo-picker__choices {
+  display: grid;
+  gap: 7px;
+}
+
+.trio-demo-picker__choice {
+  --choice: #6550c7;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 59px;
+  padding: 8px 10px;
+  border: 1px solid #eceaf0;
+  border-radius: 8px;
+  background: #fff;
+  color: #403c49;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.trio-demo-picker__choice--shipping { --choice: #377f96; }
+.trio-demo-picker__choice--quest { --choice: #b76568; }
+.trio-demo-picker__choice--music { --choice: #7154a7; }
+
+.trio-demo-picker__choice:hover {
+  border-color: color-mix(in srgb, var(--choice) 34%, #e8e5ee);
+  background: color-mix(in srgb, var(--choice) 4%, #fff);
+  transform: translateY(-1px);
+}
+
+.trio-demo-picker__choice:focus-visible,
+.trio-demo-controls button:focus-visible,
+.trio-demo-controls select:focus-visible {
+  outline: 2px solid #6550c7;
+  outline-offset: 2px;
+}
+
+.trio-demo-picker__number {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--choice) 10%, #fff);
+  color: var(--choice);
+  font: 700 10px/1 Manrope, sans-serif;
+}
+
+.trio-demo-picker__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.trio-demo-picker__copy strong {
+  color: #383440;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.trio-demo-picker__copy small {
+  overflow: hidden;
+  color: #7c7685;
+  font-size: 10px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trio-demo-picker__choice > svg { color: var(--choice); }
+
+.trio-demo-picker__message {
+  margin: 9px 1px 0;
+  color: #865b62;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.demo-player.trio-demo-controls {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 15px;
+  padding: 12px 16px 8px;
+}
+
+.trio-demo-controls .trio-demo-controls__label {
+  grid-column: 1;
+  grid-row: 1;
+  padding-right: 0;
+}
+
+.trio-demo-controls .trio-demo-controls__label strong {
+  font-size: 15px;
+}
+
+.trio-demo-controls .trio-demo-controls__buttons {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.trio-demo-controls .trio-demo-controls__buttons > button {
+  min-width: 30px;
+}
+
+.trio-demo-controls .trio-demo-controls__buttons .demo-take-over {
+  min-width: auto;
+  white-space: nowrap;
+}
+
+.trio-demo-controls .trio-demo-controls__buttons .trio-start-demo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: auto;
+  min-width: 88px;
+  flex-shrink: 0;
+  padding: 0 10px;
+  border-color: #7056c5;
+  background: #7056c5;
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.trio-demo-controls[data-phase="ready"] .demo-beat-dot { animation: none; }
+
+.trio-demo-controls .demo-request.is-typing::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  background: #8066ca;
+  vertical-align: -1px;
+  animation: trio-type-caret 900ms steps(1) infinite;
+}
+
+@keyframes trio-type-caret { 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .trio-demo-controls .demo-request.is-typing::after { animation: none; }
+}
+
+.trio-demo-controls .trio-demo-controls__speed select {
+  min-height: 31px;
+  padding: 5px 6px;
+}
+
+.trio-demo-controls .trio-demo-controls__rail {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.trio-demo-controls .trio-demo-controls__request {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+.trio-demo-controls .trio-demo-controls__status {
+  grid-column: 1 / -1;
+  grid-row: 4;
+}
+
+.trio-demo-controls .trio-demo-controls__status > small {
+  margin-left: auto;
+  color: #81768e;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .trio-demo-picker {
+    width: min(100%, 370px);
+    padding: 12px;
+  }
+
+  .trio-demo-picker__heading > small { font-size: 9px; }
+  .trio-demo-picker__choice { min-height: 56px; }
+  .trio-demo-picker__copy small { white-space: normal; }
+
+  .demo-player.trio-demo-controls {
+    gap: 6px 8px;
+    padding: 10px 11px 7px;
+  }
+
+  .trio-demo-controls .trio-demo-controls__label {
+    min-width: 0;
+    min-height: 30px;
+  }
+
+  .trio-demo-controls .trio-demo-controls__label strong { font-size: 13px; }
+  .trio-demo-controls .trio-demo-controls__buttons { flex-wrap: wrap; justify-content: flex-end; }
+  .trio-demo-controls .trio-demo-controls__buttons .demo-take-over { padding: 0 7px; font-size: 9px; }
+  .trio-demo-controls .trio-demo-controls__status { line-height: 1.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trio-demo-picker__choice { transition: none; }
+}

@@ -1,0 +1,1627 @@
+.quest-game {
+  --quest-map-ink: #263b33;
+  --quest-map-muted: #6e7c70;
+  --quest-map-line: #dbe2d4;
+  --quest-map-paper: #fffdf7;
+  --quest-map-green: #4d7052;
+  --quest-map-green-dark: #35543d;
+  --quest-map-coral: #b85f50;
+  --quest-map-gold: #b07a3f;
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  container-name: questgame;
+  container-type: inline-size;
+  color: var(--quest-map-ink);
+  font-family: Manrope, 'Noto Sans Thai', sans-serif;
+}
+
+.quest-game,
+.quest-game * {
+  box-sizing: border-box;
+}
+
+.quest-game button,
+.quest-game a {
+  font: inherit;
+}
+
+.quest-game button:focus-visible,
+.quest-game a:focus-visible,
+.quest-game:focus-visible {
+  outline: 2px solid var(--quest-map-green);
+  outline-offset: 3px;
+}
+
+.quest-game__header,
+.quest-game__heading,
+.quest-game__demo-head,
+.quest-game__demo-events,
+.quest-game__section-topline,
+.quest-game__puzzle-topline,
+.quest-game__rule-clock,
+.quest-game__hint-actions,
+.quest-game__footer,
+.quest-game__timer-readout,
+.quest-game__timer-actions,
+.quest-game__flow-note {
+  display: flex;
+  align-items: center;
+}
+
+.quest-game__header {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.quest-game__heading {
+  display: block;
+  min-width: 0;
+}
+
+.quest-game__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--quest-map-green);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .095em;
+  text-transform: uppercase;
+}
+
+.quest-game__heading h2 {
+  margin: 0;
+  color: #2e4338;
+  font-size: clamp(18px, 2.2vw, 23px);
+  font-weight: 680;
+  letter-spacing: -.035em;
+  line-height: 1.32;
+}
+
+.quest-game__heading p {
+  max-width: 650px;
+  margin: 5px 0 0;
+  color: var(--quest-map-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.quest-game__progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  column-gap: 12px;
+  min-width: 122px;
+  padding: 9px 12px 10px;
+  border: 1px solid var(--quest-map-line);
+  border-radius: 13px;
+  background: #fbfcf6;
+}
+
+.quest-game__progress > span {
+  color: var(--quest-map-muted);
+  font-size: 10px;
+}
+
+.quest-game__progress > strong {
+  grid-row: span 2;
+  color: var(--quest-map-green-dark);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.quest-game__progress > strong small {
+  color: #859184;
+  font-size: 11px;
+}
+
+.quest-game__progress-track {
+  height: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #e8ece2;
+}
+
+.quest-game__progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--quest-map-green);
+  transition: width .24s ease;
+}
+
+.quest-game__demo {
+  padding: 12px 14px;
+  border: 1px solid #e6d9bd;
+  border-radius: 15px;
+  background: #fff9e9;
+}
+
+.quest-game__demo-head {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.quest-game__demo-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #835c2f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.quest-game__demo-head small {
+  color: #887d66;
+  font-size: 10px;
+}
+
+.quest-game__demo-events {
+  align-items: stretch;
+  gap: 8px;
+}
+
+.quest-game__demo-events > svg {
+  flex: 0 0 auto;
+  align-self: center;
+  color: #a78d63;
+}
+
+.quest-game__demo-event {
+  display: grid;
+  flex: 1 1 0;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #eee4d0;
+  border-radius: 10px;
+  background: #fffdf6;
+}
+
+.quest-game__demo-event > span {
+  color: #8a7b60;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+}
+
+.quest-game__demo-event > strong {
+  color: #485241;
+  font-size: 11px;
+}
+
+.quest-game__demo-event > small {
+  color: #857d6d;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.quest-game__demo-event--wrong > strong {
+  color: #a25448;
+}
+
+.quest-game__demo-event.is-ready {
+  border-color: #c9d9bf;
+  background: #f5f8ef;
+}
+
+.quest-game__demo-event.is-ready > strong {
+  color: #456b49;
+}
+
+.quest-game__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(265px, .9fr);
+  align-items: stretch;
+  gap: 13px;
+  min-width: 0;
+}
+
+.quest-game__map-card,
+.quest-game__puzzle {
+  min-width: 0;
+  border: 1px solid var(--quest-map-line);
+  border-radius: 16px;
+  background: var(--quest-map-paper);
+}
+
+.quest-game__map-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 12px;
+}
+
+.quest-game__section-topline {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quest-game__section-topline > span {
+  color: #465746;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.quest-game__section-topline > small {
+  color: #8b9686;
+  font-size: 10px;
+}
+
+.quest-game__map {
+  position: relative;
+  min-height: 236px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid #d9e1d1;
+  border-radius: 13px;
+  background: #eff0df;
+}
+
+.quest-game__map-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 236px;
+}
+
+.quest-game__map-nodes {
+  position: absolute;
+  inset: 0;
+}
+
+.quest-game__map-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 126px;
+  padding: 5px 8px 5px 5px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #c8d0bc;
+  border-radius: 12px;
+  background: #fffdf7;
+  color: var(--quest-map-ink);
+  text-align: left;
+  box-shadow: 0 4px 12px #33473616;
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.quest-game__map-node:hover:not(:disabled) {
+  transform: translate(-50%, calc(-50% - 2px));
+  border-color: #789276;
+  box-shadow: 0 7px 16px #33473621;
+}
+
+.quest-game__map-node.is-active {
+  border-color: var(--quest-map-green);
+  box-shadow: 0 0 0 3px #73906b34, 0 5px 14px #33473620;
+}
+
+.quest-game__map-node.is-solved .quest-game__map-node-icon {
+  background: #e5efdc;
+  color: #50734c;
+}
+
+.quest-game__map-node.is-locked {
+  border-style: dashed;
+  opacity: .78;
+}
+
+.quest-game__map-node-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: #edf1e7;
+  color: #547451;
+}
+
+.quest-game__map-node-copy {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.quest-game__map-node-copy small {
+  color: #8c9683;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+}
+
+.quest-game__map-node-copy strong {
+  color: #34463a;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.quest-game__map-caption {
+  position: absolute;
+  right: 10px;
+  bottom: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid #d9dfd1;
+  border-radius: 99px;
+  background: #fffdf4dc;
+  color: #7b8875;
+  font-size: 9px;
+}
+
+.quest-game__keyboard-note {
+  margin: 0;
+  color: #828e80;
+  font-size: 9px;
+}
+
+.quest-game__keyboard-note span {
+  margin-right: 5px;
+  color: #637661;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+}
+
+.quest-game__puzzle {
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+  scroll-margin: 18px;
+}
+
+.quest-game__puzzle-topline {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quest-game__puzzle-step {
+  color: #82907f;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+.quest-game__station-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid #e2e6db;
+  border-radius: 99px;
+  background: #f6f8f1;
+  color: #71806d;
+  font-size: 9px;
+}
+
+.quest-game__station-state.is-solved {
+  border-color: #d0dfc8;
+  background: #eef5e9;
+  color: #4e744d;
+}
+
+.quest-game__puzzle h3 {
+  margin: 11px 0 4px;
+  color: #34483b;
+  font-size: 16px;
+  font-weight: 680;
+  letter-spacing: -.02em;
+  line-height: 1.4;
+}
+
+.quest-game__clue {
+  margin: 0 0 12px;
+  color: #697869;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.quest-game__choices {
+  display: grid;
+  gap: 7px;
+}
+
+.quest-game__choice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 15px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 37px;
+  padding: 6px 9px;
+  border: 1px solid #dfe5da;
+  border-radius: 10px;
+  background: #fff;
+  color: #405344;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.quest-game__choice > span {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 7px;
+  background: #f0f3ea;
+  color: #71846f;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+}
+
+.quest-game__choice > svg {
+  color: #899789;
+}
+
+.quest-game__choice:hover:not(:disabled) {
+  transform: translateX(2px);
+  border-color: #8ca487;
+  background: #f7faf3;
+}
+
+.quest-game__choice:disabled {
+  cursor: default;
+  opacity: .7;
+}
+
+.quest-game__feedback,
+.quest-game__preview-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid #efd8d1;
+  border-radius: 9px;
+  background: #fff6f2;
+  color: #965246;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.quest-game__feedback.is-success {
+  border-color: #d5e2cb;
+  background: #f4f8ef;
+  color: #4f744c;
+}
+
+.quest-game__feedback svg,
+.quest-game__preview-feedback svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.quest-game__preview-feedback {
+  border-color: #e8dfcc;
+  background: #fbf8ef;
+  color: #7f7154;
+}
+
+.quest-game__rule-card {
+  display: grid;
+  gap: 7px;
+  margin-top: auto;
+  padding: 10px 0 0;
+}
+
+.quest-game__rule-clock {
+  gap: 6px;
+  color: #71806e;
+}
+
+.quest-game__rule-clock > span {
+  font-size: 10px;
+}
+
+.quest-game__rule-clock > strong {
+  margin-left: auto;
+  color: #3e5642;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+}
+
+.quest-game__rule-card > p:not(.quest-game__hint-output):not(.quest-game__answer-output) {
+  margin: 0;
+  color: #858f81;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.quest-game__hint-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quest-game__small-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 31px;
+  padding: 5px 8px;
+  border: 1px solid #d8e1d2;
+  border-radius: 9px;
+  background: #f9fbf6;
+  color: #536c52;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.quest-game__small-button:hover:not(:disabled) {
+  border-color: #90a88a;
+  background: #f1f6ed;
+}
+
+.quest-game__small-button:disabled {
+  border-color: #e8ebe4;
+  background: #fafbf8;
+  color: #9ca59a;
+  cursor: not-allowed;
+}
+
+.quest-game__hint-output,
+.quest-game__answer-output {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.quest-game__hint-output {
+  background: #f3f6eb;
+  color: #577253;
+}
+
+.quest-game__answer-output {
+  background: #fff3e0;
+  color: #805b2f;
+}
+
+.quest-game__hint-output > svg,
+.quest-game__answer-output > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.quest-game__rule-note {
+  color: #91998c;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.quest-game__footer {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--quest-map-line);
+  border-radius: 13px;
+  background: #fafbf6;
+}
+
+.quest-game__timer-readout {
+  gap: 9px;
+  min-width: 0;
+}
+
+.quest-game__timer-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #bbc4b5;
+}
+
+.quest-game__timer-dot.is-running {
+  background: #5d895c;
+  box-shadow: 0 0 0 4px #e4eddf;
+}
+
+.quest-game__timer-readout > span:last-child {
+  display: grid;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.quest-game__timer-readout small {
+  color: #899487;
+  font-size: 9px;
+}
+
+.quest-game__timer-readout strong {
+  color: #354b39;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px;
+}
+
+.quest-game__timer-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.quest-game__timer-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid #dbe2d6;
+  border-radius: 9px;
+  background: #fff;
+  color: #61725f;
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.quest-game__timer-button--primary {
+  border-color: var(--quest-map-green);
+  background: var(--quest-map-green);
+  color: #fff;
+}
+
+.quest-game__timer-button--primary:hover:not(:disabled) {
+  background: var(--quest-map-green-dark);
+}
+
+.quest-game__timer-button:hover:not(:disabled) {
+  border-color: #9eae98;
+}
+
+.quest-game__timer-button:disabled {
+  opacity: .52;
+  cursor: not-allowed;
+}
+
+.quest-game__complete {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -7px 0 0;
+  color: #4f744c;
+  font-size: 11px;
+}
+
+.quest-game__flow-note {
+  flex-wrap: wrap;
+  gap: 5px;
+  color: #8b9588;
+  font-size: 9px;
+}
+
+.quest-game__flow-note > span:first-child,
+.quest-game__flow-note > span:last-child {
+  color: #587254;
+}
+
+.quest-game__flow-divider {
+  width: 1px;
+  height: 12px;
+  margin: 0 4px;
+  background: #d9e0d4;
+}
+
+.quest-game__export-link {
+  justify-self: start;
+  color: #71816f;
+  font-size: 10px;
+  text-decoration-color: #b8c5b2;
+  text-underline-offset: 3px;
+}
+
+.quest-game__export-link:hover {
+  color: var(--quest-map-green-dark);
+}
+
+@media (max-width: 720px) {
+  .quest-game__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quest-game__map {
+    min-height: 215px;
+  }
+
+  .quest-game__map-art {
+    min-height: 215px;
+  }
+
+  .quest-game__puzzle {
+    min-height: 0;
+  }
+}
+
+@container questgame (max-width: 500px) {
+  .quest-game {
+    gap: 11px;
+  }
+
+  .quest-game__header {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .quest-game__progress {
+    min-width: 82px;
+    padding: 7px 8px 8px;
+  }
+
+  .quest-game__progress > span {
+    max-width: 56px;
+    font-size: 8px;
+  }
+
+  .quest-game__progress > strong {
+    font-size: 17px;
+  }
+
+  .quest-game__heading h2 {
+    font-size: 17px;
+  }
+
+  .quest-game__heading p {
+    font-size: 10px;
+  }
+
+  .quest-game__demo {
+    padding: 9px;
+  }
+
+  .quest-game__demo-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 7px;
+  }
+
+  .quest-game__demo-events {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .quest-game__demo-events > svg {
+    display: none;
+  }
+
+  .quest-game__demo-event {
+    grid-template-columns: minmax(0, .8fr) minmax(0, 1fr);
+    column-gap: 7px;
+    padding: 6px 8px;
+  }
+
+  .quest-game__demo-event > span {
+    grid-row: span 2;
+    align-self: center;
+  }
+
+  .quest-game__demo-event > strong,
+  .quest-game__demo-event > small {
+    min-width: 0;
+  }
+
+  .quest-game__map-card {
+    padding: 9px;
+  }
+
+  .quest-game__map {
+    min-height: 184px;
+  }
+
+  .quest-game__map-art {
+    min-height: 184px;
+  }
+
+  .quest-game__map-node {
+    max-width: 104px;
+    gap: 4px;
+    padding: 4px 6px 4px 4px;
+  }
+
+  .quest-game__map-node-icon {
+    width: 25px;
+    height: 25px;
+  }
+
+  .quest-game__map-node-copy strong {
+    font-size: 9px;
+  }
+
+  .quest-game__map-caption {
+    right: 6px;
+    bottom: 6px;
+    font-size: 8px;
+  }
+
+  .quest-game__puzzle {
+    padding: 12px;
+  }
+
+  .quest-game__footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .quest-game__timer-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .quest-game__timer-button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 300px) {
+  .quest-game__header {
+    flex-direction: column;
+  }
+
+  .quest-game__progress {
+    width: 100%;
+  }
+
+  .quest-game__map {
+    min-height: 142px;
+  }
+
+  .quest-game__map-art {
+    min-height: 142px;
+  }
+
+  .quest-game__map-node {
+    gap: 3px;
+    padding: 3px 4px;
+  }
+
+  .quest-game__map-node-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .quest-game__map-node-copy small {
+    display: none;
+  }
+
+  .quest-game__map-node-copy strong {
+    font-size: 8px;
+  }
+
+  .quest-game__map-caption {
+    display: none;
+  }
+
+  .quest-game__puzzle h3 {
+    font-size: 14px;
+  }
+
+  .quest-game__timer-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .quest-game__flow-note {
+    gap: 3px;
+    font-size: 8px;
+  }
+}
+
+/* Keep the map aligned to its own artwork and make the narrow guided board readable. */
+.quest-game__body {
+  align-items: start;
+}
+
+.quest-game__map-card {
+  align-self: start;
+  height: fit-content;
+}
+
+.quest-game__map-node:disabled {
+  opacity: 1;
+}
+
+.quest-game__map-node.is-locked {
+  opacity: .88;
+}
+
+.quest-game__choice:disabled {
+  opacity: 1;
+}
+
+.quest-game[data-readonly='true'] .quest-game__choice:disabled {
+  border-color: #d6dfd2;
+  background: #fbfcf8;
+  color: #405344;
+}
+
+.quest-game[data-readonly='true'] .quest-game__small-button:disabled {
+  border-color: #d5dfd0;
+  background: #f4f7f0;
+  color: #61745f;
+  opacity: 1;
+}
+
+@media (max-width: 500px) {
+  .quest-game {
+    gap: 7px;
+  }
+
+  .quest-game__header {
+    display: none;
+  }
+
+  .quest-game__body {
+    grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+    align-items: start;
+    gap: 7px;
+  }
+
+  .quest-game__map-card {
+    align-self: start;
+    padding: 4px;
+  }
+
+  .quest-game__map,
+  .quest-game__map-art {
+    height: 112px;
+    min-height: 0;
+  }
+
+  .quest-game__map-node {
+    max-width: 112px;
+    gap: 5px;
+    padding: 4px 7px 4px 4px;
+  }
+
+  .quest-game__map-node-icon {
+    width: 23px;
+    height: 23px;
+  }
+
+  .quest-game__map-node-copy small {
+    display: none;
+  }
+
+  .quest-game__map-node-copy strong {
+    font-size: 11px;
+  }
+
+  .quest-game__map-caption {
+    display: none;
+  }
+
+  .quest-game__puzzle {
+    min-height: 0;
+    padding: 8px 10px;
+  }
+
+  .quest-game__puzzle h3 {
+    margin: 4px 0 2px;
+    font-size: 15px;
+  }
+
+  .quest-game__clue {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .quest-game__choices {
+    gap: 4px;
+  }
+
+  .quest-game__choice {
+    grid-template-columns: 20px minmax(0, 1fr) 14px;
+    min-height: 29px;
+    padding: 4px 7px;
+    font-size: 12px;
+  }
+
+  .quest-game__choice > span {
+    width: 19px;
+    height: 19px;
+    font-size: 10px;
+  }
+
+  .quest-game__preview-feedback {
+    gap: 5px;
+    margin-top: 5px;
+    padding: 4px 6px;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .quest-game__rule-card {
+    gap: 4px;
+    padding-top: 5px;
+  }
+
+  .quest-game__control-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 7px;
+  }
+
+  .quest-game__rule-status {
+    min-width: 0;
+    font-size: 10px;
+  }
+
+  .quest-game[data-guided-preview='true'] .quest-game__rule-status {
+    display: none;
+  }
+
+  .quest-game__hint-actions {
+    gap: 4px;
+  }
+
+  .quest-game__small-button {
+    min-height: 27px;
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  .quest-game__details {
+    padding-top: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quest-game *,
+  .quest-game *::before,
+  .quest-game *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* The live board stays short enough to sit inside the workflow canvas. */
+.quest-game__header {
+  gap: 10px;
+}
+
+.quest-game__heading h2 {
+  font-size: clamp(16px, 2vw, 21px);
+}
+
+.quest-game__progress {
+  min-width: 104px;
+  padding: 7px 9px;
+}
+
+.quest-game__body {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.quest-game__map-card {
+  display: block;
+  padding: 9px;
+}
+
+.quest-game__map {
+  min-height: 190px;
+}
+
+.quest-game__map-art {
+  min-height: 190px;
+}
+
+.quest-game__puzzle {
+  padding: 11px;
+}
+
+.quest-game__puzzle h3 {
+  margin-top: 7px;
+  font-size: 14px;
+}
+
+.quest-game__clue {
+  margin-bottom: 8px;
+  font-size: 10px;
+}
+
+.quest-game__choice {
+  min-height: 32px;
+  padding: 4px 7px;
+}
+
+.quest-game__choice > span {
+  width: 19px;
+  height: 19px;
+}
+
+.quest-game__control-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 5px 7px;
+}
+
+.quest-game__rule-card {
+  gap: 5px;
+  padding-top: 7px;
+}
+
+.quest-game__rule-clock {
+  gap: 4px;
+}
+
+.quest-game__rule-clock > span {
+  font-size: 9px;
+}
+
+.quest-game__rule-clock > strong {
+  margin-left: 1px;
+  font-size: 12px;
+}
+
+.quest-game__rule-status {
+  min-width: 0;
+  text-align: right;
+}
+
+.quest-game__hint-actions {
+  grid-column: 1 / -1;
+  gap: 4px;
+}
+
+.quest-game__small-button {
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 9px;
+}
+
+.quest-game__small-button--timer {
+  border-color: #b9cdb3;
+  background: #eef5e9;
+  color: #456b49;
+}
+
+.quest-game__small-button--reset {
+  padding-inline: 6px;
+}
+
+.quest-game__preview-feedback {
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 0;
+  padding: 5px 7px;
+  font-size: 9px;
+}
+
+.quest-game__preview-feedback svg {
+  margin-top: 0;
+}
+
+.quest-game__hint-output,
+.quest-game__answer-output {
+  padding: 5px 7px;
+  font-size: 9px;
+}
+
+.quest-game__details {
+  min-width: 0;
+  padding-top: 5px;
+  border-top: 1px solid #edf0e8;
+  color: #768274;
+  font-size: 9px;
+}
+
+.quest-game__details summary {
+  width: fit-content;
+  color: #667860;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.quest-game__details > p {
+  margin: 5px 0 0;
+  line-height: 1.45;
+}
+
+.quest-game__details .quest-game__export-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 9px;
+}
+
+.quest-game__complete {
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: #f2f7ed;
+  font-size: 10px;
+}
+
+@media (max-width: 500px) {
+  .quest-game__body {
+    grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+    gap: 7px;
+  }
+
+  .quest-game__map-card {
+    padding: 6px;
+  }
+
+  .quest-game__map,
+  .quest-game__map-art {
+    min-height: 172px;
+  }
+
+  .quest-game__map-node {
+    max-width: 76px;
+    gap: 3px;
+    padding: 3px 4px;
+  }
+
+  .quest-game__map-node-icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .quest-game__map-node-icon svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .quest-game__map-node-copy small {
+    display: none;
+  }
+
+  .quest-game__map-node-copy strong {
+    font-size: 8px;
+  }
+
+  .quest-game__map-caption {
+    display: none;
+  }
+
+  .quest-game__puzzle {
+    padding: 8px;
+  }
+
+  .quest-game__puzzle h3 {
+    font-size: 13px;
+  }
+
+  .quest-game__choices {
+    gap: 5px;
+  }
+
+  .quest-game__choice {
+    grid-template-columns: 18px minmax(0, 1fr) 12px;
+    gap: 5px;
+    min-height: 29px;
+    font-size: 9px;
+  }
+
+  .quest-game__choice > span {
+    width: 17px;
+    height: 17px;
+  }
+
+  .quest-game__hint-actions {
+    flex-wrap: wrap;
+  }
+
+  .quest-game__small-button {
+    min-height: 26px;
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 430px) {
+  .quest-game__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quest-game__map,
+  .quest-game__map-art {
+    min-height: 184px;
+  }
+
+  .quest-game__map-node {
+    max-width: 108px;
+    gap: 4px;
+    padding: 4px 6px 4px 4px;
+  }
+
+  .quest-game__map-node-icon {
+    width: 25px;
+    height: 25px;
+  }
+
+  .quest-game__map-node-copy small {
+    display: block;
+  }
+
+  .quest-game__map-node-copy strong {
+    font-size: 9px;
+  }
+
+  .quest-game__puzzle {
+    padding: 11px;
+  }
+
+  .quest-game__puzzle h3 {
+    font-size: 15px;
+  }
+
+  .quest-game__choice {
+    grid-template-columns: 20px minmax(0, 1fr) 14px;
+    min-height: 34px;
+    font-size: 10px;
+  }
+
+  .quest-game__choice > span {
+    width: 19px;
+    height: 19px;
+  }
+}
+
+@media (max-width: 300px) {
+  .quest-game__header {
+    flex-direction: row;
+  }
+
+  .quest-game__progress {
+    width: auto;
+    min-width: 76px;
+  }
+
+  .quest-game__map,
+  .quest-game__map-art {
+    min-height: 142px;
+  }
+
+  .quest-game__map-node {
+    max-width: 74px;
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .quest-game__map-node-icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .quest-game__map-node-copy small {
+    display: none;
+  }
+
+  .quest-game__puzzle {
+    padding: 9px;
+  }
+
+  .quest-game__hint-actions {
+    gap: 3px;
+  }
+
+  .quest-game__small-button {
+    gap: 3px;
+    padding-inline: 5px;
+  }
+}
+
+/* The card is often narrower than the browser viewport inside the workflow canvas. */
+.quest-game__body {
+  align-items: start;
+}
+
+.quest-game__map-card {
+  align-self: start;
+  height: fit-content;
+}
+
+.quest-game__map-node:disabled,
+.quest-game__choice:disabled {
+  opacity: 1;
+}
+
+.quest-game__map-node.is-locked {
+  opacity: .88;
+}
+
+.quest-game[data-readonly='true'] .quest-game__choice:disabled {
+  border-color: #d6dfd2;
+  background: #fbfcf8;
+  color: #405344;
+}
+
+.quest-game[data-readonly='true'] .quest-game__small-button:disabled {
+  border-color: #d5dfd0;
+  background: #f4f7f0;
+  color: #61745f;
+  opacity: 1;
+}
+
+@container questgame (max-width: 500px) {
+  .quest-game {
+    gap: 7px;
+  }
+
+  .quest-game__header {
+    display: none;
+  }
+
+  .quest-game__body {
+    grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+    align-items: start;
+    gap: 7px;
+  }
+
+  .quest-game__map-card {
+    align-self: start;
+    padding: 4px;
+  }
+
+  .quest-game__map,
+  .quest-game__map-art {
+    height: 132px;
+    min-height: 0;
+  }
+
+  .quest-game__map-nodes {
+    inset: auto 4px 5px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .quest-game__map-node {
+    position: relative;
+    left: auto !important;
+    top: auto !important;
+    display: grid;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    min-height: 27px;
+    padding: 3px 2px;
+    transform: none;
+    border-radius: 7px;
+    box-shadow: 0 2px 6px #33473618;
+    text-align: center;
+  }
+
+  .quest-game__map-node:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .quest-game__map-node-icon,
+  .quest-game__map-node-copy small,
+  .quest-game__map-caption {
+    display: none;
+  }
+
+  .quest-game__map-node.is-solved {
+    border-color: #d0dfc8;
+    background: #eef5e9;
+  }
+
+  .quest-game__map-node.is-locked {
+    border-style: dashed;
+    background: #f7f8f3;
+    color: #647260;
+  }
+
+  .quest-game__map-node-copy {
+    display: block;
+  }
+
+  .quest-game__map-node-copy strong {
+    font-size: 9px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .quest-game__puzzle {
+    min-height: 0;
+    padding: 8px 10px;
+  }
+
+  .quest-game__puzzle h3 {
+    margin: 4px 0 2px;
+    font-size: 15px;
+  }
+
+  .quest-game__clue {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .quest-game__choices {
+    gap: 4px;
+  }
+
+  .quest-game__choice {
+    grid-template-columns: 20px minmax(0, 1fr) 14px;
+    min-height: 29px;
+    padding: 4px 7px;
+    font-size: 12px;
+  }
+
+  .quest-game__choice > span {
+    width: 19px;
+    height: 19px;
+    font-size: 10px;
+  }
+
+  .quest-game__preview-feedback {
+    gap: 5px;
+    margin-top: 5px;
+    padding: 4px 6px;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .quest-game__rule-card {
+    gap: 4px;
+    padding-top: 5px;
+  }
+
+  .quest-game__control-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 7px;
+  }
+
+  .quest-game__rule-status {
+    min-width: 0;
+    font-size: 10px;
+  }
+
+  .quest-game[data-guided-preview='true'] .quest-game__rule-status {
+    display: none;
+  }
+
+  .quest-game__hint-actions {
+    gap: 4px;
+  }
+
+  .quest-game__small-button {
+    min-height: 27px;
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  .quest-game__details {
+    padding-top: 3px;
+  }
+}
+
+@container questgame (max-width: 320px) {
+  .quest-game__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quest-game__map,
+  .quest-game__map-art {
+    height: 100px;
+  }
+
+  .quest-game__map-node-copy strong {
+    font-size: 10px;
+  }
+}

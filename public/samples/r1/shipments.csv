@@ -1,0 +1,4 @@
+shipment_id,zone,service_date,weight_gram,remote
+ALT-BKK-20,bangkok,2026-10-20,1100,true
+ALT-REG-20,regional,2026-10-20,1100,true
+ALT-BOUNDARY,bangkok,2026-10-14,1000,false

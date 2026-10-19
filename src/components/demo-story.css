@@ -1,0 +1,10 @@
+.demo-player-controls>button.demo-follow { display:flex; width:auto; padding:0 8px; gap:5px; font-size:9px; }
+.demo-player-controls>button.demo-follow[aria-pressed=true] { background:#f0e9ff; border-color:#d5c6f1; color:#7150ab; }
+.demo-player[data-phase=building] .demo-player-label>span { color:#7754ba; }
+.demo-player[data-phase=building] .demo-progress i { background:#9b7dd0; }
+.is-guided-demo .canvas-card { transition:box-shadow .3s,border-color .3s; }
+.is-guided-demo .inspector { bottom:174px; }
+@media(max-width:760px) { .demo-follow span { display:none; }.demo-player-controls>button.demo-follow { padding:0 6px; }.is-guided-demo .inspector { bottom:205px; } }
+@media(prefers-reduced-motion:reduce) { .is-guided-demo .canvas-card { transition:none; } }
+
+.connect-starter{display:inline-flex;align-items:center;gap:8px;margin:12px auto 0;color:#6754b4;background:#f4f0ff;padding:9px 14px;border-radius:12px;cursor:pointer;font-weight:650;font-size:12px}.demo-isolation-note{white-space:normal;line-height:1.4}

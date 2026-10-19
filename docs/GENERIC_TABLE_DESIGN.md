@@ -1,0 +1,54 @@
+# File-driven shared Canvas
+
+Status: implemented and deployed as a testing release on 19 October 2026. [Acceptance](GENERIC_TABLE_ACCEPTANCE.md) records CI, real-provider/two-account staging checks and the approved production migration; [Deployments](DEPLOYMENTS.md) identifies the active source/version. The gates below remain requirements for changes to these paths.
+
+The signed-in app gains a blank `table` room. The existing invoice, lesson and encounter rooms retain their behavior and data. This is a bounded general table runtime: collections, typed fields, records, actions, conditions, atomic effects, unique constraints and optional turns. It does not execute generated code.
+
+## User flow
+
+1. Create a blank table, drop UTF-8 CSV, JSON, TXT or Markdown into its source container. Up to 32 KiB per file, four files and 64 KiB total. Source text is stored in the private room authority and only the owner can see it. Images, binary files and PDF are rejected with an explanation in this release.
+2. Describe the task and explicitly consent to sending source text to the configured AI provider. The model returns a data-only program and initial rows. Every proposal names exact source quotations and lists assumptions. Unverified assumptions remain visible for human review.
+3. Inspect the proposed tables/actions/evidence on Canvas. Simulate, validate, approve, then activate using the existing revision-bound lifecycle. New sources or actions invalidate stale approvals. Rule changes preserve current records and must retain compatible collections and fields.
+4. Invite up to seven participants using individual single-use links. All participants see the shared active records, rules and actions. Uploaded source text, pending proposals and owner review are private to the owner. Do not upload secret data to shared active records.
+5. Commands are checked server-side against membership, the latest revision, parameter types, conditions and invariants, and commit atomically. Conflicts require refreshing/reviewing; no automatic repeat of a stale action. History and the saved room are persisted. Closing a browser does not delete the room; sign in and select it again.
+
+## Implementation boundaries
+
+`table-contracts.ts` defines the transport. `domain/table.ts` owns validation, source ingestion and deterministic execution. Existing authority/repository transactions own concurrency, idempotency, persistence and permissions. Cloudflare AI owns budget and provider dispatch. Canvas renders the validated program rather than domain-specific case components. Migration `0002_table_kind.sql` extended the directory kind constraints on staging and production under the recorded approval. Do not rerun the original provisioning or infer approval for a new persistent schema change from this design.
+
+Limits: six collections, twelve fields per collection, one hundred records per collection and two hundred in a room, sixteen actions, eight inputs per action, twenty-four conditions/effects, and up to twenty selectable rule revisions within a 256 KiB history budget. The room view keeps the latest one hundred action summaries with a separate monotonic action counter; authoritative event history remains in the server store. Programs are limited to 64 KiB and records to 128 KiB both at initialization and after every action. Sources cited by active or retained rule revisions cannot be removed. Later rule edits preserve the collection definitions and existing rows; changing the data schema is a separate future migration workflow.
+
+## Table conversation and requested actions
+
+The assistant remains visible beside the Canvas. Direct table controls are the primary way to play. Owners and participants can also ask about active rules and shared records or describe one action they want to take. The assistant must ask for clarification when the player asks it to choose a move or keep playing; it has no autonomous turn loop.
+
+Conversation requests use an explicit consent separate from owner rule drafting. The provider receives the request, an allowlisted active program, shared records, current turn, caller seat and a bounded selection of the caller's recent conversation in this room. Private source files, draft proposals, source quotations, full rule/event history and account profiles are excluded from this context. Known membership identifiers in shared values and conversation are represented by seat aliases; arbitrary user-authored text is not promised to be anonymous. Owner rule drafting keeps its separate all-source consent and simulation/approval lifecycle.
+
+An explanation changes no table data. An action response is a typed proposal for an existing `table.act` only. The server validates it against the deterministic interpreter without committing the result. The UI shows the action and inputs for a separate confirmation. Confirmation uses server-stored arguments bound to the original actor, room, epoch and revision, with ordinary membership, turn, condition, CAS and idempotency checks. A changed room requires a new reviewed request; it is never automatically retried or billed again. A provider response cannot edit rules, create arbitrary commands or bypass the existing lifecycle.
+
+Assistant requests reuse the existing Room model-job storage and shared billing ledger. Their purpose is distinct from owner draft jobs so completion and recovery cannot accidentally activate or propose a rule. No persistent schema is added for chat. Recovery mode stops new requests and confirmations while preserving room reads and resume.
+
+## Project continuity and context limits
+
+The durable unit is the room, not an AI request or a browser login session. Hosted rooms retain their active rules, shared records, membership and authoritative events when a browser closes or a login expires. Signing in again resumes the same room. A new message creates an assistant request within that room; it does not create a replacement room or reset play. Explicit reset/revocation continues to invalidate the old room epoch and its private assistant access.
+
+This change adds durable assistant prompts, validated replies and confirmation status in the existing model-job JSON, scoped to the requesting actor, room and epoch. The UI restores this history and can load older pages after reload. Another participant, including the room owner, cannot read a member's private assistant conversation. Shared table changes remain visible to all authorized members through the normal room projection. Owner rule-drafting jobs are a separate flow, not part of this conversation archive.
+
+Stored history and model context are different. For each request, the server selects at most six recent completed exchanges, bounded to 16 KiB, alongside the latest authorized table state. Earlier answers are quoted history, not rules or instructions. The current active rules, values and turn always take precedence. Old action proposals never execute as a consequence of a follow-up message; confirmation still requires the proposal's original revision to match.
+
+The complete provider request is capped at 48 KiB and the reply at 1,024 tokens. If the request is too large, optional conversation entries are removed oldest-first as whole entries and the omitted count is recorded. Current rules and records are never silently truncated or replaced by a generated summary. If the authoritative current context alone exceeds the cap, the request fails before provider dispatch/billing. The room, saved history and direct Canvas play continue to work. The app must report this limit rather than invent a complete answer from incomplete state.
+
+This release does not implement semantic retrieval, automatic narrative summaries, editable project-memory notes or unlimited archival storage. The assistant history has an explicit 500-request room storage bound for this testing release, with at most eight running/committing jobs. Reaching a storage, model or spending limit must preserve existing data and leave manual play available; it must not silently delete old history or start a new project. Long-running narrative campaigns need a separately tested retrieval/summary workflow before claiming indefinite conversational recall. A future summary must cite its source messages and rule revision, remain inspectable, and never overwrite authoritative state without ordinary human review.
+
+CI and two-account staging observations for these bounded continuity behaviors are now recorded in [acceptance](GENERIC_TABLE_ACCEPTANCE.md). They establish saved actor-private transcripts and recent-context follow-up, not semantic recall of every prior message.
+
+## Acceptance gates
+
+- Equipment lending: import inventory and policy; two actors reserve the same item; exactly one succeeds; only its borrower may return it.
+- Team shift scheduling: import roster/availability; validate both sides of a swap; simultaneous swaps cannot overwrite one another or violate unique assignments.
+- Custom board game: import rules and player rows; enforce turns and scoring bounds; change a scoring rule with review while preserving the ongoing score.
+- All three run through the same interpreter with distinct source files, not switches on scenario names. Negative tests include malformed model output, unsafe keys, unsupported files, stale approvals, participant rule edits, duplicate command, invalid actions, and restart/resume.
+- Actual two-account Google sign-in on an isolated staging deployment, invite redemption, shared updates/conflicts, logout/login and resume must be witnessed before production. Synthetic auth tests are additional evidence, never a substitute.
+- Conversation acceptance must prove explanation without mutation, provider-context privacy, no automatic action, explicit confirmation, stale proposal rejection, actor-bound job access, duplicate-confirm idempotency and human Canvas play while an assistant proposal is pending. The current release has separate checks of this route; repeat affected checks when behavior changes instead of relying only on the three-scenario table acceptance.
+- Continuity acceptance must cover conversation after reload and sign-in, actor/room/epoch isolation, follow-up questions with recent context, current rules taking precedence over older replies, bounded history pagination and a context-limit failure without provider dispatch or loss of manual play. Showing old messages in the UI does not prove that every message is included in model context.
+- Future production changes must pass their local/CI, review and affected hosted acceptance gates before an approved release. Credentials stay in ignored local environment files and Worker secrets.

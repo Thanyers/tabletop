@@ -1,0 +1,57 @@
+.react-flow__edge.canvas-edge__path {
+  pointer-events: stroke;
+}
+
+.react-flow__edge .canvas-edge__path {
+  transition: opacity 120ms ease, stroke 160ms ease, stroke-width 160ms ease;
+}
+
+.react-flow__edge .canvas-edge__halo {
+  pointer-events: none;
+}
+
+.canvas-edge__source-dot {
+  pointer-events: none;
+}
+
+.canvas-edge-label {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 3px 8px;
+  border: 1px solid #e3e8ee;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 1px 4px rgb(39 52 68 / 8%);
+  color: #66768a;
+  font: 600 11px/1.25 Manrope, 'Noto Sans Thai', sans-serif;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 120ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.canvas-edge-label.is-active {
+  border-color: #d7e0e9;
+  color: #526b88;
+}
+
+.canvas-edge-label.is-dimmed {
+  opacity: 0.72;
+}
+
+.canvas-edge-label.is-moving {
+  opacity: 0.8;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge .canvas-edge__path,
+  .canvas-edge-label {
+    transition: none;
+  }
+}

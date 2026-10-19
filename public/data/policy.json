@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "defaultThreshold": 20000,
+  "laptop": {
+    "threshold": 20000,
+    "usefulLifeMonths": 60,
+    "start": "following-month"
+  },
+  "createdAt": "2026-09-01T00:00:00.000Z",
+  "source": "synthetic-seed"
+}

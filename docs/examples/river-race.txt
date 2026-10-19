@@ -1,0 +1,2 @@
+River Race: two players use host and member-1 seats. Host goes first. On your turn, advance your own boat by 2 points and then pass the turn. Scores must stay between 0 and 20. Start both boats at zero. The owner can propose a new scoring rule mid-game without resetting scores.
+Boats: red (host), blue (member-1).

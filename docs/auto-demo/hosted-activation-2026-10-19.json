@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-18T21:56:47.105Z",
+  "origin": "https://tabletop.ptchrr.workers.dev",
+  "runtimeCommit": "a495cf5617f60af1c51087b54b6c145f0621e938",
+  "before": {
+    "observedAt": "2026-10-18T21:52:35.366Z",
+    "environment": "hosted-cloudflare-free",
+    "roomAlias": "Encounter Table",
+    "candidateHash": "a925f8fdc9dc3702575d17e5b6d1efac1e56d35f910b6d060164b3218f0e4208",
+    "status": "APPROVED",
+    "ruleRevision": 0,
+    "dataRevision": 1,
+    "activeRule": {
+      "allyTarget": false,
+      "apCost": 0,
+      "oncePerTurn": false
+    },
+    "intendedRule": {
+      "allyTarget": true,
+      "apCost": 1,
+      "oncePerTurn": true
+    },
+    "scope": "One existing owner-created test room; preserve existing room and history"
+  },
+  "firstAttempt": {
+    "result": "rejected",
+    "visibleMessage": "This table is not available to the current session. Open a new invitation or choose another table.",
+    "persistedRuleRevision": 0,
+    "serverErrorCode": "not-captured"
+  },
+  "recovery": {
+    "method": "Manually reproposed the same approved rule through the existing UI, then simulated, validated, approved and activated.",
+    "additionalAiRequests": 0,
+    "newCandidateHash": "9f779e1f640b6568e6ea492364325d8b0d0a8e7704260a845aee6c909b435a1e"
+  },
+  "after": {
+    "observedAt": "2026-10-18T21:56:01.412Z",
+    "candidateHash": "9f779e1f640b6568e6ea492364325d8b0d0a8e7704260a845aee6c909b435a1e",
+    "status": "ACTIVE",
+    "ruleRevision": 1,
+    "dataRevision": 1,
+    "activeRule": {
+      "allyTarget": true,
+      "apCost": 1,
+      "oncePerTurn": true
+    },
+    "revisionOptions": [
+      0,
+      1
+    ],
+    "historyKept": true
+  },
+  "reload": {
+    "observedAt": "2026-10-18T21:56:47.105Z",
+    "passed": true,
+    "ruleRevision": 1,
+    "candidateStatus": "ACTIVE",
+    "rule": {
+      "allyTarget": true,
+      "apCost": 1,
+      "oncePerTurn": true
+    },
+    "revisionOptions": [
+      0,
+      1
+    ]
+  },
+  "privacy": {
+    "credentialsIncluded": false,
+    "accountIdentifiersIncluded": false,
+    "invitationTokensIncluded": false
+  },
+  "limits": [
+    "One owner account; hosted two-account gameplay remains untested.",
+    "Initial rejection cause not established from its generic UI message.",
+    "Recorded summary is not a full Room/D1 backup."
+  ]
+}
