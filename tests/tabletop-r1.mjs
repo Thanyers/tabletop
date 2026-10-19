@@ -109,7 +109,8 @@ async function lifecycle(page, objectId) {
   let editor;
   for (const [label, type] of [['Simulate','evolve.simulate'],['Validate','evolve.validate'],['Approve','evolve.approve'],['Activate','evolve.activate']]) {
     editor = await openObject(page, objectId);
-    await clickCommand(page, editor.getByRole('button', { name: label, exact: true }), type);
+    // Accessible names include the numbered lifecycle step, e.g. "1 Simulate".
+    await clickCommand(page, editor.getByRole('region', { name:'Draft lifecycle', exact:true }).getByRole('button', { name:new RegExp('\\b' + label + '$') }), type);
   }
   return editor;
 }

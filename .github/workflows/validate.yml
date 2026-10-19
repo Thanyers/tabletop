@@ -71,6 +71,7 @@ jobs:
             test-results/unit-report.json
             test-results/cloudflare-report.json
             test-results/tabletop-r1/report.json
+            test-results/tabletop-r1/failure-*.png
             test-results/cloudflare-browser/report.json
             test-results/cloudflare-browser/public-demo-desktop.png
             test-results/cloudflare-browser/public-demo-narrow.png
