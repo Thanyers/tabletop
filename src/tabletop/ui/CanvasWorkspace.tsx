@@ -403,7 +403,12 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     return result;
   }, [plan.bindings, visibleIds]);
 
-  const choose = useCallback((_event: React.MouseEvent, node: CanvasNode) => onSelectNode(node.id), [onSelectNode]);
+  const choose = useCallback((event: React.MouseEvent, node: CanvasNode) => {
+    // A content control may have navigated to another object. Do not select its
+    // old container again while that same click bubbles through React Flow.
+    if (event.target instanceof Element && event.target.closest('.tt-canvas-node__body')) return;
+    onSelectNode(node.id);
+  }, [onSelectNode]);
   const clear = useCallback(() => onSelectNode(null), [onSelectNode]);
   const arrange = mode === 'arrange';
 

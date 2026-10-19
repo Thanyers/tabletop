@@ -172,7 +172,9 @@ try {
   await expectSeparatedObjects(invoice);
   await expect(invoice.locator('.tt-canvas-node--invoice-table')).toContainText('155.00');
   await invoice.screenshot({ path: join(output, 'invoice-desktop.png') });
-  await invoice.reload(); await expect(invoice.locator('.tt-canvas-node--invoice-table')).toContainText('52.50');
+  await invoice.reload();
+  const reloadedTable = await openObject(invoice, 'invoice.table');
+  await expect(reloadedTable.getByRole('row', { name: /ALT-BKK-20, matches/ })).toContainText('52.50');
   mark('Manual proposal requires simulation, validation, approval and activation; surcharge table, evidence link, CSV and reload agree');
   await invoice.setViewportSize({ width: 390, height: 844 });
   expect(await invoice.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

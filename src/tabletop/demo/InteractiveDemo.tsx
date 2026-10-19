@@ -121,6 +121,10 @@ export default function InteractiveDemo() {
     if (!(event.target instanceof Element) || !event.target.closest('.tt-canvas-node__body')) return;
     const control = event.target.closest('input, select, textarea, button, [contenteditable="true"]');
     if (!control && event.type !== 'submit') return;
+    // Let buttons finish their click before publishing a new practice view.
+    // Publishing during pointerdown can replace the target before click fires.
+    if (control?.matches('button') && event.type !== 'click') return;
+    if (event.type === 'click' && !control?.matches('button')) return;
     if (event.type === 'keydown') {
       const key = (event.nativeEvent as KeyboardEvent).key;
       if (['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'Escape'].includes(key)) return;
@@ -175,7 +179,7 @@ export default function InteractiveDemo() {
             const available = id.startsWith('workspace.') || id === 'lesson.rules' || compiled.plan?.nodes.some(node => node.id === id && node.visible !== false);
             return <button key={id} disabled={present || !available} title={!available ? 'จะเปิดได้เมื่อมีข้อมูลหรือเลือกมุมมองที่เกี่ยวข้อง' : undefined} onClick={() => addObject(id)}>{present ? <Check size={14} /> : <Plus size={14} />}{objectTitles[id]}{!available && ' · รอข้อมูล'}</button>;
           })}</nav>}
-          <div className="tt-practice-surface-wrap" onPointerDownCapture={interact} onKeyDownCapture={interact} onInput={interact} onChange={interact} onSubmitCapture={interact}>
+          <div className="tt-practice-surface-wrap" onPointerDownCapture={interact} onKeyDownCapture={interact} onClick={interact} onInput={interact} onChange={interact} onSubmitCapture={interact}>
             <PracticeClockProvider now={snapshot.now}><TableSurface key={`${scenario.id}:${snapshot.view.epoch}:${snapshot.view.actor.actorId}`} view={snapshot.view} plan={compiled.plan} planError={compiled.error} surface="canvas" editMode="arrange" persistLayout={false} selectedNodeId={selectedNodeId} onSelectNode={selectObject} onCommand={onCommand} busy={busy} onUpload={async (_kind, file) => importFile(file)} onExport={exportResult} onFocusEvidence={focusEvidence} onBackFromEvidence={() => setFocusSourceIds([])} focusSourceIds={focusSourceIds} visibleNodeIds={snapshot.visibleNodeIds} focusNodeId={selectedNodeId} focusRequestKey={lastEvent?.id} openedObjectId={openedObjectId} onOpenObject={openObject} onFocusObject={focusObject} auxiliaryObjects={auxiliaryObjects} emptyContent={empty} /></PracticeClockProvider>
           </div>
           {isDragOver && <div className="tt-practice-drop-message"><FileText size={24} />ปล่อยไฟล์เพื่อเพิ่มลง Canvas</div>}{dragFile && <div key={`${snapshot.view.epoch}:${snapshot.stepIndex}`} className="tt-practice-demo-drag" aria-hidden="true"><FileText size={24} /><span>{dragFile.filename}</span><MousePointer2 size={21} /></div>}
