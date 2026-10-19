@@ -73,6 +73,8 @@ jobs:
             test-results/cloudflare-browser/interactive-demo-teaching.png
             test-results/cloudflare-browser/interactive-demo-encounter.png
             test-results/cloudflare-browser/interactive-demo-narrow.png
+            test-results/cloudflare-browser/interactive-demo-manual-state.json
+            test-results/cloudflare-browser/failure-*.png
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore

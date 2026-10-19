@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { join } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 
 // Called only by the disposable Workers browser fixture. Network and identity
 // side effects are checked by that fixture around this entire interaction.
@@ -58,7 +58,17 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await workbench.getByLabel('Mass value in kg', { exact: true }).fill('3');
   await workbench.getByLabel('Time value in s', { exact: true }).fill('2');
   await workbench.getByRole('button', { name: 'Update shared lesson', exact: true }).click();
-  await expect(workbench.getByRole('img', { name: 'Cart position 8 meters, velocity 8 meters per second', exact: true })).toBeVisible();
+  const scene = workbench.locator('svg.tt-track-svg');
+  await writeFile(join(output, 'interactive-demo-manual-state.json'), JSON.stringify({
+    mode: await mode.getAttribute('data-mode'), counter: await counter.innerText(),
+    force: await workbench.getByLabel('Force value in N', { exact: true }).inputValue(),
+    mass: await workbench.getByLabel('Mass value in kg', { exact: true }).inputValue(),
+    time: await workbench.getByLabel('Time value in s', { exact: true }).inputValue(),
+    scene: await scene.getAttribute('aria-label'),
+    result: await root.locator('.tt-practice-last-event').innerText(),
+  }, null, 2));
+  await expect(scene).toBeVisible();
+  await expect(scene).toHaveAttribute('aria-label', 'Cart position 8 meters, velocity 8 meters per second');
   const takenOverCounter = await counter.innerText();
   await page.waitForTimeout(3700);
   await expect(counter).toHaveText(takenOverCounter);
@@ -128,7 +138,8 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await page.getByRole('button', { name: 'หยุดแล้วลองเอง', exact: true }).click();
   await workbench.getByLabel('Force value in N', { exact: true }).fill('6');
   await workbench.getByRole('button', { name: 'Update shared lesson', exact: true }).click();
-  await expect(workbench.getByRole('img', { name: 'Cart position 6 meters, velocity 6 meters per second', exact: true })).toBeVisible();
+  await expect(scene).toBeVisible();
+  await expect(scene).toHaveAttribute('aria-label', 'Cart position 6 meters, velocity 6 meters per second');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.screenshot({ path: join(output, 'interactive-demo-narrow.png'), fullPage: true });
 }
