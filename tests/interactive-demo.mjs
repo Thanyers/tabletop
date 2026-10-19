@@ -177,6 +177,27 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(editor).toHaveAttribute('data-canvas-object', 'lesson.source');
   await expect(editor.getByLabel('Mass value in kg', { exact:true })).toHaveValue('5');
 
+  // The first native click must keep focus/value when playback hands over.
+  await fresh('teaching-physics'); await next(); await open('lesson.source');
+  await page.getByRole('button', { name:'เล่นเดโม', exact:true }).click();
+  const forceField = editor.getByLabel('Force value in N', { exact:true });
+  await forceField.click();
+  await expect(forceField).toBeFocused();
+  await expect(mode).toHaveAttribute('data-mode', 'manual');
+  await forceField.fill('13');
+  await editor.getByRole('button', { name:'Update lesson', exact:true }).click();
+  await expect(forceField).toHaveValue('13');
+
+  await fresh('encounter-shield'); await next(); await open('encounter.source');
+  const allyControl = editor.getByLabel('Allow shielding an ally', { exact:true });
+  const allyBefore = await allyControl.isChecked();
+  await page.getByRole('button', { name:'เล่นเดโม', exact:true }).click();
+  await allyControl.click();
+  await expect(allyControl).toBeChecked({ checked:!allyBefore });
+  await expect(mode).toHaveAttribute('data-mode', 'manual');
+  const afterControlClick = await counter.innerText();
+  await page.waitForTimeout(3700); await expect(counter).toHaveText(afterControlClick);
+
   // A local file selected by one role cannot finish importing as another role.
   await fresh('teaching-physics');
   await page.evaluate(() => {
