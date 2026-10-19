@@ -8,6 +8,7 @@ import type { PlanNode, ReviewItem } from '../runtime';
 import { CandidateLifecycle, EvidenceList, UploadCard } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { formatMoney } from './types';
+import { usePracticeClock } from './PracticeClock';
 
 interface CanvasObjectContentProps {
   view: WorkspaceView;
@@ -291,6 +292,8 @@ function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentPr
   const state = view.domain as EncounterState;
   const board = node.inputs.board as EncounterBoard | undefined;
   const [tick, setTick] = useState(Date.now());
+  const practiceNow = usePracticeClock();
+  const practiceMode = practiceNow !== null;
   const pending = board?.pendingHit ?? null;
   const phase = board?.phase ?? state.phase;
   const chars = board?.characters ?? state.characters;
@@ -300,12 +303,13 @@ function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentPr
   const actorId = view.actor.seat === 'mira' || view.actor.seat === 'pip' ? view.actor.seat : null;
   const actor = chars.find((character) => character.id === actorId);
   const ownTurn = actorId === active;
-  const deadline = pending ? Math.max(0, pauseState ? pauseState.remainingReactionMs ?? 0 : pending.deadline - tick) : 0;
+  const deadline = pending ? Math.max(0, pauseState ? pauseState.remainingReactionMs ?? 0 : pending.deadline - (practiceNow ?? tick)) : 0;
   useEffect(() => {
+    if (practiceNow !== null) return;
     if (!pending || pauseState) return;
     const timer = window.setInterval(() => setTick(Date.now()), 500);
     return () => window.clearInterval(timer);
-  }, [pending?.deadline, Boolean(pauseState)]);
+  }, [practiceNow, pending?.deadline, Boolean(pauseState)]);
   const canReact = view.actor.role === 'player' && !!actor && !!pending && phase === 'reaction.open'
     && (pending.target === actorId || rule.allyTarget)
     && actor.ap >= rule.apCost
@@ -316,7 +320,7 @@ function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentPr
   const nameFor = (id: string) => chars.find((character) => character.id === id)?.name ?? 'Character';
   const reactReason = pauseState ? 'The Dungeon Master paused all encounter actions.' : !actor ? 'This seat does not control a character.' : actor.ap < rule.apCost ? 'You need ' + rule.apCost + ' AP to shield; you have ' + actor.ap + '.' : rule.oncePerTurn && actor.shieldUsedGeneration === actor.turnGeneration ? 'You already used a shield this turn.' : pending?.target !== actorId && !rule.allyTarget ? 'The current rule allows self protection only.' : pending?.shields.some((intent) => intent.target === pending.target) ? 'This character is already covered by a shield.' : 'Your character has already submitted a reaction.';
   return <div className="tt-canvas-inline">
-    <InlineHeading eyebrow="SERVER-TIMED ACTION" title="Current action" status={pauseState ? 'Paused' : phase.replaceAll('.', ' · ')} />
+    <InlineHeading eyebrow={practiceMode ? 'PRACTICE ACTION' : 'SERVER-TIMED ACTION'} title="Current action" status={pauseState ? 'Paused' : phase.replaceAll('.', ' · ')} />
     {pauseState && <p className="tt-encounter-paused" role="status"><ShieldCheck size={14} /> The Dungeon Master paused this encounter. Actions and timers are on hold.</p>}
     {pending && phase === 'reaction.open' && pauseState ? <div className="tt-inline-reaction tt-reaction-window--paused"><span className="tt-reaction-window__icon"><Shield size={17} /></span><div><strong>Reaction window paused</strong><small>{nameFor(pending.attacker)} targeted {nameFor(pending.target)}. Remaining time is held until the Dungeon Master resumes.</small></div><span className="tt-countdown" aria-label={`${Math.ceil(deadline / 1000)} seconds held`}><Clock3 size={13} /><strong>{Math.ceil(deadline / 1000)}s</strong></span></div> : pending && phase === 'reaction.open' ? <div className="tt-inline-reaction"><span className="tt-reaction-window__icon"><Shield size={17} /></span><div><strong>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}</strong><small>{pending.damage === null ? 'Damage stays with the DM until resolution; you may react now.' : `${pending.damage} damage is pending; eligible players may react before it is resolved.`}</small></div><span className={'tt-countdown' + (deadline <= 5000 ? ' is-ending' : '')} aria-live="polite"><Clock3 size={13} /><strong>{Math.ceil(deadline / 1000)}s</strong></span></div> : <div className="tt-inline-action-summary"><Activity size={14} /><span>{phase === 'action.resolved' ? 'The action is resolved. End the current turn when ready.' : nameFor(active) + ' is ready to act.'}</span></div>}
     {view.actor.role === 'dm' && <button type="button" className={pauseState ? 'tt-button tt-button--primary' : 'tt-button tt-button--quiet'} disabled={busy !== null} onClick={() => void onCommand(pauseState ? 'encounter.resume' : 'encounter.pause', {})}><ShieldCheck size={13} /> {pauseState ? 'Resume encounter' : 'Pause encounter'}</button>}
@@ -326,7 +330,7 @@ function EncounterActions({ view, node, onCommand, busy }: CanvasObjectContentPr
     {(view.actor.role === 'dm' || ownTurn) && <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || !canEnd} onClick={() => void onCommand('encounter.endTurn', {})}><RotateCcw size={13} /> End {nameFor(active)}’s turn</button>}
     {view.actor.role === 'player' && !ownTurn && phase !== 'reaction.open' && <p className="tt-canvas-inline__note">You can act when your character’s turn begins.</p>}
     {pauseState && <p className="tt-canvas-inline__note" role="status">Actions are disabled for everyone until the Dungeon Master resumes.</p>}
-    {!pauseState && pending && <p className="tt-canvas-inline__note">The deadline is server-set. The DM can resolve the reaction window at any time.</p>}
+    {!pauseState && pending && <p className="tt-canvas-inline__note">{practiceMode ? 'The practice clock holds while you read. The DM can resolve the reaction window at any time.' : 'The deadline is server-set. The DM can resolve the reaction window at any time.'}</p>}
   </div>;
 }
 

@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { verifyInteractiveDemo } from './interactive-demo.mjs';
 
 const listener = createServer();
 await new Promise(resolveReady => listener.listen(0, '127.0.0.1', resolveReady));
@@ -88,18 +89,22 @@ try {
   expect((await api(anonymous, '/api/session')).status).toBe(401);
   mark('Anonymous browser is gated by Google sign-in; no guest account is created');
 
-  // Public playback is a static recording, never an anonymous application session.
+  // Both public experiences must stay separate from authenticated application sessions.
   const publicDemoRequests = []; const publicDemoSockets = [];
   const demoContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const demo = await demoContext.newPage(); pages.push(demo);
   demo.on('pageerror', error => errors.push(error.message));
-  demo.on('request', request => {
+  demoContext.on('request', request => {
     const url = new URL(request.url());
     if (url.origin !== origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/internal/')) {
       publicDemoRequests.push({ method: request.method(), pathname: url.pathname });
     }
   });
   demo.on('websocket', socket => publicDemoSockets.push(socket.url()));
+  demoContext.on('page', page => {
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('websocket', socket => publicDemoSockets.push(socket.url()));
+  });
   await demo.route(url => url.origin !== origin, route => route.abort());
   const identityCounts = async () => ({
     users: (await db.prepare('SELECT COUNT(*) AS n FROM users').first()).n,
@@ -107,7 +112,14 @@ try {
     rooms: (await db.prepare('SELECT COUNT(*) AS n FROM rooms').first()).n,
   });
   const beforeDemo = await identityCounts();
-  await demo.goto(`${origin}/demo?legacy-demo=1`);
+  await verifyInteractiveDemo(demo, origin, output);
+  expect(publicDemoRequests).toEqual([]); expect(publicDemoSockets).toEqual([]);
+  expect(await identityCounts()).toEqual(beforeDemo);
+  expect(await demoContext.cookies()).toEqual([]);
+  expect(providerCalls).toBe(0);
+  mark('Interactive Auto demo uses the actual tables and domain commands; pause, manual edits, persona changes, isolation and narrow layout work without API calls or server state');
+  await demo.setViewportSize({ width: 1440, height: 1000 });
+  await demo.goto(`${origin}/demo/replay?legacy-demo=1`);
   await expect(demo.getByTestId('public-auto-demo')).toBeVisible();
   await expect(demo.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
   const demoCounter = demo.getByTestId('demo-step-counter');

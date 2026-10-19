@@ -113,7 +113,7 @@ export default function PublicDemo() {
         <span>tabletop<span>.</span></span>
       </a>
       <span className="tt-public-demo__top-note">ข้อมูลจำลอง · เล่นย้อนหลัง · ไม่ต้องล็อกอิน</span>
-      <a className="tt-public-demo__home" href="/"><ArrowLeft size={15} /><span>กลับหน้าหลัก</span></a>
+      <a className="tt-public-demo__home" href="/demo"><ArrowLeft size={15} /><span>ไปโต๊ะทดลองที่เล่นต่อได้</span></a>
     </header>
 
     <section className="tt-public-demo__intro" aria-labelledby="tt-public-demo-title">

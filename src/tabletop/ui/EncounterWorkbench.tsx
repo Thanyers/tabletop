@@ -3,6 +3,7 @@ import { Activity, Clock3, Heart, RotateCw, Shield, ShieldCheck, Swords, Target 
 import type { EncounterRule, EncounterState } from '../shared/contracts';
 import type { WorkbenchProps } from './types';
 import { CandidateLifecycle } from './WorkbenchShared';
+import { usePracticeClock } from './PracticeClock';
 
 interface EncounterBoard {
   characters: EncounterState['characters'];
@@ -41,16 +42,19 @@ export function EncounterWorkbench(props: WorkbenchProps) {
   const [rule, setRule] = useState<EncounterRule>(state.rule);
   const [note, setNote] = useState(state.dmNote ?? '');
   const [tick, setTick] = useState(Date.now());
+  const practiceNow = usePracticeClock();
+  const practiceMode = practiceNow !== null;
 
   useEffect(() => setRule(state.rule), [state.rule]);
   useEffect(() => setNote(state.dmNote ?? ''), [state.dmNote]);
   useEffect(() => {
+    if (practiceNow !== null) return;
     if (!pending || pauseState) return;
     const timer = window.setInterval(() => setTick(Date.now()), 500);
     return () => window.clearInterval(timer);
-  }, [pending?.deadline, Boolean(pauseState)]);
+  }, [practiceNow, pending?.deadline, Boolean(pauseState)]);
 
-  const remainingMs = pending ? Math.max(0, pauseState ? pauseState.remainingReactionMs ?? 0 : pending.deadline - tick) : 0;
+  const remainingMs = pending ? Math.max(0, pauseState ? pauseState.remainingReactionMs ?? 0 : pending.deadline - (practiceNow ?? tick)) : 0;
   const remainingSeconds = Math.ceil(remainingMs / 1000);
   const hitTarget = pending?.target ?? null;
   const canReact = view.actor.role === 'player' && !!actorId && !!pending && phase === 'reaction.open'
@@ -65,7 +69,7 @@ export function EncounterWorkbench(props: WorkbenchProps) {
 
   return (
     <div className="tt-workbench-body tt-encounter">
-      <section className="tt-case-heading"><div><span className="tt-kicker">ENCOUNTER TABLE · {view.actor.role.toUpperCase()}</span><h1>A shared turn with a clear reaction window</h1><p>Original, simplified fantasy rules. The server records the hit and owns turn order.</p></div><span className="tt-revision-mark"><Activity size={15} /> Rules r{state.ruleRevision}</span></section>
+      <section className="tt-case-heading"><div><span className="tt-kicker">ENCOUNTER TABLE · {view.actor.role.toUpperCase()}</span><h1>A shared turn with a clear reaction window</h1><p>{practiceMode ? 'A local practice table with a clear turn sequence and reaction window.' : 'Original, simplified fantasy rules. The server records the hit and owns turn order.'}</p></div><span className="tt-revision-mark"><Activity size={15} /> Rules r{state.ruleRevision}</span></section>
 
       <section className="tt-encounter-board" aria-label="Encounter board with Mira, Pip, and goblin">
         <header className="tt-encounter-board__header"><div><span className="tt-kicker">CONNECTED ENCOUNTER</span><strong>{pauseState ? 'Paused' : phase.replaceAll('.', ' · ')}</strong></div><span className={'tt-turn-pill' + (pauseState ? ' is-paused' : '')}><i aria-hidden="true" /> {pauseState ? 'DM paused the encounter' : `${nameFor(activeCharacter)}’s turn`}</span></header>
@@ -95,8 +99,8 @@ export function EncounterWorkbench(props: WorkbenchProps) {
         <div className="tt-rule-summary"><span>SHIELD RULE r{state.ruleRevision}</span><strong>{activeRule.allyTarget ? 'Self or ally' : 'Self only'} · {activeRule.apCost} AP{activeRule.oncePerTurn ? ' · once per turn' : ''}</strong></div>
       </section>
 
-      <section className="tt-section tt-action-section" aria-labelledby="tt-action-title"><header className="tt-section__header"><div><span className="tt-kicker">SERVER-AUTHORITATIVE ACTIONS</span><h2 id="tt-action-title">Current action</h2></div><span className={`tt-status-pill ${phase === 'reaction.open' ? 'tt-status-pill--pending' : 'tt-status-pill--active'}`}>{phase === 'reaction.open' ? 'Reaction open' : phase.replaceAll('.', ' ')}</span></header>
-        {pauseState && pending ? <div className="tt-reaction-window tt-reaction-window--paused"><div className="tt-reaction-window__icon"><Shield size={20} /></div><div className="tt-reaction-window__copy"><strong>Reaction window paused</strong><p>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}. The remaining time is held until the DM resumes.</p>{pending.shields.length > 0 && <small>{pending.shields.length} shield reaction{pending.shields.length === 1 ? '' : 's'} declared before the pause.</small>}</div><div className="tt-countdown" aria-label={`${remainingSeconds} seconds held`}><Clock3 size={15} /><strong>{remainingSeconds}s</strong><span>held</span></div></div> : phase === 'reaction.open' && pending ? <div className="tt-reaction-window"><div className="tt-reaction-window__icon"><Shield size={20} /></div><div className="tt-reaction-window__copy"><strong>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}.</strong><p>{pending.damage === null ? 'Damage stays with the DM until resolution.' : `${pending.damage} damage is pending.`} Eligible players may react before the DM resolves it.</p>{pending.shields.length > 0 && <small>{pending.shields.length} shield reaction{pending.shields.length === 1 ? '' : 's'} declared; outcomes are checked when resolved.</small>}</div><div className={`tt-countdown${remainingSeconds <= 5 ? ' is-ending' : ''}`} aria-live="polite"><Clock3 size={15} /><strong>{remainingSeconds}s</strong><span>server deadline</span></div></div> : phase === 'action.resolved' ? <div className="tt-action-summary"><Activity size={16} /><p>The action is resolved. The active character can end the turn when ready.</p></div> : <div className="tt-action-summary"><Activity size={16} /><p>{nameFor(activeCharacter)} is ready. The next action follows the active table rules.</p></div>}
+      <section className="tt-section tt-action-section" aria-labelledby="tt-action-title"><header className="tt-section__header"><div><span className="tt-kicker">{practiceMode ? 'PRACTICE ACTIONS' : 'SERVER-AUTHORITATIVE ACTIONS'}</span><h2 id="tt-action-title">Current action</h2></div><span className={`tt-status-pill ${phase === 'reaction.open' ? 'tt-status-pill--pending' : 'tt-status-pill--active'}`}>{phase === 'reaction.open' ? 'Reaction open' : phase.replaceAll('.', ' ')}</span></header>
+        {pauseState && pending ? <div className="tt-reaction-window tt-reaction-window--paused"><div className="tt-reaction-window__icon"><Shield size={20} /></div><div className="tt-reaction-window__copy"><strong>Reaction window paused</strong><p>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}. The remaining time is held until the DM resumes.</p>{pending.shields.length > 0 && <small>{pending.shields.length} shield reaction{pending.shields.length === 1 ? '' : 's'} declared before the pause.</small>}</div><div className="tt-countdown" aria-label={`${remainingSeconds} seconds held`}><Clock3 size={15} /><strong>{remainingSeconds}s</strong><span>held</span></div></div> : phase === 'reaction.open' && pending ? <div className="tt-reaction-window"><div className="tt-reaction-window__icon"><Shield size={20} /></div><div className="tt-reaction-window__copy"><strong>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}.</strong><p>{pending.damage === null ? 'Damage stays with the DM until resolution.' : `${pending.damage} damage is pending.`} Eligible players may react before the DM resolves it.</p>{pending.shields.length > 0 && <small>{pending.shields.length} shield reaction{pending.shields.length === 1 ? '' : 's'} declared; outcomes are checked when resolved.</small>}</div><div className={`tt-countdown${remainingSeconds <= 5 ? ' is-ending' : ''}`} aria-live="polite"><Clock3 size={15} /><strong>{remainingSeconds}s</strong><span>{practiceMode ? 'practice timer' : 'server deadline'}</span></div></div> : phase === 'action.resolved' ? <div className="tt-action-summary"><Activity size={16} /><p>The action is resolved. The active character can end the turn when ready.</p></div> : <div className="tt-action-summary"><Activity size={16} /><p>{nameFor(activeCharacter)} is ready. The next action follows the active table rules.</p></div>}
         <div className="tt-action-controls">
           {isDm && <button type="button" className={pauseState ? 'tt-button tt-button--primary' : 'tt-button tt-button--quiet'} disabled={busy !== null} onClick={() => void onCommand(pauseState ? 'encounter.resume' : 'encounter.pause', {})}><ShieldCheck size={14} /> {pauseState ? 'Resume encounter' : 'Pause encounter'}</button>}
           {isDm && phase === 'turn.start' && activeCharacter === 'goblin' && <div className="tt-declare-controls"><span><Target size={14} /> Goblin target</span><button type="button" className="tt-button tt-button--primary" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'mira' })}>Declare hit · Mira</button><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'pip' })}>Declare hit · Pip</button></div>}
@@ -105,7 +109,7 @@ export function EncounterWorkbench(props: WorkbenchProps) {
           {(isDm || ownTurn) && <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || !canEndTurn} onClick={() => void onCommand('encounter.endTurn', {})}><RotateCw size={14} /> End {nameFor(activeCharacter)}’s turn</button>}
           {view.actor.role === 'player' && !ownTurn && phase !== 'reaction.open' && <p className="tt-turn-hint">You can act when your character’s turn begins.</p>}
           {pauseState && <p className="tt-turn-hint" role="status">Gameplay is paused for everyone. The remaining reaction time will continue when the DM resumes.</p>}
-          {!pauseState && phase === 'reaction.open' && <p className="tt-turn-hint">The reaction deadline is set by the server. The DM can resolve the window at any time.</p>}
+          {!pauseState && phase === 'reaction.open' && <p className="tt-turn-hint">{practiceMode ? 'The practice clock holds while you read. The DM can resolve the window at any time.' : 'The reaction deadline is set by the server. The DM can resolve the window at any time.'}</p>}
         </div>
       </section>
 
@@ -116,7 +120,7 @@ export function EncounterWorkbench(props: WorkbenchProps) {
       {isDm && <section className="tt-section" aria-labelledby="tt-dm-note-title"><header className="tt-section__header"><div><span className="tt-kicker">DM ONLY</span><h2 id="tt-dm-note-title">Private table note</h2></div><span className="tt-private-lock">Hidden from players</span></header><form className="tt-note-form" onSubmit={saveNote}><label className="tt-visually-hidden" htmlFor="tt-dm-note">Private DM note</label><textarea id="tt-dm-note" rows={3} maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Write a note only the DM can see…" /><div><small>{note.length}/2000 characters</small><button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || note === (state.dmNote ?? '')}><ShieldCheck size={14} /> Save private note</button></div></form></section>}
 
       {isDm && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />}
-      <section className="tt-footer-note"><Swords size={14} /><span>Original simplified rules. The server validates current turn, actor seat, target, AP, cooldown, deadline, and rule revision.</span></section>
+      <section className="tt-footer-note"><Swords size={14} /><span>{practiceMode ? 'Practice draft rules and checks stay inside this local table.' : 'Original simplified rules. The server validates current turn, actor seat, target, AP, cooldown, deadline, and rule revision.'}</span></section>
     </div>
   );
 }

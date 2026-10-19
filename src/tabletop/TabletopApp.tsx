@@ -3,13 +3,10 @@ import { Activity, ArrowDownUp, ArrowRight, BookOpen, Check, ChevronDown, Circle
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
 import { planForWorkspace } from './runtime';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
-import { CanvasWorkspace } from './ui/CanvasWorkspace';
-import { EncounterWorkbench } from './ui/EncounterWorkbench';
-import { InvoiceWorkbench } from './ui/InvoiceWorkbench';
-import { TeachingWorkbench } from './ui/TeachingWorkbench';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
+import { TableSurface } from './ui/TableSurface';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
 import './ui/tabletop.css';
@@ -512,22 +509,28 @@ export default function TabletopApp() {
 
       {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
 
-      <main className={`tt-main tt-main--${surface}`}>
-        <section className="tt-canvas-panel" aria-label="Table objects canvas">
-          <div className="tt-canvas-panel__head"><div><span className="tt-kicker">CONNECTED OBJECTS</span><strong>{caseInfo[view.kind].title}</strong></div><span>{compiled.plan?.bindings.length ?? 0} data connection{compiled.plan?.bindings.length === 1 ? '' : 's'}</span></div>
-          {compiled.plan ? <CanvasWorkspace view={view} plan={compiled.plan} mode={editMode} selectedNodeId={selectedNodeId} onSelectNode={selectCanvasNode} onCommand={runCommand} busy={busy} onUpload={upload} onFocusEvidence={focusEvidence} focusSourceIds={focusSourceIds} /> : <div className="tt-plan-error" role="alert"><CircleAlert size={18} /><strong>This table needs a refresh</strong><p>{compiled.error}</p><button className="tt-button tt-button--quiet" type="button" onClick={() => void openWorkspace(view.id)}>Reload table</button></div>}
-        </section>
-
-        <section className="tt-inspector-panel" aria-label="Table workbench"><div className="tt-inspector-scroll" ref={inspectorScrollRef}>
-          <MemberStrip view={view} />
+      <TableSurface
+        view={view}
+        plan={compiled.plan}
+        planError={compiled.error}
+        surface={surface}
+        editMode={editMode}
+        selectedNodeId={selectedNodeId}
+        onSelectNode={selectCanvasNode}
+        onCommand={runCommand}
+        busy={busy}
+        onUpload={upload}
+        onExport={download}
+        onFocusEvidence={focusEvidence}
+        onBackFromEvidence={backFromEvidence}
+        focusSourceIds={focusSourceIds}
+        inspectorScrollRef={inspectorScrollRef}
+        onReload={() => void openWorkspace(view.id)}
+        inspectorContent={<>
           {canAskAI && <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} />}
           {selectedNode && compiled.plan && <ObjectInspector node={selectedNode} plan={compiled.plan} onClose={() => setSelectedNodeId(null)} />}
-          {compiled.error && <div className="tt-inline-plan-warning" role="alert"><CircleAlert size={15} /><span>{compiled.error}</span></div>}
-          {view.kind === 'invoice' && compiled.plan && <InvoiceWorkbench view={view} plan={compiled.plan} onCommand={runCommand} busy={busy} onUpload={upload} onExport={download} onFocusEvidence={focusEvidence} onBackFromEvidence={backFromEvidence} focusSourceIds={focusSourceIds} />}
-          {view.kind === 'teaching' && compiled.plan && <TeachingWorkbench view={view} plan={compiled.plan} onCommand={runCommand} busy={busy} onUpload={upload} onExport={download} onFocusEvidence={focusEvidence} onBackFromEvidence={backFromEvidence} focusSourceIds={focusSourceIds} />}
-          {view.kind === 'encounter' && compiled.plan && <EncounterWorkbench view={view} plan={compiled.plan} onCommand={runCommand} busy={busy} onUpload={upload} onExport={download} onFocusEvidence={focusEvidence} onBackFromEvidence={backFromEvidence} focusSourceIds={focusSourceIds} />}
-        </div></section>
-      </main>
+        </>}
+      />
 
       {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} />}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
