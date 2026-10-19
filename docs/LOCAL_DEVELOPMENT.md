@@ -1,5 +1,7 @@
 # Local development and runtime boundaries
 
+For the current hosted app and team onboarding, start with [CONTRIBUTING](../CONTRIBUTING.md) and [Deployments](DEPLOYMENTS.md). The Node path below is the guest runtime; Cloudflare tests at the end exercise the account-based production architecture.
+
 The built Tabletop R1 candidate runs as one local Node server. For frontend development, run Vite and the API as two local processes; Vite serves the UI and forwards same-origin API and WebSocket traffic to the loopback API server. Both workflows are local only and do not provision a hosted environment.
 
 ## Requirements and first start
@@ -75,7 +77,7 @@ Teaching and encounter cases use their deterministic server rules and can be exp
 
 The Node guest runtime keeps its model endpoint disabled. The Cloudflare runtime connects DeepSeek Flash to authenticated jobs, consent, and a durable budget ledger. See the Cloudflare checks below and [provider verification](AI_PROVIDER_VERIFICATION.md) for separate bounded live API evidence. Keep `DEEPSEEK_KEY` in an ignored local file or server secret; never prefix it with `VITE_` or include it in a browser build.
 
-Local mode currently accepts the supported CSV and text-PDF inputs into a private filesystem object store for development. Production mode rejects public upload requests with `UPLOAD_SERVICE_NOT_CONFIGURED` until a scanner and durable private object store are selected and wired into the application. The container candidate does not add those services. Do not treat the local parser or filesystem store as an upload-security or production-storage service.
+The legacy invoice workflow in local mode accepts supported CSV and text-PDF inputs into a private filesystem object store. Its production upload endpoint rejects requests with `UPLOAD_SERVICE_NOT_CONFIGURED` until a scanner and durable private object store are wired in. Generic `table` source ingestion is a separate authorized text command and is supported on Cloudflare within the [generic file limits](GENERIC_TABLE_DESIGN.md#user-flow). It does not enable PDF/image/binary uploads or R2. Do not treat the local parser or filesystem store as a production-storage service.
 
 ## Production-mode contract
 
@@ -91,7 +93,7 @@ Production mode is a deployment candidate that requires all of the following to 
 
 Production startup does not apply database migrations; it requires the configured PostgreSQL schema to be ready. The explicit migration entrypoint is `node --import tsx server/migrate.ts --environment production`. A database owner must approve the target database, schema operation, scope, and recovery plan before anyone runs it. Do not run that command against a shared or production database as part of ordinary startup.
 
-The [Cloudflare candidate](CLOUDFLARE_RELEASE.md) uses a separate Workers entrypoint and D1/SQLite Durable Object repositories, reusing the shared domain and frontend. R2 and public uploads remain deferred. No resource or cost approval follows from a local test. The alternate Node container still expects an HTTPS reverse proxy and external PostgreSQL.
+The [Cloudflare deployment](DEPLOYMENTS.md) uses a separate Workers entrypoint and D1/SQLite Durable Object repositories, reusing the shared domain and frontend. R2 and the legacy invoice upload endpoint remain deferred. No resource or cost approval follows from a local test. The alternate Node container still expects an HTTPS reverse proxy and external PostgreSQL.
 
 The included `Dockerfile` is a multistage, non-root container candidate with a built-in Node health check. It defaults to production mode, so it will stop at startup until the production environment and required values are supplied. It has not been deployed, and its presence does not mean production readiness.
 

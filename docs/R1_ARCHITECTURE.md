@@ -1,10 +1,10 @@
 # R1 implementation boundaries
 
-Status: local Cloudflare release candidate, 18 October 2026. The [release record](CLOUDFLARE_RELEASE.md) separates emulator evidence from pending hosted acceptance. The [master plan](../handoff/Final/planning-review/TABLETOP_R1_MASTER_PLAN.md) remains the product baseline.
+This document describes the shared runtime and original three workflows. The deployed file-driven `table` and its private assistant are detailed in [Generic table design](GENERIC_TABLE_DESIGN.md). See [current deployments](DEPLOYMENTS.md) and [acceptance](GENERIC_TABLE_ACCEPTANCE.md) for current release evidence; the [initial release record](CLOUDFLARE_RELEASE.md) and [master plan](../handoff/Final/planning-review/TABLETOP_R1_MASTER_PLAN.md) retain their historical scope.
 
 ## Shared application and domain
 
-The React client renders invoice, teaching, and encounter workspaces through a typed capability registry and manifest compiler. The compiler checks ports, required inputs, versions, visibility, duplicate IDs, limits, and cycles before evaluating a plan. It returns no partial plan on failure. Components are curated application code; the application does not execute model-generated JavaScript.
+The React client renders invoice, teaching, encounter and generic table workspaces. The original workflows use a typed capability registry and manifest compiler. The compiler checks ports, required inputs, versions, visibility, duplicate IDs, limits, and cycles before evaluating a plan. It returns no partial plan on failure. Generic tables add a bounded data-only interpreter for typed collections, records, actions, conditions and atomic effects. Components are curated application code; the application does not execute model-generated JavaScript.
 
 `src/tabletop/shared/contracts.ts` defines the contracts. `src/tabletop/domain/` contains deterministic decisions and role projections. `src/tabletop/runtime/` calculates displays from an authorized projection. `server/authority.ts` applies the same command rules through either the PostgreSQL/PGlite repository or the Cloudflare room repository.
 
@@ -50,13 +50,13 @@ The Billing Durable Object reserves a conservative peak-price maximum before a p
 
 Room jobs recheck epoch, revision, role, and session before committing. Duplicate commands do not redial the provider. Reset scrubs old job payloads. A failed completion-status write is reconciled against the command receipt, preserving a successfully committed draft. Uncertain provider outcomes after a restart are not automatically retried.
 
-Local browser acceptance uses a synthetic provider with the real local ledger and room commit. [Provider verification](AI_PROVIDER_VERIFICATION.md) records separate earlier bounded live API calls. Hosted latency, quotas, and quality acceptance across all workflows remain pending.
+Local browser acceptance uses a synthetic provider with the real local ledger and room commit. [Provider verification](AI_PROVIDER_VERIFICATION.md) records earlier bounded live API calls; [generic acceptance](GENERIC_TABLE_ACCEPTANCE.md) records later real-provider and two-Google-account staging checks. Full latency/load and live budget-negative acceptance remain incomplete. Generic rule drafting and actor-private table conversation have distinct consent and context contracts in [Generic table design](GENERIC_TABLE_DESIGN.md).
 
 ## Evidence and uploads
 
 Invoice money uses integer satang and weight uses integer grams. Dates include the start and exclude the end. Missing, ambiguous, duplicate, or unreviewed evidence remains unresolved. Explicit human review marks a source verified. Exports require authority, escape HTML, and neutralize spreadsheet formula prefixes.
 
-Cloudflare advertises `uploads: false`; there is no public upload route or R2 binding. The sample invoice case, source review, rules, calculations, and exports remain available. Production imports require private storage, quarantine/scanning, bounded parsing, deletion, and restore testing before enablement.
+Cloudflare advertises `uploads: false` for the legacy invoice upload endpoint and has no R2 binding. The sample invoice case, source review, rules, calculations, and exports remain available. Generic `table` rooms separately accept bounded UTF-8 CSV/JSON/TXT/Markdown source text through authorized commands into private Room storage. This is not PDF/image/binary upload support. Broader document imports require private storage, quarantine/scanning, bounded parsing, deletion, and restore testing before enablement.
 
 ## Alternate local Node runtime
 
@@ -68,4 +68,4 @@ The alternate Node container requires external PostgreSQL, HTTPS, and explicitly
 
 CI uses pinned actions, read-only repository permissions, synthetic credentials, and no deployment step. It checks publication paths, dependencies, types, domain/server tests, local D1/DO tests, browser behavior, and Worker dry-run bundling.
 
-Production resource/schema approval, paid-plan readiness, hosted Google redirect, deployed asset parity, two-device resume, hibernation/logout, delayed alarms, live AI, and recoverable storage/code rollback remain release gates. Durable storage alone does not prove an application-wide backup. The legacy `?legacy-demo=1` experience and local Component Lab remain separate.
+The testing release completed its approved resource/schema changes, hosted Google setup, asset parity, bounded live AI and two-account staging checks. Current evidence and remaining gates are listed in [Generic table acceptance](GENERIC_TABLE_ACCEPTANCE.md). Two physical devices, load/soak, live budget-negative tests and coordinated D1/Room/Billing restore are not fully verified. Durable storage alone does not prove an application-wide backup. The legacy `?legacy-demo=1` experience and local Component Lab remain separate.

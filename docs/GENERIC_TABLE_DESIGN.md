@@ -1,5 +1,7 @@
 # File-driven shared Canvas
 
+Status: implemented and deployed as a testing release on 19 October 2026. [Acceptance](GENERIC_TABLE_ACCEPTANCE.md) records CI, real-provider/two-account staging checks and the approved production migration; [Deployments](DEPLOYMENTS.md) identifies the active source/version. The gates below remain requirements for changes to these paths.
+
 The signed-in app gains a blank `table` room. The existing invoice, lesson and encounter rooms retain their behavior and data. This is a bounded general table runtime: collections, typed fields, records, actions, conditions, atomic effects, unique constraints and optional turns. It does not execute generated code.
 
 ## User flow
@@ -12,7 +14,7 @@ The signed-in app gains a blank `table` room. The existing invoice, lesson and e
 
 ## Implementation boundaries
 
-`table-contracts.ts` defines the transport. `domain/table.ts` owns validation, source ingestion and deterministic execution. Existing authority/repository transactions own concurrency, idempotency, persistence and permissions. Cloudflare AI owns budget and provider dispatch. Canvas renders the validated program rather than domain-specific case components. The existing database kind/role CHECK constraints need an explicitly reviewed migration before deployment; no production migration runs during local implementation.
+`table-contracts.ts` defines the transport. `domain/table.ts` owns validation, source ingestion and deterministic execution. Existing authority/repository transactions own concurrency, idempotency, persistence and permissions. Cloudflare AI owns budget and provider dispatch. Canvas renders the validated program rather than domain-specific case components. Migration `0002_table_kind.sql` extended the directory kind constraints on staging and production under the recorded approval. Do not rerun the original provisioning or infer approval for a new persistent schema change from this design.
 
 Limits: six collections, twelve fields per collection, one hundred records per collection and two hundred in a room, sixteen actions, eight inputs per action, twenty-four conditions/effects, and up to twenty selectable rule revisions within a 256 KiB history budget. The room view keeps the latest one hundred action summaries with a separate monotonic action counter; authoritative event history remains in the server store. Programs are limited to 64 KiB and records to 128 KiB both at initialization and after every action. Sources cited by active or retained rule revisions cannot be removed. Later rule edits preserve the collection definitions and existing rows; changing the data schema is a separate future migration workflow.
 
@@ -38,7 +40,7 @@ The complete provider request is capped at 48 KiB and the reply at 1,024 tokens.
 
 This release does not implement semantic retrieval, automatic narrative summaries, editable project-memory notes or unlimited archival storage. The assistant history has an explicit 500-request room storage bound for this testing release, with at most eight running/committing jobs. Reaching a storage, model or spending limit must preserve existing data and leave manual play available; it must not silently delete old history or start a new project. Long-running narrative campaigns need a separately tested retrieval/summary workflow before claiming indefinite conversational recall. A future summary must cite its source messages and rule revision, remain inspectable, and never overwrite authoritative state without ordinary human review.
 
-These continuity requirements are implementation and acceptance targets until the corresponding tests and staging observations are recorded. The earlier two-account resume observations establish persisted table state, not conversational memory.
+CI and two-account staging observations for these bounded continuity behaviors are now recorded in [acceptance](GENERIC_TABLE_ACCEPTANCE.md). They establish saved actor-private transcripts and recent-context follow-up, not semantic recall of every prior message.
 
 ## Acceptance gates
 
@@ -47,6 +49,6 @@ These continuity requirements are implementation and acceptance targets until th
 - Custom board game: import rules and player rows; enforce turns and scoring bounds; change a scoring rule with review while preserving the ongoing score.
 - All three run through the same interpreter with distinct source files, not switches on scenario names. Negative tests include malformed model output, unsafe keys, unsupported files, stale approvals, participant rule edits, duplicate command, invalid actions, and restart/resume.
 - Actual two-account Google sign-in on an isolated staging deployment, invite redemption, shared updates/conflicts, logout/login and resume must be witnessed before production. Synthetic auth tests are additional evidence, never a substitute.
-- Conversation acceptance must prove explanation without mutation, provider-context privacy, no automatic action, explicit confirmation, stale proposal rejection, actor-bound job access, duplicate-confirm idempotency and human Canvas play while an assistant proposal is pending. Repeat real-provider checks with both staging accounts after the feature is implemented; the earlier three-scenario acceptance does not prove this new route.
+- Conversation acceptance must prove explanation without mutation, provider-context privacy, no automatic action, explicit confirmation, stale proposal rejection, actor-bound job access, duplicate-confirm idempotency and human Canvas play while an assistant proposal is pending. The current release has separate checks of this route; repeat affected checks when behavior changes instead of relying only on the three-scenario table acceptance.
 - Continuity acceptance must cover conversation after reload and sign-in, actor/room/epoch isolation, follow-up questions with recent context, current rules taking precedence over older replies, bounded history pagination and a context-limit failure without provider dispatch or loss of manual play. Showing old messages in the UI does not prove that every message is included in model context.
-- Production remains on its existing version until the local/CI, review and two-real-account gates pass. Credentials stay in ignored local environment files and Worker secrets.
+- Future production changes must pass their local/CI, review and affected hosted acceptance gates before an approved release. Credentials stay in ignored local environment files and Worker secrets.

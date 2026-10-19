@@ -1,6 +1,8 @@
 # Tabletop production setup and resume
 
-สถานะวันที่ 19 ตุลาคม 2026: **เปิด public alpha บน Cloudflare Free แล้ว** ที่ [Tabletop](https://tabletop.ptchrr.workers.dev) มี Workers API/Static Assets, Room/Billing SQLite Durable Objects, D1 และคีย์ฝั่งเซิร์ฟเวอร์ครบ เจ้าของเลือก Free และยังไม่ได้เปิด Paid ทดสอบ Google login ของเจ้าของ, logout/login resume และ AI จริงครบสามเคสแล้ว กติกา Encounter r1 เปิดใช้ตามคำอนุมัติเฉพาะห้องและตรวจหลัง reload แล้ว แต่ hosted multiplayer สองบัญชีและ recovery ยังต้องตรวจ ดู [ผลทดสอบหลังเปิดระบบ](../handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md) และ [auto demo พร้อมประวัติ](AUTO_DEMO.md)
+สถานะ 19 ตุลาคม 2026: รุ่นทดสอบเปิดบน Cloudflare Free ทั้ง production และ staging ดู URL/source/version/งบปัจจุบันที่ [Deployment](DEPLOYMENTS.md) การทดสอบสามโจทย์ทั่วไปด้วย Google สองบัญชีจริง แชทส่วนตัว และ compatible read-only recovery บน staging ผ่านแล้วตาม [acceptance](GENERIC_TABLE_ACCEPTANCE.md) การกู้คืนทั้งระบบ สองอุปกรณ์จริง และ load test ยังไม่ครบ
+
+เอกสารนี้เก็บแนวทางตั้งระบบและตารางราคาที่ตรวจตามวันที่ระบุไว้ ไม่ใช่ใบเสนอราคาปัจจุบันหรือคำสั่งให้ provision ซ้ำ ก่อนเปลี่ยนแผนให้ตรวจราคาผู้ให้บริการใหม่ และใช้ [คู่มือผู้ใช้](USER_GUIDE_TH.md) สำหรับขั้นตอนปัจจุบัน
 
 ## ระบบที่ใช้
 
@@ -10,9 +12,9 @@
 | ห้องและสมาชิก | SQLite Durable Object หนึ่งตัวต่อห้อง เป็นผู้ตัดสิน state, role, revision, receipt และคำเชิญ |
 | Multiplayer | WebSocket Hibernation ส่ง projection ตามสิทธิ์ และตรวจ session/revocation จาก D1 primary ก่อนส่งข้อมูลส่วนตัว |
 | Google account/resume | D1 เก็บบัญชีถาวร, session hash และดัชนีห้อง; ตรวจ Google OIDC state/PKCE/nonce/signature/issuer/audience |
-| Admin | ดู metadata ห้องและสมาชิก ไม่เปิด DM notes หรือคำตอบส่วนตัว |
+| Admin | หน้าจอ/API แอดมินของแอปดู metadata ห้องและสมาชิก ไม่เปิด DM notes หรือคำตอบส่วนตัว; สิทธิ์ผู้ดูแล Cloudflare/storage แยกต่างหาก |
 | AI | DeepSeek Flash ฝั่งเซิร์ฟเวอร์ กับ Billing Durable Object จองงบก่อนเรียกและ settle usage แบบไม่ซ้ำ |
-| อัปโหลดไฟล์ | ปิดไว้ใน Cloudflare จนกว่า private R2, scanning และ parser จะพร้อม; Node local ยังใช้ไฟล์ตัวอย่างได้ |
+| อัปโหลดไฟล์ | Shared data table รับข้อความ CSV/JSON/TXT/Markdown แบบจำกัดผ่านคำสั่งที่มีสิทธิ์; legacy invoice upload, PDF/ภาพ/ไบนารี และ R2 ยังไม่เปิด |
 
 Supabase และ Render ไม่จำเป็นสำหรับทางนี้ สิทธิ์ของห้องตรวจที่ Room DO เสมอ ดัชนี D1 ใช้ค้นหาเท่านั้นและซ่อมผ่าน outbox ที่เรียงลำดับแล้ว ความล่าช้าของดัชนีต้องไม่เปิดสิทธิ์ให้ผู้ที่ถูกถอนออก
 
@@ -30,13 +32,13 @@ Resume คืนสถานะล่าสุด ไม่ย้อนเวล
 
 ## AI ที่เปิดในรอบนี้
 
-ใช้ `deepseek-flash` สร้างข้อเสนอที่มี schema สำหรับ invoice, teaching และ encounter ตามที่เจ้าของเลือก ผู้ใช้เห็นขอบเขตข้อมูลและกดยินยอมก่อนส่ง Invoice ใช้เฉพาะแหล่งข้อมูลที่ตรวจแล้วซึ่งผู้ใช้เลือก ไม่ส่งโน้ต DM, คำตอบส่วนตัว หรือประวัติทั้งห้อง
+ใช้ `deepseek-flash` สร้างข้อเสนอที่มี schema สำหรับ invoice, teaching, encounter และ generic table ผู้ใช้เห็นขอบเขตข้อมูลและกดยินยอมก่อนส่ง Invoice ใช้เฉพาะแหล่งข้อมูลที่ตรวจแล้วซึ่งผู้ใช้เลือก ไม่ส่งโน้ต DM, คำตอบส่วนตัว หรือประวัติทั้งห้อง Generic table แยก consent สำหรับร่างกฎจาก source files กับแชทจาก active shared state ตาม [design](GENERIC_TABLE_DESIGN.md)
 
-AI สร้างเพียง draft จากนั้นต้อง simulate, validate, อนุมัติ และ activate ตามขั้นตอน ระบบเกม คำนวณเงิน และตรวจสิทธิ์ยังเป็นโค้ด deterministic ไม่มีการรัน JavaScript ที่โมเดลเขียน
+AI ร่างการเปลี่ยนกฎเป็น draft ที่ต้อง simulate, validate, อนุมัติ และ activate ส่วนแชทอาจตอบคำอธิบายโดยไม่เปลี่ยนข้อมูล หรือเตรียมหนึ่ง action ให้ผู้ใช้ตรวจแล้วกด **Confirm action** แยก ไม่ต้องผ่านวงจรเปลี่ยนกฎ ระบบเกม คำนวณเงิน และตรวจสิทธิ์ยังเป็นโค้ด deterministic ไม่มีการรัน JavaScript ที่โมเดลเขียน
 
 งบรายวัน/เดือนต้องเป็นค่าบวกจึงเปิด AI ค่าเริ่มต้นเป็นศูนย์ Billing DO กันงบก่อน network call, ป้องกัน dispatch ซ้ำ, คิด cache-hit ด้วย และเก็บเงินจองไว้เมื่อไม่รู้ผลลัพธ์แน่ชัด การจำกัดนี้ครอบคลุมเฉพาะการเรียกจาก Tabletop ไม่ครอบคลุม key เดียวกันที่นำไปใช้ที่อื่น
 
-ผล live API ก่อนหน้านี้อยู่ใน [AI provider verification](AI_PROVIDER_VERIFICATION.md) ส่วนผลจาก URL จริงรอบนี้: 4 คำขอได้ 3 ร่าง (Invoice, Teaching, Encounter) โดย Teaching ครั้งแรกล้มเหลวและส่งคำขอเดิมใหม่สำเร็จ ยังระบุสาเหตุครั้งแรกไม่ได้ ไม่มีร่างใดถูกเปิดใช้อัตโนมัติ
+ผล live API ช่วงแรกอยู่ใน [AI provider verification](AI_PROVIDER_VERIFICATION.md) และ [รายงานเปิดระบบเดิม](../handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md): 4 คำขอได้ 3 ร่าง (Invoice, Teaching, Encounter) โดย Teaching ครั้งแรกล้มเหลวและส่งคำขอเดิมใหม่สำเร็จ ยังระบุสาเหตุครั้งแรกไม่ได้ ไม่มีร่างใดถูกเปิดใช้อัตโนมัติ ผล generic table และแชทรอบหลังอยู่ใน [acceptance](GENERIC_TABLE_ACCEPTANCE.md)
 
 ## ค่าใช้จ่ายรายเดือน
 
@@ -109,12 +111,12 @@ DeepSeek หักจาก balance; [Balance API](https://api-docs.deepseek.com
 | `GITHUB_TOKEN` | ใช้ส่ง source ไป repository ที่ระบุ ไม่ส่งขึ้น Cloudflare |
 | `APPROVED_MONTHLY_INFRA_BUDGET_USD`, `APPROVED_MONTHLY_AI_BUDGET_USD`, `APPROVED_MONTHLY_TOTAL_BUDGET_USD` | ช่องบันทึกวงเงิน local; รอบนี้ใช้คำอนุมัติในแชตและ ignored release receipt โดยไม่เขียนทับไฟล์ credential |
 
-Target origin: `https://tabletop.ptchrr.workers.dev` และ Google Authorized redirect URI: `https://tabletop.ptchrr.workers.dev/api/auth/google/callback` ตรงกัน ตรวจ Google login ของเจ้าของจริงและกลับเข้าห้องหลัง logout/login แล้ว ยังไม่ได้ตรวจบัญชีที่สองหรือเครื่องอื่น
+Google Authorized redirect URI ของ production คือ `https://tabletop.ptchrr.workers.dev/api/auth/google/callback` และ staging คือ `https://tabletop-staging.ptchrr.workers.dev/api/auth/google/callback` โดยคงทั้งสองรายการใน client ที่ใช้ ดูขอบเขตการตรวจ Google จริงและ resume ที่ [acceptance](GENERIC_TABLE_ACCEPTANCE.md)
 
 GitHub เก็บโค้ดและชื่อ configuration Cloudflare ฉีด secret ให้ Worker ตอนรัน จึงไม่ต้องมี API key ใน GitHub หรือ `VITE_*` CI ใช้ synthetic credentials และไม่มีสิทธิ์ deploy ดู [Worker Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 
-เจ้าของอนุมัติและสร้าง resource/schema ตาม [release scope](CLOUDFLARE_RELEASE.md) แล้ว: Worker `tabletop`, D1 `tabletop-production`, และ SQLite DO `Room`/`Billing` ใช้ฐานข้อมูลใหม่ ไม่เปิด R2/upload หรือ Paid ในรอบนี้
+เจ้าของอนุมัติและสร้าง resource/schema รุ่นแรกตาม [release scope](CLOUDFLARE_RELEASE.md) แล้ว ต่อมาเพิ่ม staging และ apply migration 0002 ตาม [generic acceptance](GENERIC_TABLE_ACCEPTANCE.md) ฐานเหล่านี้มีข้อมูลแล้ว การสร้างหรือเปลี่ยน schema ต่อไปต้องมี scope ใหม่ ไม่เปิด R2, legacy invoice upload หรือ Paid
 
 Token ต้องจัดการ Worker เป้าหมายและ D1 ที่อนุมัติได้ ไม่ต้องให้สิทธิ์ DNS, Google service account, Global API Key หรือ billing เพื่อทดสอบและ deploy ที่ workers.dev หากต้องเปิด Workers Paid เจ้าของทำขั้นตอนชำระเงินใน Cloudflare ได้ ตรวจสิทธิ์ที่ใช้งานจริงก่อนทำ ไม่ขยายสิทธิ์ token อัตโนมัติ
 
-ส่วนที่ทำแล้วคือฐานใหม่/schema, secret ที่ host, deploy commit ที่ผ่าน CI, ตรวจ served assets/HTTPS, Google login ของเจ้าของ และ AI จริงแบบจำกัดจำนวน ส่วนที่เหลือคือสองบัญชี/สองเครื่อง, hosted mobile, multiplayer และ rollback/restore ไม่มีการ merge PR อัตโนมัติ และยังไม่เรียกว่า Production Ready
+ส่วนที่ทำแล้วและข้อจำกัดล่าสุดอยู่ใน [ทีมพัฒนาต่อ](TEAM_HANDOFF_TH.md#สิ่งที่ทดสอบแล้ว) โดยแยก CI แบบจำลอง, สองบัญชีจริงบน staging และ production release checks ไม่ใช้การผ่านสองบัญชีบนเครื่องเดียวแทนสองอุปกรณ์จริง และไม่ใช้ compatible read-only recovery แทนการ restore ทั้งระบบ

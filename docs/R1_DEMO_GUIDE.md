@@ -1,5 +1,7 @@
 # Try the local R1 candidate
 
+This guide covers the three original workflows in the **local Node guest runtime**. For hosted Google accounts, file-driven Shared data tables, interactive public practice and saved multiplayer rooms, use the [current user guide](USER_GUIDE_TH.md). Local upload/session limits below are not the Cloudflare generic-table limits.
+
 Start the app using [Local development](LOCAL_DEVELOPMENT.md), then open `http://127.0.0.1:4310`. Use synthetic inputs. No API key is needed. **Canvas** contains working objects; **Focus table** opens the longer forms and evidence details. Use **Arrange** to reposition objects, **Use** to interact, **Focus object** for one object, and **Fit objects** for an overview.
 
 ## Invoice: import, review, change a rate, export

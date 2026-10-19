@@ -1,42 +1,66 @@
-# Tabletop R1
+# Tabletop
 
-Tabletop R1 is a local-first, server-authoritative workspace for shipment invoice reconciliation, physics lessons, and a cooperative tabletop encounter. Rule changes follow a review path: propose a change, simulate it, validate it, approve it, then activate it as a new revision.
+โต๊ะทำงานร่วมกันบน Canvas: นำข้อมูลและกติกาจากไฟล์มาให้ AI ร่างเป็นตารางและการกระทำ ตรวจและเปิดใช้กฎ แล้วชวนคนอื่นเข้ามาเล่นหรือทำงานในสถานะเดียวกัน
 
-## Start locally
+**สถานะ 19 ตุลาคม 2026:** รุ่นทดสอบเปิดใช้งานบน Cloudflare แล้ว รองรับไฟล์ของผู้ใช้, Google login, multiplayer, แชท AI และกลับมาเล่นต่อ มีเดโมสาธารณะที่หยุดแล้วลองเองได้
 
-Use Node.js 22.23.2 and npm. The local server listens on `127.0.0.1:4310` and stores its PGlite database and private source objects beneath `server/.data/` by default.
+**ทีมที่รับงานต่อให้เริ่มจาก branch [`feat/tabletop-r1`](https://github.com/Thanyers/tabletop/tree/feat/tabletop-r1)** ซึ่งมี source ของรุ่นที่ deploy อยู่และเอกสารชุดนี้ การพิจารณารวมเข้า `main` อยู่ใน [draft PR #2](https://github.com/Thanyers/tabletop/pull/2)
+
+## เปิดใช้งานที่ไหน
+
+| ต้องการ | ลิงก์ | การเก็บข้อมูล |
+| --- | --- | --- |
+| ลองเดโม ไม่ต้องล็อกอิน | [Auto demo บน Canvas](https://tabletop.ptchrr.workers.dev/demo) | อยู่ในแท็บ; รีเฟรชเริ่มใหม่; ดาวน์โหลดประวัติได้ |
+| สร้างโต๊ะจากไฟล์ตัวเองและชวนเพื่อน | [แอป production](https://tabletop.ptchrr.workers.dev/) | ล็อกอิน Google; ห้องและข้อมูลที่ส่งแล้วอยู่บนเซิร์ฟเวอร์ |
+| ทดสอบการเปลี่ยนแปลงก่อน release | [Staging](https://tabletop-staging.ptchrr.workers.dev/) | ห้องและฐานข้อมูลแยกจาก production |
+| ดูรอบทดสอบที่บันทึกไว้ | [Replay archive](https://tabletop.ptchrr.workers.dev/demo/replay) | อ่าน checkpoint ของรอบเดิม |
+
+รุ่นที่ deploy, บริการที่ใช้ และงบ AI ดูที่ [Deployment ปัจจุบัน](docs/DEPLOYMENTS.md)
+
+## ตอนนี้ทำอะไรได้
+
+- **สร้างโต๊ะแบบทั่วไป:** อัปโหลด UTF-8 CSV, JSON, TXT หรือ Markdown แล้วให้ AI ร่างข้อมูล กฎ และปุ่มการกระทำ ไม่ผูกกับชื่อสามโจทย์เดิม
+- **ตรวจงานก่อนเปิดใช้:** อ่านหลักฐานและสมมติฐาน → Simulate → Validate → Approve → Activate กฎที่ยังเป็นร่างไม่เปลี่ยนโต๊ะที่กำลังเล่น
+- **เล่นร่วมกัน:** เจ้าของส่งลิงก์เชิญใช้ครั้งเดียวให้แต่ละที่นั่ง สมาชิกเห็นสถานะร่วมกันแบบสด เซิร์ฟเวอร์ตรวจสิทธิ์ เทิร์น และการแก้ไขชนกัน
+- **ถาม AI ระหว่างเล่น:** ใช้แชทข้าง Canvas ถามกฎหรือสถานะ และขอเตรียมหนึ่งการกระทำได้ ต้องกด Confirm action แยกก่อนเกิดผลจริง
+- **กลับมาเล่นต่อ:** ล็อกอิน Google บัญชีเดิมแล้วเลือก My tables ข้อมูลห้องและแชทส่วนตัวที่บันทึกแล้วไม่หายเพราะปิดเว็บ
+- **ดูแล้วรับช่วงเดโม:** เดโมหลักมีตรวจบิล ทดลองแรง/มวล และเกมโล่ กดหยุดเพื่อแก้กติกาหรือเล่นเองได้ ภาพประกอบเตรียมไว้ล่วงหน้า จึงไม่มีค่าเรียก AI ระหว่างเดโม
+
+![เดโมทดลองแรงและมวลบน Canvas](docs/images/demo-physics.jpg)
+
+ภาพจากเดโมสาธารณะบน production: ฉากรถใช้ภาพที่เตรียมไว้ ส่วนตำแหน่งและตัวเลขคำนวณจากสถานะที่กำลังทดลอง
+
+## เริ่มอ่านสำหรับทีม
+
+| เอกสาร | ใช้เมื่อ |
+| --- | --- |
+| [วิธีใช้และวิธีเล่น](docs/USER_GUIDE_TH.md) | ต้องการลองเดโม สร้างห้อง นำเข้าไฟล์ เชิญคน และกลับมาเล่นต่อ |
+| [ภาพรวมและงานสำหรับทีมพัฒนาต่อ](docs/TEAM_HANDOFF_TH.md) | ต้องการเข้าใจสถาปัตยกรรม จุดแก้โค้ด ผลทดสอบ และงานที่ยังเหลือ |
+| [วิธีร่วมพัฒนา](CONTRIBUTING.md) | ต้องการ clone, รัน local, ทดสอบ และส่ง PR |
+| [ไฟล์โจทย์ตัวอย่าง 3 แบบ](docs/examples/README.md) | ต้องการลองอุปกรณ์ยืมคืน จัดเวร หรือเกมแข่งเรือด้วย AI จริง |
+| [Deployment ปัจจุบัน](docs/DEPLOYMENTS.md) | ต้องการทราบ URL, source commit, Cloudflare resources และงบที่ตั้งไว้ |
+| [ดัชนีเอกสาร](docs/README.md) | ต้องการรายละเอียด runtime, AI, ข้อจำกัด และหลักฐานย้อนหลัง |
+
+## ขอบเขตที่ต้องรู้ก่อนใช้
+
+โต๊ะแบบทั่วไปยังรับเฉพาะไฟล์ข้อความ **32 KiB/ไฟล์, 4 ไฟล์, รวม 64 KiB** ไม่มี PDF/ภาพ/ไฟล์ไบนารีหรือการสร้างภาพขณะเล่น การตรวจบิลแบบเดิมมีข้อจำกัดการนำเข้าอีกชุดหนึ่ง ดูคู่มือก่อนเลือกประเภทโต๊ะ
+
+AI สร้างข้อเสนอที่อาจต้องแก้ไข ผู้ใช้ต้องตรวจความถูกต้องเอง ระบบรันกฎแบบข้อมูลที่ตรวจสอบได้ ไม่รัน JavaScript ที่โมเดลเขียน โต๊ะเกมตัวอย่างยังไม่ใช่ D&D เต็มระบบ
+
+ห้องเป็นข้อมูลถาวร แต่ความจำของ AI มีขอบเขต: ใช้สถานะปัจจุบันกับบทสนทนาล่าสุดไม่เกิน 6 คู่ ยังไม่มีการค้นความจำเก่าหรือสรุปเรื่องราวระยะยาวอัตโนมัติ เดโม `/demo` เก็บเฉพาะในแท็บและจำลองผู้เล่น ดู [การบันทึกและข้อจำกัด](docs/USER_GUIDE_TH.md#การบันทึกและความจำ)
+
+ผ่านการทดสอบสามโจทย์ทั่วไปด้วย Google สองบัญชีจริงบน staging และตรวจ release บน production แล้ว แต่การกู้คืนทั้งระบบ การทดสอบโหลด และการทดสอบสองอุปกรณ์จริงยังไม่ครบ ดู [ขอบเขตหลักฐาน](docs/TEAM_HANDOFF_TH.md#สิ่งที่ทดสอบแล้ว)
+
+## รันในเครื่อง
+
+ใช้ Node.js **22.23.2** ตาม CI และ npm จากนั้นรันจาก root ของ repo:
 
 ```powershell
+git clone --branch feat/tabletop-r1 https://github.com/Thanyers/tabletop.git
+cd tabletop
 npm ci
 npm run build
 npm start
 ```
 
-Open <http://127.0.0.1:4310>. Read [Local development](docs/LOCAL_DEVELOPMENT.md) for data paths, imports, sample sources, and production boundaries. The `.env.example` file is a reference; the server does not load `.env` automatically.
-
-For team review, open the [public alpha](https://tabletop.ptchrr.workers.dev), follow the [three-workflow demo guide](docs/R1_DEMO_GUIDE.md), and read the [post-deployment report](handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md). The initial deployment uses Cloudflare Free. Owner Google sign-in, logout/login resume, and live AI drafts in all three workflows were exercised; two-account hosted multiplayer and full recovery remain pending. See the [release record](docs/CLOUDFLARE_RELEASE.md) and [implementation boundaries](docs/R1_ARCHITECTURE.md).
-
-## What is available
-
-- Invoice reconciliation uses exact satang and gram rules. New shipment or invoice imports replace that active dataset; source records, saved runs, and approved rates remain available.
-- Teaching and encounter rules are deterministic and run on the server. Manual rule editing and the approval workflow do not depend on AI.
-- The legacy single-user demo remains opt-in at `/?legacy-demo=1`.
-- Example evidence files are in [`public/samples/r1/`](public/samples/r1/): `shipments.csv`, `invoice.csv`, `invoice.pdf`, `rate-card.txt`, and `rate-card.pdf`.
-
-Uploaded evidence starts as **provided**. A person must review and verify a source before it can support a reconciliation rule. Review the source and its effective dates before comparing invoices or proposing a change.
-
-## Capability boundaries
-
-The Cloudflare runtime includes Google sign-in, persistent account membership, My tables/resume, private multiplayer projections, DM pause/resume, and an admin metadata panel. Closing a browser or expiring a login does not delete a saved Cloudflare room. The local Node runtime retains its original guest-session and seven-day workspace behavior.
-
-DeepSeek Flash is connected to authenticated Cloudflare jobs through a durable reservation ledger. An owner, teacher, or DM can consent to a bounded request and receive a draft; simulation, validation, human approval, and activation remain separate. Configured daily/monthly budgets are required and default to zero. Local browser tests use a synthetic provider; the separate [provider verification](docs/AI_PROVIDER_VERIFICATION.md) records earlier bounded live API checks. The Node guest runtime keeps AI disabled.
-
-Public uploads remain disabled on Cloudflare until private R2 storage and scanning are integrated. The invoice sample case, manual verified-source review, deterministic calculations, and exports remain available. Local Node development supports the existing private filesystem uploads.
-
-The [production setup](docs/PRODUCTION_SETUP.md) uses Workers Static Assets/API, one SQLite Durable Object per room, D1 identity/session/directory records, and a separate Billing Durable Object. No Render or Supabase service is required. The included Dockerfile packages the alternate Node/PostgreSQL runtime and has not been deployed. See [local development](docs/LOCAL_DEVELOPMENT.md) for both test paths and [release scope](docs/CLOUDFLARE_RELEASE.md) for provisioning, costs, and remaining acceptance checks.
-
-## Repeatable persona demos
-
-Run `npm run demo:auto` to build and execute isolated invoice, teaching, and encounter scenarios with synthetic accounts. Each run retains a separate JSON history and a self-contained HTML replay; `npm run demo:auto:view` opens a read-only local server for the latest report. Playback does not submit commands or call AI. See [Auto demo and retained history](docs/AUTO_DEMO.md) for personas, expected failures, privacy boundaries, and the separate owner-approved hosted activation record.
-
-`docs/source-baseline.json` records the approved local source snapshot. It is provenance for this checkout, not imported Sites history or a production release record.
+เปิด [localhost:4310](http://127.0.0.1:4310) หรือ `/demo` สำหรับเดโม วิธีนี้เป็น Node guest runtime และปิด AI; การทดสอบ Google/AI/multiplayer แบบ Cloudflare ใช้ emulator และ fixture ตาม [CONTRIBUTING](CONTRIBUTING.md) ไม่ต้องใช้ production credentials เพื่อเริ่มพัฒนา

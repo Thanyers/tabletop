@@ -1,4 +1,6 @@
-# Cloudflare release candidate
+# Initial Cloudflare release record
+
+> Historical record for the initial three-workflow release. Its versions, counts and pending checks describe that release, not the latest deployment. See [current deployments](DEPLOYMENTS.md), [generic-table acceptance](GENERIC_TABLE_ACCEPTANCE.md) and the [current user guide](USER_GUIDE_TH.md). Do not repeat the initial provisioning against the existing databases.
 
 18 October 2026, Asia/Bangkok. **Public alpha deployed on Cloudflare Free; hosted acceptance is partial.** Open [Tabletop](https://tabletop.ptchrr.workers.dev). Runtime source: `a495cf5617f60af1c51087b54b6c145f0621e938`; active Worker version: `dfdc8c72-2fc2-4344-92c1-44fbc48d80d0`. The owner approved the resource/schema scope below and selected Free. No Paid subscription was activated. See the [post-deployment report](../handoff/Final/planning-review/TABLETOP_R1_POST_DEPLOY_TEST_REPORT.md) for executed checks and remaining gates.
 
