@@ -195,7 +195,9 @@ try {
   mark('Three real sessions share physics; learner exploration, representation and answers stay correctly scoped');
   await learner2.reload(); await expect(learner2.locator('.tt-canvas-node--lesson-scene')).toContainText('4 m');
   await teacher.getByRole('button', { name: 'Reset table', exact: true }).click();
-  await teacher.getByRole('dialog').getByRole('button', { name: 'Keep current table' }).focus();
+  // Wait for the dialog's initial focus effect before testing its keyboard trap.
+  // Forcing focus here races the dialog's scheduled autofocus.
+  await expect(teacher.getByRole('dialog').getByRole('button', { name: 'Keep current table' })).toBeFocused();
   await teacher.keyboard.press('Shift+Tab');
   await expect(teacher.getByRole('dialog').getByRole('button', { name: 'Reset table', exact: true })).toBeFocused();
   await clickCommand(teacher, teacher.getByRole('dialog').getByRole('button', { name: 'Reset table', exact: true }), 'workspace.reset');

@@ -171,7 +171,7 @@ export default function InteractiveDemo() {
     setNotice('หยุดเดโมแล้ว โต๊ะนี้เป็นของคุณแก้ไขต่อได้ การเล่นอัตโนมัติจะไม่กลับมาทับการเปลี่ยนแปลง');
   }, [runtime]);
 
-  const captureWorkbenchInput = useCallback((event: SyntheticEvent<HTMLElement>) => {
+  const handleWorkbenchInteraction = useCallback((event: SyntheticEvent<HTMLElement>) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
     if (!target.closest('.tt-inspector-panel, .tt-canvas-node__body')) return;
@@ -182,8 +182,17 @@ export default function InteractiveDemo() {
       if (['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'Escape'].includes(key)) return;
       if (control?.matches('button') && key !== 'Enter' && key !== ' ') return;
     }
-    if (snapshot.mode !== 'manual') beginTakeover();
-  }, [beginTakeover, snapshot.mode]);
+    if (event.type === 'input' || event.type === 'change') {
+      // Input/change are handled during bubbling, then deferred until React's
+      // child change handlers have finished saving the filled/pasted value.
+      // This still cancels playback before another timer task can run.
+      queueMicrotask(() => {
+        if (runtime.getSnapshot().mode !== 'manual') beginTakeover();
+      });
+      return;
+    }
+    if (runtime.getSnapshot().mode !== 'manual') beginTakeover();
+  }, [beginTakeover, runtime]);
 
   const chooseScenario = (event: ChangeEvent<HTMLSelectElement>) => {
     const scenarioId = event.currentTarget.value;
@@ -376,11 +385,11 @@ export default function InteractiveDemo() {
 
         <div
           className="tt-practice-surface-wrap"
-          onPointerDownCapture={captureWorkbenchInput}
-          onKeyDownCapture={captureWorkbenchInput}
-          onInputCapture={captureWorkbenchInput}
-          onChangeCapture={captureWorkbenchInput}
-          onSubmitCapture={captureWorkbenchInput}
+          onPointerDownCapture={handleWorkbenchInteraction}
+          onKeyDownCapture={handleWorkbenchInteraction}
+          onInput={handleWorkbenchInteraction}
+          onChange={handleWorkbenchInteraction}
+          onSubmitCapture={handleWorkbenchInteraction}
         >
           <PracticeClockProvider now={snapshot.now}>
             <TableSurface
