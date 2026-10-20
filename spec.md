@@ -30,6 +30,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
+- **F005 Generative Canvas — พร้อม review:** [PR #24](https://github.com/Thanyers/tabletop/pull/24) เพิ่มสูตรแบบ bounded AST, scene/chart/metric/controls, ทดลองร่างส่วนตัว, shared semantic layout และ AI repair/การค้นบทสนทนาแบบจำกัด · รวม `dev` ถึง `253ac58` และแก้การเปิดแชท island กลับจาก Canvas · ผลตรวจ Node `22.23.2`: `npm test` 355/355, `npm run test:cloudflare` 71/71, Component Lab 7/7, `npm run test:r1:browser` 7/7, `npm run test:cloudflare:browser` 22/22, `npm run test:generative:browser` 4 เรื่อง/8 drafts, AI จริงสามเรื่องผ่านก่อนรวม island และตรวจ UI ซ้ำแล้ว, lint 0 errors/104 warnings, build และ Worker dry run ผ่าน; public scanner 488 files/client scanner 136 assets ไม่มี findings · รายละเอียดและข้อจำกัดอยู่ใน [acceptance](docs/GENERATIVE_CANVAS_ACCEPTANCE.md); candidate นี้ยังไม่ได้ deploy
+- **Research/design ต้นทาง:** [Generative Canvas plan](docs/GENERATIVE_CANVAS_PLAN_TH.md) + [primary-source research](docs/GENERATIVE_CANVAS_RESEARCH_2026-10-20.md) ครอบคลุมเป้าหมายระยะถัดไปด้วย; ขอบเขตที่ทำแล้วให้ยึด [runtime](docs/GENERATIVE_CANVAS_RUNTIME.md) ไม่ถือว่าทั้งแผนเป็นความสามารถที่ส่งแล้ว
 - **Release ล่าสุด:** **`v1.1.0`** (annotated tag `91d69d0` บน `a2c97cd` = merge PR #26, CI `local-validation` บน main ผ่านก่อน tag) · build จาก tag ได้ `version.json` = `1.1.0` / `a2c97cd` · **ยังไม่ deploy** — production/staging ยังรัน `v1.0.0` รอ operator
 - **Release ก่อนหน้า:** `v1.0.0` (`ce2c50e`) deploy แล้วทั้ง staging และ production
 - **Branch:** `main` @ `ce2c50e` = release · PR #12–#14 เคยเข้า `main` ตรงโดยไม่ผ่าน `dev` · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection
@@ -38,7 +40,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 - **F001 T1–T2 หน้าเริ่ม `/new` — merge เข้า `dev` แล้ว (#25):** การ์ด 3 ใบ + ช่องพิมพ์ (สร้างโต๊ะข้อมูลว่างและเติมช่องร่างกฎ ยังไม่เรียก AI) + เริ่มโต๊ะว่าง · ตรวจแล้ว: `npm test` 319/319, typecheck/build ผ่าน, `test:cloudflare` 65/65, `test:cloudflare:browser` 20/20, `test:r1:browser` 7/7, ภาพหน้าจอ 1280 และ 390 ไม่มีเลื่อนแนวนอน · Node v26.3.1
 - **F004 URL paths — merge เข้า `dev` แล้ว (#21):** `/`, `/t/<id>`, `/join#invite=...`, `/new`
 - **Infra:** Cloudflare Workers Free + D1 + SQLite DO + Google OAuth + DeepSeek Flash · ไม่มี R2/Paid · เพดาน AI prod $1/วัน $10/เดือน, staging $0.20/$0.20
-- **CI ล่าสุดของ candidate:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด))
+- **หลักฐานของ release `v1.0.0`:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด)); ผลของ F005 แยกไว้ด้านบน
 - **R1 browser ไม่รอ rate limit (CI004, branch `feat/CI004-r1-no-rate-wait` → `dev`):** `tests/tabletop-r1.mjs` เปิด server (และ data dir) ใหม่ทุก scenario แทนการ sleep รอหน้าต่าง rate limit 1 นาที 2 ครั้ง · rate limit ของแอปไม่เปลี่ยน · ตรวจแล้ว (Node v26.3.1, `BROWSER_CHANNEL=chrome`): ก่อนแก้ 138 วินาที (sleep 49.6 + 51.1) → หลังแก้ 48–51 วินาที 7/7 ผ่าน 3 รอบติด · ตัวควบคุม: ใช้ server เดียวโดยไม่รอ → scenario encounter ได้ 429 `RATE_LIMITED` · CI เดิม step นี้ 129–134 วินาที
 - **Local (2026-10-20, เครื่องนี้):** clone `main` @ `e8cb73e` แล้ว pull เป็น `48fb2bd` → `npm ci` (0 vulnerabilities) → `npm run build` ผ่าน → `npm start` เปิด `:4310` ได้ ใช้ Node v26.3.1 (ไม่ตรง CI 22.23.2) · `npm run test:cloudflare` 65/65 ผ่าน (room 28, auth 13, ai 9, table-assistant 8, billing 7) ตรงกับจำนวนใน CI · `test:cloudflare:browser` 16/16 ผ่าน (ใช้ `BROWSER_CHANNEL=chrome` หลัง `build:cloudflare`)
 - **`/version` — [PR #10](https://github.com/Thanyers/tabletop/pull/10) merge เข้า `main` แล้ว (`9fbfdec`) และ deploy แล้วพร้อม PR #13:** `GET /version` → `{"version","sha","built_at"}` ทั้ง Worker และ Node อ่านจาก `dist/version.json` ที่ build เขียน · ตรวจแล้ว: `npm test` 314/314, `npm run build` ผ่าน, `test:cloudflare` 65/65, `build:cloudflare` dry run, `test:cloudflare:browser` 17/17 (มี check `/version`), curl `:4310/version` → 200 `no-store`, `check-public-files` + `check-client-secrets` ไม่มี finding
@@ -49,7 +51,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 ### ข้อจำกัดผลิตภัณฑ์ที่มีผล
 
 - ไฟล์โต๊ะทั่วไป: UTF-8 CSV/JSON/TXT/MD, 32 KiB/ไฟล์, 4 ไฟล์, รวม 64 KiB · ไม่รับ PDF/ภาพ/ไบนารี
-- AI context: สถานะปัจจุบัน + ≤6 คู่/16 KiB, คำขอ ≤48 KiB, ≤500 assistant jobs/ห้อง · ไม่มีความจำระยะยาว
+- AI context ของ candidate: สถานะปัจจุบัน + ≤6 คู่/16 KiB (สี่ช่วงล่าสุดและค้นได้อีกสองช่วงจาก 100 รายการของผู้ถาม/ห้อง/epoch เดียวกัน), table input ≤48,000 bytes และ provider request รวม ≤64,000 bytes, ≤500 assistant jobs/ห้อง · ยังไม่มีการสรุปความจำระยะยาวอัตโนมัติ
 - ห้อง: เจ้าของ + สมาชิก ≤7 · invite ใช้ครั้งเดียว หมดอายุ 10 นาที
 - เปลี่ยนโครงสร้างตารางระหว่างเล่นไม่ได้
 
@@ -61,6 +63,10 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-20 | F005 ใช้ bounded AST สำหรับสูตรและพฤติกรรมใหม่บน React/SVG เดิม | ข้าม catalog เดิมได้โดยไม่เปิด host JavaScript/IO; action และผลลัพธ์ตรวจที่ authority ก่อน commit และร่างทดลองบนสำเนาส่วนตัว |
+| 2026-10-20 | shared layout มี revision ของตัวเองและกล้องเป็นของแต่ละคน | การลากการ์ดไม่ทำให้คำสั่งเล่นหมดอายุ; เปิดการ์ดแล้วรอ geometry นิ่งก่อนเลื่อนกล้อง และการเลื่อน/ซูมของคนยกเลิก focus ที่ค้าง |
+| 2026-10-20 | F005 ใช้ JSON state เดิม ไม่มี SQL migration หรือ binding ใหม่ | ห้องเก่ายังอ่านได้; ห้องที่บันทึก AST ใหม่ต้องใช้ compatible writer จึงต้องเสนอ MAJOR ตามกฎ rollback ก่อน release |
+| 2026-10-20 | รอบพิสูจน์ Generative Canvas ต้องรวมการจัดวางการ์ดตามความสัมพันธ์และ custom behavior ที่ catalog เดิมทำไม่ได้ | ผู้ใช้รับทางเลือกเทคโนโลยีและขอ algorithm จัดวางที่เข้าใจง่าย/สร้างสรรค์; F005 ใช้ bounded AST พิสูจน์ส่วนนี้ ส่วน shared clock, code sandbox และ hidden evaluation ทั้งชุดยังอยู่ในแผน |
 | 2026-10-20 | โปรเจกต์นี้ไม่ใช้ phak; ติดตามงานใน `spec.md` + GitHub PR | ผู้ใช้สั่ง — ทับกฎ global ใน [CLAUDE.md](CLAUDE.md) |
 | 2026-10-20 | `CLAUDE.md` / `spec.md` / `MEMORY.md` ขึ้น repo public | ผู้ใช้สั่ง · ห้ามใส่ secret/ID/ข้อมูลผู้ใช้ตามกฎใน CLAUDE.md |
 | 2026-10-20 | เอกสารผูกโค้ดอยู่ใน git ผ่าน PR; หลักฐานที่มีข้อมูลส่วนตัวอยู่ใน `test-results/` | ตรงกับ convention เดิมของ repo และ repo เป็น public |
@@ -80,8 +86,11 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ดู [PLAN.md](PLAN.md) — กระดานว่าใครทำงานไหน branch อะไร (ย้ายมาจากหัวข้อนี้เพื่อไม่ให้หลายคนแก้ส่วนเดียวกันจนชน)
 
+งาน Generative Canvas ที่เริ่มก่อนมีกระดานทีมย้ายรายละเอียดไป [F005](docs/features/F005-generative-canvas.md) โดยคงขอบเขตและหลักฐานใน [acceptance](docs/GENERATIVE_CANVAS_ACCEPTANCE.md)
+
 ## ถัดไป
 
+0. Review [F005 / PR #24](https://github.com/Thanyers/tabletop/pull/24) กับ [ผลตรวจและช่องว่าง](docs/GENERATIVE_CANVAS_ACCEPTANCE.md) แล้วเตรียม release ตามกติกา: เสนอ MAJOR เพราะ writer เก่าไม่รองรับ AST ที่บันทึกใหม่, ทดสอบ hosted/OAuth และ recovery ตาม scope ก่อน production; เกณฑ์ hidden evaluation ใน [แผน §9](docs/GENERATIVE_CANVAS_PLAN_TH.md#9-แผนส่งมอบแบบมีจุดหยุดตัดสินใจ) ยังต้องทำก่อนเปิด beta ทั่วไป
 1. **เจ้าของ repo (admin):** รันคำสั่ง ruleset ใน [AGENTS.md §9](AGENTS.md#9-ตั้งค่า-repo-ครั้งเดียว-admin-ของ-repo) เพื่อ protect `main` + `dev` และล็อก tag `v*`
 2. ออก release ถัดไปตาม AGENTS.md; production ปัจจุบันคือ tag `v1.0.0` แล้ว ไม่ต้อง deploy tag นี้ซ้ำเพียงเพื่อให้มีเลขรุ่น
 3. แจ้งทีมว่างานใหม่ต้องเปิด PR เข้า `dev` เท่านั้น — #12–#14 ยังเข้า `main` ตรง

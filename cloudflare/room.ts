@@ -6,10 +6,12 @@ import { CommandAuthority } from '../server/authority.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
 import { exportInvoice } from '../server/exports.js';
+import { projectionCursor } from '../server/projection-cursor.js';
 import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import { authenticateHash, authenticateRequest, isAdminSession, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
 import { respondToTablePrompt } from './table-assistant.js';
+import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
 import type { Env } from './contracts.js';
 import { requireWorkspaceWritable } from './table-mode.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
@@ -27,7 +29,7 @@ import { decideDomain } from '../src/tabletop/domain/index.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
-const MAX_JSON_DEPTH_LIMIT = 40;
+const MAX_JSON_DEPTH_LIMIT = 96;
 const MAX_MODEL_PROMPT_CHARS = 4_000;
 const MAX_TABLE_ASSISTANT_PROMPT_CHARS = 4_000;
 const TABLE_ASSISTANT_CONTEXT_TURNS = 6;
@@ -475,7 +477,7 @@ export class Room extends DurableObject<Env> {
             || (afterValues[0] !== undefined && !PROJECTION_CURSOR_PATTERN.test(afterValues[0]))) {
           throw new AuthorityError('INVALID_REQUEST');
         }
-        const cursor = authorized.workspace.revision;
+        const cursor = projectionCursor(authorized.workspace);
         return json(200, {
           resync: afterValues[0] !== cursor,
           cursor,
@@ -540,9 +542,6 @@ export class Room extends DurableObject<Env> {
             modelJobView(reconciled), { 'x-request-id': requestId });
         }
         if (input.expectedRevision !== authorized.workspace.revision) throw new AuthorityError('STALE_REVISION');
-        const context = await this.tableAssistantConversation(
-          workspaceId, input.expectedEpoch, authorized.session.record.actorId,
-        );
         const reservation = await this.repository.reserveModelJob({
           id: jobId,
           workspaceId,
@@ -651,7 +650,7 @@ export class Room extends DurableObject<Env> {
         }
         if (input.expectedRevision !== authorized.workspace.revision) throw new AuthorityError('STALE_REVISION');
         const context = await this.tableAssistantConversation(
-          workspaceId, input.expectedEpoch, authorized.session.record.actorId,
+          workspaceId, input.expectedEpoch, authorized.session.record.actorId, input.prompt,
         );
         const reservation = await this.repository.reserveModelJob({
           id: jobId,
@@ -937,7 +936,7 @@ export class Room extends DurableObject<Env> {
       sessionHash: authorized.session.record.tokenHash,
       actorId: authorized.session.record.actorId,
       workspaceId,
-      revision: authorized.workspace.revision,
+      revision: projectionCursor(authorized.workspace),
     };
     server.serializeAttachment(attachment);
     this.ctx.acceptWebSocket(server, [`actor:${attachment.actorId}`]);
@@ -957,12 +956,13 @@ export class Room extends DurableObject<Env> {
     workspaceId: string,
     epoch: number,
     actorId: string,
+    prompt: string,
   ): Promise<{ conversation: TableAssistantConversationEntry[]; omittedCount: number }> {
     const jobs = await this.repository.listRecentCompletedTableAssistantJobs(
-      workspaceId, epoch, actorId, TABLE_ASSISTANT_CONTEXT_TURNS,
+      workspaceId, epoch, actorId, TABLE_MEMORY_SCAN_LIMIT,
     );
     const conversation: TableAssistantConversationEntry[] = [];
-    for (const job of jobs.reverse()) {
+    for (const job of jobs) {
       const prompt = job.data.prompt;
       const expectedRevision = job.data.expectedRevision;
       const result = tableAssistantResultSchema.safeParse(job.data.result);
@@ -982,10 +982,7 @@ export class Room extends DurableObject<Env> {
           ? { confirmationStatus: job.data.confirmationStatus } : {}),
       });
     }
-    const selectedCount = conversation.length;
-    const byteLength = (): number => new TextEncoder().encode(JSON.stringify(conversation)).byteLength;
-    while (conversation.length > 0 && byteLength() > TABLE_ASSISTANT_CONTEXT_MAX_BYTES) conversation.shift();
-    return { conversation, omittedCount: selectedCount - conversation.length };
+    return selectTableConversation(conversation, prompt);
   }
 
   private async runTableAssistantJob(input: RunTableAssistantJobInput): Promise<void> {
@@ -1345,9 +1342,9 @@ export class Room extends DurableObject<Env> {
         const session = await authenticateHash(attachment.sessionHash, this.env);
         if (session.record.actorId !== attachment.actorId) throw new AuthorityError('SESSION_EXPIRED');
         const authorized = await this.authority.authorizeSession(session, attachment.workspaceId);
-        if (authorized.workspace.revision === attachment.revision) continue;
+        if (projectionCursor(authorized.workspace) === attachment.revision) continue;
         socket.send(JSON.stringify({ type: 'projection', workspace: authorized.workspace }));
-        socket.serializeAttachment({ ...attachment, revision: authorized.workspace.revision });
+        socket.serializeAttachment({ ...attachment, revision: projectionCursor(authorized.workspace) });
       } catch {
         try { socket.close(4403, 'Authorization expired'); } catch { /* already closed */ }
       }

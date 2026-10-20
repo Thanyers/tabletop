@@ -12,6 +12,8 @@
     "dev:cloudflare": "wrangler dev --local --ip 127.0.0.1 --port 8787 --var PUBLIC_ORIGIN:http://127.0.0.1:8787",
     "test:cloudflare": "vitest run --config vitest.cloudflare.config.ts",
     "test:cloudflare:browser": "node tests/cloudflare-browser.mjs",
+    "test:generative:browser": "node --import tsx tests/generative-canvas-browser.mjs",
+    "test:generative:live": "node --import tsx scripts/generic-table-local.mjs --real-ai --generative-auto",
     "demo:auto": "npm run build && npm run build:cloudflare && node scripts/auto-demo.mjs",
     "demo:auto:run": "node scripts/auto-demo.mjs",
     "demo:auto:view": "node scripts/serve-auto-demo.mjs",
