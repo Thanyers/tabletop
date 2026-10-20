@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2.2.0 — 2026-10-21
+
+MINOR: ไม่มี migration, secret หรือ config ใหม่ · rollback ได้ทันที (รุ่นเก่าจะกลับไปถามความยินยอม AI ทุกครั้ง) · รุ่นแรกที่ deploy ผ่าน pipeline CD001
+
+- CI/CD: merge `release/X.Y.Z` เข้า `main` แล้ว pipeline สร้าง tag, รัน D1 migration (บันทึกจุดกู้คืนก่อน), deploy staging, ตรวจ smoke แล้ว deploy production ด้วย build เดียวกันอัตโนมัติ · ล้มแล้วหยุดและเปิด issue ไม่ rollback เอง ([CD001](docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001))
+- แชทบนโต๊ะถามความยินยอมส่ง AI ครั้งเดียวต่อโต๊ะต่อคน ครอบทั้งร่างกฎและถามคำถาม และจำไว้ในเบราว์เซอร์แม้ reload · ไฟล์ที่เพิ่มทีหลังส่งไปกับคำขอร่างกฎครั้งถัดไปโดยไม่ถามซ้ำ · reset โต๊ะ เปิดโต๊ะอื่น หรือใช้บัญชีอื่นจะถามใหม่ (F013)
+
 ## 2.1.0 — 2026-10-20
 
 MINOR: ไม่มี migration, secret หรือ config ใหม่ · rollback ได้ทันที (แท็บที่เปิดค้างด้วยโค้ดใหม่จะต่อ socket ซ้ำจนกว่าจะรีเฟรช)

@@ -305,7 +305,7 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
   return importedSource;
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls } = {}) {
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
@@ -337,21 +337,25 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   };
   owner.on('request', countModelRequests);
   const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
-  await send.click();
-  await expect(consent).toBeVisible();
-  const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
-  expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
-  expect(copy).toContain('Table files included');
-  expect(copy).toContain('Chat history is not included.');
-  for (const filename of sourceNames) expect(copy).toContain(filename);
-  expect(modelRequests).toBe(0);
-  await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(consent).toHaveCount(0);
-  await expect(prompt).toHaveValue('Build a shared table from the source, with bounded actions and checks.');
-  expect(modelRequests).toBe(0);
-  await send.click();
-  await expect(consent).toBeVisible();
-  for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
+  if (expectConsent) {
+    await send.click();
+    await expect(consent).toBeVisible();
+    const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
+    expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
+    expect(copy).toContain('Table files included');
+    expect(copy).toContain('Chat history is not included.');
+    expect(copy).toContain('You will not be asked again on this table');
+    for (const filename of sourceNames) expect(copy).toContain(filename);
+    expect(modelRequests).toBe(0);
+    await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(consent).toHaveCount(0);
+    await expect(prompt).toHaveValue('Build a shared table from the source, with bounded actions and checks.');
+    expect(modelRequests).toBe(0);
+    // Cancel grants nothing, so the next Send asks again.
+    await send.click();
+    await expect(consent).toBeVisible();
+    for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
+  }
   setTableReply({ change, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
@@ -372,11 +376,25 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await route.continue();
   };
   const workspaceUrl = `**/api/workspaces/${tableId}`;
-  if (failDraftRefresh) await owner.route(workspaceUrl, workspaceRoute);
+  const modelUrl = `**/api/workspaces/${tableId}/model`;
+  // Arm the refresh failure before the browser sees the 202. Setting it after reading the
+  // response in the test raced the app's own refresh on slow CI machines.
+  const modelRoute = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const response = await route.fetch();
+    if (response.status() === 202) modelAccepted = true;
+    await route.fulfill({ response });
+  };
+  if (failDraftRefresh) {
+    await owner.route(workspaceUrl, workspaceRoute);
+    await owner.route(modelUrl, modelRoute);
+  }
   const providerCallsBefore = failDraftRefresh ? getProviderCalls() : undefined;
   const modelResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   void modelResponse.catch(() => {});
-  await consent.getByRole('button', { name: 'Send', exact: true }).click();
+  // F013: after one grant for this owner on this table epoch, a later rule request sends without asking.
+  await (expectConsent ? consent.getByRole('button', { name: 'Send', exact: true }) : send).click();
+  if (!expectConsent) await expect(consent).toHaveCount(0);
   let accepted;
   try {
     accepted = await modelResponse;
@@ -431,6 +449,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     expect(modelRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
     await owner.unroute(workspaceUrl, workspaceRoute);
+    await owner.unroute(modelUrl, modelRoute);
   } else {
     await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
     await expect(draftCard.getByRole('button', { name: 'Retry table refresh', exact: true })).toHaveCount(0);
@@ -645,7 +664,7 @@ async function selectOtherTable(page, title, tableId) {
   await expect(page.locator('.tt-canvas-panel')).toBeVisible();
 }
 
-async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, privatePrompt, privateAnswer, capabilities, mark }) {
+async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, privatePrompt, privateAnswer, capabilities, getProviderCalls, mark }) {
   expect(capabilities).toMatchObject({ modelEnabled: true });
   const original = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const originalVisibleTitle = await owner.locator('.tt-workspace-picker__button strong').innerText();
@@ -712,15 +731,34 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
     }
     await expect(prompt).toBeEnabled();
     await expect(send).toBeEnabled();
-    await send.click();
+    // F013: this owner already consented on this table epoch, so Send goes straight out. The request is
+    // answered here so nothing reaches the server or the provider while the layout ACK is held.
+    const callsBeforePendingAsk = getProviderCalls();
+    const pendingAskBodies = [];
+    const assistantUrl = `**/api/workspaces/${tableId}/assistant`;
+    const stopPendingAsk = async route => {
+      if (route.request().method() !== 'POST') return route.continue();
+      pendingAskBodies.push(route.request().postDataJSON());
+      await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ message: 'Synthetic question stop during a held layout ACK.' }) });
+    };
+    await owner.route(assistantUrl, stopPendingAsk);
+    try {
+      const pendingAskResponse = owner.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/api/workspaces/${tableId}/assistant`) && response.request().method() === 'POST');
+      void pendingAskResponse.catch(() => {});
+      await send.click();
+      expect((await pendingAskResponse).status()).toBe(422);
+    } finally {
+      await owner.unroute(assistantUrl, stopPendingAsk);
+    }
     const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
-    await expect(consent).toBeVisible();
-    await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(prompt).toHaveValue(pendingPrompt);
     await expect(consent).toHaveCount(0);
+    expect(pendingAskBodies).toHaveLength(1);
+    expect(pendingAskBodies[0]).toMatchObject({ prompt: pendingPrompt, consent: true });
+    await expect(prompt).toHaveValue(pendingPrompt);
     expect(modelPosts).toBe(0);
-    expect(assistantPosts).toBe(0);
-    mark(`Layout/chat concurrency: enabled model capabilities were restored at ${capabilities.receivedAt}; accepted canvas.layout ACK left the composer enabled, and normal Send opened cancellable consent with no private request.`);
+    expect(assistantPosts).toBe(1);
+    expect(getProviderCalls()).toBe(callsBeforePendingAsk);
+    mark(`Layout/chat concurrency: enabled model capabilities were restored at ${capabilities.receivedAt}; accepted canvas.layout ACK left the composer enabled, and Send under the earlier table grant went out once with consent and no provider call.`);
 
     await selectOtherTable(owner, otherTable.visibleTitle, otherTable.id);
     await expect(owner.getByTestId('table-chat-answer')).toHaveCount(0);
@@ -733,6 +771,20 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
     await expect(owner).toHaveURL(new RegExp(`/t/${otherTable.id}$`));
     await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
     expect((await api(owner, `/api/workspaces/${otherTable.id}`)).body.domain.canvasLayout?.positions?.['table.actions']).toBeUndefined();
+    // The grant belongs to the first table only: the same owner on another table is asked again.
+    const otherTablePrompt = 'Draft rules for this other table.';
+    await prompt.fill(otherTablePrompt);
+    await expect(send).toBeEnabled();
+    await send.click();
+    await expect(consent).toBeVisible();
+    expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain('You will not be asked again on this table');
+    await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(consent).toHaveCount(0);
+    await expect(prompt).toHaveValue(otherTablePrompt);
+    await prompt.fill('');
+    expect(modelPosts).toBe(0);
+    expect(assistantPosts).toBe(1);
+    expect(getProviderCalls()).toBe(callsBeforePendingAsk);
 
     await selectOtherTable(owner, originalVisibleTitle, tableId);
     const privateArticle = owner.getByRole('article', { name: privatePrompt, exact: true });
@@ -825,7 +877,7 @@ async function performContextualAction(page, collectionId, { recordId, recordLab
   return response;
 }
 
-async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply, { cancelFirst = false, loseFirstAck = false, beforeRetry } = {}) {
+async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply, { cancelFirst = false, loseFirstAck = false, beforeRetry, expectConsent = true } = {}) {
   const chat = page.getByTestId('table-chat-bar');
   const matchingPromptCards = () => page.locator('.tt-canvas-node--auxiliary')
     .filter({ hasText: promptText.slice(0, 36) });
@@ -861,15 +913,18 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
   };
   page.on('request', countRequests);
   try {
-    await send.click();
-    await expect(consent).toBeVisible();
-    const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
-    expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
-    expect(copy).toContain('up to six of your private chat exchanges, including relevant older ones when available');
-    expect(copy).toContain('Table files are not sent.');
-    expect(assistantRequests).toBe(0);
-    expect(modelRequests).toBe(0);
-    if (cancelFirst) {
+    if (expectConsent) {
+      await send.click();
+      await expect(consent).toBeVisible();
+      const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
+      expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
+      expect(copy).toContain('up to six of your private chat exchanges, including relevant older ones when available');
+      expect(copy).toContain('Table files are not sent.');
+      expect(copy).toContain('You will not be asked again on this table');
+      expect(assistantRequests).toBe(0);
+      expect(modelRequests).toBe(0);
+    }
+    if (expectConsent && cancelFirst) {
       await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(consent).toHaveCount(0);
       await expect(prompt).toHaveValue(promptText);
@@ -882,7 +937,9 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
     if (loseFirstAck) await page.route('**/api/workspaces/*/assistant', assistantRoute);
     const initialResponsePromise = loseFirstAck ? null : page.waitForResponse(candidate => candidate.url().endsWith('/assistant') && candidate.request().method() === 'POST');
     if (initialResponsePromise) void initialResponsePromise.catch(() => {});
-    await consent.getByRole('button', { name: 'Send', exact: true }).click();
+    // F013: once this actor consented on this table epoch (in either mode), Send goes straight to the assistant.
+    await (expectConsent ? consent.getByRole('button', { name: 'Send', exact: true }) : send).click();
+    if (!expectConsent) await expect(consent).toHaveCount(0);
     let response;
     if (loseFirstAck) {
       await expect(matchingPromptCards()).toHaveCount(1);
@@ -1001,7 +1058,8 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     forbiddenTexts: forbidden,
   };
   const beforeFollowup = (await api(member, `/api/workspaces/${tableId}`)).body;
-  await askTableAssistant(member, followup, followupReply, setAssistantReply);
+  // The member's grant survived the reload, so the follow-up does not ask again.
+  await askTableAssistant(member, followup, followupReply, setAssistantReply, { expectConsent: false });
   expect(getProviderCalls()).toBe(initialCalls + 2);
   const afterFollowup = (await api(member, `/api/workspaces/${tableId}`)).body;
   expect(afterFollowup.revision).toBe(beforeFollowup.revision);
@@ -1019,12 +1077,13 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   };
   const ownerCalls = getProviderCalls();
   await expect(owner.getByRole('article', { name: firstPrompt, exact: true })).toHaveCount(0);
-  await askTableAssistant(owner, ownerPrompt, ownerReply, setAssistantReply);
+  // The owner consented for a rule draft on this table epoch; one grant also covers questions.
+  await askTableAssistant(owner, ownerPrompt, ownerReply, setAssistantReply, { expectConsent: false });
   expect(getProviderCalls()).toBe(ownerCalls + 1);
   expect((await api(owner, `/api/workspaces/${tableId}`)).body.revision).toBe(ownerProfile.revision);
   await verifyDelayedLayoutAckDoesNotCrossTables({
     owner, tableId, api, privatePrompt: ownerPrompt, privateAnswer: ownerReply.result.text,
-    capabilities, mark,
+    capabilities, getProviderCalls, mark,
   });
 
   const providerCallsBeforeArchive = getProviderCalls();
@@ -1077,24 +1136,41 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await ownerRules.getByRole('button', { name: 'Edit rules', exact: true }).click();
   const ownerChat = owner.getByTestId('table-chat-bar');
   const ownerPrompt = ownerChat.getByRole('textbox', { name: 'Message', exact: true });
-  await ownerPrompt.fill('Check that consent follows the exact source file set.');
-  await ownerChat.getByRole('button', { name: 'Send message', exact: true }).click();
-  const fileConsent = ownerChat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
-  await expect(fileConsent).toBeVisible();
-  const fileConsentCopy = (await fileConsent.innerText()).replace(/\s+/gu, ' ');
-  expect(fileConsentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
-  expect(fileConsentCopy).toContain('Table files included');
-  expect(fileConsentCopy).toContain('Chat history is not included.');
-  expect(fileConsentCopy).toContain(fixtures.equipment.filename);
-  expect(fileConsentCopy).toContain(equipmentNotes.filename);
-  await fileConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(ownerPrompt).toHaveValue('Check that consent follows the exact source file set.');
+  // F013: the owner already consented on this table epoch, so a file added later does not ask again;
+  // the rule request is sent at once. The request is answered here without reaching the server or the
+  // provider, so the test leaves no draft behind.
+  const laterFilePrompt = 'Check that a file added later is sent without asking again.';
+  await ownerPrompt.fill(laterFilePrompt);
+  const laterFileBodies = [];
+  const laterFileUrl = `**/api/workspaces/${room.id}/model`;
+  const laterFileRoute = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    laterFileBodies.push(route.request().postDataJSON());
+    await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ message: 'Synthetic draft stop after the consent check.' }) });
+  };
+  await owner.route(laterFileUrl, laterFileRoute);
+  try {
+    const laterFileResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${room.id}/model`) && response.request().method() === 'POST');
+    void laterFileResponse.catch(() => {});
+    await ownerChat.getByRole('button', { name: 'Send message', exact: true }).click();
+    expect((await laterFileResponse).status()).toBe(422);
+  } finally {
+    await owner.unroute(laterFileUrl, laterFileRoute);
+  }
+  await expect(ownerChat.getByRole('alertdialog', { name: 'Send to AI', exact: true })).toHaveCount(0);
+  expect(laterFileBodies).toHaveLength(1);
+  expect(laterFileBodies[0]).toMatchObject({ prompt: laterFilePrompt, consent: true, expectedEpoch: active.epoch });
+  await expect(ownerPrompt).toHaveValue(laterFilePrompt);
   expect(getProviderCalls()).toBe(callsBeforeSecondSource);
   const cancelRuleEdit = ownerChat.getByRole('button', { name: 'Cancel rule edit', exact: true });
   await expect(cancelRuleEdit).toBeVisible();
   await cancelRuleEdit.click();
   await expect(cancelRuleEdit).toHaveCount(0);
   await expect(ownerPrompt).toHaveValue('');
+  // Drop the local failed-request card; the grant itself is remembered across the reload.
+  await owner.reload();
+  await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
+  expect(await owner.evaluate(() => JSON.parse(window.localStorage.getItem('tabletop.aiConsent.v1') ?? '[]').length)).toBe(1);
 
   const firstInvite = await inviteMember(owner, 1);
   member = await joinAndCheckSharedFiles(newPage, api, member, firstInvite, room.id, source.filename);
@@ -1145,6 +1221,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   };
   const callsBeforeOwnerAsk = getProviderCalls();
   await askTableAssistant(owner, ownerAsk.expectedPromptContains, ownerAsk, setAssistantReply, {
+    expectConsent: false,
     loseFirstAck: true,
     beforeRetry: async firstRequest => {
       const beforeAction = (await api(owner, `/api/workspaces/${room.id}`)).body;
@@ -1181,7 +1258,10 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await resetChat.getByRole('button', { name: 'Send message', exact: true }).click();
   const resetConsent = resetChat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
   await expect(resetConsent).toBeVisible();
-  expect((await resetConsent.innerText()).replace(/\s+/gu, ' ')).toMatch(/current active rules, records, and turn|current table context/iu);
+  // A reset starts a new epoch, so the earlier grant no longer covers this owner.
+  const resetConsentCopy = (await resetConsent.innerText()).replace(/\s+/gu, ' ');
+  expect(resetConsentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
+  expect(resetConsentCopy).toContain('You will not be asked again on this table');
   await resetConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(getProviderCalls()).toBe(beforeResetCalls);
   mark('Generic table: text source, reviewed lifecycle, shared equipment actions, borrower-only return, shared read-only files, and reload persistence');
@@ -1251,7 +1331,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
     expectedPromptContains: 'Prepare my red boat advance for this turn.',
     forbiddenTexts: [source.filename, fixtures.game.quote, ownerBeforeProposal.actor.actorId, ownerBeforeProposal.actor.name],
   };
-  const ownerChat = await askTableAssistant(owner, ownerProposal.expectedPromptContains, ownerProposal, setAssistantReply);
+  const ownerChat = await askTableAssistant(owner, ownerProposal.expectedPromptContains, ownerProposal, setAssistantReply, { expectConsent: false });
   expect(getProviderCalls()).toBe(ownerCalls + 1);
   const afterOwnerProposal = (await api(owner, `/api/workspaces/${room.id}`)).body;
   expect(afterOwnerProposal.revision).toBe(ownerBeforeProposal.revision);
@@ -1319,7 +1399,8 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   revisedProgram.description = 'A revised scoring rule changes the gain from two to three points. Current scores stay in place.';
   revisedProgram.actions.find((action) => action.id === 'advance').effects[0].value = literal(3);
   const revisedChange = { kind: 'table', program: revisedProgram, initialRecords: {} };
-  await requestProposal(owner, room.id, source, revisedChange, setTableReply, api);
+  // Same owner, table and epoch as the first draft: the rule edit sends without asking again.
+  await requestProposal(owner, room.id, source, revisedChange, setTableReply, api, { expectConsent: false });
   active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);

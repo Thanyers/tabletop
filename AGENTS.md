@@ -70,30 +70,21 @@ PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใ�
 2. **เสนอเลขเวอร์ชันพร้อมเหตุผล** แล้วรอคนเคาะ · ตัดสินด้วยคำถาม "deploy แล้ว rollback ทันทีได้ไหม"
    - **PATCH** แก้บั๊ก/ข้อความ/CSS · **MINOR** ฟีเจอร์ใหม่ หรือ migration ที่เข้ากันได้ย้อนหลัง
    - **MAJOR** rollback ไม่ได้ถ้าไม่ทำอะไรเพิ่ม เช่น migration ย้อนไม่ได้, ต้องเพิ่ม secret/binding/config ก่อน deploy, เปลี่ยน response จน client เก่าพัง
-3. PR `release/X.Y.Z` → `main` → คน merge
-4. ตรวจว่า check `local-validation` ของ **merge commit บน `main`** ผ่านจริง ไม่ใช่ดูแค่ PR:
-   ```bash
-   gh api repos/Thanyers/tabletop/commits/<merge-sha>/check-runs --jq '.check_runs[] | {name, conclusion}'
-   ```
-5. สร้าง **annotated tag** บน merge commit นั้น แล้ว push:
-   ```bash
-   git tag -a vX.Y.Z <merge-sha> -m "Tabletop vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
-6. เปิด PR `main` → `dev` เพื่อนำ commit ของ release กลับเข้า `dev`
-7. **deploy เป็นงานของ operator (คน)** ดูหัวข้อถัดไป
+3. PR `release/X.Y.Z` → `main` → **คน merge** · การ merge นี้คือการตัดสินใจปล่อยรุ่น ชื่อ branch คือเลขเวอร์ชันที่คนเคาะแล้ว
+4. หลัง merge **pipeline ทำต่อเองทั้งหมด** ([`release-deploy.yml`](.github/workflows/release-deploy.yml), CD001): รอ `local-validation` ของ merge commit บน `main` ผ่าน → สร้าง annotated tag `vX.Y.Z` → build ครั้งเดียว → staging (D1 migration + deploy + smoke) → production ด้วย build เดียวกัน → smoke · ดูรายละเอียดที่หัวข้อถัดไป
+5. เปิด PR `main` → `dev` เพื่อนำ commit ของ release กลับเข้า `dev`
 
-## 6. Deploy (operator เท่านั้น)
+## 6. Deploy (อัตโนมัติหลังคน merge release)
 
-deploy ขึ้น Cloudflare ทำด้วยมือจากเครื่อง operator ด้วย config ที่ **ไม่อยู่ใน git** (`wrangler.jsonc` ใน repo ใช้ ID ปลอมและงบ AI เป็นศูนย์)
+pipeline ทำงานเฉพาะ merge จาก `release/X.Y.Z` หรือ `hotfix/X.Y.Z` เข้า `main` และต้องมีหัวข้อ `## X.Y.Z` ใน `CHANGELOG.md` · merge อื่นเข้า `main` ไม่ deploy
 
-1. checkout **tag** ใน worktree ที่สะอาด → `npm ci` → `npm run build` → `dist/version.json` ต้องมี `version` เป็น `X.Y.Z` (ถ้าได้ `0.0.0-dev` แปลว่าไม่ได้ build จาก tag)
-2. deploy staging → ตรวจ `/healthz`, `/readyz`, `/api/capabilities`, `/version` และ UI ที่เปลี่ยน
-3. deploy production ด้วยไฟล์ build **ชุดเดียวกับ** staging → ตรวจซ้ำ และให้ `/version` ตรงกับ tag
-4. อัปเดต [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md) ผ่าน PR เข้า `dev`
-5. ถ้า deploy ล้มเหลว บันทึกใน `MEMORY.md` → Deploy failures พร้อมเวลาที่ fail จาก log และเวลาที่แก้
+- **config จริงอยู่ใน GitHub secrets** (`WRANGLER_CONFIG_STAGING`, `WRANGLER_CONFIG_PRODUCTION`) ไม่อยู่ใน git · pipeline ตรวจชื่อ Worker, `PUBLIC_ORIGIN`, D1 ID ก่อนใช้ เพื่อไม่ให้ config staging ไป deploy production
+- **D1 migration รันอัตโนมัติ** staging ก่อน แล้วค่อย production หลัง staging ผ่าน · ก่อนรันทุกครั้งบันทึก D1 Time Travel bookmark ไว้ใน summary ของ run (กู้ได้ด้วย `wrangler d1 time-travel restore`) · เอา bookmark ไม่ได้ = ไม่ migrate
+- **smoke** เป็นการอ่านอย่างเดียว: `/healthz`, `/readyz`, `/api/capabilities`, `/version` ต้องตรงกับ tag, `/` และ `/new` · ไม่ล็อกอิน ไม่สร้างห้อง ไม่เรียก AI → การตรวจที่ต้องล็อกอินหรือใช้ AI ยังต้องทำด้วยมือบน staging ก่อน merge release
+- **ล้มที่ขั้นไหนก็หยุดทันที** เปิด GitHub issue "Deploy failed" พร้อม `job_started_at` / `detected_at` / ขั้นที่ล้ม · **ไม่ rollback production อัตโนมัติ** (ดูข้อห้าม rollback ใน [DEPLOYMENTS](docs/DEPLOYMENTS.md)) · คนแก้แล้วรัน **Release deploy** ใหม่ด้วย SHA เดิม (workflow_dispatch) และบันทึกลง `MEMORY.md` → Deploy failures
+- หลัง deploy อัปเดต [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md) ผ่าน PR เข้า `dev`
 
-ขั้นตอน recovery และการขออนุมัติเขียนฐานอยู่ที่ [TEAM_HANDOFF_TH → ส่งรุ่นใหม่และกู้คืน](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน)
+ตั้งค่าครั้งแรกและการกู้คืน: [TEAM_HANDOFF_TH → Deploy อัตโนมัติ (CD001)](docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001) · การขออนุมัติเขียนฐานด้วยมืออยู่ที่ [ส่งรุ่นใหม่และกู้คืน](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน)
 
 ## 7. Hotfix
 
@@ -103,15 +94,16 @@ deploy ขึ้น Cloudflare ทำด้วยมือจากเครื�
 git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รันบน prod ไม่ใช่ main HEAD
 ```
 
-แก้เฉพาะบั๊กนั้น → CHANGELOG (PATCH) → PR เข้า `main` → คน merge → ตรวจ check → tag → operator deploy → **PR กลับเข้า `dev` ในวันเดียวกัน**
+แก้เฉพาะบั๊กนั้น → CHANGELOG (PATCH) → PR เข้า `main` → คน merge → pipeline tag + deploy เอง → **PR กลับเข้า `dev` ในวันเดียวกัน**
 
 ## 8. ขอบเขตของ AI
 
-**ทำได้:** แตก branch · แก้โค้ดและเอกสาร · รันเทสต์ · push branch งานของตัวเอง · เปิด PR · เสนอเลขเวอร์ชัน · สร้างและ push annotated tag **หลังคนเคาะเลขแล้ว และ check บน `main` ผ่านแล้ว**
+**ทำได้:** แตก branch · แก้โค้ดและเอกสาร · รันเทสต์ · push branch งานของตัวเอง · เปิด PR · เสนอเลขเวอร์ชัน · สร้างและ push annotated tag **หลังคนเคาะเลขแล้ว และ check บน `main` ผ่านแล้ว** (ปกติ pipeline สร้างให้เอง) · กดรัน **Release deploy** ซ้ำด้วย SHA เดิมเมื่อคนสั่ง
 
 **ห้ามเด็ดขาด:**
 - merge PR ใด ๆ หรือ push ตรงเข้า `main` / `dev`
-- deploy, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote`
+- deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · การ deploy เกิดจาก pipeline หลังคน merge release เท่านั้น
+- แก้ `release-deploy.yml` ให้ข้ามการรอ check, ข้าม smoke หรือ deploy จาก branch อื่นนอกจาก `main`
 - ลบหรือย้าย tag ที่ push แล้ว (รุ่นพังให้ออกรุ่นใหม่)
 - ตั้งเลขเวอร์ชันเองโดยไม่มีคนเคาะ หรือ hardcode เลขเวอร์ชันไว้ที่อื่นนอกจาก git tag
 - ใส่ secret, Worker/D1 ID จริง, room/account ID, invite link, อีเมล/ชื่อผู้ใช้จริง หรือ path ส่วนตัวลงไฟล์ที่ track — **repo นี้เป็น public**
