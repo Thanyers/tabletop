@@ -87,6 +87,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## งานที่กำลังทำ
 
+F006-T7: อัปเดต `README.md` และ `docs/TEAM_HANDOFF_TH.md` บน `docs/F006-merged-readme-handoff` จากรุ่นรวม `ce6d69b`; คงเรื่องเล่าผลิตภัณฑ์ เพิ่มสถานะหลัง merge/เครดิตและจุดแก้ร่วมกับทีม ตรวจลิงก์ ภาพ และ publication scan โดยไม่เปลี่ยน runtime
+
 ดู [PLAN.md](PLAN.md) — กระดานว่าใครทำงานไหน branch อะไร (ย้ายมาจากหัวข้อนี้เพื่อไม่ให้หลายคนแก้ส่วนเดียวกันจนชน)
 
 งาน Generative Canvas ที่เริ่มก่อนมีกระดานทีมย้ายรายละเอียดไป [F005](docs/features/F005-generative-canvas.md) โดยคงขอบเขตและหลักฐานใน [acceptance](docs/GENERATIVE_CANVAS_ACCEPTANCE.md)

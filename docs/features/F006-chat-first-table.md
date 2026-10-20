@@ -56,6 +56,7 @@
 | T4 | คำตอบแชทเป็นการ์ดบน Canvas · การ์ด action มี Confirm แยก · การ์ดเป็นของผู้ถามเท่านั้น | browser test: ถาม → การ์ดคำตอบ · เสนอ action → Confirm → Table history · สมาชิกอื่นไม่เห็นการ์ดคำตอบของเรา |
 | T5 | ย้าย/เขียน browser tests ของ setup + chat ใน `tests/generic-table-browser.mjs` ให้ใช้แชทใหม่ | CI `local-validation` ผ่าน |
 | T6 | คู่มือ + CHANGELOG | ลิงก์ถูก |
+| T7 | อัปเดต README และ Handoff ตามรุ่นที่ merge แล้ว โดยคงแนวคิดและประวัติงานทีม | ระบุความสามารถ/ขั้นใช้จริงของ dev, งานที่ต่อจากทีม, หลักฐาน CI และขอบเขต deployment; ลิงก์และ public scan ผ่าน |
 
 ## คำตอบสำหรับการต่อเข้ากับ F005
 
