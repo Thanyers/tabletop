@@ -12,6 +12,11 @@ const MAX_KEY_CHARS = 4096;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
 export const MAX_CHANGE_REQUEST_BYTES = 64_000;
 export const TABLE_REQUEST_TOKEN_MARGIN = 1_000;
+const MAX_REPAIR_ISSUES = 4;
+const MAX_REPAIR_ISSUE_CHARS = 1_000;
+const MAX_UNION_DIAGNOSTIC_BRANCHES = 2;
+const MAX_UNION_DIAGNOSTIC_DEPTH = 3;
+const MAX_UNION_BRANCH_DETAIL_CHARS = 240;
 const MAX_RESPONSE_BYTES = 128_000;
 const MAX_OUTPUT_CHARS = 64_000;
 const MAX_OUTPUT_TOKENS = 512;
@@ -42,7 +47,7 @@ const inputSchema = z.discriminatedUnion('kind', [
     program: tableProgramSchema.nullable(),
     turn: z.string().max(40).nullable(),
     records: tableRecordsSchema.optional(),
-    repair: z.strictObject({ attempt: z.number().int().min(2).max(3), issues: z.array(z.string().max(1000)).min(1).max(4), previousOutput: z.string().max(18_000).optional() }).optional(),
+    repair: z.strictObject({ attempt: z.number().int().min(2).max(3), issues: z.array(z.string().max(MAX_REPAIR_ISSUE_CHARS)).min(1).max(MAX_REPAIR_ISSUES), previousOutput: z.string().max(18_000).optional() }).optional(),
   }),
 ]);
 
@@ -191,6 +196,74 @@ function boundedInput(input: DeepSeekChangeInput): { value: z.infer<typeof input
   return { value: parsed.data, json };
 }
 
+function formatIssuePath(path: PropertyKey[]): string {
+  let formatted = '';
+  for (const part of path) {
+    if (typeof part === 'number') {
+      formatted += `[${part}]`;
+      continue;
+    }
+    const key = String(part);
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)) {
+      formatted += `${formatted ? '.' : ''}${key}`;
+      continue;
+    }
+    formatted += `[${JSON.stringify(key) ?? '""'}]`;
+  }
+  return formatted || '$';
+}
+
+function valueAtPath(value: unknown, path: PropertyKey[]): unknown {
+  let current = value;
+  for (const part of path) {
+    if (typeof part === 'number') {
+      if (!Array.isArray(current)) return undefined;
+      current = current[part];
+    } else {
+      if (typeof part !== 'string' || !isObject(current)) return undefined;
+      current = current[part];
+    }
+  }
+  return current;
+}
+
+function isWrappedExpression(value: unknown): boolean {
+  if (!isObject(value)) return false;
+  const keys = Object.keys(value);
+  const expression = value.expression;
+  return keys.length === 1 && isObject(expression) && typeof expression.op === 'string';
+}
+
+function formatValidationIssue(
+  issue: z.core.$ZodIssue,
+  output: unknown,
+  depth = 0,
+  pathPrefix: PropertyKey[] = [],
+): string {
+  const issuePath = [...pathPrefix, ...issue.path];
+  const path = formatIssuePath(issuePath);
+  if (issue.code !== 'invalid_union') return `${path}: ${issue.message}`;
+  if (issue.errors.length === 0 || depth >= MAX_UNION_DIAGNOSTIC_DEPTH) {
+    return `${path}: value does not match an allowed schema shape.`;
+  }
+
+  const branches = issue.errors.slice(0, MAX_UNION_DIAGNOSTIC_BRANCHES).map((branch) => {
+    const firstIssue = branch[0];
+    if (!firstIssue) return 'no validation detail';
+    return formatValidationIssue(firstIssue, output, depth + 1, issuePath).slice(0, MAX_UNION_BRANCH_DETAIL_CHARS);
+  });
+  const omitted = issue.errors.length > branches.length ? '; additional schema branches omitted' : '';
+  const wrapperHint = isWrappedExpression(valueAtPath(output, issuePath))
+    ? '; this looks like a table-operand wrapper: when a field expects a generated expression, pass the AST directly as {"op": ...}; use {"expression": ...} only for action operands'
+    : '';
+  return `${path}: no allowed schema branch matched (${branches.join('; ')}${omitted})${wrapperHint}.`;
+}
+
+function formatValidationIssues(issues: readonly z.core.$ZodIssue[], output: unknown): string[] {
+  return issues.slice(0, MAX_REPAIR_ISSUES)
+    .map(issue => formatValidationIssue(issue, output).slice(0, MAX_REPAIR_ISSUE_CHARS));
+}
+
 function changeFrom(content: string, kind: DeepSeekChangeInput['kind'], usage: DeepSeekChangeUsage): ChangeSet {
   if (!content || content.length > MAX_OUTPUT_CHARS) throw fail('MODEL_PROVIDER_OUTPUT_REJECTED');
   let output: unknown;
@@ -200,7 +273,7 @@ function changeFrom(content: string, kind: DeepSeekChangeInput['kind'], usage: D
   }
   const parsed = kind === 'teaching' ? teachingChangeSchema.safeParse(output)
     : kind === 'encounter' ? encounterChangeSchema.safeParse(output) : tableChangeSchema.safeParse(output);
-  if (!parsed.success) throw new RejectedChangeReply(usage, parsed.error.issues.slice(0, 4).map(issue => `${issue.path.join('.')}: ${issue.message}`.slice(0, 1000)), content.slice(0, 18_000));
+  if (!parsed.success) throw new RejectedChangeReply(usage, formatValidationIssues(parsed.error.issues, output), content.slice(0, 18_000));
   return parsed.data;
 }
 
@@ -226,14 +299,18 @@ function systemPrompt(kind: 'teaching' | 'encounter' | 'table'): string {
     'The root has exactly three keys: {"kind":"table","program":{...,"canvas":{"version":1,"views":[...]}},"initialRecords":{...}}. Put canvas INSIDE program, never beside program. All required program keys must be present.',
     'Use the bounded data-only language in the schema. Action condition left/right and effect value use OPERANDS: {"literal":3}, {"input":"amount"}, {"record":"item","field":"amount"}, {"system":"seat"}, or {"expression":AST}. They never take a raw AST. Example subtract an action input: {"expression":{"op":"math","fn":"multiply","args":[{"op":"literal","value":-1},{"op":"input","id":"amount"}]}}. Inside views or that expression wrapper use the typed AST directly. Never JavaScript, eval, HTML, URLs, external assets or code strings. Compose math, comparisons, conditionals, aggregate/map/filter/reduce to implement the requested behavior instead of selecting a scenario template.',
     'For visual or simulation requests include program.canvas {version:1,views:[...]}. Use scene, chart, metric and controls descriptors linked to the SAME records and actions. Supply relatedTo connections. Keep a clear central scene and nearby controls/results; the host computes card geometry. Controls and draggable scene shapes bind a declared action and ALL its parameters. Numeric controls should have a value expression reading their committed value. Charts and metrics must derive real quantities. Use bounded step/time actions for simulations; no network, wall clock or randomness.',
+    'Scene primitive numeric values may be numbers or, when computed, raw ASTs such as {"op":"math",...}; view/control value expressions use the raw AST too. Do not wrap these values in {"expression":...}; that wrapper is for table action operands only. Scene view width and height are fixed positive numbers.',
+    'A control value expression is evaluated from table state without action-input context; it cannot read the pending action parameter. Bind a slider, toggle, or select parameter through its own {"kind":"control"} input, then give every other action parameter a stable literal, record, or expression binding. A two-axis drag may bind both coordinate parameters as controls.',
     'Keep generated views concise, useful and connected. Choose readable coordinates and safe paint colors. Scene dimensions and SVG primitives are data; only declared primitives are allowed. Never put private source quotations or personal identifiers into shared views unless the request explicitly asks to share those values. Upload consent alone does not authorize copying private files into views.',
     'relatedTo belongs to a VIEW only, never a scene element. A fixed row lookup is {"op":"recordField","collection":"items","recordId":"item-1","field":"amount"}. {"op":"field","record":"row","field":"amount"} is ONLY for a chart row or a named row inside aggregate/map/filter/reduce; never use it in standalone metrics or scenes.',
     'Scene text is a string or an expression returning text, not a number. Put numeric results in metric views, charts, or numeric geometry; do not invent concatenation or string formatting operators. Aggregate sum and count return zero on an empty selection. Guard mean/min/max with a count check when there might be no matching rows.',
     'Math add/subtract/multiply/divide/remainder/power each require EXACTLY TWO args, including add. Nest binary expressions for three or more terms, or use aggregate sum. abs/sqrt/sin/cos/tan/asin/acos/atan/floor/ceil/round take exactly one arg; min/max take at least two.',
     'Every control/drag inputs map must cover ALL action parameters. Example action parameters item(record),x(number),y(number): x slider inputs {"item":{"kind":"record","collection":"items","recordId":"item-1"},"x":{"kind":"control"},"y":{"kind":"expression","value":{"op":"recordField","collection":"items","recordId":"item-1","field":"y"}}}; a two-axis drag uses kind control for BOTH x and y. Controls do not automatically supply omitted parameters.',
     'For a record parameter, {"input":"first"} resolves to that selected row id; compare distinct selected rows with {"input":"first"} neq {"input":"second"}. A field lookup such as {"record":"first","field":"name"} must use a field declared in that parameter collection. The row id is metadata, never an implicit field.',
+    'An action must read the row actually selected by its record parameter. Within an expression use {"op":"selectedField","parameter":"item","field":"amount"} for the selected item. A recordField with a fixed recordId is appropriate only when the rule intentionally reads that fixed row; it must not substitute for a selected row when another player or item is chosen. For a numeric increment, prefer an effect {"record":"item","field":"amount","op":"add","value":{"input":"delta"}}; for a decrement use add with the negated input. Before returning, trace the action for at least two distinct selected rows and consecutive turns: unrelated rows stay unchanged and required totals remain conserved.',
     'Invariants express composite uniqueness only; never use them for numeric ranges or other validation. Put numeric bounds on the field min and max. Conditions are all ANDed.',
     'The system actor is an opaque account id; the system seat is host or member-N; the system turn is the current seat. Never compare actor to seat. requireTurn checks that the acting seat equals the current turn. advanceTurn cycles through turnOrder; use an empty turnOrder when actions have no turn order.',
+    'Roles authorize account actions; seats identify the acting player. The owner acts from the host seat and participants act from member-N seats. Include both "owner" and "participant" in roles when both should use an action; host and member-N are not role names.',
     'Resolve every effect against the state before the action, then commit all effects atomically. Do not make later effects depend on earlier effects in the same action.',
     'With source files, cite at least one source using its exact existing source id and a non-empty quote that is an exact contiguous substring of the raw source text, preserving spacing, punctuation, and line breaks. Prefer a short policy sentence. For JSON, copy a literal substring from the supplied text; never parse, reserialize, normalize, or reconstruct it to make a quote. New records must be grounded in source rows; use safe bounded IDs. Without source files use evidence:[] and list assumptions; never fabricate a source.',
     'When the current program is null, create a complete program and initial records. When editing an existing program, keep initialRecords empty, preserve collection and field definitions byte-for-byte, retain the current turn in turnOrder, and change rules/actions/views. Current records are authoritative context, never replacement initial data. Preserve view IDs when editing the same tool. Never reset or alter existing records or turn.',

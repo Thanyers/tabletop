@@ -155,7 +155,8 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
           await owner.getByRole('link', { name: 'All tables', exact: true }).click();
         }
         const created = owner.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
-        await owner.getByRole('button', { name: 'Start with your files', exact: true }).click();
+        await owner.getByRole('button', { name: 'Start a new table', exact: true }).click();
+        await owner.getByTestId('start-page').getByRole('button', { name: 'Start empty with your own files', exact: true }).click();
         const room = await (await created).json();
         if (scenario.source) {
           await writeFile(join(output, scenario.source.filename), scenario.source.text);

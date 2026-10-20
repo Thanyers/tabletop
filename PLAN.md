@@ -23,7 +23,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `todo` | [F001](docs/features/F001-guided-table-start.md) |
+| F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
 | F002 | ตั้งชื่อโต๊ะที่แถบด้านบน | `todo` | [F002](docs/features/F002-rename-table.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
@@ -33,8 +33,8 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F001-T1 | ชุดข้อมูลการ์ด starter 3 โจทย์ | `todo` | — | — | `src/tabletop/shared/starters.ts` (ใหม่) | — | |
-| F001-T2 | หน้าเริ่มโต๊ะใหม่: คำถาม + การ์ด + ช่องพิมพ์ | `todo` | — | — | `src/tabletop/ui/StartPrompt.tsx` (ใหม่), `TabletopApp.tsx`, CSS ใหม่ | T1, F004-T2 | hotspot `TabletopApp.tsx` · อยู่ที่ path `/new` |
+| F001-T1 | ชุดข้อมูลการ์ด starter 3 โจทย์ | `review` | Claude Code | `feat/F001-start-page` | `src/tabletop/shared/starters.ts` (ใหม่) | — | |
+| F001-T2 | หน้าเริ่มโต๊ะใหม่: คำถาม + การ์ด + ช่องพิมพ์ | `review` | Claude Code | `feat/F001-start-page` | `src/tabletop/ui/StartPrompt.tsx` (ใหม่), `TabletopApp.tsx`, CSS ใหม่ | T1, F004-T2 | hotspot `TabletopApp.tsx` · อยู่ที่ path `/new` |
 | F001-T3 | ตรวจและเตรียม "ตัวอย่าง + กฎให้ตรวจ" ของแรงกับมวลและเกมโล่ | `todo` | — | — | `src/tabletop/domain/` (teaching, encounter) | — | spike ก่อน: ตอนนี้มีแค่ `invoice.sample` |
 | F001-T4 | กดการ์ดแล้วสร้างโต๊ะชนิดนั้นและโหลดตัวอย่าง | `todo` | — | — | `client.ts`, `TabletopApp.tsx` | T2, T3 | |
 | F001-T5 | Endpoint AI แนะนำ starter จากข้อความ (Worker) | `todo` | — | — | `cloudflare/starter-ai.ts` (ใหม่), `cloudflare/index.ts`, `cloudflare/contracts.ts`, `cloudflare/*.test.ts` | — | แตะงบ AI + consent ต้องมีเทสต์ด้านปฏิเสธ |
@@ -44,6 +44,7 @@
 | F001-T9 | แชทย่อเป็นวงกลมไอคอนดุ๊กดิ๊กเมื่อไม่มีคนพิมพ์ | `todo` | — | — | ไฟล์เดียวกับ T8 | T8 | ต้องรองรับ reduced motion |
 | F001-T10 | ปรับ browser tests ตาม flow ใหม่ | `todo` | — | — | `tests/*.mjs` | T2, T4, T8 | แต่ละงานแก้เทสต์ของตัวเองได้ งานนี้เก็บส่วนที่เหลือ |
 | F001-T11 | คู่มือผู้ใช้ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | T4, T7, T9 | |
+| CI004 | R1 browser test เปิด server ใหม่ทุก scenario แทนการรอ rate limit | `review` | JitrudeeDongdee (Claude) | `feat/CI004-r1-no-rate-wait` | `tests/tabletop-r1.mjs` | — | hotspot `tests/tabletop-r1.mjs` |
 | F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–120 ตัวอักษร) | `todo` | — | — | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | |
 | F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | ชนกับ F003-T1/T3 (ไฟล์ Room เดียวกัน) |
 | F002-T3 | UI แก้ชื่อที่แถบด้านบน | `todo` | — | — | `TabletopApp.tsx`, CSS | F002-T2 | hotspot `TabletopApp.tsx` |
@@ -60,3 +61,6 @@
 | F004-T4 | Worker/Node ส่ง `index.html` ให้ path ลึก + asset โหลดได้ | `review` | Claude Code | `feat/F004-url-paths` | `server/app.ts`, `wrangler.jsonc`, tests | — | |
 | F004-T5 | ปรับ browser tests + เอกสาร | `review` | Claude Code | `feat/F004-url-paths` | `tests/*.mjs`, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F004-T2 | |
 | F005-T1 | Generative runtime, views, private trial, layout, AI repair/memory และ acceptance | `doing` | Codex | `feat/F005-generative-canvas` | `src/tabletop/{shared,domain,runtime,ui}/`, `server/`, `cloudflare/`, tests, docs, workflow | — | เริ่มก่อนมีกระดานทีม; รวม F004 จาก dev แล้ว ไม่หยิบ F001–F003 |
+| CI001 | ESLint ใน CI (ห้าม `any`/`@ts-ignore`) + pre-commit hook husky | `review` | JitrudeeDongdee (Claude) | `feat/CI001-eslint-husky` | `eslint.config.js` (ใหม่), `.husky/` (ใหม่), `package.json`, `package-lock.json`, `.github/workflows/validate.yml`, `scripts/check-public-files.mjs`, `.gitignore`, `CONTRIBUTING.md`, `AGENTS.md` | — | |
+| CI002 | เคลียร์ ESLint warning แล้วเลื่อนกฎเป็น error | `todo` | — | — | ทั่ว repo, `eslint.config.js` | CI001 | แตกตามโฟลเดอร์ ระวัง hotspot |
+| CI003 | ย้าย guard ของ workbench ให้ hook ไม่ถูกเรียกแบบมีเงื่อนไข | `review` | JitrudeeDongdee (Claude) | `fix/CI003-workbench-hooks` | `src/tabletop/ui/{Encounter,Invoice,Teaching}Workbench.tsx`, `eslint.config.js` | CI001 | บั๊กแฝง ดู spec ถัดไป ข้อ 7 |

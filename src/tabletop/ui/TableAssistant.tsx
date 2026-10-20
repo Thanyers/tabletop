@@ -29,6 +29,8 @@ interface TableAssistantProps {
   onChatConfirm: (view: TableWorkspaceView, job: TableAssistantJob, commandId: CommandId) => Promise<void>;
   onChatRefresh: (view: TableWorkspaceView) => Promise<void>;
   onOpenObject: (id: string) => void;
+  /** Text placed in the rule draft prompt, e.g. a description typed on the start page. */
+  rulePrefill?: { text: string; key: number };
 }
 
 type ChatEntry = {
@@ -583,7 +585,7 @@ function AssistantResultCard({ entry, view, readOnly, onOpenObject, onConfirm, o
 export function TableAssistant({
   compact = false, view, capabilities, readOnly, onRequest, onPoll, onRefresh, onAttachFile,
   onOpenSources, onOpenRules, onOpenActions, onReviewDraft,
-  onChatRequest, onChatPoll, onChatHistory, onChatConfirm, onChatRefresh, onOpenObject,
+  onChatRequest, onChatPoll, onChatHistory, onChatConfirm, onChatRefresh, onOpenObject, rulePrefill,
 }: TableAssistantProps) {
   const initiallyReviewingRules = view.actor.role === 'owner' && !readOnly && view.domain.kind === 'table'
     && (!view.domain.program || Boolean(view.domain.candidate && view.domain.candidate.status !== 'active'));
@@ -627,6 +629,7 @@ export function TableAssistant({
         onReviewDraft={onReviewDraft}
         readOnly={readOnly}
         embedded
+        prefill={rulePrefill}
       />
     </div> : <>
       {!compact && <details className="tt-table-assistant__canvas-tools">

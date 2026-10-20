@@ -32,6 +32,7 @@ npm start
 
 ```powershell
 node scripts/check-public-files.mjs
+npm run lint
 npm test
 npm run build
 npm run test:cloudflare
@@ -51,6 +52,30 @@ npm run test:generative:browser
 Browser runners เปิด loopback fixture ของตัวเอง ใช้บัญชีและ provider จำลอง ไม่โทรหา Google/DeepSeek จริง หากใช้ shell อื่นให้ตั้ง environment variable ด้วย syntax ของ shell นั้น การรัน public persona suite พร้อมเก็บประวัติใช้ `npm run demo:auto` ตาม [AUTO_DEMO](docs/AUTO_DEMO.md)
 
 ชุด Generative ตรวจ scene/controls/formula, ทดลองร่างส่วนตัว, สองผู้เล่นและตำแหน่งร่วมกัน รวมโจทย์นอก catalog เดิม รายละเอียดการเรียก provider จริงแบบ opt-in และขอบเขตผลตรวจอยู่ใน [Generative runtime](docs/GENERATIVE_CANVAS_RUNTIME.md) และ [acceptance](docs/GENERATIVE_CANVAS_ACCEPTANCE.md); CI ใช้เฉพาะ fixture จำลอง
+
+### Lint
+
+`npm run lint` (ESLint + typescript-eslint, config ที่ [`eslint.config.js`](eslint.config.js)) รันใน CI ก่อน unit tests · **error ทำให้ CI fail ส่วน warning ไม่** · typecheck (`strict`) ยังเป็นงานของ `npm run build`
+
+| กฎ | ระดับ | เหตุผล |
+| --- | --- | --- |
+| `@typescript-eslint/no-explicit-any` | error | `strict` กันแค่ `any` ที่ TypeScript อนุมานเอง ไม่กัน `: any` / `as any` ที่เขียนเอง · ใช้ `unknown` แล้ว narrow หรือ zod แทน |
+| `@typescript-eslint/ban-ts-comment` | error | ห้าม `@ts-ignore` / `@ts-nocheck` · `@ts-expect-error` ต้องมีเหตุผลอย่างน้อย 10 ตัวอักษร |
+| `react-hooks/rules-of-hooks` | error | component ที่ต้อง return ก่อนตามชนิดข้อมูล ให้แยก guard ออกเป็น component นอก แล้วส่งค่าที่ narrow แล้วให้ component ใน (ดู `InvoiceWorkbench.tsx`) |
+| eslint-disable ที่ไม่ได้ใช้ | error | กัน comment ปิดกฎค้างหลังแก้โค้ดแล้ว |
+| กฎ recommended ที่เหลือ | error | ยกเว้นกฎที่มีของเดิมค้างตอนเริ่มใช้ lint ซึ่งตั้งเป็น warning ไว้ก่อน (ดูใน config) แล้วจะเลื่อนเป็น error เมื่อเคลียร์หมด |
+| `no-control-regex` | off | sanitizer ตั้งใจลบอักขระควบคุม |
+
+ตัวแปร/argument ที่ตั้งใจไม่ใช้ให้ขึ้นต้นด้วย `_` · ห้ามแก้ warning ของไฟล์อื่นปนในงานที่ไม่เกี่ยว เพราะจะชนกับงานที่แตะไฟล์นั้น
+
+### Pre-commit hook
+
+`npm ci` / `npm install` ติดตั้ง hook ของ [husky](https://typicode.github.io/husky/) ให้อัตโนมัติผ่าน script `prepare` · ก่อนทุก commit hook ([`.husky/pre-commit`](.husky/pre-commit)) จะรัน:
+
+1. `node scripts/check-public-files.mjs` กับทั้ง repo
+2. `lint-staged` → `eslint` เฉพาะไฟล์ `.ts/.tsx/.js/.mjs` ที่ stage ไว้ (ไม่ `--fix` ให้เอง)
+
+hook เป็นด่านเสริมที่ข้ามได้ด้วย `git commit --no-verify` · ด่านที่บังคับจริงคือ check `local-validation` ใน CI · ถ้า hook ไม่ทำงานหลัง clone ให้รัน `npm run prepare` แล้วเช็คว่า `git config core.hooksPath` ได้ `.husky/_` · worktree ของเครื่องมือ AI ให้วางใต้ `.claude/worktrees/` (ignored แล้ว) ไม่อย่างนั้น `check-public-files` จะแจ้งว่าเป็น nested repository
 
 CI ใน [validate.yml](.github/workflows/validate.yml) ยังตรวจ dependency advisories, Component Lab, secret canary ใน browser build และเก็บรายงาน มี repository permission แบบอ่านและไม่มี deployment step
 

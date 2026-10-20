@@ -33,7 +33,7 @@ const blockedExternal = [];
 const providerResponses = [];
 const tableActRequests = [];
 let providerCalls = 0;
-let lastUiDiagnostics = null;
+const lastUiDiagnostics = null;
 let browser;
 const pages = [];
 const actorsById = new Map();
@@ -264,6 +264,21 @@ try {
     return dock;
   }
 
+  async function waitForStableBoundingBox(locator) {
+    let previous = null;
+    let stableSince = 0;
+    await expect.poll(async () => {
+      const box = await locator.boundingBox();
+      if (!box) { previous = null; stableSince = 0; return false; }
+      const current = [box.x, box.y, box.width, box.height];
+      const stable = previous !== null && current.every((value, index) => Math.abs(value - previous[index]) < 0.5);
+      if (stable) stableSince ||= Date.now();
+      else stableSince = 0;
+      previous = current;
+      return stableSince > 0 && Date.now() - stableSince >= 180;
+    }, { timeout: 3_000, intervals: [50, 100, 150] }).toBe(true);
+  }
+
   async function openCanvasObject(page, id) {
     const editor = page.getByTestId('canvas-object-editor');
     if (!(await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id)) {
@@ -274,21 +289,95 @@ try {
       await expect(editor).toHaveAttribute('data-canvas-object', id);
       await expect(editor).toBeVisible();
     }
-    let previous = null;
-    await expect.poll(async () => {
-      const box = await editor.boundingBox();
-      if (!box) { previous = null; return false; }
-      const current = [box.x, box.y, box.width, box.height];
-      const stable = previous !== null && current.every((value, index) => Math.abs(value - previous[index]) < 0.5);
-      previous = current;
-      return stable;
-    }, { timeout: 3_000, intervals: [50, 100, 150] }).toBe(true);
+    await waitForStableBoundingBox(editor);
     return editor;
+  }
+
+  async function requestCanvasObjectFocusImmediately(page, id) {
+    const editor = page.getByTestId('canvas-object-editor');
+    const dock = await openObjects(page);
+    const button = dock.getByTestId(`open-canvas-${id}`);
+    await expect(button).toBeVisible();
+    await button.click();
+    await expect(editor).toHaveAttribute('data-canvas-object', id);
+    await expect(editor).toBeVisible();
+    return editor;
+  }
+
+  async function readCanvasViewport(page) {
+    return page.locator('.react-flow__viewport').evaluate((element) => {
+      const transform = getComputedStyle(element).transform;
+      const matrix = transform === 'none' ? new DOMMatrixReadOnly() : new DOMMatrixReadOnly(transform);
+      return { x: matrix.m41, y: matrix.m42, zoom: matrix.a };
+    });
+  }
+
+  async function waitForStableCanvasViewport(page) {
+    await page.waitForTimeout(350);
+    let previous = null;
+    let stableSamples = 0;
+    await expect.poll(async () => {
+      const current = await readCanvasViewport(page);
+      const stable = previous !== null
+        && Math.abs(current.x - previous.x) < 0.5
+        && Math.abs(current.y - previous.y) < 0.5
+        && Math.abs(current.zoom - previous.zoom) < 0.001;
+      stableSamples = stable ? stableSamples + 1 : 0;
+      previous = current;
+      return stableSamples >= 2;
+    }, { timeout: 3_000, intervals: [50, 100, 150] }).toBe(true);
+    return readCanvasViewport(page);
+  }
+
+  async function assertZoomSurvivesPendingObjectFocus(page, tableId, nodeId) {
+    const before = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
+    const beforeViewport = await readCanvasViewport(page);
+    const dock = await openObjects(page);
+    const openCard = dock.getByTestId(`open-canvas-${nodeId}`);
+    const zoomIn = page.getByRole('button', { name: 'Zoom In', exact: true });
+    await expect(openCard).toBeVisible();
+    await expect(zoomIn).toBeVisible();
+    const mutatingRequests = [];
+    const recordMutation = request => {
+      const requestUrl = new URL(request.url());
+      if (requestUrl.origin === origin && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+        mutatingRequests.push(`${request.method()} ${requestUrl.pathname}`);
+      }
+    };
+    page.on('request', recordMutation);
+    try {
+      // Keep the two real pointer clicks adjacent: the second lands while the opened card's
+      // geometry-based focus request is still pending, without waiting for the card to settle.
+      await openCard.click();
+      await zoomIn.click();
+    } finally {
+      page.off('request', recordMutation);
+    }
+    await expect.poll(async () => (await readCanvasViewport(page)).zoom)
+      .toBeGreaterThan(beforeViewport.zoom);
+    const zoomAfterClick = await readCanvasViewport(page);
+    const editor = page.getByTestId('canvas-object-editor');
+    await expect(editor).toHaveAttribute('data-canvas-object', nodeId);
+    await expect(editor).toBeVisible();
+    await waitForStableBoundingBox(editor);
+    const settledViewport = await waitForStableCanvasViewport(page);
+    expect(zoomAfterClick.zoom).toBeGreaterThan(beforeViewport.zoom);
+    expect(Math.abs(settledViewport.zoom - zoomAfterClick.zoom)).toBeLessThan(0.01);
+    expect(Math.abs(settledViewport.x - zoomAfterClick.x)).toBeLessThan(1);
+    expect(Math.abs(settledViewport.y - zoomAfterClick.y)).toBeLessThan(1);
+    expect(mutatingRequests).toEqual([]);
+    const after = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
+    expect(after).toEqual(before);
+    mark('Generated card open followed immediately by user zoom; settled viewport retained the zoom with no API mutations');
   }
 
   async function createFreshTable(owner) {
     const created = responseAfter(owner, (response) => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
-    const response = await created(() => owner.getByRole('button', { name: 'Start with your files', exact: true }).click());
+    await owner.getByRole('button', { name: 'Start a new table', exact: true }).click();
+    const startPage = owner.getByTestId('start-page');
+    await expect(startPage.getByRole('heading', { name: 'What should we start with?' })).toBeVisible();
+    await expect(owner).toHaveURL(/\/new$/);
+    const response = await created(() => startPage.getByRole('button', { name: 'Start empty with your own files', exact: true }).click());
     expect(response.status()).toBe(201);
     const room = await response.json();
     await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
@@ -335,6 +424,7 @@ try {
     const editor = owner.getByTestId('canvas-object-editor');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
     await expect(editor).toBeVisible();
+    await waitForStableBoundingBox(editor);
     const preview = editor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true });
     await expect(preview).toBeVisible();
     await expect(preview).toContainText('Trial changes stay in this private copy; the active table is unchanged.');
@@ -373,18 +463,26 @@ try {
   async function exercisePrivateTrial(owner, tableId, candidate, preview, expectedControl) {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
     const requestCount = tableActRequests.length;
+    const candidateInitialRecords = candidate.domain.candidate?.change?.initialRecords ?? {};
+    const trialRecords = Object.keys(candidateInitialRecords).length ? candidateInitialRecords : before.domain.records;
     if (expectedControl === 'Advance 5 minutes') {
       const scene = preview.getByRole('region', { name: 'Cafe floor', exact: true });
       const metric = preview.getByRole('region', { name: 'Average queue wait', exact: true }).locator('.tt-generated-metric strong');
+      const queue = trialRecords.queue;
+      const clock = trialRecords.clock.find((record) => record.id === 'clock-1').values.minute;
+      const selectedOrder = queue.find((record) => record.id === 'order-1');
+      const expectedWait = clock - selectedOrder.values.arrived_at;
+      const expectedAverageWait = queue.reduce((sum, record) => sum + (record.id === 'order-1' ? expectedWait : record.values.wait_minutes), 0) / queue.length;
+      const baselineAverageWait = queue.reduce((sum, record) => sum + record.values.wait_minutes, 0) / queue.length;
       const form = preview.locator('.tt-generated-control__form').filter({ hasText: 'Start service' });
       await form.locator('select').nth(0).selectOption('order-1');
       await form.locator('select').nth(1).selectOption('staff-1');
       await clickVisible(form.getByRole('button', { name: 'Start service', exact: true }));
       await expect(scene).toContainText('serving');
-      await expect(metric).toHaveText('12');
+      await expect(metric).toHaveText(String(expectedAverageWait));
       await clickVisible(preview.getByRole('button', { name: 'Reset trial', exact: true }));
       await expect(preview.getByRole('region', { name: 'Cafe floor', exact: true })).toContainText('waiting');
-      await expect(preview.getByRole('region', { name: 'Average queue wait', exact: true }).locator('.tt-generated-metric strong')).toHaveText('0');
+      await expect(metric).toHaveText(String(baselineAverageWait));
     } else if (expectedControl === 'scene') {
       const scene = preview.locator('svg.tt-generated-scene');
       await scene.scrollIntoViewIfNeeded();
@@ -392,7 +490,11 @@ try {
       await expect(scene).toBeVisible();
       const light = scene.locator('.tt-generated-scene__shape[aria-label="Move light-source"]');
       await expect(light).toHaveAttribute('data-drag-enabled', 'true');
-      const points = await light.evaluate((element) => {
+      const beforeValues = trialRecords.lights.find((record) => record.id === 'light-1').values;
+      const target = { x: Math.min(100, beforeValues.light_x + 20), y: Math.min(100, beforeValues.light_y + 10) };
+      expect(target.x).toBeGreaterThan(beforeValues.light_x);
+      expect(target.y).toBeGreaterThan(beforeValues.light_y);
+      const points = await light.evaluate((element, targetPoint) => {
         const svg = element.ownerSVGElement;
         const matrix = svg.getScreenCTM();
         const screen = (x, y) => {
@@ -400,30 +502,37 @@ try {
           const mapped = point.matrixTransform(matrix);
           return { x: mapped.x, y: mapped.y };
         };
-        return { start: screen(Number(element.getAttribute('cx')), Number(element.getAttribute('cy'))), target: screen(40, 20) };
-      });
+        return { start: screen(Number(element.getAttribute('cx')), Number(element.getAttribute('cy'))), target: screen(targetPoint.x, targetPoint.y) };
+      }, target);
       const drag = pageMouse(owner);
       await drag.move(points.start.x, points.start.y);
       await drag.down();
       await drag.move(points.target.x, points.target.y, { steps: 8 });
       await drag.up();
-      await expect(preview.getByRole('region', { name: 'Shadow tip x', exact: true }).locator('.tt-generated-metric strong')).toHaveText('63.33');
+      const expectedShadow = (x, y) => x + ((beforeValues.ground_y - y) * (beforeValues.object_x - x)) / (beforeValues.top_y - y);
+      const formatShadow = value => Number(value.toFixed(2)).toLocaleString('en', { maximumFractionDigits: 2 });
+      const trialMetric = preview.getByRole('region', { name: 'Shadow tip x', exact: true }).locator('.tt-generated-metric strong');
+      await expect(trialMetric).toHaveText(formatShadow(expectedShadow(target.x, target.y)));
       await clickVisible(preview.getByRole('button', { name: 'Reset trial', exact: true }));
-      await expect(preview.getByRole('region', { name: 'Shadow tip x', exact: true }).locator('.tt-generated-metric strong')).toHaveText('80');
+      await expect(trialMetric).toHaveText(formatShadow(expectedShadow(beforeValues.light_x, beforeValues.light_y)));
     } else if (expectedControl === 'Recalculate payment') {
       const metric = preview.getByRole('region', { name: 'Monthly payment', exact: true }).locator('.tt-generated-metric strong');
       const initial = Number(await metric.innerText());
+      const loan = trialRecords.loans.find((record) => record.id === 'loan-1').values;
+      const monthlyRate = loan.annual_rate / 12;
+      const factor = (1 + monthlyRate) ** loan.months;
+      const expectedPayment = loan.principal * monthlyRate * factor / (factor - 1);
       await clickVisible(preview.getByRole('button', { name: 'Recalculate payment', exact: true }));
-      const expectedPayment = 1000 * (0.12 / 12) * (1 + 0.12 / 12) ** 12 / ((1 + 0.12 / 12) ** 12 - 1);
       await expect(metric).toHaveText(expectedPayment.toLocaleString('en', { maximumFractionDigits: 2 }));
-      expect(Number(await metric.innerText())).not.toBe(initial);
+      if (Math.abs(initial - expectedPayment) > 0.005) expect(Number(await metric.innerText())).not.toBe(initial);
       await clickVisible(preview.getByRole('button', { name: 'Reset trial', exact: true }));
-      await expect(preview.getByRole('region', { name: 'Monthly payment', exact: true }).locator('.tt-generated-metric strong')).toHaveText('0');
+      await expect(metric).toHaveText(Number(loan.payment).toLocaleString('en', { maximumFractionDigits: 2 }));
     } else if (expectedControl === 'slider') {
       const slider = preview.locator('input[type="range"]');
       await expect(slider).toHaveCount(1);
       await expect(slider).toBeDisabled();
-      await expect(preview.locator('.tt-generated-control__range [role="status"]')).toContainText(/waiting for member 1/i);
+      const expectedSeat = String(before.domain.turn ?? 'member-1').replace('-', ' ');
+      await expect(preview.locator('.tt-generated-control__range [role="status"]')).toContainText(new RegExp(`waiting for ${expectedSeat}`, 'i'));
     }
     await assertTrialDidNotChangeActiveTable(owner, tableId, before, requestCount);
   }
@@ -544,10 +653,21 @@ try {
     if (scenario.action === 'scene-drag') {
       const beforeValues = active.domain.records.lights[0].values;
       const tableActCount = tableActRequests.length;
-      const editor = await openCanvasObject(owner, 'table.view.light-shadow-scene');
+      const sceneId = 'table.view.light-shadow-scene';
+      const editor = await openCanvasObject(owner, sceneId);
       const scene = editor.locator('svg.tt-generated-scene');
       const light = scene.locator('.tt-generated-scene__shape[aria-label="Move light-source"]');
       await expect(light).toHaveAttribute('data-drag-enabled', 'true');
+      const viewportBeforeZoom = await readCanvasViewport(owner);
+      await owner.getByRole('button', { name: 'Zoom Out', exact: true }).click();
+      const zoomedViewport = await waitForStableCanvasViewport(owner);
+      expect(zoomedViewport.zoom).toBeLessThan(viewportBeforeZoom.zoom);
+      await expect(light).toBeVisible();
+
+      // Re-request focus on the already-open scene, so its size stays fixed while
+      // the canvas has a pending focus request when the real pointer gesture begins.
+      await requestCanvasObjectFocusImmediately(owner, sceneId);
+      const viewportBeforeGesture = await readCanvasViewport(owner);
       const points = await light.evaluate((element) => {
         const svg = element.ownerSVGElement;
         const matrix = svg.getScreenCTM();
@@ -561,18 +681,30 @@ try {
       });
       const drag = pageMouse(owner);
       await drag.move(points.start.x, points.start.y);
+      const hitTarget = await owner.evaluate(({ x, y }) => {
+        const hit = document.elementFromPoint(x, y);
+        return Boolean(hit?.closest('.tt-generated-scene__shape[aria-label="Move light-source"]'));
+      }, points.start);
+      expect(hitTarget).toBe(true);
       await drag.down();
       await drag.move(points.target.x, points.target.y, { steps: 8 });
       await drag.up();
+      const viewportAtRelease = await readCanvasViewport(owner);
       await expect.poll(async () => {
         const value = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.records.lights[0].values;
         return Math.abs(value.light_x - 40) <= 0.001 && Math.abs(value.light_y - 20) <= 0.001 ? value : null;
       }).not.toBeNull();
+      const settledViewport = await waitForStableCanvasViewport(owner);
+      expect(Math.abs(viewportAtRelease.zoom - viewportBeforeGesture.zoom)).toBeLessThan(0.01);
+      expect(Math.abs(settledViewport.zoom - viewportAtRelease.zoom)).toBeLessThan(0.01);
+      expect(Math.abs(settledViewport.x - viewportAtRelease.x)).toBeLessThan(1);
+      expect(Math.abs(settledViewport.y - viewportAtRelease.y)).toBeLessThan(1);
       const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
       const values = current.domain.records.lights[0].values;
       expect(Math.abs(values.light_x - beforeValues.light_x)).toBeGreaterThan(1);
       expect(Math.abs(values.light_y - beforeValues.light_y)).toBeGreaterThan(1);
       expect(tableActRequests).toHaveLength(tableActCount + 1);
+      mark('Generated-scene drag hit its visible target during a pending focus request; the settled camera stayed at the gesture position');
       const independentlyComputedShadow = values.light_x
         + ((values.ground_y - values.light_y) * (values.object_x - values.light_x))
         / (values.top_y - values.light_y);
@@ -656,6 +788,7 @@ try {
     const activated = await advanceLifecycle(owner, tableId, simulatedEditor);
     expect(activated.domain.program.canvas.views.length).toBeGreaterThan(0);
     expect(activated.domain.records).toEqual(draft.domain.candidate.change.initialRecords);
+    if (scenario.id === 'cafe') await assertZoomSurvivesPendingObjectFocus(owner, tableId, 'table.view.cafe-floor');
     const memberOne = await addMember(owner, memberOneActor, 'member-1', tableId);
     const memberTwo = await addMember(owner, memberTwoActor, 'member-2', tableId);
     const members = [memberOne, memberTwo];
@@ -689,11 +822,11 @@ try {
     const editEditor = await openCanvasObject(owner, 'table.rules');
     const editPreview = editEditor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true });
     await expect(editPreview).toBeVisible();
-    await expect(editPreview.locator('[data-drag-enabled="true"]')).toHaveCount(0);
+    await exercisePrivateTrial(owner, tableId, editDraft, editPreview, expectedControl);
     const simulateEdit = responseAfter(owner, (response) => isCommandResponse(response, 'evolve.simulate'));
     expect((await simulateEdit(() => editEditor.getByRole('button', { name: 'Preview change', exact: true }).click())).status()).toBe(200);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('simulated');
-    let currentEditor = await openCanvasObject(owner, 'table.rules');
+    const currentEditor = await openCanvasObject(owner, 'table.rules');
     const afterSimulation = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(afterSimulation.domain.records).toEqual(recordSnapshot);
     expect(afterSimulation.domain.program).toEqual(beforeEdit.domain.program);
@@ -720,6 +853,18 @@ try {
       await assertSharedPosition(member, `table.view.${pinnedView.id}`, pin.point);
     }
     if (source) await assertMemberCannotUsePrivateTools(memberOne, tableId, afterEdit.revision, afterEdit.epoch, source);
+    const screenshotViewId = {
+      cafe: 'table.view.cafe-floor',
+      shadow: 'table.view.light-shadow-scene',
+      water: 'table.view.water-stock',
+      novel: 'table.view.monthly-payment',
+    }[scenario.id];
+    const screenshotEditor = await openCanvasObject(owner, screenshotViewId);
+    await expect(screenshotEditor).toHaveAttribute('data-canvas-object', screenshotViewId);
+    const renderedScene = screenshotEditor.locator('svg.tt-generated-scene');
+    const renderedMetric = screenshotEditor.locator('.tt-generated-metric strong');
+    if (scenario.id === 'cafe' || scenario.id === 'shadow') await expect(renderedScene).toBeVisible();
+    else await expect(renderedMetric).toBeVisible();
     await owner.screenshot({ path: join(output, `${scenario.id}-canvas.png`), fullPage: true });
     mark(`${scenario.id}: synthetic ${source ? 'file' : 'prompt'} draft, private preview, activation, real ${scenario.action}, shared rows/layout, reload and incremental edit`);
   }
