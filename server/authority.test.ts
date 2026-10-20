@@ -630,6 +630,34 @@ describe('tabletop server authority', () => {
     const memberReference = (memberDirectory.body as SessionView).workspaces.find((item) => item.id === workspace.id);
     expect(memberReference).toMatchObject({ title: 'River Race', kind: 'table' });
     expect(JSON.stringify(memberDirectory.body)).not.toContain('owner-private-source-name.txt');
+
+    // F002: the owner's chosen name wins over the rules title for everyone; members cannot rename.
+    workspace = (await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: owner })).body as WorkspaceView;
+    const renameId = randomUUID();
+    const renamed = await command(base, owner, workspace, 'workspace.rename', { title: '  Friday boat club  ' }, renameId);
+    expect(renamed.response.status).toBe(200);
+    const renamedView = (renamed.body as CommandAck).workspace;
+    expect(renamedView.title).toBe('Friday boat club');
+    expect(renamedView.revision).not.toBe(workspace.revision);
+    if (renamedView.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(renamedView.domain.program?.title).toBe('River Race');
+    const retried = await command(base, owner, workspace, 'workspace.rename', { title: '  Friday boat club  ' }, renameId);
+    expect(retried.response.status).toBe(200);
+    expect((retried.body as CommandAck).duplicate).toBe(true);
+    for (const session of [owner, joined.session]) {
+      const directory = await call<SessionView>(base, '/api/session', { session });
+      expect((directory.body as SessionView).workspaces.find((item) => item.id === workspace.id)?.title).toBe('Friday boat club');
+    }
+    const memberView = (await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: joined.session })).body as WorkspaceView;
+    expect(memberView.title).toBe('Friday boat club');
+    const memberRename = await command(base, joined.session, memberView, 'workspace.rename', { title: 'Taken over' });
+    expect(memberRename.response.status).toBe(403);
+    expect((memberRename.body as ApiError).errorCode).toBe('ROLE_FORBIDDEN');
+    for (const payload of [{ title: '   ' }, { title: 'line\nbreak' }, { title: 'x'.repeat(101) }, { title: 5 }, { name: 'wrong field' }, { title: 'ok', extra: true }]) {
+      const rejected = await command(base, owner, renamedView, 'workspace.rename', payload);
+      expect(rejected.response.status, JSON.stringify(payload)).toBeGreaterThanOrEqual(400);
+      expect((rejected.body as ApiError).errorCode, JSON.stringify(payload)).toBe('INVALID_COMMAND_PAYLOAD');
+    }
   });
 
   it('rejects lost-ack invite replay after the single-use ticket expires', async () => {

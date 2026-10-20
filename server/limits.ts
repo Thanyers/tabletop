@@ -27,7 +27,7 @@ export const SESSION_TOKEN_MIN_LENGTH = 40;
 export const SESSION_TOKEN_MAX_LENGTH = 64;
 export const MAX_DISPLAY_NAME_CHARS = 48;
 export const MAX_NAME_INPUT_CHARS = 60;
-export const MAX_WORKSPACE_TITLE_CHARS = 100;
+export { WORKSPACE_TITLE_MAX_CHARS as MAX_WORKSPACE_TITLE_CHARS } from '../src/tabletop/shared/workspace-title.js';
 export const MAX_COMMAND_TYPE_CHARS = 100;
 export const MAX_REVISION_TOKEN_CHARS = 80;
 export const SECONDS_PER_MINUTE = 60;
