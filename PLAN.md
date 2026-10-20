@@ -48,6 +48,7 @@
 | F001-T10 | ปรับ browser tests ตาม flow ใหม่ | `todo` | — | — | `tests/*.mjs` | T2, T4, T8 | แต่ละงานแก้เทสต์ของตัวเองได้ งานนี้เก็บส่วนที่เหลือ |
 | F001-T11 | คู่มือผู้ใช้ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | T4, T7, T9 | |
 | CI004 | R1 browser test เปิด server ใหม่ทุก scenario แทนการรอ rate limit | `review` | JitrudeeDongdee (Claude) | `feat/CI004-r1-no-rate-wait` | `tests/tabletop-r1.mjs` | — | hotspot `tests/tabletop-r1.mjs` |
+| F011 | สถานะรอ AI บนการ์ดแชท: ไอคอน Sparkles มีวงแหวนหมุน + จุดเด้ง + shimmer และจัดข้อความไว้กลางการ์ด | `review` | JitrudeeDongdee (Claude) | `feat/F011-chat-loading-motion` | `src/tabletop/ui/useTableChat.tsx`, `CanvasWorkspace.tsx`, `table-chat.css` | — | รองรับ reduced motion |
 | F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–100 ตัวอักษร) | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | รวมกับ F005 ผ่าน CI ที่ 743ff27 |
 | F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | |
 | F002-T3 | UI แก้ชื่อที่แถบด้านบน | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `TabletopApp.tsx`, CSS | F002-T2 | สมาชิกเห็นชื่อร่วมกัน |
