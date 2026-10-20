@@ -7,7 +7,7 @@
 .tt-start-page__back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 2px; border: 0; background: none; color: var(--tt-muted); font-size: 13px; font-weight: 600; cursor: pointer; }
 .tt-start-page__back:hover { color: var(--tt-ink); }
 
-.tt-start-page__cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.tt-start-page__cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .tt-start-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; height: 100%; min-height: 168px; padding: var(--tt-card-padding); border: 1px solid var(--tt-card-edge); border-radius: var(--tt-card-radius); background: var(--tt-card-surface); box-shadow: var(--tt-shadow-piece); color: var(--tt-ink); text-align: left; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .tt-start-card:hover:not(:disabled), .tt-start-card:focus-visible { transform: translateY(-2px); box-shadow: var(--tt-shadow-lift); border-color: var(--tt-moss); }
 .tt-start-card:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 3px; }
@@ -25,8 +25,12 @@
 .tt-start-page__describe-foot small { color: var(--tt-muted); font-size: 12px; line-height: 1.45; }
 .tt-start-page__describe-foot .tt-button { flex: none; }
 
-.tt-start-page__empty { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 8px 2px; border: 0; background: none; color: var(--tt-moss); font-size: 14px; font-weight: 650; cursor: pointer; }
-.tt-start-page__empty:disabled { opacity: .55; cursor: default; }
+.tt-start-card--empty { border-style: dashed; background: var(--tt-paper); box-shadow: none; }
+.tt-start-card--empty .tt-start-card__icon { background: var(--tt-card-surface); color: var(--tt-moss); }
+
+@media (max-width: 860px) {
+  .tt-start-page__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 @media (max-width: 720px) {
   .tt-start-page__cards { grid-template-columns: 1fr; }

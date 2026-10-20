@@ -442,7 +442,7 @@ try {
   await expect(starter).toHaveURL(`${origin}/new`);
   const startPage = starter.getByTestId('start-page');
   await expect(startPage.getByRole('heading', { name: 'What should we start with?' })).toBeVisible();
-  await expect(startPage.getByRole('list', { name: 'Prepared tables' }).getByRole('button')).toHaveText([/Invoice check/, /Physics lesson/, /Shared encounter/]);
+  await expect(startPage.getByRole('list', { name: 'Ways to start' }).getByRole('button')).toHaveText([/Invoice check/, /Physics lesson/, /Shared encounter/, /Start empty/]);
   await starter.reload(); await starter.waitForLoadState('networkidle');
   await expect(startPage).toBeVisible();
   await starter.goBack();

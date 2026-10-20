@@ -23,7 +23,7 @@
 
 ตรวจ branch และ `/version` ก่อน: `main` ก่อน #33 ยังเป็น 1.1.0 และไม่มี `TableChat` จาก #30 ส่วน `main` หลัง #33 มีแล้ว `npm start` อ่านไฟล์จาก `dist/` จึงต้อง build ใหม่หลังดึงโค้ด การรีเฟรช browser อย่างเดียวไม่สร้างไฟล์ใหม่
 
-เปิด `/new` → **Start empty with your own files** เพื่อทดสอบโต๊ะทั่วไป (`kind=table`) จะพบช่อง **Message** ด้านล่าง แม้ AI ปิดและส่งไม่ได้ ส่วน Invoice / Physics / Encounter ใช้ assistant เดิม และ Node local ซ่อนช่องเดิมเมื่อ `model.enabled=false` รอบนี้ตรวจได้ 1 ช่องในโต๊ะทั่วไปและ 0 ช่องใน Physics บน `5e69816` ยังไม่ทราบ branch/ชนิดโต๊ะที่เครื่องทีมเปิด จึงระบุสาเหตุเฉพาะเครื่องนั้นไม่ได้ แต่ไม่พบว่างานแชทถูก merge ทับ
+เปิด `/new` → การ์ด **Start empty** เพื่อทดสอบโต๊ะทั่วไป (`kind=table`) จะพบช่อง **Message** ด้านล่าง แม้ AI ปิดและส่งไม่ได้ ส่วน Invoice / Physics / Encounter ใช้ assistant เดิม และ Node local ซ่อนช่องเดิมเมื่อ `model.enabled=false` รอบนี้ตรวจได้ 1 ช่องในโต๊ะทั่วไปและ 0 ช่องใน Physics บน `5e69816` ยังไม่ทราบ branch/ชนิดโต๊ะที่เครื่องทีมเปิด จึงระบุสาเหตุเฉพาะเครื่องนั้นไม่ได้ แต่ไม่พบว่างานแชทถูก merge ทับ
 
 เมื่ออยู่บน branch ที่ต้องการแล้ว ให้รัน `npm ci` → `npm run build` → `npm start` การใส่ key ใน `.env` ไม่ได้เปิด AI ให้ Node อัตโนมัติ ถ้าจะทดสอบ AI จริงให้ใช้ staging หรือ Workers local ตาม [Local development](LOCAL_DEVELOPMENT.md) เก็บ secrets และค่าฐานจริงออกจาก Git
 
