@@ -7,6 +7,7 @@ import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
 import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
+import { isSharedCanvasId } from '../shared/canvas-layout-ids';
 import { dedupeVisibleCanvasConnections } from './canvas-flow';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
 import './canvas-visual-flow.css';
@@ -106,9 +107,7 @@ function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean }
     && (point.pinned === undefined || typeof point.pinned === 'boolean');
 }
 
-function isSharedCanvasNode(id: string) {
-  return id === 'table.actions' || id.startsWith('table.collection.') || id.startsWith('table.view.');
-}
+const isSharedCanvasNode = isSharedCanvasId;
 
 const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
 
@@ -507,12 +506,25 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         revertToCanonical();
         return;
       }
+      const attempt = async (expectedLayoutRevision: number) => {
+        try {
+          return await onCommand('canvas.layout', { expectedLayoutRevision, positions: { [id]: { ...position, pinned: true } } });
+        } catch {
+          return null;
+        }
+      };
       const expectedLayoutRevision = sharedLayoutRef.current?.revision ?? 0;
-      let updated: WorkspaceView | null = null;
-      try {
-        updated = await onCommand('canvas.layout', { expectedLayoutRevision, positions: { [id]: { ...position, pinned: true } } });
-      } catch {
-        updated = null;
+      let updated = await attempt(expectedLayoutRevision);
+      if (!updated) {
+        // Someone else may have moved a different card at the same moment. Retry once on
+        // the newer layout, but only if nobody moved this card in between (F007).
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
+        const latest = sharedLayoutRef.current;
+        const latestPoint = latest?.positions[id];
+        const untouched = !latestPoint || (before !== undefined && Math.abs(latestPoint.x - before.x) < 0.5 && Math.abs(latestPoint.y - before.y) < 0.5);
+        if (latest && latest.revision !== expectedLayoutRevision && untouched && sequence > layoutBlockedThroughRef.current) {
+          updated = await attempt(latest.revision);
+        }
       }
       if (!updated) {
         layoutBlockedThroughRef.current = Math.max(layoutBlockedThroughRef.current, layoutMoveSequenceRef.current);
@@ -672,7 +684,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
 
   useEffect(() => {
     const isNewWorkspace = layoutWorkspaceRef.current !== workspaceKey;
-    const visibleSharedIds = new Set(visiblePlanNodes.map((spec) => spec.id).filter(isSharedCanvasNode));
+    const visibleSharedIds = new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)].filter(isSharedCanvasNode));
     const storedLayout = isNewWorkspace && persistLayout ? readCanvasLayout(workspaceKey) : null;
     const remoteLayoutChanged = remoteLayoutEnabled && sharedLayout !== null
       && (isNewWorkspace || (sharedLayout.revision >= (appliedSharedLayoutRevisionRef.current ?? -1)
@@ -765,7 +777,17 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         type: 'tabletopObject',
         ariaLabel: object.title,
         dragHandle: '.tt-canvas-node__head',
-        position: (isNewWorkspace ? storedLayout?.positions[object.id] : undefined) ?? previousPositions.get(object.id) ?? workspacePositionsRef.current[object.id] ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 },
+        position: (() => {
+          // Table-wide cards (people, history) follow the shared layout like plan cards (F007).
+          const isShared = remoteLayoutEnabled && isSharedCanvasNode(object.id);
+          const remotePosition = isShared ? sharedLayout?.positions[object.id] : undefined;
+          const isNewNode = !previousPositions.has(object.id);
+          if ((isNewWorkspace || remoteLayoutChanged || isNewNode) && remotePosition && !draggingNodeIdsRef.current.has(object.id)) return { x: remotePosition.x, y: remotePosition.y };
+          return (isNewWorkspace && !isShared ? storedLayout?.positions[object.id] : undefined)
+            ?? previousPositions.get(object.id)
+            ?? (!isShared ? workspacePositionsRef.current[object.id] : undefined)
+            ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 };
+        })(),
         selected: object.id === selectedNodeId,
         zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
         data: {
@@ -988,6 +1010,20 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     layoutSnapshotRef.current = { workspaceKey, ids, sizes, edges: edgeKeys, signature };
     if (initial) setLayoutReadyKey(workspaceKey);
   }, [view.kind, nodes, edges, workspaceKey, visibleAuxiliaryObjects, setNodes]);
+
+  // Cards nobody has placed yet are laid out on each screen. Once that first layout is
+  // ready, write it to the table so everyone starts from the same arrangement (F007).
+  const seededLayoutRef = useRef('');
+  useEffect(() => {
+    if (!remoteLayoutEnabled || layoutReadyKey !== workspaceKey || seededLayoutRef.current === workspaceKey) return;
+    if (view.actor.role !== 'owner' && view.actor.role !== 'participant') return;
+    const known = sharedLayoutRef.current?.positions ?? {};
+    const missing = nodes.filter((node) => isSharedCanvasNode(node.id) && !known[node.id] && !draggingNodeIdsRef.current.has(node.id)).slice(0, 24);
+    seededLayoutRef.current = workspaceKey;
+    if (missing.length === 0) return;
+    const positions = Object.fromEntries(missing.map((node) => [node.id, { x: Math.round(node.position.x), y: Math.round(node.position.y), pinned: true }]));
+    void onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, positions }).catch(() => null);
+  }, [remoteLayoutEnabled, layoutReadyKey, workspaceKey, nodes, onCommand, view.actor.role]);
 
   const choose = useCallback((event: React.MouseEvent, node: CanvasNode) => {
     // A content control may have navigated to another object. Do not select its

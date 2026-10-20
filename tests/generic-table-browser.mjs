@@ -516,6 +516,38 @@ async function joinAndCheckPrivateFiles(newPage, api, actor, inviteUrl, tableId,
   return page;
 }
 
+// F007: every member sees table-wide cards at the same place.
+async function nodeTransforms(page, ids) {
+  return page.evaluate((nodeIds) => Object.fromEntries(nodeIds.map((id) => {
+    const element = document.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
+    return [id, element instanceof HTMLElement ? element.style.transform : null];
+  })), ids);
+}
+
+async function verifySharedCardLayout(owner, member, tableId, api) {
+  const shared = ['table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
+  await expect.poll(async () => {
+    const layout = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.canvasLayout?.positions ?? {};
+    return shared.filter((id) => id.startsWith('workspace.') || id === 'table.rules').every((id) => layout[id]);
+  }, { timeout: 15_000 }).toBe(true);
+  await owner.reload(); await member.reload();
+  await expect(owner.locator('.react-flow__node[data-id="workspace.people"]')).toHaveCount(1);
+  await expect(member.locator('.react-flow__node[data-id="workspace.people"]')).toHaveCount(1);
+  await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
+    .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
+  const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const moved = await api(owner, `/api/workspaces/${tableId}/commands`, {
+    commandId: crypto.randomUUID(), expectedRevision: before.revision, expectedEpoch: before.epoch,
+    type: 'canvas.layout', payload: { expectedLayoutRevision: before.domain.canvasLayout.revision, positions: { 'workspace.history': { x: 1480, y: 960, pinned: true } } },
+  });
+  expect(moved.status).toBe(200);
+  await expect.poll(async () => (await nodeTransforms(member, ['workspace.history']))['workspace.history'], { timeout: 10_000 })
+    .toBe('translate(1480px, 960px)');
+  const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  expect(after.domain.records).toEqual(before.domain.records);
+  expect(after.domain.dataRevision).toBe(before.domain.dataRevision);
+}
+
 async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
   const editor = await openCanvasObject(page, 'table.actions');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.actions');
@@ -851,6 +883,8 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
 
   const firstInvite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, firstInvite, room.id, source.filename);
+  await verifySharedCardLayout(owner, member, room.id, api);
+  mark('Shared card layout: rules, people, history and table cards sit at the same place for owner and member, and a move reaches the other screen live');
   await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls });
   mark('Generic table chat: explicit consent, participant-only answer history, grounded reference, reload continuity, and no table mutation');
   await performContextualAction(member, 'equipment', {
