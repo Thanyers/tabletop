@@ -31,9 +31,11 @@ export function handleCanvasLayout(state: TableState, payload: unknown, ctx: Act
 }
 
 export function sharedCanvasIds(state: TableState): Set<string> {
-  if (!state.program) return new Set(ALWAYS_SHARED_CANVAS_IDS);
+  const files = state.sources.length > 0 ? ['table.sources'] : [];
+  if (!state.program) return new Set([...ALWAYS_SHARED_CANVAS_IDS, ...files]);
   return new Set([
     ...ALWAYS_SHARED_CANVAS_IDS,
+    ...files,
     'table.rules',
     'table.actions',
     ...state.program.collections.map(collection => `table.collection.${collection.id}`),
@@ -41,7 +43,7 @@ export function sharedCanvasIds(state: TableState): Set<string> {
   ]);
 }
 
-/** Drops retired view positions and never exposes private source/auxiliary geometry. */
+/** Drops retired view positions and never exposes private auxiliary geometry. */
 export function projectCanvasLayout(state: TableState) {
   if (!state.canvasLayout) return undefined;
   const allowed = sharedCanvasIds(state);

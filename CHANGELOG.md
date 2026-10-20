@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2.1.0 — 2026-10-20
+
+MINOR: ไม่มี migration, secret หรือ config ใหม่ · rollback ได้ทันที (แท็บที่เปิดค้างด้วยโค้ดใหม่จะต่อ socket ซ้ำจนกว่าจะรีเฟรช)
+
+- เห็นเมาส์ของคนอื่นบน Canvas พร้อมชื่อและสีประจำตัวแบบสด ส่งผ่าน WebSocket เดิม ไม่เก็บลงฐาน · หายเมื่อออกนอก Canvas หรือไม่ขยับ 10 วินาที ([F009](docs/features/F009-live-cursors.md)) ไม่มี migration
+- หน้า `/new`: ปุ่มข้อความ **Start empty with your own files** เปลี่ยนเป็นการ์ดใบที่สี่ **Start empty** เรียงคู่กับการ์ดตัวอย่าง (เส้นประ) ([F001](docs/features/F001-guided-table-start.md))
+- ไฟล์บนโต๊ะข้อมูลเป็นของทั้งโต๊ะ: สมาชิกที่ถูกเชิญเห็นการ์ด Files และอ่านเนื้อหาได้ทันที ตำแหน่งการ์ดใช้ร่วมกันเหมือนการ์ดอื่น · สมาชิกเพิ่มไฟล์ได้ (คลิปหนีบ, การ์ด Files, ลากวาง) แต่ลบได้เฉพาะเจ้าของ · ไฟล์ของสมาชิกไม่ล้างร่างของเจ้าของ · ร่างกฎ ประวัติร่าง และ quotation ยังเป็นของเจ้าของ · แชทถาม AI ยังไม่ส่งไฟล์ ([F008](docs/features/F008-shared-table-files.md)) ไม่มี migration
+
 ## 2.0.0 — 2026-10-20
 
 MAJOR: JSON ของกฎและ Canvas รองรับ expression และมุมมองใหม่; หลังเขียนข้อมูลแบบใหม่นี้ ห้ามใช้ `v1.1.0` หรือต่ำกว่าเป็น writer เพื่อ rollback ให้ใช้ build ที่อ่านสัญญาใหม่นี้ได้พร้อม `TABLE_READ_ONLY=true` แล้วแก้ไปข้างหน้า ไม่มี SQL migration, secret, binding หรือ dependency ใหม่ ผู้ใช้อนุมัติเลขรุ่นและ staging → ทดสอบ Google สองบัญชี → production ในรอบนี้; ผล hosted acceptance และ deployment ต้องยืนยันแยกก่อนส่ง production

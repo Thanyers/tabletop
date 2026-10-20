@@ -14,6 +14,7 @@ import type { AIProposalRequest, AIProposalResult } from './ai.js';
 import { respondToTablePrompt } from './table-assistant.js';
 import type { TableAssistantInput, TableAssistantResult } from '../src/tabletop/shared/table-assistant-contracts.js';
 import type { TableAssistantResponse } from './table-assistant.js';
+import { CURSOR_MIN_INTERVAL_MS } from '../src/tabletop/shared/cursor-protocol.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
@@ -1083,7 +1084,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(vi.mocked(respondToTablePrompt)).not.toHaveBeenCalled();
   });
 
-  it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with private sources intact', async () => {
+  it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with shared read-only sources', async () => {
     const owner = newActor('Table owner');
     const firstMember = newActor('First participant');
     const secondMember = newActor('Second participant');
@@ -1117,13 +1118,12 @@ describe('Cloudflare room Durable Object', () => {
     expect(sourceId).toBeTruthy();
 
     const participantStart = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
-    expect(JSON.stringify(participantStart.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(JSON.stringify(participantStart.body)).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     if (participantStart.body.domain.kind !== 'table') throw new Error('Expected participant table projection.');
-    expect(participantStart.body.domain.sources).toEqual([]);
-    const ownerOnlyImport = await issueCommand(stub, participantStart.body, firstMember, 'table.import', {
-      filename: 'another.txt', text: 'This must be rejected for participants.',
-    });
-    expect(ownerOnlyImport.response.status).toBe(403);
+    expect(participantStart.body.domain.sources.map(source => source.id)).toEqual([sourceId]);
+    // F008: members may add files (covered in server/authority.test.ts) but only the owner removes them.
+    const ownerOnlyRemove = await issueCommand(stub, participantStart.body, firstMember, 'table.removeSource', { sourceId });
+    expect(ownerOnlyRemove.response.status).toBe(403);
 
     const eventRows = await inspectRoom<{ event_data: SqlStorageValue }>(stub,
       "SELECT event_data FROM room_events WHERE event_type = 'table.import'");
@@ -1153,7 +1153,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(ownerView.body.domain.candidate).toMatchObject({ status: 'draft' });
     const participantDraft = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
     expect(participantDraft.body.domain.candidate).toBeNull();
-    expect(JSON.stringify(participantDraft.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(JSON.stringify(participantDraft.body.domain.candidate)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) {
       const step = await issueCommand(stub, ownerView.body, owner, type, {});
       expect(step.response.status).toBe(200);
@@ -1184,7 +1184,7 @@ describe('Cloudflare room Durable Object', () => {
     if (resumedOwner.body.domain.kind !== 'table') throw new Error('Expected resumed owner table.');
     expect(resumedOwner.body.domain.sources[0]?.text).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     expect(resumedOwner.body.domain.records.equipment?.find((row) => row.id === 'camera')?.values.available).toBe(false);
-    expect(JSON.stringify(resumedParticipant.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(resumedParticipant.body.domain.kind === 'table' && resumedParticipant.body.domain.sources[0]?.text).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
 
     const lateParticipant = newActor('Late participant');
     await saveActor(lateParticipant);
@@ -1201,7 +1201,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(participantWhileReadOnly.response.status).toBe(200);
     expect(participantWhileReadOnly.body.domain.kind).toBe('table');
     if (participantWhileReadOnly.body.domain.kind !== 'table') throw new Error('Expected read-only participant table.');
-    expect(participantWhileReadOnly.body.domain.sources).toEqual([]);
+    expect(participantWhileReadOnly.body.domain.sources).toEqual(ownerWhileReadOnly.body.domain.kind === 'table' ? ownerWhileReadOnly.body.domain.sources : []);
     expect(participantWhileReadOnly.body.domain.records).toEqual(resumedParticipant.body.domain.kind === 'table'
       ? resumedParticipant.body.domain.records : {});
 
@@ -2079,6 +2079,53 @@ describe('Cloudflare room Durable Object', () => {
     } finally {
       ownerSocket.socket.close(1000, 'Test complete');
       learnerSocket.socket.close(1000, 'Test complete');
+    }
+  });
+  it('relays live cursors to other members only, without storing them (F009)', async () => {
+    const owner = newActor('Cursor owner');
+    const learner = newActor('Cursor learner');
+    await Promise.all([saveActor(owner), saveActor(learner)]);
+    const { roomId, stub } = await createRoom(owner);
+    const invite = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'learner-1' }, mutation: true,
+    });
+    const joined = await call<WorkspaceView>(stub, '/internal/redeem', learner, {
+      method: 'POST', body: { ticket: invite.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(joined.response.status).toBe(200);
+    const ownerSocket = await connectProjectionSocket(stub, roomId, owner);
+    const learnerSocket = await connectProjectionSocket(stub, roomId, learner);
+    const frames = (socket: WebSocket) => {
+      const seen: unknown[] = [];
+      socket.addEventListener('message', (event) => {
+        const data = JSON.parse(String(event.data)) as { type?: string };
+        if (data.type === 'cursor') seen.push(data);
+      });
+      return seen;
+    };
+    const ownerFrames = frames(ownerSocket.socket);
+    const learnerFrames = frames(learnerSocket.socket);
+    try {
+      await learnerSocket.projections.waitFor(() => true);
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 120.4, y: -30 }));
+      await vi.waitFor(() => expect(learnerFrames).toEqual([{ type: 'cursor', actorId: owner.id, x: 120, y: -30 }]));
+      // Frames faster than the per-session interval are dropped; a leave always goes through.
+      await new Promise((resolve) => setTimeout(resolve, CURSOR_MIN_INTERVAL_MS + 30));
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 1, y: 1 }));
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 2, y: 2 }));
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', leave: true }));
+      await vi.waitFor(() => expect(learnerFrames.at(-1)).toEqual({ type: 'cursor', actorId: owner.id, leave: true }));
+      expect(learnerFrames).toContainEqual({ type: 'cursor', actorId: owner.id, x: 1, y: 1 });
+      expect(learnerFrames).not.toContainEqual({ type: 'cursor', actorId: owner.id, x: 2, y: 2 });
+      expect(ownerFrames).toEqual([]);
+      // A spoofed identity is not accepted: unknown fields close the socket.
+      const closed = new Promise<number>((resolve) => learnerSocket.socket.addEventListener('close', (event) => resolve(event.code)));
+      learnerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 1, y: 1, actorId: owner.id }));
+      expect(await closed).toBe(4400);
+      await vi.waitFor(() => expect(ownerFrames.at(-1)).toEqual({ type: 'cursor', actorId: learner.id, leave: true }));
+    } finally {
+      ownerSocket.socket.close();
+      learnerSocket.socket.close();
     }
   });
 

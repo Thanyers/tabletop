@@ -25,6 +25,7 @@ import {
 import { clientRateKey, json, logRequest, RateLimiter, readJsonBody, requestId as makeRequestId, requestMethod } from './http.js';
 import { randomToken } from './codec.js';
 import { projectionCursor } from './projection-cursor.js';
+import { CURSOR_MIN_INTERVAL_MS, cursorRelay, parseCursorInput, type CursorInput } from '../src/tabletop/shared/cursor-protocol.js';
 
 export interface ExtensionContext {
   readonly request: IncomingMessage;
@@ -68,6 +69,8 @@ interface SocketPeer {
   readonly socket: WebSocket;
   readonly request: IncomingMessage;
   readonly workspaceId: string;
+  readonly actorId: string;
+  cursorSentAt: number;
   alive: boolean;
   projectionPending: boolean;
   projectionRunning: boolean;
@@ -246,10 +249,22 @@ export function createApp(options: CreateAppOptions): TabletopApp {
   }, WS_HEARTBEAT_INTERVAL_MS);
   heartbeat.unref();
 
+  // F009: ephemeral cursor fan-out to the other people in the same workspace; never stored.
+  const relayCursor = (from: SocketPeer, input: CursorInput): void => {
+    const frame = cursorRelay(from.actorId, input);
+    for (const peer of peers) {
+      if (peer === from || peer.workspaceId !== from.workspaceId || peer.actorId === from.actorId || peer.socket.readyState !== WebSocket.OPEN) continue;
+      peer.socket.send(frame);
+    }
+  };
+  const socketActors = new WeakMap<IncomingMessage, string>();
+
   webSockets.on('connection', (socket, request) => {
     const path = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`).pathname;
     const workspaceId = workspaceIdFrom(path, 'socket');
-    if (!workspaceId) {
+    const actorId = socketActors.get(request);
+    socketActors.delete(request);
+    if (!workspaceId || !actorId) {
       socket.close(4400, 'Invalid socket route');
       return;
     }
@@ -257,6 +272,8 @@ export function createApp(options: CreateAppOptions): TabletopApp {
       socket,
       request,
       workspaceId,
+      actorId,
+      cursorSentAt: 0,
       alive: true,
       projectionPending: false,
       projectionRunning: false,
@@ -265,8 +282,19 @@ export function createApp(options: CreateAppOptions): TabletopApp {
     };
     peers.add(peer);
     socket.on('pong', () => { peer.alive = true; });
-    socket.on('message', () => { socket.close(4400, 'Client messages are not supported'); });
-    socket.on('close', () => { peers.delete(peer); });
+    socket.on('message', (data, isBinary) => {
+      const input = isBinary ? null : parseCursorInput(data.toString());
+      if (!input) { socket.close(4400, 'Only cursor messages are supported'); return; }
+      const now = Date.now();
+      if (!('leave' in input) && now - peer.cursorSentAt < CURSOR_MIN_INTERVAL_MS) return;
+      peer.cursorSentAt = now;
+      relayCursor(peer, input);
+    });
+    socket.on('close', () => {
+      peers.delete(peer);
+      // Another tab of the same person keeps its cursor; only the last socket announces a leave.
+      if (![...peers].some((other) => other.workspaceId === peer.workspaceId && other.actorId === peer.actorId)) relayCursor(peer, { type: 'cursor', leave: true });
+    });
     socket.on('error', () => { peers.delete(peer); });
     scheduleProjection(peer);
   });
@@ -557,7 +585,8 @@ export function createApp(options: CreateAppOptions): TabletopApp {
       const workspaceId = workspaceIdFrom(path, 'socket');
       if (!workspaceId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
       requireSameOrigin(request, configuredOrigin);
-      await authority.authorize(request, workspaceId);
+      const authorized = await authority.authorize(request, workspaceId);
+      socketActors.set(request, authorized.workspace.actor.actorId);
       webSockets.handleUpgrade(request, socket, head, (webSocket) => {
         webSockets.emit('connection', webSocket, request);
       });

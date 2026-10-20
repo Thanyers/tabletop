@@ -7,6 +7,7 @@ import { planForWorkspace } from './runtime';
 import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
+import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
@@ -397,12 +398,18 @@ export default function TabletopApp() {
     return () => window.removeEventListener('popstate', followHistory);
   }, [setWorkspace, showNotice]);
 
+  const cursorStore = useMemo(() => createCursorStore(), []);
+  const cursorSendRef = useRef<((point: { x: number; y: number } | null) => void) | null>(null);
+  const liveCursors = useMemo(() => ({ store: cursorStore, send: (point: { x: number; y: number } | null) => cursorSendRef.current?.(point) }), [cursorStore]);
   useEffect(() => {
     if (!view) return;
-    return tabletopClient.subscribe(view.id, (next) => {
+    cursorStore.clear();
+    const subscription = tabletopClient.subscribe(view.id, (next) => {
       if (workspaceRef.current?.id === next.id) setWorkspace(next);
-    }, setConnection);
-  }, [view?.id, setWorkspace]);
+    }, setConnection, (cursor) => { if (cursor) cursorStore.apply(cursor); else cursorStore.clear(); });
+    cursorSendRef.current = subscription.sendCursor;
+    return () => { cursorSendRef.current = null; cursorStore.clear(); subscription(); };
+  }, [view?.id, setWorkspace, cursorStore]);
 
   useEffect(() => () => { if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current); }, []);
 
@@ -790,6 +797,7 @@ export default function TabletopApp() {
   const surfaceBusy = tableReadOnly ? 'table.readOnly' : busy;
 
   return (
+    <LiveCursorProvider value={liveCursors}>
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
     <div className="tt-app">
       <header className="tt-topbar">
@@ -865,6 +873,7 @@ export default function TabletopApp() {
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
     </UploadCapabilityProvider>
+    </LiveCursorProvider>
   );
 }
 

@@ -463,9 +463,9 @@ try {
       const dialogText = (await consent.innerText()).replace(/\s+/gu, ' ');
       expect(dialogText).toMatch(/current active rules, records, and turn|current table context/iu);
       expect(dialogText).toContain('Chat history is not included.');
-      expect(dialogText).toContain('Private source files included');
+      expect(dialogText).toContain('Table files included');
       for (const filename of sourceNames) expect(dialogText).toContain(filename);
-      if (sourceNames.length === 0) expect(dialogText).toMatch(/no private source files are attached|not included/iu);
+      if (sourceNames.length === 0) expect(dialogText).toMatch(/no table files are attached|not included/iu);
       if (cancelFirst) {
         expect(modelPosts).toBe(0);
         await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -995,9 +995,8 @@ try {
       expect(projection.body.domain.program).toEqual(visibleProgram);
       expect(projection.body.domain.records).toEqual(ownerReady.domain.records);
       expect(projection.body.domain.canvasLayout).toEqual(ownerReady.domain.canvasLayout);
-      expect(projection.body.domain.sources).toEqual([]);
+      expect(projection.body.domain.sources).toEqual(ownerReady.domain.sources);
       expect(projection.body.domain.candidate).toBeNull();
-      if (scenario.file) expect(JSON.stringify(projection.body.domain)).not.toContain(scenario.file.filename);
     }
     await assertMemberCannotUsePrivateTools(memberOne, tableId, ownerReady.revision, ownerReady.epoch, source);
 
