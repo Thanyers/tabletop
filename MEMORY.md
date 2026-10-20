@@ -100,6 +100,11 @@
 - **Root cause:** `git ls-files --others` รายงาน git worktree/repo ที่ไม่ได้ track (เช่น `.claude/worktrees/<name>/`) เป็น entry เดียวที่เป็นโฟลเดอร์ สคริปต์เลย `readFileSync` โฟลเดอร์
 - **Correct behavior:** วาง worktree ของ AI ไว้ใต้ `.claude/worktrees/` (ignored แล้ว) · ถ้า `check-public-files` แจ้ง `Nested repository must be ignored or reviewed` ให้ย้ายหรือเพิ่ม path นั้นใน `.gitignore` · ห้ามใช้ `git commit --no-verify` เพื่อข้าม
 
+### 2026-10-20 — แก้ไฟล์ผิด worktree เพราะ cwd ของ shell ไม่ได้อยู่ที่คิด
+- **เกิดอะไร:** สร้าง worktree ใหม่ด้วย `git worktree add … && cd <ใหม่>` ในคำสั่งหนึ่ง แล้วคำสั่งถัดไปแก้ไฟล์ด้วย path แบบ relative · cwd จริงกลับไปอยู่ worktree เดิม (preview) การแก้ UI จึงไปอยู่ผิด branch ส่วน commit ของ branch ใหม่มีแค่เทสต์ · browser test จับได้ทีหลัง
+- **ต้นเหตุ:** ไม่ได้ตรวจว่าไฟล์ที่แก้อยู่ branch ไหนก่อน commit และเชื่อ `git commit` ว่าได้ของครบ
+- **ทำแบบนี้:** ทุกคำสั่งที่แก้ไฟล์ขึ้นต้นด้วย `cd <worktree-absolute-path> &&` ในคำสั่งเดียวกัน · ก่อน commit รัน `git -C <worktree> diff --stat` แล้วเทียบกับไฟล์ที่ตั้งใจแก้ · ถ้ารายการไม่ตรงห้าม commit
+
 ## Deploy failures
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า
