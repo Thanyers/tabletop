@@ -4,7 +4,7 @@ import { consentKey, consentQuestion, needsConsent } from './table-chat-consent'
 import './table-chat.css';
 
 const MAX_MESSAGE_CHARS = 1200;
-const MAX_ROWS = 3;
+const MAX_ROWS = 5;
 
 export interface TableChatProps {
   /** Source file ids that a request would send; consent covers exactly this set. */
