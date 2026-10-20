@@ -439,7 +439,7 @@ export default function TabletopApp() {
   const leaveStartPage = useCallback(() => setPage('home'), []);
 
   // A typed description starts an empty shared table and waits in its rule draft;
-  // nothing reaches the model until the owner adds a source and consents.
+  // nothing reaches the model until the owner consents; source files are optional.
   const startFromDescription = useCallback(async (description: string) => {
     const created = await createWorkspace('table');
     if (created) setAiPrefill({ text: description, key: Date.now() });

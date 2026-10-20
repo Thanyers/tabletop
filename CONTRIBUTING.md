@@ -46,9 +46,12 @@ npx playwright install chromium
 $env:BROWSER_CHANNEL = 'chromium'
 npm run test:r1:browser
 npm run test:cloudflare:browser
+npm run test:generative:browser
 ```
 
 Browser runners เปิด loopback fixture ของตัวเอง ใช้บัญชีและ provider จำลอง ไม่โทรหา Google/DeepSeek จริง หากใช้ shell อื่นให้ตั้ง environment variable ด้วย syntax ของ shell นั้น การรัน public persona suite พร้อมเก็บประวัติใช้ `npm run demo:auto` ตาม [AUTO_DEMO](docs/AUTO_DEMO.md)
+
+ชุด Generative ตรวจ scene/controls/formula, ทดลองร่างส่วนตัว, สองผู้เล่นและตำแหน่งร่วมกัน รวมโจทย์นอก catalog เดิม รายละเอียดการเรียก provider จริงแบบ opt-in และขอบเขตผลตรวจอยู่ใน [Generative runtime](docs/GENERATIVE_CANVAS_RUNTIME.md) และ [acceptance](docs/GENERATIVE_CANVAS_ACCEPTANCE.md); CI ใช้เฉพาะ fixture จำลอง
 
 ### Lint
 

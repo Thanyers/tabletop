@@ -24,6 +24,7 @@ import {
 } from './limits.js';
 import { clientRateKey, json, logRequest, RateLimiter, readJsonBody, requestId as makeRequestId, requestMethod } from './http.js';
 import { randomToken } from './codec.js';
+import { projectionCursor } from './projection-cursor.js';
 
 export interface ExtensionContext {
   readonly request: IncomingMessage;
@@ -216,9 +217,9 @@ export function createApp(options: CreateAppOptions): TabletopApp {
           const result = await authority.authorize(peer.request, peer.workspaceId);
           if (peer.projectionPending) continue;
           if (peer.socket.readyState !== WebSocket.OPEN) return;
-          if (result.workspace.revision === peer.lastRevision) continue;
+          if (projectionCursor(result.workspace) === peer.lastRevision) continue;
           peer.socket.send(JSON.stringify({ type: 'projection', workspace: result.workspace }));
-          peer.lastRevision = result.workspace.revision;
+          peer.lastRevision = projectionCursor(result.workspace);
         }
       } catch {
         peer.socket.close(4403, 'Authorization expired');
@@ -480,7 +481,7 @@ export function createApp(options: CreateAppOptions): TabletopApp {
                 || (afterValues[0] !== undefined && !/^[a-f0-9]{64}$/u.test(afterValues[0]))) {
               throw new AuthorityError('INVALID_REQUEST');
             }
-            const cursor = authorized.workspace.revision;
+            const cursor = projectionCursor(authorized.workspace);
             apiJson(response, 200, {
               resync: afterValues[0] !== cursor,
               cursor,

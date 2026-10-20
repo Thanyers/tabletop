@@ -169,6 +169,58 @@ afterEach(async () => {
 });
 
 describe('tabletop server authority', () => {
+  it('shares independent layout revisions over sockets, preserves valid actions, and rejects stale drags', async () => {
+    const { base, server } = await openServer();
+    const owner = await createSession(base, 'Owner');
+    const member = await createSession(base, 'Member');
+    let view = await createWorkspace(base, owner, 'table');
+    const invitation = await invite(base, owner, view.id, 'member-1');
+    const joined = await redeem(base, member, invitation.ticket);
+    view = (await call<WorkspaceView>(base, `/api/workspaces/${view.id}`, { session: owner })).body as WorkspaceView;
+    const run = async (type: string, payload: unknown) => {
+      const result = await command(base, owner, view, type, payload);
+      expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+      view = (result.body as CommandAck).workspace;
+    };
+    await run('table.import', tableScenarioSources.game);
+    if (view.domain.kind !== 'table') throw Error('Expected table');
+    await run('evolve.propose', { change: gameChange(view.domain.sources[0].id) });
+    for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) await run(type, {});
+    const memberBefore = (await call<WorkspaceView>(base, `/api/workspaces/${view.id}`, { session: joined.session })).body as WorkspaceView;
+    const socket = new WebSocketClient(`ws://127.0.0.1:${server.port}/api/workspaces/${view.id}/socket`, {
+      headers: { cookie: joined.session.cookie, origin: base },
+    });
+    try {
+      await receiveSocketProjection(socket);
+      const nextProjection = receiveSocketProjection(socket);
+      const before = view;
+      await run('canvas.layout', { expectedLayoutRevision: 0, positions: { 'table.collection.boats': { x: 900, y: 250, pinned: true } } });
+      expect(view.revision).toBe(before.revision);
+      const received = (await nextProjection).workspace;
+      expect(received.revision).toBe(memberBefore.revision);
+      expect(received.domain).toMatchObject({ canvasLayout: { revision: 1, positions: { 'table.collection.boats': { x: 900, y: 250 } } } });
+      const stale = await command(base, joined.session, memberBefore, 'canvas.layout', {
+        expectedLayoutRevision: 0, positions: { 'table.collection.boats': { x: 100, y: 100 } },
+      });
+      expect(stale.response.status).toBe(409);
+      expect(stale.body).toMatchObject({ errorCode: 'STALE_LAYOUT' });
+      // The action prepared before the move is still valid.
+      const action = await command(base, owner, before, 'table.act', { actionId: 'advance', inputs: { boat: 'red' } });
+      expect(action.response.status).toBe(200);
+      view = (action.body as CommandAck).workspace;
+      // A stale game revision does not invalidate a correctly versioned layout command.
+      const moved = await command(base, joined.session, memberBefore, 'canvas.layout', {
+        expectedLayoutRevision: 1, positions: { 'table.actions': { x: 1400, y: 250, pinned: true } },
+      });
+      expect(moved.response.status).toBe(200);
+      const resumed = (await call<WorkspaceView>(base, `/api/workspaces/${view.id}`, { session: owner })).body as WorkspaceView;
+      expect(resumed.domain).toMatchObject({ canvasLayout: { revision: 2 }, records: { boats: [{ id: 'red', values: { score: 2 } }, { id: 'blue' }] } });
+      const events = await call<{ cursor: string; resync: boolean }>(base, `/api/workspaces/${view.id}/events?after=${memberBefore.revision}`, { session: joined.session });
+      expect(events.body).toMatchObject({ resync: true });
+      expect((events.body as { cursor: string }).cursor).not.toBe(memberBefore.revision);
+    } finally { socket.close(); }
+  });
+
   it('creates table owners, redeems participant seats, and keeps imported source text out of participant projections', async () => {
     const { base } = await openServer();
     const owner = await createSession(base, 'Table owner');

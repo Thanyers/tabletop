@@ -6,6 +6,8 @@ import { equipmentChange, gameChange, shiftsChange, tableScenarioSources } from 
 import type { ActorContext, DomainState, WorkspaceView } from '../shared/contracts';
 import type { TableChange, TableState } from '../shared/table-contracts';
 import { planForWorkspace } from '../runtime';
+import { evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
+import { loanAmortizationChange } from '../testing/generative-scenarios';
 
 const owner: ActorContext = { actorId: 'account-a', name: 'Owner', role: 'owner', workspaceId: 'fixture', epoch: 1, now: 1000, hash: v => createHash('sha256').update(JSON.stringify(v)).digest('hex') };
 const member: ActorContext = { ...owner, actorId: 'account-b', name: 'Participant', role: 'participant', seat: 'member-1' };
@@ -52,6 +54,23 @@ describe('file-driven generic table authority', () => {
     state = activate(state, edit); expect(state.records.boats[0].values.score).toBe(2); expect(state.turn).toBe('member-1');
     state = act(JSON.parse(JSON.stringify(state)), 'advance', { boat: 'blue' }, member);
     expect(state.records.boats.map(r => r.values.score)).toEqual([2, 3]); expect(state.turn).toBe('host');
+  });
+  it('keeps canvas optional for existing v1 programs and preserves records when adding a view during a rule edit', () => {
+    const initial = activate(createTableState(), loanAmortizationChange);
+    expect(initial.program?.canvas).toBeUndefined();
+    const calculated = act(initial, 'recalculate', { loan: 'loan-1' });
+    const edit = structuredClone(loanAmortizationChange);
+    edit.initialRecords = {};
+    edit.program.canvas = { version: 1, views: [
+      { id: 'current-payment', kind: 'metric', title: 'Monthly payment', value: { op: 'recordField', collection: 'loans', recordId: 'loan-1', field: 'payment' }, format: 'number' },
+    ] };
+    const revised = activate(calculated, edit);
+    expect(revised.ruleRevision).toBe(initial.ruleRevision + 1);
+    expect(revised.records).toEqual(calculated.records);
+    expect(revised.program?.canvas).toEqual(edit.program.canvas);
+    if (!revised.program?.canvas) throw new Error('Expected the added view.');
+    const evaluated = evaluateGenerativeCanvas(revised.program.canvas, { program: revised.program, records: revised.records, actor: owner.actorId, turn: revised.turn });
+    expect(evaluated).toMatchObject([{ id: 'current-payment', kind: 'metric', value: calculated.records.loans[0].values.payment }]);
   });
   it('rejects stale approval after data changes; participant cannot import or propose', () => {
     const initial = source('equipment'); let state: DomainState = activate(initial, equipmentChange(initial.sources[0].id));

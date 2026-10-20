@@ -673,6 +673,46 @@ describe('Cloudflare room Durable Object', () => {
     }
   });
 
+  it('recalls an older relevant exchange from persisted private history after room eviction', async () => {
+    const owner = newActor('Memory recall owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const observedInputs: TableAssistantInput[] = [];
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) => {
+      observedInputs.push(structuredClone(input));
+      return assistantResponse(input, { kind: 'explanation', text: `Earlier discussion: ${input.prompt}`, references: [] });
+    });
+    const send = async (prompt: string) => {
+      const commandId = randomUUID();
+      const jobId = tableAssistantJobId(roomId, workspace.epoch, owner.id, commandId);
+      const accepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+        method: 'POST', body: { commandId, expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+          prompt, consent: true }, mutation: true,
+      });
+      expect(accepted.response.status).toBe(202);
+      expect((await waitForTableAssistantJob(stub, roomId, owner, jobId)).status).toBe('completed');
+    };
+    await send('Keep an orchard reserve in our experiment.');
+    for (let index = 0; index < 8; index += 1) await send(`Question about station ${index}.`);
+    await evictDurableObject(stub);
+    await send('What did we discuss about orchard reserve?');
+    const recalled = observedInputs.at(-1)?.conversation;
+    expect(recalled).toHaveLength(6);
+    expect(recalled?.[0]).toMatchObject({ prompt: 'Keep an orchard reserve in our experiment.', contextSource: 'recalled' });
+    expect(recalled?.slice(-4).map(item => item.prompt)).toEqual([
+      'Question about station 4.', 'Question about station 5.', 'Question about station 6.', 'Question about station 7.',
+    ]);
+    const other = await createRoom(owner, 'table');
+    const commandId = randomUUID();
+    const accepted = await call<TestTableAssistantJob>(other.stub, `/api/workspaces/${other.roomId}/assistant`, owner, {
+      method: 'POST', body: { commandId, expectedRevision: other.workspace.revision, expectedEpoch: other.workspace.epoch,
+        prompt: 'What did we discuss about orchard reserve?', consent: true }, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    await waitForTableAssistantJob(other.stub, other.roomId, owner, tableAssistantJobId(other.roomId, other.workspace.epoch, owner.id, commandId));
+    expect(observedInputs.at(-1)?.conversation).toEqual([]);
+  });
+
   it('bounds table assistant continuity to six completed entries and whole-entry 16 KiB pruning', async () => {
     const owner = newActor('Bounded history owner');
     await saveActor(owner);

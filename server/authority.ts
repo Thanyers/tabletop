@@ -4,6 +4,7 @@ import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
+import { jsonWithinBudget } from '../src/tabletop/shared/json-budget.js';
 import { AuthorityError } from './errors.js';
 import {
   INVITE_TTL_MS,
@@ -64,7 +65,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
   table: new Set([
-    'table.import', 'table.removeSource', 'table.act',
+    'table.import', 'table.removeSource', 'table.act', 'canvas.layout',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
 };
@@ -179,6 +180,7 @@ function publicMember(member: StoredMember): Member {
 }
 
 function commandFrom(value: unknown): CommandEnvelope {
+  if (!jsonWithinBudget(value)) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
   const result = commandEnvelopeSchema.safeParse(value);
   if (!result.success) throw new AuthorityError('INVALID_REQUEST');
   try {
@@ -198,7 +200,7 @@ function assertIdentityFieldsAbsent(payload: unknown): void {
 function mapDomainError(error: DomainError): AuthorityError {
   const conflictCodes = new Set([
     'STALE_CANDIDATE', 'STALE_LESSON', 'APPROVAL_EXPIRED', 'APPROVAL_REVOKED', 'APPROVAL_MISMATCH',
-    'CANDIDATE_PENDING', 'REACTION_CLOSED', 'IDEMPOTENCY_MISMATCH',
+    'CANDIDATE_PENDING', 'REACTION_CLOSED', 'IDEMPOTENCY_MISMATCH', 'STALE_LAYOUT',
   ]);
   const status = error.code === 'FORBIDDEN' ? 403 : conflictCodes.has(error.code) ? 409 : 422;
   return new AuthorityError(error.code, error.message, status);
@@ -674,7 +676,9 @@ export class CommandAuthority {
           throw error;
         }
         const currentView = this.toWorkspaceView(workspace, member, currentProjection, await transaction.listMembers());
-        if (currentView.revision !== envelope.expectedRevision) throw new AuthorityError('STALE_REVISION');
+        // Layout uses its own CAS and current node whitelist in the domain. A game
+        // action must not make an unrelated drag stale; epoch and membership still apply.
+        if (envelope.type !== 'canvas.layout' && currentView.revision !== envelope.expectedRevision) throw new AuthorityError('STALE_REVISION');
         if (envelope.type === 'workspace.reset') {
           if (!isEmptyPayload(envelope.payload)) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
           return this.resetWorkspace(transaction, workspace, member, session, envelope, requestHash, now);
@@ -963,12 +967,16 @@ export class CommandAuthority {
       createdAt: workspace.createdAt,
       expiresAt: workspace.expiresAt,
     };
+    // Geometry is independently revisioned. Moving a card cannot invalidate an
+    // action, rule review, or AI proposal for otherwise unchanged table data.
+    const revisionDomain = { ...domain };
+    if (revisionDomain.kind === 'table') delete revisionDomain.canvasLayout;
     const revision = keyedSha256(workspace.projectionSalt, canonicalJson({
       purpose: 'tabletop-r1-projection-revision-v1',
       actorId: member.actorId,
       workspaceId: workspace.id,
       epoch: workspace.epoch,
-      projection,
+      projection: { ...projection, domain: revisionDomain },
     }));
     return { ...projection, revision };
   }

@@ -191,6 +191,9 @@ try {
   demo.on('pageerror', error => errors.push(error.message));
   demoContext.on('request', request => {
     const url = new URL(request.url());
+    // Edge may open its internal downloads UI during export checks. Its
+    // browser-owned resources are not application network requests.
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
     if (url.origin !== origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/internal/')) {
       publicDemoRequests.push({ method: request.method(), pathname: url.pathname });
     }
@@ -476,6 +479,15 @@ try {
   expect(Math.abs((islandBox.x + islandBox.width / 2) - (canvasBox.x + canvasBox.width / 2))).toBeLessThan(2);
   expect(islandBox.width).toBeLessThanOrEqual(560);
   mark('Assistant island floats centred over the Canvas, stays open with unsent text, collapses to a still round button when idle under reduced motion, and reopens focused with Enter');
+
+  await starter.locator('.tt-topbar').click({ position: { x: 4, y: 4 } });
+  await expect(bubble).toBeVisible({ timeout: 6_000 });
+  await expect(island).toHaveAttribute('data-collapsed', 'true');
+  const assistantCard = await openCanvasObject(starter, 'workspace.ai');
+  await assistantCard.getByRole('button', { name: 'Write a message', exact: true }).click();
+  await expect(island).toHaveAttribute('data-collapsed', 'false');
+  await expect(rulePrompt).toBeFocused();
+  mark('Write a message on the Canvas assistant object expands a collapsed island and focuses its composer');
 
   await openCanvasObject(dm, 'workspace.ai');
   await dm.getByLabel('What would you like to change?', { exact: true }).fill('Allow a shield for an ally, with one AP cost and once each turn.');

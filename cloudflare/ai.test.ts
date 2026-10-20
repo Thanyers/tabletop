@@ -199,6 +199,7 @@ describe('Cloudflare AI proposal helper', () => {
       kind: 'table', prompt: input.prompt,
       sources: table.sources.map(({ id, filename, text }) => ({ id, filename, text })),
       program: table.program, turn: table.turn,
+      records: table.records,
     };
     const requestBytes = measureDeepSeekChangeRequest(measuredInput);
     let observed = '';
@@ -217,6 +218,7 @@ describe('Cloudflare AI proposal helper', () => {
         sources: [{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
         program: null,
         turn: null,
+        records: {},
       });
     }));
     expect(result.change).toEqual(proposal('table'));
@@ -259,14 +261,59 @@ describe('Cloudflare AI proposal helper', () => {
     expect(calls).toBe(0);
   });
 
-  it('requires at least one uploaded source before proposing table rules', async () => {
+  it('supports prompt-only creation without fabricating evidence', async () => {
     const input = request('table');
     if (input.workspace.domain.kind !== 'table') throw new Error('Expected table fixture.');
     input.workspace.domain.sources = [];
     let calls = 0;
-    const deniedFetch: typeof fetch = async () => { calls += 1; throw new Error('A source is required before provider use.'); };
-    await expect(proposeChange(testEnv, input, deniedFetch)).rejects.toMatchObject({ code: 'SOURCE_REQUIRED' });
-    expect(calls).toBe(0);
+    const change = equipmentChange('unused');
+    change.program.evidence = [];
+    change.program.assumptions = ['Hypothetical equipment for this requested example.'];
+    const result = await proposeChange(testEnv, input, providerFetch(change, content => {
+      calls += 1;
+      expect(JSON.parse(content)).toMatchObject({ sources: [], records: {}, program: null });
+    }));
+    expect(result.change).toEqual(change);
+    expect(calls).toBe(1);
+  });
+
+  it('repairs a semantically invalid generated tool with separate metered attempts', async () => {
+    const input = request('table');
+    const bad = equipmentChange('source_fixture');
+    bad.program.actions[0].effects[0].field = 'missing_field';
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+      const sent = JSON.parse(data.messages[1].content);
+      calls++;
+      if (calls === 2) {
+        expect(sent.repair.attempt).toBe(2);
+        expect(sent.repair.issues.join(' ')).toContain('unknown record field');
+        expect(sent.repair.previousOutput).toContain('missing_field');
+      }
+      return providerFetch(calls === 1 ? bad : proposal('table'))(url, init);
+    };
+    const result = await proposeChange(testEnv, input, fetchImpl);
+    expect(calls).toBe(2);
+    expect(result.usage.promptTokens).toBe(40);
+    expect(result.usage.completionTokens).toBe(24);
+    expect(result.change).toEqual(proposal('table'));
+    const stub = testEnv.BILLING.get(testEnv.BILLING.idFromName('global'));
+    const rows = await runInDurableObject(stub, (_instance, state) => state.storage.sql
+      .exec<{ status: string }>('SELECT status FROM billing_jobs WHERE workspace_id = ?', input.workspace.id).toArray());
+    expect(rows).toHaveLength(2);
+    expect(rows.every(row => row.status === 'settled')).toBe(true);
+  });
+
+  it('caps generated repairs at three without accepting a broken artifact', async () => {
+    const input = request('table');
+    const invalid = equipmentChange('source_fixture');
+    invalid.program.actions[0].effects[0].field = 'missing_field';
+    let calls = 0;
+    await expect(proposeChange(testEnv, input, providerFetch(invalid, () => { calls++; })))
+      .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+    expect(calls).toBe(3);
+    expect(input.workspace.domain.candidate).toBeNull();
   });
 
   it('reserves and dispatches each stable command once, rejecting replay and changed input', async () => {
