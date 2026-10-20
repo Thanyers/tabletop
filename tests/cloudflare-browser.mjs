@@ -280,8 +280,9 @@ try {
   await expect(dm.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toHaveCount(0);
   await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
-  await dm.locator('.tt-template-choices > summary').click();
-  await dm.getByRole('button', { name: /Shared encounter.*Run turns/ }).click();
+  await dm.getByRole('button', { name: 'Start a new table', exact: true }).click();
+  await expect(dm).toHaveURL(`${origin}/new`);
+  await dm.getByTestId('start-page').getByRole('button', { name: /Shared encounter.*Run turns/ }).click();
   const createdResponse = await created;
   expect(createdResponse.status()).toBe(201);
   let room = await createdResponse.json();
@@ -346,6 +347,7 @@ try {
   expect(pausedAction.body.errorCode).toBe('ENCOUNTER_PAUSED');
   await dm.reload();
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
   expect((await api(dm, `/api/workspaces/${room.id}`)).body.domain.paused).toBeTruthy();
   expect((await command(dm, 'encounter.resume')).status).toBe(200);
   expect((await command(pip, 'encounter.shield', { target: 'pip' })).status).toBe(200);
@@ -358,6 +360,31 @@ try {
   const outsider = await newPage(actors[3]);
   expect((await api(outsider, `/api/workspaces/${room.id}`)).status).toBe(403);
   expect((await api(outsider, '/api/admin/workspaces')).status).toBe(403);
+
+  // A table URL is an address, not access: outsiders get the same notice as for a missing table.
+  const outsiderLink = await newPage(actors[3], `${origin}/t/${room.id}`);
+  await expect(outsiderLink.getByText('This table is not available to this account.', { exact: false })).toBeVisible();
+  await expect(outsiderLink).toHaveURL(`${origin}/`);
+  await expect(outsiderLink.locator('.tt-canvas-panel')).toHaveCount(0);
+  const missingLink = await newPage(actors[3], `${origin}/t/${randomUUID()}`);
+  await expect(missingLink.getByText('This table is not available to this account.', { exact: false })).toBeVisible();
+  // Signed-out visitors return to the requested table after signing in.
+  const signedOut = await newPage(null, `${origin}/t/${room.id}`);
+  await expect(signedOut.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await signedOut.context().addCookies([{ name: 'tabletop_local_session', value: actors[0].token, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  await signedOut.goto(origin); await signedOut.waitForLoadState('networkidle');
+  await expect(signedOut).toHaveURL(`${origin}/t/${room.id}`);
+  await expect(signedOut.locator('.tt-canvas-panel')).toBeVisible();
+  // Back and forward move between the table list and the open table.
+  // The table was created from /new, so back returns to the start page.
+  await dm.goBack();
+  await expect(dm).toHaveURL(`${origin}/new`);
+  await expect(dm.getByTestId('start-page')).toBeVisible();
+  await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
+  await dm.goForward();
+  await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  mark('Each table has its own /t/<id> URL: reload and back/forward follow it, sign-in returns to it, and outsiders see only an unavailable notice');
   const metadata = await api(dm, '/api/admin/workspaces');
   expect(metadata.status).toBe(200);
   expect(JSON.stringify(metadata.body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
@@ -368,6 +395,32 @@ try {
   await dm.getByRole('button', { name: 'Close admin panel' }).click();
   await dm.locator('.tt-table-options > summary').click();
   mark('Admin sees room metadata; an unrelated account cannot read the room or admin directory');
+
+  // /new start page: prepared cards, reload and history, and a typed description that waits in the rule draft.
+  const starter = missingLink;
+  await starter.getByRole('button', { name: 'Start a new table', exact: true }).click();
+  await expect(starter).toHaveURL(`${origin}/new`);
+  const startPage = starter.getByTestId('start-page');
+  await expect(startPage.getByRole('heading', { name: 'What should we start with?' })).toBeVisible();
+  await expect(startPage.getByRole('list', { name: 'Prepared tables' }).getByRole('button')).toHaveText([/Invoice check/, /Physics lesson/, /Shared encounter/]);
+  await starter.reload(); await starter.waitForLoadState('networkidle');
+  await expect(startPage).toBeVisible();
+  await starter.goBack();
+  await expect(starter).toHaveURL(`${origin}/`);
+  await expect(starter.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+  await starter.goForward();
+  await expect(startPage).toBeVisible();
+  await expect(startPage.getByRole('button', { name: 'Start with this', exact: true })).toBeDisabled();
+  const description = 'Track who borrows the team cameras and when they come back.';
+  await startPage.getByLabel('Or describe what you want to make').fill(description);
+  const createdFromText = starter.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
+  await startPage.getByRole('button', { name: 'Start with this', exact: true }).click();
+  const textRoom = await (await createdFromText).json();
+  expect(textRoom.kind).toBe('table');
+  await expect(starter).toHaveURL(`${origin}/t/${textRoom.id}`);
+  await expect(starter.getByLabel('How should this table work?', { exact: true })).toHaveValue(description);
+  expect((await api(starter, `/api/workspaces/${textRoom.id}`)).body.domain.program).toBeNull();
+  mark('Start page at /new offers the three prepared tables, survives reload and back/forward, and a typed description opens an empty shared table with the description waiting in its rule draft');
 
   await openCanvasObject(dm, 'workspace.ai');
   await dm.getByLabel('What would you like to change?', { exact: true }).fill('Allow a shield for an ally, with one AP cost and once each turn.');

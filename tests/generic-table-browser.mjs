@@ -182,17 +182,17 @@ async function refreshTable(page, tableId) {
 
 async function openNewTable(owner, api) {
   const created = owner.waitForResponse((response) => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
-  const primary = owner.getByRole('button', { name: 'Start with your files', exact: true });
-  await expect(primary).toBeVisible();
-  const templates = owner.locator('.tt-template-choices');
-  await expect(templates.locator('summary')).toHaveText('Or explore what a table can become');
-  await expect(templates).not.toHaveAttribute('open', '');
-  await expect(templates.getByRole('button', { name: /Invoice check/ })).toBeHidden();
-  await primary.click();
+  await owner.getByRole('button', { name: 'Start a new table', exact: true }).click();
+  const startPage = owner.getByTestId('start-page');
+  await expect(startPage.getByRole('heading', { name: 'What should we start with?' })).toBeVisible();
+  await expect(owner).toHaveURL(/\/new$/);
+  await expect(startPage.getByRole('list', { name: 'Prepared tables' }).getByRole('button')).toHaveCount(3);
+  await startPage.getByRole('button', { name: 'Start empty with your own files', exact: true }).click();
   const response = await created;
   expect(response.status()).toBe(201);
   const view = await response.json();
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
+  await expect(owner).toHaveURL(new RegExp(`/t/${view.id}$`));
   const workspacePicker = owner.locator('.tt-workspace-picker__button');
   await expect(workspacePicker).toBeVisible();
   await workspacePicker.click();

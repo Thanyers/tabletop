@@ -8,11 +8,14 @@ import { startTabletopServer } from '../server/bootstrap.ts';
 const output = resolve('test-results/tabletop-r1');
 await mkdir(output, { recursive: true });
 const directory = await mkdtemp(join(tmpdir(), 'tabletop-browser-'));
-const server = await startTabletopServer({ environment: 'local', port: 0, dataDir: directory, staticDir: resolve('dist') });
-const base = `http://127.0.0.1:${server.port}`;
+// Each scenario gets its own server so the real per-IP API limit starts fresh
+// without waiting out its one-minute window or weakening application throttling.
+let caseNumber = 0;
+const startCaseServer = () => startTabletopServer({ environment: 'local', port: 0, dataDir: join(directory, `case-${++caseNumber}`), staticDir: resolve('dist') });
+let server = await startCaseServer();
+let base = `http://127.0.0.1:${server.port}`;
 const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
 const checks = [], errors = [], pages = [];
-let caseStartedAt = Date.now();
 const mark = name => { checks.push(name); console.log('PASS ' + name) };
 const board = page => page.locator('.tt-canvas-panel');
 async function newPage() {
@@ -31,11 +34,12 @@ async function current(page) {
   });
 }
 async function nextCase() {
-  // Seven automated actors share one loopback IP. Keep separate scenarios outside
-  // the real one-minute API limit instead of weakening application throttling.
-  const remaining = 60_250 - (Date.now() - caseStartedAt);
-  if (remaining > 0) await new Promise(resolveWait => setTimeout(resolveWait, Math.min(remaining, 60_000)));
-  caseStartedAt = Date.now();
+  // Seven automated actors share one loopback IP. Close the previous scenario's
+  // contexts before its server so no open socket reports a disconnect as a page error.
+  for (const page of pages) if (!page.isClosed()) await page.context().close();
+  await server.close();
+  server = await startCaseServer();
+  base = `http://127.0.0.1:${server.port}`;
 }
 async function expectSeparatedObjects(page) {
   await closeExpandedObjects(page);
@@ -69,14 +73,10 @@ async function clickCommand(page, locator, type) {
   return response.json();
 }
 async function start(page, label) {
-  const templates = page.locator('.tt-template-choices');
-  const choice = templates.getByRole('button', { name: new RegExp(label) });
-  if (!(await choice.isVisible().catch(() => false))) {
-    await expect(templates.locator('summary')).toHaveText('Or explore what a table can become');
-    await expect(templates).not.toHaveAttribute('open', '');
-    await templates.locator('summary').click();
-    await expect(choice).toBeVisible();
-  }
+  const startPage = page.getByTestId('start-page');
+  if (!(await startPage.isVisible().catch(() => false))) await page.getByRole('button', { name: 'Start a new table', exact: true }).click();
+  const choice = startPage.getByRole('button', { name: new RegExp(label) });
+  await expect(choice).toBeVisible();
   await choice.click();
   await expect(page.locator('.tt-canvas-node').first()).toBeVisible();
 }

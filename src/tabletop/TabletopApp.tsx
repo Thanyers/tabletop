@@ -4,12 +4,15 @@ import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contra
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
+import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { TableAssistant } from './ui/TableAssistant';
 import { TableSurface } from './ui/TableSurface';
+import { StartPage } from './ui/StartPage';
+import { starterFor } from './shared/starters';
 import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
@@ -28,9 +31,9 @@ const localCapabilities: TabletopCapabilities = {
 };
 
 const caseInfo: Record<CaseKind, { title: string; subtitle: string; icon: typeof Table2 }> = {
-  invoice: { title: 'Invoice check', subtitle: 'Match shipment charges with dated evidence.', icon: Table2 },
-  teaching: { title: 'Physics lesson', subtitle: 'Teach one model through text, scene, and graph.', icon: BookOpen },
-  encounter: { title: 'Shared encounter', subtitle: 'Run turns and reactions with a Dungeon Master.', icon: Users },
+  invoice: { title: starterFor('invoice').title, subtitle: starterFor('invoice').summary, icon: Table2 },
+  teaching: { title: starterFor('teaching').title, subtitle: starterFor('teaching').summary, icon: BookOpen },
+  encounter: { title: starterFor('encounter').title, subtitle: starterFor('encounter').summary, icon: Users },
   table: { title: 'Shared data table', subtitle: 'Build collections and actions from your own files.', icon: Table2 },
 };
 
@@ -111,6 +114,10 @@ export default function TabletopApp() {
   const [session, setSession] = useState<SessionView | null>(null);
   const [view, setView] = useState<WorkspaceView | null>(null);
   const [starting, setStarting] = useState(true);
+  // Which page shows while no table is open: the table list or the /new start page.
+  const [page, setPage] = useState<'home' | 'new'>('home');
+  const pageRef = useRef<'home' | 'new'>('home');
+  pageRef.current = page;
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
@@ -131,6 +138,9 @@ export default function TabletopApp() {
   const [resetOpen, setResetOpen] = useState(false);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const workspaceRef = useRef<WorkspaceView | null>(null);
+  // How the next change of open table is written to the address bar: the first
+  // sync after boot replaces, user navigation pushes, back/forward writes nothing.
+  const urlSyncRef = useRef<'replace' | 'push' | 'none'>('replace');
   const projectionSequenceRef = useRef(0);
   const inspectorScrollRef = useRef<HTMLDivElement>(null);
   const noticeTimerRef = useRef<number | undefined>(undefined);
@@ -167,7 +177,10 @@ export default function TabletopApp() {
       setInviteSeat(null);
       setPreviousInvitesRevoked(false);
     }
-    if (next) saveLastWorkspace(next.id);
+    if (next) {
+      saveLastWorkspace(next.id);
+      setPage('home');
+    }
   }, []);
 
   const latestAfterAck = useCallback(async (ack: { duplicate: boolean; workspace: WorkspaceView }, workspaceId: string, requestSequence: number): Promise<WorkspaceView> => {
@@ -250,6 +263,8 @@ export default function TabletopApp() {
     let alive = true;
     const boot = async () => {
       const fragmentTicket = inviteFromFragment();
+      const returnPath = takeReturnPath();
+      const route = parseRoute(returnPath ?? window.location.pathname);
       const callbackUrl = new URL(window.location.href);
       const googleLoginFailed = callbackUrl.searchParams.get('auth_error') === 'google_login_failed';
       let currentAuth: AuthStatus | null = null;
@@ -271,6 +286,7 @@ export default function TabletopApp() {
             if (savePendingInvite(fragmentTicket)) clearInviteFragment();
             else showNotice('This tab could not save the invitation securely. Keep the invitation link and try again after signing in.', 'error');
           }
+          saveReturnPath(returnPath ?? window.location.pathname);
           setSession(null);
           setWorkspace(null);
           return;
@@ -312,7 +328,21 @@ export default function TabletopApp() {
             clearPendingInvite();
             if (alive) showNotice(errorText(error), 'error');
           }
-        } else {
+        } else if (route?.name === 'table') {
+          try {
+            const opened = await tabletopClient.workspace(route.id);
+            if (alive) setWorkspace(opened);
+          } catch (error) {
+            if (error instanceof ApiFailure && error.status === 401) throw error;
+            if (!alive) return;
+            // Do not reveal whether the table exists; members and outsiders see the same notice.
+            window.history.replaceState({}, document.title, '/');
+            showNotice('This table is not available to this account. Ask the table owner for an invitation.', 'error');
+          }
+        } else if (route?.name === 'new') {
+          setPage('new');
+        } else if (route?.name !== 'join') {
+          if (!route) window.history.replaceState({}, document.title, '/');
           let lastId: string | null = null;
           try { lastId = window.localStorage.getItem(lastWorkspaceKey); } catch { lastId = null; }
           const resumeId = currentSession.workspaces.find((item) => item.id === lastId)?.id ?? currentSession.workspaces[0]?.id;
@@ -335,6 +365,38 @@ export default function TabletopApp() {
   }, [bootstrapAttempt, refreshSession, setWorkspace, showNotice]);
 
   useEffect(() => {
+    if (starting) return;
+    const target = routePath(view ? { name: 'table', id: view.id } : { name: page });
+    const mode = urlSyncRef.current;
+    urlSyncRef.current = 'push';
+    if (mode === 'none' || window.location.pathname === target) return;
+    if (mode === 'replace') window.history.replaceState({}, document.title, target);
+    else window.history.pushState({}, document.title, target);
+  }, [view?.id, page, starting]);
+
+  useEffect(() => {
+    const followHistory = () => {
+      const route = parseRoute(window.location.pathname);
+      if (route?.name === 'table') {
+        if (workspaceRef.current?.id === route.id) return;
+        tabletopClient.workspace(route.id).then((opened) => {
+          urlSyncRef.current = 'none';
+          setWorkspace(opened);
+        }, (error) => showNotice(errorText(error), 'error'));
+      } else {
+        const nextPage = route?.name === 'new' ? 'new' : 'home';
+        if (!workspaceRef.current && pageRef.current === nextPage) return;
+        urlSyncRef.current = 'none';
+        saveLastWorkspace(null);
+        setWorkspace(null);
+        setPage(nextPage);
+      }
+    };
+    window.addEventListener('popstate', followHistory);
+    return () => window.removeEventListener('popstate', followHistory);
+  }, [setWorkspace, showNotice]);
+
+  useEffect(() => {
     if (!view) return;
     return tabletopClient.subscribe(view.id, (next) => {
       if (workspaceRef.current?.id === next.id) setWorkspace(next);
@@ -349,11 +411,11 @@ export default function TabletopApp() {
     catch (error) { return { plan: null, error: error instanceof Error ? error.message : 'The current table plan could not be rendered.' }; }
   }, [view]);
 
-  const createWorkspace = useCallback(async (kind: CaseKind) => {
+  const createWorkspace = useCallback(async (kind: CaseKind): Promise<WorkspaceView | null> => {
     if (kind === 'table' && capabilities.tableReadOnly) {
       showNotice('New shared tables are temporarily paused. You can still open existing tables and inspect their records.', 'info');
       setWorkspaceMenuOpen(false);
-      return;
+      return null;
     }
     setBusy('workspace.create');
     try {
@@ -361,10 +423,27 @@ export default function TabletopApp() {
       setWorkspace(next);
       await refreshSession();
       showNotice(`${caseInfo[kind].title} is ready.`, 'success');
+      return next;
     } catch (error) {
       showNotice(errorText(error), 'error');
+      return null;
     } finally { setBusy(null); setWorkspaceMenuOpen(false); }
   }, [capabilities.tableReadOnly, refreshSession, setWorkspace, showNotice]);
+
+  const openStartPage = useCallback(() => {
+    setWorkspaceMenuOpen(false);
+    setWorkspace(null);
+    setPage('new');
+  }, [setWorkspace]);
+
+  const leaveStartPage = useCallback(() => setPage('home'), []);
+
+  // A typed description starts an empty shared table and waits in its rule draft;
+  // nothing reaches the model until the owner adds a source and consents.
+  const startFromDescription = useCallback(async (description: string) => {
+    const created = await createWorkspace('table');
+    if (created) setAiPrefill({ text: description, key: Date.now() });
+  }, [createWorkspace]);
 
   const runCommand = useCallback(async (type: string, payload: unknown): Promise<WorkspaceView | null> => {
     const current = workspaceRef.current;
@@ -575,7 +654,7 @@ export default function TabletopApp() {
     setInviteBusy(true);
     try {
       const invite = await tabletopClient.invite(current.id, seat, replaceOutstanding);
-      const url = new URL(window.location.href);
+      const url = new URL(routePath({ name: 'join' }), window.location.origin);
       url.hash = new URLSearchParams({ invite: invite.ticket }).toString();
       setInviteState({ seat, invite, url: url.toString() });
       setPreviousInvitesRevoked(false);
@@ -629,7 +708,18 @@ export default function TabletopApp() {
   if (authStatus?.mode === 'google' && !authStatus.authenticated) return <AccountSignIn status={authStatus} notice={notice} hasPendingInvite={Boolean(readPendingInvite() || inviteFromFragment())} checking={false} onRetry={retryBootstrap} onDismissNotice={() => setNotice(null)} />;
   if (!session) return <FailureScreen onRetry={retryBootstrap} notice={notice} />;
   const headerAccount = accountForHeader(authStatus, session);
-  if (!view) return <WorkspaceChooser session={session} account={headerAccount} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onCreate={(kind) => void createWorkspace(kind)} onOpen={(id) => void openWorkspace(id)} />;
+  if (!view && page === 'new') return <StartPage
+    header={<ChooserHeader session={session} account={headerAccount} busy={busy} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} onHome={leaveStartPage} />}
+    notice={<NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />}
+    busy={busy !== null}
+    tableReadOnly={capabilities.tableReadOnly === true}
+    renderIcon={(kind) => <CaseIcon kind={kind} />}
+    onChooseStarter={(kind) => void createWorkspace(kind)}
+    onDescribe={(description) => void startFromDescription(description)}
+    onStartEmpty={() => void createWorkspace('table')}
+    onBack={leaveStartPage}
+  />;
+  if (!view) return <WorkspaceChooser session={session} account={headerAccount} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
@@ -660,6 +750,7 @@ export default function TabletopApp() {
     onChatConfirm={confirmTableAssistantAction}
     onChatRefresh={refreshTableAssistant}
     onOpenObject={requestCanvasFocus}
+    rulePrefill={aiPrefill}
   /> : undefined;
   const surfaceBusy = tableReadOnly ? 'table.readOnly' : busy;
 
@@ -667,13 +758,13 @@ export default function TabletopApp() {
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
     <div className="tt-app">
       <header className="tt-topbar">
-        <a className="tt-brand" href="#table" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
+        <a className="tt-brand" href="/" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
         <span className="tt-topbar__divider" aria-hidden="true" />
         <div className="tt-workspace-picker">
           <button type="button" className="tt-workspace-picker__button" aria-label={`Tables: ${workspaceLabel(view)}`} aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
           {workspaceMenuOpen && <>
             <button className="tt-menu-dismiss" type="button" aria-label="Close table menu" onClick={() => setWorkspaceMenuOpen(false)} />
-            <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span>{(['invoice', 'teaching', 'encounter', 'table'] as const).map((kind) => <button role="menuitem" type="button" key={kind} disabled={kind === 'table' && capabilities.tableReadOnly === true} title={kind === 'table' && capabilities.tableReadOnly ? 'Creating shared tables is temporarily paused.' : undefined} onClick={() => void createWorkspace(kind)}><Plus size={15} /><span><strong>{caseInfo[kind].title}</strong><small>{kind === 'table' && capabilities.tableReadOnly ? 'Temporarily paused' : caseInfo[kind].subtitle}</small></span><ArrowRight size={14} /></button>)}<hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
+            <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span><button role="menuitem" type="button" onClick={openStartPage}><Plus size={15} /><span><strong>New table</strong><small>Choose a prepared table or describe your own</small></span><ArrowRight size={14} /></button><hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
           </>}
         </div>
         <div className="tt-topbar__spacer" />
@@ -739,13 +830,21 @@ function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'inf
   return <main className="tt-failure"><span className="tt-dialog__mark"><CircleAlert size={18} /></span><p className="tt-kicker">TABLETOP</p><h1>The table could not be opened</h1><p>{notice?.text ?? 'Check your connection and try again.'}</p><button type="button" className="tt-button tt-button--primary" onClick={onRetry}><RefreshCw size={14} /> Try again</button></main>;
 }
 
-function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onCreate, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onCreate: (kind: CaseKind) => void; onOpen: (id: string) => void }) {
-  return <main className="tt-chooser"><header className="tt-chooser__top"><a className="tt-brand" href="#table" aria-label="Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>
-    {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={onDismissNotice}><X size={14} /></button></div>}
+function ChooserHeader({ session, account, busy, onSignOut, onLoadAdminWorkspaces, onHome }: { session: SessionView; account: GoogleAuthUser | null; busy: string | null; onSignOut: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; onHome?: () => void }) {
+  return <header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop" onClick={(event) => { event.preventDefault(); onHome?.(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>;
+}
+
+function NoticeBanner({ notice, onDismiss }: { notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismiss: () => void }) {
+  if (!notice) return null;
+  return <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={onDismiss}><X size={14} /></button></div>;
+}
+
+function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onStart, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onStart: () => void; onOpen: (id: string) => void }) {
+  return <main className="tt-chooser"><ChooserHeader session={session} account={account} busy={busy} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} />
+    <NoticeBanner notice={notice} onDismiss={onDismissNotice} />
     <section className="tt-chooser__content"><h1>What are you here to do?</h1><p>Start with what you're working on. Your table will take shape around it.</p>
-      <button className="tt-start-own-table" type="button" disabled={busy !== null || tableReadOnly} onClick={() => onCreate('table')}>{busy === 'workspace.create' ? <LoaderCircle size={18} className="tt-spin" /> : <Plus size={18} />}Start with your files</button>
-      {tableReadOnly && <p role="status">New tables are temporarily paused. You can still open an existing table.</p>}
-      <details className="tt-template-choices"><summary>Or explore what a table can become</summary><div className="tt-start-table">{(['invoice', 'teaching', 'encounter'] as const).map((kind) => <button className="tt-case-choice" type="button" key={kind} disabled={busy !== null} onClick={() => onCreate(kind)}><CaseIcon kind={kind} /><span><strong>{caseInfo[kind].title}</strong><small>{caseInfo[kind].subtitle}</small></span><Plus size={15} /></button>)}</div></details>
+      <button className="tt-start-own-table" type="button" disabled={busy !== null} onClick={onStart}><Plus size={18} />Start a new table</button>
+      {tableReadOnly && <p role="status">New shared tables are temporarily paused. You can still open a prepared table or an existing one.</p>}
       {session.workspaces.length > 0 && <div className="tt-existing-tables"><h2>Pick up where you left off</h2>{session.workspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
     </section>
   </main>;
