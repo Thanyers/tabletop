@@ -91,7 +91,7 @@
 - **Worker + D1** จัดการ Google identity, session, CSRF, rate limits และ directory สำหรับ My tables; directory ใช้ค้นหาห้อง ไม่ใช่ authority ของสมาชิก
 - **Room Durable Object** เป็น state ถาวรต่อห้อง รวมสมาชิก/คำเชิญ, revision, receipts, rules, events และ assistant jobs; domain ฝั่ง server ตรวจ role, seat, turn และเงื่อนไขก่อน commit แบบ atomic
 - **AI adapter + Billing Durable Object** ส่งเฉพาะข้อมูลที่ผู้ใช้ยินยอมในขอบเขตที่กำหนด จอง/settle งบ และตรวจ structured output; โมเดลไม่ได้ให้สิทธิ์ อนุมัติกฎ หรือ execute code
-- **ความเป็นส่วนตัว:** source files สมาชิกทุกคนอ่านได้ (เจ้าของเท่านั้นเพิ่ม/ลบ), draft rules เป็นของเจ้าของ, conversation เป็นของผู้ถาม, active rules/records เป็นข้อมูลร่วม อย่าส่ง private content เพิ่มเพียงเพื่อจัดหน้า UI
+- **ความเป็นส่วนตัว:** source files สมาชิกทุกคนอ่านและเพิ่มได้ (เจ้าของเท่านั้นลบ), draft rules เป็นของเจ้าของ, conversation เป็นของผู้ถาม, active rules/records เป็นข้อมูลร่วม อย่าส่ง private content เพิ่มเพียงเพื่อจัดหน้า UI
 
 D1 และ Room DO ไม่ได้อยู่ใน transaction เดียวกัน การ sync directory ใช้ ordered outbox; WebSocket ส่ง authorized snapshots และ resync เมื่อ reconnect จึงอย่าตั้งสมมติฐานว่า event จะถูกส่งครั้งเดียวเสมอ รายละเอียด auth และ projection อยู่ใน [R1 architecture](R1_ARCHITECTURE.md); contract และข้อจำกัดของ table อยู่ใน [Generic table design](GENERIC_TABLE_DESIGN.md)
 

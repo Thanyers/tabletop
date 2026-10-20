@@ -43,12 +43,12 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
   const [importing, setImporting] = useState(false);
   const totalBytes = state.sources.reduce((sum, source) => sum + new TextEncoder().encode(source.text).byteLength, 0);
   const readOnly = busy === 'table.readOnly';
-  const canAdd = !readOnly && view.actor.role === 'owner' && !!onTableImport && state.sources.length < MAX_SOURCE_FILES && totalBytes < MAX_SOURCE_BYTES;
+  const canAdd = !readOnly && !!onTableImport && state.sources.length < MAX_SOURCE_FILES && totalBytes < MAX_SOURCE_BYTES;
 
   const addFiles = async (files: File[]) => {
     if (!files.length) return;
-    if (!onTableImport || view.actor.role !== 'owner') {
-      setError('Only the table owner can add source files.');
+    if (!onTableImport) {
+      setError('Files cannot be added here.');
       return;
     }
     setError('');
@@ -83,7 +83,7 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
 
   return <div className="tt-canvas-inline tt-table-sources">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">SHARED TABLE FILES</span><strong>Files for this table</strong><small>{state.sources.length}/{MAX_SOURCE_FILES} · {Math.ceil(totalBytes / 1024)} KiB</small></div>
-    <p className="tt-canvas-inline__note"><Users size={13} aria-hidden="true" /> Everyone at this table can read these files. Only the owner adds or removes them.</p>
+    <p className="tt-canvas-inline__note"><Users size={13} aria-hidden="true" /> Everyone at this table can read and add files. Only the owner removes them.</p>
     {expanded && readOnly && <p className="tt-table-readonly-inline" role="status">This table is temporarily read-only. You can still inspect the files and shared records.</p>}
     {expanded && <>
       {readOnly ? null : canAdd ? <div className="tt-table-dropzone" onDrop={onDrop} onDragOver={onDragOver}>
@@ -93,7 +93,7 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
         <button type="button" className="tt-button tt-button--quiet" onClick={() => inputRef.current?.click()} disabled={busy !== null || importing}>Choose files</button>
         <input ref={inputRef} type="file" accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown" multiple hidden onChange={onInput} aria-label="Choose table source files" />
         <details><summary>File limits</summary><small>UTF-8 text · four files, 64 KiB total. PDF and images are not supported. AI requests have a separate 48 KiB input limit including your prompt and current rules.</small></details>
-      </div> : view.actor.role === 'owner' ? <p className="tt-table-limit-note">{state.sources.length >= MAX_SOURCE_FILES ? 'All four source file slots are in use.' : totalBytes >= MAX_SOURCE_BYTES ? 'The 64 KiB source limit has been reached.' : 'Only the table owner can add source files.'}</p> : <p className="tt-table-limit-note">Only the table owner can add files.</p>}
+      </div> : <p className="tt-table-limit-note">{state.sources.length >= MAX_SOURCE_FILES ? 'All four source file slots are in use.' : totalBytes >= MAX_SOURCE_BYTES ? 'The 64 KiB source limit has been reached.' : 'Files cannot be added here.'}</p>}
     </>}
     {error && <p className="tt-table-error" role="alert"><AlertCircle size={14} />{error}</p>}
     {state.sources.length === 0 ? !expanded && <p className="tt-canvas-inline__empty">{readOnly ? 'No files yet.' : 'Add a file or describe the table you want.'}</p> : <ul className="tt-table-source-list" aria-label="Table source files">{state.sources.map((source) => <SourceCard key={source.id} source={source} expanded={expanded} canRemove={view.actor.role === 'owner' && !readOnly && !referencedSourceIds.has(source.id)} readOnly={readOnly} referenced={referencedSourceIds.has(source.id)} busy={busy !== null} onRemove={() => void onCommand('table.removeSource', { sourceId: source.id })} />)}</ul>}

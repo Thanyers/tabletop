@@ -246,11 +246,15 @@ describe('tabletop server authority', () => {
     if ((participantView.body as WorkspaceView).domain.kind !== 'table') throw new Error('Expected participant table projection.');
     expect(((participantView.body as WorkspaceView).domain as Extract<WorkspaceView['domain'], { kind: 'table' }>).sources.map(source => source.filename)).toEqual([tableScenarioSources.equipment.filename]);
 
-    const denied = await command(base, redeemed.session, participantView.body as WorkspaceView, 'table.import', {
-      filename: 'second.txt', text: 'participants cannot add sources',
+    const memberImport = await command(base, redeemed.session, participantView.body as WorkspaceView, 'table.import', {
+      filename: 'second.txt', text: 'participants can add sources',
     });
-    expect(denied.response.status).toBe(403);
-    expect((denied.body as ApiError).errorCode).toBe('FORBIDDEN');
+    expect(memberImport.response.status).toBe(200);
+    const memberSource = ((memberImport.body as CommandAck).workspace.domain as Extract<WorkspaceView['domain'], { kind: 'table' }>).sources.find(source => source.filename === 'second.txt');
+    expect(memberSource).toBeTruthy();
+    const removeDenied = await command(base, redeemed.session, (memberImport.body as CommandAck).workspace, 'table.removeSource', { sourceId: memberSource!.id });
+    expect(removeDenied.response.status).toBe(403);
+    expect((removeDenied.body as ApiError).errorCode).toBe('FORBIDDEN');
   });
 
   it('isolates sessions, projects private notes, rejects learner teacher actions, and enforces command idempotency/CAS', async () => {

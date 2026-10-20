@@ -522,8 +522,7 @@ async function joinAndCheckSharedFiles(newPage, api, actor, inviteUrl, tableId, 
   await expect(page.getByRole('button', { name: `Remove ${filename}`, exact: true })).toHaveCount(0);
   const chat = page.getByTestId('table-chat-bar');
   await expect(chat).toBeVisible();
-  await expect(chat.getByRole('button', { name: 'Attach a file', exact: true })).toHaveCount(0);
-  await expect(chat.getByLabel('Choose a file to attach', { exact: true })).toHaveCount(0);
+  await expect(chat.getByRole('button', { name: 'Attach a file', exact: true })).toBeEnabled();
   await expect(chat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
   await openCanvasObject(page, 'table.rules');
   await expect(page.getByTestId('canvas-object-editor').getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
