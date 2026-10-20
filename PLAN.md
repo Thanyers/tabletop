@@ -27,6 +27,7 @@
 | F002 | ตั้งชื่อโต๊ะที่แถบด้านบน | `todo` | [F002](docs/features/F002-rename-table.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
+| F006 | โต๊ะข้อมูลเริ่มจากแชท: แชทแถวเดียวกึ่งกลางล่าง · โต๊ะว่างไม่มีการ์ด · คำตอบเป็นการ์ด | `doing` (T2+ รอ #24) | [F006](docs/features/F006-chat-first-table.md) |
 
 ## งาน
 
@@ -62,3 +63,9 @@
 | CI001 | ESLint ใน CI (ห้าม `any`/`@ts-ignore`) + pre-commit hook husky | `review` | JitrudeeDongdee (Claude) | `feat/CI001-eslint-husky` | `eslint.config.js` (ใหม่), `.husky/` (ใหม่), `package.json`, `package-lock.json`, `.github/workflows/validate.yml`, `scripts/check-public-files.mjs`, `.gitignore`, `CONTRIBUTING.md`, `AGENTS.md` | — | |
 | CI002 | เคลียร์ ESLint warning แล้วเลื่อนกฎเป็น error | `todo` | — | — | ทั่ว repo, `eslint.config.js` | CI001 | แตกตามโฟลเดอร์ ระวัง hotspot |
 | CI003 | ย้าย guard ของ workbench ให้ hook ไม่ถูกเรียกแบบมีเงื่อนไข | `review` | JitrudeeDongdee (Claude) | `fix/CI003-workbench-hooks` | `src/tabletop/ui/{Encounter,Invoice,Teaching}Workbench.tsx`, `eslint.config.js` | CI001 | บั๊กแฝง ดู spec ถัดไป ข้อ 7 |
+| F006-T1 | component `TableChat` แถวเดียว ขยาย 3 แถว + คลิปหนีบ + แถบยินยอม | `doing` | Claude Code | `feat/F006-chat-first` | `src/tabletop/ui/TableChat.tsx`, `table-chat.css`, `table-chat-consent.ts` (ใหม่ทั้งหมด) | — | ไม่ชนใคร |
+| F006-T2 | ซ่อนการ์ด Files/Rules เมื่อยังไม่มีของ | `blocked` | — | — | `src/tabletop/runtime/index.ts`, `TableCanvasObjects.tsx` | #24 | รอ F005 merge (ไฟล์เดียวกัน) |
+| F006-T3 | ต่อ `TableChat` แทน `TableAssistant` ในโต๊ะข้อมูล | `blocked` | — | — | `TableSurface.tsx`, `TabletopApp.tsx` | F006-T1, #24 | |
+| F006-T4 | คำตอบแชทเป็นการ์ดบน Canvas + Confirm action | `blocked` | — | — | `CanvasWorkspace.tsx`, `TableCanvasObjects.tsx` | F006-T3, #24 | |
+| F006-T5 | ย้าย browser tests ของ setup + chat ไปใช้แชทใหม่ | `blocked` | — | — | `tests/generic-table-browser.mjs`, `tests/cloudflare-browser.mjs` | F006-T3 | |
+| F006-T6 | คู่มือ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F006-T4 | |
