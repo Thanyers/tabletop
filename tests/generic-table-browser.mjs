@@ -305,7 +305,34 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
   return importedSource;
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls } = {}) {
+// F011: while the provider is held, the card is busy, its glyph orbits (still under reduced motion), and its status is centred.
+async function verifyPendingChatMotion(owner, draftNode, draftCard) {
+  const glyph = draftNode.locator('.tt-object-glyph');
+  await expect(draftCard).toContainText('Preparing a rule draft…');
+  await expect(draftNode).toHaveAttribute('aria-busy', 'true');
+  await expect(glyph).toHaveClass(/\bis-busy\b/u);
+  const motion = () => glyph.evaluate(node => ({
+    orbit: getComputedStyle(node, '::after').animationName,
+    breathe: getComputedStyle(node.querySelector('svg')).animationName,
+    dot: getComputedStyle(node.closest('.tt-canvas-node').querySelector('.tt-chat-dots i')).animationName,
+  }));
+  expect(await motion()).toEqual({ orbit: 'none', breathe: 'none', dot: 'none' });
+  await owner.emulateMedia({ reducedMotion: 'no-preference' });
+  try {
+    await expect.poll(motion).toEqual({ orbit: 'tt-glyph-orbit', breathe: 'tt-glyph-breathe', dot: 'tt-chat-dot' });
+  } finally {
+    await owner.emulateMedia({ reducedMotion: 'reduce' });
+  }
+  const offset = await draftNode.evaluate(node => {
+    const body = node.querySelector('.tt-canvas-node__body').getBoundingClientRect();
+    const text = node.querySelector('.tt-chat-card__pending--working').getBoundingClientRect();
+    return { x: Math.abs((body.left + body.right) / 2 - (text.left + text.right) / 2), y: Math.abs((body.top + body.bottom) / 2 - (text.top + text.bottom) / 2) };
+  });
+  expect(offset.x, JSON.stringify(offset)).toBeLessThanOrEqual(2);
+  expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
+}
+
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, observePending = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
@@ -352,7 +379,9 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   await send.click();
   await expect(consent).toBeVisible();
   for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
-  setTableReply({ change, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  let releaseProvider = () => {};
+  const gate = observePending ? new Promise(resolve => { releaseProvider = resolve; }) : undefined;
+  setTableReply({ change, gate, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -393,7 +422,18 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     : 'A rule draft is ready. Review it before anyone uses it.';
   try {
     await expect(draftCard).toBeVisible({ timeout: 20_000 });
+    if (observePending) {
+      try {
+        await verifyPendingChatMotion(owner, draftNode, draftCard);
+      } finally {
+        releaseProvider();
+      }
+    }
     await expect(draftCard).toContainText(expectedDraftText, { timeout: 20_000 });
+    if (observePending) {
+      await expect(draftNode).not.toHaveAttribute('aria-busy', /.*/u);
+      await expect(draftNode.locator('.tt-object-glyph')).not.toHaveClass(/\bis-busy\b/u);
+    }
   } catch (error) {
     const answerDiagnostics = await owner.getByTestId('table-chat-answer').evaluateAll(cards => cards.map(card => ({
       text: card.textContent?.trim() ?? '',
@@ -1190,7 +1230,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
 async function shiftScenario({ owner, member, newPage, api, setTableReply, mark }) {
   const room = await openNewTable(owner, api);
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
-  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api);
+  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { observePending: true });
   await progressThroughLifecycle(owner, room.id, api, expectedRules.shifts);
   const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
