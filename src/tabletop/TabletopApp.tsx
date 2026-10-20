@@ -820,7 +820,7 @@ export default function TabletopApp() {
   return (
     <LiveCursorProvider value={liveCursors}>
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
-    <div className="tt-app">
+    <div className="tt-app" data-workspace-kind={view?.kind}>
       <header className="tt-topbar">
         <a className="tt-brand" href="/" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
         <span className="tt-topbar__divider" aria-hidden="true" />

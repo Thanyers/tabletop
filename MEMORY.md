@@ -130,6 +130,11 @@
 - **Root cause:** The old interpreter had updates but no typed record creation; matching the word “table” anywhere with “change” confused data changes with program changes.
 - **Correct behavior:** Route clear UI/construction requests to the builder, leave data requests on the confirmation path, and offer an owner-only builder handoff for ambiguous requests with the actor/table/epoch consent retained by F013. Run `npx vitest run src/tabletop/ui/table-build-intent.test.ts src/tabletop/domain/table-record-actions.test.ts`.
 
+### 2026-10-21 — Generic card sizing broke legacy demo geometry
+- **What happened:** F010's first CI run failed the seven-session and public-demo overlap assertions after wider cards and growing bodies were applied globally. The generated Invoice fixture itself passed.
+- **Root cause:** Legacy examples use their established card dimensions; their geometry does not follow the measured layout used by generic tables. Reaching a later CI step also did not prove earlier independent steps passed.
+- **Correct behavior:** Scope the new card rules to `data-workspace-kind="table"`, preserve legacy dimensions, and read actual job/step conclusions. Run `npm run build && npm run build:cloudflare`, then `npm run test:r1:browser`, `npm run test:cloudflare:browser`, and `node scripts/canvas-evolution-local.mjs --auto`. All three browser checks passed locally after the scope fix (7, 25, and 10 checks).
+
 ## Deploy failures
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า
