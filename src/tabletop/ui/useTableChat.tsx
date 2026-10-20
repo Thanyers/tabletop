@@ -6,7 +6,7 @@ import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantRefere
 import type { TableState } from '../shared/table-contracts';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
-import { historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -144,8 +144,9 @@ function proposalIsStale(job: TableAssistantJob, view: TableView): boolean {
 
 function isPendingAction(card: ChatCard, view: TableView): boolean {
   const job = card.job;
-  if (!job || job.status !== 'completed' || job.confirmationStatus !== 'available' || job.result?.kind !== 'action-proposal' || proposalIsStale(job, view)) return false;
-  const action = view.domain.program?.actions.find((item) => item.id === job.result?.actionId);
+  const proposal = job?.result;
+  if (!job || job.status !== 'completed' || job.confirmationStatus !== 'available' || proposal?.kind !== 'action-proposal' || proposalIsStale(job, view)) return false;
+  const action = view.domain.program?.actions.find((item) => item.id === proposal.actionId);
   return Boolean(action && action.roles.includes(view.actor.role as 'owner' | 'participant'));
 }
 
@@ -174,6 +175,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const historyGeneration = useRef(0);
   const requestLock = useRef(false);
   const confirmLocks = useRef(new Set<string>());
+  const draftRefreshLocks = useRef(new Set<string>());
   const isBlockedRef = useRef(false);
   const [explicitDraftScope, setExplicitDraftScope] = useState<string | null>(null);
   const explicitDraftScopeRef = useRef<string | null>(null);
@@ -277,11 +279,29 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   });
   const activePollKey = activePollCards.map((card) => `${card.id}:${card.modelJob?.id ?? card.job?.id ?? ''}:${card.job?.confirmationStatus ?? ''}`).join('|');
 
-  const refreshAfterDraft = useCallback((targetScope: string, cardId: string, workspaceId: string) => {
-    void optionsRef.current.refresh(workspaceId).catch((error: unknown) => {
-      patchCard(targetScope, cardId, { pollError: `The draft is ready, but the table could not refresh: ${errorText(error)}` });
-    });
+  const retryDraftRefresh = useCallback(async (targetScope: string, cardId: string, workspaceId: string) => {
+    const current = viewRef.current;
+    const lockKey = `${targetScope}:${cardId}`;
+    if (!current || !targetScope || targetScope !== scopeRef.current || current.id !== workspaceId || draftRefreshLocks.current.has(lockKey)) return;
+    draftRefreshLocks.current.add(lockKey);
+    patchCard(targetScope, cardId, { checking: true });
+    try {
+      await optionsRef.current.refresh(workspaceId);
+      const latest = viewRef.current;
+      const result = draftRefreshPatch(targetScope, scopeRef.current);
+      if (latest?.id === workspaceId && result) patchCard(targetScope, cardId, result);
+    } catch (error) {
+      const latest = viewRef.current;
+      const result = draftRefreshPatch(targetScope, scopeRef.current, errorText(error));
+      if (latest?.id === workspaceId && result) patchCard(targetScope, cardId, result);
+    } finally {
+      draftRefreshLocks.current.delete(lockKey);
+    }
   }, [patchCard]);
+
+  const refreshAfterDraft = useCallback((targetScope: string, cardId: string, workspaceId: string) => {
+    void retryDraftRefresh(targetScope, cardId, workspaceId);
+  }, [retryDraftRefresh]);
 
   const pollModelOnce = useCallback(async (targetScope: string, cardId: string, workspaceId: string, jobId: string) => {
     const next = await optionsRef.current.pollDraft(workspaceId, jobId);
@@ -485,7 +505,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const confirmCard = useCallback(async (card: ChatCard) => {
     const current = viewRef.current;
     if (!current || !card.job || confirmLocks.current.has(card.id) || !isPendingAction(card, current)) return;
-    const action = card.job.result?.kind === 'action-proposal' ? current.domain.program?.actions.find((item) => item.id === card.job?.result?.actionId) : undefined;
+    const proposal = card.job.result;
+    const action = proposal?.kind === 'action-proposal' ? current.domain.program?.actions.find((item) => item.id === proposal.actionId) : undefined;
     if (!action || !actorHasTurn(current, action.requireTurn) || optionsRef.current.readOnly || optionsRef.current.busy) return;
     const commandId = card.confirmId ?? crypto.randomUUID();
     confirmLocks.current.add(card.id);
@@ -564,11 +585,12 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         onConfirm={() => void confirmCard(card)}
         onRetry={() => void retrySameRequest(card)}
         onCheck={() => void checkStatus(card)}
+        onRetryRefresh={() => void retryDraftRefresh(scope, card.id, table.id)}
         onPrefill={() => prefillCard(card)}
         onDismiss={() => dismiss(card)}
       />,
     }));
-  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, prefillCard, dismiss]);
+  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, dismiss]);
 
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
   const owner = table.actor.role === 'owner';
@@ -603,7 +625,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
 
-function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onPrefill, onDismiss }: {
+function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onDismiss }: {
   card: ChatCard;
   view: TableView;
   readOnly: boolean;
@@ -613,6 +635,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   onConfirm: () => void;
   onRetry: () => void;
   onCheck: () => void;
+  onRetryRefresh: () => void;
   onPrefill: () => void;
   onDismiss: () => void;
 }) {
@@ -639,8 +662,10 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   }
   if (card.kind === 'draft') {
     return <div className="tt-chat-card" data-testid="table-chat-answer">
-      <p><Sparkles size={14} /> A rule draft is ready. Review it before anyone uses it.</p>
-      <button type="button" className="tt-button tt-button--primary" onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}
+      <p><Sparkles size={14} /> {card.pollError ? 'The rule draft is ready, but the table could not refresh.' : 'A rule draft is ready. Review it before anyone uses it.'}</p>
+      {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
+      {card.pollError && <><p className="tt-chat-card__error" role="alert">{card.pollError}</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly || card.checking} onClick={onRetryRefresh}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Retry table refresh</button></>}
+      <button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}
     </div>;
   }
   const job = card.job;

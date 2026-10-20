@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { canApplyWorkspaceRefresh, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
   id: 'a'.repeat(64),
@@ -15,6 +15,18 @@ const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
 });
 
 describe('private table chat recovery state', () => {
+  it('rejects delayed projection reads after reset, seat changes, navigation, or a newer update', () => {
+    const original = { id: 'table-1', epoch: 3, kind: 'table', actor: { actorId: 'actor-a', role: 'participant', seat: 'member-1' } };
+    expect(canApplyWorkspaceRefresh(original, original, original, 4, 4)).toBe(true);
+    expect(canApplyWorkspaceRefresh(original, { ...original, epoch: 4 }, original, 4, 5)).toBe(false);
+    expect(canApplyWorkspaceRefresh(original, original, { ...original, epoch: 2 }, 4, 4)).toBe(false);
+    expect(canApplyWorkspaceRefresh(original, { ...original, actor: { ...original.actor, actorId: 'actor-b' } }, original, 4, 4)).toBe(false);
+    expect(canApplyWorkspaceRefresh(original, original, { ...original, actor: { ...original.actor, role: 'owner' } }, 4, 4)).toBe(false);
+    expect(canApplyWorkspaceRefresh(original, original, { ...original, actor: { ...original.actor, seat: 'member-2' } }, 4, 4)).toBe(false);
+    expect(canApplyWorkspaceRefresh(original, { ...original, id: 'table-2' }, original, 4, 4)).toBe(false);
+    expect(canApplyWorkspaceRefresh(original, null, original, 4, 4)).toBe(false);
+    expect(canApplyWorkspaceRefresh(original, original, original, 4, 5)).toBe(false);
+  });
   it('keeps owner candidate drafting on the proposal endpoint until a program is active', () => {
     expect(tableChatMode('owner', false, false)).toBe('draft');
     expect(tableChatMode('owner', true, false)).toBe('ask');
@@ -25,6 +37,19 @@ describe('private table chat recovery state', () => {
   it('returns an active table to assistant mode when explicit rule editing is cancelled', () => {
     expect(tableChatMode('owner', true, true)).toBe('draft');
     expect(tableChatMode('owner', true, false)).toBe('ask');
+  });
+
+  it('keeps draft refresh failures visible, clears them only on scoped success, and ignores stale results', () => {
+    expect(draftRefreshPatch('table-a:owner', 'table-a:owner', 'Connection lost.')).toEqual({
+      checking: false,
+      pollError: 'The draft is ready, but the table could not refresh: Connection lost.',
+    });
+    expect(draftRefreshPatch('table-a:owner', 'table-a:owner')).toEqual({
+      checking: false,
+      pollError: undefined,
+      pollTimedOut: false,
+    });
+    expect(draftRefreshPatch('table-a:owner', 'table-b:owner')).toBeNull();
   });
 
   it('allows an original-body retry only for the same actor, table, and epoch', () => {
@@ -45,7 +70,7 @@ describe('private table chat recovery state', () => {
       prompt: 'How many orders are open?',
       createdAt: 1_700_000_000_100,
       phase: 'failed',
-      requestCommandId: 'command-1',
+      requestCommandId: '00000000-0000-4000-8000-000000000001',
       requestUncertain: true,
       requestError: 'Connection lost.',
     };
@@ -57,7 +82,7 @@ describe('private table chat recovery state', () => {
     expect(reconciled).toHaveLength(3);
     const unresolved = reconciled.find((card) => card.id === 'answer-command-1');
     expect(unresolved).toMatchObject({
-      requestCommandId: 'command-1',
+      requestCommandId: '00000000-0000-4000-8000-000000000001',
       phase: 'failed',
       requestUncertain: true,
     });
@@ -67,13 +92,13 @@ describe('private table chat recovery state', () => {
   });
 
   it('merges only an exact server job ID and keeps the local card identity', () => {
-    const acknowledged: ChatCard = { id: 'answer-command-2', kind: 'answer', prompt: 'How many orders are open?', createdAt: 1_700_000_000_000, phase: 'waiting', requestCommandId: 'command-2', job: job({ status: 'running', result: undefined }) };
+    const acknowledged: ChatCard = { id: 'answer-command-2', kind: 'answer', prompt: 'How many orders are open?', createdAt: 1_700_000_000_000, phase: 'waiting', requestCommandId: '00000000-0000-4000-8000-000000000002', job: job({ status: 'running', result: undefined }) };
     const updated = historyCard(job({ status: 'completed' }), 'answer-history-copy');
 
     const merged = mergeChatHistory([acknowledged], [updated]);
 
     expect(merged).toHaveLength(1);
-    expect(merged[0]).toMatchObject({ id: 'answer-command-2', requestCommandId: 'command-2', phase: 'complete', job: { status: 'completed' } });
+    expect(merged[0]).toMatchObject({ id: 'answer-command-2', requestCommandId: '00000000-0000-4000-8000-000000000002', phase: 'complete', job: { status: 'completed' } });
   });
 
   it('rehydrates running and failed server states instead of discarding them', () => {

@@ -206,16 +206,27 @@ async function openNewTable(owner, api) {
   return view;
 }
 
-async function addSource(page, tableId, source, api, method = 'chat', { aiDisabled = false } = {}) {
+async function addSource(page, tableId, source, api, method = 'chat', { aiDisabled = false, failHistory = false } = {}) {
   const chat = page.getByTestId('table-chat-bar');
   await expect(chat).toBeVisible();
   const capabilitiesRoute = url => new URL(url).pathname === '/api/capabilities';
+  const historyRoute = url => {
+    const parsed = new URL(url);
+    return parsed.pathname === `/api/workspaces/${tableId}/assistant` && parsed.searchParams.has('limit');
+  };
   if (aiDisabled) {
     await page.route(capabilitiesRoute, route => route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ uploads: true, tableReadOnly: false, tableAssistant: { available: true }, model: { enabled: false, reason: 'AI disabled for this fixture.' } }),
     }));
+    if (failHistory) {
+      await page.route(historyRoute, route => route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Synthetic private history read failure.' }),
+      }));
+    }
     await page.reload();
     await expect(page.getByTestId('table-chat-bar')).toBeVisible();
     const disabledChat = page.getByTestId('table-chat-bar');
@@ -224,6 +235,7 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
     await expect(disabledComposer).toHaveValue('Keep this message ready while AI is off.');
     await expect(disabledChat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
     await expect(disabledChat.getByRole('button', { name: 'Attach a file', exact: true })).toBeEnabled();
+    if (failHistory) await expect(disabledChat.getByRole('alert')).toContainText('Private conversation history could not be loaded.');
   }
   const sourceCountBefore = (await api(page, `/api/workspaces/${tableId}`)).body.domain.sources.length;
   let importRequests = 0;
@@ -270,6 +282,7 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
   if (aiDisabled) {
     expect(modelRequests).toBe(0);
     await page.unroute(capabilitiesRoute);
+    if (failHistory) await page.unroute(historyRoute);
     await page.reload();
     await expect(page.getByTestId('table-chat-bar')).toBeVisible();
   }
@@ -278,7 +291,7 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
   return importedSource;
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api) {
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls } = {}) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
   expect(sourceNames.length).toBeGreaterThan(0);
@@ -322,13 +335,52 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   await expect(consent).toBeVisible();
   for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
   setTableReply({ change, expectedSources: before.domain.sources.map(item => ({ filename: item.filename, text: item.text })) });
+  let modelAccepted = false;
+  let failedDraftRefresh = false;
+  let workspaceRefreshRequests = 0;
+  const workspaceRoute = async route => {
+    if (route.request().method() === 'GET' && modelAccepted) {
+      workspaceRefreshRequests += 1;
+      if (failDraftRefresh && !failedDraftRefresh) {
+        failedDraftRefresh = true;
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Synthetic draft refresh failure.' }),
+        });
+        return;
+      }
+    }
+    await route.continue();
+  };
+  const workspaceUrl = `**/api/workspaces/${tableId}`;
+  if (failDraftRefresh) await owner.route(workspaceUrl, workspaceRoute);
+  const providerCallsBefore = failDraftRefresh ? getProviderCalls() : undefined;
   const modelResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   void modelResponse.catch(() => {});
   await consent.getByRole('button', { name: 'Send', exact: true }).click();
   const accepted = await modelResponse;
   expect(accepted.status()).toBe(202);
+  modelAccepted = true;
   const draftCard = owner.getByTestId('table-chat-answer').filter({ hasText: 'A rule draft is ready' }).first();
   await expect(draftCard).toBeVisible({ timeout: 20_000 });
+  if (failDraftRefresh) {
+    const retryRefresh = draftCard.getByRole('button', { name: 'Retry table refresh', exact: true });
+    await expect(draftCard.getByRole('alert')).toBeVisible({ timeout: 20_000 });
+    await expect(retryRefresh).toBeVisible();
+    expect(failedDraftRefresh).toBe(true);
+    expect(workspaceRefreshRequests).toBe(1);
+    expect(getProviderCalls()).toBe(providerCallsBefore + 1);
+    const refreshResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
+    void refreshResponse.catch(() => {});
+    await retryRefresh.click();
+    expect((await refreshResponse).status()).toBe(200);
+    await expect(retryRefresh).toHaveCount(0);
+    expect(workspaceRefreshRequests).toBe(2);
+    expect(modelRequests).toBe(1);
+    expect(getProviderCalls()).toBe(providerCallsBefore + 1);
+    await owner.unroute(workspaceUrl, workspaceRoute);
+  }
   await draftCard.getByRole('button', { name: 'Review rules', exact: true }).click();
   await expect(owner.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', 'table.rules');
   owner.off('request', countModelRequests);
@@ -710,12 +762,12 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await mobileComposer.fill('');
   await owner.setViewportSize({ width: 1280, height: 820 });
   const source = await addSource(owner, room.id, fixtures.equipment, api, 'chat', { aiDisabled: true });
-  await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api);
+  await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api, { failDraftRefresh: true, getProviderCalls });
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
   const callsBeforeSecondSource = getProviderCalls();
-  await addSource(owner, room.id, equipmentNotes, api);
+  await addSource(owner, room.id, equipmentNotes, api, 'chat', { aiDisabled: true, failHistory: true });
   expect(getProviderCalls()).toBe(callsBeforeSecondSource);
   const ownerRules = await openCanvasObject(owner, 'table.rules');
   await ownerRules.getByRole('button', { name: 'Edit rules', exact: true }).click();

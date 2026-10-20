@@ -10,6 +10,7 @@ import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/Workb
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
+import { canApplyWorkspaceRefresh, sameChatRequestScope } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
@@ -617,8 +618,21 @@ export default function TabletopApp() {
   const loadAdminWorkspaces = useCallback((after?: string) => tabletopClient.adminWorkspaces(after), []);
 
   const refreshWorkspaceProjection = useCallback(async (workspaceId: string) => {
-    const latest = await tabletopClient.workspace(workspaceId);
-    if (workspaceRef.current?.id === workspaceId) setWorkspace(latest);
+    const expected = workspaceRef.current;
+    if (!expected || expected.id !== workspaceId) throw new ApiFailure('The current table changed before it could be refreshed.', 409, 'STALE_EPOCH');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const requestSequence = projectionSequenceRef.current;
+      const latest = await tabletopClient.workspace(workspaceId);
+      const current = workspaceRef.current;
+      if (!current || !sameChatRequestScope(expected, current) || !sameChatRequestScope(expected, latest)) {
+        throw new ApiFailure('The table or seat changed while refreshing. Open the current table before continuing.', 409, 'STALE_EPOCH');
+      }
+      if (canApplyWorkspaceRefresh(expected, current, latest, requestSequence, projectionSequenceRef.current)) {
+        setWorkspace(latest);
+        return;
+      }
+    }
+    throw new ApiFailure('The table kept changing while refreshing. Try the refresh again.', 409, 'STALE_REVISION');
   }, [setWorkspace]);
 
   const download = useCallback(async (format: 'csv' | 'html') => {

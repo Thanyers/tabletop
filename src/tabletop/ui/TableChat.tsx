@@ -60,8 +60,8 @@ export function TableChat({
   const scopeKey = consentKey(scope);
   const trimmed = message.trim();
   const historyBlocked = mode === 'ask' && historyStatus !== 'ready';
-  const controlsBusy = busy || sending || attaching || historyBlocked;
-  const canSend = aiEnabled && !controlsBusy && trimmed.length >= 3;
+  const controlsBusy = busy || sending || attaching;
+  const canSend = aiEnabled && !controlsBusy && !historyBlocked && trimmed.length >= 3;
 
   useEffect(() => {
     setGrantedKey(null);
@@ -93,7 +93,7 @@ export function TableChat({
   }, [message]);
 
   const send = async () => {
-    if (sendLock.current || !trimmed) return;
+    if (sendLock.current || !canSend) return;
     sendLock.current = true;
     setAsking(false);
     setSending(true);
@@ -148,7 +148,7 @@ export function TableChat({
         </ul> : <small>No private source files are attached.</small>}
       </div>
       <div className="tt-table-chat-bar__consent-actions">
-        <button type="button" className="tt-table-chat-bar__consent-yes" disabled={sending || busy} onClick={() => { setGrantedKey(scopeKey); void send(); }}>Send</button>
+        <button type="button" className="tt-table-chat-bar__consent-yes" disabled={!canSend} onClick={() => { setGrantedKey(scopeKey); void send(); }}>Send</button>
         <button type="button" className="tt-table-chat-bar__consent-no" onClick={() => { setAsking(false); fieldRef.current?.focus(); }}>Cancel</button>
       </div>
     </div>}

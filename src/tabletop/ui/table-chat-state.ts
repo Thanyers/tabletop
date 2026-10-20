@@ -10,7 +10,7 @@ export interface ChatRequestScope {
   id: string;
   epoch: number;
   kind: string;
-  actor: { actorId: string; role: string };
+  actor: { actorId: string; role: string; seat?: string };
 }
 
 /** Same-command retries may use an older revision only for the same seat and table epoch. */
@@ -19,7 +19,22 @@ export function sameChatRequestScope(snapshot: ChatRequestScope, current: ChatRe
     && snapshot.epoch === current.epoch
     && snapshot.kind === current.kind
     && snapshot.actor.actorId === current.actor.actorId
-    && snapshot.actor.role === current.actor.role;
+    && snapshot.actor.role === current.actor.role
+    && snapshot.actor.seat === current.actor.seat;
+}
+
+/** A delayed read may not replace a newer projection or a different private scope. */
+export function canApplyWorkspaceRefresh(
+  expected: ChatRequestScope,
+  current: ChatRequestScope | null,
+  received: ChatRequestScope,
+  requestSequence: number,
+  currentSequence: number,
+): boolean {
+  return current !== null
+    && requestSequence === currentSequence
+    && sameChatRequestScope(expected, current)
+    && sameChatRequestScope(expected, received);
 }
 
 export interface ChatCard {
@@ -28,7 +43,7 @@ export interface ChatCard {
   prompt: string;
   createdAt: number;
   phase: 'sending' | 'waiting' | 'complete' | 'failed';
-  requestCommandId?: string;
+  requestCommandId?: ReturnType<typeof crypto.randomUUID>;
   /** In-memory snapshot used only to retry an uncertain request with its original body. */
   requestView?: WorkspaceView;
   requestUncertain?: boolean;
@@ -39,7 +54,7 @@ export interface ChatCard {
   pollError?: string;
   pollTimedOut?: boolean;
   checking?: boolean;
-  confirmId?: string;
+  confirmId?: ReturnType<typeof crypto.randomUUID>;
   confirming?: boolean;
   confirmationPending?: boolean;
   confirmationError?: string;
@@ -97,4 +112,12 @@ export function mergeChatHistory(current: readonly ChatCard[], incoming: readonl
 
 export function isUncertainRequest(card: ChatCard): boolean {
   return card.requestUncertain === true && !card.job && !card.modelJob;
+}
+
+/** Apply draft-refresh results only while they still belong to the current private table scope. */
+export function draftRefreshPatch(targetScope: string, currentScope: string, error?: string): Pick<ChatCard, 'checking' | 'pollError' | 'pollTimedOut'> | null {
+  if (!targetScope || targetScope !== currentScope) return null;
+  return error
+    ? { checking: false, pollError: `The draft is ready, but the table could not refresh: ${error}` }
+    : { checking: false, pollError: undefined, pollTimedOut: false };
 }
