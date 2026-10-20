@@ -540,16 +540,19 @@ async function nodeTransforms(page, ids) {
 
 async function verifyLiveCursor(owner, member) {
   // F009: the owner's pointer appears on the member's canvas with the owner's name, then leaves.
-  const ownerName = (await owner.evaluate(async () => (await (await fetch('/api/session')).json()).name)) ?? '';
+  const ownerSession = await owner.evaluate(async () => (await fetch('/api/session')).json());
+  const ownerName = ownerSession?.name ?? '';
   const box = await owner.getByTestId('canvas-object-workspace').boundingBox();
   if (!box) throw new Error('Owner canvas is not visible.');
-  const cursor = member.getByTestId('live-cursor');
+  // The member's own pointer may still rest on its canvas from earlier clicks; move it away first.
+  await member.mouse.move(0, 0);
+  const cursor = member.locator(`[data-testid="live-cursor"][data-actor-id="${ownerSession.actorId}"]`);
   await expect.poll(async () => {
     await owner.mouse.move(box.x + box.width / 2 + Math.random() * 40, box.y + box.height / 2);
     return cursor.count();
   }, { timeout: 10_000 }).toBe(1);
   if (ownerName) await expect(cursor).toContainText(ownerName);
-  await expect(owner.getByTestId('live-cursor')).toHaveCount(0);
+  await expect(owner.locator(`[data-testid="live-cursor"][data-actor-id="${ownerSession.actorId}"]`)).toHaveCount(0);
   await owner.mouse.move(box.x + box.width + 40, box.y - 40);
   await expect(cursor).toHaveCount(0);
 }
