@@ -35,6 +35,16 @@
 - **Root cause:** Node runtime (`npm start`) ไม่มี `/api/auth/status` จึงเป็น guest เสมอ · ล็อกอิน Google มีเฉพาะ Worker · emulator ตอบ `ORIGIN_REJECTED` ถ้าเปิดผ่าน `localhost` เพราะ `PUBLIC_ORIGIN` คือ `http://127.0.0.1:8787` · ไม่มี OAuth client จะได้ `503 LOGIN_UNAVAILABLE`
 - **Correct behavior:** `npm run build` → `npx wrangler d1 migrations apply DB --local` (ห้าม `--remote`) → ใส่ `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` ใน `.dev.vars` (ignored) โดย OAuth client ต้องมี redirect URI `http://127.0.0.1:8787/api/auth/google/callback` → `npm run dev:cloudflare` → เปิด `http://127.0.0.1:8787` เท่านั้น
 
+### 2026-10-20 — `pkill -f` ปิดเซิร์ฟเวอร์ของคนอื่นไปด้วย
+- **What happened:** ปิดเซิร์ฟเวอร์ทดสอบของตัวเองที่ `:4319` ด้วย `pkill -f "node --import tsx server/bootstrap.ts"` แล้วเซิร์ฟเวอร์ preview `:4310` ของผู้ใช้หยุดไปด้วย
+- **Root cause:** ทุกเซิร์ฟเวอร์ Node ของโปรเจกต์รันด้วยคำสั่งเดียวกัน · `pkill -f` จับตามข้อความคำสั่ง ไม่ใช่ตาม port
+- **Correct behavior:** ปิดตาม port เท่านั้น: `kill $(lsof -tiTCP:<port> -sTCP:LISTEN)` · เซิร์ฟเวอร์ที่เปิดผ่าน browser pane ให้ปิดด้วย `preview_stop`
+
+### 2026-10-20 — หลาย session ใช้โฟลเดอร์ repo เดียวกัน
+- **What happened:** session อื่นสลับ checkout ไป `chore/eslint-husky` และแก้ `node_modules` ระหว่างที่งานนี้รออยู่ · commit ของงานนี้ไปลงผิด branch และ emulator ที่รันจากโฟลเดอร์หลักล้มเพราะหา `zod` ไม่เจอ
+- **Root cause:** หลาย agent ทำงานในโฟลเดอร์เดียวกันพร้อมกัน
+- **Correct behavior:** ทำงานใน worktree ของตัวเอง: `git worktree add .claude/worktrees/<ชื่อ> -b <branch> origin/dev` แล้ว `npm ci --ignore-scripts` ในนั้น · ก่อน commit ทุกครั้งรัน `git branch --show-current` ให้แน่ใจว่าเป็น branch ของงานนี้
+
 ## Deploy failures
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า

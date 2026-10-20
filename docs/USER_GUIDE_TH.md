@@ -30,6 +30,8 @@
 
 ## สร้างโต๊ะจากไฟล์ของตัวเอง
 
+กด **Start a new table** ที่หน้าแรก หรือเลือก **New table** จากเมนูโต๊ะด้านบน จะเข้าหน้าเริ่ม (`/new`) ที่มี 3 ทาง: กดการ์ดโต๊ะสำเร็จรูปเพื่อเปิดโต๊ะตัวอย่าง · พิมพ์ว่าอยากทำอะไรแล้วกด **Start with this** เพื่อสร้างโต๊ะข้อมูลว่างที่มีข้อความนั้นรออยู่ในช่องร่างกฎ · หรือกด **Start empty with your own files** แล้วทำตามขั้นตอนด้านล่าง
+
 1. เปิด [แอปหลัก](https://tabletop.ptchrr.workers.dev/) แล้วกด **Continue with Google**; หน้าเริ่มโต๊ะถาม **What are you here to do?** และบอก **Start with what you're working on. Your table will take shape around it.** ถ้ากลับมาที่โต๊ะเดิม ให้กด **All tables** เพื่อกลับมาหน้าเริ่มโต๊ะ
 2. เลือก **Start with your files** เพื่อเริ่มโต๊ะว่าง หรือเปิด **Or explore what a table can become** แล้วเลือกการ์ดตัวอย่าง
 3. ลากไฟล์ลง Canvas หรือเปิด **Set up** แล้วกด **Attach a file** รองรับ UTF-8 `.csv`, `.json`, `.txt`, `.md` เท่านั้น: **32 KiB ต่อไฟล์, ไม่เกิน 4 ไฟล์, รวม 64 KiB**
