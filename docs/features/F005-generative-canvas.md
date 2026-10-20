@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — [PR #24](https://github.com/Thanyers/tabletop/pull/24), local implementation/acceptance ผ่าน |
+| สถานะ | `done` — [PR #24](https://github.com/Thanyers/tabletop/pull/24) merge เข้า dev; post-merge CI ที่ f0be463 ผ่าน; ยังไม่ deploy |
 | เจ้าของฟีเจอร์ | Codex; runtime, renderer, layout แบ่ง ownership และ main รวมผล |
 | เวอร์ชันที่คาด | เสนอ MAJOR ตามเกณฑ์ rollback: ห้องที่บันทึก AST ใหม่ต้องใช้ compatible writer; รอคนเคาะเลข release |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F005-T1` |

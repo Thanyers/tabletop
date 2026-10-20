@@ -5,6 +5,31 @@
 
 ## Lessons
 
+### 2026-10-20 — การบันทึกตำแหน่งพื้นหลังต้องไม่ล็อกแชท
+- **What happened:** แชทพร้อมส่งและ AI เปิดอยู่ แต่หลังขยับการ์ด textarea กับ Send ถูกปิดจนผลบันทึกตำแหน่งกลับมา
+- **Root cause:** `canvas.layout` ใช้ busy state เดียวกับคำสั่งเล่น ทั้งที่มีคิวและ revision แยกอยู่แล้ว; ผลตอบรับของ layout ยังอาจล้าง busy ของคำสั่งอื่น
+- **Correct behavior:** ให้ layout ไม่ตั้งหรือล้าง foreground busy และคง queue/CAS/scope guards เดิม; รัน `npm run build`, `npm run build:cloudflare`, `npm run test:cloudflare:browser` โดยกรณี regression ต้องค้าง ACK ที่เซิร์ฟเวอร์รับแล้ว ตรวจว่า Send เปิด consent ได้ และ Cancel ไม่ส่งคำขอ AI
+
+### 2026-10-20 — Browser harness ต้องเดินตามมุมมองปัจจุบันของ Canvas
+- **What happened:** หลังรวมผังร่วม เทสต์วัดการซูมระหว่างที่ระบบยังบันทึกผังเริ่มต้น; เทสต์ Retry พยายามกดการ์ดที่พ้นจอหลังเปิดวัตถุอื่น และเทสต์ Reset กดปิดเมนูที่เปิดอยู่แล้ว
+- **Root cause:** สมมติว่าผังเริ่มต้นจบแล้ว การ์ดเดิมยังอยู่ในจอ และเมนูเริ่มปิดเสมอ; ชื่อดิบ `Shared Table` อาจต่างจากชื่อโปรแกรมที่ผู้ใช้เห็น
+- **Correct behavior:** รอ shared positions ก่อนเก็บ baseline, เปิดการ์ดผ่าน Objects, ตั้งสถานะเมนูตามที่อ่านได้จริง และใช้ชื่อโต๊ะที่แสดง; คง full-domain equality, zero-mutation, explicit consent และ retry payload assertions แล้วรัน `npm run test:cloudflare:browser` กับ `npm run test:generative:browser`
+
+### 2026-10-20 — ผังร่วมต้องรองรับโต๊ะว่างและไม่เผยร่างส่วนตัว
+- **What happened:** การจัดผังครั้งเดียวจำว่าเสร็จก่อนมี shared card หรือก่อนตอบรับ ทำให้การ์ดที่เพิ่มทีหลังไม่ถูกแชร์; Rules ก่อนเปิดใช้ถูกอนุญาตให้มี geometry ร่วมทั้งที่เนื้อหาร่างเป็นของเจ้าของ
+- **Root cause:** ใช้ room key เป็นตัวจบการ seed แทนผลยืนยันรายวัตถุ และเลือก shared ID โดยไม่ดูว่ากฎเปิดใช้แล้วหรือยัง
+- **Correct behavior:** seed เฉพาะ shared cards ที่ยังไม่มีตำแหน่งตาม scope ปัจจุบันและผลยืนยัน; เก็บ Rules ก่อนเปิดใช้เป็นส่วนตัวทั้ง UI/authority/projection แล้วรัน `npx vitest run src/tabletop/domain/canvas-layout.test.ts`, `npm run test:cloudflare:browser` และ `npm run test:generative:browser` บน bundle เดียวกัน
+
+### 2026-10-20 — Retry แชทต้องใช้คำขอเดิม และผล refresh ต้องตรงกับผู้ใช้ปัจจุบัน
+- **What happened:** การส่งที่ไม่ทราบผลอาจเกิดก่อน revision เปลี่ยน และ projection ที่โหลดช้าอาจกลับมาหลัง reset หรือเปลี่ยนผู้ใช้
+- **Root cause:** ใช้ command ID เดิมแต่สร้าง body จาก view ใหม่ หรือเทียบเพียง room ID ก่อนติดตั้งผลโหลด ไม่พอสำหรับ idempotency และการแยกข้อมูล
+- **Correct behavior:** เก็บ request snapshot ในหน่วยความจำเพื่อ retry ด้วย body เดิม; ตรวจ room/epoch/actor/role/seat และลำดับ projection ก่อนใช้ผล refresh แล้วรัน `npx vitest run src/tabletop/ui/table-chat-state.test.ts` กับ `npm run test:cloudflare:browser`
+
+### 2026-10-20 — เทสต์แชทใหม่ต้องตรวจขอบเขตข้อมูลจริงและ Canvas ว่าง
+- **What happened:** เทสต์เดิมคาดคำว่า current table และ ReactFlow ตั้งแต่โต๊ะว่าง ขณะที่ UI ระบุ active rules/records/turn และยังไม่มี node; copy ฝั่งถามโต๊ะบอก recent ทั้งที่ดึงข้อความเก่าที่เกี่ยวข้องได้
+- **Root cause:** นำสมมติฐานจากแชทเก่ามาใช้กับ F006 และสรุป context scope ไม่ตรงกับตัวเลือกความจำ
+- **Correct behavior:** ตรวจชื่อไฟล์จริง, การรวม/ไม่รวมประวัติ, การใช้บทสนทนาเก่าที่เกี่ยวข้อง และขอบเขต Canvas ก่อนมี node; รัน `npm run build`, `npm run build:cloudflare`, `npm run test:cloudflare:browser`, `npm run test:generative:browser` ตามลำดับ โดยไม่ใช้ force-click หรือเปลี่ยนผลธุรกิจที่คาด
+
 ### 2026-10-20 — ทุกทางเข้า Assistant ต้องกางแชทที่ย่ออยู่ได้
 - **What happened:** หลังรวมแชท island ปุ่ม Write a message บน Canvas พยายามโฟกัส textarea ที่ซ่อนอยู่และไม่เปิดแชทกลับมา
 - **Root cause:** ปุ่มไอคอนใช้ expand handler แต่ปุ่มบนการ์ดใช้เฉพาะ DOM focus

@@ -170,10 +170,17 @@ async function openCanvasObject(page, id) {
   return editor;
 }
 
-async function refreshTable(page, tableId) {
+async function setTableOptionsOpen(page, open) {
   const options = page.locator('.tt-table-options');
-  if (await options.getAttribute('open') === null) await options.locator('summary').click();
-  await expect(options).toHaveAttribute('open', '');
+  const isOpen = await options.getAttribute('open') !== null;
+  if (isOpen !== open) await options.locator('summary').click();
+  if (open) await expect(options).toHaveAttribute('open', '');
+  else await expect(options).not.toHaveAttribute('open');
+}
+
+async function refreshTable(page, tableId) {
+  await setTableOptionsOpen(page, true);
+  const options = page.locator('.tt-table-options');
   const refreshed = page.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
   await options.getByRole('button', { name: 'Refresh table', exact: true }).click();
   const response = await refreshed;
@@ -199,19 +206,44 @@ async function openNewTable(owner, api) {
   await expect(workspacePicker).toHaveAttribute('aria-expanded', 'true');
   await expect(owner.locator('.tt-workspace-menu')).toBeVisible();
   await owner.getByRole('button', { name: 'Close table menu', exact: true }).click();
-  const assistant = owner.getByTestId('table-assistant');
-  await expect(assistant.getByRole('button', { name: 'Set up this table from sources', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  const dock = await openObjectsMenu(owner);
-  await expect(dock.getByTestId('open-canvas-table.sources')).toHaveText('Files');
-  await expect(dock.getByTestId('open-canvas-table.rules')).toHaveText('Rules');
-  await owner.getByTestId('canvas-object-menu-trigger').click();
+  await expect(owner.getByTestId('table-chat-bar')).toBeVisible();
+  await expect(owner.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible();
+  await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
   expect((await api(owner, `/api/workspaces/${view.id}`)).body.kind).toBe('table');
   return view;
 }
 
-async function addSource(page, tableId, source, api, method = 'assistant') {
-  const assistant = page.getByTestId('table-assistant');
-  await expect(assistant).toBeVisible();
+async function addSource(page, tableId, source, api, method = 'chat', { aiDisabled = false, failHistory = false, onCapabilitiesReady } = {}) {
+  const chat = page.getByTestId('table-chat-bar');
+  await expect(chat).toBeVisible();
+  const capabilitiesRoute = url => new URL(url).pathname === '/api/capabilities';
+  const historyRoute = url => {
+    const parsed = new URL(url);
+    return parsed.pathname === `/api/workspaces/${tableId}/assistant` && parsed.searchParams.has('limit');
+  };
+  if (aiDisabled) {
+    await page.route(capabilitiesRoute, route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ uploads: true, tableReadOnly: false, tableAssistant: { available: true }, model: { enabled: false, reason: 'AI disabled for this fixture.' } }),
+    }));
+    if (failHistory) {
+      await page.route(historyRoute, route => route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Synthetic private history read failure.' }),
+      }));
+    }
+    await page.reload();
+    await expect(page.getByTestId('table-chat-bar')).toBeVisible();
+    const disabledChat = page.getByTestId('table-chat-bar');
+    const disabledComposer = disabledChat.getByRole('textbox', { name: 'Message', exact: true });
+    await disabledComposer.fill('Keep this message ready while AI is off.');
+    await expect(disabledComposer).toHaveValue('Keep this message ready while AI is off.');
+    await expect(disabledChat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    await expect(disabledChat.getByRole('button', { name: 'Attach a file', exact: true })).toBeEnabled();
+    if (failHistory) await expect(disabledChat.getByRole('alert')).toContainText('Private conversation history could not be loaded.');
+  }
   const sourceCountBefore = (await api(page, `/api/workspaces/${tableId}`)).body.domain.sources.length;
   let importRequests = 0;
   let modelRequests = 0;
@@ -228,33 +260,25 @@ async function addSource(page, tableId, source, api, method = 'assistant') {
   page.on('request', trackImport);
   const imported = page.waitForResponse((response) => isCommandResponse(response, 'table.import'));
   if (method === 'drop') {
-    const editor = await openCanvasObject(page, 'table.sources');
-    await expect(editor).toHaveAttribute('data-canvas-object', 'table.sources');
     await page.evaluate(({ filename, text }) => {
-      const zone = document.querySelector('.tt-table-dropzone');
-      if (!zone) throw new Error('Expanded source file drop area is missing.');
+      const zone = document.querySelector('.tt-canvas-panel');
+      if (!zone) throw new Error('Canvas file drop area is missing.');
       const transfer = new DataTransfer();
       transfer.items.add(new File([text], filename, { type: filename.endsWith('.json') ? 'application/json' : 'text/plain' }));
       zone.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: transfer }));
       zone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
     }, source);
   } else {
-    const prompt = assistant.getByLabel('How should this table work?');
+    const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
     const retainedPrompt = 'Keep this request while I attach the source.';
     await prompt.fill(retainedPrompt);
-    await assistant.getByLabel('Choose table source files').setInputFiles({ name: source.filename, mimeType: source.filename.endsWith('.json') ? 'application/json' : 'text/plain', buffer: Buffer.from(source.text, 'utf8') });
+    await chat.getByLabel('Choose a file to attach', { exact: true }).setInputFiles({ name: source.filename, mimeType: source.filename.endsWith('.json') ? 'application/json' : 'text/plain', buffer: Buffer.from(source.text, 'utf8') });
     await expect(prompt).toHaveValue(retainedPrompt);
   }
   const response = await imported;
   expect(response.status()).toBe(200);
-  await expect(assistant).toContainText(source.filename);
   expect(modelRequests).toBe(0);
-  if (method === 'assistant') expect(importRequests).toBe(1);
-  if (method === 'drop') {
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(250);
-    expect(importRequests).toBe(1);
-  }
+  expect(importRequests).toBe(1);
   page.off('request', trackImport);
   const current = await api(page, `/api/workspaces/${tableId}`);
   expect(current.status).toBe(200);
@@ -262,36 +286,163 @@ async function addSource(page, tableId, source, api, method = 'assistant') {
   const importedSource = current.body.domain.sources.find((item) => item.filename === source.filename && item.text === source.text);
   expect(importedSource).toBeTruthy();
   expect(assistantRequests).toBe(0);
+  if (aiDisabled) {
+    expect(modelRequests).toBe(0);
+    await page.unroute(capabilitiesRoute);
+    if (failHistory) await page.unroute(historyRoute);
+    const capabilitiesReady = page.waitForResponse(response => response.url().endsWith('/api/capabilities') && response.request().method() === 'GET');
+    void capabilitiesReady.catch(() => {});
+    await page.reload();
+    const capabilitiesResponse = await capabilitiesReady;
+    expect(capabilitiesResponse.status()).toBe(200);
+    const restoredCapabilities = await capabilitiesResponse.json();
+    expect(restoredCapabilities.model?.enabled).toBe(true);
+    onCapabilitiesReady?.({ receivedAt: Date.now(), modelEnabled: restoredCapabilities.model.enabled });
+    await expect(page.getByTestId('table-chat-bar')).toBeVisible();
+  }
+  const sourceObject = await openCanvasObject(page, 'table.sources');
+  await expect(sourceObject).toContainText(source.filename);
   return importedSource;
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api) {
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls } = {}) {
+  const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  const assistant = owner.getByTestId('table-assistant');
-  await expect(assistant).toBeVisible();
-  const rulesMode = assistant.getByRole('button', { name: before.domain.program ? 'Open rules and sources' : 'Set up this table from sources', exact: true });
-  await expect(rulesMode).toBeVisible();
-  await expect(rulesMode).toHaveText(before.domain.program ? 'Rules' : 'Set up');
-  if (await rulesMode.getAttribute('aria-pressed') !== 'true') await rulesMode.click();
-  const consentCopy = assistant.locator('.tt-ai-proposal__privacy');
-  await expect(consentCopy).not.toHaveAttribute('open', '');
-  await consentCopy.locator('summary').click();
-  await expect(consentCopy).toContainText('Your prompt, current rules, shared records, and all 1 private source file on this table go to the AI provider after you agree.');
-  await expect(consentCopy).toContainText('Member profiles and activity are excluded.');
-  await expect(consentCopy).toContainText('Review the generated rules, views and records before sharing them through activation.');
-  await assistant.getByLabel('How should this table work?').fill('Build a shared table from the source, with bounded actions and checks.');
-  const ask = assistant.getByRole('button', { name: 'Prepare rule draft', exact: true });
-  await expect(ask).toBeDisabled();
-  await assistant.getByLabel('Send this request, table state and 1 source file to AI.', { exact: true }).check();
-  setTableReply({ change, expectedFilename: source.filename, expectedText: source.text });
-  await ask.click();
-  await expect(assistant.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(assistant.getByLabel('Send this request, table state and 1 source file to AI.', { exact: true })).not.toBeChecked();
-  await expect(ask).toBeDisabled();
+  const sourceNames = before.domain.sources.map(item => item.filename);
+  expect(sourceNames.length).toBeGreaterThan(0);
+  expect(sourceNames).toContain(source.filename);
+  const editingActiveRules = Boolean(before.domain.program || before.domain.candidate?.status === 'active');
+  if (editingActiveRules) {
+    const rules = await openCanvasObject(owner, 'table.rules');
+    await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+  }
+  const chat = owner.getByTestId('table-chat-bar');
+  const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
+  const send = chat.getByRole('button', { name: 'Send message', exact: true });
+  if (editingActiveRules) {
+    const cancelRuleEdit = chat.getByRole('button', { name: 'Cancel rule edit', exact: true });
+    await expect(cancelRuleEdit).toBeVisible();
+    await prompt.fill('Discard this unsent rule edit.');
+    await cancelRuleEdit.click();
+    await expect(prompt).toHaveValue('');
+    await expect(cancelRuleEdit).toHaveCount(0);
+    const rules = await openCanvasObject(owner, 'table.rules');
+    await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+  }
+  const proposalPrompt = 'Build a shared table from the source, with bounded actions and checks.';
+  await prompt.fill(proposalPrompt);
+  let modelRequests = 0;
+  const countModelRequests = request => {
+    if (request.method() === 'POST' && request.url().endsWith(`/api/workspaces/${tableId}/model`)) modelRequests += 1;
+  };
+  owner.on('request', countModelRequests);
+  const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+  await send.click();
+  await expect(consent).toBeVisible();
+  const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
+  expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
+  expect(copy).toContain('Private source files included');
+  expect(copy).toContain('Chat history is not included.');
+  for (const filename of sourceNames) expect(copy).toContain(filename);
+  expect(modelRequests).toBe(0);
+  await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(consent).toHaveCount(0);
+  await expect(prompt).toHaveValue('Build a shared table from the source, with bounded actions and checks.');
+  expect(modelRequests).toBe(0);
+  await send.click();
+  await expect(consent).toBeVisible();
+  for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
+  setTableReply({ change, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  let modelAccepted = false;
+  let failedDraftRefresh = false;
+  let workspaceRefreshRequests = 0;
+  const workspaceRoute = async route => {
+    if (route.request().method() === 'GET' && modelAccepted) {
+      workspaceRefreshRequests += 1;
+      if (failDraftRefresh && !failedDraftRefresh) {
+        failedDraftRefresh = true;
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Synthetic draft refresh failure.' }),
+        });
+        return;
+      }
+    }
+    await route.continue();
+  };
+  const workspaceUrl = `**/api/workspaces/${tableId}`;
+  if (failDraftRefresh) await owner.route(workspaceUrl, workspaceRoute);
+  const providerCallsBefore = failDraftRefresh ? getProviderCalls() : undefined;
+  const modelResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
+  void modelResponse.catch(() => {});
+  await consent.getByRole('button', { name: 'Send', exact: true }).click();
+  let accepted;
+  try {
+    accepted = await modelResponse;
+  } catch (error) {
+    throw new Error(`${stepLabel}: model POST did not return`, { cause: error });
+  }
+  expect(accepted.status()).toBe(202);
+  const acceptedJob = await accepted.json();
+  modelAccepted = true;
+  const draftNode = owner.getByRole('article', { name: /^Build a shared table from the source, with/iu }).first();
+  const draftCard = draftNode.getByTestId('table-chat-answer');
+  const expectedDraftText = failDraftRefresh
+    ? 'The rule draft is ready, but the table could not refresh.'
+    : 'A rule draft is ready. Review it before anyone uses it.';
+  try {
+    await expect(draftCard).toBeVisible({ timeout: 20_000 });
+    await expect(draftCard).toContainText(expectedDraftText, { timeout: 20_000 });
+  } catch (error) {
+    const answerDiagnostics = await owner.getByTestId('table-chat-answer').evaluateAll(cards => cards.map(card => ({
+      text: card.textContent?.trim() ?? '',
+      statuses: [...card.querySelectorAll('[role="alert"], [role="status"]')].map(node => node.textContent?.trim() ?? ''),
+    })));
+    const jobStatus = await api(owner, `/api/workspaces/${tableId}/model/${acceptedJob.id}`).catch(statusError => ({
+      status: 0,
+      body: { message: statusError instanceof Error ? statusError.message : String(statusError) },
+    }));
+    const jobDetails = {
+      id: acceptedJob.id,
+      http: jobStatus.status,
+      status: jobStatus.body?.status,
+      message: jobStatus.body?.message,
+      candidateId: jobStatus.body?.candidateId,
+    };
+    throw new Error(`${stepLabel}\n${error instanceof Error ? error.message : String(error)}\nAccepted model job: ${JSON.stringify(jobDetails)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
+  }
+  if (failDraftRefresh) {
+    const retryRefresh = draftCard.getByRole('button', { name: 'Retry table refresh', exact: true });
+    await expect(draftCard.getByRole('alert')).toBeVisible({ timeout: 20_000 });
+    await expect(retryRefresh).toBeVisible();
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeDisabled();
+    expect(failedDraftRefresh).toBe(true);
+    expect(workspaceRefreshRequests).toBe(1);
+    expect(getProviderCalls()).toBe(providerCallsBefore + 1);
+    const refreshResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
+    void refreshResponse.catch(() => {});
+    await retryRefresh.click();
+    expect((await refreshResponse).status()).toBe(200);
+    await expect(retryRefresh).toHaveCount(0);
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
+    expect(workspaceRefreshRequests).toBe(2);
+    expect(modelRequests).toBe(1);
+    expect(getProviderCalls()).toBe(providerCallsBefore + 1);
+    await owner.unroute(workspaceUrl, workspaceRoute);
+  } else {
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
+    await expect(draftCard.getByRole('button', { name: 'Retry table refresh', exact: true })).toHaveCount(0);
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
+  }
+  await draftCard.getByRole('button', { name: 'Review rules', exact: true }).click();
+  await expect(owner.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', 'table.rules');
+  owner.off('request', countModelRequests);
+  expect(modelRequests).toBe(1);
   await owner.reload();
-  const refreshedAssistant = owner.getByTestId('table-assistant');
-  await expect(refreshedAssistant.getByText('Draft ready for review', { exact: true })).toBeVisible();
-  await refreshedAssistant.getByRole('button', { name: 'Review draft', exact: true }).click();
+  const refreshedRules = await openCanvasObject(owner, 'table.rules');
+  await expect(refreshedRules.getByRole('region', { name: 'Proposed rules', exact: true })).toBeVisible();
   const editor = owner.getByTestId('canvas-object-editor');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
   const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -340,7 +491,7 @@ async function progressThroughLifecycle(owner, tableId, api, rules) {
   }
   const active = (await api(owner, `/api/workspaces/${tableId}`)).body;
   expect(active.domain.program).toBeTruthy();
-  await expect(owner.getByTestId('table-assistant').getByRole('button', { name: 'Open rules and sources', exact: true })).toHaveText('Rules');
+  await expect(owner.getByTestId('table-chat-bar')).toBeVisible();
   return active;
 }
 
@@ -366,28 +517,16 @@ async function joinAndCheckPrivateFiles(newPage, api, actor, inviteUrl, tableId,
   expect(workspace.body.domain.candidate).toBeNull();
   expect(workspace.body.domain.revisions).toEqual([]);
   expect(JSON.stringify(workspace.body.domain)).not.toContain(filename);
-  const dock = await openObjectsMenu(page);
-  await expect(dock.getByTestId('open-canvas-table.sources')).toHaveCount(0);
-  await expect(dock.getByTestId('open-canvas-table.rules')).toBeVisible();
-  await expect(dock.getByTestId('open-canvas-table.rules')).toHaveText('Rules');
-  await expect(dock.getByTestId('open-canvas-table.actions')).toHaveText('Actions');
-  await page.getByTestId('canvas-object-menu-trigger').click();
-  const assistant = page.getByTestId('table-assistant');
-  await expect(assistant.getByRole('heading', { name: 'Table assistant', exact: true })).toBeVisible();
-  const privacy = assistant.locator('.tt-table-chat__privacy');
-  await privacy.locator('summary').click();
-  await expect(privacy).toContainText('The owner manages private source files and rule drafts');
-  await privacy.locator('summary').click();
-  const tableTools = assistant.locator('.tt-table-assistant__canvas-tools');
-  await expect(tableTools).toHaveCount(0);
+  const chat = page.getByTestId('table-chat-bar');
+  await expect(chat).toBeVisible();
+  await expect(chat.getByRole('button', { name: 'Attach a file', exact: true })).toHaveCount(0);
+  await expect(chat.getByLabel('Choose a file to attach', { exact: true })).toHaveCount(0);
+  await expect(chat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
   await openCanvasObject(page, 'table.rules');
   await expect(page.getByTestId('canvas-object-editor').getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
   await openCanvasObject(page, 'table.actions');
   await expect(page.getByTestId('canvas-object-editor').locator('.tt-table-action-picker')).toBeVisible();
-  await expect(assistant.getByTestId('table-ai-composer')).toHaveCount(0);
-  await expect(assistant.getByLabel('Choose table source files')).toHaveCount(0);
-  await expect(assistant.getByRole('button', { name: 'Prepare rule draft', exact: true })).toHaveCount(0);
-  await expect(assistant).not.toContainText(filename);
+  await expect(chat).not.toContainText(filename);
   return page;
 }
 
@@ -401,26 +540,189 @@ async function nodeTransforms(page, ids) {
 
 async function verifySharedCardLayout(owner, member, tableId, api) {
   const shared = ['table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
+  // These auxiliary cards are created after activation. Materialize them through
+  // the Objects menu so late-card layout seeding is exercised without a reload.
+  for (const page of [owner, member]) {
+    for (const id of shared) await openCanvasObject(page, id);
+  }
   await expect.poll(async () => {
-    const layout = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.canvasLayout?.positions ?? {};
-    return shared.filter((id) => id.startsWith('workspace.') || id === 'table.rules').every((id) => layout[id]);
+    const ownerView = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const memberView = (await api(member, `/api/workspaces/${tableId}`)).body;
+    const ownerLayout = ownerView.domain.canvasLayout?.positions ?? {};
+    const memberLayout = memberView.domain.canvasLayout?.positions ?? {};
+    return shared.every((id) => ownerLayout[id] && JSON.stringify(ownerLayout[id]) === JSON.stringify(memberLayout[id]));
   }, { timeout: 15_000 }).toBe(true);
-  await owner.reload(); await member.reload();
-  await expect(owner.locator('.react-flow__node[data-id="workspace.people"]')).toHaveCount(1);
-  await expect(member.locator('.react-flow__node[data-id="workspace.people"]')).toHaveCount(1);
+  const beforeReload = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const memberBeforeReload = (await api(member, `/api/workspaces/${tableId}`)).body;
+  const canonical = Object.fromEntries(shared.map(id => [id, beforeReload.domain.canvasLayout.positions[id]]));
+  expect(memberBeforeReload.domain.canvasLayout.positions).toMatchObject(canonical);
+  for (const domain of [beforeReload.domain, memberBeforeReload.domain]) {
+    expect(Object.keys(domain.canvasLayout?.positions ?? {}).some(id => id.startsWith('chat.'))).toBe(false);
+    expect(domain.canvasLayout?.positions?.['table.sources']).toBeUndefined();
+  }
+  expect(memberBeforeReload.domain.sources).toEqual([]);
   await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
     .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
-  const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  const moved = await api(owner, `/api/workspaces/${tableId}/commands`, {
-    commandId: crypto.randomUUID(), expectedRevision: before.revision, expectedEpoch: before.epoch,
-    type: 'canvas.layout', payload: { expectedLayoutRevision: before.domain.canvasLayout.revision, positions: { 'workspace.history': { x: 1480, y: 960, pinned: true } } },
-  });
-  expect(moved.status).toBe(200);
-  await expect.poll(async () => (await nodeTransforms(member, ['workspace.history']))['workspace.history'], { timeout: 10_000 })
-    .toBe('translate(1480px, 960px)');
+  await owner.reload(); await member.reload();
+  for (const page of [owner, member]) {
+    for (const id of shared) await openCanvasObject(page, id);
+  }
+  await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
+    .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
+  const afterReload = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  expect(afterReload.domain.canvasLayout.positions).toMatchObject(canonical);
+  await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
+    .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
+  const beforeMove = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const historyEditor = await openCanvasObject(owner, 'workspace.history');
+  await historyEditor.getByRole('button', { name: 'Move Table history without dragging', exact: true }).click();
+  const moveResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
+  void moveResponse.catch(() => {});
+  await historyEditor.getByRole('group', { name: 'Move Table history without dragging', exact: true })
+    .getByRole('button', { name: 'Move Table history down', exact: true }).click();
+  expect((await moveResponse).status()).toBe(200);
   const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  expect(after.domain.records).toEqual(before.domain.records);
-  expect(after.domain.dataRevision).toBe(before.domain.dataRevision);
+  expect(after.domain.canvasLayout.positions['workspace.history']).toMatchObject({
+    x: beforeMove.domain.canvasLayout.positions['workspace.history'].x,
+    y: beforeMove.domain.canvasLayout.positions['workspace.history'].y + 48,
+    pinned: true,
+  });
+  await expect.poll(async () => (await nodeTransforms(member, ['workspace.history']))['workspace.history'], { timeout: 10_000 })
+    .toBe(`translate(${after.domain.canvasLayout.positions['workspace.history'].x}px, ${after.domain.canvasLayout.positions['workspace.history'].y}px)`);
+  expect(after.domain.records).toEqual(beforeMove.domain.records);
+  expect(after.domain.dataRevision).toBe(beforeMove.domain.dataRevision);
+}
+
+async function createBlankTableFromPicker(page) {
+  const created = page.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
+  void created.catch(() => {});
+  await page.locator('.tt-workspace-picker__button').click();
+  await page.locator('.tt-workspace-menu').getByRole('menuitem', { name: /New table/u }).click();
+  const startPage = page.getByTestId('start-page');
+  await expect(startPage.getByRole('heading', { name: 'What should we start with?' })).toBeVisible();
+  await startPage.getByRole('button', { name: 'Start empty with your own files', exact: true }).click();
+  const response = await created;
+  expect(response.status()).toBe(201);
+  const table = await response.json();
+  await expect(page).toHaveURL(new RegExp(`/t/${table.id}$`));
+  const visibleTitle = await page.locator('.tt-workspace-picker__button strong').innerText();
+  await expect(page.locator('.tt-canvas-node')).toHaveCount(0);
+  return { ...table, visibleTitle };
+}
+
+async function selectOtherTable(page, title, tableId) {
+  const picker = page.locator('.tt-workspace-picker__button');
+  await picker.click();
+  const target = page.locator('.tt-workspace-menu > button[role="menuitem"]:not(.is-current)').filter({ hasText: title });
+  await expect(target).toHaveCount(1);
+  await target.click();
+  await expect(page).toHaveURL(new RegExp(`/t/${tableId}$`));
+  await expect(page.locator('.tt-canvas-panel')).toBeVisible();
+}
+
+async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, privatePrompt, privateAnswer, capabilities, mark }) {
+  expect(capabilities).toMatchObject({ modelEnabled: true });
+  const original = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const originalVisibleTitle = await owner.locator('.tt-workspace-picker__button strong').innerText();
+  const otherTable = await createBlankTableFromPicker(owner);
+  await selectOtherTable(owner, originalVisibleTitle, tableId);
+  const chat = owner.getByTestId('table-chat-bar');
+  const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
+  const send = chat.getByRole('button', { name: 'Send message', exact: true });
+  const pendingPrompt = 'Can I ask a question while this table is being arranged?';
+  await prompt.fill(pendingPrompt);
+  await expect(send).toBeEnabled();
+
+  let modelPosts = 0;
+  let assistantPosts = 0;
+  const countPrivatePosts = request => {
+    if (request.method() !== 'POST') return;
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith('/model')) modelPosts += 1;
+    if (path.endsWith('/assistant')) assistantPosts += 1;
+  };
+  owner.on('request', countPrivatePosts);
+  await openCanvasObject(owner, 'table.actions');
+  const actionNode = owner.getByTestId('canvas-object-editor');
+  await actionNode.getByRole('button', { name: 'Move Actions without dragging', exact: true }).click();
+
+  let releaseAck;
+  const ackGate = new Promise(resolve => { releaseAck = resolve; });
+  let acceptedResolve;
+  const serverAccepted = new Promise(resolve => { acceptedResolve = resolve; });
+  let heldAck = false;
+  let layoutCommand;
+  const commandUrl = `**/api/workspaces/${tableId}/commands`;
+  const holdLayoutAck = async route => {
+    const request = route.request();
+    if (heldAck || request.method() !== 'POST' || request.postDataJSON()?.type !== 'canvas.layout') return route.continue();
+    heldAck = true;
+    layoutCommand = request.postDataJSON();
+    const response = await route.fetch();
+    acceptedResolve(response.status());
+    await ackGate;
+    await route.fulfill({ response });
+  };
+  await owner.route(commandUrl, holdLayoutAck);
+  const layoutResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
+  void layoutResponse.catch(() => {});
+  try {
+    await actionNode.getByRole('group', { name: 'Move Actions without dragging', exact: true })
+      .getByRole('button', { name: 'Move Actions right', exact: true }).click();
+    expect(await Promise.race([serverAccepted, layoutResponse.then(response => response.status())])).toBe(200);
+    const accepted = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const acceptedPoint = accepted.domain.canvasLayout.positions['table.actions'];
+    expect(acceptedPoint.x).toBe(original.domain.canvasLayout.positions['table.actions'].x + 48);
+    expect(acceptedPoint.pinned).toBe(true);
+
+    const pendingLayoutState = {
+      capabilities,
+      promptDisabled: await prompt.isDisabled(),
+      sendDisabled: await send.isDisabled(),
+      prompt: await prompt.inputValue(),
+      layoutCommand,
+    };
+    if (pendingLayoutState.promptDisabled || pendingLayoutState.sendDisabled) {
+      throw new Error(`A server-accepted canvas.layout ACK disabled chat before completion: ${JSON.stringify(pendingLayoutState)}`);
+    }
+    await expect(prompt).toBeEnabled();
+    await expect(send).toBeEnabled();
+    await send.click();
+    const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+    await expect(consent).toBeVisible();
+    await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(prompt).toHaveValue(pendingPrompt);
+    await expect(consent).toHaveCount(0);
+    expect(modelPosts).toBe(0);
+    expect(assistantPosts).toBe(0);
+    mark(`Layout/chat concurrency: enabled model capabilities were restored at ${capabilities.receivedAt}; accepted canvas.layout ACK left the composer enabled, and normal Send opened cancellable consent with no private request.`);
+
+    await selectOtherTable(owner, otherTable.visibleTitle, otherTable.id);
+    await expect(owner.getByTestId('table-chat-answer')).toHaveCount(0);
+    await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
+    const otherState = (await api(owner, `/api/workspaces/${otherTable.id}`)).body;
+    expect(otherState.domain.canvasLayout?.positions?.['table.actions']).toBeUndefined();
+
+    releaseAck();
+    expect((await layoutResponse).status()).toBe(200);
+    await expect(owner).toHaveURL(new RegExp(`/t/${otherTable.id}$`));
+    await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
+    expect((await api(owner, `/api/workspaces/${otherTable.id}`)).body.domain.canvasLayout?.positions?.['table.actions']).toBeUndefined();
+
+    await selectOtherTable(owner, originalVisibleTitle, tableId);
+    const privateArticle = owner.getByRole('article', { name: privatePrompt, exact: true });
+    await expect(privateArticle.getByTestId('table-chat-answer')).toContainText(privateAnswer);
+    const resumed = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    expect(resumed.domain.canvasLayout.positions['table.actions']).toEqual(acceptedPoint);
+    expect(Object.keys(resumed.domain.canvasLayout.positions).some(id => id.startsWith('chat.'))).toBe(false);
+    await openCanvasObject(owner, 'table.actions');
+    await expect.poll(async () => (await nodeTransforms(owner, ['table.actions']))['table.actions'], { timeout: 10_000 })
+      .toBe(`translate(${acceptedPoint.x}px, ${acceptedPoint.y}px)`);
+  } finally {
+    releaseAck();
+    await owner.unroute(commandUrl, holdLayoutAck);
+    owner.off('request', countPrivatePosts);
+  }
 }
 
 async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
@@ -498,25 +800,109 @@ async function performContextualAction(page, collectionId, { recordId, recordLab
   return response;
 }
 
-const tableChatConsent = 'I agree to share this message and table context with the AI provider.';
-
-async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply) {
-  const chat = page.getByTestId('table-chat');
+async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply, { cancelFirst = false, loseFirstAck = false, beforeRetry } = {}) {
+  const chat = page.getByTestId('table-chat-bar');
+  const matchingPromptCards = () => page.locator('.tt-canvas-node--auxiliary')
+    .filter({ hasText: promptText.slice(0, 36) });
+  const answerCardForPrompt = () => matchingPromptCards()
+    .getByTestId('table-chat-answer');
   const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
-  const send = chat.getByRole('button', { name: 'Send', exact: true });
-  await expect(prompt).toBeEnabled();
+  const send = chat.getByRole('button', { name: 'Send message', exact: true });
+  await expect(prompt).toBeVisible();
   await prompt.fill(promptText);
-  await expect(send).toBeDisabled();
-  setAssistantReply(syntheticReply);
-  await chat.getByLabel(tableChatConsent, { exact: true }).check();
-  const responsePromise = page.waitForResponse((response) => response.url().endsWith('/assistant') && response.request().method() === 'POST');
-  await send.click();
-  const response = await responsePromise;
-  expect([200, 202]).toContain(response.status());
-  const history = chat.locator('.tt-table-chat__history');
-  if (await history.getAttribute('open') === null) await history.locator('summary').click();
-  await expect(chat).toContainText(syntheticReply.result.text, { timeout: 20_000 });
-  return chat;
+  await expect(send).toBeEnabled();
+  const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+  let assistantRequests = 0;
+  let modelRequests = 0;
+  const assistantBodies = [];
+  let lostAckStatus;
+  const countRequests = request => {
+    if (request.method() !== 'POST') return;
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith('/assistant')) assistantRequests += 1;
+    if (path.endsWith('/model')) modelRequests += 1;
+  };
+  const assistantRoute = async route => {
+    const request = route.request();
+    if (request.method() !== 'POST') return route.continue();
+    assistantBodies.push(request.postDataJSON());
+    const response = await route.fetch();
+    if (loseFirstAck && assistantBodies.length === 1) {
+      lostAckStatus = response.status();
+      await route.abort('connectionreset');
+      return;
+    }
+    await route.fulfill({ response });
+  };
+  page.on('request', countRequests);
+  try {
+    await send.click();
+    await expect(consent).toBeVisible();
+    const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
+    expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
+    expect(copy).toContain('up to six of your private chat exchanges, including relevant older ones when available');
+    expect(copy).toContain('Private source files are excluded.');
+    expect(assistantRequests).toBe(0);
+    expect(modelRequests).toBe(0);
+    if (cancelFirst) {
+      await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(consent).toHaveCount(0);
+      await expect(prompt).toHaveValue(promptText);
+      expect(assistantRequests).toBe(0);
+      expect(modelRequests).toBe(0);
+      await send.click();
+      await expect(consent).toBeVisible();
+    }
+    setAssistantReply(syntheticReply);
+    if (loseFirstAck) await page.route('**/api/workspaces/*/assistant', assistantRoute);
+    const initialResponsePromise = loseFirstAck ? null : page.waitForResponse(candidate => candidate.url().endsWith('/assistant') && candidate.request().method() === 'POST');
+    if (initialResponsePromise) void initialResponsePromise.catch(() => {});
+    await consent.getByRole('button', { name: 'Send', exact: true }).click();
+    let response;
+    if (loseFirstAck) {
+      await expect(matchingPromptCards()).toHaveCount(1);
+      const failedCard = answerCardForPrompt();
+      await expect(failedCard).toBeVisible({ timeout: 20_000 });
+      await expect(failedCard.getByRole('button', { name: 'Retry same request', exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect(failedCard).toContainText('connection was lost before the request could be confirmed');
+      expect([200, 202]).toContain(lostAckStatus);
+      expect(assistantBodies).toHaveLength(1);
+      if (beforeRetry) await beforeRetry(assistantBodies[0]);
+      const retryResponsePromise = page.waitForResponse(candidate => candidate.url().endsWith('/assistant') && candidate.request().method() === 'POST');
+      void retryResponsePromise.catch(() => {});
+      const failedNodeId = await failedCard.evaluate(element => element.closest('.react-flow__node')?.getAttribute('data-id'));
+      expect(failedNodeId).toMatch(/^chat\./u);
+      await openCanvasObject(page, failedNodeId);
+      await expect(failedCard).toBeVisible();
+      await failedCard.scrollIntoViewIfNeeded();
+      await failedCard.getByRole('button', { name: 'Retry same request', exact: true }).click();
+      try {
+        response = await retryResponsePromise;
+      } catch (error) {
+        throw new Error(`Table assistant retry did not return: ${promptText}`, { cause: error });
+      }
+      expect(assistantBodies).toHaveLength(2);
+      expect(assistantBodies[1]).toEqual(assistantBodies[0]);
+      expect(assistantBodies[1].prompt).toBe(promptText);
+    } else {
+      try {
+        response = await initialResponsePromise;
+      } catch (error) {
+        throw new Error(`Table assistant request did not return: ${promptText}`, { cause: error });
+      }
+    }
+    expect([200, 202]).toContain(response.status());
+    await expect.poll(() => modelRequests).toBe(0);
+    const answer = answerCardForPrompt();
+    await expect(answer).toBeVisible({ timeout: 20_000 });
+    await expect(answer).toContainText(syntheticReply.result.text, { timeout: 20_000 });
+    expect(assistantRequests).toBe(loseFirstAck ? 2 : 1);
+    expect(modelRequests).toBe(0);
+    return answer;
+  } finally {
+    page.off('request', countRequests);
+    if (loseFirstAck) await page.unroute('**/api/workspaces/*/assistant', assistantRoute);
+  }
 }
 
 async function seedConversationPage({ page, tableId, profile, api, setAssistantReply }) {
@@ -556,7 +942,7 @@ async function seedConversationPage({ page, tableId, profile, api, setAssistantR
   return created;
 }
 
-async function verifyParticipantConversation({ owner, member, tableId, source, api, setAssistantReply, getProviderCalls }) {
+async function verifyParticipantConversation({ owner, member, tableId, source, api, setAssistantReply, getProviderCalls, capabilities, mark }) {
   const profile = (await api(member, `/api/workspaces/${tableId}`)).body;
   const initialCalls = getProviderCalls();
   const firstPrompt = 'What does the Available rule mean?';
@@ -578,8 +964,10 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(member.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', 'table.collection.equipment');
 
   await member.reload();
-  await expect(member.getByTestId('table-chat')).toContainText(firstPrompt);
-  await expect(member.getByTestId('table-chat')).toContainText(firstText);
+  const rehydratedMemberNode = member.getByRole('article', { name: firstPrompt, exact: true });
+  const rehydratedMemberAnswer = rehydratedMemberNode.getByTestId('table-chat-answer');
+  await expect(rehydratedMemberNode).toBeVisible();
+  await expect(rehydratedMemberAnswer).toContainText(firstText);
   const followup = 'Does that apply to every item in the list?';
   const followupReply = {
     result: { kind: 'explanation', text: 'Yes. Each equipment row follows the same active availability check.', references: [{ kind: 'field', collectionId: 'equipment', id: 'available' }] },
@@ -605,72 +993,90 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     expectedPromptContains: ownerPrompt, forbiddenTexts: [...forbidden, firstPrompt, firstText, followup],
   };
   const ownerCalls = getProviderCalls();
-  await expect(owner.getByTestId('table-chat')).not.toContainText(firstPrompt);
+  await expect(owner.getByRole('article', { name: firstPrompt, exact: true })).toHaveCount(0);
   await askTableAssistant(owner, ownerPrompt, ownerReply, setAssistantReply);
   expect(getProviderCalls()).toBe(ownerCalls + 1);
   expect((await api(owner, `/api/workspaces/${tableId}`)).body.revision).toBe(ownerProfile.revision);
+  await verifyDelayedLayoutAckDoesNotCrossTables({
+    owner, tableId, api, privatePrompt: ownerPrompt, privateAnswer: ownerReply.result.text,
+    capabilities, mark,
+  });
 
   const providerCallsBeforeArchive = getProviderCalls();
   const archived = await seedConversationPage({ page: member, tableId, profile: afterFollowup, api, setAssistantReply });
   expect(getProviderCalls()).toBe(providerCallsBeforeArchive + archived.length);
   await member.reload();
-  const restored = member.getByTestId('table-chat');
-  await expect(restored).toContainText(archived[20].prompt);
-  await expect(restored).not.toContainText(archived[0].prompt);
+  const restored = member.getByTestId('table-chat-answer');
+  const newestHistoryNode = member.getByRole('article', { name: archived[20].prompt, exact: true });
+  await expect(newestHistoryNode).toBeVisible();
+  await expect(newestHistoryNode.getByTestId('table-chat-answer')).toContainText(archived[20].answer);
+  await expect(member.getByRole('article', { name: archived[0].prompt, exact: true })).toHaveCount(0);
   const callsBeforeHistoryRead = getProviderCalls();
-  const historyDetails = restored.locator('details.tt-table-chat__history');
-  if (await historyDetails.getAttribute('open') === null) await historyDetails.locator('summary').click();
-  await expect(historyDetails).toHaveAttribute('open', '');
-  const older = historyDetails.getByRole('button', { name: 'Older messages', exact: true });
-  await expect(older).toBeVisible();
-  await older.click();
-  await expect(restored).toContainText(archived[0].prompt);
+  await expect(restored).toHaveCount(6);
   expect(getProviderCalls()).toBe(callsBeforeHistoryRead);
 }
 
 async function equipmentScenario({ owner, member, secondMember, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
+  let capabilities;
   const room = await openNewTable(owner, api);
   await owner.setViewportSize({ width: 390, height: 844 });
   const canvasBox = await owner.locator('.tt-canvas-panel').boundingBox();
-  const assistantBox = await owner.getByTestId('table-assistant-panel').boundingBox();
-  const flowBox = await owner.locator('.tt-canvas-panel .react-flow').boundingBox();
+  const chatBox = await owner.getByTestId('table-chat-bar').boundingBox();
   expect(canvasBox).toBeTruthy();
-  expect(assistantBox).toBeTruthy();
-  expect(flowBox).toBeTruthy();
-  expect(assistantBox.x).toBeGreaterThanOrEqual(canvasBox.x - 1);
-  expect(assistantBox.y).toBeGreaterThanOrEqual(canvasBox.y - 1);
-  expect(assistantBox.x + assistantBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width + 1);
-  expect(assistantBox.y + assistantBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height + 1);
-  expect(flowBox.height).toBeGreaterThan(100);
-  expect(flowBox.y + flowBox.height).toBeLessThanOrEqual(assistantBox.y - 1);
+  expect(chatBox).toBeTruthy();
+  expect(chatBox.x).toBeGreaterThanOrEqual(canvasBox.x - 1);
+  expect(chatBox.y).toBeGreaterThanOrEqual(canvasBox.y - 1);
+  expect(chatBox.x + chatBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width + 1);
+  expect(chatBox.y + chatBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height + 1);
+  expect(chatBox.width).toBeLessThanOrEqual(370);
+  expect(canvasBox.height).toBeGreaterThan(100);
+  expect(await owner.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const mobileComposer = owner.getByTestId('table-chat-bar').getByRole('textbox', { name: 'Message', exact: true });
+  await expect(mobileComposer).toHaveAttribute('rows', '1');
+  await mobileComposer.fill(Array.from({ length: 8 }, (_, index) => `Line ${index + 1}`).join('\n'));
+  await expect.poll(() => mobileComposer.evaluate(element => element.clientHeight)).toBeLessThanOrEqual(110);
+  await mobileComposer.fill('');
   await owner.setViewportSize({ width: 1280, height: 820 });
-  const source = await addSource(owner, room.id, fixtures.equipment, api);
-  await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api);
+  const source = await addSource(owner, room.id, fixtures.equipment, api, 'chat', {
+    aiDisabled: true,
+    onCapabilitiesReady: ready => { capabilities = ready; },
+  });
+  await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api, { failDraftRefresh: true, getProviderCalls });
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
-  const ownerAssistant = owner.getByTestId('table-assistant');
-  const rulesMode = ownerAssistant.getByRole('button', { name: 'Open rules and sources', exact: true });
-  if (await rulesMode.getAttribute('aria-pressed') !== 'true') await rulesMode.click();
-  const initialSourceConsent = ownerAssistant.getByLabel('Send this request, table state and 1 source file to AI.', { exact: true });
-  await initialSourceConsent.check();
-  const sourcePrompt = ownerAssistant.getByLabel('How should this table work?', { exact: true });
-  await sourcePrompt.fill('Check that approval consent follows the selected source files.');
-  const prepareDraft = ownerAssistant.getByRole('button', { name: 'Prepare rule draft', exact: true });
-  await expect(prepareDraft).toBeEnabled();
-  await addSource(owner, room.id, equipmentNotes, api);
-  const updatedSourceConsent = ownerAssistant.getByLabel('Send this request, table state and 2 source files to AI.', { exact: true });
-  await expect(updatedSourceConsent).not.toBeChecked();
-  await expect(prepareDraft).toBeDisabled();
-  await updatedSourceConsent.check();
-  await expect(prepareDraft).toBeEnabled();
+  const callsBeforeSecondSource = getProviderCalls();
+  await addSource(owner, room.id, equipmentNotes, api, 'chat', { aiDisabled: true, failHistory: true });
+  expect(getProviderCalls()).toBe(callsBeforeSecondSource);
+  const ownerRules = await openCanvasObject(owner, 'table.rules');
+  await ownerRules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+  const ownerChat = owner.getByTestId('table-chat-bar');
+  const ownerPrompt = ownerChat.getByRole('textbox', { name: 'Message', exact: true });
+  await ownerPrompt.fill('Check that consent follows the exact source file set.');
+  await ownerChat.getByRole('button', { name: 'Send message', exact: true }).click();
+  const fileConsent = ownerChat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+  await expect(fileConsent).toBeVisible();
+  const fileConsentCopy = (await fileConsent.innerText()).replace(/\s+/gu, ' ');
+  expect(fileConsentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
+  expect(fileConsentCopy).toContain('Private source files included');
+  expect(fileConsentCopy).toContain('Chat history is not included.');
+  expect(fileConsentCopy).toContain(fixtures.equipment.filename);
+  expect(fileConsentCopy).toContain(equipmentNotes.filename);
+  await fileConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(ownerPrompt).toHaveValue('Check that consent follows the exact source file set.');
+  expect(getProviderCalls()).toBe(callsBeforeSecondSource);
+  const cancelRuleEdit = ownerChat.getByRole('button', { name: 'Cancel rule edit', exact: true });
+  await expect(cancelRuleEdit).toBeVisible();
+  await cancelRuleEdit.click();
+  await expect(cancelRuleEdit).toHaveCount(0);
+  await expect(ownerPrompt).toHaveValue('');
 
   const firstInvite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, firstInvite, room.id, source.filename);
   await verifySharedCardLayout(owner, member, room.id, api);
   mark('Shared card layout: rules, people, history and table cards sit at the same place for owner and member, and a move reaches the other screen live');
-  await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls });
-  mark('Generic table assistant: explicit consent, participant-only conversation history, grounded reference, reload continuity, and no table mutation');
+  await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls, capabilities, mark });
+  mark('Generic table chat: explicit consent, participant-only answer history, grounded reference, reload continuity, and no table mutation');
   await performContextualAction(member, 'equipment', {
     recordId: 'camera', recordLabel: 'Field camera', actionTitle: 'Borrow equipment', recordFieldLabel: 'Item',
     resetTextOnRecordChange: {
@@ -703,6 +1109,55 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect(member.locator('.tt-canvas-panel')).toBeVisible();
   const resumed = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(resumed.domain.records.equipment.find((row) => row.id === 'camera').values.available).toBe(true);
+  await refreshTable(owner, room.id);
+  const ownerAsk = {
+    result: { kind: 'explanation', text: 'Borrowing and returns are recorded as table actions.', references: [{ kind: 'action', id: 'borrow' }] },
+    expectedRole: 'owner', expectedSeat: 'host', expectedConversationCount: 1,
+    expectedConversationContains: ['Who is allowed to return a borrowed item?', 'Only the member who borrowed an item may return it.'],
+    expectedPromptContains: 'Summarize how this table records equipment changes.',
+    forbiddenTexts: [source.filename, fixtures.equipment.quote, equipmentNotes.filename],
+  };
+  const callsBeforeOwnerAsk = getProviderCalls();
+  await askTableAssistant(owner, ownerAsk.expectedPromptContains, ownerAsk, setAssistantReply, {
+    loseFirstAck: true,
+    beforeRetry: async firstRequest => {
+      const beforeAction = (await api(owner, `/api/workspaces/${room.id}`)).body;
+      expect(firstRequest.expectedRevision).toBe(beforeAction.revision);
+      await performContextualAction(owner, 'equipment', {
+        recordId: 'camera', recordLabel: 'Field camera', actionTitle: 'Borrow equipment', recordFieldLabel: 'Item',
+        resetTextOnRecordChange: { label: 'Completion note', discardValue: 'Temporary reservation note', submitValue: 'Owner reservation during retry', records: [] },
+      });
+      const afterAction = (await api(owner, `/api/workspaces/${room.id}`)).body;
+      expect(afterAction.revision).not.toBe(beforeAction.revision);
+      expect(afterAction.domain.records.equipment.find((row) => row.id === 'camera').values).toMatchObject({
+        available: false, borrower: afterAction.actor.actorId, borrow_note: 'Owner reservation during retry',
+      });
+    },
+  });
+  expect(getProviderCalls()).toBe(callsBeforeOwnerAsk + 1);
+  const beforeReset = (await api(owner, `/api/workspaces/${room.id}`)).body;
+  const beforeResetCalls = getProviderCalls();
+  await setTableOptionsOpen(owner, true);
+  await owner.locator('.tt-table-options').getByRole('button', { name: 'Reset table', exact: true }).click();
+  const resetDialog = owner.getByRole('dialog', { name: 'Reset this table?', exact: true });
+  const resetResponse = owner.waitForResponse(response => isCommandResponse(response, 'workspace.reset'));
+  void resetResponse.catch(() => {});
+  await resetDialog.getByRole('button', { name: 'Reset table', exact: true }).click();
+  expect((await resetResponse).status()).toBe(200);
+  await expect(owner.getByTestId('table-chat-bar')).toBeVisible();
+  const afterReset = (await api(owner, `/api/workspaces/${room.id}`)).body;
+  expect(afterReset.epoch).toBeGreaterThan(beforeReset.epoch);
+  expect(afterReset.domain.sources).toEqual([]);
+  await expect(owner.getByTestId('table-chat-answer')).toHaveCount(0);
+  const resetChat = owner.getByTestId('table-chat-bar');
+  const resetPrompt = resetChat.getByRole('textbox', { name: 'Message', exact: true });
+  await resetPrompt.fill('Start a private draft after the table reset.');
+  await resetChat.getByRole('button', { name: 'Send message', exact: true }).click();
+  const resetConsent = resetChat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+  await expect(resetConsent).toBeVisible();
+  expect((await resetConsent.innerText()).replace(/\s+/gu, ' ')).toMatch(/current active rules, records, and turn|current table context/iu);
+  await resetConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(getProviderCalls()).toBe(beforeResetCalls);
   mark('Generic table: text source, reviewed lifecycle, shared equipment actions, borrower-only return, private source projection, and reload persistence');
 }
 
@@ -740,8 +1195,17 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await requestProposal(owner, room.id, source, buildChange('game', source.id), setTableReply, api);
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
   expect(active.domain.turn).toBe('host');
+  const generatedTableTitle = 'River Race: Active Canvas';
+  await owner.getByRole('button', { name: 'Rename table', exact: true }).click();
+  const renameInput = owner.getByLabel('Table name', { exact: true });
+  await renameInput.fill(generatedTableTitle);
+  await renameInput.press('Enter');
+  await expect(owner.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
+  expect((await api(owner, `/api/workspaces/${room.id}`)).body.title).toBe(generatedTableTitle);
   const invite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
+  await expect(member.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
+  await expect(member.getByRole('button', { name: 'Rename table', exact: true })).toHaveCount(0);
   const memberName = (await api(member, `/api/workspaces/${room.id}`)).body.actor.name;
   const people = await openCanvasObject(owner, 'workspace.people');
   await expect(people).toContainText(memberName);
@@ -767,12 +1231,30 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(afterOwnerProposal.revision).toBe(ownerBeforeProposal.revision);
   expect(afterOwnerProposal.domain.records.boats.map((row) => row.values.score)).toEqual([0, 0]);
   expect(afterOwnerProposal.domain.turn).toBe('host');
-  const ownerProposalCard = ownerChat.locator('.tt-table-chat__answer.is-proposal').last();
+  const ownerProposalCard = ownerChat;
   const ownerConfirm = ownerProposalCard.getByRole('button', { name: 'Confirm action', exact: true });
   await expect(ownerConfirm).toBeEnabled();
-  const ownerConfirmation = owner.waitForResponse((response) => response.url().endsWith('/confirm') && response.request().method() === 'POST');
-  await ownerConfirm.click();
-  expect((await ownerConfirmation).status()).toBe(200);
+  const confirmationBodies = [];
+  let lostConfirmationStatus;
+  const confirmationRoute = async route => {
+    const request = route.request();
+    if (request.method() !== 'POST') return route.continue();
+    confirmationBodies.push(request.postDataJSON());
+    const response = await route.fetch();
+    lostConfirmationStatus = response.status();
+    await route.abort('connectionreset');
+  };
+  const confirmationUrl = `**/api/workspaces/${room.id}/assistant/*/confirm`;
+  await owner.route(confirmationUrl, confirmationRoute);
+  try {
+    await ownerConfirm.dblclick();
+    await expect(ownerProposalCard).toContainText('Confirmed. See Table history for the result.', { timeout: 20_000 });
+    expect([200, 202]).toContain(lostConfirmationStatus);
+    expect(confirmationBodies).toHaveLength(1);
+    expect(confirmationBodies[0].commandId).toMatch(/^[0-9a-f-]{36}$/iu);
+  } finally {
+    await owner.unroute(confirmationUrl, confirmationRoute);
+  }
   active = (await api(owner, `/api/workspaces/${room.id}`)).body;
   expect(active.domain.turn).toBe('member-1');
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
@@ -788,7 +1270,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
     expectedPromptContains: memberPrompt,
     forbiddenTexts: [source.filename, fixtures.game.quote, memberBeforeProposal.actor.actorId, memberBeforeProposal.actor.name],
   };
-  const memberChat = await askTableAssistant(member, memberPrompt, memberProposal, setAssistantReply);
+  const memberChat = await askTableAssistant(member, memberPrompt, memberProposal, setAssistantReply, { cancelFirst: true });
   expect(getProviderCalls()).toBe(memberCalls + 1);
   const afterMemberProposal = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(afterMemberProposal.revision).toBe(memberBeforeProposal.revision);
@@ -799,9 +1281,9 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   active = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(active.domain.turn).toBe('host');
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);
-  await expect(memberChat.locator('.tt-table-chat__answer.is-proposal').last().getByRole('button', { name: 'Confirm action', exact: true })).toBeDisabled();
-  await expect(memberChat).toContainText('The table changed after this proposal. It cannot be confirmed');
-  mark('Generic table assistant: action proposal requires a separate confirmation; a direct table action makes a pending proposal stale');
+  await expect(memberChat.getByRole('button', { name: 'Confirm action', exact: true })).toHaveCount(0);
+  await expect(memberChat).toContainText('The table changed after this proposal. Ask again for a fresh proposal.');
+  mark('Generic table chat: lost ask and confirm acknowledgements retry or reconcile once; a direct table action makes a pending proposal stale');
 
   await openCanvasObject(owner, 'table.collection.boats');
   await refreshTable(owner, room.id);
@@ -827,12 +1309,18 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await member.reload();
   const resumed = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(resumed.domain.records.boats.map((row) => row.values.score)).toEqual([5, 5]);
-  mark('Generic table: text source, role and turn-gated actions, rule revision preserves live scores, and member reload resumes shared data');
+  await owner.reload();
+  await expect(owner.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
+  await expect(member.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
+  const ownerAfterReload = (await api(owner, `/api/workspaces/${room.id}`)).body;
+  expect(ownerAfterReload.domain.program.description).toContain('A revised scoring rule');
+  expect(ownerAfterReload.domain.records.boats.map((row) => row.values.score)).toEqual([5, 5]);
+  mark('Generic table: generated program rename survives AI rule edit and both reloads; role, turn and live scores persist');
 }
 
 export async function verifyGenericTableBrowser({ actors, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
   const [equipmentOwner, shiftsOwner, gameOwner] = actors.owners;
-  const [member, secondMember] = actors.members;
+  const secondMember = actors.members[1];
   const owners = [equipmentOwner, shiftsOwner, gameOwner];
   const scenarios = [equipmentScenario, shiftScenario, gameScenario];
   for (let index = 0; index < scenarios.length; index += 1) {

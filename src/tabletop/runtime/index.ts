@@ -42,7 +42,7 @@ const manifestSchema = z.strictObject({
     position: z.strictObject({ x: z.number().finite(), y: z.number().finite() }),
     inputs: z.record(z.string(), z.unknown()), visibility: z.enum(['private', 'shared']),
     version: z.literal(1), visible: z.boolean().optional(),
-  })).min(1).max(24),
+  })).max(24),
   bindings: z.array(z.strictObject({ id: z.string().min(1).max(300), from: endpointSchema, to: endpointSchema, valueType: z.string().min(1).max(80) })).max(96),
 });
 export const capabilityRegistry: Readonly<Record<string, Capability>> = {
@@ -107,6 +107,7 @@ export function compileManifest(rawManifest: unknown, registry: Readonly<Record<
   const parsed = manifestSchema.safeParse(rawManifest);
   if (!parsed.success) return { ok: false, diagnostics: [{ code: 'SCHEMA', message: 'Unsupported manifest shape/version or resource limit' }] };
   const manifest: Manifest = parsed.data;
+  if (manifest.kind !== 'table' && manifest.nodes.length === 0) return { ok: false, diagnostics: [{ code: 'SCHEMA', message: 'Unsupported manifest shape/version or resource limit' }] };
   const nodes = new Map<string, PlanNode>();
   const incoming = new Map<string, Binding>(); const edges = new Map<string, string[]>();
   for (const node of manifest.nodes) {
@@ -156,8 +157,9 @@ const binding = (from: string, output: string, to: string, input: string, valueT
 export function manifestForWorkspace(view: WorkspaceView): Manifest {
   const state = view.domain;
   if (state.kind === 'table') {
-    const nodes = [node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private')];
-    if (view.actor.role === 'owner') nodes.unshift(node('table.sources', 'table.sources', 'Files', 40, 40, { state }, 'private'));
+    const nodes: PlanNode[] = [];
+    if (view.actor.role === 'owner' && state.sources.length > 0) nodes.push(node('table.sources', 'table.sources', 'Files', 40, 40, { state }, 'private'));
+    if (state.program !== null || (view.actor.role === 'owner' && state.candidate !== null)) nodes.push(node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private'));
     const bindings: Binding[] = [];
     const collectionNodeIds = new Map<string, string>();
     for (const [index, collection] of (state.program?.collections ?? []).entries()) {

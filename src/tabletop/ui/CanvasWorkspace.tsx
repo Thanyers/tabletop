@@ -7,9 +7,9 @@ import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
 import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
-import { isSharedCanvasId } from '../shared/canvas-layout-ids';
 import { dedupeVisibleCanvasConnections } from './canvas-flow';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
+import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNodeIds } from './canvas-layout-scope';
 import './canvas-visual-flow.css';
 
 export { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds };
@@ -42,6 +42,7 @@ interface PlanCanvasNodeData extends CanvasNodeBaseData {
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
+  onEditRules?: () => void;
 }
 
 interface AuxiliaryCanvasNodeData extends CanvasNodeBaseData {
@@ -105,8 +106,6 @@ function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean }
     && Math.abs(Number(point.x)) < 100_000 && Math.abs(Number(point.y)) < 100_000
     && (point.pinned === undefined || typeof point.pinned === 'boolean');
 }
-
-const isSharedCanvasNode = isSharedCanvasId;
 
 const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
 
@@ -335,7 +334,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
       {outputPorts.map((port, index) => <Handle key={`out-${port}`} type="source" position={Position.Right} id={port} style={portStyle(index, outputPorts.length)} />)}
       <CanvasObjectHeader data={data} />
       <div className="tt-canvas-node__body nodrag nopan nokey">
-        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
+        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} onEditRules={data.onEditRules} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
       </div>
     </article>
   );
@@ -366,13 +365,16 @@ interface CanvasWorkspaceProps {
   emptyContent?: ReactNode;
   openedObjectId?: string | null;
   onOpenObject?: (id: string | null) => void;
+  onEditRules?: () => void;
 }
 
-function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
+function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject, onEditRules }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, CanvasEdge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
-  const workspaceKey = view.id + ':' + view.epoch;
+  const workspaceKey = canvasLayoutScopeKey(view);
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const sharedLayout = useMemo(() => sharedLayoutForView(view), [view]);
   const remoteLayoutEnabled = persistLayout && view.kind === 'table';
   const sharedLayoutRef = useRef<SharedCanvasLayout | null>(sharedLayout);
@@ -391,6 +393,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const draggingNodeIdsRef = useRef(new Set<string>());
   const dragStartPositionsRef = useRef(new Map<string, CanvasPoint>());
   const layoutCommandQueueRef = useRef(Promise.resolve());
+  const layoutScopeRef = useRef({ key: workspaceKey, generation: 0 });
+  const pendingSeedNodeIdsRef = useRef(new Set<string>());
+  const seedAttemptCountsRef = useRef(new Map<string, number>());
   const layoutMoveSequenceRef = useRef(0);
   const layoutBlockedThroughRef = useRef(0);
   const appliedSharedLayoutRevisionRef = useRef<number | null>(null);
@@ -399,6 +404,31 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const openObjectFocusSequenceRef = useRef(0);
   const canvasInteractionRevisionRef = useRef(0);
   const [openObjectFocusSequence, setOpenObjectFocusSequence] = useState(0);
+  if (layoutScopeRef.current.key !== workspaceKey) {
+    layoutScopeRef.current = { key: workspaceKey, generation: layoutScopeRef.current.generation + 1 };
+    layoutCommandQueueRef.current = Promise.resolve();
+    pendingSeedNodeIdsRef.current.clear();
+    seedAttemptCountsRef.current.clear();
+    draggingNodeIdsRef.current.clear();
+    dragStartPositionsRef.current.clear();
+    layoutMoveSequenceRef.current = 0;
+    layoutBlockedThroughRef.current = 0;
+  }
+  useEffect(() => {
+    if (layoutScopeRef.current.key !== workspaceKey) {
+      layoutScopeRef.current = { key: workspaceKey, generation: layoutScopeRef.current.generation + 1 };
+    }
+    const mountedScope = layoutScopeRef.current;
+    const pendingSeedNodeIds = pendingSeedNodeIdsRef.current;
+    const seedAttemptCounts = seedAttemptCountsRef.current;
+    return () => {
+      if (layoutScopeRef.current !== mountedScope) return;
+      layoutScopeRef.current = { key: '', generation: mountedScope.generation + 1 };
+      layoutCommandQueueRef.current = Promise.resolve();
+      pendingSeedNodeIds.clear();
+      seedAttemptCounts.clear();
+    };
+  }, [workspaceKey]);
   const cancelPendingOpenObjectFocus = useCallback(() => {
     const request = pendingOpenObjectFocusRef.current;
     if (!request) return;
@@ -435,6 +465,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
   const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
+  const activeOpenedIdRef = useRef(activeOpenedId);
+  activeOpenedIdRef.current = activeOpenedId;
   const [objectsMenuOpen, setObjectsMenuOpen] = useState(false);
   const [previousView, setPreviousView] = useState<{ x: number; y: number; zoom: number } | null>(null);
   useEffect(() => { setPreviousView(null); }, [view.id, view.epoch]);
@@ -446,13 +478,12 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const [revisionNotice, setRevisionNotice] = useState<{ key: string; message: string } | null>(null);
 
   useEffect(() => {
-    const workspaceKey = view.id + ':' + view.epoch;
     if (localPhysicsWorkspace.current !== workspaceKey || !localPhysicsDirty.current) {
       localPhysicsWorkspace.current = workspaceKey;
       localPhysicsDirty.current = false;
       if (teachingParams) setLocalPhysics(teachingParams);
     }
-  }, [view.id, view.epoch, teachingParams?.force, teachingParams?.mass, teachingParams?.time]);
+  }, [workspaceKey, teachingParams?.force, teachingParams?.mass, teachingParams?.time]);
   const changeLocalPhysics = useCallback((next: PhysicsParams) => {
     localPhysicsDirty.current = true;
     setLocalPhysics(next);
@@ -473,22 +504,27 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [persistLayout, workspaceKey]);
 
   const commitUserPosition = useCallback((id: string, position: CanvasPoint, before?: CanvasPoint) => {
+    const scope = layoutScopeRef.current;
+    if (scope.key !== workspaceKey) return;
     rememberPosition(id, position);
-    if (!remoteLayoutEnabled || !isSharedCanvasNode(id)) return;
+    if (!remoteLayoutEnabled || !isSharedCanvasNodeForView(id, view)) return;
     const sequence = ++layoutMoveSequenceRef.current;
+    const isCurrentScope = () => layoutScopeRef.current === scope;
     const revertToCanonical = () => {
+      if (!isCurrentScope()) return;
       const canonical = sharedLayoutRef.current?.positions[id] ?? before;
       if (!canonical) return;
       workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: canonical };
       setNodes((current) => current.map((node) => node.id === id ? { ...node, position: { x: canonical.x, y: canonical.y } } : node));
     };
-    const applyCanonicalLayout = (canonicalLayout: SharedCanvasLayout) => {
+    const applyCanonicalLayout = (canonicalLayout: SharedCanvasLayout, canonicalView: WorkspaceView) => {
+      if (!isCurrentScope()) return;
       sharedLayoutRef.current = canonicalLayout;
       appliedSharedLayoutRevisionRef.current = canonicalLayout.revision;
       const canonical = canonicalLayout.positions[id] ?? position;
       const visibleCanonicalPositions = new Map<string, CanvasPoint>();
       for (const [nodeId, point] of Object.entries(canonicalLayout.positions)) {
-        if (!isSharedCanvasNode(nodeId)) continue;
+        if (!isSharedCanvasNodeForView(nodeId, canonicalView)) continue;
         workspacePositionsRef.current = { ...workspacePositionsRef.current, [nodeId]: { ...point, pinned: true } };
         pinnedNodeIdsRef.current.add(nodeId);
         visibleCanonicalPositions.set(nodeId, point);
@@ -500,13 +536,16 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       }));
     };
     const send = async () => {
+      if (!isCurrentScope()) return;
       if (sequence <= layoutBlockedThroughRef.current) {
         revertToCanonical();
         return;
       }
       const attempt = async (expectedLayoutRevision: number) => {
+        if (!isCurrentScope()) return null;
         try {
-          return await onCommand('canvas.layout', { expectedLayoutRevision, positions: { [id]: { ...position, pinned: true } } });
+          const updated = await onCommand('canvas.layout', { expectedLayoutRevision, positions: { [id]: { ...position, pinned: true } } });
+          return isCurrentScope() && updated && canvasLayoutScopeKey(updated) === workspaceKey ? updated : null;
         } catch {
           return null;
         }
@@ -514,9 +553,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       const expectedLayoutRevision = sharedLayoutRef.current?.revision ?? 0;
       let updated = await attempt(expectedLayoutRevision);
       if (!updated) {
+        if (!isCurrentScope()) return;
         // Someone else may have moved a different card at the same moment. Retry once on
         // the newer layout, but only if nobody moved this card in between (F007).
         await new Promise((resolve) => window.setTimeout(resolve, 350));
+        if (!isCurrentScope()) return;
         const latest = sharedLayoutRef.current;
         const latestPoint = latest?.positions[id];
         const untouched = !latestPoint || (before !== undefined && Math.abs(latestPoint.x - before.x) < 0.5 && Math.abs(latestPoint.y - before.y) < 0.5);
@@ -524,16 +565,17 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           updated = await attempt(latest.revision);
         }
       }
+      if (!isCurrentScope()) return;
       if (!updated) {
         layoutBlockedThroughRef.current = Math.max(layoutBlockedThroughRef.current, layoutMoveSequenceRef.current);
         revertToCanonical();
         return;
       }
       const canonicalLayout = sharedLayoutForView(updated);
-      if (canonicalLayout) applyCanonicalLayout(canonicalLayout);
+      if (canonicalLayout) applyCanonicalLayout(canonicalLayout, updated);
     };
     layoutCommandQueueRef.current = layoutCommandQueueRef.current.then(send, send);
-  }, [onCommand, remoteLayoutEnabled, rememberPosition, setNodes]);
+  }, [onCommand, remoteLayoutEnabled, rememberPosition, setNodes, view, workspaceKey]);
 
   const moveCanvasObject = useCallback((id: string, dx: number, dy: number) => {
     cancelPendingOpenObjectFocus();
@@ -682,7 +724,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
 
   useEffect(() => {
     const isNewWorkspace = layoutWorkspaceRef.current !== workspaceKey;
-    const visibleSharedIds = new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)].filter(isSharedCanvasNode));
+    const visibleSharedIds = new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)].filter((id) => isSharedCanvasNodeForView(id, view)));
     const storedLayout = isNewWorkspace && persistLayout ? readCanvasLayout(workspaceKey) : null;
     const remoteLayoutChanged = remoteLayoutEnabled && sharedLayout !== null
       && (isNewWorkspace || (sharedLayout.revision >= (appliedSharedLayoutRevisionRef.current ?? -1)
@@ -692,7 +734,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       workspacePositionsRef.current = { ...(storedLayout?.positions ?? {}) };
       pinnedNodeIdsRef.current.clear();
       for (const [id, point] of Object.entries(workspacePositionsRef.current)) {
-        if (remoteLayoutEnabled && isSharedCanvasNode(id)) {
+        if (remoteLayoutEnabled && isSharedCanvasNodeForView(id, view)) {
           delete workspacePositionsRef.current[id];
           continue;
         }
@@ -703,10 +745,10 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     }
     if (remoteLayoutChanged && sharedLayout) {
       for (const id of Object.keys(workspacePositionsRef.current)) {
-        if (isSharedCanvasNode(id)) delete workspacePositionsRef.current[id];
+        if (isSharedCanvasNodeForView(id, view)) delete workspacePositionsRef.current[id];
       }
       for (const [id, point] of Object.entries(sharedLayout.positions)) {
-        if (!isSharedCanvasNode(id) || !visibleSharedIds.has(id)) continue;
+        if (!isSharedCanvasNodeForView(id, view) || !visibleSharedIds.has(id)) continue;
         workspacePositionsRef.current[id] = point;
         if (point.pinned !== false) pinnedNodeIdsRef.current.add(id);
       }
@@ -728,7 +770,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         ariaLabel: spec.title,
         dragHandle: '.tt-canvas-node__head',
         position: (() => {
-          const isShared = remoteLayoutEnabled && isSharedCanvasNode(spec.id);
+          const isShared = remoteLayoutEnabled && isSharedCanvasNodeForView(spec.id, view);
           const remotePosition = isShared ? sharedLayout?.positions[spec.id] : undefined;
           const isNewNode = !previousPositions.has(spec.id);
           if ((isNewWorkspace || remoteLayoutChanged || isNewNode) && remotePosition && !draggingNodeIdsRef.current.has(spec.id)) return { x: remotePosition.x, y: remotePosition.y };
@@ -766,6 +808,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           localPhysics,
           onLocalPhysicsChange: changeLocalPhysics,
           onResetLocalPhysics: resetLocalPhysics,
+          onEditRules,
         },
       }));
       const maxY = visiblePlanNodes.reduce((maximum, spec) => Math.max(maximum, (previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec)).y), 0);
@@ -776,7 +819,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         dragHandle: '.tt-canvas-node__head',
         position: (() => {
           // Table-wide cards (people, history) follow the shared layout like plan cards (F007).
-          const isShared = remoteLayoutEnabled && isSharedCanvasNode(object.id);
+          const isShared = remoteLayoutEnabled && isSharedCanvasNodeForView(object.id, view);
           const remotePosition = isShared ? sharedLayout?.positions[object.id] : undefined;
           const isNewNode = !previousPositions.has(object.id);
           if ((isNewWorkspace || remoteLayoutChanged || isNewNode) && remotePosition && !draggingNodeIdsRef.current.has(object.id)) return { x: remotePosition.x, y: remotePosition.y };
@@ -802,7 +845,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject]);
+  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
@@ -1008,19 +1051,133 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     if (initial) setLayoutReadyKey(workspaceKey);
   }, [view.kind, nodes, edges, workspaceKey, visibleAuxiliaryObjects, setNodes]);
 
-  // Cards nobody has placed yet are laid out on each screen. Once that first layout is
-  // ready, write it to the table so everyone starts from the same arrangement (F007).
-  const seededLayoutRef = useRef('');
+  // Share positions only after newly rendered nodes have measured and settled. Keep
+  // the in-flight IDs private to this actor/epoch scope and seed late arrivals too.
   useEffect(() => {
-    if (!remoteLayoutEnabled || layoutReadyKey !== workspaceKey || seededLayoutRef.current === workspaceKey) return;
+    if (!remoteLayoutEnabled || layoutReadyKey !== workspaceKey || nodes.length === 0) return;
     if (view.actor.role !== 'owner' && view.actor.role !== 'participant') return;
+    const scope = layoutScopeRef.current;
     const known = sharedLayoutRef.current?.positions ?? {};
-    const missing = nodes.filter((node) => isSharedCanvasNode(node.id) && !known[node.id] && !draggingNodeIdsRef.current.has(node.id)).slice(0, 24);
-    seededLayoutRef.current = workspaceKey;
-    if (missing.length === 0) return;
-    const positions = Object.fromEntries(missing.map((node) => [node.id, { x: Math.round(node.position.x), y: Math.round(node.position.y), pinned: true }]));
-    void onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, positions }).catch(() => null);
-  }, [remoteLayoutEnabled, layoutReadyKey, workspaceKey, nodes, onCommand, view.actor.role]);
+    const revision = sharedLayoutRef.current?.revision ?? 0;
+    const seedIds = missingSharedCanvasNodeIds(nodes, view, known, pendingSeedNodeIdsRef.current, draggingNodeIdsRef.current, activeOpenedId, 24)
+      .filter((id) => (seedAttemptCountsRef.current.get(`${revision}:${id}`) ?? 0) < 2);
+    if (seedIds.length === 0) return;
+    for (const id of seedIds) {
+      pendingSeedNodeIdsRef.current.add(id);
+      const attemptKey = `${revision}:${id}`;
+      seedAttemptCountsRef.current.set(attemptKey, (seedAttemptCountsRef.current.get(attemptKey) ?? 0) + 1);
+    }
+
+    const isCurrentScope = () => layoutScopeRef.current === scope;
+    const pause = () => new Promise<void>((resolve) => window.setTimeout(resolve, 32));
+    const settledPositions = async (ids: readonly string[]): Promise<Map<string, CanvasPoint> | null> => {
+      let previousGeometry = '';
+      let stableSince = 0;
+      let stableSamples = 0;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await pause();
+        if (!isCurrentScope()) return null;
+        const eligibleIds = ids.filter((id) => activeOpenedIdRef.current !== id && !draggingNodeIdsRef.current.has(id));
+        if (eligibleIds.length === 0) return new Map();
+        const measured = eligibleIds.map((id) => flow.getNode(id));
+        if (measured.some((node) => !node || !Number.isFinite(node.measured?.width) || !Number.isFinite(node.measured?.height))) {
+          previousGeometry = '';
+          stableSince = 0;
+          stableSamples = 0;
+          continue;
+        }
+        const geometry = measured.map((node) => {
+          if (!node) return '';
+          const width = node.measured?.width;
+          const height = node.measured?.height;
+          if (typeof width !== 'number' || typeof height !== 'number') return '';
+          return [node.position.x, node.position.y, width, height]
+            .map((value) => String(Math.round(value * 2) / 2)).join(',');
+        }).join('|');
+        const now = performance.now();
+        if (geometry === previousGeometry) stableSamples += 1;
+        else {
+          previousGeometry = geometry;
+          stableSince = now;
+          stableSamples = 0;
+        }
+        if (stableSamples >= 2 && now - stableSince >= 90) {
+          const positions = new Map<string, CanvasPoint>();
+          for (let index = 0; index < eligibleIds.length; index += 1) {
+            const nodeId = eligibleIds[index];
+            const node = measured[index];
+            if (nodeId === undefined || !node) return null;
+            positions.set(nodeId, { x: node.position.x, y: node.position.y });
+          }
+          return positions;
+        }
+      }
+      return null;
+    };
+    const currentSeedPositions = (ids: readonly string[]) => {
+      const currentView = viewRef.current;
+      const currentKnown = sharedLayoutRef.current?.positions ?? {};
+      const otherPendingIds = new Set(pendingSeedNodeIdsRef.current);
+      for (const id of seedIds) otherPendingIds.delete(id);
+      const eligible = missingSharedCanvasNodeIds(
+        ids.map((id) => ({ id })), currentView, currentKnown, otherPendingIds,
+        draggingNodeIdsRef.current, activeOpenedIdRef.current, 24,
+      );
+      const positions: Record<string, CanvasPoint & { pinned: boolean }> = {};
+      for (const id of eligible) {
+        const node = flow.getNode(id);
+        if (!node || !Number.isFinite(node.position.x) || !Number.isFinite(node.position.y)) continue;
+        positions[id] = { x: Math.round(node.position.x), y: Math.round(node.position.y), pinned: true };
+      }
+      return positions;
+    };
+    const send = async () => {
+      try {
+        if (!isCurrentScope()) return;
+        const settled = await settledPositions(seedIds);
+        if (!isCurrentScope()) return;
+        if (!settled || settled.size === 0) return;
+        const settledIds = [...settled.keys()];
+        let positions = currentSeedPositions(settledIds);
+        if (Object.keys(positions).length === 0) return;
+        const expectedLayoutRevision = sharedLayoutRef.current?.revision ?? 0;
+        const attempt = async (revision: number, currentPositions: Record<string, CanvasPoint & { pinned: boolean }>) => {
+          if (!isCurrentScope()) return null;
+          try {
+            const updated = await onCommand('canvas.layout', { expectedLayoutRevision: revision, positions: currentPositions });
+            return isCurrentScope() && updated && canvasLayoutScopeKey(updated) === workspaceKey ? updated : null;
+          } catch {
+            return null;
+          }
+        };
+        let updated = await attempt(expectedLayoutRevision, positions);
+        if (!updated) {
+          if (!isCurrentScope()) return;
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+          if (!isCurrentScope()) return;
+          const latest = sharedLayoutRef.current;
+          if (latest && latest.revision !== expectedLayoutRevision) {
+            const latestAttemptIds = settledIds.filter((id) => (seedAttemptCountsRef.current.get(`${latest.revision}:${id}`) ?? 0) < 2);
+            for (const id of latestAttemptIds) {
+              const attemptKey = `${latest.revision}:${id}`;
+              seedAttemptCountsRef.current.set(attemptKey, (seedAttemptCountsRef.current.get(attemptKey) ?? 0) + 1);
+            }
+            positions = currentSeedPositions(latestAttemptIds);
+            if (Object.keys(positions).length > 0) updated = await attempt(latest.revision, positions);
+          }
+        }
+        if (!isCurrentScope() || !updated) return;
+        const canonical = sharedLayoutForView(updated);
+        if (!canonical) return;
+        if (!sharedLayoutRef.current || canonical.revision >= sharedLayoutRef.current.revision) sharedLayoutRef.current = canonical;
+      } finally {
+        if (isCurrentScope()) for (const id of seedIds) pendingSeedNodeIdsRef.current.delete(id);
+      }
+    };
+    const queued = layoutCommandQueueRef.current.then(send, send);
+    layoutCommandQueueRef.current = queued;
+    void queued.catch(() => undefined);
+  }, [remoteLayoutEnabled, layoutReadyKey, workspaceKey, nodes, edges, sharedLayout?.revision, onCommand, view, activeOpenedId, flow]);
 
   const choose = useCallback((event: React.MouseEvent, node: CanvasNode) => {
     // A content control may have navigated to another object. Do not select its

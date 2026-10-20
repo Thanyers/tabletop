@@ -33,7 +33,7 @@ const blockedExternal = [];
 const providerResponses = [];
 const tableActRequests = [];
 let providerCalls = 0;
-const lastUiDiagnostics = null;
+let lastUiDiagnostics = null;
 let browser;
 const pages = [];
 const actorsById = new Map();
@@ -330,13 +330,45 @@ try {
   }
 
   async function assertZoomSurvivesPendingObjectFocus(page, tableId, nodeId) {
+    const editor = page.getByTestId('canvas-object-editor');
+    const closeCurrentEditor = async () => {
+      const closeObject = page.getByRole('button', { name: 'Close object', exact: true });
+      if (await closeObject.count() > 0) {
+        await closeObject.first().click();
+        await expect(editor).toHaveCount(0);
+      }
+    };
+    await closeCurrentEditor();
+    await waitForStableCanvasViewport(page);
+    await closeCurrentEditor();
+    await expect(editor).toHaveCount(0);
+    const waitForVisibleSharedPositions = async () => {
+      await expect.poll(async () => {
+        const nodeStates = await page.locator('.tt-canvas-node').evaluateAll((nodes) => nodes.map((node) => ({
+          id: node.closest('.react-flow__node')?.getAttribute('data-id'),
+          opened: node.getAttribute('data-testid') === 'canvas-object-editor',
+        })));
+        const visibleStates = nodeStates.filter(({ id }) => id && (/^table\.(collection|view)\.[a-z][a-z0-9_-]{0,39}$|^table\.(actions|rules)$|^workspace\.(people|history)$/).test(id));
+        const eligibleIds = visibleStates.filter(({ opened }) => !opened).map(({ id }) => id);
+        const domain = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
+        const missingIds = eligibleIds.filter((id) => {
+          const position = domain.canvasLayout?.positions?.[id];
+          return !position || !Number.isFinite(position.x) || !Number.isFinite(position.y);
+        });
+        return {
+          ready: eligibleIds.length > 0 && missingIds.length === 0,
+          eligibleIds,
+          openedIds: visibleStates.filter(({ opened }) => opened).map(({ id }) => id),
+          missingIds,
+        };
+      }, { timeout: 10_000, intervals: [50, 100, 150] }).toMatchObject({ ready: true });
+    };
+    await waitForVisibleSharedPositions();
+    await waitForStableCanvasViewport(page);
+    await waitForVisibleSharedPositions();
+    await expect(editor).toHaveCount(0);
     const before = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
     const beforeViewport = await readCanvasViewport(page);
-    const dock = await openObjects(page);
-    const openCard = dock.getByTestId(`open-canvas-${nodeId}`);
-    const zoomIn = page.getByRole('button', { name: 'Zoom In', exact: true });
-    await expect(openCard).toBeVisible();
-    await expect(zoomIn).toBeVisible();
     const mutatingRequests = [];
     const recordMutation = request => {
       const requestUrl = new URL(request.url());
@@ -346,29 +378,33 @@ try {
     };
     page.on('request', recordMutation);
     try {
+      const dock = await openObjects(page);
+      const openCard = dock.getByTestId(`open-canvas-${nodeId}`);
+      const zoomIn = page.getByRole('button', { name: 'Zoom In', exact: true });
+      await expect(openCard).toBeVisible();
+      await expect(zoomIn).toBeVisible();
       // Keep the two real pointer clicks adjacent: the second lands while the opened card's
       // geometry-based focus request is still pending, without waiting for the card to settle.
       await openCard.click();
       await zoomIn.click();
+      await expect.poll(async () => (await readCanvasViewport(page)).zoom)
+        .toBeGreaterThan(beforeViewport.zoom);
+      const zoomAfterClick = await readCanvasViewport(page);
+      await expect(editor).toHaveAttribute('data-canvas-object', nodeId);
+      await expect(editor).toBeVisible();
+      await waitForStableBoundingBox(editor);
+      const settledViewport = await waitForStableCanvasViewport(page);
+      expect(zoomAfterClick.zoom).toBeGreaterThan(beforeViewport.zoom);
+      expect(Math.abs(settledViewport.zoom - zoomAfterClick.zoom)).toBeLessThan(0.01);
+      expect(Math.abs(settledViewport.x - zoomAfterClick.x)).toBeLessThan(1);
+      expect(Math.abs(settledViewport.y - zoomAfterClick.y)).toBeLessThan(1);
+      const after = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
+      expect(mutatingRequests).toEqual([]);
+      expect(after).toEqual(before);
+      mark('Generated card open followed immediately by user zoom; settled viewport retained the zoom with no API mutations');
     } finally {
       page.off('request', recordMutation);
     }
-    await expect.poll(async () => (await readCanvasViewport(page)).zoom)
-      .toBeGreaterThan(beforeViewport.zoom);
-    const zoomAfterClick = await readCanvasViewport(page);
-    const editor = page.getByTestId('canvas-object-editor');
-    await expect(editor).toHaveAttribute('data-canvas-object', nodeId);
-    await expect(editor).toBeVisible();
-    await waitForStableBoundingBox(editor);
-    const settledViewport = await waitForStableCanvasViewport(page);
-    expect(zoomAfterClick.zoom).toBeGreaterThan(beforeViewport.zoom);
-    expect(Math.abs(settledViewport.zoom - zoomAfterClick.zoom)).toBeLessThan(0.01);
-    expect(Math.abs(settledViewport.x - zoomAfterClick.x)).toBeLessThan(1);
-    expect(Math.abs(settledViewport.y - zoomAfterClick.y)).toBeLessThan(1);
-    expect(mutatingRequests).toEqual([]);
-    const after = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
-    expect(after).toEqual(before);
-    mark('Generated card open followed immediately by user zoom; settled viewport retained the zoom with no API mutations');
   }
 
   async function createFreshTable(owner) {
@@ -381,12 +417,15 @@ try {
     expect(response.status()).toBe(201);
     const room = await response.json();
     await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
+    await expect(owner.getByTestId('table-chat-bar')).toBeVisible();
+    await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
     return room;
   }
 
   async function attachSource(owner, tableId, file) {
-    const editor = await openCanvasObject(owner, 'table.sources');
-    await editor.getByLabel('Choose table source files').setInputFiles({
+    const bar = owner.getByTestId('table-chat-bar');
+    await expect(bar).toBeVisible();
+    await bar.getByLabel('Choose a file to attach', { exact: true }).setInputFiles({
       name: file.filename, mimeType: 'text/plain', buffer: Buffer.from(file.text, 'utf8'),
     });
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.sources.length).toBe(1);
@@ -396,42 +435,126 @@ try {
     return source;
   }
 
-  async function openAssistantIfCollapsed(page) {
-    const island = page.getByTestId('table-assistant-panel');
-    if (await island.getAttribute('data-collapsed') !== 'true') return;
-    const bubble = page.getByTestId('table-assistant-bubble');
-    await expect(bubble).toBeVisible();
-    await bubble.click();
-    await expect(island).toHaveAttribute('data-collapsed', 'false');
+  async function sendTableMessage(page, promptText, { sourceNames = [], expectConsent = true, cancelFirst = false, workspaceId = null } = {}) {
+    const bar = page.getByTestId('table-chat-bar');
+    const composer = bar.getByRole('textbox', { name: 'Message', exact: true });
+    const submit = bar.getByRole('button', { name: 'Send message', exact: true });
+    await expect(composer).toBeVisible();
+    await composer.fill(promptText);
+    if (!expectConsent) {
+      await submit.click();
+      return null;
+    }
+    const consent = bar.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+    let modelPosts = 0;
+    const countModelPosts = (request) => {
+      if (request.method() === 'POST' && /\/api\/workspaces\/[^/]+\/model$/.test(new URL(request.url()).pathname)) modelPosts += 1;
+    };
+    page.on('request', countModelPosts);
+    try {
+      await submit.click();
+      await expect(consent).toBeVisible();
+      const dialogText = (await consent.innerText()).replace(/\s+/gu, ' ');
+      expect(dialogText).toMatch(/current active rules, records, and turn|current table context/iu);
+      expect(dialogText).toContain('Chat history is not included.');
+      expect(dialogText).toContain('Private source files included');
+      for (const filename of sourceNames) expect(dialogText).toContain(filename);
+      if (sourceNames.length === 0) expect(dialogText).toMatch(/no private source files are attached|not included/iu);
+      if (cancelFirst) {
+        expect(modelPosts).toBe(0);
+        await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(consent).toHaveCount(0);
+        await expect(composer).toHaveValue(promptText);
+        expect(modelPosts).toBe(0);
+        await submit.click();
+        await expect(consent).toBeVisible();
+        for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
+      }
+      expect(modelPosts).toBe(0);
+      const sendButton = consent.getByRole('button', { name: 'Send', exact: true });
+      await expect(sendButton).toBeEnabled();
+      const modelPost = (request) => request.method() === 'POST' && /\/api\/workspaces\/[^/]+\/model$/.test(new URL(request.url()).pathname);
+      const response = responseAfter(page, (item) => modelPost(item.request()) && item.request().method() === 'POST');
+      const requestObserved = page.waitForRequest(modelPost, { timeout: 5_000 }).then(
+        (request) => ({ request }),
+        (error) => ({ error }),
+      );
+      await sendButton.evaluate((button) => {
+        window.__tableChatConsentClickCount = 0;
+        button.addEventListener('click', () => { window.__tableChatConsentClickCount += 1; }, { capture: true, once: true });
+      });
+      try {
+        await sendButton.click();
+        // Consent acceptance closes the dialog synchronously in the UI before the request resolves.
+        // This makes a click that never reaches the handler distinguishable from a slow endpoint.
+        await expect(consent).toHaveCount(0, { timeout: 3_000 });
+        const observed = await requestObserved;
+        if (observed.error) throw observed.error;
+        expect(modelPosts).toBe(1);
+        return await response(() => Promise.resolve());
+      } catch (error) {
+        const clickCount = await page.evaluate(() => window.__tableChatConsentClickCount ?? 0).catch(() => null);
+        const sendState = await sendButton.evaluate((button) => ({
+          disabled: button.disabled,
+          ariaDisabled: button.getAttribute('aria-disabled'),
+          text: button.textContent?.trim() ?? '',
+        })).catch(() => null);
+        const uiState = {
+          promptText,
+          workspaceId,
+          sourceNames,
+          modelPosts,
+          consentVisible: await consent.isVisible().catch(() => false),
+          composerEnabled: await composer.isEnabled().catch(() => false),
+          sendState,
+          consentClickCount: clickCount,
+          barText: (await bar.innerText().catch(() => '')).replace(/\s+/gu, ' ').slice(0, 1_000),
+          workspace: workspaceId ? await api(page, `/api/workspaces/${workspaceId}`).catch((apiError) => ({ error: String(apiError) })) : null,
+        };
+        lastUiDiagnostics = uiState;
+        const requestState = await requestObserved;
+        throw new Error(`Consent Send handoff failed: ${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ ...uiState, requestObserved: !requestState.error, requestError: requestState.error ? String(requestState.error) : undefined }, null, 2)}`, { cause: error });
+      }
+    } finally {
+      page.off('request', countModelPosts);
+    }
   }
 
-  async function askForDraft(owner, tableId, scenario, phase, file) {
+  function draftPrompt(scenario, phase) {
+    return `scenario:${scenario.id}; phase:${phase}. Create a bounded, understandable Canvas for this synthetic fixture.`;
+  }
+
+  function draftCardForPrompt(page, prompt) {
+    const draftNode = page.locator('.tt-canvas-node--auxiliary').filter({ hasText: prompt.slice(0, 36) }).first();
+    return draftNode.getByTestId('table-chat-answer');
+  }
+
+  async function askForDraft(owner, tableId, scenario, phase, file, { cancelFirst = false } = {}) {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-    await openAssistantIfCollapsed(owner);
-    const assistant = owner.getByTestId('table-assistant');
-    await expect(assistant).toBeVisible();
-    await assistant.getByRole('button', { name: /Open rules and sources|Set up this table from sources/ }).click();
-    await assistant.getByLabel('How should this table work?', { exact: true }).fill(
-      `scenario:${scenario.id}; phase:${phase}. Create a bounded, understandable Canvas for this synthetic fixture.`,
-    );
-    const consent = assistant.getByLabel(file
-      ? `Send this request, table state and 1 source file to AI.`
-      : 'Send this request, table state and 0 source files to AI.');
-    await consent.check();
-    const request = responseAfter(owner, (response) => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
-    expect((await request(() => assistant.getByRole('button', { name: 'Prepare rule draft', exact: true }).click())).status()).toBe(202);
-    await expect(assistant.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 30_000 });
+    if (before.domain.program || before.domain.candidate?.status === 'active') {
+      const rules = await openCanvasObject(owner, 'table.rules');
+      await clickVisible(rules.getByRole('button', { name: 'Edit rules', exact: true }));
+    }
+    const sourceNames = before.domain.sources.map((source) => source.filename);
+    const prompt = draftPrompt(scenario, phase);
+    const response = await sendTableMessage(owner, prompt, { sourceNames, cancelFirst, workspaceId: tableId });
+    expect(response?.status()).toBe(202);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('draft');
     const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(candidate.domain.program).toEqual(before.domain.program);
     expect(candidate.domain.records).toEqual(before.domain.records);
     expect(candidate.domain.candidate?.change.kind).toBe('table');
+    const draftCard = draftCardForPrompt(owner, prompt);
+    await expect(draftCard).toBeVisible({ timeout: 30_000 });
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
     return candidate;
   }
 
-  async function assertPrivateCandidatePreview(owner, tableId, candidate, expectedControl) {
-    await openAssistantIfCollapsed(owner);
-    await owner.getByRole('button', { name: 'Review draft', exact: true }).click();
+  async function assertPrivateCandidatePreview(owner, tableId, candidate, expectedControl, prompt) {
+    const draftCard = draftCardForPrompt(owner, prompt);
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
+    await clickVisible(draftCard.getByRole('button', { name: 'Review rules', exact: true }));
     const editor = owner.getByTestId('canvas-object-editor');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
     await expect(editor).toBeVisible();
@@ -791,11 +914,11 @@ try {
     const created = await createFreshTable(owner);
     const tableId = created.id;
     const source = scenario.file ? await attachSource(owner, tableId, scenario.file) : null;
-    const draft = await askForDraft(owner, tableId, scenario, 'initial-draft', source);
+    const draft = await askForDraft(owner, tableId, scenario, 'initial-draft', source, { cancelFirst: scenario.id === 'cafe' });
     const expectedControl = scenario.action === 'button'
       ? scenario.id === 'cafe' ? 'Advance 5 minutes' : 'Recalculate payment'
       : scenario.action === 'slider' ? 'slider' : 'scene';
-    const simulatedEditor = await assertPrivateCandidatePreview(owner, tableId, draft, expectedControl);
+    const simulatedEditor = await assertPrivateCandidatePreview(owner, tableId, draft, expectedControl, draftPrompt(scenario, 'initial-draft'));
     const activated = await advanceLifecycle(owner, tableId, simulatedEditor);
     expect(activated.domain.program.canvas.views.length).toBeGreaterThan(0);
     expect(activated.domain.records).toEqual(draft.domain.candidate.change.initialRecords);
@@ -842,26 +965,35 @@ try {
     expect(afterSimulation.domain.records).toEqual(recordSnapshot);
     expect(afterSimulation.domain.program).toEqual(beforeEdit.domain.program);
     await advanceLifecycle(owner, tableId, currentEditor);
+    const newViewId = 'table.view.incremental-result';
+    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.canvasLayout?.positions?.[newViewId], { timeout: 15_000 }).toBeTruthy();
     const afterEdit = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const newViewPoint = afterEdit.domain.canvasLayout.positions[newViewId];
     expect(afterEdit.domain.records).toEqual(recordSnapshot);
+    expect(afterEdit.domain.dataRevision).toBe(beforeEdit.domain.dataRevision);
     expect(afterEdit.domain.canvasLayout.positions[`table.view.${pinnedView.id}`]).toEqual(pin.point);
-    expect(afterEdit.domain.canvasLayout.revision).toBe(pin.layout.revision);
+    expect(afterEdit.domain.canvasLayout.revision).toBeGreaterThan(pin.layout.revision);
     expect(afterEdit.domain.program.canvas.views).toHaveLength(viewsBeforeEdit.length + 1);
     expect(afterEdit.domain.program.canvas.views.at(-1).id).toBe('incremental-result');
     await assertSharedPosition(owner, `table.view.${pinnedView.id}`, pin.point);
+    await assertSharedPosition(owner, newViewId, newViewPoint);
 
     for (const member of members) {
       await expect.poll(async () => (await api(member, `/api/workspaces/${tableId}`)).body.domain.program.canvas.views.length).toBe(viewsBeforeEdit.length + 1);
       const projected = (await api(member, `/api/workspaces/${tableId}`)).body;
       expect(projected.domain.records).toEqual(recordSnapshot);
       expect(projected.domain.canvasLayout.positions[`table.view.${pinnedView.id}`]).toEqual(pin.point);
+      expect(projected.domain.canvasLayout.positions[newViewId]).toEqual(newViewPoint);
       await assertSharedPosition(member, `table.view.${pinnedView.id}`, pin.point);
+      await assertSharedPosition(member, newViewId, newViewPoint);
       await member.reload();
       await expect(member.locator('.tt-canvas-panel')).toBeVisible();
       const resumed = (await api(member, `/api/workspaces/${tableId}`)).body;
       expect(resumed.domain.records).toEqual(recordSnapshot);
       expect(resumed.domain.canvasLayout.positions[`table.view.${pinnedView.id}`]).toEqual(pin.point);
+      expect(resumed.domain.canvasLayout.positions[newViewId]).toEqual(newViewPoint);
       await assertSharedPosition(member, `table.view.${pinnedView.id}`, pin.point);
+      await assertSharedPosition(member, newViewId, newViewPoint);
     }
     if (source) await assertMemberCannotUsePrivateTools(memberOne, tableId, afterEdit.revision, afterEdit.epoch, source);
     const screenshotViewId = {

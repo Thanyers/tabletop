@@ -28,6 +28,7 @@ export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   emptyContent?: ReactNode;
   openedObjectId?: string | null;
   onOpenObject?: (id: string | null) => void;
+  onEditRules?: () => void;
   onInvite?: () => void;
   aiContent?: ReactNode;
   assistantContent?: ReactNode;
@@ -62,6 +63,7 @@ export function TableSurface({
   emptyContent,
   openedObjectId,
   onOpenObject,
+  onEditRules,
   onInvite,
   aiContent,
   assistantContent,
@@ -162,6 +164,7 @@ export function TableSurface({
             emptyContent={emptyContent}
             openedObjectId={openedObjectId}
             onOpenObject={onOpenObject}
+            onEditRules={onEditRules}
           />
         ) : (
           <div className="tt-plan-error" role="alert">

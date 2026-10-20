@@ -34,6 +34,7 @@ export function sharedCanvasIds(state: TableState): Set<string> {
   if (!state.program) return new Set(ALWAYS_SHARED_CANVAS_IDS);
   return new Set([
     ...ALWAYS_SHARED_CANVAS_IDS,
+    'table.rules',
     'table.actions',
     ...state.program.collections.map(collection => `table.collection.${collection.id}`),
     ...(state.program.canvas?.views ?? []).map(view => `table.view.${view.id}`),

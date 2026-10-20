@@ -24,10 +24,11 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
-| F002 | ตั้งชื่อโต๊ะที่แถบด้านบน | `review` | [F002](docs/features/F002-rename-table.md) |
+| F002 | ตั้งชื่อโต๊ะที่แถบด้านบน | `done` (#29 → dev) | [F002](docs/features/F002-rename-table.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
-| F005 | สร้างภาพ สูตร และเครื่องมือใหม่บน Canvas พร้อม shared layout | `review` | [F005](docs/features/F005-generative-canvas.md) |
+| F005 | สร้างภาพ สูตร และเครื่องมือใหม่บน Canvas พร้อม shared layout | `done` (#24 → dev) | [F005](docs/features/F005-generative-canvas.md) |
+| F006 | โต๊ะข้อมูลเริ่มจากแชท: แชทแถวเดียวกึ่งกลางล่าง · โต๊ะว่างไม่มีการ์ด · คำตอบเป็นการ์ด | `review` (รวม F005/F002/F007 และทดสอบ local ครบ; #30) | [F006](docs/features/F006-chat-first-table.md) |
 | F007 | ตำแหน่งการ์ดเป็นของทั้งโต๊ะ ทุกคนเห็นเหมือนกัน | `review` | [F007](docs/features/F007-shared-card-layout.md) |
 
 ## งาน
@@ -46,10 +47,10 @@
 | F001-T10 | ปรับ browser tests ตาม flow ใหม่ | `todo` | — | — | `tests/*.mjs` | T2, T4, T8 | แต่ละงานแก้เทสต์ของตัวเองได้ งานนี้เก็บส่วนที่เหลือ |
 | F001-T11 | คู่มือผู้ใช้ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | T4, T7, T9 | |
 | CI004 | R1 browser test เปิด server ใหม่ทุก scenario แทนการรอ rate limit | `review` | JitrudeeDongdee (Claude) | `feat/CI004-r1-no-rate-wait` | `tests/tabletop-r1.mjs` | — | hotspot `tests/tabletop-r1.mjs` |
-| F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–120 ตัวอักษร) | `review` | Claude Code | `feat/F002-rename-table` | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | |
-| F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `review` | Claude Code | `feat/F002-rename-table` | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | ชนกับ F003-T1/T3 (ไฟล์ Room เดียวกัน) |
-| F002-T3 | UI แก้ชื่อที่แถบด้านบน | `review` | Claude Code | `feat/F002-rename-table` | `TabletopApp.tsx`, CSS | F002-T2 | hotspot `TabletopApp.tsx` |
-| F002-T4 | คู่มือ + CHANGELOG | `review` | Claude Code | `feat/F002-rename-table` | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F002-T3 | |
+| F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–100 ตัวอักษร) | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | รวมกับ F005 ผ่าน CI ที่ 743ff27 |
+| F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | |
+| F002-T3 | UI แก้ชื่อที่แถบด้านบน | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `TabletopApp.tsx`, CSS | F002-T2 | สมาชิกเห็นชื่อร่วมกัน |
+| F002-T4 | คู่มือ + CHANGELOG | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F002-T3 | |
 | F003-T1 | เอาสมาชิกออก (เจ้าของ) | `todo` | — | — | `server/authority.ts`, `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `TabletopApp.tsx` | — | ต้องเสร็จก่อนเปิดลิงก์ใช้ซ้ำ · ชนกับ F002-T2 |
 | F003-T2 | ออกแบบ + security review ลิงก์ใช้ซ้ำ ให้คนอนุมัติ | `todo` | — | — | `docs/features/F003-reusable-invite-link.md` | — | ไม่ใช่โค้ด |
 | F003-T3 | Room: สถานะลิงก์ + เปิด/ปิด/สร้างใหม่ + redeem แบบใช้ซ้ำ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/*.test.ts` | F003-T1, F003-T2 | |
@@ -61,8 +62,14 @@
 | F004-T3 | กลับ path เดิมหลังล็อกอิน + หน้าเปิดโต๊ะไม่ได้ | `review` | Claude Code | `feat/F004-url-paths` | `TabletopApp.tsx`, `src/tabletop/ui/account.tsx` | F004-T2 | |
 | F004-T4 | Worker/Node ส่ง `index.html` ให้ path ลึก + asset โหลดได้ | `review` | Claude Code | `feat/F004-url-paths` | `server/app.ts`, `wrangler.jsonc`, tests | — | |
 | F004-T5 | ปรับ browser tests + เอกสาร | `review` | Claude Code | `feat/F004-url-paths` | `tests/*.mjs`, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F004-T2 | |
-| F005-T1 | Generative runtime, views, private trial, layout, AI repair/memory และ acceptance | `review` | Codex | `feat/F005-generative-canvas` · [PR #24](https://github.com/Thanyers/tabletop/pull/24) | `src/tabletop/{shared,domain,runtime,ui}/`, `server/`, `cloudflare/`, tests, docs, workflow | — | รวม dev ถึง 253ac58; local unit 355, CF 71, browser 7+22, generated 4 เรื่อง, AI จริง 3 เรื่อง ผ่าน; ยังไม่ deploy |
+| F005-T1 | Generative runtime, views, private trial, layout, AI repair/memory และ acceptance | `done` | Codex | `feat/F005-generative-canvas` · [PR #24](https://github.com/Thanyers/tabletop/pull/24) merged | `src/tabletop/{shared,domain,runtime,ui}/`, `server/`, `cloudflare/`, tests, docs, workflow | — | post-merge CI ที่ f0be463 ผ่าน: unit 355, CF 71, browser 7+22, generated 4 เรื่อง; AI จริง 3 เรื่องผ่านใน local acceptance; ยังไม่ deploy |
 | CI001 | ESLint ใน CI (ห้าม `any`/`@ts-ignore`) + pre-commit hook husky | `review` | JitrudeeDongdee (Claude) | `feat/CI001-eslint-husky` | `eslint.config.js` (ใหม่), `.husky/` (ใหม่), `package.json`, `package-lock.json`, `.github/workflows/validate.yml`, `scripts/check-public-files.mjs`, `.gitignore`, `CONTRIBUTING.md`, `AGENTS.md` | — | |
 | CI002 | เคลียร์ ESLint warning แล้วเลื่อนกฎเป็น error | `todo` | — | — | ทั่ว repo, `eslint.config.js` | CI001 | แตกตามโฟลเดอร์ ระวัง hotspot |
 | CI003 | ย้าย guard ของ workbench ให้ hook ไม่ถูกเรียกแบบมีเงื่อนไข | `review` | JitrudeeDongdee (Claude) | `fix/CI003-workbench-hooks` | `src/tabletop/ui/{Encounter,Invoice,Teaching}Workbench.tsx`, `eslint.config.js` | CI001 | บั๊กแฝง ดู spec ถัดไป ข้อ 7 |
+| F006-T1 | component `TableChat` แถวเดียว ขยาย 5 แถว + คลิปหนีบ + แถบยินยอม | `review` | Codex รับช่วงจากทีม | `feat/F006-chat-first` · #30 | `src/tabletop/ui/TableChat.tsx`, `table-chat.css`, `table-chat-consent.ts` | — | ผู้ใช้มอบหมายให้ต่อให้ครบและทดสอบรวม #24/#29 |
+| F006-T2 | ซ่อนการ์ด Files/Rules เมื่อยังไม่มีของ | `review` | Codex | `feat/F006-chat-first` · #30 | `src/tabletop/runtime/index.ts`, `TableCanvasObjects.tsx` | #24 merged | |
+| F006-T3 | ต่อ `TableChat` แทน `TableAssistant` ในโต๊ะข้อมูล | `review` | Codex | `feat/F006-chat-first` · #30 | `TableSurface.tsx`, `TabletopApp.tsx` | F006-T1 | คง prompt-only generation และการแก้กฎหลังเล่นจาก F005 |
+| F006-T4 | คำตอบแชทเป็นการ์ดบน Canvas + Confirm action | `review` | Codex | `feat/F006-chat-first` · #30 | `CanvasWorkspace.tsx`, `TableCanvasObjects.tsx` | F006-T3 | ประวัติและการ์ดยังแยกตามผู้ถาม |
+| F006-T5 | ย้าย browser tests ของ setup + chat ไปใช้แชทใหม่ | `review` | ทีมเริ่ม · Codex รับช่วงและรวมทดสอบตามคำสั่งผู้ใช้ | `feat/F006-chat-first` · #30 | `tests/generic-table-browser.mjs`, `tests/cloudflare-browser.mjs`, `tests/generative-canvas-browser.mjs` | F006-T3 | local ผ่าน Node 7 / Worker 25 / generated 4 เรื่อง; รอ CI ของ commit ที่ส่งตรวจ |
+| F006-T6 | คู่มือ + CHANGELOG | `review` | Codex | `feat/F006-chat-first` · #30 | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F006-T4 | |
 | F007-T1 | ขยายการ์ดที่ใช้ตำแหน่งร่วม + ตำแหน่งเริ่มต้น + ลองส่งใหม่เมื่อชน | `review` | Claude Code | `feat/F007-shared-layout` | `src/tabletop/shared/canvas-layout-ids.ts` (ใหม่), `domain/canvas-layout.ts`, `ui/CanvasWorkspace.tsx`, `TabletopApp.tsx` (runCommand) | — | ชนกับ #30 ที่ `CanvasWorkspace.tsx` (prop `onEditRules`) เล็กน้อย |

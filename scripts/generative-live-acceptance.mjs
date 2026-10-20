@@ -46,14 +46,6 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
       return response.json();
     }, id);
   }
-  async function openAssistantIfCollapsed(page) {
-    const island = page.getByTestId('table-assistant-panel');
-    if (await island.getAttribute('data-collapsed') !== 'true') return;
-    const bubble = page.getByTestId('table-assistant-bubble');
-    await expect(bubble).toBeVisible();
-    await bubble.click();
-    await expect(island).toHaveAttribute('data-collapsed', 'false');
-  }
   async function waitForStableBoundingBox(locator) {
     let previous = null;
     let stableSince = 0;
@@ -91,14 +83,26 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     return response;
   };
   async function requestDraft(page, id, prompt) {
-    await openAssistantIfCollapsed(page);
-    const assistant = page.getByTestId('table-assistant');
-    const mode = assistant.getByRole('button', { name: /^(Open rules and sources|Set up this table from sources)$/ });
-    if (await mode.getAttribute('aria-pressed') !== 'true') await mode.click();
-    await assistant.getByLabel('How should this table work?').fill(prompt);
-    await assistant.locator('.tt-ai-proposal__consent input').check();
+    const before = await read(page, id);
+    if (before.domain.program || before.domain.candidate?.status === 'active') {
+      const rules = await object(page, 'table.rules');
+      await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+    }
+    const chat = page.getByTestId('table-chat-bar');
+    const composer = chat.getByRole('textbox', { name: 'Message', exact: true });
+    await expect(composer).toBeVisible();
+    await composer.fill(prompt);
+    await chat.getByRole('button', { name: 'Send message', exact: true }).click();
+    const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+    await expect(consent).toBeVisible();
+    const consentCopy = (await consent.innerText()).replace(/\s+/gu, ' ');
+    expect(consentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
+    expect(consentCopy).toContain('Chat history is not included.');
+    expect(consentCopy).toContain('Private source files included');
+    for (const source of before.domain.sources) expect(consentCopy).toContain(source.filename);
     const request = page.waitForResponse(response => response.url().endsWith(`/api/workspaces/${id}/model`) && response.request().method() === 'POST');
-    await assistant.getByRole('button', { name: 'Prepare rule draft', exact: true }).click();
+    void request.catch(() => {});
+    await consent.getByRole('button', { name: 'Send', exact: true }).click();
     const accepted = await request;
     expect(accepted.status()).toBe(202);
     const job = await accepted.json();
@@ -108,9 +112,12 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     }, { id, jobId: job.id }), { timeout: 40_000, intervals: [500, 1000] }).not.toBe('running');
     const final = await page.evaluate(async ({ id, jobId }) => (await fetch(`/api/workspaces/${id}/model/${jobId}`)).json(), { id, jobId: job.id });
     if (final.status !== 'completed') throw Error(`Model stopped: ${final.message ?? final.status}`);
-    await openAssistantIfCollapsed(page);
-    await expect(assistant.getByRole('button', { name: 'Review draft', exact: true })).toBeVisible({ timeout: 10_000 });
-    await assistant.getByRole('button', { name: 'Review draft', exact: true }).click();
+    const draftNode = page.locator('.tt-canvas-node--auxiliary').filter({ hasText: prompt.slice(0, 36) }).first();
+    const draftCard = draftNode.getByTestId('table-chat-answer');
+    await expect(draftCard).toBeVisible({ timeout: 10_000 });
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 10_000 });
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
+    await draftCard.getByRole('button', { name: 'Review rules', exact: true }).click();
     const draft = await read(page, id);
     expect(draft.domain.candidate.status).toBe('draft');
     expect(draft.domain.candidate.change.program.canvas.views.length).toBeGreaterThan(0);
@@ -207,7 +214,7 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
         if (scenario.source) {
           await writeFile(join(output, scenario.source.filename), scenario.source.text);
           const imported = commandResponse(owner, 'table.import');
-          await owner.getByTestId('table-assistant').getByLabel('Choose table source files').setInputFiles({
+          await owner.getByTestId('table-chat-bar').getByLabel('Choose a file to attach', { exact: true }).setInputFiles({
             name: scenario.source.filename, mimeType: 'text/markdown', buffer: Buffer.from(scenario.source.text),
           });
           expect((await imported).status()).toBe(200);
