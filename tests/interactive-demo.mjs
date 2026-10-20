@@ -18,6 +18,15 @@ export async function verifyInteractiveDemo(page, origin, output) {
     if (await options.getAttribute('open') === null) await summary.click();
     await expect(options).toHaveAttribute('open', '');
   }
+  async function closeAdvancedOptions() {
+    const options = page.locator('.tt-practice-options');
+    if (await options.getAttribute('open') !== null) await options.locator('summary').click();
+  }
+  async function addObject(title) {
+    await closeAdvancedOptions();
+    await page.getByRole('button', { name: 'เพิ่มบนโต๊ะ', exact: true }).click();
+    await page.getByRole('navigation', { name: 'เพิ่ม container บนโต๊ะ' }).getByRole('button', { name: title, exact: true }).click();
+  }
   async function selectActor(actorId) {
     await openAdvancedOptions();
     await page.getByLabel('ลองเป็น', { exact: true }).selectOption(actorId);
@@ -63,8 +72,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   }
   async function open(id) {
     // Dismiss the role/transport popover before using Canvas controls beneath it.
-    const options = page.locator('.tt-practice-options');
-    if (await options.getAttribute('open') !== null) await options.locator('summary').click();
+    await closeAdvancedOptions();
     const isCurrent = await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id;
     if (!isCurrent) {
       const trigger = page.getByTestId('canvas-object-menu-trigger');
@@ -124,8 +132,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   }).toBe(true);
   await page.getByRole('button', { name: 'Zoom In', exact: true }).click();
   await open('invoice.source');
-  await page.getByRole('button', { name: 'เพิ่มบนโต๊ะ', exact: true }).click();
-  await page.getByRole('navigation', { name: 'เพิ่ม container บนโต๊ะ' }).getByRole('button', { name: 'กฎค่าขนส่ง', exact: true }).click();
+  await addObject('กฎค่าขนส่ง');
   await open('invoice.rules');
   await expect(editor).toContainText('No rate rules are active');
   // Invalid file cannot replace existing normalized rows or add a phantom file.
@@ -188,8 +195,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(page.getByRole('button', { name: 'ทำขั้นถัดไป', exact: true })).toHaveCount(0);
   // Add the question container manually at a partly built table.
   if (await node('lesson.question').count() === 0) {
-    await page.getByRole('button', { name: 'เพิ่มบนโต๊ะ', exact: true }).click();
-    await page.getByRole('navigation', { name: 'เพิ่ม container บนโต๊ะ' }).getByRole('button', { name: 'โจทย์และคำตอบ', exact: true }).click();
+    await addObject('โจทย์และคำตอบ');
   }
   await open('lesson.question');
   await editor.getByLabel('Private teacher note', { exact: true }).fill('PRACTICE_TEACHER_PRIVATE');
@@ -288,8 +294,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await setPracticeFile({ name:'my-lesson.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({ kind:'teaching-lesson', version:1, parameters:{force:9,mass:3,time:2} })) });
   await expect(mode).toHaveAttribute('data-mode', 'manual');
   await expect(node('practice.files')).toContainText('my-lesson.json');
-  await page.getByRole('button', { name:'เพิ่มบนโต๊ะ', exact:true }).click();
-  await page.getByRole('navigation', { name:'เพิ่ม container บนโต๊ะ' }).getByRole('button', { name:'รางทดลอง', exact:true }).click();
+  await addObject('รางทดลอง');
   await open('lesson.scene');
   await expect(editor.locator('svg.tt-track-svg')).toHaveAttribute('aria-label', 'Cart travels 6 meters in 2 seconds');
 
