@@ -29,6 +29,8 @@ export function checkDeployConfig(raw: string, expected: { name: string; origin:
   const db = databases.find(item => item.binding === 'DB');
   if (!db) problems.push('d1_databases must bind DB.');
   else if (typeof db.database_id !== 'string' || PLACEHOLDER_ID.test(db.database_id)) problems.push('DB database_id is missing or still the placeholder.');
+  // The account is on Workers Free, which rejects CPU limits at deploy time (code 100328).
+  if (config.limits !== undefined) problems.push('Remove "limits": the Workers Free plan rejects CPU limits (Cloudflare error 100328).');
   const assets = (config.assets ?? {}) as Record<string, unknown>;
   if (!Array.isArray(assets.run_worker_first) || !assets.run_worker_first.includes('/version')) problems.push('assets.run_worker_first must include /version.');
   return { ok: problems.length === 0, problems };
