@@ -6,7 +6,7 @@
 
 รุ่นที่บันทึกว่า deploy ล่าสุดคือ `v1.0.0` / `ce2c50e` เมื่อ 20 ตุลาคม 2026 ดู [DEPLOYMENTS](DEPLOYMENTS.md) สำหรับ source/build และหลักฐานของ staging/production โดยตรง
 
-งานรุ่นถัดไปอยู่บน `feat/F005-generative-canvas`: สูตรและภาพแบบข้อมูลที่ AI สร้างได้, ตัวควบคุมและการลากใน scene, ทดลองร่างส่วนตัว, shared semantic layout และการค้นบทสนทนาเก่าแบบจำกัดขอบเขต อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract/วิธีใช้ และ [acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md) สำหรับผลตรวจ ห้ามถือว่า candidate นี้ขึ้น production แล้ว
+งานรุ่นถัดไปใน `dev` รวม F005 จาก [PR #24](https://github.com/Thanyers/tabletop/pull/24) และการตั้งชื่อโต๊ะ F002 จาก [PR #29](https://github.com/Thanyers/tabletop/pull/29) ส่วน [PR #30](https://github.com/Thanyers/tabletop/pull/30) ต่อช่องแชท F006 บนฐานเดียวกัน สูตร/ภาพ ตัวควบคุม การลากใน scene ทดลองร่างส่วนตัว shared semantic layout และการค้นบทสนทนาเก่าแบบจำกัดยังใช้ contract เดิม อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract/วิธีใช้ และ [spec.md](../spec.md) สำหรับผลตรวจล่าสุด ห้ามถือว่างานใน `dev` ขึ้น production แล้ว
 
 ลำดับงานที่ควรทำต่อ:
 
@@ -22,7 +22,7 @@
 | --- | --- |
 | เปิดโต๊ะ, session และ API client | [`TabletopApp.tsx`](../src/tabletop/TabletopApp.tsx), [`client.ts`](../src/tabletop/client.ts) |
 | Canvas, objects และตัวแสดงข้อมูล | [`CanvasWorkspace.tsx`](../src/tabletop/ui/CanvasWorkspace.tsx), [`CanvasObjectContent.tsx`](../src/tabletop/ui/CanvasObjectContent.tsx), [`TableCanvasObjects.tsx`](../src/tabletop/ui/TableCanvasObjects.tsx) |
-| แชท, rule proposal และ consent | [`TableAssistant.tsx`](../src/tabletop/ui/TableAssistant.tsx), [`AIProposal.tsx`](../src/tabletop/ui/AIProposal.tsx), [`table-assistant-contracts.ts`](../src/tabletop/shared/table-assistant-contracts.ts) |
+| แชท, rule proposal และ consent | โต๊ะข้อมูล: [`TableChat.tsx`](../src/tabletop/ui/TableChat.tsx), [`useTableChat.tsx`](../src/tabletop/ui/useTableChat.tsx), [`table-chat-consent.ts`](../src/tabletop/ui/table-chat-consent.ts); โต๊ะตัวอย่างเดิม: [`TableAssistant.tsx`](../src/tabletop/ui/TableAssistant.tsx), [`AIProposal.tsx`](../src/tabletop/ui/AIProposal.tsx); สัญญาร่วม: [`table-assistant-contracts.ts`](../src/tabletop/shared/table-assistant-contracts.ts) |
 | schema และ interpreter ของ Shared data table | [`table-contracts.ts`](../src/tabletop/shared/table-contracts.ts), [`domain/table.ts`](../src/tabletop/domain/table.ts) |
 | สิทธิ์, คำสั่ง และ state ที่เป็น authority | [`server/authority.ts`](../server/authority.ts), [`cloudflare/room.ts`](../cloudflare/room.ts), [`room-repository.ts`](../cloudflare/room-repository.ts) |
 | Worker, auth และ room directory | [`cloudflare/index.ts`](../cloudflare/index.ts), [`cloudflare/`](../cloudflare/) |

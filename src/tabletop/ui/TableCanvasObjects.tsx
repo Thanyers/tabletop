@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import { AlertCircle, Database, FilePlus2, LockKeyhole, Play, Trash2 } from 'lucide-react';
+import { AlertCircle, Database, FilePlus2, LockKeyhole, Pencil, Play, Trash2 } from 'lucide-react';
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
 import type { ActorContext, WorkspaceView } from '../shared/contracts';
 import type { PlanNode } from '../runtime';
@@ -18,6 +18,7 @@ interface TableCanvasObjectProps {
   onTableImport?: WorkbenchProps['onTableImport'];
   outputs: Record<string, unknown>;
   expanded?: boolean;
+  onEditRules?: () => void;
 }
 
 const MAX_SOURCE_FILES = 4;
@@ -107,7 +108,7 @@ function SourceCard({ source, expanded, canRemove, readOnly, referenced, busy, o
   </li>;
 }
 
-function TableRules({ view, state, onCommand, busy, expanded = false }: TableCanvasObjectProps & { state: TableState }) {
+function TableRules({ view, state, onCommand, busy, expanded = false, onEditRules }: TableCanvasObjectProps & { state: TableState }) {
   const [manualChange, setManualChange] = useState('');
   const [manualError, setManualError] = useState('');
   const isOwner = view.actor.role === 'owner';
@@ -132,6 +133,7 @@ function TableRules({ view, state, onCommand, busy, expanded = false }: TableCan
 
   return <div className="tt-canvas-inline tt-table-rules">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">{isOwner ? 'OWNER REVIEW · SHARED ACTIVE RULES' : 'SHARED ACTIVE RULES'}</span><strong>{program?.title ?? 'Rules and proposal'}</strong><small>{program ? `Active r${state.ruleRevision}` : 'No active program'}</small></div>
+    {isOwner && program && onEditRules && <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || readOnly || Boolean(state.candidate && state.candidate.status !== 'active')} onClick={onEditRules}><Pencil size={13} />Edit rules</button></div>}
     {!expanded ? <p className="tt-canvas-inline__note">{program ? `${program.collections.length} collections · ${program.actions.length} actions · open to inspect rules, evidence and changes.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
       {program ? <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /> : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
       {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} />

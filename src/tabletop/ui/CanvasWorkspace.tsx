@@ -41,6 +41,7 @@ interface PlanCanvasNodeData extends CanvasNodeBaseData {
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
+  onEditRules?: () => void;
 }
 
 interface AuxiliaryCanvasNodeData extends CanvasNodeBaseData {
@@ -336,7 +337,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
       {outputPorts.map((port, index) => <Handle key={`out-${port}`} type="source" position={Position.Right} id={port} style={portStyle(index, outputPorts.length)} />)}
       <CanvasObjectHeader data={data} />
       <div className="tt-canvas-node__body nodrag nopan nokey">
-        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
+        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} onEditRules={data.onEditRules} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
       </div>
     </article>
   );
@@ -367,9 +368,10 @@ interface CanvasWorkspaceProps {
   emptyContent?: ReactNode;
   openedObjectId?: string | null;
   onOpenObject?: (id: string | null) => void;
+  onEditRules?: () => void;
 }
 
-function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
+function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject, onEditRules }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, CanvasEdge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
@@ -754,6 +756,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           localPhysics,
           onLocalPhysicsChange: changeLocalPhysics,
           onResetLocalPhysics: resetLocalPhysics,
+          onEditRules,
         },
       }));
       const maxY = visiblePlanNodes.reduce((maximum, spec) => Math.max(maximum, (previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec)).y), 0);
@@ -780,7 +783,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject]);
+  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;

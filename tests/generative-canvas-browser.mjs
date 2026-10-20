@@ -381,12 +381,15 @@ try {
     expect(response.status()).toBe(201);
     const room = await response.json();
     await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
+    await expect(owner.getByTestId('table-chat-bar')).toBeVisible();
+    await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
     return room;
   }
 
   async function attachSource(owner, tableId, file) {
-    const editor = await openCanvasObject(owner, 'table.sources');
-    await editor.getByLabel('Choose table source files').setInputFiles({
+    const bar = owner.getByTestId('table-chat-bar');
+    await expect(bar).toBeVisible();
+    await bar.getByLabel('Choose a file to attach', { exact: true }).setInputFiles({
       name: file.filename, mimeType: 'text/plain', buffer: Buffer.from(file.text, 'utf8'),
     });
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.sources.length).toBe(1);
@@ -396,42 +399,71 @@ try {
     return source;
   }
 
-  async function openAssistantIfCollapsed(page) {
-    const island = page.getByTestId('table-assistant-panel');
-    if (await island.getAttribute('data-collapsed') !== 'true') return;
-    const bubble = page.getByTestId('table-assistant-bubble');
-    await expect(bubble).toBeVisible();
-    await bubble.click();
-    await expect(island).toHaveAttribute('data-collapsed', 'false');
+  async function sendTableMessage(page, promptText, { sourceNames = [], expectConsent = true, cancelFirst = false } = {}) {
+    const bar = page.getByTestId('table-chat-bar');
+    const composer = bar.getByRole('textbox', { name: 'Message', exact: true });
+    const submit = bar.getByRole('button', { name: 'Send message', exact: true });
+    await expect(composer).toBeVisible();
+    await composer.fill(promptText);
+    if (!expectConsent) {
+      await submit.click();
+      return null;
+    }
+    const consent = bar.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+    let modelPosts = 0;
+    const countModelPosts = (request) => {
+      if (request.method() === 'POST' && /\/api\/workspaces\/[^/]+\/model$/.test(new URL(request.url()).pathname)) modelPosts += 1;
+    };
+    page.on('request', countModelPosts);
+    try {
+      await submit.click();
+      await expect(consent).toBeVisible();
+      const dialogText = (await consent.innerText()).replace(/\s+/gu, ' ');
+      expect(dialogText).toMatch(/table.{0,40}(context|data)|current table/iu);
+      for (const filename of sourceNames) expect(dialogText).toContain(filename);
+      if (sourceNames.length === 0) expect(dialogText).toMatch(/no files|not included/iu);
+      if (cancelFirst) {
+        expect(modelPosts).toBe(0);
+        await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(consent).toHaveCount(0);
+        await expect(composer).toHaveValue(promptText);
+        expect(modelPosts).toBe(0);
+        await submit.click();
+        await expect(consent).toBeVisible();
+        for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
+      }
+      expect(modelPosts).toBe(0);
+      const request = responseAfter(page, (response) => /\/api\/workspaces\/[^/]+\/model$/.test(new URL(response.url()).pathname) && response.request().method() === 'POST');
+      return await request(() => consent.getByRole('button', { name: 'Send', exact: true }).click());
+    } finally {
+      page.off('request', countModelPosts);
+    }
   }
 
-  async function askForDraft(owner, tableId, scenario, phase, file) {
+  async function askForDraft(owner, tableId, scenario, phase, file, { cancelFirst = false } = {}) {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-    await openAssistantIfCollapsed(owner);
-    const assistant = owner.getByTestId('table-assistant');
-    await expect(assistant).toBeVisible();
-    await assistant.getByRole('button', { name: /Open rules and sources|Set up this table from sources/ }).click();
-    await assistant.getByLabel('How should this table work?', { exact: true }).fill(
+    if (before.domain.program || before.domain.candidate?.status === 'active') {
+      const rules = await openCanvasObject(owner, 'table.rules');
+      await clickVisible(rules.getByRole('button', { name: 'Edit rules', exact: true }));
+    }
+    const sourceNames = before.domain.sources.map((source) => source.filename);
+    const response = await sendTableMessage(owner,
       `scenario:${scenario.id}; phase:${phase}. Create a bounded, understandable Canvas for this synthetic fixture.`,
-    );
-    const consent = assistant.getByLabel(file
-      ? `Send this request, table state and 1 source file to AI.`
-      : 'Send this request, table state and 0 source files to AI.');
-    await consent.check();
-    const request = responseAfter(owner, (response) => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
-    expect((await request(() => assistant.getByRole('button', { name: 'Prepare rule draft', exact: true }).click())).status()).toBe(202);
-    await expect(assistant.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 30_000 });
+      { sourceNames, cancelFirst });
+    expect(response?.status()).toBe(202);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('draft');
     const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(candidate.domain.program).toEqual(before.domain.program);
     expect(candidate.domain.records).toEqual(before.domain.records);
     expect(candidate.domain.candidate?.change.kind).toBe('table');
+    const draftCard = owner.getByTestId('table-chat-answer').filter({ hasText: 'A rule draft is ready' });
+    await expect(draftCard).toBeVisible({ timeout: 30_000 });
     return candidate;
   }
 
   async function assertPrivateCandidatePreview(owner, tableId, candidate, expectedControl) {
-    await openAssistantIfCollapsed(owner);
-    await owner.getByRole('button', { name: 'Review draft', exact: true }).click();
+    const draftCard = owner.getByTestId('table-chat-answer').filter({ hasText: 'A rule draft is ready' });
+    await clickVisible(draftCard.getByRole('button', { name: 'Review rules', exact: true }));
     const editor = owner.getByTestId('canvas-object-editor');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
     await expect(editor).toBeVisible();
@@ -791,7 +823,7 @@ try {
     const created = await createFreshTable(owner);
     const tableId = created.id;
     const source = scenario.file ? await attachSource(owner, tableId, scenario.file) : null;
-    const draft = await askForDraft(owner, tableId, scenario, 'initial-draft', source);
+    const draft = await askForDraft(owner, tableId, scenario, 'initial-draft', source, { cancelFirst: scenario.id === 'cafe' });
     const expectedControl = scenario.action === 'button'
       ? scenario.id === 'cafe' ? 'Advance 5 minutes' : 'Recalculate payment'
       : scenario.action === 'slider' ? 'slider' : 'scene';

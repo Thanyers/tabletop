@@ -1,20 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { consentKey, consentQuestion, needsConsent } from './table-chat-consent';
+import { consentKey, consentQuestion, needsConsent, type TableChatConsentScope } from './table-chat-consent';
+
+const scope = (patch: Partial<TableChatConsentScope> = {}): TableChatConsentScope => ({
+  workspaceId: 'table-1',
+  epoch: 3,
+  actorId: 'actor-a',
+  mode: 'draft',
+  sourceIds: ['file-b', 'file-a'],
+  ...patch,
+});
 
 describe('chat consent', () => {
-  it('asks once per exact set of files, regardless of order, and again when files change', () => {
-    expect(needsConsent(null, [])).toBe(true);
-    const granted = consentKey(['b', 'a']);
-    expect(needsConsent(granted, ['a', 'b'])).toBe(false);
-    expect(needsConsent(granted, ['a', 'b', 'c'])).toBe(true);
-    expect(needsConsent(granted, ['a'])).toBe(true);
-    expect(needsConsent(consentKey([]), [])).toBe(false);
+  it('covers one exact source set regardless of order', () => {
+    const grant = consentKey(scope());
+    expect(needsConsent(null, scope())).toBe(true);
+    expect(needsConsent(grant, scope({ sourceIds: ['file-a', 'file-b'] }))).toBe(false);
+    expect(needsConsent(grant, scope({ sourceIds: ['file-a'] }))).toBe(true);
+    expect(needsConsent(grant, scope({ sourceIds: ['file-a', 'file-b', 'file-c'] }))).toBe(true);
   });
 
-  it('names how much is sent', () => {
-    expect(consentQuestion(0)).toBe('Send this message to AI?');
-    expect(consentQuestion(1)).toBe('Send this message and 1 file to AI?');
-    expect(consentQuestion(3)).toBe('Send this message and 3 files to AI?');
-    expect(consentQuestion(0, true)).toBe("Send this message and this table's current data to AI?");
+  it('resets consent when the workspace, epoch, actor, or request mode changes', () => {
+    const grant = consentKey(scope({ sourceIds: [] }));
+    expect(needsConsent(grant, scope({ sourceIds: [], workspaceId: 'table-2' }))).toBe(true);
+    expect(needsConsent(grant, scope({ sourceIds: [], epoch: 4 }))).toBe(true);
+    expect(needsConsent(grant, scope({ sourceIds: [], actorId: 'actor-b' }))).toBe(true);
+    expect(needsConsent(grant, scope({ sourceIds: [], mode: 'ask' }))).toBe(true);
+    expect(needsConsent(consentKey(scope({ sourceIds: [], mode: 'ask' })), scope({ sourceIds: [], mode: 'draft' }))).toBe(true);
+  });
+
+  it('states the distinct table context and history scope for each endpoint', () => {
+    expect(consentQuestion('draft')).toContain('active rules, records, and turn');
+    expect(consentQuestion('draft')).toContain('Chat history is not included');
+    expect(consentQuestion('ask')).toContain('up to six recent private chat exchanges');
+    expect(consentQuestion('ask')).toContain('Private source files are excluded');
   });
 });

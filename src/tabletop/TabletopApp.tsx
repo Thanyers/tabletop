@@ -156,7 +156,7 @@ export default function TabletopApp() {
 
   const setWorkspace = useCallback((next: WorkspaceView | null) => {
     const previous = workspaceRef.current;
-    const changedTable = previous?.id !== next?.id || previous?.epoch !== next?.epoch;
+    const changedTable = previous?.id !== next?.id || previous?.epoch !== next?.epoch || previous?.actor.actorId !== next?.actor.actorId;
     workspaceRef.current = next;
     if (next) projectionSequenceRef.current += 1;
     setView(next);
@@ -556,15 +556,17 @@ export default function TabletopApp() {
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
 
   const pollAI = useCallback((workspaceId: string, jobId: string) => tabletopClient.modelJob(workspaceId, jobId), []);
-  const requestTableAssistant = useCallback((targetView: WorkspaceView, prompt: string, commandId: ReturnType<typeof crypto.randomUUID>): Promise<TableAssistantJob> => {
+  const requestTableAssistant = useCallback((targetView: WorkspaceView, prompt: string, commandId: ReturnType<typeof crypto.randomUUID>, sameCommandRetry = false): Promise<TableAssistantJob> => {
     const current = workspaceRef.current;
-    if (!current || !sameWorkspaceActor(current, targetView) || current.kind !== 'table' || !['owner', 'participant'].includes(current.actor.role)) {
+    if (!current || !sameWorkspaceActor(current, targetView) || current.actor.role !== targetView.actor.role || current.kind !== 'table' || !['owner', 'participant'].includes(current.actor.role)) {
       return Promise.reject(new ApiFailure('This table seat changed. Open the current table before sending another request.', 409, 'STALE_EPOCH'));
     }
     if (capabilities.tableReadOnly) return Promise.reject(new ApiFailure('Assistant requests for this table are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('The table assistant is not enabled for this service.', 403));
-    if (current.revision !== targetView.revision) return Promise.reject(new ApiFailure('The table changed. Review its current state and send your question again.', 409, 'STALE_REVISION'));
-    return tabletopClient.requestTableAssistant(current, prompt, commandId);
+    if (!sameCommandRetry && current.revision !== targetView.revision) return Promise.reject(new ApiFailure('The table changed. Review its current state and send your question again.', 409, 'STALE_REVISION'));
+    // A retry carries the original snapshot and command ID. The server decides
+    // whether it is an exact duplicate or a stale, previously unaccepted request.
+    return tabletopClient.requestTableAssistant(targetView, prompt, commandId);
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
 
   const pollTableAssistant = useCallback((targetView: WorkspaceView, jobId: string): Promise<TableAssistantJob> => {
@@ -701,7 +703,9 @@ export default function TabletopApp() {
   const tableChat = useTableChat({
     view,
     aiEnabled: capabilities.model.enabled,
+    assistantAvailable: capabilities.tableAssistant?.available === true,
     readOnly: capabilities.tableReadOnly === true,
+    busy: busy !== null,
     requestDraft: (target, prompt, commandId) => requestAI(target, prompt, undefined, commandId),
     pollDraft: pollAI,
     refresh: refreshWorkspaceProjection,
@@ -754,15 +758,11 @@ export default function TabletopApp() {
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
   const remainingInviteSeats = inviteSeats.filter((seat) => !connectedSeats.has(seat) && !(inviteIsHeld && inviteState?.seat === seat));
   const aiContent = canAskAI && view.kind !== 'table' && !tableReadOnly ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} prefill={aiPrefill} /> : undefined;
-  // Shared tables start blank: Files and Rules appear once there is a source or a draft (F006).
-  const chatVisibleIds = isTableWorkspaceView(view) && compiled.plan ? (() => {
-    const hasSources = view.domain.sources.length > 0;
-    const hasRules = Boolean(view.domain.program || view.domain.candidate);
-    const cardIds = tableChat.cards.map((card) => card.id);
-    if (!hasSources && !hasRules) return cardIds;
-    const hidden = new Set([...(hasSources ? [] : ['table.sources']), ...(hasRules ? [] : ['table.rules'])]);
-    return [...compiled.plan.nodes.map((node) => node.id).filter((id) => !hidden.has(id)), DEFAULT_CANVAS_AUXILIARY_IDS.people, DEFAULT_CANVAS_AUXILIARY_IDS.history, ...cardIds];
-  })() : undefined;
+  // The runtime owns Files/Rules visibility. Keep a truly empty table free of
+  // default cards while still allowing its private chat answers to materialize.
+  const chatVisibleIds = isTableWorkspaceView(view) && compiled.plan?.nodes.length === 0
+    ? tableChat.cards.map((card) => card.id)
+    : undefined;
   const surfaceBusy = tableReadOnly ? 'table.readOnly' : busy;
 
   return (
@@ -831,6 +831,7 @@ export default function TabletopApp() {
         focusRequestKey={focusRequestKey}
         openedObjectId={openedObjectId}
         onOpenObject={setOpenedObjectId}
+        onEditRules={view.kind === 'table' && view.actor.role === 'owner' && capabilities.model.enabled && !tableReadOnly ? tableChat.editRules : undefined}
         inspectorContent={<>
           {selectedNode && compiled.plan && <ObjectInspector node={selectedNode} plan={compiled.plan} onClose={() => setSelectedNodeId(null)} />}
         </>}

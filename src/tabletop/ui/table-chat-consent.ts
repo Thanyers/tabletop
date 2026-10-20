@@ -1,16 +1,31 @@
-// Explicit consent for the chat-first table (F006). Consent covers one exact set
-// of source files: a new or removed file asks again, a new message does not.
+export type TableChatMode = 'draft' | 'ask';
 
-export function consentKey(sourceIds: readonly string[]): string {
-  return [...sourceIds].sort().join('|');
+export interface TableChatConsentScope {
+  workspaceId: string;
+  epoch: number;
+  actorId: string;
+  mode: TableChatMode;
+  /** Current private files are part of draft requests and explicitly excluded from asks. */
+  sourceIds: readonly string[];
 }
 
-export function needsConsent(grantedKey: string | null, sourceIds: readonly string[]): boolean {
-  return grantedKey !== consentKey(sourceIds);
+/** A grant is bound to the exact table, actor, request mode, and displayed file set. */
+export function consentKey(scope: TableChatConsentScope): string {
+  return JSON.stringify({
+    workspaceId: scope.workspaceId,
+    epoch: scope.epoch,
+    actorId: scope.actorId,
+    mode: scope.mode,
+    sourceIds: [...scope.sourceIds].sort(),
+  });
 }
 
-export function consentQuestion(fileCount: number, sharesTable = false): string {
-  if (sharesTable) return "Send this message and this table's current data to AI?";
-  if (fileCount === 0) return 'Send this message to AI?';
-  return `Send this message and ${fileCount} ${fileCount === 1 ? 'file' : 'files'} to AI?`;
+export function needsConsent(grantedKey: string | null, scope: TableChatConsentScope): boolean {
+  return grantedKey !== consentKey(scope);
+}
+
+export function consentQuestion(mode: TableChatMode): string {
+  return mode === 'draft'
+    ? 'This sends your message, current active rules, records, and turn, plus the private source files listed below. Chat history is not included.'
+    : 'This sends your message, current active rules, records, and turn, plus up to six recent private chat exchanges. Private source files are excluded.';
 }
