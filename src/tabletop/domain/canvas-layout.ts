@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ActorContext } from '../shared/contracts';
 import type { TableState } from '../shared/table-contracts';
 import { assert, hasRole, parsePayload } from './helpers';
+import { ALWAYS_SHARED_CANVAS_IDS, SHARED_CANVAS_ID_PATTERN } from '../shared/canvas-layout-ids';
 
 const point = z.strictObject({
   x: z.number().finite().min(-90_000).max(90_000),
@@ -10,7 +11,7 @@ const point = z.strictObject({
 });
 const layoutInput = z.strictObject({
   expectedLayoutRevision: z.number().int().safe().nonnegative(),
-  positions: z.record(z.string().regex(/^table\.(collection|view)\.[a-z][a-z0-9_-]{0,39}$|^table\.actions$/), point)
+  positions: z.record(z.string().regex(SHARED_CANVAS_ID_PATTERN), point)
     .refine(positions => Object.keys(positions).length > 0 && Object.keys(positions).length <= 24),
 });
 
@@ -30,8 +31,9 @@ export function handleCanvasLayout(state: TableState, payload: unknown, ctx: Act
 }
 
 export function sharedCanvasIds(state: TableState): Set<string> {
-  if (!state.program) return new Set();
+  if (!state.program) return new Set(ALWAYS_SHARED_CANVAS_IDS);
   return new Set([
+    ...ALWAYS_SHARED_CANVAS_IDS,
     'table.actions',
     ...state.program.collections.map(collection => `table.collection.${collection.id}`),
     ...(state.program.canvas?.views ?? []).map(view => `table.view.${view.id}`),
