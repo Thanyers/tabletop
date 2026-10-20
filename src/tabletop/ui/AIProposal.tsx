@@ -205,7 +205,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
 
     return <section className={`tt-ai-proposal tt-ai-proposal--table${embedded ? ' tt-ai-proposal--embedded' : ''}`} data-testid={embedded ? undefined : 'table-assistant'} aria-label={embedded ? 'Private rule drafting tools' : undefined} aria-labelledby={embedded ? undefined : 'tt-ai-title'}>
       {!embedded && <header className="tt-ai-proposal__head"><span className="tt-ai-proposal__icon"><Sparkles size={15} /></span><div><span className="tt-kicker">OWNER TOOLS</span><h2 id="tt-ai-title">Table assistant</h2></div><span className="tt-ai-proposal__manual">Rules stay on Canvas</span></header>}
-      <section className="tt-table-assistant__files" aria-label={`Private source files, ${tableSources.length} of 4`}>
+      <section className="tt-table-assistant__files" aria-label={`Table files, ${tableSources.length} of 4`}>
         <header><strong>Your files</strong><span>{tableSources.length} / 4 · private</span></header>
         {tableSources.length > 0 ? <ul>{tableSources.map((source) => <li key={source.id} title={source.filename}><FileText size={13} /><span>{source.filename}</span></li>)}</ul> : <p>No files attached yet.</p>}
         <div className="tt-table-assistant__file-actions">
@@ -226,7 +226,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
         <label htmlFor="tt-ai-prompt">How should this table work?</label>
         <textarea id="tt-ai-prompt" value={prompt} maxLength={1200} rows={3} disabled={readOnly || requesting || waitingNow} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what people should be able to do…" />
         {tableSources.length === 0 && <small className="tt-ai-proposal__source-hint">Start with an idea, or attach a file.</small>}
-        <details className="tt-ai-proposal__privacy"><summary>What goes to AI?</summary><p>Your prompt, current rules, shared records, and all {tableSources.length} private source file{tableSources.length === 1 ? '' : 's'} on this table go to the AI provider after you agree. Member profiles and activity are excluded. Original files and drafts stay private to you. Review the generated rules, views and records before sharing them through activation. A request may make up to three bounded attempts to repair invalid output within the configured budget.</p></details>
+        <details className="tt-ai-proposal__privacy"><summary>What goes to AI?</summary><p>Your prompt, current rules, shared records, and all {tableSources.length} table file{tableSources.length === 1 ? '' : 's'} go to the AI provider after you agree. Member profiles and activity are excluded. Everyone at this table can read the files; drafts stay private to you. Review the generated rules, views and records before sharing them through activation. A request may make up to three bounded attempts to repair invalid output within the configured budget.</p></details>
         <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} disabled={readOnly || requesting || waitingNow} onChange={(event) => setConsent(event.target.checked)} /><span>Send this request, table state and {tableSources.length} source file{tableSources.length === 1 ? '' : 's'} to AI.</span></label>
         <button type="submit" className="tt-button tt-button--primary" aria-label="Prepare rule draft" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />}Prepare draft</button>
       </form>

@@ -56,7 +56,7 @@ describe('shared arrangement authority', () => {
   });
   it('rejects unavailable, private and arbitrary geometry without mutating existing positions', () => {
     const state = active();
-    for (const id of ['table.sources', 'table.trial', 'workspace.ai', 'chat.answer-1', 'assistant', 'table.collection.missing', 'table.view.missing', '__proto__']) {
+    for (const id of ['table.trial', 'workspace.ai', 'chat.answer-1', 'assistant', 'table.collection.missing', 'table.view.missing', '__proto__']) {
       expect(() => handleCanvasLayout(state, { expectedLayoutRevision: 0, positions: { [id]: { x: 0, y: 0 } } }, participant)).toThrow();
     }
     expect(() => handleCanvasLayout(state, move(0, Infinity), owner)).toThrow();
@@ -81,11 +81,18 @@ describe('shared arrangement authority', () => {
     }
     const moved = handleCanvasLayout(state, move(0, 900), participant).state;
     expect(() => decideDomain(moved, { type: 'evolve.activate', payload: {} }, owner)).not.toThrow();
-    moved.canvasLayout.positions['table.sources'] = { x: 150, y: 20 };
+    moved.canvasLayout.positions['chat.answer-1'] = { x: 150, y: 20 };
     moved.canvasLayout.positions['table.view.retired'] = { x: 450, y: 20 };
     const projected = projectDomain(moved, participant);
     if (projected.kind !== 'table') throw Error('Expected table');
     expect(Object.keys(projected.canvasLayout!.positions)).toEqual(['table.collection.equipment']);
-    expect(projected.sources).toEqual([]);
+    expect(projected.sources).toEqual(moved.sources);
+  });
+  it('shares the Files card position once the table has files (F008)', () => {
+    expect(() => handleCanvasLayout(createTableState(), { expectedLayoutRevision: 0, positions: { 'table.sources': { x: 0, y: 0 } } }, participant)).toThrow();
+    const placed = handleCanvasLayout(active(), { expectedLayoutRevision: 0, positions: { 'table.sources': { x: 40, y: 60, pinned: true } } }, participant).state;
+    const projected = projectDomain(placed, participant);
+    if (projected.kind !== 'table') throw Error('Expected table');
+    expect(projected.canvasLayout?.positions['table.sources']).toEqual({ x: 40, y: 60, pinned: true });
   });
 });

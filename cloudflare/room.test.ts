@@ -1083,7 +1083,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(vi.mocked(respondToTablePrompt)).not.toHaveBeenCalled();
   });
 
-  it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with private sources intact', async () => {
+  it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with shared read-only sources', async () => {
     const owner = newActor('Table owner');
     const firstMember = newActor('First participant');
     const secondMember = newActor('Second participant');
@@ -1117,13 +1117,12 @@ describe('Cloudflare room Durable Object', () => {
     expect(sourceId).toBeTruthy();
 
     const participantStart = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
-    expect(JSON.stringify(participantStart.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(JSON.stringify(participantStart.body)).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     if (participantStart.body.domain.kind !== 'table') throw new Error('Expected participant table projection.');
-    expect(participantStart.body.domain.sources).toEqual([]);
-    const ownerOnlyImport = await issueCommand(stub, participantStart.body, firstMember, 'table.import', {
-      filename: 'another.txt', text: 'This must be rejected for participants.',
-    });
-    expect(ownerOnlyImport.response.status).toBe(403);
+    expect(participantStart.body.domain.sources.map(source => source.id)).toEqual([sourceId]);
+    // F008: members may add files (covered in server/authority.test.ts) but only the owner removes them.
+    const ownerOnlyRemove = await issueCommand(stub, participantStart.body, firstMember, 'table.removeSource', { sourceId });
+    expect(ownerOnlyRemove.response.status).toBe(403);
 
     const eventRows = await inspectRoom<{ event_data: SqlStorageValue }>(stub,
       "SELECT event_data FROM room_events WHERE event_type = 'table.import'");
@@ -1153,7 +1152,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(ownerView.body.domain.candidate).toMatchObject({ status: 'draft' });
     const participantDraft = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
     expect(participantDraft.body.domain.candidate).toBeNull();
-    expect(JSON.stringify(participantDraft.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(JSON.stringify(participantDraft.body.domain.candidate)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) {
       const step = await issueCommand(stub, ownerView.body, owner, type, {});
       expect(step.response.status).toBe(200);
@@ -1184,7 +1183,7 @@ describe('Cloudflare room Durable Object', () => {
     if (resumedOwner.body.domain.kind !== 'table') throw new Error('Expected resumed owner table.');
     expect(resumedOwner.body.domain.sources[0]?.text).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     expect(resumedOwner.body.domain.records.equipment?.find((row) => row.id === 'camera')?.values.available).toBe(false);
-    expect(JSON.stringify(resumedParticipant.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(resumedParticipant.body.domain.kind === 'table' && resumedParticipant.body.domain.sources[0]?.text).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
 
     const lateParticipant = newActor('Late participant');
     await saveActor(lateParticipant);
@@ -1201,7 +1200,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(participantWhileReadOnly.response.status).toBe(200);
     expect(participantWhileReadOnly.body.domain.kind).toBe('table');
     if (participantWhileReadOnly.body.domain.kind !== 'table') throw new Error('Expected read-only participant table.');
-    expect(participantWhileReadOnly.body.domain.sources).toEqual([]);
+    expect(participantWhileReadOnly.body.domain.sources).toEqual(ownerWhileReadOnly.body.domain.kind === 'table' ? ownerWhileReadOnly.body.domain.sources : []);
     expect(participantWhileReadOnly.body.domain.records).toEqual(resumedParticipant.body.domain.kind === 'table'
       ? resumedParticipant.body.domain.records : {});
 

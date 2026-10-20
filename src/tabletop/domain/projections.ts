@@ -8,10 +8,9 @@ export function projectDomain(state: DomainState, ctx: ActorContext): DomainStat
     const projected = clone(state);
     if (state.canvasLayout) projected.canvasLayout = projectCanvasLayout(state);
     if (ctx.role === 'participant') {
-      projected.sources = []; projected.candidate = null; projected.revisions = [];
+      // F008: table files are visible to every member; drafts and draft history stay with the owner.
+      projected.candidate = null; projected.revisions = [];
       if (projected.program) projected.program.evidence = [];
-      // Owner-only source/draft mutations must not reveal even their count through a revision.
-      projected.dataRevision = (projected.actionRevision ?? 0) + projected.ruleRevision;
     }
     return projected;
   }

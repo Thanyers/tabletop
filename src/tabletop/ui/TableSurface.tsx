@@ -129,9 +129,9 @@ export function TableSurface({
   return (
     <main className={`tt-main tt-main--${layoutSurface}${view.kind === 'table' && assistantContent ? ' tt-main--with-assistant' : ''}`}>
       <section className={`tt-canvas-panel${promptContent ? ' tt-canvas-panel--composer' : ''}${assistantContent ? ' tt-canvas-panel--assistant' : ''}`} style={hasAssistant ? { '--tt-assistant-height': `${assistantHeight}px` } as CSSProperties : undefined} aria-label="Table objects canvas"
-        onDragOver={(event) => { if (view.kind === 'table' && onTableImport && view.actor.role === 'owner' && event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+        onDragOver={(event) => { if (view.kind === 'table' && onTableImport && event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
         onDrop={(event) => {
-          if (view.kind !== 'table' || !onTableImport || view.actor.role !== 'owner' || !event.dataTransfer.files.length) return;
+          if (view.kind !== 'table' || !onTableImport || !event.dataTransfer.files.length) return;
           event.preventDefault(); event.stopPropagation();
           if (busy || dropping) return;
           const files = Array.from(event.dataTransfer.files);

@@ -609,7 +609,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     sourceFiles={sourceFiles}
     placeholder={placeholder}
     aiEnabled={aiEnabled && !readOnly && modeCanAsk}
-    canAttach={owner && !readOnly}
+    canAttach={!readOnly}
     busy={sendBlocked}
     acceptFiles={ACCEPT_FILES}
     historyStatus={assistantAvailable ? historyStatus : 'ready'}

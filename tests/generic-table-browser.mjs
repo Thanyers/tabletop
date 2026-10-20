@@ -341,7 +341,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   await expect(consent).toBeVisible();
   const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
   expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
-  expect(copy).toContain('Private source files included');
+  expect(copy).toContain('Table files included');
   expect(copy).toContain('Chat history is not included.');
   for (const filename of sourceNames) expect(copy).toContain(filename);
   expect(modelRequests).toBe(0);
@@ -508,25 +508,26 @@ async function inviteMember(owner, seatNumber) {
   return url;
 }
 
-async function joinAndCheckPrivateFiles(newPage, api, actor, inviteUrl, tableId, filename) {
+async function joinAndCheckSharedFiles(newPage, api, actor, inviteUrl, tableId, filename) {
   const page = await newPage(actor, inviteUrl);
   await expect(page.locator('.tt-canvas-panel')).toBeVisible();
   const workspace = await api(page, `/api/workspaces/${tableId}`);
   expect(workspace.status).toBe(200);
-  expect(workspace.body.domain.sources).toEqual([]);
+  // F008: members read the table files; drafts and draft history stay with the owner.
+  expect(workspace.body.domain.sources.map((source) => source.filename)).toContain(filename);
   expect(workspace.body.domain.candidate).toBeNull();
   expect(workspace.body.domain.revisions).toEqual([]);
-  expect(JSON.stringify(workspace.body.domain)).not.toContain(filename);
+  const files = page.locator('[data-canvas-object="table.sources"]');
+  await expect(files).toContainText(filename);
+  await expect(page.getByRole('button', { name: `Remove ${filename}`, exact: true })).toHaveCount(0);
   const chat = page.getByTestId('table-chat-bar');
   await expect(chat).toBeVisible();
-  await expect(chat.getByRole('button', { name: 'Attach a file', exact: true })).toHaveCount(0);
-  await expect(chat.getByLabel('Choose a file to attach', { exact: true })).toHaveCount(0);
+  await expect(chat.getByRole('button', { name: 'Attach a file', exact: true })).toBeEnabled();
   await expect(chat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
   await openCanvasObject(page, 'table.rules');
   await expect(page.getByTestId('canvas-object-editor').getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
   await openCanvasObject(page, 'table.actions');
   await expect(page.getByTestId('canvas-object-editor').locator('.tt-table-action-picker')).toBeVisible();
-  await expect(chat).not.toContainText(filename);
   return page;
 }
 
@@ -539,7 +540,7 @@ async function nodeTransforms(page, ids) {
 }
 
 async function verifySharedCardLayout(owner, member, tableId, api) {
-  const shared = ['table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
+  const shared = ['table.sources', 'table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
   // These auxiliary cards are created after activation. Materialize them through
   // the Objects menu so late-card layout seeding is exercised without a reload.
   for (const page of [owner, member]) {
@@ -558,9 +559,9 @@ async function verifySharedCardLayout(owner, member, tableId, api) {
   expect(memberBeforeReload.domain.canvasLayout.positions).toMatchObject(canonical);
   for (const domain of [beforeReload.domain, memberBeforeReload.domain]) {
     expect(Object.keys(domain.canvasLayout?.positions ?? {}).some(id => id.startsWith('chat.'))).toBe(false);
-    expect(domain.canvasLayout?.positions?.['table.sources']).toBeUndefined();
   }
-  expect(memberBeforeReload.domain.sources).toEqual([]);
+  // F008: the Files card and its files are shared with members.
+  expect(memberBeforeReload.domain.sources).toEqual(beforeReload.domain.sources);
   await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
     .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
   await owner.reload(); await member.reload();
@@ -846,7 +847,7 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
     const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
     expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
     expect(copy).toContain('up to six of your private chat exchanges, including relevant older ones when available');
-    expect(copy).toContain('Private source files are excluded.');
+    expect(copy).toContain('Table files are not sent.');
     expect(assistantRequests).toBe(0);
     expect(modelRequests).toBe(0);
     if (cancelFirst) {
@@ -1063,7 +1064,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect(fileConsent).toBeVisible();
   const fileConsentCopy = (await fileConsent.innerText()).replace(/\s+/gu, ' ');
   expect(fileConsentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
-  expect(fileConsentCopy).toContain('Private source files included');
+  expect(fileConsentCopy).toContain('Table files included');
   expect(fileConsentCopy).toContain('Chat history is not included.');
   expect(fileConsentCopy).toContain(fixtures.equipment.filename);
   expect(fileConsentCopy).toContain(equipmentNotes.filename);
@@ -1077,7 +1078,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect(ownerPrompt).toHaveValue('');
 
   const firstInvite = await inviteMember(owner, 1);
-  member = await joinAndCheckPrivateFiles(newPage, api, member, firstInvite, room.id, source.filename);
+  member = await joinAndCheckSharedFiles(newPage, api, member, firstInvite, room.id, source.filename);
   await verifySharedCardLayout(owner, member, room.id, api);
   mark('Shared card layout: rules, people, history and table cards sit at the same place for owner and member, and a move reaches the other screen live');
   await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls, capabilities, mark });
@@ -1099,7 +1100,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect(equipmentPreview).not.toContainText(active.actor.actorId);
 
   const secondInvite = await inviteMember(owner, 2);
-  secondMember = await joinAndCheckPrivateFiles(newPage, api, secondMember, secondInvite, room.id, source.filename);
+  secondMember = await joinAndCheckSharedFiles(newPage, api, secondMember, secondInvite, room.id, source.filename);
   const people = await openCanvasObject(member, 'workspace.people');
   await expect(people).toContainText('Second Member');
   mark('Generic table: existing participant receives the new membership projection over its live connection');
@@ -1163,7 +1164,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   expect((await resetConsent.innerText()).replace(/\s+/gu, ' ')).toMatch(/current active rules, records, and turn|current table context/iu);
   await resetConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(getProviderCalls()).toBe(beforeResetCalls);
-  mark('Generic table: text source, reviewed lifecycle, shared equipment actions, borrower-only return, private source projection, and reload persistence');
+  mark('Generic table: text source, reviewed lifecycle, shared equipment actions, borrower-only return, shared read-only files, and reload persistence');
 }
 
 async function shiftScenario({ owner, member, newPage, api, setTableReply, mark }) {
@@ -1177,7 +1178,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   await expect(ownerRecordActions).toContainText('Actions for this collection are limited to members.');
   await expect(ownerRecordActions.getByRole('combobox', { name: 'Action', exact: true })).toHaveCount(0);
   const invite = await inviteMember(owner, 1);
-  member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
+  member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename);
   await performContextualAction(member, 'people', {
     recordId: 'bo', recordLabel: 'Bo', actionTitle: 'Swap shifts', recordFieldLabel: 'First person',
     recordParameterChoice: 'First person', inputs: { 'Second person': 'ada' },
@@ -1208,7 +1209,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await expect(owner.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
   expect((await api(owner, `/api/workspaces/${room.id}`)).body.title).toBe(generatedTableTitle);
   const invite = await inviteMember(owner, 1);
-  member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
+  member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename);
   await expect(member.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
   await expect(member.getByRole('button', { name: 'Rename table', exact: true })).toHaveCount(0);
   const memberName = (await api(member, `/api/workspaces/${room.id}`)).body.actor.name;
