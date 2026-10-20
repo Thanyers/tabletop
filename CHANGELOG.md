@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **แก้:** workbench ของ invoice / physics / encounter ไม่เรียก React hook หลัง return แบบมีเงื่อนไขแล้ว (กัน React error "Rendered fewer hooks" ถ้าชนิดข้อมูลเปลี่ยนใน component เดิม) · ผู้ใช้ไม่เห็นอะไรเปลี่ยน
 - **CI/dev:** เพิ่ม ESLint (`npm run lint`) เข้า CI ห้าม `any` ที่เขียนเอง ห้าม `@ts-ignore` และบังคับกฎของ React hooks · เพิ่ม pre-commit hook (husky + lint-staged) ที่รัน `check-public-files` และ lint ไฟล์ที่ stage · `check-public-files` ไม่ crash เมื่อเจอ nested repository แล้ว แต่รายงานเป็น finding แทน · ไม่เปลี่ยน behavior ของแอป ([CONTRIBUTING → Lint](CONTRIBUTING.md#lint))
 
 ## 1.0.0 — 2026-10-20
