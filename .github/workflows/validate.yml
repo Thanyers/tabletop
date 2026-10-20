@@ -3,7 +3,7 @@ name: Validate local R1 candidate
 on:
   pull_request:
   push:
-    branches: [main, feat/tabletop-r1]
+    branches: [main, dev, feat/tabletop-r1]
   workflow_dispatch:
 
 permissions:
