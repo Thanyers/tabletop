@@ -24,7 +24,7 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
-| F002 | ตั้งชื่อโต๊ะที่แถบด้านบน | `todo` | [F002](docs/features/F002-rename-table.md) |
+| F002 | ตั้งชื่อโต๊ะที่แถบด้านบน | `review` | [F002](docs/features/F002-rename-table.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
 
@@ -44,10 +44,10 @@
 | F001-T10 | ปรับ browser tests ตาม flow ใหม่ | `todo` | — | — | `tests/*.mjs` | T2, T4, T8 | แต่ละงานแก้เทสต์ของตัวเองได้ งานนี้เก็บส่วนที่เหลือ |
 | F001-T11 | คู่มือผู้ใช้ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | T4, T7, T9 | |
 | CI004 | R1 browser test เปิด server ใหม่ทุก scenario แทนการรอ rate limit | `review` | JitrudeeDongdee (Claude) | `feat/CI004-r1-no-rate-wait` | `tests/tabletop-r1.mjs` | — | hotspot `tests/tabletop-r1.mjs` |
-| F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–120 ตัวอักษร) | `todo` | — | — | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | |
-| F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | ชนกับ F003-T1/T3 (ไฟล์ Room เดียวกัน) |
-| F002-T3 | UI แก้ชื่อที่แถบด้านบน | `todo` | — | — | `TabletopApp.tsx`, CSS | F002-T2 | hotspot `TabletopApp.tsx` |
-| F002-T4 | คู่มือ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F002-T3 | |
+| F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–120 ตัวอักษร) | `review` | Claude Code | `feat/F002-rename-table` | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | |
+| F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `review` | Claude Code | `feat/F002-rename-table` | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | ชนกับ F003-T1/T3 (ไฟล์ Room เดียวกัน) |
+| F002-T3 | UI แก้ชื่อที่แถบด้านบน | `review` | Claude Code | `feat/F002-rename-table` | `TabletopApp.tsx`, CSS | F002-T2 | hotspot `TabletopApp.tsx` |
+| F002-T4 | คู่มือ + CHANGELOG | `review` | Claude Code | `feat/F002-rename-table` | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F002-T3 | |
 | F003-T1 | เอาสมาชิกออก (เจ้าของ) | `todo` | — | — | `server/authority.ts`, `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `TabletopApp.tsx` | — | ต้องเสร็จก่อนเปิดลิงก์ใช้ซ้ำ · ชนกับ F002-T2 |
 | F003-T2 | ออกแบบ + security review ลิงก์ใช้ซ้ำ ให้คนอนุมัติ | `todo` | — | — | `docs/features/F003-reusable-invite-link.md` | — | ไม่ใช่โค้ด |
 | F003-T3 | Room: สถานะลิงก์ + เปิด/ปิด/สร้างใหม่ + redeem แบบใช้ซ้ำ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/*.test.ts` | F003-T1, F003-T2 | |

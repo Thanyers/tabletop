@@ -398,6 +398,31 @@ try {
   await dm.locator('.tt-table-options > summary').click();
   mark('Admin sees room metadata; an unrelated account cannot read the room or admin directory');
 
+  // F002: the owner renames the table from the top bar; members see it live and in My tables but cannot rename.
+  await expect(pip.getByRole('button', { name: 'Rename table', exact: true })).toHaveCount(0);
+  await dm.getByRole('button', { name: 'Rename table', exact: true }).click();
+  const renameInput = dm.getByLabel('Table name', { exact: true });
+  await expect(renameInput).toBeFocused();
+  await renameInput.fill('Dragon bridge');
+  await renameInput.press('Escape');
+  await expect(dm.locator('.tt-workspace-picker__button')).not.toContainText('Dragon bridge');
+  await dm.getByRole('button', { name: 'Rename table', exact: true }).click();
+  await renameInput.fill('  Dragon bridge  ');
+  await renameInput.press('Enter');
+  await expect(dm.locator('.tt-workspace-picker__button')).toContainText('Dragon bridge');
+  await expect(pip.locator('.tt-workspace-picker__button')).toContainText('Dragon bridge');
+  expect((await api(pip, '/api/session')).body.workspaces.find(item => item.id === room.id)?.title).toBe('Dragon bridge');
+  const memberRename = await command(pip, 'workspace.rename', { title: 'Stolen name' });
+  expect(memberRename.status).toBe(403);
+  await dm.getByRole('button', { name: 'Rename table', exact: true }).click();
+  await renameInput.fill('   ');
+  await renameInput.press('Enter');
+  await expect(dm.getByText('A table name needs 1 to 100 characters', { exact: false })).toBeVisible();
+  await expect(renameInput).toBeVisible();
+  await renameInput.press('Escape');
+  await expect(dm.locator('.tt-workspace-picker__button')).toContainText('Dragon bridge');
+  mark('Owner renames the table from the top bar; members see the new name live and in My tables, cannot rename, and blank names are refused');
+
   // /new start page: prepared cards, reload and history, and a typed description that waits in the rule draft.
   const starter = missingLink;
   await starter.getByRole('button', { name: 'Start a new table', exact: true }).click();

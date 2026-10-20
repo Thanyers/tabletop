@@ -1,3 +1,4 @@
+import { defaultWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import type {
   ActorContext,
   CaseKind,
@@ -560,7 +561,7 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
   async listWorkspaceReferences(actorId: string, now: number): Promise<WorkspaceReference[]> {
     const result = await this.database.query<Record<string, unknown>>(
       `SELECT w.id,
-              CASE WHEN w.kind = 'table'
+              CASE WHEN w.kind = 'table' AND w.title = $3
                 THEN COALESCE(NULLIF(BTRIM(w.domain_state #>> '{program,title}'), ''), w.title)
                 ELSE w.title
               END AS title,
@@ -569,7 +570,7 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
        JOIN memberships m ON m.workspace_id = w.id AND m.epoch = w.epoch
        WHERE m.actor_id = $1 AND m.revoked_at IS NULL AND w.expires_at > $2
        ORDER BY w.created_at DESC`,
-      [actorId, now],
+      [actorId, now, defaultWorkspaceTitle('table')],
     );
     return result.rows.map((row) => ({
       id: readString(row.id, 'id'),
