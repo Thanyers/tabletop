@@ -17,11 +17,13 @@
 | ที่เล่น | รุ่น / สิ่งที่ตรวจแล้ว | วิธีเริ่ม |
 | --- | --- | --- |
 | [Production](https://tabletop.ptchrr.workers.dev/) | `1.0.0` / `ce2c50e`; version, health, readiness และ capabilities ตอบ 200, AI เปิด, โต๊ะไม่ถูกพักการแก้ไข | Google login → Start with your files → นำไฟล์ที่รองรับเข้า → ตรวจและเปิดใช้กฎ → เล่นบน Canvas → Invite; บัญชีเดิมกลับมาเปิดโต๊ะเดิมได้ |
-| [Public demo](https://tabletop.ptchrr.workers.dev/demo) | เดโมที่เตรียมไว้ในรุ่น production; ไม่เรียก AI | ไม่ต้องล็อกอิน เลือกเรื่อง รอการ์ดปรากฏ แล้วกดพัก/ลองเอง |
+| [Public demo](https://tabletop.ptchrr.workers.dev/demo) | เดโมที่เตรียมไว้ในรุ่น production; กดเล่นจริงซ้ำเวลา 19:44 น. ผ่านโต๊ะว่าง → เพิ่มการ์ด → เล่น/พัก → ลองเอง | ไม่ต้องล็อกอิน เลือกเรื่อง รอการ์ดปรากฏ แล้วกดพัก/ลองเอง |
 | [Staging](https://tabletop-staging.ptchrr.workers.dev/) | ยังเป็น `1.0.0` / `ce2c50e`; endpoints ชุดเดียวกันตอบ 200 และ AI เปิด | ใช้ตรวจ hosted/OAuth; **ยังไม่ได้ลงรุ่นรวมใหม่** |
 | `dev` ในเครื่อง | `ce6d69b`; Generative Canvas, แชทใหม่, ตั้งชื่อ และผังร่วมผ่านชุดทดสอบ local/CI | ตั้งเครื่องตาม [CONTRIBUTING](../CONTRIBUTING.md); Node local ปิด AI, ชุด Workers/Generative acceptance ใช้ provider และบัญชีจำลอง การใช้ AI จริงต้องมี config local ของ operator |
 
 ผล endpoint บอกเวอร์ชันและความพร้อมของบริการ ณ เวลาตรวจ ไม่ใช่หลักฐานว่าได้เล่นสองบัญชีจริงหรือทดสอบ AI ใหม่บน Cloudflare ในรอบนี้ รายละเอียด production ยึด [DEPLOYMENTS](DEPLOYMENTS.md); การนำไฟล์ของโต๊ะทั่วไปกับ upload ของ Invoice เป็นคนละ capability
+
+รอบ public demo ใช้ browser ใหม่โดยไม่มีบัญชี: เลือกทดลองแรงและมวล กดขั้นบน Canvas ให้การ์ดค่อย ๆ เกิด ตรวจว่า Play เดินต่อและ Pause หยุด จากนั้นรับช่วงเอง เปลี่ยน F=12 N, m=3 kg, t=2 s แล้วกด Update lesson ได้ระยะ 8 m ตามสูตร ไม่มี API request, cookie, WebSocket หรือ uncaught browser error จึงไม่มี paid AI call และไม่แก้ห้องจริง หลักฐานนี้ครอบคลุมเดโมที่เตรียมไว้ ไม่ใช่การสร้างกฎใหม่ด้วย AI หรือ multiplayer บน hosted build ใหม่
 
 ## งานทีมและสิ่งที่แก้ตอนรวม
 

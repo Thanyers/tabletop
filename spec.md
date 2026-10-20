@@ -88,7 +88,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## งานที่กำลังทำ
 
-F006-T7 อยู่สถานะ review ใน [PR #32](https://github.com/Thanyers/tabletop/pull/32); README และ Handoff อ้างผล runtime ของ `ce6d69b` และสถานะ Cloudflare ที่อ่านได้จริง ไม่เปลี่ยนฟีเจอร์หรือ deployment
+F006-T7 อยู่สถานะ review ใน [PR #32](https://github.com/Thanyers/tabletop/pull/32); README และ Handoff อ้างผล runtime ของ `ce6d69b` และสถานะ Cloudflare ที่อ่านได้จริง รอบ public demo เวลา 19:44 น. กด Play/Pause และเล่นเองได้ F=12, m=3, t=2 → 8 m โดยไม่มี API/cookie/socket/browser error ไม่เปลี่ยนฟีเจอร์หรือ deployment
 
 ดู [PLAN.md](PLAN.md) — กระดานว่าใครทำงานไหน branch อะไร (ย้ายมาจากหัวข้อนี้เพื่อไม่ให้หลายคนแก้ส่วนเดียวกันจนชน)
 
