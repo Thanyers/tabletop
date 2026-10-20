@@ -51,7 +51,7 @@
 
 .tt-flow-wrap .tt-canvas-tools {
   position: absolute;
-  z-index: 6;
+  z-index: 40;
   top: 10px;
   right: 12px;
   left: 12px;
@@ -62,103 +62,167 @@
   pointer-events: none;
 }
 
-.tt-flow-wrap .tt-canvas-lineage {
-  position: relative;
-  z-index: auto;
-  top: auto;
-  right: auto;
-  left: auto;
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 48px;
+.tt-flow-wrap .tt-canvas-objects { position: relative; flex: 0 0 auto; pointer-events: auto; }
+.tt-flow-wrap .tt-canvas-objects__trigger {
+  display: inline-flex;
+  min-height: 40px;
   align-items: center;
-  gap: 7px;
-  padding: 4px 7px;
-  border: 1px solid #d7e2de;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #d4dfda;
   border-radius: 7px;
-  background: #fbfcfaee;
+  color: #3d5c52;
+  background: #fbfcfaef;
   box-shadow: 0 3px 12px #2435480b;
+  font: 700 12px/1 Manrope, 'Noto Sans Thai', sans-serif;
+  cursor: pointer;
   backdrop-filter: blur(8px);
-  pointer-events: auto;
 }
 
-.tt-flow-wrap .tt-canvas-lineage__label {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 5px;
-  padding: 0 4px;
-  color: #58736b;
-  font: 750 9px/1 var(--tt-mono);
-  letter-spacing: .07em;
-}
+.tt-flow-wrap .tt-canvas-objects__trigger > svg { color: var(--tt-moss); }
+.tt-flow-wrap .tt-canvas-objects__trigger small { color: #81918a; font: 600 10px var(--tt-mono); }
+.tt-flow-wrap .tt-canvas-objects__trigger:hover { border-color: #a9c7ba; background: #fff; }
+.tt-flow-wrap .tt-canvas-objects__trigger:focus-visible,
+.tt-flow-wrap .tt-canvas-objects__panel button:focus-visible,
+.tt-flow-wrap .tt-canvas-node button:focus-visible { outline: 2px solid var(--tt-blue); outline-offset: 2px; }
 
-.tt-flow-wrap .tt-canvas-lineage__label svg { color: var(--tt-moss); }
-.tt-flow-wrap .tt-canvas-lineage__label small { color: #8a9993; font: 600 8px var(--tt-mono); letter-spacing: 0; }
-.tt-flow-wrap .tt-canvas-lineage__paths { display: flex; min-width: 0; gap: 5px; overflow-x: auto; padding: 2px 1px; scrollbar-width: thin; }
-.tt-flow-wrap .tt-canvas-lineage__path {
+.tt-flow-wrap .tt-canvas-objects__panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
   display: grid;
-  flex: 0 0 auto;
-  min-width: 162px;
-  max-width: 225px;
-  gap: 2px;
-  padding: 4px 7px 3px;
-  border: 1px solid #dce6e2;
-  border-radius: 5px;
-  color: #3f5952;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(68vh, 560px);
+  gap: 5px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid #d3dfd9;
+  border-radius: 8px;
+  background: #fbfcfa;
+  box-shadow: 0 12px 32px #24354820;
+  overscroll-behavior: contain;
+}
+
+.tt-flow-wrap .tt-canvas-objects__panel[hidden] { display: none; }
+.tt-flow-wrap .tt-canvas-connections {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid #e0e7e3;
+  border-radius: 6px;
+  color: #4f6c62;
   background: #fff;
+  font: 650 11px Manrope, 'Noto Sans Thai', sans-serif;
   text-align: left;
   cursor: pointer;
-  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
 }
 
-.tt-flow-wrap .tt-canvas-lineage__endpoints { display: grid; grid-template-columns: minmax(0, 1fr) 13px minmax(0, 1fr); align-items: center; gap: 4px; min-width: 0; }
-.tt-flow-wrap .tt-canvas-lineage__endpoints > span { overflow: hidden; color: #3e5550; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.tt-flow-wrap .tt-canvas-lineage__endpoints > svg { color: #80918b; }
-.tt-flow-wrap .tt-canvas-lineage__path small { overflow: hidden; color: #788984; font: 8px/1.3 var(--tt-mono); text-overflow: ellipsis; white-space: nowrap; }
-.tt-flow-wrap .tt-canvas-lineage__path[data-from-role='source'] .tt-canvas-lineage__endpoints > span:first-child { color: var(--tt-blue); }
-.tt-flow-wrap .tt-canvas-lineage__path[data-to-role='rules'] .tt-canvas-lineage__endpoints > span:last-child { color: var(--tt-amber); }
-.tt-flow-wrap .tt-canvas-lineage__path[data-to-role='result'] .tt-canvas-lineage__endpoints > span:last-child { color: var(--tt-moss); }
-.tt-flow-wrap .tt-canvas-lineage__path:hover { border-color: #a9c7ba; background: #f6faf7; }
-.tt-flow-wrap .tt-canvas-lineage__path:focus-visible { outline: 2px solid var(--tt-blue); outline-offset: 2px; }
-.tt-flow-wrap .tt-canvas-lineage__path[aria-current='location'] { border-color: #8ab3a6; background: #f0f7f2; box-shadow: inset 0 0 0 1px #24796b14; }
-
-.tt-flow-wrap .tt-canvas-actions {
-  position: relative;
-  top: auto;
-  right: auto;
-  z-index: auto;
-  flex: 0 0 auto;
-  align-self: flex-start;
-  margin-left: auto;
-  pointer-events: auto;
+.tt-flow-wrap .tt-canvas-connections > svg { color: var(--tt-moss); }
+.tt-flow-wrap .tt-canvas-connections small { color: #86968f; font: 9px var(--tt-mono); }
+.tt-flow-wrap .tt-canvas-connections i { margin-left: auto; color: #71867e; font: normal 9px var(--tt-mono); }
+.tt-flow-wrap .tt-canvas-connections[aria-pressed='true'] { border-color: #9bbcaf; background: #eff6f1; }
+.tt-flow-wrap .tt-canvas-objects__list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.tt-flow-wrap .tt-canvas-objects__list button {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #334e48;
+  background: transparent;
+  font: 600 12px Manrope, 'Noto Sans Thai', sans-serif;
+  text-align: left;
+  cursor: pointer;
 }
+
+.tt-flow-wrap .tt-canvas-objects__list button:hover { border-color: #d9e5df; background: #f3f8f4; }
+.tt-flow-wrap .tt-canvas-objects__list button[aria-current='location'] { border-color: #b9d0c3; color: #205e52; background: #edf6f1; }
 
 .tt-flow-wrap .tt-canvas-revision-change {
-  position: absolute;
-  z-index: 8;
-  top: 57px;
-  left: 50%;
+  position: relative;
+  z-index: 1;
   display: flex;
-  max-width: min(680px, calc(100% - 24px));
+  flex: 0 1 auto;
+  max-width: min(430px, calc(100% - 150px));
+  min-height: 40px;
   align-items: center;
   gap: 7px;
-  padding: 7px 10px;
-  transform: translateX(-50%);
+  margin-top: 0;
+  padding: 5px 9px;
   border: 1px solid #cbded5;
   border-radius: 6px;
   color: #527268;
   background: #fbfdfbf2;
-  box-shadow: 0 5px 18px #24354816;
+  box-shadow: 0 5px 18px #24354812;
   font-size: 10px;
   pointer-events: none;
   animation: tt-flow-revision-in .2s ease-out, tt-flow-revision-out .3s ease-in 1.5s both;
 }
 
-.tt-flow-wrap .tt-canvas-revision-change > span { flex: 0 0 auto; font-weight: 750; }
-.tt-flow-wrap .tt-canvas-revision-change > b { overflow: hidden; color: var(--tt-ink); font: 600 9px var(--tt-mono); text-overflow: ellipsis; white-space: nowrap; }
+.tt-flow-wrap .tt-canvas-revision-change > b { overflow: hidden; color: var(--tt-ink); font: 600 10px var(--tt-mono); text-overflow: ellipsis; white-space: nowrap; }
 .tt-flow-wrap .tt-canvas-revision-change > svg { flex: 0 0 auto; color: var(--tt-moss); }
+
+.tt-flow-wrap .tt-canvas-node { position: relative; }
+.tt-flow-wrap .tt-canvas-node__head { cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; }
+.tt-flow-wrap .react-flow__node.dragging .tt-canvas-node__head { cursor: grabbing; }
+.tt-flow-wrap .tt-canvas-node__drag-handle { display: grid; flex: 0 0 14px; place-items: center; color: #87968f; }
+.tt-flow-wrap .tt-canvas-node__identity { display: grid; flex: 1 1 auto; min-width: 0; }
+.tt-flow-wrap .tt-canvas-node__title { min-width: 0; color: var(--tt-ink); font-size: 14px; font-weight: 720; }
+.tt-flow-wrap .tt-canvas-node__open,
+.tt-flow-wrap .tt-canvas-node__move-toggle {
+  min-height: 40px;
+  border: 1px solid #d5dfda;
+  border-radius: 5px;
+  color: #4f6d63;
+  background: #fbfcfa;
+  font: 650 11px Manrope, 'Noto Sans Thai', sans-serif;
+  cursor: pointer;
+}
+
+.tt-flow-wrap .tt-canvas-node__open { padding: 0 10px; }
+.tt-flow-wrap .tt-canvas-node__move-toggle { display: grid; width: 40px; flex: 0 0 40px; place-items: center; padding: 0; }
+.tt-flow-wrap .tt-canvas-node__open:hover,
+.tt-flow-wrap .tt-canvas-node__move-toggle:hover { border-color: #a9c7ba; background: #fff; }
+.tt-flow-wrap .tt-canvas-node__body { user-select: text; -webkit-user-select: text; touch-action: auto; }
+.tt-flow-wrap .tt-canvas-move-tools {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 8px;
+  display: grid;
+  min-width: 206px;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid #d4dfda;
+  border-radius: 7px;
+  color: #435c54;
+  background: #fbfcfa;
+  box-shadow: 0 10px 28px #2435481f;
+}
+
+.tt-flow-wrap .tt-canvas-move-tools > span { font-size: 11px; font-weight: 700; }
+.tt-flow-wrap .tt-canvas-move-tools__directions { display: flex; justify-content: space-between; gap: 5px; }
+.tt-flow-wrap .tt-canvas-move-tools__directions button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border: 1px solid #d9e3de;
+  border-radius: 5px;
+  color: #456458;
+  background: #fff;
+  cursor: pointer;
+}
+
+.tt-flow-wrap .tt-canvas-move-tools__directions button:hover { border-color: #9dbbab; background: #eff6f1; }
+.tt-flow-wrap .tt-canvas-move-tools > small { color: #798982; font-size: 10px; }
+.tt-flow-wrap .tt-canvas-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.tt-flow-wrap .react-flow__controls-button { width: 40px; height: 40px; }
 
 .tt-flow-wrap .react-flow__edge-path { stroke-linecap: round; }
 .tt-flow-wrap .react-flow__edge.animated .react-flow__edge-path { animation-duration: .65s; }
@@ -173,10 +237,8 @@
 }
 
 @media (max-width: 1100px) {
-  .tt-flow-wrap .tt-canvas-tools { top: 10px; right: 10px; left: 10px; flex-direction: column; align-items: stretch; gap: 7px; }
-  .tt-flow-wrap .tt-canvas-lineage { flex: 0 0 auto; width: 100%; }
-  .tt-flow-wrap .tt-canvas-actions { top: auto; right: auto; align-self: flex-end; margin-left: 0; }
-  .tt-flow-wrap .tt-canvas-revision-change { position: relative; top: auto; left: auto; align-self: center; transform: none; }
+  .tt-flow-wrap .tt-canvas-tools { top: 10px; right: 10px; left: 10px; }
+  .tt-flow-wrap .tt-canvas-objects__panel { max-height: min(68vh, 560px); }
 }
 
 @media (max-width: 760px) {
@@ -185,16 +247,12 @@
   .tt-flow-wrap .tt-canvas-node__title { font-size: 12px; }
   .tt-flow-wrap .tt-canvas-node__capability { font-size: 7px; }
   .tt-flow-wrap .tt-canvas-tools { top: 7px; right: 7px; left: 7px; gap: 6px; }
-  .tt-flow-wrap .tt-canvas-lineage { min-height: 45px; gap: 5px; padding: 3px 5px; }
-  .tt-flow-wrap .tt-canvas-lineage__label { gap: 3px; font-size: 8px; }
-  .tt-flow-wrap .tt-canvas-lineage__path { min-width: 158px; min-height: 36px; }
-  .tt-flow-wrap .tt-canvas-actions { top: auto; right: auto; }
-  .tt-flow-wrap .tt-canvas-revision-change { max-width: calc(100% - 18px); gap: 5px; padding: 6px 8px; font-size: 9px; }
-  .tt-flow-wrap .tt-canvas-revision-change > b { font-size: 8px; }
+  .tt-flow-wrap .tt-canvas-objects__trigger { min-height: 40px; padding-inline: 10px; }
+  .tt-flow-wrap .tt-canvas-revision-change { max-width: min(250px, calc(100% - 125px)); min-height: 40px; gap: 5px; padding: 5px 7px; }
+  .tt-flow-wrap .tt-canvas-revision-change > b { font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tt-flow-wrap .tt-canvas-lineage__path { transition: none; }
   .tt-flow-wrap .tt-canvas-revision-change { animation: none; }
   .tt-flow-wrap .react-flow__edge.animated .react-flow__edge-path { animation: none !important; }
 }

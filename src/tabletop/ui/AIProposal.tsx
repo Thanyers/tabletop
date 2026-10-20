@@ -15,6 +15,7 @@ interface AIProposalProps {
   onReviewDraft?: () => void;
   readOnly?: boolean;
   embedded?: boolean;
+  prefill?: { text: string; key: number };
 }
 
 const completed = (job: ModelJob) => job.status === 'completed' || job.status === 'complete';
@@ -29,7 +30,7 @@ function proposalErrorMessage(reason: unknown, kind: WorkspaceView['kind']): str
   return typeof error?.message === 'string' ? error.message : 'The AI request could not be sent.';
 }
 
-export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, onAttachFile, onOpenSources, onReviewDraft, readOnly = false, embedded = false }: AIProposalProps) {
+export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, onAttachFile, onOpenSources, onReviewDraft, readOnly = false, embedded = false, prefill }: AIProposalProps) {
   const [prompt, setPrompt] = useState('');
   const [lastPrompt, setLastPrompt] = useState('');
   const [sourceId, setSourceId] = useState('');
@@ -52,6 +53,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
   const tableSources = view.kind === 'table' && view.domain.kind === 'table' ? view.domain.sources : [];
   const tableCandidate = view.kind === 'table' && view.domain.kind === 'table' ? view.domain.candidate : null;
   const tableDraftPending = tableCandidate !== null && tableCandidate.status !== 'active';
+  const sourceScope = tableSources.map((source) => source.id).join('|');
 
   useEffect(() => {
     generation.current += 1;
@@ -73,11 +75,17 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
     if (sourceId && !sources.some((source) => source.id === sourceId)) setSourceId('');
   }, [sourceId, sources]);
 
+  useEffect(() => {
+    if (prefill) { setPrompt(prefill.text); setConsent(false); }
+  }, [prefill]);
+
+  useEffect(() => { setConsent(false); }, [sourceScope, sourceId]);
+
   const refreshDraft = async (token: number) => {
     setRefreshing(true);
     try {
       await onRefresh(view.id);
-      if (generation.current === token) setMessage('Draft status refreshed. Review it in the table lifecycle before taking any next step.');
+      if (generation.current === token) setMessage('Draft ready. Open Rules to review it.');
     } catch (reason) {
       if (generation.current === token) setError(reason instanceof Error ? reason.message : 'The table could not be refreshed.');
     } finally {
@@ -123,6 +131,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
     if (!prompt.trim() || !consent || readOnly || requesting || attaching || (job && waiting(job)) || (view.kind === 'invoice' && !sourceId) || (view.kind === 'table' && tableSources.length === 0) || !capabilities.model.enabled) return;
     const token = ++generation.current;
     const commandId = crypto.randomUUID();
+    setConsent(false);
     setRequesting(true);
     setJob(null);
     setLastPrompt(prompt.trim());
@@ -160,6 +169,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
 
   const attachTableSource = async (file: File) => {
     if (!onAttachFile || view.kind !== 'table' || readOnly) return;
+    setConsent(false);
     const token = generation.current;
     setAttaching(true);
     setAttachmentError('');
@@ -196,7 +206,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
     return <section className={`tt-ai-proposal tt-ai-proposal--table${embedded ? ' tt-ai-proposal--embedded' : ''}`} data-testid={embedded ? undefined : 'table-assistant'} aria-label={embedded ? 'Private rule drafting tools' : undefined} aria-labelledby={embedded ? undefined : 'tt-ai-title'}>
       {!embedded && <header className="tt-ai-proposal__head"><span className="tt-ai-proposal__icon"><Sparkles size={15} /></span><div><span className="tt-kicker">OWNER TOOLS</span><h2 id="tt-ai-title">Table assistant</h2></div><span className="tt-ai-proposal__manual">Rules stay on Canvas</span></header>}
       <section className="tt-table-assistant__files" aria-label={`Private source files, ${tableSources.length} of 4`}>
-        <header><strong>Private source files</strong><span>{tableSources.length} / 4</span></header>
+        <header><strong>Your files</strong><span>{tableSources.length} / 4 · private</span></header>
         {tableSources.length > 0 ? <ul>{tableSources.map((source) => <li key={source.id} title={source.filename}><FileText size={13} /><span>{source.filename}</span></li>)}</ul> : <p>No files attached yet.</p>}
         <div className="tt-table-assistant__file-actions">
           <input ref={tableFileInput} type="file" className="tt-table-assistant__file-input" accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown" aria-label="Choose table source files" tabIndex={-1} onChange={(event) => {
@@ -205,25 +215,25 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
             if (file) void attachTableSource(file);
           }} />
           <button type="button" className="tt-button tt-button--quiet" disabled={attachDisabled} onClick={() => tableFileInput.current?.click()}>{attaching ? <LoaderCircle size={14} className="tt-spin" /> : <Paperclip size={14} />}Attach a file</button>
-          <button type="button" className="tt-button tt-button--quiet" disabled={!onOpenSources || attaching || requesting || waitingNow} onClick={onOpenSources}><FolderOpen size={14} />Manage files</button>
+          <button type="button" className="tt-button tt-button--quiet" disabled={!onOpenSources || attaching || requesting || waitingNow} onClick={onOpenSources}><FolderOpen size={14} />View files</button>
         </div>
-        <small>UTF-8 CSV, JSON, TXT or Markdown · 32 KiB each · 64 KiB total. Adding a file does not send an AI request.</small>
+        <details><summary>File limits</summary><small>UTF-8 CSV, JSON, TXT or Markdown · 32 KiB each · 64 KiB total. Adding a file does not send an AI request.</small></details>
       </section>
       {readOnly && <p className="tt-table-assistant__notice" role="status"><AlertCircle size={14} />Editing and AI requests are temporarily paused. You can still review the current table.</p>}
       {!capabilities.model.enabled && <p className="tt-ai-proposal__unavailable"><AlertCircle size={14} />{capabilities.model.reason || 'AI rule proposals are not enabled for this table. Manual rule editing remains available on Canvas.'}</p>}
-      {tableDraftPending && <p className="tt-table-assistant__notice" role="status">A rule draft is ready to review. You can describe a correction here to prepare a replacement; it will need a fresh review.</p>}
+      {tableDraftPending && <p className="tt-table-assistant__notice" role="status">Draft ready. Review it, or describe a correction.</p>}
       <form className="tt-ai-proposal__form" data-testid="table-ai-composer" onSubmit={(event) => void submit(event)}>
-        <label htmlFor="tt-ai-prompt">What should the rule draft change or explain?</label>
-        <textarea id="tt-ai-prompt" value={prompt} maxLength={1200} rows={3} disabled={readOnly} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the collections, fields, actions and checks people need…" />
-        {tableSources.length === 0 && <small className="tt-ai-proposal__source-hint">Attach a file first. Original files stay private to the owner, including after rules are activated.</small>}
-        <div className="tt-ai-proposal__privacy"><strong>Before you send</strong><p>After you consent, your prompt, current rules, and all {tableSources.length} private source file{tableSources.length === 1 ? '' : 's'} on this table are sent to the AI provider. Shared records and member activity are excluded. Source files and drafts stay private to the owner; active rules and records are shared with members.</p></div>
-        <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} disabled={readOnly} onChange={(event) => setConsent(event.target.checked)} /><span>I agree to send this request and all private source files for a rule draft.</span></label>
-        <button type="submit" className="tt-button tt-button--primary" aria-label="Prepare rule draft" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />}Send</button>
+        <label htmlFor="tt-ai-prompt">How should this table work?</label>
+        <textarea id="tt-ai-prompt" value={prompt} maxLength={1200} rows={3} disabled={readOnly || requesting || waitingNow} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what people should be able to do…" />
+        {tableSources.length === 0 && <small className="tt-ai-proposal__source-hint">Attach a text file to get started.</small>}
+        <details className="tt-ai-proposal__privacy"><summary>What goes to AI?</summary><p>Your prompt, current rules, and all {tableSources.length} private source file{tableSources.length === 1 ? '' : 's'} on this table go to the AI provider after you agree. Shared records and member activity are excluded. Original files and drafts stay private to you; active rules and records are shared.</p></details>
+        <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} disabled={readOnly || requesting || waitingNow} onChange={(event) => setConsent(event.target.checked)} /><span>Send this request and all {tableSources.length} source file{tableSources.length === 1 ? '' : 's'} to AI.</span></label>
+        <button type="submit" className="tt-button tt-button--primary" aria-label="Prepare rule draft" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />}Prepare draft</button>
       </form>
       {attachmentError && <p className="tt-ai-proposal__error" role="alert"><AlertCircle size={14} />{attachmentError}</p>}
       {(requestStatus || lastPrompt) && <div className="tt-table-assistant__status" data-testid="table-assistant-status" role="status" aria-live="polite">
         {requestStatus && <strong>{requestStatus}</strong>}
-        {lastPrompt && <div><small>Last request</small><p>{lastPrompt}</p></div>}
+        {lastPrompt && <details><summary>Request details</summary><p>{lastPrompt}</p></details>}
         {(job?.message || message) && <p>{job?.message || message}</p>}
         {waitingNow && <button type="button" className="tt-button tt-button--quiet" onClick={() => void checkStatus()} disabled={checking}>{checking ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />}Check status</button>}
         {job && completed(job) && <button type="button" className="tt-button tt-button--quiet" onClick={() => void refreshDraft(generation.current)} disabled={refreshing}>{refreshing ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />}Refresh table</button>}
@@ -235,7 +245,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
   }
 
   return <section className="tt-ai-proposal" id="tt-ai-proposal" aria-labelledby="tt-ai-title">
-    <header className="tt-ai-proposal__head"><span className="tt-ai-proposal__icon"><Sparkles size={15} /></span><div><span className="tt-kicker">OPTIONAL ASSISTANCE</span><h2 id="tt-ai-title">Ask AI for a draft</h2></div><span className="tt-ai-proposal__manual">Manual rules stay available</span></header>
+    <header className="tt-ai-proposal__head"><div><h2 id="tt-ai-title">Change rules</h2></div></header>
     {!capabilities.model.enabled ? <p className="tt-ai-proposal__unavailable"><AlertCircle size={14} />{capabilities.model.reason || 'AI proposals are not enabled for this table.'}</p> : <>
       <form className="tt-ai-proposal__form" onSubmit={(event) => void submit(event)}>
         {view.kind === 'invoice' && <label className="tt-ai-proposal__source" htmlFor="tt-ai-source">Verified rate evidence
@@ -245,16 +255,16 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
           </select>
           {sources.length === 0 && <small>Review a rate card or excerpt as verified before asking for an invoice draft.</small>}
         </label>}
-        <label htmlFor="tt-ai-prompt">What should the draft change or explain?</label>
+        <label htmlFor="tt-ai-prompt">What would you like to change?</label>
         <textarea id="tt-ai-prompt" value={prompt} maxLength={1200} rows={3} onChange={(event) => setPrompt(event.target.value)} placeholder={view.kind === 'invoice' ? 'Describe the rate change to compare against this verified evidence…' : view.kind === 'teaching' ? 'Describe a teaching adjustment for the current lesson…' : 'Describe a bounded shield-rule proposal for this encounter…'} />
-        <div className="tt-ai-proposal__privacy"><strong>Before you send</strong><p>Only your prompt and relevant current rules or parameters are sent. {view.kind === 'invoice' ? 'The verified excerpt you select is included.' : ''} Private notes and learner answers are excluded.</p></div>
-        <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>I agree to send this request for an AI draft.</span></label>
-        <button type="submit" className="tt-button tt-button--primary" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />} Ask AI for a draft</button>
+        <details className="tt-ai-proposal__privacy"><summary>What goes to AI?</summary><p>Only your prompt and relevant current rules or parameters are sent. {view.kind === 'invoice' ? 'The verified excerpt you select is included.' : ''} Private notes and learner answers are excluded.</p></details>
+        <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>Send this request and current {view.kind === 'invoice' ? 'rules with the selected evidence' : 'rules or parameters'} to AI.</span></label>
+        <button type="submit" className="tt-button tt-button--primary" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />}Prepare draft</button>
       </form>
       {(requesting || job) && <div className="tt-ai-proposal__job" role="status" aria-live="polite"><span className={`tt-ai-proposal__job-mark${job && completed(job) ? ' is-done' : ''}`}>{job && completed(job) ? <Check size={14} /> : <LoaderCircle size={14} className="tt-spin" />}</span><span><strong>{job?.status === 'failed' ? 'Request stopped' : completed(job ?? { id: '', status: 'queued' }) ? 'Draft ready for review' : 'Preparing draft'}</strong><small>{job?.message || message || (waitingNow ? 'This can take a little while.' : '')}</small></span>{waitingNow && <button type="button" className="tt-button tt-button--quiet" onClick={() => void checkStatus()} disabled={checking}>{checking ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />} Check status</button>}{job && completed(job) && <button type="button" className="tt-button tt-button--quiet" onClick={() => void refreshDraft(generation.current)} disabled={refreshing}>{refreshing ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />} Refresh table</button>}</div>}
       {message && !requesting && !job && <p className="tt-ai-proposal__message" role="status">{message}</p>}
       {error && <p className="tt-ai-proposal__error" role="alert"><AlertCircle size={14} />{error}</p>}
-      {job && completed(job) && <p className="tt-ai-proposal__footer">AI suggestions create a draft only. Review and use the table’s existing simulation and approval steps; nothing is activated automatically.</p>}
+      {job && completed(job) && <p className="tt-ai-proposal__footer">Review the draft on Canvas before using it.</p>}
     </>}
   </section>;
 }

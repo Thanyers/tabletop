@@ -1,0 +1,587 @@
+/* Compact assistant layout. Keep this scoped to the table workspace so
+   other workbenches retain their existing layout. */
+.tt-app .tt-table-assistant-panel > .tt-table-assistant {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-content: stretch;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 11px;
+}
+
+.tt-app .tt-table-assistant__head {
+  flex: 0 0 auto;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.tt-app .tt-table-assistant__mark {
+  width: 30px;
+  height: 30px;
+}
+
+.tt-app .tt-table-assistant__head > div {
+  min-width: 0;
+  gap: 0;
+}
+
+.tt-app .tt-table-assistant__head h2 {
+  color: var(--tt-ink);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.tt-app .tt-table-assistant__turn {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  margin-left: auto;
+  padding: 5px 8px;
+  border: 1px solid #dce7e0;
+  border-radius: 999px;
+  color: #416a55;
+  background: #f5faf6;
+  font-size: 10px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.tt-app .tt-table-assistant__modes {
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 3px;
+}
+
+.tt-app .tt-table-assistant__modes > button {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.tt-app .tt-table-assistant__rules-mode {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tt-app .tt-table-assistant__canvas-tools {
+  flex: 0 0 auto;
+  min-width: 0;
+  border: 1px solid var(--tt-line);
+  border-radius: 5px;
+  background: #fff;
+}
+
+.tt-app .tt-table-assistant__canvas-tools > summary {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 9px;
+  color: #5f7569;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tt-app .tt-table-assistant__canvas-tools > summary:focus-visible,
+.tt-app .tt-table-chat__privacy > summary:focus-visible {
+  outline: 2px solid var(--tt-blue);
+  outline-offset: 2px;
+}
+
+.tt-app .tt-table-assistant__canvas-tools[open] > summary {
+  border-bottom: 1px solid var(--tt-line);
+}
+
+.tt-app .tt-table-assistant__canvas-tools .tt-table-assistant__direct-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 7px;
+}
+
+.tt-app .tt-table-assistant__canvas-tools .tt-table-assistant__direct-links > button {
+  min-height: 32px;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding-inline: 8px;
+  font-size: 10px;
+}
+
+.tt-app .tt-table-assistant__waiting {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 7px 8px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.tt-app .tt-table-assistant-panel > .tt-table-assistant > .tt-table-chat {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.tt-app .tt-table-chat__intro {
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.tt-app .tt-table-chat__intro h3 {
+  font-size: 12px;
+}
+
+.tt-app .tt-table-chat__intro p {
+  margin: 0;
+  color: var(--tt-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.tt-app .tt-table-chat__history-tools {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #78877f;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.tt-app .tt-table-chat__history-tools > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tt-app .tt-table-chat__history-tools .tt-button {
+  min-height: 28px;
+  flex: 0 0 auto;
+  padding-inline: 8px;
+  font-size: 9px;
+}
+
+.tt-app .tt-table-chat__notice {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.tt-app .tt-table-chat__thread {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-height: none;
+  min-height: 36px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 7px;
+  scrollbar-gutter: stable;
+}
+
+.tt-app .tt-table-chat__older {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 28px;
+  align-self: flex-start;
+  padding-inline: 8px;
+  font-size: 9px;
+}
+
+.tt-app .tt-table-chat__empty {
+  align-self: center;
+  margin: auto;
+  font-size: 10px;
+}
+
+.tt-app .tt-table-chat__empty p {
+  font-size: 10px;
+}
+
+.tt-app .tt-table-chat__form {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--tt-line);
+}
+
+.tt-app .tt-table-chat__form > label:first-child {
+  color: #456357;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.tt-app .tt-table-chat__compose-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 7px;
+  min-width: 0;
+}
+
+.tt-app .tt-table-chat__compose-row textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 58px;
+  max-height: 110px;
+  padding: 8px 9px;
+  border-color: #ccdcd2;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.tt-app .tt-table-chat__compose-row textarea:disabled {
+  color: #7b8882;
+  background: #f3f6f4;
+  cursor: not-allowed;
+}
+
+.tt-app .tt-table-chat__compose-row > .tt-button {
+  min-width: 68px;
+  min-height: 58px;
+  align-self: stretch;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+.tt-app .tt-table-chat__privacy {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+}
+
+.tt-app .tt-table-chat__privacy > summary {
+  min-height: 29px;
+  padding: 7px 8px;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.tt-app .tt-table-chat__privacy > p {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 5px);
+  left: 0;
+  z-index: 4;
+  max-height: min(32dvh, 190px);
+  overflow: auto;
+  padding: 9px;
+  border: 1px solid var(--tt-line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 6px 18px #2435481a;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.tt-app .tt-table-chat__consent {
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.tt-app .tt-table-chat__consent input {
+  width: 16px;
+  height: 16px;
+  margin-top: 0;
+}
+
+.tt-app .tt-table-chat__send-help {
+  margin: 0;
+  color: #697a70;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.tt-app .tt-table-chat__form > .tt-table-chat__notice {
+  margin: 0;
+}
+
+.tt-app .tt-table-chat__answer-actions .tt-button {
+  min-height: 38px;
+  font-size: 10px;
+}
+
+@media (max-width: 760px) {
+  .tt-app .tt-table-assistant-panel > .tt-table-assistant {
+    gap: 6px;
+    padding: 9px;
+  }
+
+  .tt-app .tt-table-assistant__head {
+    min-height: 31px;
+  }
+
+  .tt-app .tt-table-assistant__mark {
+    width: 27px;
+    height: 27px;
+  }
+
+  .tt-app .tt-table-assistant__head h2 {
+    font-size: 14px;
+  }
+
+  .tt-app .tt-table-assistant__modes > button {
+    min-height: 34px;
+  }
+
+  .tt-app .tt-table-assistant__canvas-tools > summary {
+    min-height: 29px;
+  }
+
+  .tt-app .tt-table-assistant-panel > .tt-table-assistant > .tt-table-chat {
+    gap: 5px;
+  }
+
+  .tt-app .tt-table-chat__intro h3 {
+    font-size: 11px;
+  }
+
+  .tt-app .tt-table-chat__intro p {
+    font-size: 9px;
+  }
+
+  .tt-app .tt-table-chat__thread {
+    min-height: 32px;
+    padding: 6px;
+  }
+
+  .tt-app .tt-table-chat__form {
+    gap: 5px;
+    padding-top: 6px;
+  }
+
+  .tt-app .tt-table-chat__compose-row {
+    gap: 6px;
+  }
+
+  .tt-app .tt-table-chat__compose-row textarea {
+    min-height: 54px;
+    padding: 7px 8px;
+  }
+
+  .tt-app .tt-table-chat__compose-row > .tt-button {
+    min-width: 62px;
+    min-height: 54px;
+    padding-inline: 8px;
+  }
+
+  .tt-app .tt-table-chat__privacy > summary {
+    min-height: 27px;
+    padding-block: 6px;
+  }
+
+  .tt-app .tt-table-chat__consent {
+    font-size: 8.5px;
+  }
+}
+
+/* The Canvas assistant is a floating palette. Keep its body content-sized,
+   with the conversation as the only scroll area and the composer at the end. */
+.tt-app .tt-table-assistant.is-compact {
+  flex: 0 1 auto;
+  width: 100%;
+  height: auto;
+  max-height: inherit;
+  min-height: 0;
+  gap: 7px;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-assistant__head {
+  min-height: 30px;
+  gap: 7px;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-assistant__mark {
+  width: 26px;
+  height: 26px;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-assistant__head h2 {
+  font-size: 14px;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-assistant__turn {
+  margin-left: auto;
+  padding: 4px 7px;
+  font-size: 9px;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-assistant__modes {
+  gap: 3px;
+  padding: 2px;
+  border-color: var(--tt-line);
+  background: var(--tt-cream-2);
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-assistant__modes > button {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.tt-app .tt-table-assistant.is-compact > .tt-table-assistant__rules-mode {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tt-app .tt-table-assistant.is-compact > .tt-table-chat {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__intro {
+  gap: 0;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__intro h3 {
+  font-size: 11px;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__intro p {
+  display: none;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-medium);
+  background: var(--tt-cream-0);
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history > summary {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  color: var(--tt-ink);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history > summary:focus-visible {
+  outline: 2px solid var(--tt-blue);
+  outline-offset: -2px;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history-count {
+  min-width: 22px;
+  padding: 3px 7px;
+  border: 1px solid var(--tt-line);
+  border-radius: 999px;
+  color: var(--tt-muted);
+  background: var(--tt-cream-1);
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history[open] {
+  flex: 1 1 auto;
+  max-height: min(180px, 24dvh);
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history-content {
+  display: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--tt-line);
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history[open] > .tt-table-chat__history-content {
+  display: flex;
+}
+
+.tt-app .tt-table-assistant.is-compact .tt-table-chat__history-tools {
+  padding: 5px 8px;
+}
+
+.tt-app .tt-table-assistant-panel > .tt-table-assistant.is-compact > .tt-table-chat .tt-table-chat__thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tt-app .tt-table-assistant-panel > .tt-table-assistant.is-compact > .tt-table-chat .tt-table-chat__form {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
+@media (max-width: 760px) {
+  .tt-app .tt-table-assistant.is-compact {
+    gap: 6px;
+    padding: 9px;
+  }
+
+  .tt-app .tt-table-assistant.is-compact .tt-table-assistant__head {
+    min-height: 28px;
+  }
+
+  .tt-app .tt-table-assistant.is-compact .tt-table-assistant__mark {
+    width: 24px;
+    height: 24px;
+  }
+
+  .tt-app .tt-table-assistant.is-compact .tt-table-assistant__modes > button {
+    min-height: 34px;
+  }
+
+  .tt-app .tt-table-assistant.is-compact > .tt-table-chat {
+    gap: 5px;
+  }
+
+  .tt-app .tt-table-assistant.is-compact .tt-table-chat__history > summary {
+    min-height: 33px;
+    padding-block: 5px;
+  }
+
+  .tt-app .tt-table-assistant-panel > .tt-table-assistant.is-compact > .tt-table-chat .tt-table-chat__thread {
+    min-height: 0;
+    padding: 6px;
+  }
+}

@@ -11,8 +11,30 @@ export async function verifyInteractiveDemo(page, origin, output) {
   const canvas = page.getByRole('region', { name: 'พื้นที่ Canvas ทดลอง', exact: true });
   const editor = page.getByTestId('canvas-object-editor');
   const node = id => page.locator(`[data-canvas-object="${id}"]`);
+  const fileTray = page.getByRole('complementary', { name: 'ไฟล์สำหรับเริ่มโต๊ะ', exact: true });
+  async function openAdvancedOptions() {
+    const summary = page.getByLabel('ตัวเลือกเดโม', { exact: true });
+    if (await summary.getAttribute('aria-expanded') !== 'true') await summary.click();
+  }
+  async function selectActor(actorId) {
+    await openAdvancedOptions();
+    await page.getByLabel('ลองเป็น', { exact: true }).selectOption(actorId);
+  }
+  async function setFileTrayVisible(visible) {
+    if (await fileTray.isVisible() !== visible) {
+      await openAdvancedOptions();
+      await page.getByRole('button', { name: 'ไฟล์ตัวอย่าง', exact: true }).click();
+    }
+    if (visible) await expect(fileTray).toBeVisible();
+    else await expect(fileTray).toBeHidden();
+  }
+  async function setPracticeFile(file) {
+    await setFileTrayVisible(true);
+    await page.getByLabel('เลือกไฟล์เข้า Canvas', { exact: true }).setInputFiles(file);
+  }
   const next = async () => {
     const before = await counter.innerText();
+    await openAdvancedOptions();
     await page.getByRole('button', { name: 'ทำขั้นถัดไป', exact: true }).click();
     await expect.poll(() => counter.innerText()).not.toBe(before);
   };
@@ -23,9 +45,30 @@ export async function verifyInteractiveDemo(page, origin, output) {
     await expect(page.getByTestId('practice-empty-canvas')).toBeVisible();
     await expect(page.locator('[data-canvas-object]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Focus table', exact: true })).toHaveCount(0);
+    await expect(fileTray).toBeVisible();
+    await expect(page.getByRole('button', { name: 'เล่นเดโม', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ลองเอง', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'พักเดโม', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^(Use|Arrange)$/ })).toHaveCount(0);
+    const options = page.locator('.tt-practice-options');
+    await expect(options).not.toHaveAttribute('open', '');
+    await openAdvancedOptions();
+    await expect(options.getByRole('button', { name: 'ทำขั้นถัดไป', exact: true })).toBeVisible();
+    await expect(options.getByLabel('ลองเป็น', { exact: true })).toBeVisible();
+    await expect(options.getByRole('button', { name: 'เริ่มโต๊ะทดลองใหม่', exact: true })).toBeVisible();
+    await expect(options.getByRole('button', { name: 'ไฟล์ตัวอย่าง', exact: true })).toBeVisible();
+    await options.locator('summary').click();
   }
   async function open(id) {
-    await page.getByTestId('canvas-object-dock').getByTestId(`open-canvas-${id}`).click();
+    const isCurrent = await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id;
+    if (!isCurrent) {
+      const trigger = page.getByTestId('canvas-object-menu-trigger');
+      await expect(trigger).toBeVisible();
+      if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+      const dock = page.getByTestId('canvas-object-dock');
+      await expect(dock).toBeVisible();
+      await dock.getByTestId(`open-canvas-${id}`).click();
+    }
     await expect(editor).toHaveAttribute('data-canvas-object', id);
     await expect(editor).toBeVisible();
     await expect(canvas).toBeVisible();
@@ -54,32 +97,45 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await page.locator('[data-sample-id="invoice-shipments"]').dragTo(canvas);
   await expect(mode).toHaveAttribute('data-mode', 'manual');
   await expect(node('practice.files')).toContainText('october-shipments.csv');
+  await expect(fileTray).toBeHidden();
   await expect(node('invoice.source')).toContainText(/provided/i);
+  await expect(page.getByRole('button', { name: /^(Use|Arrange)$/ })).toHaveCount(0);
   await expect(node('invoice.rules')).toHaveCount(0);
   await expect(node('invoice.table')).toHaveCount(0);
   // Moving objects and the camera stays in memory for the public practice table.
-  const sourceHeader = await node('invoice.source').locator('.tt-canvas-node__head').boundingBox();
+  const sourceNodeBefore = await node('invoice.source').boundingBox();
+  const sourceHeaderElement = node('invoice.source').locator('.tt-canvas-node__head');
+  await expect(sourceHeaderElement).toBeVisible();
+  const sourceHeader = await sourceHeaderElement.boundingBox();
+  expect(sourceNodeBefore).not.toBeNull();
   expect(sourceHeader).not.toBeNull();
   await page.mouse.move(sourceHeader.x + 30, sourceHeader.y + 15);
   await page.mouse.down();
   await page.mouse.move(sourceHeader.x + 80, sourceHeader.y + 40, { steps: 8 });
   await page.mouse.up();
+  await expect.poll(async () => {
+    const after = await node('invoice.source').boundingBox();
+    return after && (Math.abs(after.x - sourceNodeBefore.x) > 20 || Math.abs(after.y - sourceNodeBefore.y) > 20);
+  }).toBe(true);
   await page.getByRole('button', { name: 'Zoom In', exact: true }).click();
-  await page.getByRole('button', { name: 'Fit objects', exact: true }).click();
-  await page.getByRole('button', { name: 'เพิ่ม container', exact: true }).click();
+  await open('invoice.source');
+  await page.getByRole('button', { name: 'เพิ่มบนโต๊ะ', exact: true }).click();
   await page.getByRole('navigation', { name: 'เพิ่ม container บนโต๊ะ' }).getByRole('button', { name: 'กฎค่าขนส่ง', exact: true }).click();
   await open('invoice.rules');
   await expect(editor).toContainText('No rate rules are active');
   // Invalid file cannot replace existing normalized rows or add a phantom file.
   const existingFileCount = await node('practice.files').locator('details').count();
-  await page.getByLabel('เลือกไฟล์เข้า Canvas', { exact: true }).setInputFiles({ name: 'invalid.csv', mimeType: 'text/csv', buffer: Buffer.from('unsupported,header\na,b') });
+  await setFileTrayVisible(true);
+  await setPracticeFile({ name: 'invalid.csv', mimeType: 'text/csv', buffer: Buffer.from('unsupported,header\na,b') });
   await expect(root.locator('.tt-practice-notice')).toBeVisible();
   await expect(node('practice.files').locator('details')).toHaveCount(existingFileCount);
+  await setFileTrayVisible(false);
   await page.screenshot({ path: join(output, 'canvas-demo-dragged.png'), fullPage: true });
 
   await fresh('invoice-rules');
   await next();
   await expect(node('practice.files')).toBeVisible();
+  await expect(fileTray).toBeHidden();
   await expect(node('invoice.rules')).toHaveCount(0);
   await finish();
   await open('invoice.rules');
@@ -108,7 +164,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   const beforePlay = await counter.innerText();
   await expect.poll(() => counter.innerText(), { timeout: 10_000 }).not.toBe(beforePlay);
   await expect(mode).toHaveAttribute('data-mode', 'playing');
-  await page.getByRole('button', { name: 'หยุดเดโม', exact: true }).click();
+  await page.getByRole('button', { name: 'พักเดโม', exact: true }).click();
   const paused = await counter.innerText();
   await page.waitForTimeout(3700); await expect(counter).toHaveText(paused);
   await open('lesson.source');
@@ -126,22 +182,22 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(page.getByRole('button', { name: 'เล่นเดโม', exact: true })).toBeDisabled();
   // Add the question container manually at a partly built table.
   if (await node('lesson.question').count() === 0) {
-    await page.getByRole('button', { name: 'เพิ่ม container', exact: true }).click();
+    await page.getByRole('button', { name: 'เพิ่มบนโต๊ะ', exact: true }).click();
     await page.getByRole('navigation', { name: 'เพิ่ม container บนโต๊ะ' }).getByRole('button', { name: 'โจทย์และคำตอบ', exact: true }).click();
   }
   await open('lesson.question');
   await editor.getByLabel('Private teacher note', { exact: true }).fill('PRACTICE_TEACHER_PRIVATE');
   await editor.getByRole('button', { name: 'Save note', exact: true }).click();
-  await page.getByLabel('ลองเป็น', { exact: true }).selectOption('practice-learner-1');
+  await selectActor('practice-learner-1');
   await open('lesson.question');
   await expect(root).not.toContainText('PRACTICE_TEACHER_PRIVATE');
   await editor.getByLabel('Position in meters', { exact: true }).fill('8');
   await editor.getByRole('button', { name: 'Check answer', exact: true }).click();
   await expect(editor).toContainText('Correct');
-  await page.getByLabel('ลองเป็น', { exact: true }).selectOption('practice-learner-2');
+  await selectActor('practice-learner-2');
   await open('lesson.question');
   await expect(editor).not.toContainText('Correct');
-  await page.getByLabel('ลองเป็น', { exact: true }).selectOption('practice-teacher');
+  await selectActor('practice-teacher');
   await open('lesson.source');
   const historyDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'ดาวน์โหลดบันทึก', exact: true }).click();
@@ -161,7 +217,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await independent.close();
 
   await fresh('teaching-physics'); await finish();
-  await page.getByRole('button', { name:'Fit objects', exact:true }).click();
+  await open('lesson.rules');
   await expect.poll(() => page.locator('[data-canvas-object]').evaluateAll(elements => {
     const cards = elements.map(element => ({ id:element.getAttribute('data-canvas-object'), rect:element.getBoundingClientRect() }));
     const overlaps = [];
@@ -171,7 +227,6 @@ export async function verifyInteractiveDemo(page, origin, output) {
     }
     return overlaps;
   })).toEqual([]);
-  await open('lesson.rules');
   await expect(editor).toContainText('a = F ÷ m');
   await editor.getByRole('button', { name:'Open force and mass controls', exact:true }).click();
   await expect(editor).toHaveAttribute('data-canvas-object', 'lesson.source');
@@ -213,18 +268,18 @@ export async function verifyInteractiveDemo(page, origin, output) {
       });
     };
   });
-  await page.getByLabel('เลือกไฟล์เข้า Canvas', { exact: true }).setInputFiles({ name: 'slow-lesson.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ kind:'teaching-lesson', version:1, parameters:{force:12,mass:3,time:2} })) });
-  await page.getByLabel('ลองเป็น', { exact:true }).selectOption('practice-learner-1');
+  await setPracticeFile({ name: 'slow-lesson.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ kind:'teaching-lesson', version:1, parameters:{force:12,mass:3,time:2} })) });
+  await selectActor('practice-learner-1');
   await page.evaluate(async () => { await window.releasePracticeFileRead(); });
   await expect(page.locator('[data-canvas-object]')).toHaveCount(0);
   await expect(root.locator('.tt-practice-notice')).toHaveCount(0);
   await expect(page.getByRole('button', { name:'เลือกไฟล์จากเครื่อง', exact:true })).toBeEnabled();
 
   await fresh('teaching-physics');
-  await page.getByLabel('เลือกไฟล์เข้า Canvas', { exact:true }).setInputFiles({ name:'my-lesson.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({ kind:'teaching-lesson', version:1, parameters:{force:9,mass:3,time:2} })) });
+  await setPracticeFile({ name:'my-lesson.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({ kind:'teaching-lesson', version:1, parameters:{force:9,mass:3,time:2} })) });
   await expect(mode).toHaveAttribute('data-mode', 'manual');
   await expect(node('practice.files')).toContainText('my-lesson.json');
-  await page.getByRole('button', { name:'เพิ่ม container', exact:true }).click();
+  await page.getByRole('button', { name:'เพิ่มบนโต๊ะ', exact:true }).click();
   await page.getByRole('navigation', { name:'เพิ่ม container บนโต๊ะ' }).getByRole('button', { name:'รางทดลอง', exact:true }).click();
   await open('lesson.scene');
   await expect(editor.locator('svg.tt-track-svg')).toHaveAttribute('aria-label', 'Cart travels 6 meters in 2 seconds');
@@ -233,12 +288,12 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await open('encounter.board'); await expect(editor).toContainText('8/10 HP');
   await fresh('encounter-shield');
   for (let index = 0; index < 30 && await node('encounter.actions').getByText(/has opened a reaction/).count() === 0; index++) await next();
-  await page.getByRole('button', { name: 'หยุดแล้วลองเอง', exact: true }).click();
-  await page.getByLabel('ลองเป็น', { exact: true }).selectOption('practice-mira'); await open('encounter.actions');
+  await page.getByRole('button', { name: 'ลองเอง', exact: true }).click();
+  await selectActor('practice-mira'); await open('encounter.actions');
   const clock = editor.locator('.tt-countdown'), held = await clock.innerText();
   await page.waitForTimeout(31_100); await expect(clock).toHaveText(held, { useInnerText:true });
   await editor.getByRole('button', { name:'Shield Pip as ally', exact:true }).click();
-  await page.getByLabel('ลองเป็น', { exact:true }).selectOption('practice-dm'); await open('encounter.actions');
+  await selectActor('practice-dm'); await open('encounter.actions');
   await editor.getByRole('button', { name:'Resolve hit', exact:true }).click();
   await open('encounter.board'); await expect(editor).toContainText('8/10 HP');
   await page.screenshot({ path:join(output,'interactive-demo-encounter.png'), fullPage:true });

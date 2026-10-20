@@ -122,10 +122,17 @@ try {
     }, { path, body });
   }
   async function openCanvasObject(page, id) {
-    await expect(page.getByRole('button', { name: 'Canvas', exact:true })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByTestId('canvas-object-dock').getByTestId(`open-canvas-${id}`).click();
-    await expect(page.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', id);
-    await expect(page.getByTestId('canvas-object-editor')).toBeVisible();
+    const editor = page.getByTestId('canvas-object-editor');
+    if (await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id) return editor;
+    const trigger = page.getByTestId('canvas-object-menu-trigger');
+    await expect(trigger).toBeVisible();
+    if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+    const dock = page.getByTestId('canvas-object-dock');
+    await expect(dock).toBeVisible();
+    await dock.getByTestId(`open-canvas-${id}`).click();
+    await expect(editor).toHaveAttribute('data-canvas-object', id);
+    await expect(editor).toBeVisible();
+    return editor;
   }
   const anonymous = await newPage();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();

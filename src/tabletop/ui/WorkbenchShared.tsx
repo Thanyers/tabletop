@@ -21,42 +21,44 @@ export function CandidateLifecycle({ view, onCommand, busy, readOnly = false }: 
   const run = (type: string, payload: unknown = {}) => { void onCommand(type, payload); };
   const isBusy = readOnly || (busy?.startsWith('evolve.') ?? false);
 
+  if (!candidate) return null;
+
   return (
     <section className="tt-section tt-lifecycle" aria-labelledby="tt-lifecycle-title">
       <header className="tt-section__header">
-        <div><span className="tt-kicker">CHANGE CONTROL</span><h2 id="tt-lifecycle-title">Draft lifecycle</h2></div>
+        <div><h2 id="tt-lifecycle-title">{candidate.status === 'active' ? 'Rules in use' : 'Review this change'}</h2></div>
         <span className={`tt-status-pill tt-status-pill--${candidate?.status ?? 'idle'}`}>{candidate?.status ?? 'No draft'}</span>
       </header>
       {!candidate ? (
         <div className="tt-empty-note"><ShieldCheck size={17} /><p>{readOnly ? 'Editing is temporarily paused. The current active rules remain available to inspect.' : 'Make a bounded edit to create a draft. The Active table keeps its current rules until activation.'}</p></div>
       ) : (
         <>
-          <ChangeJourney candidate={candidate} activeRevision={view.domain.ruleRevision} />
+          <details className="tt-review-details"><summary>Review details</summary><ChangeJourney candidate={candidate} activeRevision={view.domain.ruleRevision} />
           <div className="tt-candidate-meta">
             <span>Draft by {view.members.find(member => member.actorId === candidate.createdBy)?.name ?? 'the table owner'}</span>
             <span>Data r{candidate.baseDataRevision} · Rules r{candidate.baseRuleRevision}</span>
             <small title={candidate.hash}>Candidate {candidate.hash.slice(0, 12)}</small>
           </div>
+          {candidate.proof && <p className="tt-proof-note">Validation {candidate.proof.passed ? 'passed' : 'failed'} · {candidate.proof.hash.slice(0, 12)}</p>}</details>
           {candidate.simulation && <SimulationComparison simulation={candidate.simulation} />}
           {candidate.simulation && candidate.simulation.checks.length > 0 && (
-            <div className="tt-check-list" aria-label="Simulation checks">
+            <details className="tt-review-checks"><summary>{candidate.simulation.checks.filter((check) => check.passed).length} / {candidate.simulation.checks.length} checks passed</summary><div className="tt-check-list" aria-label="Simulation checks">
               {candidate.simulation.checks.map((check) => <div className={check.passed ? 'is-passed' : 'is-failed'} key={check.id}><span aria-hidden="true">{check.passed ? <Check size={13} /> : <X size={13} />}</span><span>{check.message}</span><b>{check.passed ? 'Pass' : 'Needs work'}</b></div>)}
-            </div>
+            </div></details>
           )}
           <div className="tt-lifecycle-actions">
-            {candidate.status === 'draft' && <button type="button" onClick={() => run('evolve.simulate')} disabled={isBusy}><span>1</span> Simulate</button>}
-            {candidate.status === 'simulated' && <button type="button" onClick={() => run('evolve.validate')} disabled={isBusy}><span>2</span> Validate</button>}
-            {candidate.status === 'validated' && <button type="button" onClick={() => run('evolve.approve')} disabled={isBusy}><span>3</span> Approve</button>}
-            {candidate.status === 'approved' && <button className="is-primary" type="button" onClick={() => run('evolve.activate')} disabled={isBusy}><span>4</span> Activate</button>}
+            {candidate.status === 'draft' && <button type="button" onClick={() => run('evolve.simulate')} disabled={isBusy}>Preview change</button>}
+            {candidate.status === 'simulated' && <button type="button" onClick={() => run('evolve.validate')} disabled={isBusy}>Check rules</button>}
+            {candidate.status === 'validated' && <button type="button" onClick={() => run('evolve.approve')} disabled={isBusy}>Approve rules</button>}
+            {candidate.status === 'approved' && <button className="is-primary" type="button" onClick={() => run('evolve.activate')} disabled={isBusy}>Use these rules</button>}
             {candidate.status === 'active' && view.domain.revisions.length > 0 && (
-              <div className="tt-rollback">
+              <details className="tt-rollback"><summary>Earlier rules</summary>
                 <label htmlFor="tt-rollback-revision">Restore a compatible revision</label>
                 <div><select id="tt-rollback-revision" value={rollbackRevision} disabled={isBusy} onChange={(event) => setRollbackRevision(event.target.value)}><option value="">Choose a revision</option>{view.domain.revisions.map((record) => <option value={record.revision} key={record.revision}>Revision {record.revision}</option>)}</select><button type="button" disabled={!rollbackRevision || isBusy} onClick={() => run('evolve.rollback', { revision: Number(rollbackRevision) })}><RotateCcw size={14} /> Restore</button></div>
-              </div>
+              </details>
             )}
             {candidate.status === 'active' && <span className="tt-lifecycle-complete"><CheckCircle2 size={14} /> Active revision {view.domain.ruleRevision}</span>}
           </div>
-          {candidate.proof && <p className="tt-proof-note">Validation proof {candidate.proof.passed ? 'passed' : 'failed'} · {candidate.proof.hash.slice(0, 12)}</p>}
         </>
       )}
       {readOnly && candidate && <p className="tt-table-readonly-inline" role="status">Editing and rule changes are temporarily paused. This draft cannot be advanced.</p>}

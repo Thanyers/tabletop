@@ -70,14 +70,27 @@ async function clickCommand(page, locator, type) {
   return response.json();
 }
 async function start(page, label) {
-  await page.getByRole('button', { name: new RegExp(label) }).click();
+  const templates = page.locator('.tt-template-choices');
+  const choice = templates.getByRole('button', { name: new RegExp(label) });
+  if (!(await choice.isVisible().catch(() => false))) {
+    await expect(templates.locator('summary')).toHaveText('Or start with an example');
+    await expect(templates).not.toHaveAttribute('open', '');
+    await templates.locator('summary').click();
+    await expect(choice).toBeVisible();
+  }
+  await choice.click();
   await expect(page.locator('.tt-canvas-node').first()).toBeVisible();
 }
 async function openObject(page, id) {
   const editor = board(page).locator(`.tt-canvas-node[data-testid="canvas-object-editor"][data-object-id="${id}"]`);
   if (await editor.isVisible().catch(() => false)) return editor;
   await closeExpandedObjects(page);
-  await page.getByTestId('canvas-object-dock').getByTestId('open-canvas-' + id).click();
+  const trigger = page.getByTestId('canvas-object-menu-trigger');
+  await expect(trigger).toBeVisible();
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  const dock = page.getByTestId('canvas-object-dock');
+  await expect(dock).toBeVisible();
+  await dock.getByTestId('open-canvas-' + id).click();
   await expect(editor).toBeVisible();
   return editor;
 }
@@ -107,9 +120,9 @@ async function verifySource(page, filename) {
 }
 async function lifecycle(page, objectId) {
   let editor;
-  for (const [label, type] of [['Simulate','evolve.simulate'],['Validate','evolve.validate'],['Approve','evolve.approve'],['Activate','evolve.activate']]) {
+  for (const [label, type] of [['Preview change','evolve.simulate'],['Check rules','evolve.validate'],['Approve rules','evolve.approve'],['Use these rules','evolve.activate']]) {
     editor = await openObject(page, objectId);
-    // Accessible names include the numbered lifecycle step, e.g. "1 Simulate".
+    // The lifecycle label describes the next owner decision at each stage.
     await clickCommand(page, editor.getByRole('region', { name:'Draft lifecycle', exact:true }).getByRole('button', { name:new RegExp('\\b' + label + '$') }), type);
   }
   return editor;
@@ -136,6 +149,14 @@ async function joinSeat(url) {
 try {
   const invoice = await newPage();
   await start(invoice, 'Invoice check');
+  const workspacePicker = invoice.locator('.tt-workspace-picker__button');
+  await expect(workspacePicker).toBeVisible();
+  await workspacePicker.click();
+  await expect(workspacePicker).toHaveAttribute('aria-expanded', 'true');
+  const workspaceMenu = invoice.locator('.tt-workspace-menu');
+  await expect(workspaceMenu).toBeVisible();
+  await expect(workspaceMenu).toContainText('START A TABLE');
+  await invoice.getByRole('button', { name:'Close table menu', exact:true }).click();
   await expect(invoice.locator('.tt-canvas-node--invoice-table')).toContainText('THB');
   await upload(invoice, 'Choose shipment csv', 'shipments.csv');
   await verifySource(invoice, 'shipments.csv');

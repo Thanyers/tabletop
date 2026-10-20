@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowRight, BookOpenCheck, ChartLine, Database, ListChecks, Play, Scale, Swords, Table2, Workflow } from 'lucide-react';
+import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
+import { Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Move, Play, Scale, Swords, Table2, Workflow } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
@@ -20,6 +20,8 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   selected: boolean;
   opened: boolean;
   onToggleOpen: (id: string) => void;
+  onSelectNode: (id: string) => void;
+  onMove: (id: string, dx: number, dy: number) => void;
 }
 
 interface PlanCanvasNodeData extends CanvasNodeBaseData {
@@ -124,16 +126,6 @@ function canvasRole(capability: string, kind: CanvasNodeData['kind']): CanvasRol
   return 'compute';
 }
 
-function capabilityLabel(capability: string, kind: CanvasNodeData['kind']) {
-  if (kind === 'auxiliary') return 'TABLE TOOL';
-  const labels: Record<string, string> = {
-    source: 'SOURCE', sources: 'SOURCE FILES', rules: 'RULES', reconcile: 'RECONCILIATION', model: 'MODEL', merge: 'REVIEW MERGE',
-    table: 'RESULT TABLE', collection: 'DATA COLLECTION', scene: 'MOTION SCENE', graph: 'MOTION GRAPH', board: 'ENCOUNTER BOARD',
-    actions: 'ACTIONS', question: 'LEARNING PROMPT', review: 'REVIEW QUEUE',
-  };
-  return labels[capabilityLeaf(capability)] ?? capabilityLeaf(capability).replaceAll('-', ' ').toUpperCase();
-}
-
 function capabilityGlyph(capability: string, kind: CanvasNodeData['kind']) {
   if (kind === 'auxiliary') return <Workflow size={16} />;
   const leaf = capabilityLeaf(capability);
@@ -185,9 +177,64 @@ function defaultCanvasPosition(kind: WorkspaceView['kind'], spec: PlanNode) {
   return spec.position;
 }
 
-function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
-  const openButtonRef = useRef<HTMLButtonElement>(null);
+function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
+  const moveButtonRef = useRef<HTMLButtonElement>(null);
+  const [moveMenuOpen, setMoveMenuOpen] = useState(false);
+  const [moveAnnouncement, setMoveAnnouncement] = useState('');
+  const moveMenuId = `canvas-move-${data.id}`;
 
+  const move = (dx: number, dy: number, direction: string) => {
+    data.onMove(data.id, dx, dy);
+    setMoveAnnouncement(`${data.title} moved ${direction}.`);
+    setMoveMenuOpen(false);
+    window.requestAnimationFrame(() => moveButtonRef.current?.focus());
+  };
+
+  return <>
+    <header className="tt-canvas-node__head">
+      <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
+      <span className="tt-object-glyph" aria-hidden="true">{capabilityGlyph(data.capability, data.kind)}</span>
+      <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span></span>
+      <button className="tt-canvas-node__open nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onKeyDown={(event) => {
+        if (event.key === 'Escape' && data.opened) {
+          event.preventDefault();
+          event.stopPropagation();
+          data.onToggleOpen(data.id);
+        }
+      }} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
+        {data.opened ? 'Close' : 'Open'}
+      </button>
+      <button ref={moveButtonRef} className="tt-canvas-node__move-toggle nodrag nopan nokey" type="button" aria-expanded={moveMenuOpen} aria-controls={moveMenuId} aria-label={`Move ${data.title} without dragging`} title="Move without dragging" onKeyDown={(event) => {
+        if (event.key === 'Escape' && moveMenuOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          setMoveMenuOpen(false);
+        }
+      }} onClick={(event) => { event.stopPropagation(); data.onSelectNode(data.id); setMoveMenuOpen((open) => !open); }}>
+        <Move size={16} aria-hidden="true" />
+      </button>
+    </header>
+    {moveMenuOpen && <div id={moveMenuId} className="tt-canvas-move-tools nodrag nopan nokey" role="group" aria-label={`Move ${data.title} without dragging`} onKeyDown={(event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setMoveMenuOpen(false);
+        window.requestAnimationFrame(() => moveButtonRef.current?.focus());
+      }
+    }}>
+      <span>Move object</span>
+      <div className="tt-canvas-move-tools__directions">
+        <button type="button" aria-label={`Move ${data.title} up`} onClick={(event) => { event.stopPropagation(); move(0, -1, 'up'); }}><ArrowUp size={16} aria-hidden="true" /></button>
+        <button type="button" aria-label={`Move ${data.title} left`} onClick={(event) => { event.stopPropagation(); move(-1, 0, 'left'); }}><ArrowLeft size={16} aria-hidden="true" /></button>
+        <button type="button" aria-label={`Move ${data.title} down`} onClick={(event) => { event.stopPropagation(); move(0, 1, 'down'); }}><ArrowDown size={16} aria-hidden="true" /></button>
+        <button type="button" aria-label={`Move ${data.title} right`} onClick={(event) => { event.stopPropagation(); move(1, 0, 'right'); }}><ArrowRight size={16} aria-hidden="true" /></button>
+      </div>
+    </div>}
+    <span className="tt-canvas-visually-hidden" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</span>
+  </>;
+}
+
+function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
   if (data.kind === 'auxiliary') {
     return (
       <article
@@ -200,28 +247,24 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         aria-label={data.title}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && data.opened) {
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest('button, input, textarea, select, [contenteditable="true"]')) return;
             event.preventDefault();
             event.stopPropagation();
             data.onToggleOpen(data.id);
-            window.requestAnimationFrame(() => openButtonRef.current?.focus());
+            const node = event.currentTarget;
+            window.requestAnimationFrame(() => node.querySelector<HTMLButtonElement>('.tt-canvas-node__open')?.focus());
           }
         }}
       >
-        <header className="tt-canvas-node__head">
-          <span className="tt-object-glyph" aria-hidden="true">{capabilityGlyph(data.capability, data.kind)}</span>
-          <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span><span className="tt-canvas-node__capability">{data.auxiliary.eyebrow ?? capabilityLabel(data.capability, data.kind)}</span></span>
-          <button ref={openButtonRef} className="tt-canvas-node__open nodrag nopan" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
-            {data.opened ? 'Close' : 'Open'}
-          </button>
-        </header>
-        <div className="tt-canvas-node__body nodrag nopan">{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</div>
+        <CanvasObjectHeader data={data} />
+        <div className="tt-canvas-node__body nodrag nopan nokey">{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</div>
       </article>
     );
   }
 
   const inputPorts = Object.keys(data.spec.inputs);
   const outputPorts = Object.keys(data.outputs);
-  const capability = data.spec.capability.split('.').slice(-1)[0]?.replaceAll('-', ' ') ?? 'component';
   const role = canvasRole(data.capability, data.kind);
 
   return (
@@ -232,26 +275,23 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         data-testid={data.opened ? 'canvas-object-editor' : undefined}
         data-object-id={data.opened ? data.id : undefined}
         data-canvas-role={role}
-      aria-label={data.spec.title + ', ' + capability}
+      aria-label={data.spec.title}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && data.opened) {
+          const target = event.target instanceof Element ? event.target : null;
+          if (target?.closest('button, input, textarea, select, [contenteditable="true"]')) return;
           event.preventDefault();
           event.stopPropagation();
           data.onToggleOpen(data.id);
-          window.requestAnimationFrame(() => openButtonRef.current?.focus());
+          const node = event.currentTarget;
+          window.requestAnimationFrame(() => node.querySelector<HTMLButtonElement>('.tt-canvas-node__open')?.focus());
         }
       }}
     >
       {inputPorts.map((port, index) => <Handle key={`in-${port}`} type="target" position={Position.Left} id={port} style={portStyle(index, inputPorts.length)} />)}
       {outputPorts.map((port, index) => <Handle key={`out-${port}`} type="source" position={Position.Right} id={port} style={portStyle(index, outputPorts.length)} />)}
-      <header className="tt-canvas-node__head">
-        <span className="tt-object-glyph" aria-hidden="true">{capabilityGlyph(data.capability, data.kind)}</span>
-        <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.spec.title}</span><span className="tt-canvas-node__capability">{capabilityLabel(data.capability, data.kind)}</span></span>
-        <button ref={openButtonRef} className="tt-canvas-node__open nodrag nopan" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.spec.title}`} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
-          {data.opened ? 'Close' : 'Open'}
-        </button>
-      </header>
-      <div className="tt-canvas-node__body nodrag nopan">
+      <CanvasObjectHeader data={data} />
+      <div className="tt-canvas-node__body nodrag nopan nokey">
         <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
       </div>
     </article>
@@ -263,7 +303,8 @@ const nodeTypes: NodeTypes = { tabletopObject: CanvasObjectNode };
 interface CanvasWorkspaceProps {
   view: WorkspaceView;
   plan: ExecutablePlan;
-  mode: 'use' | 'arrange';
+  /** @deprecated Canvas objects are always draggable from their headers. */
+  mode?: 'use' | 'arrange';
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   onCommand: WorkbenchProps['onCommand'];
@@ -284,7 +325,7 @@ interface CanvasWorkspaceProps {
   onOpenObject?: (id: string | null) => void;
 }
 
-function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
+function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, CanvasEdge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
@@ -305,6 +346,12 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
   const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
+  const [objectsMenuOpen, setObjectsMenuOpen] = useState(false);
+  const [previousView, setPreviousView] = useState<{ x: number; y: number; zoom: number } | null>(null);
+  useEffect(() => { setPreviousView(null); }, [view.id, view.epoch]);
+  const [showConnections, setShowConnections] = useState(false);
+  const objectsMenuRef = useRef<HTMLDivElement>(null);
+  const objectsButtonRef = useRef<HTMLButtonElement>(null);
   const lastFocusRequestRef = useRef<string | null>(null);
   const lastDomainRevisionRef = useRef<{ workspaceKey: string; data: number; rules: number } | null>(null);
   const [revisionNotice, setRevisionNotice] = useState<{ key: string; message: string } | null>(null);
@@ -326,6 +373,31 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     if (view.domain.kind === 'teaching') setLocalPhysics(view.domain.parameters);
   }, [view]);
 
+  const rememberPosition = useCallback((id: string, position: { x: number; y: number }) => {
+    workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: position };
+    if (!persistLayout) return;
+    const layout = readCanvasLayout(workspaceKey);
+    layout.positions[id] = position;
+    writeCanvasLayout(workspaceKey, layout);
+  }, [persistLayout, workspaceKey]);
+
+  const moveCanvasObject = useCallback((id: string, dx: number, dy: number) => {
+    const node = flow.getNode(id);
+    if (!node) return;
+    const position = { x: node.position.x + dx * 48, y: node.position.y + dy * 48 };
+    rememberPosition(id, position);
+    setNodes((current) => current.map((candidate) => candidate.id === id ? { ...candidate, position } : candidate));
+  }, [flow, rememberPosition, setNodes]);
+
+  useEffect(() => {
+    if (!objectsMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Element && !objectsMenuRef.current?.contains(event.target)) setObjectsMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [objectsMenuOpen]);
+
   useEffect(() => {
     const current = { workspaceKey, data: view.domain.dataRevision, rules: view.domain.ruleRevision };
     const previous = lastDomainRevisionRef.current;
@@ -336,8 +408,8 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     }
 
     const changed = [
-      previous.data !== current.data ? `Data r${previous.data} → r${current.data}` : '',
-      previous.rules !== current.rules ? `Rules r${previous.rules} → r${current.rules}` : '',
+      previous.data !== current.data ? 'Data updated' : '',
+      previous.rules !== current.rules ? 'Rules updated' : '',
     ].filter(Boolean);
     if (changed.length === 0) return;
 
@@ -350,14 +422,18 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     if (openedObjectId === undefined) setInternalOpenedId(nextId);
     onOpenObject?.(nextId);
     onSelectNode(id);
-    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: canvasMotionDuration(160) }));
-  }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode, flow]);
-  const openObject = useCallback((id: string) => {
+  }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode]);
+  const navigateToObject = useCallback((id: string) => {
     if (!nodes.some((node) => node.id === id)) return;
+    setPreviousView(flow.getViewport());
     if (openedObjectId === undefined) setInternalOpenedId(id);
     onOpenObject?.(id);
     onSelectNode(id);
-    window.requestAnimationFrame(() => flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.62, maxZoom: 1, duration: canvasMotionDuration(160) }));
+    setObjectsMenuOpen(false);
+    window.requestAnimationFrame(() => {
+      flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.92, maxZoom: 1.15, duration: canvasMotionDuration(200) });
+      objectsButtonRef.current?.focus();
+    });
   }, [flow, nodes, onOpenObject, openedObjectId, onSelectNode]);
 
   useEffect(() => {
@@ -374,6 +450,8 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
       const planNodes = visiblePlanNodes.map((spec): CanvasNode => ({
         id: spec.id,
         type: 'tabletopObject',
+        ariaLabel: spec.title,
+        dragHandle: '.tt-canvas-node__head',
         position: (isNewWorkspace ? storedLayout?.positions[spec.id] : undefined) ?? previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec),
         selected: spec.id === selectedNodeId,
         zIndex: activeOpenedId === spec.id ? 20 : spec.id === selectedNodeId ? 10 : 0,
@@ -384,6 +462,8 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           capability: spec.capability,
           opened: activeOpenedId === spec.id,
           onToggleOpen: toggleOpenObject,
+          onSelectNode,
+          onMove: moveCanvasObject,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
           selected: spec.id === selectedNodeId,
@@ -405,6 +485,8 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
       const auxiliaryNodes = visibleAuxiliaryObjects.map((object, index): CanvasNode => ({
         id: object.id,
         type: 'tabletopObject',
+        ariaLabel: object.title,
+        dragHandle: '.tt-canvas-node__head',
         position: (isNewWorkspace ? storedLayout?.positions[object.id] : undefined) ?? previousPositions.get(object.id) ?? workspacePositionsRef.current[object.id] ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 },
         selected: object.id === selectedNodeId,
         zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
@@ -415,13 +497,15 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           capability: object.eyebrow ?? 'table tool',
           opened: activeOpenedId === object.id,
           onToggleOpen: toggleOpenObject,
+          onSelectNode,
+          onMove: moveCanvasObject,
           selected: object.id === selectedNodeId,
           auxiliary: object,
         },
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject]);
+  }, [workspaceKey, persistLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
@@ -432,11 +516,11 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     const targetId = preferredId && nodes.some((node) => node.id === preferredId) ? preferredId : nodes[0]?.id;
     requestAnimationFrame(() => {
       if (focusNodeId && nodes.some((node) => node.id === focusNodeId)) {
-        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.14, minZoom: 0.62, maxZoom: 1, duration: 0 });
+        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.12, minZoom: 0.92, maxZoom: 1.15, duration: 0 });
       } else if (savedViewport) {
         flow.setCenter(savedViewport.centerX, savedViewport.centerY, { zoom: savedViewport.zoom, duration: 0 });
       } else if (targetId) {
-        flow.fitView({ nodes: [{ id: targetId }], padding: 0.16, minZoom: 0.62, maxZoom: 0.95, duration: 0 });
+        flow.fitView({ nodes: [{ id: targetId }], padding: 0.12, minZoom: 0.92, maxZoom: 1.1, duration: 0 });
       }
     });
   }, [workspaceKey, nodes, view.id, view.kind, flow, focusNodeId]);
@@ -455,25 +539,24 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
   }, [workspaceKey, persistLayout]);
 
   const persistPosition = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
-    const position = { x: node.position.x, y: node.position.y };
-    workspacePositionsRef.current = { ...workspacePositionsRef.current, [node.id]: position };
-    if (!persistLayout) return;
-    const current = readCanvasLayout(workspaceKey);
-    current.positions[node.id] = position;
-    writeCanvasLayout(workspaceKey, current);
-  }, [workspaceKey, persistLayout]);
+    rememberPosition(node.id, { x: node.position.x, y: node.position.y });
+  }, [rememberPosition]);
 
-  const focusSelected = useCallback(() => {
-    if (!selectedNodeId) return;
-    flow.fitView({ nodes: [{ id: selectedNodeId }], padding: 0.14, minZoom: 0.85, maxZoom: 1, duration: canvasMotionDuration(180) });
-  }, [flow, selectedNodeId]);
+  const handleNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
+    onNodesChange(changes);
+    for (const change of changes) {
+      if (change.type === 'position' && change.position && change.dragging !== true) {
+        rememberPosition(change.id, change.position);
+      }
+    }
+  }, [onNodesChange, rememberPosition]);
 
   useEffect(() => {
     if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId)) return;
     const requestKey = `${focusNodeId}:${String(focusRequestKey ?? '')}`;
     if (lastFocusRequestRef.current === requestKey) return;
     lastFocusRequestRef.current = requestKey;
-        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.14, minZoom: 0.62, maxZoom: 1, duration: canvasMotionDuration(180) });
+        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.12, minZoom: 0.92, maxZoom: 1.15, duration: canvasMotionDuration(180) });
   }, [focusNodeId, focusRequestKey, nodes, flow]);
 
   const edges = useMemo(() => {
@@ -538,7 +621,6 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     onSelectNode(node.id);
   }, [onSelectNode]);
   const clear = useCallback(() => onSelectNode(null), [onSelectNode]);
-  const arrange = mode === 'arrange';
 
   useEffect(() => {
     setNodes((current) => current.map((node) => ({
@@ -552,26 +634,8 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
     ...visiblePlanNodes.map((spec) => ({ id: spec.id, title: spec.title })),
     ...visibleAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title })),
   ], [visiblePlanNodes, visibleAuxiliaryObjects]);
-  const lineageItems = useMemo(() => edges.flatMap((edge) => {
-    const source = objectTitles.find((object) => object.id === edge.source);
-    const target = objectTitles.find((object) => object.id === edge.target);
-    if (!source || !target) return [];
-    const sourceSpec = planNodesById.get(source.id);
-    const targetSpec = planNodesById.get(target.id);
-    return [{
-      id: edge.id,
-      source,
-      target,
-      label: edge.data?.relationshipLabel ?? 'Connected data',
-      sourceRole: sourceSpec ? canvasRole(sourceSpec.capability, 'plan') : 'auxiliary' as CanvasRole,
-      targetRole: targetSpec ? canvasRole(targetSpec.capability, 'plan') : 'auxiliary' as CanvasRole,
-    }];
-  }), [edges, objectTitles, planNodesById]);
+  const visibleEdges = showConnections ? edges : [];
   const hasVisibleObjects = objectTitles.length > 0;
-  const focusConnection = useCallback((sourceId: string, targetId: string) => {
-    onSelectNode(targetId);
-    flow.fitView({ nodes: [{ id: sourceId }, { id: targetId }], padding: 0.3, minZoom: 0.55, maxZoom: 1, duration: canvasMotionDuration(200) });
-  }, [flow, onSelectNode]);
 
   return (
     <div className="tt-flow-wrap" ref={flowWrapRef} data-canvas-editor data-testid="canvas-object-workspace">
@@ -583,14 +647,14 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
       ) : (
         <ReactFlow<CanvasNode, CanvasEdge>
           nodes={nodes}
-          edges={edges}
+          edges={visibleEdges}
           nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onNodeDragStop={persistPosition}
           onNodeClick={choose}
           onPaneClick={clear}
           onMoveEnd={persistViewport}
-          nodesDraggable={arrange}
+          nodesDraggable
           nodesConnectable={false}
           elementsSelectable
           elevateNodesOnSelect={false}
@@ -603,43 +667,36 @@ function CanvasInner({ view, plan, mode, selectedNodeId, onSelectNode, onCommand
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={21} size={1} color="#ccd5d7" />
-          <Controls position="bottom-right" showInteractive={false} />
+          <Controls position="bottom-right" showInteractive={false} showFitView={false} />
         </ReactFlow>
       )}
       <div className="tt-canvas-tools">
-        {lineageItems.length > 0 && <nav className="tt-canvas-lineage" aria-label="Connected plan flow" data-testid="canvas-flow-overview">
-          <span className="tt-canvas-lineage__label"><Workflow size={14} aria-hidden="true" /><span>FLOW</span><small>{lineageItems.length}</small></span>
-          <div className="tt-canvas-lineage__paths">
-            {lineageItems.map((item) => <button
-              key={item.id}
-              className="tt-canvas-lineage__path"
-              type="button"
-              data-from-role={item.sourceRole}
-              data-to-role={item.targetRole}
-              aria-label={`Show how ${item.source.title} feeds ${item.target.title} with ${item.label}`}
-              aria-current={selectedNodeId === item.target.id ? 'location' : undefined}
-              title={`${item.source.title} → ${item.target.title} · ${item.label}`}
-              onClick={() => focusConnection(item.source.id, item.target.id)}
-            >
-              <span className="tt-canvas-lineage__endpoints"><span>{item.source.title}</span><ArrowRight size={13} aria-hidden="true" /><span>{item.target.title}</span></span>
-              <small>{item.label}</small>
-            </button>)}
-          </div>
-        </nav>}
-        <div className="tt-canvas-actions">
-          <button type="button" onClick={focusSelected} disabled={!selectedNodeId || !nodes.some((node) => node.id === selectedNodeId)}>Focus object</button>
-          <button type="button" onClick={() => flow.fitView({ padding: 0.28, duration: 0 })}>Fit objects</button>
+        <div className="tt-canvas-objects" ref={objectsMenuRef} onKeyDown={(event) => {
+          if (event.key === 'Escape' && objectsMenuOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            setObjectsMenuOpen(false);
+            window.requestAnimationFrame(() => objectsButtonRef.current?.focus());
+          }
+        }}>
+          <button ref={objectsButtonRef} className="tt-canvas-objects__trigger" type="button" data-testid="canvas-object-menu-trigger" aria-expanded={objectsMenuOpen} aria-controls="tt-canvas-objects-list" aria-label={`Objects, ${objectTitles.length}`} onClick={(event) => { event.stopPropagation(); setObjectsMenuOpen((open) => !open); }}>
+            <Boxes size={17} aria-hidden="true" /><span>Objects</span><small>{objectTitles.length}</small>
+          </button>
+          <nav id="tt-canvas-objects-list" className="tt-canvas-objects__panel" aria-label="Canvas objects" data-testid="canvas-object-dock" hidden={!objectsMenuOpen}>
+            {previousView && <button type="button" onClick={() => { void flow.setViewport(previousView, { duration: canvasMotionDuration(180) }); setPreviousView(null); setObjectsMenuOpen(false); objectsButtonRef.current?.focus(); }}><ArrowLeft size={16} aria-hidden="true" />Previous view</button>}
+            <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} onClick={(event) => { event.stopPropagation(); setShowConnections((shown) => !shown); }}>
+              <Workflow size={16} aria-hidden="true" /><span>Connections</span><small>{edges.length}</small><i aria-hidden="true">{showConnections ? 'On' : 'Off'}</i>
+            </button>
+            <ul className="tt-canvas-objects__list">
+              {objectTitles.map((object) => <li key={object.id}>
+                <button type="button" data-testid={`open-canvas-${object.id}`} aria-label={`Open ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>{object.title}</button>
+              </li>)}
+            </ul>
+          </nav>
         </div>
         {revisionNotice && <div key={revisionNotice.key} className="tt-canvas-revision-change" role="status" aria-live="polite" aria-atomic="true">
-          <Activity size={14} aria-hidden="true" /><span>Revision changed</span><b>{revisionNotice.message}</b>
+          <Activity size={14} aria-hidden="true" /><b>{revisionNotice.message}</b>
         </div>}
-      </div>
-      {hasVisibleObjects && <nav className="tt-canvas-object-dock" aria-label="Objects on this canvas" data-testid="canvas-object-dock">
-        <span className="tt-canvas-object-dock__label">OPEN AN OBJECT</span>
-        <div>{objectTitles.map((object) => <button key={object.id} type="button" data-testid={`open-canvas-${object.id}`} aria-label={`Open ${object.title}`} aria-expanded={activeOpenedId === object.id} onClick={() => openObject(object.id)}>{object.title}</button>)}</div>
-      </nav>}
-      <div className="tt-canvas-stamp" aria-hidden="true">
-        <span>WORKSPACE FLOW</span><i />{objectTitles.length} object{objectTitles.length === 1 ? '' : 's'}<i />{edges.length} visible connection{edges.length === 1 ? '' : 's'}
       </div>
     </div>
   );
