@@ -314,7 +314,8 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     const rules = await openCanvasObject(owner, 'table.rules');
     await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
   }
-  await prompt.fill('Build a shared table from the source, with bounded actions and checks.');
+  const proposalPrompt = 'Build a shared table from the source, with bounded actions and checks.';
+  await prompt.fill(proposalPrompt);
   let modelRequests = 0;
   const countModelRequests = request => {
     if (request.method() === 'POST' && request.url().endsWith(`/api/workspaces/${tableId}/model`)) modelRequests += 1;
@@ -364,12 +365,23 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const accepted = await modelResponse;
   expect(accepted.status()).toBe(202);
   modelAccepted = true;
-  const draftCard = owner.getByTestId('table-chat-answer').filter({ hasText: 'A rule draft is ready' }).first();
-  await expect(draftCard).toBeVisible({ timeout: 20_000 });
+  const draftNode = owner.getByRole('article', { name: /^Build a shared table from the source, with/iu }).first();
+  const draftCard = draftNode.getByTestId('table-chat-answer');
+  try {
+    await expect(draftCard).toBeVisible({ timeout: 20_000 });
+  } catch (error) {
+    const answerDiagnostics = await owner.getByTestId('table-chat-answer').evaluateAll(cards => cards.map(card => ({
+      text: card.textContent?.trim() ?? '',
+      statuses: [...card.querySelectorAll('[role="alert"], [role="status"]')].map(node => node.textContent?.trim() ?? ''),
+    })));
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
+  }
   if (failDraftRefresh) {
+    await expect(draftCard).toContainText('The rule draft is ready, but the table could not refresh.');
     const retryRefresh = draftCard.getByRole('button', { name: 'Retry table refresh', exact: true });
     await expect(draftCard.getByRole('alert')).toBeVisible({ timeout: 20_000 });
     await expect(retryRefresh).toBeVisible();
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeDisabled();
     expect(failedDraftRefresh).toBe(true);
     expect(workspaceRefreshRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
@@ -378,10 +390,16 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await retryRefresh.click();
     expect((await refreshResponse).status()).toBe(200);
     await expect(retryRefresh).toHaveCount(0);
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
     expect(workspaceRefreshRequests).toBe(2);
     expect(modelRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
     await owner.unroute(workspaceUrl, workspaceRoute);
+  } else {
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
+    await expect(draftCard.getByRole('button', { name: 'Retry table refresh', exact: true })).toHaveCount(0);
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
   }
   await draftCard.getByRole('button', { name: 'Review rules', exact: true }).click();
   await expect(owner.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', 'table.rules');
@@ -588,7 +606,7 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
     await expect(consent).toBeVisible();
     const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
     expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
-    expect(copy).toContain('up to six recent private chat exchanges');
+    expect(copy).toContain('up to six of your private chat exchanges, including relevant older ones when available');
     expect(copy).toContain('Private source files are excluded.');
     expect(assistantRequests).toBe(0);
     expect(modelRequests).toBe(0);

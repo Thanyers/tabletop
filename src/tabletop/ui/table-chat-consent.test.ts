@@ -31,7 +31,8 @@ describe('chat consent', () => {
   it('states the distinct table context and history scope for each endpoint', () => {
     expect(consentQuestion('draft')).toContain('active rules, records, and turn');
     expect(consentQuestion('draft')).toContain('Chat history is not included');
-    expect(consentQuestion('ask')).toContain('up to six recent private chat exchanges');
+    expect(consentQuestion('ask')).toContain('up to six of your private chat exchanges');
+    expect(consentQuestion('ask')).toContain('including relevant older ones when available');
     expect(consentQuestion('ask')).toContain('Private source files are excluded');
   });
 });

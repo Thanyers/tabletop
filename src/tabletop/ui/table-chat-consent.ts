@@ -27,5 +27,5 @@ export function needsConsent(grantedKey: string | null, scope: TableChatConsentS
 export function consentQuestion(mode: TableChatMode): string {
   return mode === 'draft'
     ? 'This sends your message, current active rules, records, and turn, plus the private source files listed below. Chat history is not included.'
-    : 'This sends your message, current active rules, records, and turn, plus up to six recent private chat exchanges. Private source files are excluded.';
+    : 'This sends your message, current active rules, records, and turn, plus up to six of your private chat exchanges, including relevant older ones when available. Private source files are excluded.';
 }

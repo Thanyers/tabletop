@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-20 — Retry แชทต้องใช้คำขอเดิม และผล refresh ต้องตรงกับผู้ใช้ปัจจุบัน
+- **What happened:** การส่งที่ไม่ทราบผลอาจเกิดก่อน revision เปลี่ยน และ projection ที่โหลดช้าอาจกลับมาหลัง reset หรือเปลี่ยนผู้ใช้
+- **Root cause:** ใช้ command ID เดิมแต่สร้าง body จาก view ใหม่ หรือเทียบเพียง room ID ก่อนติดตั้งผลโหลด ไม่พอสำหรับ idempotency และการแยกข้อมูล
+- **Correct behavior:** เก็บ request snapshot ในหน่วยความจำเพื่อ retry ด้วย body เดิม; ตรวจ room/epoch/actor/role/seat และลำดับ projection ก่อนใช้ผล refresh แล้วรัน `npx vitest run src/tabletop/ui/table-chat-state.test.ts` กับ `npm run test:cloudflare:browser`
+
+### 2026-10-20 — เทสต์แชทใหม่ต้องตรวจขอบเขตข้อมูลจริงและ Canvas ว่าง
+- **What happened:** เทสต์เดิมคาดคำว่า current table และ ReactFlow ตั้งแต่โต๊ะว่าง ขณะที่ UI ระบุ active rules/records/turn และยังไม่มี node; copy ฝั่งถามโต๊ะบอก recent ทั้งที่ดึงข้อความเก่าที่เกี่ยวข้องได้
+- **Root cause:** นำสมมติฐานจากแชทเก่ามาใช้กับ F006 และสรุป context scope ไม่ตรงกับตัวเลือกความจำ
+- **Correct behavior:** ตรวจชื่อไฟล์จริง, การรวม/ไม่รวมประวัติ, การใช้บทสนทนาเก่าที่เกี่ยวข้อง และขอบเขต Canvas ก่อนมี node; รัน `npm run build`, `npm run build:cloudflare`, `npm run test:cloudflare:browser`, `npm run test:generative:browser` ตามลำดับ โดยไม่ใช้ force-click หรือเปลี่ยนผลธุรกิจที่คาด
+
 ### 2026-10-20 — ทุกทางเข้า Assistant ต้องกางแชทที่ย่ออยู่ได้
 - **What happened:** หลังรวมแชท island ปุ่ม Write a message บน Canvas พยายามโฟกัส textarea ที่ซ่อนอยู่และไม่เปิดแชทกลับมา
 - **Root cause:** ปุ่มไอคอนใช้ expand handler แต่ปุ่มบนการ์ดใช้เฉพาะ DOM focus
