@@ -1,0 +1,180 @@
+# CD001: a merged release/X.Y.Z (or hotfix/X.Y.Z) PR on main deploys itself.
+# Validate passes on the main merge commit → tag vX.Y.Z → build once → staging
+# (D1 migrations + deploy + smoke) → production (same build) → smoke.
+# Any failure stops the pipeline, opens a GitHub issue and never rolls back.
+# Setup and recovery: docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001
+name: Release deploy
+
+on:
+  workflow_run:
+    workflows: ["Validate local R1 candidate"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full SHA of a release merge commit on main (re-run after fixing secrets or a failed step)
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: release-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write # push the release tag
+      issues: write   # open an issue when a deploy fails
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
+      PRODUCTION_WORKER: ${{ vars.PRODUCTION_WORKER || 'tabletop' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Record start
+        run: |
+          echo "JOB_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          echo "STAGE=prepare" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+          persist-credentials: true # needed to push the tag
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Resolve release version
+        run: |
+          git fetch --quiet --tags origin main
+          git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$SHA is not on main"; exit 1; }
+          SUBJECT="$(git log -1 --format=%s "$SHA")"
+          VERSION="$(npx tsx server/release-deploy.ts version "$SUBJECT")"
+          if [ -z "$VERSION" ]; then
+            echo "Not a release/hotfix merge ($SUBJECT); nothing to deploy."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          npx tsx server/release-deploy.ts changelog "$VERSION" || { echo "::error::CHANGELOG.md has no '## $VERSION' heading"; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Release $VERSION at $SHA"
+
+      - name: Check deploy settings
+        if: env.SKIP != '1'
+        env:
+          WRANGLER_CONFIG_STAGING: ${{ secrets.WRANGLER_CONFIG_STAGING }}
+          WRANGLER_CONFIG_PRODUCTION: ${{ secrets.WRANGLER_CONFIG_PRODUCTION }}
+        run: |
+          missing=""
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WRANGLER_CONFIG_STAGING WRANGLER_CONFIG_PRODUCTION STAGING_URL PRODUCTION_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then echo "::error::Missing repo secrets/variables:$missing"; exit 1; fi
+          umask 077
+          printf '%s' "$WRANGLER_CONFIG_STAGING" > wrangler.staging.json
+          printf '%s' "$WRANGLER_CONFIG_PRODUCTION" > wrangler.production.json
+          npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
+          npx tsx server/release-deploy.ts check-config wrangler.production.json "$PRODUCTION_WORKER" "$PRODUCTION_URL"
+
+      - name: Tag v${{ env.VERSION }}
+        if: env.SKIP != '1'
+        run: |
+          TAG="v$VERSION"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            [ "$(git rev-list -n1 "$TAG")" = "$SHA" ] || { echo "::error::$TAG already exists on another commit"; exit 1; }
+            echo "$TAG already points at $SHA"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" "$SHA" -m "Tabletop $TAG"
+            git push origin "$TAG"
+          fi
+          git checkout --quiet "$TAG"
+
+      - name: Build once for both environments
+        if: env.SKIP != '1'
+        run: |
+          npm run build
+          node -e "const v=require('./dist/version.json'); if (v.version !== process.env.VERSION) { console.error('::error::dist/version.json is ' + v.version); process.exit(1); } console.log(v)"
+
+      - name: Staging — migrations
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
+          bash .github/scripts/d1-migrate.sh wrangler.staging.json staging
+
+      - name: Staging — deploy
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
+          npx wrangler deploy --config wrangler.staging.json
+
+      - name: Staging — smoke checks
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
+          npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Production — migrations
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-migrations" >> "$GITHUB_ENV"
+          bash .github/scripts/d1-migrate.sh wrangler.production.json production
+
+      - name: Production — deploy (same build as staging)
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-deploy" >> "$GITHUB_ENV"
+          npx wrangler deploy --config wrangler.production.json
+
+      - name: Production — smoke checks
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-smoke" >> "$GITHUB_ENV"
+          npx tsx server/release-deploy.ts smoke "$PRODUCTION_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "STAGE=done" >> "$GITHUB_ENV"
+          echo "Released v$VERSION ($SHA) to staging and production." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove deploy configs
+        if: always()
+        run: rm -f wrangler.staging.json wrangler.production.json
+
+      # The failure logger must never change the deploy's outcome: it only runs after
+      # a failure, and its own errors are swallowed.
+      - name: Open deploy-failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ACTOR: ${{ github.event.workflow_run.actor.login || github.actor }}
+        run: |
+          DETECTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BODY="$(printf '%s\n' \
+            "Release deploy failed. Production is NOT rolled back automatically." \
+            "" \
+            "| Field | Value |" "| --- | --- |" \
+            "| Version | v${VERSION:-unknown} |" \
+            "| Commit | $SHA |" \
+            "| Failed stage | ${STAGE:-unknown} |" \
+            "| job_started_at | $JOB_STARTED_AT |" \
+            "| detected_at | $DETECTED_AT |" \
+            "| Triggered by | $ACTOR |" \
+            "| Run | $RUN_URL |" \
+            "" \
+            "Next: read the run log, fix, then re-run **Release deploy** with this SHA (workflow_dispatch)." \
+            "Record the failure and fix times in MEMORY.md → Deploy failures (see docs/TEAM_HANDOFF_TH.md).")"
+          gh issue create --title "Deploy failed: v${VERSION:-unknown} at ${STAGE:-unknown}" --body "$BODY" \
+            || echo "Could not open the failure issue; the run log still has the details."

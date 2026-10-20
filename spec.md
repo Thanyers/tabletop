@@ -92,6 +92,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | 2026-10-20 | lint ไม่ใช้ type-aware rules (`recommendedTypeChecked`) | typecheck เป็นงานของ `tsc` อยู่แล้ว · type-aware ช้ากว่าหลายเท่าทั้งใน CI และ hook |
 | 2026-10-20 | pre-commit hook ไม่ `--fix` ให้อัตโนมัติ | ไม่แก้ไฟล์ที่ stage แทนคน · คนเห็นและแก้เอง |
 | ก่อนหน้า | ไม่ rollback Worker ไปรุ่นที่ไม่รู้จักห้อง `table` ใช้ `TABLE_READ_ONLY=true` แทน | ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน) |
+| 2026-10-20 | CD001: merge release เข้า `main` = deploy staging → production อัตโนมัติ รวม D1 migration | ผู้ใช้เลือกเอง; กันด้วยการรอ CI บน merge commit, ตรวจ config, Time Travel bookmark ก่อน migrate, smoke ทุก environment, หยุดและเปิด issue เมื่อล้ม ไม่ rollback เอง |
 
 ## งานที่กำลังทำ
 
