@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-20 — การบันทึกตำแหน่งพื้นหลังต้องไม่ล็อกแชท
+- **What happened:** แชทพร้อมส่งและ AI เปิดอยู่ แต่หลังขยับการ์ด textarea กับ Send ถูกปิดจนผลบันทึกตำแหน่งกลับมา
+- **Root cause:** `canvas.layout` ใช้ busy state เดียวกับคำสั่งเล่น ทั้งที่มีคิวและ revision แยกอยู่แล้ว; ผลตอบรับของ layout ยังอาจล้าง busy ของคำสั่งอื่น
+- **Correct behavior:** ให้ layout ไม่ตั้งหรือล้าง foreground busy และคง queue/CAS/scope guards เดิม; รัน `npm run build`, `npm run build:cloudflare`, `npm run test:cloudflare:browser` โดยกรณี regression ต้องค้าง ACK ที่เซิร์ฟเวอร์รับแล้ว ตรวจว่า Send เปิด consent ได้ และ Cancel ไม่ส่งคำขอ AI
+
+### 2026-10-20 — Browser harness ต้องเดินตามมุมมองปัจจุบันของ Canvas
+- **What happened:** หลังรวมผังร่วม เทสต์วัดการซูมระหว่างที่ระบบยังบันทึกผังเริ่มต้น; เทสต์ Retry พยายามกดการ์ดที่พ้นจอหลังเปิดวัตถุอื่น และเทสต์ Reset กดปิดเมนูที่เปิดอยู่แล้ว
+- **Root cause:** สมมติว่าผังเริ่มต้นจบแล้ว การ์ดเดิมยังอยู่ในจอ และเมนูเริ่มปิดเสมอ; ชื่อดิบ `Shared Table` อาจต่างจากชื่อโปรแกรมที่ผู้ใช้เห็น
+- **Correct behavior:** รอ shared positions ก่อนเก็บ baseline, เปิดการ์ดผ่าน Objects, ตั้งสถานะเมนูตามที่อ่านได้จริง และใช้ชื่อโต๊ะที่แสดง; คง full-domain equality, zero-mutation, explicit consent และ retry payload assertions แล้วรัน `npm run test:cloudflare:browser` กับ `npm run test:generative:browser`
+
 ### 2026-10-20 — ผังร่วมต้องรองรับโต๊ะว่างและไม่เผยร่างส่วนตัว
 - **What happened:** การจัดผังครั้งเดียวจำว่าเสร็จก่อนมี shared card หรือก่อนตอบรับ ทำให้การ์ดที่เพิ่มทีหลังไม่ถูกแชร์; Rules ก่อนเปิดใช้ถูกอนุญาตให้มี geometry ร่วมทั้งที่เนื้อหาร่างเป็นของเจ้าของ
 - **Root cause:** ใช้ room key เป็นตัวจบการ seed แทนผลยืนยันรายวัตถุ และเลือก shared ID โดยไม่ดูว่ากฎเปิดใช้แล้วหรือยัง

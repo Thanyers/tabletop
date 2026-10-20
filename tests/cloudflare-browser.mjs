@@ -139,6 +139,13 @@ try {
     await expect(editor).toBeVisible();
     return editor;
   }
+  async function setTableOptionsOpen(page, open) {
+    const options = page.locator('.tt-table-options');
+    const isOpen = await options.getAttribute('open') !== null;
+    if (isOpen !== open) await options.locator('summary').click();
+    if (open) await expect(options).toHaveAttribute('open', '');
+    else await expect(options).not.toHaveAttribute('open');
+  }
   const welcomeIdentityCounts = () => db.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM web_sessions) AS sessions, (SELECT COUNT(*) FROM oauth_states) AS oauth, (SELECT COUNT(*) FROM rooms) AS rooms').first();
   const beforeWelcome = await welcomeIdentityCounts();
   const anonymous = await newPage();
@@ -295,9 +302,9 @@ try {
   expect(createdResponse.status()).toBe(201);
   const room = await createdResponse.json();
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, true);
   await expect(dm.getByRole('link', { name: 'Try a demo', exact: true })).toHaveAttribute('target', '_blank');
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, false);
   let miraInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'mira' });
   const pipInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'pip' });
   expect(miraInvite.status).toBe(201); expect(pipInvite.status).toBe(201);
@@ -397,11 +404,11 @@ try {
   expect(metadata.status).toBe(200);
   expect(JSON.stringify(metadata.body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
   expect(metadata.body.workspaces.some(item => item.id === room.id)).toBe(true);
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, true);
   await dm.getByRole('button', { name: 'Admin', exact: true }).click();
   await expect(dm.getByRole('dialog', { name: 'Table metadata' })).toContainText(room.id);
   await dm.getByRole('button', { name: 'Close admin panel' }).click();
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, false);
   mark('Admin sees room metadata; an unrelated account cannot read the room or admin directory');
 
   // F002: the owner renames the table from the top bar; members see it live and in My tables but cannot rename.
@@ -515,7 +522,7 @@ try {
   mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; creates a draft without activating it');
 
   const logoutResponse = pip.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
-  await pip.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(pip, true);
   await pip.getByRole('button', { name: 'Sign out of Google account' }).click();
   expect((await logoutResponse).status()).toBe(200);
   await expect(pip.getByRole('link', { name: 'Continue with Google' })).toBeVisible();

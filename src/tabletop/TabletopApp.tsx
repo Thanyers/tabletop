@@ -454,7 +454,10 @@ export default function TabletopApp() {
       return null;
     }
     const requestSequence = projectionSequenceRef.current;
-    setBusy(type);
+    // Layout writes have their own queue and revision. Background placement must
+    // neither disable the composer nor clear a foreground command's busy state.
+    const blocksForeground = type !== 'canvas.layout';
+    if (blocksForeground) setBusy(type);
     try {
       const ack = await tabletopClient.command(current, type, payload);
       if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(current, workspaceRef.current))) return null;
@@ -487,7 +490,7 @@ export default function TabletopApp() {
         } catch (refreshError) { showNotice(errorText(refreshError), 'error'); }
       } else showNotice(errorText(error), 'error');
       return null;
-    } finally { setBusy(null); }
+    } finally { if (blocksForeground) setBusy(null); }
   }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
   const upload = useCallback(async (kind: 'shipments' | 'invoice' | 'rate-card', file: File) => {

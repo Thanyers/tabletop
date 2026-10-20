@@ -33,7 +33,7 @@ const blockedExternal = [];
 const providerResponses = [];
 const tableActRequests = [];
 let providerCalls = 0;
-const lastUiDiagnostics = null;
+let lastUiDiagnostics = null;
 let browser;
 const pages = [];
 const actorsById = new Map();
@@ -330,13 +330,45 @@ try {
   }
 
   async function assertZoomSurvivesPendingObjectFocus(page, tableId, nodeId) {
+    const editor = page.getByTestId('canvas-object-editor');
+    const closeCurrentEditor = async () => {
+      const closeObject = page.getByRole('button', { name: 'Close object', exact: true });
+      if (await closeObject.count() > 0) {
+        await closeObject.first().click();
+        await expect(editor).toHaveCount(0);
+      }
+    };
+    await closeCurrentEditor();
+    await waitForStableCanvasViewport(page);
+    await closeCurrentEditor();
+    await expect(editor).toHaveCount(0);
+    const waitForVisibleSharedPositions = async () => {
+      await expect.poll(async () => {
+        const nodeStates = await page.locator('.tt-canvas-node').evaluateAll((nodes) => nodes.map((node) => ({
+          id: node.closest('.react-flow__node')?.getAttribute('data-id'),
+          opened: node.getAttribute('data-testid') === 'canvas-object-editor',
+        })));
+        const visibleStates = nodeStates.filter(({ id }) => id && (/^table\.(collection|view)\.[a-z][a-z0-9_-]{0,39}$|^table\.(actions|rules)$|^workspace\.(people|history)$/).test(id));
+        const eligibleIds = visibleStates.filter(({ opened }) => !opened).map(({ id }) => id);
+        const domain = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
+        const missingIds = eligibleIds.filter((id) => {
+          const position = domain.canvasLayout?.positions?.[id];
+          return !position || !Number.isFinite(position.x) || !Number.isFinite(position.y);
+        });
+        return {
+          ready: eligibleIds.length > 0 && missingIds.length === 0,
+          eligibleIds,
+          openedIds: visibleStates.filter(({ opened }) => opened).map(({ id }) => id),
+          missingIds,
+        };
+      }, { timeout: 10_000, intervals: [50, 100, 150] }).toMatchObject({ ready: true });
+    };
+    await waitForVisibleSharedPositions();
+    await waitForStableCanvasViewport(page);
+    await waitForVisibleSharedPositions();
+    await expect(editor).toHaveCount(0);
     const before = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
     const beforeViewport = await readCanvasViewport(page);
-    const dock = await openObjects(page);
-    const openCard = dock.getByTestId(`open-canvas-${nodeId}`);
-    const zoomIn = page.getByRole('button', { name: 'Zoom In', exact: true });
-    await expect(openCard).toBeVisible();
-    await expect(zoomIn).toBeVisible();
     const mutatingRequests = [];
     const recordMutation = request => {
       const requestUrl = new URL(request.url());
@@ -346,29 +378,33 @@ try {
     };
     page.on('request', recordMutation);
     try {
+      const dock = await openObjects(page);
+      const openCard = dock.getByTestId(`open-canvas-${nodeId}`);
+      const zoomIn = page.getByRole('button', { name: 'Zoom In', exact: true });
+      await expect(openCard).toBeVisible();
+      await expect(zoomIn).toBeVisible();
       // Keep the two real pointer clicks adjacent: the second lands while the opened card's
       // geometry-based focus request is still pending, without waiting for the card to settle.
       await openCard.click();
       await zoomIn.click();
+      await expect.poll(async () => (await readCanvasViewport(page)).zoom)
+        .toBeGreaterThan(beforeViewport.zoom);
+      const zoomAfterClick = await readCanvasViewport(page);
+      await expect(editor).toHaveAttribute('data-canvas-object', nodeId);
+      await expect(editor).toBeVisible();
+      await waitForStableBoundingBox(editor);
+      const settledViewport = await waitForStableCanvasViewport(page);
+      expect(zoomAfterClick.zoom).toBeGreaterThan(beforeViewport.zoom);
+      expect(Math.abs(settledViewport.zoom - zoomAfterClick.zoom)).toBeLessThan(0.01);
+      expect(Math.abs(settledViewport.x - zoomAfterClick.x)).toBeLessThan(1);
+      expect(Math.abs(settledViewport.y - zoomAfterClick.y)).toBeLessThan(1);
+      const after = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
+      expect(mutatingRequests).toEqual([]);
+      expect(after).toEqual(before);
+      mark('Generated card open followed immediately by user zoom; settled viewport retained the zoom with no API mutations');
     } finally {
       page.off('request', recordMutation);
     }
-    await expect.poll(async () => (await readCanvasViewport(page)).zoom)
-      .toBeGreaterThan(beforeViewport.zoom);
-    const zoomAfterClick = await readCanvasViewport(page);
-    const editor = page.getByTestId('canvas-object-editor');
-    await expect(editor).toHaveAttribute('data-canvas-object', nodeId);
-    await expect(editor).toBeVisible();
-    await waitForStableBoundingBox(editor);
-    const settledViewport = await waitForStableCanvasViewport(page);
-    expect(zoomAfterClick.zoom).toBeGreaterThan(beforeViewport.zoom);
-    expect(Math.abs(settledViewport.zoom - zoomAfterClick.zoom)).toBeLessThan(0.01);
-    expect(Math.abs(settledViewport.x - zoomAfterClick.x)).toBeLessThan(1);
-    expect(Math.abs(settledViewport.y - zoomAfterClick.y)).toBeLessThan(1);
-    expect(mutatingRequests).toEqual([]);
-    const after = (await api(page, `/api/workspaces/${tableId}`)).body.domain;
-    expect(after).toEqual(before);
-    mark('Generated card open followed immediately by user zoom; settled viewport retained the zoom with no API mutations');
   }
 
   async function createFreshTable(owner) {
@@ -399,7 +435,7 @@ try {
     return source;
   }
 
-  async function sendTableMessage(page, promptText, { sourceNames = [], expectConsent = true, cancelFirst = false } = {}) {
+  async function sendTableMessage(page, promptText, { sourceNames = [], expectConsent = true, cancelFirst = false, workspaceId = null } = {}) {
     const bar = page.getByTestId('table-chat-bar');
     const composer = bar.getByRole('textbox', { name: 'Message', exact: true });
     const submit = bar.getByRole('button', { name: 'Send message', exact: true });
@@ -435,8 +471,50 @@ try {
         for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
       }
       expect(modelPosts).toBe(0);
-      const request = responseAfter(page, (response) => /\/api\/workspaces\/[^/]+\/model$/.test(new URL(response.url()).pathname) && response.request().method() === 'POST');
-      return await request(() => consent.getByRole('button', { name: 'Send', exact: true }).click());
+      const sendButton = consent.getByRole('button', { name: 'Send', exact: true });
+      await expect(sendButton).toBeEnabled();
+      const modelPost = (request) => request.method() === 'POST' && /\/api\/workspaces\/[^/]+\/model$/.test(new URL(request.url()).pathname);
+      const response = responseAfter(page, (item) => modelPost(item.request()) && item.request().method() === 'POST');
+      const requestObserved = page.waitForRequest(modelPost, { timeout: 5_000 }).then(
+        (request) => ({ request }),
+        (error) => ({ error }),
+      );
+      await sendButton.evaluate((button) => {
+        window.__tableChatConsentClickCount = 0;
+        button.addEventListener('click', () => { window.__tableChatConsentClickCount += 1; }, { capture: true, once: true });
+      });
+      try {
+        await sendButton.click();
+        // Consent acceptance closes the dialog synchronously in the UI before the request resolves.
+        // This makes a click that never reaches the handler distinguishable from a slow endpoint.
+        await expect(consent).toHaveCount(0, { timeout: 3_000 });
+        const observed = await requestObserved;
+        if (observed.error) throw observed.error;
+        expect(modelPosts).toBe(1);
+        return await response(() => Promise.resolve());
+      } catch (error) {
+        const clickCount = await page.evaluate(() => window.__tableChatConsentClickCount ?? 0).catch(() => null);
+        const sendState = await sendButton.evaluate((button) => ({
+          disabled: button.disabled,
+          ariaDisabled: button.getAttribute('aria-disabled'),
+          text: button.textContent?.trim() ?? '',
+        })).catch(() => null);
+        const uiState = {
+          promptText,
+          workspaceId,
+          sourceNames,
+          modelPosts,
+          consentVisible: await consent.isVisible().catch(() => false),
+          composerEnabled: await composer.isEnabled().catch(() => false),
+          sendState,
+          consentClickCount: clickCount,
+          barText: (await bar.innerText().catch(() => '')).replace(/\s+/gu, ' ').slice(0, 1_000),
+          workspace: workspaceId ? await api(page, `/api/workspaces/${workspaceId}`).catch((apiError) => ({ error: String(apiError) })) : null,
+        };
+        lastUiDiagnostics = uiState;
+        const requestState = await requestObserved;
+        throw new Error(`Consent Send handoff failed: ${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ ...uiState, requestObserved: !requestState.error, requestError: requestState.error ? String(requestState.error) : undefined }, null, 2)}`, { cause: error });
+      }
     } finally {
       page.off('request', countModelPosts);
     }
@@ -459,7 +537,7 @@ try {
     }
     const sourceNames = before.domain.sources.map((source) => source.filename);
     const prompt = draftPrompt(scenario, phase);
-    const response = await sendTableMessage(owner, prompt, { sourceNames, cancelFirst });
+    const response = await sendTableMessage(owner, prompt, { sourceNames, cancelFirst, workspaceId: tableId });
     expect(response?.status()).toBe(202);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('draft');
     const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body;

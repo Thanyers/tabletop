@@ -30,7 +30,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
-- **F006 แชทบน Canvas — กำลังรวมทดสอบ:** ผู้ใช้ให้รับช่วง [PR #30](https://github.com/Thanyers/tabletop/pull/30) ต่อจากงานทีม รวมบนฐาน F005 + F002 และ F007 ที่เข้ามาใน [PR #31](https://github.com/Thanyers/tabletop/pull/31); Canvas ว่างก่อนมีเนื้อหา, ช่องแชทห้าแถว, การ์ดคำตอบส่วนตัว, Rules → Edit rules และวงจร review เดิม ดู [ขอบเขตและข้อกำหนด](docs/features/F006-chat-first-table.md) ผลของ F005/F002 ด้านล่างไม่ใช่หลักฐานว่า F006 ผ่านแล้ว
+- **F006 แชทบน Canvas — local acceptance ผ่าน พร้อม review:** รับช่วง [PR #30](https://github.com/Thanyers/tabletop/pull/30) จากทีมบนฐาน F005 + F002 + F007 ([PR #31](https://github.com/Thanyers/tabletop/pull/31)); Canvas ว่างก่อนมีเนื้อหา, ช่องแชทห้าแถว, การ์ดคำตอบส่วนตัว และ Rules → Edit rules พร้อม recovery เดิม แก้ shared layout ให้รองรับการ์ดใหม่/ข้ามห้องและไม่ล็อกแชท · Node `22.23.2`: `npm test` 376, `test:cloudflare` 71, browser Node 7 / Worker 25, generated 4 เรื่อง/8 คำขอจำลอง; build/dry-run/secret scan ผ่าน, lint 0 errors / 101 warnings · ดู [ผลตรวจและขอบเขต AI จริง 6 คำขอ](docs/features/F006-chat-first-table.md#ผลตรวจรุ่นรวม); สถานะ CI และ merge ของ commit ที่ส่งตรวจให้ยึด PR #30; ยังไม่ deploy
 - **F005 Generative Canvas — merge เข้า `dev` แล้ว:** [PR #24](https://github.com/Thanyers/tabletop/pull/24), merge `f0be463` · bounded expressions, scene/chart/metric/controls, ทดลองร่างส่วนตัว, shared semantic layout และ AI repair/การค้นบทสนทนาแบบจำกัด · post-merge [CI 39402734458](https://github.com/Thanyers/tabletop/actions/runs/39402734458) ผ่านบน Node `22.23.2`: unit 355, Cloudflare 71, browser Node 7 / Worker 22, generated 4 เรื่อง/8 drafts · AI จริงสามเรื่องผ่านใน disposable local acceptance; ขอบเขตอยู่ใน [acceptance](docs/GENERATIVE_CANVAS_ACCEPTANCE.md); ยังไม่ deploy
 - **Research/design ต้นทาง:** [Generative Canvas plan](docs/GENERATIVE_CANVAS_PLAN_TH.md) + [primary-source research](docs/GENERATIVE_CANVAS_RESEARCH_2026-10-20.md) ครอบคลุมเป้าหมายระยะถัดไปด้วย; ขอบเขตที่ทำแล้วให้ยึด [runtime](docs/GENERATIVE_CANVAS_RUNTIME.md) ไม่ถือว่าทั้งแผนเป็นความสามารถที่ส่งแล้ว
 - **Release ล่าสุด:** **`v1.1.0`** (annotated tag `91d69d0` บน `a2c97cd` = merge PR #26, CI `local-validation` บน main ผ่านก่อน tag) · build จาก tag ได้ `version.json` = `1.1.0` / `a2c97cd` · **ยังไม่ deploy** — production/staging ยังรัน `v1.0.0` รอ operator
@@ -65,6 +65,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-20 | การบันทึก `canvas.layout` ไม่ตั้งหรือล้าง busy ของแชท/คำสั่งเล่น | ผังมีคิวและ revision แยก; การบันทึกตำแหน่งพื้นหลังต้องไม่ขัดการพิมพ์หรือเปิด consent และผลตอบรับช้าต้องไม่ปลดล็อกคำสั่งอื่น |
 | 2026-10-20 | F005 ใช้ bounded AST สำหรับสูตรและพฤติกรรมใหม่บน React/SVG เดิม | ข้าม catalog เดิมได้โดยไม่เปิด host JavaScript/IO; action และผลลัพธ์ตรวจที่ authority ก่อน commit และร่างทดลองบนสำเนาส่วนตัว |
 | 2026-10-20 | shared layout มี revision ของตัวเองและกล้องเป็นของแต่ละคน | การลากการ์ดไม่ทำให้คำสั่งเล่นหมดอายุ; เปิดการ์ดแล้วรอ geometry นิ่งก่อนเลื่อนกล้อง และการเลื่อน/ซูมของคนยกเลิก focus ที่ค้าง |
 | 2026-10-20 | F005 ใช้ JSON state เดิม ไม่มี SQL migration หรือ binding ใหม่ | ห้องเก่ายังอ่านได้; ห้องที่บันทึก AST ใหม่ต้องใช้ compatible writer จึงต้องเสนอ MAJOR ตามกฎ rollback ก่อน release |

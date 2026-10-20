@@ -170,10 +170,17 @@ async function openCanvasObject(page, id) {
   return editor;
 }
 
-async function refreshTable(page, tableId) {
+async function setTableOptionsOpen(page, open) {
   const options = page.locator('.tt-table-options');
-  if (await options.getAttribute('open') === null) await options.locator('summary').click();
-  await expect(options).toHaveAttribute('open', '');
+  const isOpen = await options.getAttribute('open') !== null;
+  if (isOpen !== open) await options.locator('summary').click();
+  if (open) await expect(options).toHaveAttribute('open', '');
+  else await expect(options).not.toHaveAttribute('open');
+}
+
+async function refreshTable(page, tableId) {
+  await setTableOptionsOpen(page, true);
+  const options = page.locator('.tt-table-options');
   const refreshed = page.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
   await options.getByRole('button', { name: 'Refresh table', exact: true }).click();
   const response = await refreshed;
@@ -206,7 +213,7 @@ async function openNewTable(owner, api) {
   return view;
 }
 
-async function addSource(page, tableId, source, api, method = 'chat', { aiDisabled = false, failHistory = false } = {}) {
+async function addSource(page, tableId, source, api, method = 'chat', { aiDisabled = false, failHistory = false, onCapabilitiesReady } = {}) {
   const chat = page.getByTestId('table-chat-bar');
   await expect(chat).toBeVisible();
   const capabilitiesRoute = url => new URL(url).pathname === '/api/capabilities';
@@ -283,7 +290,14 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
     expect(modelRequests).toBe(0);
     await page.unroute(capabilitiesRoute);
     if (failHistory) await page.unroute(historyRoute);
+    const capabilitiesReady = page.waitForResponse(response => response.url().endsWith('/api/capabilities') && response.request().method() === 'GET');
+    void capabilitiesReady.catch(() => {});
     await page.reload();
+    const capabilitiesResponse = await capabilitiesReady;
+    expect(capabilitiesResponse.status()).toBe(200);
+    const restoredCapabilities = await capabilitiesResponse.json();
+    expect(restoredCapabilities.model?.enabled).toBe(true);
+    onCapabilitiesReady?.({ receivedAt: Date.now(), modelEnabled: restoredCapabilities.model.enabled });
     await expect(page.getByTestId('table-chat-bar')).toBeVisible();
   }
   const sourceObject = await openCanvasObject(page, 'table.sources');
@@ -591,8 +605,9 @@ async function createBlankTableFromPicker(page) {
   expect(response.status()).toBe(201);
   const table = await response.json();
   await expect(page).toHaveURL(new RegExp(`/t/${table.id}$`));
+  const visibleTitle = await page.locator('.tt-workspace-picker__button strong').innerText();
   await expect(page.locator('.tt-canvas-node')).toHaveCount(0);
-  return table;
+  return { ...table, visibleTitle };
 }
 
 async function selectOtherTable(page, title, tableId) {
@@ -605,10 +620,28 @@ async function selectOtherTable(page, title, tableId) {
   await expect(page.locator('.tt-canvas-panel')).toBeVisible();
 }
 
-async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, privatePrompt, privateAnswer }) {
+async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, privatePrompt, privateAnswer, capabilities, mark }) {
+  expect(capabilities).toMatchObject({ modelEnabled: true });
   const original = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const originalVisibleTitle = await owner.locator('.tt-workspace-picker__button strong').innerText();
   const otherTable = await createBlankTableFromPicker(owner);
-  await selectOtherTable(owner, original.title, tableId);
+  await selectOtherTable(owner, originalVisibleTitle, tableId);
+  const chat = owner.getByTestId('table-chat-bar');
+  const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
+  const send = chat.getByRole('button', { name: 'Send message', exact: true });
+  const pendingPrompt = 'Can I ask a question while this table is being arranged?';
+  await prompt.fill(pendingPrompt);
+  await expect(send).toBeEnabled();
+
+  let modelPosts = 0;
+  let assistantPosts = 0;
+  const countPrivatePosts = request => {
+    if (request.method() !== 'POST') return;
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith('/model')) modelPosts += 1;
+    if (path.endsWith('/assistant')) assistantPosts += 1;
+  };
+  owner.on('request', countPrivatePosts);
   await openCanvasObject(owner, 'table.actions');
   const actionNode = owner.getByTestId('canvas-object-editor');
   await actionNode.getByRole('button', { name: 'Move Actions without dragging', exact: true }).click();
@@ -618,11 +651,13 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   let acceptedResolve;
   const serverAccepted = new Promise(resolve => { acceptedResolve = resolve; });
   let heldAck = false;
+  let layoutCommand;
   const commandUrl = `**/api/workspaces/${tableId}/commands`;
   const holdLayoutAck = async route => {
     const request = route.request();
     if (heldAck || request.method() !== 'POST' || request.postDataJSON()?.type !== 'canvas.layout') return route.continue();
     heldAck = true;
+    layoutCommand = request.postDataJSON();
     const response = await route.fetch();
     acceptedResolve(response.status());
     await ackGate;
@@ -640,7 +675,29 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
     expect(acceptedPoint.x).toBe(original.domain.canvasLayout.positions['table.actions'].x + 48);
     expect(acceptedPoint.pinned).toBe(true);
 
-    await selectOtherTable(owner, otherTable.title, otherTable.id);
+    const pendingLayoutState = {
+      capabilities,
+      promptDisabled: await prompt.isDisabled(),
+      sendDisabled: await send.isDisabled(),
+      prompt: await prompt.inputValue(),
+      layoutCommand,
+    };
+    if (pendingLayoutState.promptDisabled || pendingLayoutState.sendDisabled) {
+      throw new Error(`A server-accepted canvas.layout ACK disabled chat before completion: ${JSON.stringify(pendingLayoutState)}`);
+    }
+    await expect(prompt).toBeEnabled();
+    await expect(send).toBeEnabled();
+    await send.click();
+    const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+    await expect(consent).toBeVisible();
+    await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(prompt).toHaveValue(pendingPrompt);
+    await expect(consent).toHaveCount(0);
+    expect(modelPosts).toBe(0);
+    expect(assistantPosts).toBe(0);
+    mark(`Layout/chat concurrency: enabled model capabilities were restored at ${capabilities.receivedAt}; accepted canvas.layout ACK left the composer enabled, and normal Send opened cancellable consent with no private request.`);
+
+    await selectOtherTable(owner, otherTable.visibleTitle, otherTable.id);
     await expect(owner.getByTestId('table-chat-answer')).toHaveCount(0);
     await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
     const otherState = (await api(owner, `/api/workspaces/${otherTable.id}`)).body;
@@ -652,7 +709,7 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
     await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
     expect((await api(owner, `/api/workspaces/${otherTable.id}`)).body.domain.canvasLayout?.positions?.['table.actions']).toBeUndefined();
 
-    await selectOtherTable(owner, original.title, tableId);
+    await selectOtherTable(owner, originalVisibleTitle, tableId);
     const privateArticle = owner.getByRole('article', { name: privatePrompt, exact: true });
     await expect(privateArticle.getByTestId('table-chat-answer')).toContainText(privateAnswer);
     const resumed = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -664,6 +721,7 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   } finally {
     releaseAck();
     await owner.unroute(commandUrl, holdLayoutAck);
+    owner.off('request', countPrivatePosts);
   }
 }
 
@@ -744,9 +802,9 @@ async function performContextualAction(page, collectionId, { recordId, recordLab
 
 async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply, { cancelFirst = false, loseFirstAck = false, beforeRetry } = {}) {
   const chat = page.getByTestId('table-chat-bar');
-  const answerCardForPrompt = () => page.locator('.tt-canvas-node--auxiliary')
-    .filter({ hasText: promptText.slice(0, 36) })
-    .first()
+  const matchingPromptCards = () => page.locator('.tt-canvas-node--auxiliary')
+    .filter({ hasText: promptText.slice(0, 36) });
+  const answerCardForPrompt = () => matchingPromptCards()
     .getByTestId('table-chat-answer');
   const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
   const send = chat.getByRole('button', { name: 'Send message', exact: true });
@@ -802,6 +860,7 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
     await consent.getByRole('button', { name: 'Send', exact: true }).click();
     let response;
     if (loseFirstAck) {
+      await expect(matchingPromptCards()).toHaveCount(1);
       const failedCard = answerCardForPrompt();
       await expect(failedCard).toBeVisible({ timeout: 20_000 });
       await expect(failedCard.getByRole('button', { name: 'Retry same request', exact: true })).toBeVisible({ timeout: 20_000 });
@@ -811,6 +870,10 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
       if (beforeRetry) await beforeRetry(assistantBodies[0]);
       const retryResponsePromise = page.waitForResponse(candidate => candidate.url().endsWith('/assistant') && candidate.request().method() === 'POST');
       void retryResponsePromise.catch(() => {});
+      const failedNodeId = await failedCard.evaluate(element => element.closest('.react-flow__node')?.getAttribute('data-id'));
+      expect(failedNodeId).toMatch(/^chat\./u);
+      await openCanvasObject(page, failedNodeId);
+      await expect(failedCard).toBeVisible();
       await failedCard.scrollIntoViewIfNeeded();
       await failedCard.getByRole('button', { name: 'Retry same request', exact: true }).click();
       try {
@@ -879,7 +942,7 @@ async function seedConversationPage({ page, tableId, profile, api, setAssistantR
   return created;
 }
 
-async function verifyParticipantConversation({ owner, member, tableId, source, api, setAssistantReply, getProviderCalls }) {
+async function verifyParticipantConversation({ owner, member, tableId, source, api, setAssistantReply, getProviderCalls, capabilities, mark }) {
   const profile = (await api(member, `/api/workspaces/${tableId}`)).body;
   const initialCalls = getProviderCalls();
   const firstPrompt = 'What does the Available rule mean?';
@@ -936,6 +999,7 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   expect((await api(owner, `/api/workspaces/${tableId}`)).body.revision).toBe(ownerProfile.revision);
   await verifyDelayedLayoutAckDoesNotCrossTables({
     owner, tableId, api, privatePrompt: ownerPrompt, privateAnswer: ownerReply.result.text,
+    capabilities, mark,
   });
 
   const providerCallsBeforeArchive = getProviderCalls();
@@ -953,6 +1017,7 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
 }
 
 async function equipmentScenario({ owner, member, secondMember, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
+  let capabilities;
   const room = await openNewTable(owner, api);
   await owner.setViewportSize({ width: 390, height: 844 });
   const canvasBox = await owner.locator('.tt-canvas-panel').boundingBox();
@@ -972,7 +1037,10 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect.poll(() => mobileComposer.evaluate(element => element.clientHeight)).toBeLessThanOrEqual(110);
   await mobileComposer.fill('');
   await owner.setViewportSize({ width: 1280, height: 820 });
-  const source = await addSource(owner, room.id, fixtures.equipment, api, 'chat', { aiDisabled: true });
+  const source = await addSource(owner, room.id, fixtures.equipment, api, 'chat', {
+    aiDisabled: true,
+    onCapabilitiesReady: ready => { capabilities = ready; },
+  });
   await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api, { failDraftRefresh: true, getProviderCalls });
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
@@ -1007,7 +1075,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   member = await joinAndCheckPrivateFiles(newPage, api, member, firstInvite, room.id, source.filename);
   await verifySharedCardLayout(owner, member, room.id, api);
   mark('Shared card layout: rules, people, history and table cards sit at the same place for owner and member, and a move reaches the other screen live');
-  await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls });
+  await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls, capabilities, mark });
   mark('Generic table chat: explicit consent, participant-only answer history, grounded reference, reload continuity, and no table mutation');
   await performContextualAction(member, 'equipment', {
     recordId: 'camera', recordLabel: 'Field camera', actionTitle: 'Borrow equipment', recordFieldLabel: 'Item',
@@ -1044,7 +1112,8 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await refreshTable(owner, room.id);
   const ownerAsk = {
     result: { kind: 'explanation', text: 'Borrowing and returns are recorded as table actions.', references: [{ kind: 'action', id: 'borrow' }] },
-    expectedRole: 'owner', expectedSeat: 'host', expectedConversationCount: 0,
+    expectedRole: 'owner', expectedSeat: 'host', expectedConversationCount: 1,
+    expectedConversationContains: ['Who is allowed to return a borrowed item?', 'Only the member who borrowed an item may return it.'],
     expectedPromptContains: 'Summarize how this table records equipment changes.',
     forbiddenTexts: [source.filename, fixtures.equipment.quote, equipmentNotes.filename],
   };
@@ -1068,8 +1137,8 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   expect(getProviderCalls()).toBe(callsBeforeOwnerAsk + 1);
   const beforeReset = (await api(owner, `/api/workspaces/${room.id}`)).body;
   const beforeResetCalls = getProviderCalls();
-  await owner.locator('.tt-table-options > summary').click();
-  await owner.getByRole('button', { name: 'Reset table', exact: true }).click();
+  await setTableOptionsOpen(owner, true);
+  await owner.locator('.tt-table-options').getByRole('button', { name: 'Reset table', exact: true }).click();
   const resetDialog = owner.getByRole('dialog', { name: 'Reset this table?', exact: true });
   const resetResponse = owner.waitForResponse(response => isCommandResponse(response, 'workspace.reset'));
   void resetResponse.catch(() => {});
@@ -1212,8 +1281,8 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   active = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(active.domain.turn).toBe('host');
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);
-  await expect(memberChat.getByRole('button', { name: 'Confirm action', exact: true })).toBeDisabled();
-  await expect(memberChat).toContainText('The table changed after this proposal. It cannot be confirmed');
+  await expect(memberChat.getByRole('button', { name: 'Confirm action', exact: true })).toHaveCount(0);
+  await expect(memberChat).toContainText('The table changed after this proposal. Ask again for a fresh proposal.');
   mark('Generic table chat: lost ask and confirm acknowledgements retry or reconcile once; a direct table action makes a pending proposal stale');
 
   await openCanvasObject(owner, 'table.collection.boats');

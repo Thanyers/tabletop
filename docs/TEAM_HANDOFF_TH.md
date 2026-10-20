@@ -6,7 +6,7 @@
 
 รุ่นที่บันทึกว่า deploy ล่าสุดคือ `v1.0.0` / `ce2c50e` เมื่อ 20 ตุลาคม 2026 ดู [DEPLOYMENTS](DEPLOYMENTS.md) สำหรับ source/build และหลักฐานของ staging/production โดยตรง
 
-งานรุ่นถัดไปใน `dev` รวม F005 จาก [PR #24](https://github.com/Thanyers/tabletop/pull/24) และการตั้งชื่อโต๊ะ F002 จาก [PR #29](https://github.com/Thanyers/tabletop/pull/29) ส่วน [PR #30](https://github.com/Thanyers/tabletop/pull/30) ต่อช่องแชท F006 บนฐานเดียวกัน สูตร/ภาพ ตัวควบคุม การลากใน scene ทดลองร่างส่วนตัว shared semantic layout และการค้นบทสนทนาเก่าแบบจำกัดยังใช้ contract เดิม อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract/วิธีใช้ และ [spec.md](../spec.md) สำหรับผลตรวจล่าสุด ห้ามถือว่างานใน `dev` ขึ้น production แล้ว
+งานรุ่นถัดไปใน `dev` รวม F005 จาก [PR #24](https://github.com/Thanyers/tabletop/pull/24), การตั้งชื่อโต๊ะ F002 จาก [PR #29](https://github.com/Thanyers/tabletop/pull/29) และตำแหน่งการ์ดร่วม F007 จาก [PR #31](https://github.com/Thanyers/tabletop/pull/31) ส่วน [PR #30](https://github.com/Thanyers/tabletop/pull/30) ต่อช่องแชท F006 และแก้การทำงานร่วมกับ F007 บนฐานเดียวกัน สูตร/ภาพ ตัวควบคุม การลากใน scene ทดลองร่างส่วนตัว และการค้นบทสนทนาเก่าแบบจำกัดยังอยู่ครบ อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract/วิธีใช้ และ [spec.md](../spec.md) สำหรับผลตรวจล่าสุด ห้ามถือว่างานใน `dev` ขึ้น production แล้ว
 
 ลำดับงานที่ควรทำต่อ:
 

@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` — Codex รับช่วง T1–T6 ตามคำสั่งผู้ใช้; รวม F005 และ F002 เพื่อทดสอบทั้งชุด |
+| สถานะ | `review` — Codex รับช่วง T1–T6 ตามคำสั่งผู้ใช้; รวม F005, F002 และ F007 ผ่าน local acceptance ทั้งชุด; CI ของ commit ล่าสุดอยู่ใน PR #30 |
 | เจ้าของฟีเจอร์ | ผู้ใช้ (ผู้สั่งงาน); ทีมเริ่ม implementation และ Codex รับช่วง integration/verification |
 | เวอร์ชันที่คาด | F006 เป็น UI change ไม่มี migration; release รวม F005 ต้องพิจารณาข้อจำกัด rollback ของ F005 ด้วย |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F006-T*` |
@@ -80,3 +80,23 @@
 | 2026-10-20 | บอกว่าคำถามอาจส่งบทสนทนาเก่าที่เกี่ยวข้อง ไม่ใช้คำว่า recent อย่างเดียว | ตัวเลือก context ส่งได้ถึง 6 exchanges จากประวัติส่วนตัวในห้อง/epoch/ผู้ถามเดียวกัน รวมรายการเก่าที่ค้นจากคำสำคัญ |
 | 2026-10-20 | เรียก AI จริงเฉพาะห้อง local ที่ทิ้งได้ และลดเพดานคำขอสำหรับ rerun | รอบรวมใช้ 4 คำขอ; แก้ตัวเลือกการ์ดใน test harness แล้วรัน cafe ซ้ำไม่เกิน 2 คำขอ รวม 6 คำขอ ไม่แก้โมเดลหรือผลธุรกิจที่คาดเพื่อให้ผ่าน |
 | 2026-10-20 | รวม F007 จาก `e92b535` / PR #31 ก่อนปิด F006 | ทีมเพิ่มตำแหน่งร่วมของ Rules/People/History และผังเริ่มต้นระหว่างทดสอบ ต้องคงทั้งการเติบโตจาก Canvas ว่างและการ์ดคำตอบส่วนตัว พร้อมทดสอบรุ่นรวมใหม่ |
+| 2026-10-20 | แยกการบันทึกผังจาก foreground busy | regression ที่ค้างผลตอบรับของ layout หลังเซิร์ฟเวอร์รับแล้วพิสูจน์ว่าแชทถูกปิดทั้งที่ AI พร้อม; layout ต้องไม่ตั้งหรือล้าง busy ของคำสั่งเล่นและแชท |
+
+## ผลตรวจรุ่นรวม
+
+รันใน worktree แยกด้วย Node `22.23.2` บนฐาน F005 + F002 + F007; fixture ใช้ฐานทดสอบ local ที่ทิ้งได้และบัญชีจำลอง
+
+| การตรวจ | ผล |
+| --- | --- |
+| `npm test` | 376/376 ผ่าน |
+| `npm run test:cloudflare` | 71/71 ผ่าน |
+| `npm run build` + `npm run build:cloudflare` | typecheck, build และ Worker dry-run ผ่าน |
+| `npm run lint` | 0 errors; warnings เดิม 101 รายการ |
+| `npm run test:r1:browser` | 7/7 ผ่าน ไม่มี uncaught browser errors |
+| `npm run test:generative:browser` | 4 โจทย์ / 8 คำขอจำลอง ผ่าน private trial, ปุ่ม/slider/scene drag, shared layout, การเพิ่มการ์ดหลังแก้กฎ และ reload; ไม่มี browser errors หรือ outbound network |
+| `npm run test:cloudflare:browser` | 25/25 ผ่าน ไม่มี uncaught browser errors; รวมแชทส่วนตัว, lost ACK, การรีเซ็ต, การตั้งชื่อหลังแก้กฎ และการค้าง ACK ของ layout ข้ามโต๊ะ |
+| Publication / client secret scan | 502 source files และ 136 browser assets ไม่มี findings |
+
+รอบ AI จริงก่อนรวม F007 ใช้แอป `97ecd98` และคำขอรวม 6 ครั้ง: cafe คำนวณ 3 → 8 และเพิ่มการ์ดหลังแก้กฎโดยรักษางานเดิม, shadow ตรวจสูตรแยกได้ 80 → 70 และลากวัตถุจริง, water เล่นสองบัญชีจำลองรักษายอดรวม 100 และกลับมาเล่นต่อได้ หลังรวม F007 ตรวจ UI/authority ซ้ำด้วย provider จำลอง; ไม่ถือว่าได้ทดสอบ Google OAuth, production หรือโทรศัพท์สองเครื่องจริงใหม่แล้ว
+
+หลักฐาน local อยู่ใน `test-results/f006-final-*.log`, `test-results/generative-canvas/report.json`, `test-results/cloudflare-browser/report.json` และ `test-results/F006-live-evidence.json` ซึ่งไม่เผยแพร่ใน repo ส่วน CI ของ commit ที่ส่งตรวจให้ดู [PR #30](https://github.com/Thanyers/tabletop/pull/30) การส่งรุ่นขึ้น production เป็นขั้น release แยก
