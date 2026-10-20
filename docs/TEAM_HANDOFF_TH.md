@@ -42,9 +42,9 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
 ## สิ่งที่ทดสอบแล้ว
 
 - [รุ่นที่ deploy](DEPLOYMENTS.md) อ้าง source `c9d3bf0` / PR #6; staging และ production ใช้ source tree เดียวกัน และไฟล์เว็บ 130 ไฟล์ตรงกับ build ที่ตรวจ
-- [CI ของรุ่นล่าสุด](https://github.com/Thanyers/tabletop/actions/runs/39358949964) ผ่าน unit/SQL 309 รายการ, Cloudflare 65, Component Lab 7, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ DeepSeek จริง
+- [CI ของรุ่นล่าสุด](https://github.com/Thanyers/tabletop/actions/runs/39358949964) ผ่าน unit/SQL 309 รายการ, Cloudflare 65, Component Lab 7, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ AI provider จริง
 - Staging ผ่านการเล่น River Race ด้วย Google สองบัญชีจริงและกลับเข้าห้องเดิมหลังปิด/เปิดแท็บ; production ตรวจอ่านและกลับเข้า Encounter Table เดิมได้หลัง deploy โดยข้อมูลและกฎเดิมยังอยู่
-- [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) บันทึกการเล่น local ของ Helpdesk ด้วย DeepSeek จริงและบัญชีจำลองสองคน แยกจากหลักฐาน Google สองบัญชีบน staging
+- [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) บันทึกการเล่น local ของ Helpdesk ด้วย AI จริงและบัญชีจำลองสองคน แยกจากหลักฐาน Google สองบัญชีบน staging
 - `SKIPPED`: automated axe/full contrast/screen-reader audit, การใช้นิ้วบนโทรศัพท์จริง และกรณี invoice เปลี่ยนระหว่างหลักฐานสองชิ้น
 - ยังไม่มีหลักฐาน load/soak, restart recovery หรือการกู้ D1 + Room + Billing ทั้งระบบ การกลับเข้าห้องเดิมและการทดสอบ local ไม่ยืนยันความพร้อมทุกกรณี
 

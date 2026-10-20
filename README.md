@@ -8,7 +8,7 @@
 
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="docs/showcase/tabletop-story-poster.png">
-  <img src="docs/showcase/tabletop-story.gif" alt="จากไฟล์นโยบาย Helpdesk ให้ AI ร่างกฎ คนตรวจและเปิดใช้ เลือกงานทำเอง แล้วชวนคนมาใช้โต๊ะเดิมร่วมกัน" width="1000">
+  <img src="docs/showcase/tabletop-story.gif" alt="เริ่มจาก Canvas ว่าง วางไฟล์บทเรียนแรงและมวล ให้ AI ร่างกฎแล้วคนตรวจ จากนั้นการ์ดปรับค่า ฉากรถ และกราฟค่อย ๆ งอกขึ้นมา ก่อนเพิ่มแรงจาก 10 เป็น 20 นิวตันแล้วทดลองเอง" width="1000">
 </picture>
 
 <sub>ภาพเคลื่อนไหวอธิบายแนวคิด สร้างด้วย Remotion · [ดูภาพนิ่ง](docs/showcase/tabletop-story-poster.png) · [ที่มาของภาพและโค้ด](docs/showcase/README.md)</sub>
@@ -32,7 +32,7 @@ Tabletop เอาความรู้สึกของ **โต๊ะบอ�
 
 ![โต๊ะ Helpdesk จริงหลังเล่นจบสามงาน มีรายการ Tickets และช่องแชทบน Canvas ข้อมูลและชื่อทั้งหมดเป็นข้อมูลจำลอง](docs/assets/calm-canvas.png)
 
-<sub>ภาพจากรอบทดสอบในเครื่อง: ไฟล์ใหม่ → DeepSeek จริง → ตรวจและเปิดใช้กฎ → จบสามงาน รวม 14 รายการสำเร็จ · [ดูผลทดสอบ](docs/CALM_CANVAS_ACCEPTANCE.md)</sub>
+<sub>ภาพจากรอบทดสอบในเครื่อง: ไฟล์ใหม่ → AI จริง → ตรวจและเปิดใช้กฎ → จบสามงาน รวม 14 รายการสำเร็จ · [ดูผลทดสอบ](docs/CALM_CANVAS_ACCEPTANCE.md)</sub>
 
 ## โต๊ะเดียวกัน เปลี่ยนไปตามสิ่งที่อยากทำ
 
