@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, LoaderCircle, Paperclip } from 'lucide-react';
 import { consentKey, consentQuestion, needsConsent } from './table-chat-consent';
 import './table-chat.css';
@@ -14,13 +14,17 @@ export interface TableChatProps {
   canAttach: boolean;
   busy: boolean;
   acceptFiles?: string;
+  /** Sending also shares the table's current data (asking the table, not drafting). */
+  sharesTable?: boolean;
+  /** Text to place in the box, e.g. a description typed on the start page. */
+  prefill?: { text: string; key: number };
   onAttach: (file: File) => Promise<void>;
   /** Resolves true when the message was accepted, so the box can clear. */
   onSend: (message: string) => Promise<boolean>;
 }
 
 /** One-line chat box fixed to the bottom centre of a shared table (F006). */
-export function TableChat({ sourceIds, placeholder, aiEnabled, canAttach, busy, acceptFiles, onAttach, onSend }: TableChatProps) {
+export function TableChat({ sourceIds, placeholder, aiEnabled, canAttach, busy, acceptFiles, sharesTable = false, prefill, onAttach, onSend }: TableChatProps) {
   const [message, setMessage] = useState('');
   const [grantedKey, setGrantedKey] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -29,6 +33,10 @@ export function TableChat({ sourceIds, placeholder, aiEnabled, canAttach, busy, 
   const fileRef = useRef<HTMLInputElement>(null);
   const trimmed = message.trim();
   const canSend = aiEnabled && !busy && !sending && trimmed.length > 0;
+
+  useEffect(() => {
+    if (prefill) setMessage(prefill.text.slice(0, MAX_MESSAGE_CHARS));
+  }, [prefill]);
 
   useLayoutEffect(() => {
     const field = fieldRef.current;
@@ -58,7 +66,7 @@ export function TableChat({ sourceIds, placeholder, aiEnabled, canAttach, busy, 
 
   return <div className="tt-table-chat-bar" data-testid="table-chat-bar">
     {asking && <div className="tt-table-chat-bar__consent" role="alertdialog" aria-label="Send to AI">
-      <span>{consentQuestion(sourceIds.length)}</span>
+      <span>{consentQuestion(sourceIds.length, sharesTable)}</span>
       <button type="button" className="tt-table-chat-bar__consent-yes" onClick={() => { setGrantedKey(consentKey(sourceIds)); void send(); }}>Send</button>
       <button type="button" className="tt-table-chat-bar__consent-no" onClick={() => { setAsking(false); fieldRef.current?.focus(); }}>Cancel</button>
     </div>}
