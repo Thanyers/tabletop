@@ -20,6 +20,11 @@
 - **Root cause:** การขยายการ์ดเปลี่ยนความสูงและเรียก incremental layout หลังคำสั่ง fit; การรอเพียงสอง animation frames ไม่รับประกันว่าขนาดกับตำแหน่งนิ่ง
 - **Correct behavior:** ใช้คำขอ focus ครั้งเดียวที่รอ geometry นิ่งและยกเลิกเมื่อคนลาก/เลื่อนเอง แล้วรัน `npm run build`, `npm run build:cloudflare`, `npm run test:cloudflare:browser` ตามลำดับ ห้ามใช้ force-click เพื่อปิดผลล้มของปุ่มที่อยู่นอกจอ
 
+### 2026-10-20 — ตัวเลขถูกไม่ได้แปลว่าภาพที่ AI สร้างถูก
+- **What happened:** ฉากแสง–เงาคำนวณ metric ถูก แต่ endpoint ของเส้นเงาใช้พิกัดหลอดไฟ; live pointer test อ่านตำแหน่งก่อนการ์ดกับกล้องนิ่งจึงพลาดวัตถุ
+- **Root cause:** acceptance ตรวจเฉพาะ metric และใช้ visible เป็นเงื่อนไขเริ่มลาก ทั้งที่ geometry ยังเปลี่ยนได้
+- **Correct behavior:** ตรวจ endpoint ของ scene ด้วยสูตรอิสระก่อน/หลัง action, รอ bounds นิ่งและใช้ hit-test ก่อนลาก; รัน `GENERATIVE_CASE=shadow npm run test:generative:live` ใน disposable fixture พร้อม credential source แล้วเก็บทุก failure ห้ามแก้ output ให้ตรงคำตอบเอง
+
 ### 2026-10-20 — ข้อความ handoff ในแชทเก่ากว่า repo
 - **What happened:** ข้อความส่งต่องานบอกให้เริ่มจาก `feat/tabletop-r1` (draft PR), deploy `f1725c8`, commit ล่าสุด `bed5881` แต่ repo จริง PR #2 merge เข้า `main` แล้ว ตามด้วย PR #3–#7 และ prod รัน `c9d3bf0`
 - **Root cause:** ข้อความเขียนก่อนรอบ merge/deploy ถัดไป และ hardcode SHA ไว้

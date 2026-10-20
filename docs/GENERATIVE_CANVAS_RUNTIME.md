@@ -50,7 +50,7 @@
 | การสร้าง/ซ่อมด้วย AI | [ai.ts](../cloudflare/ai.ts), [provider adapter](../server/providers/deepseek-changes.ts) |
 | ค้นบทสนทนาเก่า | [table-memory.ts](../cloudflare/table-memory.ts), [room-repository.ts](../cloudflare/room-repository.ts) |
 
-ไม่มี dependency, secret, binding หรือ SQL migration ใหม่ใน candidate นี้ ใช้ optional fields ใน JSON state เดิม ข้อมูลเก่าที่ไม่มี canvas ยังเปิดได้ แต่หลังบันทึก expression/descriptor ใหม่แล้ว **อย่าถอยไปใช้โค้ด v1.0.0 เพื่อเขียนห้องเหล่านั้น** ใช้ build ที่อ่านสัญญาใหม่นี้ได้และพักการเขียนก่อนทำ recovery
+F005 ไม่เพิ่ม runtime dependency, secret, binding หรือ SQL migration ใช้ optional fields ใน JSON state เดิม ข้อมูลเก่าที่ไม่มี canvas ยังเปิดได้ แต่หลังบันทึก expression/descriptor ใหม่แล้ว **อย่าถอยไปใช้โค้ด v1.0.0 เพื่อเขียนห้องเหล่านั้น** ใช้ build ที่อ่านสัญญาใหม่นี้ได้และพักการเขียนก่อนทำ recovery
 
 ก่อนบันทึกตรวจผลลัพธ์ด้วย actor/seat/turn ของผู้ส่งคำสั่งจริง พร้อม identity probes ที่จำกัด 64 บริบท; ไม่ใช่การพิสูจน์ทุกเงื่อนไขของผู้ชมในอนาคต หากการแสดงผลของผู้ชมชนขอบเขต runtime จะแสดงข้อผิดพลาดแทนการรันเกินงบ ส่วนผลรวมและจำนวนรายการที่ว่างให้ศูนย์; mean/min/max ของชุดว่างต้องมีเงื่อนไขรองรับ
 

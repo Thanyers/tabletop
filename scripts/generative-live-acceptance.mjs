@@ -13,7 +13,7 @@ const cases = [
   },
   {
     id: 'shadow',
-    prompt: 'Create a tiny light/shadow experiment without a file. Collection lights: one row main, numeric light_x=20 bounded 0..100 and light_y=10 bounded 0..40. Action move_light parameters light(record), x(number0..100), y(number0..40) sets both coordinates. Scene 120 by120: draggable circle light-source bound to this action; object top at (50,50), ground y=90; show the ray and shadow edge. Metric shadow-x calculates light_x+(90-light_y)*(50-light_x)/(50-light_y). Include sliders reading committed x and y. Both roles may act; no turns. All geometry must update from actual expressions; never a prerecorded picture.',
+    prompt: 'Create a tiny light/shadow experiment without a file. Collection lights: one row main, numeric light_x=20 bounded 0..100 and light_y=10 bounded 0..40. Action move_light parameters light(record), x(number0..100), y(number0..40) sets both coordinates. Scene 120 by 120: draggable circle light-source bound to this action; object top is (50,50), and ground is y=90. Draw ray from (light_x,light_y) to (50,50). Draw the shadow edge from (50,50) to the ground intersection, with endpoint x = light_x + (90-light_y)*(50-light_x)/(50-light_y) and y=90. Use this exact same ground-intersection expression for the shadow edge and metric shadow-x; do not use light_x as the shadow endpoint. Include sliders reading committed x and y. Both roles may act; no turns. All geometry must update from actual expressions; never a prerecorded picture.',
   },
   {
     id: 'water',
@@ -46,13 +46,30 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
       return response.json();
     }, id);
   }
+  async function waitForStableBoundingBox(locator) {
+    let previous = null;
+    let stableSince = 0;
+    await expect.poll(async () => {
+      const box = await locator.boundingBox();
+      if (!box) { previous = null; stableSince = 0; return false; }
+      const current = [box.x, box.y, box.width, box.height];
+      const stable = previous !== null && current.every((value, index) => Math.abs(value - previous[index]) < 0.5);
+      if (stable) stableSince ||= Date.now();
+      else stableSince = 0;
+      previous = current;
+      return stableSince > 0 && Date.now() - stableSince >= 180;
+    }, { timeout: 3_000, intervals: [50, 100, 150] }).toBe(true);
+  }
   async function object(page, id) {
     const editor = page.getByTestId('canvas-object-editor');
-    if (await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id) return editor;
-    const trigger = page.getByTestId('canvas-object-menu-trigger');
-    if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
-    await page.getByTestId(`open-canvas-${id}`).click();
-    await expect(editor).toHaveAttribute('data-canvas-object', id);
+    if (!(await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id)) {
+      const trigger = page.getByTestId('canvas-object-menu-trigger');
+      if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+      await page.getByTestId(`open-canvas-${id}`).click();
+      await expect(editor).toHaveAttribute('data-canvas-object', id);
+    }
+    await expect(editor).toBeVisible();
+    await waitForStableBoundingBox(editor);
     return editor;
   }
   const commandResponse = (page, type) => {
@@ -145,6 +162,25 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     const editor = await object(page, `table.view.${result.id}`);
     await expect(editor.locator('.tt-generated-metric')).toContainText(String(Math.round(expected * 100) / 100));
   }
+  function assertShadowScene(view) {
+    const point = view.domain.records.lights.find(row => row.id === 'main')?.values;
+    expect(point).toBeTruthy();
+    if (!point) throw Error('The shadow source record is missing.');
+    const outputs = evaluateGenerativeCanvas(view.domain.program.canvas, {
+      program: view.domain.program, records: view.domain.records, actor: view.actor.actorId, seat: view.actor.seat ?? 'host', turn: view.domain.turn,
+    });
+    const scenes = outputs.filter(item => item.kind === 'scene');
+    expect(scenes).toHaveLength(1);
+    const segments = scenes[0].elements.filter(element => element.shape === 'line'
+      && Math.abs(element.x1 - 50) < 0.001
+      && Math.abs(element.y1 - 50) < 0.001
+      && Math.abs(element.y2 - 90) < 0.001);
+    expect(segments).toHaveLength(1);
+    const expectedShadowX = point.light_x + (90 - point.light_y) * (50 - point.light_x) / (50 - point.light_y);
+    expect(segments[0].x2).toBeCloseTo(expectedShadowX, 5);
+    expect(segments[0].y2).toBeCloseTo(90, 5);
+    return expectedShadowX;
+  }
   const owner = await pageFor(actors[0]);
   try {
     for (const scenario of cases.filter(item => !selectedCase || item.id === selectedCase)) {
@@ -186,8 +222,10 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
           await metric(owner, view, 'unfinished-count', 0, 'Remaining orders');
           mark('cafe: actual UI actions calculate 3 then 8; a real AI edit grows a new card while retaining finished orders');
         } else if (scenario.id === 'shadow') {
+          assertShadowScene(view);
           await metric(owner, view, 'shadow-x', 80);
           view = await act(owner, room.id, 'move_light', { light: 'main', x: 30, y: 10 });
+          assertShadowScene(view);
           await metric(owner, view, 'shadow-x', 70);
           const scene = view.domain.program.canvas.views.find(item => item.kind === 'scene');
           const editor = await object(owner, `table.view.${scene.id}`);
@@ -196,15 +234,24 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
           const handle = editor.getByRole('button', { name: `Move ${lightShapes[0].id}`, exact: true });
           await expect(handle).toBeVisible();
           const box = await handle.boundingBox();
+          expect(box).not.toBeNull();
+          if (!box) throw Error('The draggable light has no visible bounds.');
+          const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
           const response = commandResponse(owner, 'table.act');
-          await owner.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await owner.mouse.move(start.x, start.y);
+          const hitTarget = await owner.evaluate(({ x, y }) => {
+            const hit = document.elementFromPoint(x, y);
+            return Boolean(hit?.closest('.tt-generated-scene__shape[aria-label="Move light-source"]'));
+          }, start);
+          expect(hitTarget).toBe(true);
           await owner.mouse.down();
-          await owner.mouse.move(box.x + box.width / 2 + 28, box.y + box.height / 2, { steps: 8 });
+          await owner.mouse.move(start.x + 28, start.y, { steps: 8 });
           await owner.mouse.up();
           expect((await response).status()).toBe(200);
           view = await read(owner, room.id);
           const point = view.domain.records.lights.find(row => row.id === 'main').values;
           expect(point.light_x).not.toBe(30);
+          assertShadowScene(view);
           await metric(owner, view, 'shadow-x', point.light_x + (90 - point.light_y) * (50 - point.light_x) / (50 - point.light_y));
           mark('shadow: independent geometry oracle gives 80 then 70; actual pointer drag commits coordinates and recomputes the shadow');
         } else {

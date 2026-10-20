@@ -20,7 +20,10 @@ await mkdir(output, { recursive: true });
 // Preserve each previous trial, including rejected live proposals, before a rerun.
 const archive = resolve(output, 'runs', new Date().toISOString().replace(/[:.]/g, '-'));
 await mkdir(archive, { recursive: true });
-for (const name of ['live-api-acceptance.json', 'live-ai-receipts.json', 'fixture-api-acceptance.json', 'report.json', 'cafe-generated.json', 'shadow-generated.json', 'water-generated.json']) {
+for (const name of [
+  'live-api-acceptance.json', 'live-ai-receipts.json', 'fixture-api-acceptance.json', 'report.json',
+  ...['cafe', 'shadow', 'water'].flatMap(id => [`${id}-generated.json`, `${id}-played.png`, `${id}-failure.png`]),
+]) {
   try { await copyFile(resolve(output, name), resolve(archive, name)); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
