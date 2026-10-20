@@ -10,7 +10,7 @@
 
 ## Narrative and voice
 
-Tell the public story in this order: **Human → Frustration → Belief → Tabletop → Real Experience → Proof**. Keep the voice warm, tactile, quietly confident, human, and a little poetic while grounded in real work. Keep public copy provider-neutral and supported by product evidence. The working Canvas stays free of slogans: use concise, task-focused labels and guidance there.
+The hero may open with the Brand Belief and a simple invitation. Develop the body of the public story in this order: **Human → Frustration → Belief → Tabletop → Real Experience → Proof**. Keep the voice warm, tactile, quietly confident, human, and a little poetic while grounded in real work. Keep public copy provider-neutral and supported by product evidence. The working Canvas stays free of slogans: use concise, task-focused labels and guidance there.
 
 ## Who
 
