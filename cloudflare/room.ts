@@ -72,6 +72,8 @@ interface PublicModelJob {
   status: 'running' | 'completed' | 'failed';
   message?: string;
   candidateId?: string;
+  /** Questions for the owner when the model asked instead of drafting (F012). */
+  questions?: string[];
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -309,6 +311,8 @@ function modelJobView(job: RoomModelJob): PublicModelJob {
     id: job.id,
     status: 'completed',
     ...(typeof job.data.candidateId === 'string' ? { candidateId: job.data.candidateId } : {}),
+    ...(Array.isArray(job.data.questions) && job.data.questions.every((item) => typeof item === 'string')
+      ? { questions: job.data.questions as string[] } : {}),
   };
 }
 
@@ -1221,6 +1225,13 @@ export class Room extends DurableObject<Env> {
       job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
       if (!job || job.status !== 'running') return;
       requireWorkspaceWritable(this.env, authorized.workspace.kind);
+
+      if ('questions' in proposal) {
+        // Nothing to commit: the owner answers in the chat and asks again.
+        await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
+          input.actorId, 'completed', { ...initialData, questions: proposal.questions });
+        return;
+      }
 
       const envelope = {
         commandId: input.commandId,

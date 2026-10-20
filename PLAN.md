@@ -30,6 +30,7 @@
 | F005 | สร้างภาพ สูตร และเครื่องมือใหม่บน Canvas พร้อม shared layout | `done` (#24 → dev) | [F005](docs/features/F005-generative-canvas.md) |
 | F006 | โต๊ะข้อมูลเริ่มจากแชท: แชทแถวเดียวกึ่งกลางล่าง · โต๊ะว่างไม่มีการ์ด · คำตอบเป็นการ์ด | `done` (#30 → dev; T7 เอกสารส่งต่อแยก) | [F006](docs/features/F006-chat-first-table.md) |
 | F007 | ตำแหน่งการ์ดเป็นของทั้งโต๊ะ ทุกคนเห็นเหมือนกัน | `review` | [F007](docs/features/F007-shared-card-layout.md) |
+| F012 | AI ถามกลับแทนการร่างกฎเมื่อโจทย์ยังไม่พอ | `review` | [F012](docs/features/F012-ai-clarifying-questions.md) |
 
 ## งาน
 
@@ -77,3 +78,4 @@
 | F007-T1 | ขยายการ์ดที่ใช้ตำแหน่งร่วม + ตำแหน่งเริ่มต้น + ลองส่งใหม่เมื่อชน | `review` | Claude Code | `feat/F007-shared-layout` | `src/tabletop/shared/canvas-layout-ids.ts` (ใหม่), `domain/canvas-layout.ts`, `ui/CanvasWorkspace.tsx`, `TabletopApp.tsx` (runCommand) | — | ชนกับ #30 ที่ `CanvasWorkspace.tsx` (prop `onEditRules`) เล็กน้อย |
 | F008-T1 | ไฟล์บนโต๊ะเห็นได้และเพิ่มได้ทุกคนที่ถูกเชิญ (ลบเฉพาะเจ้าของ) + การ์ด Files ตำแหน่งร่วม | `review` | Claude Code | `feat/F008-shared-files` | `domain/projections.ts`, `runtime/index.ts`, `canvas-layout*.ts`, `TableCanvasObjects.tsx`, `TableChat.tsx`, `table-chat-consent.ts`, `AIProposal.tsx`, tests, docs | — | [F008](docs/features/F008-shared-table-files.md) |
 | F009-T1 | เห็นเมาส์ของแต่ละคนพร้อมชื่อบน Canvas (live cursors) | `review` | Claude Code | `feat/F009-live-cursors` | `src/tabletop/shared/cursor-protocol.ts` (ใหม่), `ui/live-cursors.tsx` (ใหม่), `cloudflare/room.ts` (webSocketMessage), `server/app.ts` (socket), `client.ts` (subscribe), `CanvasWorkspace.tsx`, `TabletopApp.tsx`, tests | — | [F009](docs/features/F009-live-cursors.md) · ชน F008 ที่ PLAN/CHANGELOG/generic-table-browser.mjs เล็กน้อย |
+| F012 | AI ถามกลับ 1–3 ข้อแทนการร่างกฎเมื่อโจทย์ไม่พอ + การ์ดคำถามในแชท | `review` | JitrudeeDongdee (Claude) | `feat/F012-ai-clarifying-questions` | `server/providers/deepseek-changes.ts`, `cloudflare/ai.ts`, `cloudflare/room.ts`, `src/tabletop/client.ts`, `useTableChat.tsx`, `table-chat.css` | — | hotspot `cloudflare/room.ts` · [F012](docs/features/F012-ai-clarifying-questions.md) |

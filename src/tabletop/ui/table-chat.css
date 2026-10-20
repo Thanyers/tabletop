@@ -52,3 +52,10 @@
 
 /* The bar's own border shows focus; drop the app-wide blue field outline inside it. */
 .tt-app .tt-table-chat-bar__box textarea:focus, .tt-app .tt-table-chat-bar__box textarea:focus-visible { outline: none; box-shadow: none; }
+
+/* The AI asked questions instead of drafting rules (F012). */
+.tt-app .tt-chat-card__questions { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tt-app .tt-chat-card__questions button { width: 100%; padding: 8px 12px; border: 1px solid var(--tt-line); border-radius: 12px; background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: 13px; line-height: 1.45; text-align: left; cursor: pointer; }
+.tt-app .tt-chat-card__questions button:hover:not(:disabled) { border-color: #24796b; }
+.tt-app .tt-chat-card__questions button:focus-visible { outline: 2px solid #24796b; outline-offset: 2px; }
+.tt-app .tt-chat-card__hint { color: var(--tt-muted); font-size: 12px; }
