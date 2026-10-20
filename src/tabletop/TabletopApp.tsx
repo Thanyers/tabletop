@@ -475,7 +475,8 @@ export default function TabletopApp() {
           const fresh = await tabletopClient.workspace(current.id);
           if (workspaceRef.current?.id === current.id) setWorkspace(fresh);
           await refreshSession().catch(() => undefined);
-          showNotice('This table changed elsewhere. The latest version is loaded; review and repeat your edit if it still applies.', 'error');
+          // Someone else moved a card; the Canvas retries quietly on the newer layout (F007).
+          if (error.code !== 'STALE_LAYOUT') showNotice('This table changed elsewhere. The latest version is loaded; review and repeat your edit if it still applies.', 'error');
         } catch (refreshError) { showNotice(errorText(refreshError), 'error'); }
       } else showNotice(errorText(error), 'error');
       return null;

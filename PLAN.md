@@ -28,6 +28,7 @@
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
 | F005 | สร้างภาพ สูตร และเครื่องมือใหม่บน Canvas พร้อม shared layout | `review` | [F005](docs/features/F005-generative-canvas.md) |
+| F007 | ตำแหน่งการ์ดเป็นของทั้งโต๊ะ ทุกคนเห็นเหมือนกัน | `review` | [F007](docs/features/F007-shared-card-layout.md) |
 
 ## งาน
 
@@ -64,3 +65,4 @@
 | CI001 | ESLint ใน CI (ห้าม `any`/`@ts-ignore`) + pre-commit hook husky | `review` | JitrudeeDongdee (Claude) | `feat/CI001-eslint-husky` | `eslint.config.js` (ใหม่), `.husky/` (ใหม่), `package.json`, `package-lock.json`, `.github/workflows/validate.yml`, `scripts/check-public-files.mjs`, `.gitignore`, `CONTRIBUTING.md`, `AGENTS.md` | — | |
 | CI002 | เคลียร์ ESLint warning แล้วเลื่อนกฎเป็น error | `todo` | — | — | ทั่ว repo, `eslint.config.js` | CI001 | แตกตามโฟลเดอร์ ระวัง hotspot |
 | CI003 | ย้าย guard ของ workbench ให้ hook ไม่ถูกเรียกแบบมีเงื่อนไข | `review` | JitrudeeDongdee (Claude) | `fix/CI003-workbench-hooks` | `src/tabletop/ui/{Encounter,Invoice,Teaching}Workbench.tsx`, `eslint.config.js` | CI001 | บั๊กแฝง ดู spec ถัดไป ข้อ 7 |
+| F007-T1 | ขยายการ์ดที่ใช้ตำแหน่งร่วม + ตำแหน่งเริ่มต้น + ลองส่งใหม่เมื่อชน | `review` | Claude Code | `feat/F007-shared-layout` | `src/tabletop/shared/canvas-layout-ids.ts` (ใหม่), `domain/canvas-layout.ts`, `ui/CanvasWorkspace.tsx`, `TabletopApp.tsx` (runCommand) | — | ชนกับ #30 ที่ `CanvasWorkspace.tsx` (prop `onEditRules`) เล็กน้อย |
