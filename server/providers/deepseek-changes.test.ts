@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DomainError } from '../../src/tabletop/shared/contracts.js';
 import { tableScenarioSources, equipmentChange } from '../../src/tabletop/testing/table-scenarios.js';
-import { DeepSeekChangeProvider, measureDeepSeekChangeRequest, type DeepSeekChangeInput } from './deepseek-changes.js';
+import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeRequest, type DeepSeekChangeInput } from './deepseek-changes.js';
 
 const API_KEY = 'test-only-deepseek-key';
 
@@ -161,6 +161,59 @@ describe('DeepSeekChangeProvider', () => {
     await expect(provider.propose(oversized, new AbortController().signal))
       .rejects.toMatchObject({ code: 'MODEL_PROVIDER_INPUT_TOO_LARGE' });
     expect(calls).toBe(0);
+  });
+
+  it('returns bounded nested schema diagnostics and metered usage for a rejected scene expression wrapper', async () => {
+    const tableChange = equipmentChange('source_equipment');
+    const invalidOutput: unknown = {
+      ...tableChange,
+      program: {
+        ...tableChange.program,
+        canvas: {
+          version: 1,
+          views: [{
+            id: 'repair_scene',
+            kind: 'scene',
+            title: 'Repair scene',
+            width: 320,
+            height: 200,
+            elements: [{
+              id: 'wrapped_width',
+              shape: 'rect',
+              x: 0,
+              y: 0,
+              width: { expression: { op: 'math', fn: 'multiply', args: [{ op: 'literal', value: 2 }, { op: 'literal', value: 4 }] } },
+              height: 20,
+            }],
+          }],
+        },
+      },
+    };
+    const content = JSON.stringify(invalidOutput);
+    const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(content) });
+    let rejection: unknown;
+    try {
+      await provider.propose({
+        kind: 'table',
+        prompt: 'Show a computed rectangle width.',
+        sources: [{ id: 'source_equipment', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
+        program: null,
+        turn: null,
+      }, new AbortController().signal);
+    } catch (error: unknown) {
+      rejection = error;
+    }
+
+    expect(rejection).toBeInstanceOf(RejectedChangeReply);
+    if (!(rejection instanceof RejectedChangeReply)) throw new Error('Expected a metered rejected reply.');
+    expect(rejection.usage).toEqual({ promptTokens: 40, completionTokens: 30, cacheHitTokens: 10, cacheMissTokens: 30, reasoningTokens: 0 });
+    expect(rejection.issues).toHaveLength(1);
+    expect(rejection.issues[0]).toContain('program.canvas.views[0].elements[0].width');
+    expect(rejection.issues[0]).toContain('expected number, received object');
+    expect(rejection.issues[0]).toContain('pass the AST directly');
+    expect(rejection.issues.length).toBeLessThanOrEqual(4);
+    expect(rejection.issues.every(issue => issue.length <= 1_000)).toBe(true);
+    expect(rejection.previousOutput).toBe(content.slice(0, 18_000));
   });
 
   it('rejects malformed envelopes, bad usage, provider errors, and oversized bodies without leaking details', async () => {

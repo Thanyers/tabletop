@@ -1,0 +1,279 @@
+.tt-generated-canvas,
+.tt-generated-preview,
+.tt-generated-control,
+.tt-generated-chart,
+.tt-generated-scene-wrap {
+  min-width: 0;
+}
+
+.tt-generated-canvas {
+  overflow: hidden;
+}
+
+.tt-generated-canvas__error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--tt-radius-small);
+  color: var(--tt-muted);
+  background: color-mix(in srgb, var(--tt-blue) 6%, var(--tt-paper));
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.tt-generated-metric {
+  display: flex;
+  align-items: baseline;
+  min-height: 72px;
+  padding: 14px 2px 6px;
+  color: var(--tt-ink);
+  font-size: clamp(27px, 7vw, 42px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.tt-generated-metric strong {
+  transition: color 140ms ease;
+}
+
+.tt-generated-chart > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  overflow: visible;
+}
+
+.tt-generated-chart__axis {
+  stroke: var(--tt-line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tt-generated-chart__tick,
+.tt-generated-chart__label {
+  fill: var(--tt-muted);
+  font-family: inherit;
+  font-size: 9px;
+}
+
+.tt-generated-chart__label {
+  font-size: 8px;
+}
+
+.tt-generated-chart rect,
+.tt-generated-chart circle,
+.tt-generated-chart path {
+  transition: x 120ms ease, y 120ms ease, width 120ms ease, height 120ms ease,
+    cx 120ms ease, cy 120ms ease, r 120ms ease, d 120ms ease;
+}
+
+.tt-generated-chart__data {
+  margin-top: 2px;
+}
+
+.tt-generated-chart__data > summary {
+  width: fit-content;
+  color: var(--tt-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tt-generated-chart__data[open] .tt-table-grid-scroll {
+  max-height: 240px;
+  margin-top: 8px;
+}
+
+.tt-generated-scene-wrap {
+  display: grid;
+  gap: 5px;
+}
+
+.tt-generated-scene {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-small);
+  background: var(--tt-cream-0);
+  touch-action: pan-x pan-y;
+}
+
+.tt-generated-scene__background {
+  fill: var(--tt-cream-0);
+}
+
+.tt-generated-scene__shape {
+  vector-effect: non-scaling-stroke;
+  transition: x 120ms ease, y 120ms ease, width 120ms ease, height 120ms ease,
+    cx 120ms ease, cy 120ms ease, r 120ms ease, x1 120ms ease, y1 120ms ease,
+    x2 120ms ease, y2 120ms ease, points 120ms ease;
+}
+
+.tt-generated-scene__shape.is-draggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.tt-generated-scene__shape.is-draggable:focus-visible {
+  outline: 3px solid var(--tt-blue);
+  outline-offset: 3px;
+}
+
+.tt-generated-scene.is-dragging,
+.tt-generated-scene.is-dragging .tt-generated-scene__shape.is-draggable {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.tt-generated-controls {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tt-generated-control {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tt-generated-control__button {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+}
+
+.tt-generated-control__button small,
+.tt-generated-control__range small,
+.tt-generated-control__toggle small,
+.tt-generated-control__select small {
+  color: var(--tt-muted);
+  font-size: 11px;
+}
+
+.tt-generated-control__range,
+.tt-generated-control__select,
+.tt-generated-control__toggle {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--tt-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.tt-generated-control__range label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tt-generated-control__range output {
+  color: var(--tt-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-generated-control__range input[type='range'] {
+  width: 100%;
+  min-height: 36px;
+  accent-color: var(--tt-moss);
+  touch-action: pan-y;
+}
+
+.tt-generated-control__select select,
+.tt-generated-control__form input,
+.tt-generated-control__form select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--tt-line);
+  border-radius: 5px;
+  color: var(--tt-ink);
+  background: var(--tt-paper);
+  font: inherit;
+}
+
+.tt-generated-control__toggle {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 40px;
+}
+
+.tt-generated-control__toggle input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--tt-moss);
+}
+
+.tt-generated-control__toggle small {
+  grid-column: 1 / -1;
+}
+
+.tt-generated-control__form {
+  min-width: 0;
+  margin: 0;
+}
+
+.tt-generated-control__form header {
+  align-items: center;
+}
+
+.tt-generated-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tt-line);
+}
+
+.tt-generated-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tt-generated-preview__views {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 10px;
+}
+
+.tt-generated-preview__views > .tt-canvas-inline {
+  padding: 12px;
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-medium);
+  background: var(--tt-card-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-generated-canvas *,
+  .tt-generated-canvas *::before,
+  .tt-generated-canvas *::after,
+  .tt-generated-preview *,
+  .tt-generated-preview *::before,
+  .tt-generated-preview *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .tt-generated-chart__tick {
+    font-size: 8px;
+  }
+
+  .tt-generated-chart__label {
+    font-size: 7px;
+  }
+
+  .tt-generated-preview__views {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

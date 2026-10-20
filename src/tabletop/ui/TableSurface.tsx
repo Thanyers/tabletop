@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { AlertCircle, MessageCircle } from 'lucide-react';
 import { CanvasWorkspace, type CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { EncounterWorkbench } from './EncounterWorkbench';
@@ -6,6 +6,7 @@ import { InvoiceWorkbench } from './InvoiceWorkbench';
 import { TeachingWorkbench } from './TeachingWorkbench';
 import { MemberStrip } from './WorkbenchShared';
 import { createCanvasAuxiliaryObjects } from './CanvasAuxiliaryObjects';
+import { assistantIsInUse, readAssistantIdleMs } from './assistant-idle';
 import type { ExecutablePlan, WorkbenchProps } from './types';
 
 export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
@@ -27,6 +28,7 @@ export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   emptyContent?: ReactNode;
   openedObjectId?: string | null;
   onOpenObject?: (id: string | null) => void;
+  onEditRules?: () => void;
   onInvite?: () => void;
   aiContent?: ReactNode;
   assistantContent?: ReactNode;
@@ -61,6 +63,7 @@ export function TableSurface({
   emptyContent,
   openedObjectId,
   onOpenObject,
+  onEditRules,
   onInvite,
   aiContent,
   assistantContent,
@@ -79,16 +82,48 @@ export function TableSurface({
     observer.observe(panel);
     return () => observer.disconnect();
   }, [hasAssistant]);
+  const idleMs = useMemo(readAssistantIdleMs, []);
+  const [assistantCollapsed, setAssistantCollapsed] = useState(false);
+  useEffect(() => {
+    const panel = assistantPanelRef.current;
+    if (!hasAssistant || assistantCollapsed || idleMs === null || !panel) return;
+    let timer = 0;
+    const restart = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (assistantIsInUse(panel, document.activeElement)) restart();
+        else setAssistantCollapsed(true);
+      }, idleMs);
+    };
+    const events = ['pointerdown', 'keydown', 'input', 'focusin', 'wheel'] as const;
+    for (const type of events) panel.addEventListener(type, restart);
+    restart();
+    return () => {
+      window.clearTimeout(timer);
+      for (const type of events) panel.removeEventListener(type, restart);
+    };
+  }, [hasAssistant, assistantCollapsed, idleMs]);
+  const focusAssistantInput = useCallback(() => {
+    const panel = assistantPanelRef.current;
+    const input = panel?.querySelector<HTMLTextAreaElement>('#tt-table-chat-prompt:not(:disabled)')
+      ?? panel?.querySelector<HTMLTextAreaElement>('#tt-ai-prompt:not(:disabled)')
+      ?? panel?.querySelector<HTMLTextAreaElement>('textarea:not([disabled])');
+    input?.focus();
+  }, []);
+  const expandAssistant = useCallback(() => {
+    setAssistantCollapsed(false);
+    window.requestAnimationFrame(focusAssistantInput);
+  }, [focusAssistantInput]);
   const focusCanvasObject = useMemo(() => onFocusObject ?? (onOpenObject ? (id: string) => { onSelectNode(id); onOpenObject(id); } : undefined), [onFocusObject, onOpenObject, onSelectNode]);
   const mergedAuxiliaryObjects = useMemo(() => {
     const merged = new Map(createCanvasAuxiliaryObjects({ view, onCommand, busy, onInvite, aiContent, onFocusObject: focusCanvasObject }).map((object) => [object.id, object]));
     for (const object of auxiliaryObjects ?? []) merged.set(object.id, object);
     if (assistantContent) merged.set('workspace.ai', {
       id: 'workspace.ai', title: 'Assistant',
-      content: <div className="tt-canvas-inline"><p>Questions, ideas and rule drafts for this table.</p><button type="button" className="tt-button tt-button--quiet" onClick={() => { const input = document.getElementById('tt-table-chat-prompt') ?? document.getElementById('tt-ai-prompt'); input?.focus(); }}><MessageCircle size={15} />Write a message</button></div>,
+      content: <div className="tt-canvas-inline"><p>Questions, ideas and rule drafts for this table.</p><button type="button" className="tt-button tt-button--quiet" onClick={expandAssistant}><MessageCircle size={15} />Write a message</button></div>,
     });
     return [...merged.values()];
-  }, [view, onCommand, busy, onInvite, aiContent, assistantContent, focusCanvasObject, auxiliaryObjects]);
+  }, [view, onCommand, busy, onInvite, aiContent, assistantContent, focusCanvasObject, auxiliaryObjects, expandAssistant]);
   const layoutSurface = view.kind === 'table' && assistantContent ? 'canvas' : surface;
 
   return (
@@ -129,6 +164,7 @@ export function TableSurface({
             emptyContent={emptyContent}
             openedObjectId={openedObjectId}
             onOpenObject={onOpenObject}
+            onEditRules={onEditRules}
           />
         ) : (
           <div className="tt-plan-error" role="alert">
@@ -139,7 +175,8 @@ export function TableSurface({
           </div>
         )}
         {promptContent}
-        {assistantContent && <aside ref={assistantPanelRef} className="tt-table-assistant-panel" data-testid="table-assistant-panel" aria-label="Table assistant">
+        {assistantContent && <aside ref={assistantPanelRef} className={`tt-table-assistant-panel${assistantCollapsed ? ' is-collapsed' : ''}`} data-testid="table-assistant-panel" data-collapsed={assistantCollapsed} aria-label="Table assistant">
+          {assistantCollapsed && <button type="button" className="tt-assistant-bubble" data-testid="table-assistant-bubble" aria-label="Open table assistant" aria-expanded="false" onClick={expandAssistant}><MessageCircle size={22} aria-hidden="true" /></button>}
           {assistantContent}
         </aside>}
       </section>

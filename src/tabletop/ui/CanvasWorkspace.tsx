@@ -8,6 +8,8 @@ import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
 import { dedupeVisibleCanvasConnections } from './canvas-flow';
+import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
+import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNodeIds } from './canvas-layout-scope';
 import './canvas-visual-flow.css';
 
 export { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds };
@@ -40,6 +42,7 @@ interface PlanCanvasNodeData extends CanvasNodeBaseData {
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
+  onEditRules?: () => void;
 }
 
 interface AuxiliaryCanvasNodeData extends CanvasNodeBaseData {
@@ -61,8 +64,47 @@ export interface CanvasAuxiliaryObject {
 }
 
 interface SavedCanvasLayout {
-  positions: Record<string, { x: number; y: number }>;
+  positions: Record<string, CanvasPoint & { pinned?: boolean }>;
   viewport?: { centerX: number; centerY: number; zoom: number };
+}
+
+interface SharedCanvasLayout {
+  revision: number;
+  positions: Record<string, CanvasPoint & { pinned?: boolean }>;
+}
+
+interface OpenObjectFocusRequest {
+  id: string;
+  sequence: number;
+  interactionRevision: number;
+  requireOpened: boolean;
+  returnFocusToObjects: boolean;
+  started: boolean;
+  attempts: number;
+  frame?: number;
+  timer?: number;
+}
+
+function sharedLayoutForView(view: WorkspaceView): SharedCanvasLayout | null {
+  if (view.domain.kind !== 'table') return null;
+  const raw = (view.domain as unknown as { canvasLayout?: unknown }).canvasLayout;
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as { revision?: unknown; positions?: unknown };
+  if (!Number.isSafeInteger(candidate.revision) || !candidate.positions || typeof candidate.positions !== 'object') return null;
+  const positions: SharedCanvasLayout['positions'] = {};
+  for (const [id, point] of Object.entries(candidate.positions)) {
+    if (!isPosition(point)) continue;
+    positions[id] = { ...point, pinned: point.pinned !== false };
+  }
+  return { revision: Number(candidate.revision), positions };
+}
+
+function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean } {
+  if (!value || typeof value !== 'object') return false;
+  const point = value as { x?: unknown; y?: unknown; pinned?: unknown };
+  return Number.isFinite(point.x) && Number.isFinite(point.y)
+    && Math.abs(Number(point.x)) < 100_000 && Math.abs(Number(point.y)) < 100_000
+    && (point.pinned === undefined || typeof point.pinned === 'boolean');
 }
 
 const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
@@ -77,8 +119,8 @@ function readCanvasLayout(workspaceKey: string): SavedCanvasLayout {
     const positions: SavedCanvasLayout['positions'] = {};
     if (candidate.positions && typeof candidate.positions === 'object') {
       for (const [id, point] of Object.entries(candidate.positions)) {
-        if (point && Number.isFinite(point.x) && Number.isFinite(point.y) && Math.abs(point.x) < 100_000 && Math.abs(point.y) < 100_000) {
-          positions[id] = { x: point.x, y: point.y };
+        if (isPosition(point)) {
+          positions[id] = { x: point.x, y: point.y, pinned: point.pinned ?? true };
         }
       }
     }
@@ -292,7 +334,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
       {outputPorts.map((port, index) => <Handle key={`out-${port}`} type="source" position={Position.Right} id={port} style={portStyle(index, outputPorts.length)} />)}
       <CanvasObjectHeader data={data} />
       <div className="tt-canvas-node__body nodrag nopan nokey">
-        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
+        <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} onEditRules={data.onEditRules} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
       </div>
     </article>
   );
@@ -323,17 +365,94 @@ interface CanvasWorkspaceProps {
   emptyContent?: ReactNode;
   openedObjectId?: string | null;
   onOpenObject?: (id: string | null) => void;
+  onEditRules?: () => void;
 }
 
-function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject }: CanvasWorkspaceProps) {
+function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject, onEditRules }: CanvasWorkspaceProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, CanvasEdge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
-  const workspaceKey = view.id + ':' + view.epoch;
+  const workspaceKey = canvasLayoutScopeKey(view);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const sharedLayout = useMemo(() => sharedLayoutForView(view), [view]);
+  const remoteLayoutEnabled = persistLayout && view.kind === 'table';
+  const sharedLayoutRef = useRef<SharedCanvasLayout | null>(sharedLayout);
+  const sharedLayoutWorkspaceRef = useRef(workspaceKey);
+  if (sharedLayoutWorkspaceRef.current !== workspaceKey) {
+    sharedLayoutWorkspaceRef.current = workspaceKey;
+    sharedLayoutRef.current = sharedLayout;
+  } else if (sharedLayout && (!sharedLayoutRef.current || sharedLayout.revision >= sharedLayoutRef.current.revision)) {
+    sharedLayoutRef.current = sharedLayout;
+  }
   const layoutWorkspaceRef = useRef('');
   const workspacePositionsRef = useRef<SavedCanvasLayout['positions']>({});
   const pendingViewportRef = useRef<SavedCanvasLayout['viewport'] | undefined>(undefined);
   const initialViewPendingRef = useRef(false);
+  const pinnedNodeIdsRef = useRef(new Set<string>());
+  const draggingNodeIdsRef = useRef(new Set<string>());
+  const dragStartPositionsRef = useRef(new Map<string, CanvasPoint>());
+  const layoutCommandQueueRef = useRef(Promise.resolve());
+  const layoutScopeRef = useRef({ key: workspaceKey, generation: 0 });
+  const pendingSeedNodeIdsRef = useRef(new Set<string>());
+  const seedAttemptCountsRef = useRef(new Map<string, number>());
+  const layoutMoveSequenceRef = useRef(0);
+  const layoutBlockedThroughRef = useRef(0);
+  const appliedSharedLayoutRevisionRef = useRef<number | null>(null);
+  const layoutSnapshotRef = useRef<{ workspaceKey: string; ids: Set<string>; sizes: Map<string, { width: number; height: number }>; edges: Set<string>; signature: string } | null>(null);
+  const pendingOpenObjectFocusRef = useRef<OpenObjectFocusRequest | null>(null);
+  const openObjectFocusSequenceRef = useRef(0);
+  const canvasInteractionRevisionRef = useRef(0);
+  const [openObjectFocusSequence, setOpenObjectFocusSequence] = useState(0);
+  if (layoutScopeRef.current.key !== workspaceKey) {
+    layoutScopeRef.current = { key: workspaceKey, generation: layoutScopeRef.current.generation + 1 };
+    layoutCommandQueueRef.current = Promise.resolve();
+    pendingSeedNodeIdsRef.current.clear();
+    seedAttemptCountsRef.current.clear();
+    draggingNodeIdsRef.current.clear();
+    dragStartPositionsRef.current.clear();
+    layoutMoveSequenceRef.current = 0;
+    layoutBlockedThroughRef.current = 0;
+  }
+  useEffect(() => {
+    if (layoutScopeRef.current.key !== workspaceKey) {
+      layoutScopeRef.current = { key: workspaceKey, generation: layoutScopeRef.current.generation + 1 };
+    }
+    const mountedScope = layoutScopeRef.current;
+    const pendingSeedNodeIds = pendingSeedNodeIdsRef.current;
+    const seedAttemptCounts = seedAttemptCountsRef.current;
+    return () => {
+      if (layoutScopeRef.current !== mountedScope) return;
+      layoutScopeRef.current = { key: '', generation: mountedScope.generation + 1 };
+      layoutCommandQueueRef.current = Promise.resolve();
+      pendingSeedNodeIds.clear();
+      seedAttemptCounts.clear();
+    };
+  }, [workspaceKey]);
+  const cancelPendingOpenObjectFocus = useCallback(() => {
+    const request = pendingOpenObjectFocusRef.current;
+    if (!request) return;
+    if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
+    if (request.timer !== undefined) window.clearTimeout(request.timer);
+    pendingOpenObjectFocusRef.current = null;
+    canvasInteractionRevisionRef.current += 1;
+  }, []);
+  const requestOpenObjectFocus = useCallback((id: string, requireOpened: boolean, returnFocusToObjects: boolean) => {
+    cancelPendingOpenObjectFocus();
+    const sequence = ++openObjectFocusSequenceRef.current;
+    pendingOpenObjectFocusRef.current = {
+      id,
+      sequence,
+      interactionRevision: canvasInteractionRevisionRef.current,
+      requireOpened,
+      returnFocusToObjects,
+      started: false,
+      attempts: 0,
+    };
+    setOpenObjectFocusSequence(sequence);
+  }, [cancelPendingOpenObjectFocus]);
+  const [layoutReadyKey, setLayoutReadyKey] = useState('');
+  useEffect(() => { cancelPendingOpenObjectFocus(); }, [workspaceKey, cancelPendingOpenObjectFocus]);
   const [localPhysics, setLocalPhysics] = useState<PhysicsParams>(() => view.domain.kind === 'teaching' ? view.domain.parameters : { force: 10, mass: 2, time: 2 });
   const localPhysicsDirty = useRef(false);
   const localPhysicsWorkspace = useRef('');
@@ -346,6 +465,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
   const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
+  const activeOpenedIdRef = useRef(activeOpenedId);
+  activeOpenedIdRef.current = activeOpenedId;
   const [objectsMenuOpen, setObjectsMenuOpen] = useState(false);
   const [previousView, setPreviousView] = useState<{ x: number; y: number; zoom: number } | null>(null);
   useEffect(() => { setPreviousView(null); }, [view.id, view.epoch]);
@@ -357,13 +478,12 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const [revisionNotice, setRevisionNotice] = useState<{ key: string; message: string } | null>(null);
 
   useEffect(() => {
-    const workspaceKey = view.id + ':' + view.epoch;
     if (localPhysicsWorkspace.current !== workspaceKey || !localPhysicsDirty.current) {
       localPhysicsWorkspace.current = workspaceKey;
       localPhysicsDirty.current = false;
       if (teachingParams) setLocalPhysics(teachingParams);
     }
-  }, [view.id, view.epoch, teachingParams?.force, teachingParams?.mass, teachingParams?.time]);
+  }, [workspaceKey, teachingParams?.force, teachingParams?.mass, teachingParams?.time]);
   const changeLocalPhysics = useCallback((next: PhysicsParams) => {
     localPhysicsDirty.current = true;
     setLocalPhysics(next);
@@ -373,21 +493,98 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     if (view.domain.kind === 'teaching') setLocalPhysics(view.domain.parameters);
   }, [view]);
 
-  const rememberPosition = useCallback((id: string, position: { x: number; y: number }) => {
-    workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: position };
+  const rememberPosition = useCallback((id: string, position: CanvasPoint) => {
+    const saved = { ...position, pinned: true };
+    pinnedNodeIdsRef.current.add(id);
+    workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: saved };
     if (!persistLayout) return;
     const layout = readCanvasLayout(workspaceKey);
-    layout.positions[id] = position;
+    layout.positions[id] = saved;
     writeCanvasLayout(workspaceKey, layout);
   }, [persistLayout, workspaceKey]);
 
+  const commitUserPosition = useCallback((id: string, position: CanvasPoint, before?: CanvasPoint) => {
+    const scope = layoutScopeRef.current;
+    if (scope.key !== workspaceKey) return;
+    rememberPosition(id, position);
+    if (!remoteLayoutEnabled || !isSharedCanvasNodeForView(id, view)) return;
+    const sequence = ++layoutMoveSequenceRef.current;
+    const isCurrentScope = () => layoutScopeRef.current === scope;
+    const revertToCanonical = () => {
+      if (!isCurrentScope()) return;
+      const canonical = sharedLayoutRef.current?.positions[id] ?? before;
+      if (!canonical) return;
+      workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: canonical };
+      setNodes((current) => current.map((node) => node.id === id ? { ...node, position: { x: canonical.x, y: canonical.y } } : node));
+    };
+    const applyCanonicalLayout = (canonicalLayout: SharedCanvasLayout, canonicalView: WorkspaceView) => {
+      if (!isCurrentScope()) return;
+      sharedLayoutRef.current = canonicalLayout;
+      appliedSharedLayoutRevisionRef.current = canonicalLayout.revision;
+      const canonical = canonicalLayout.positions[id] ?? position;
+      const visibleCanonicalPositions = new Map<string, CanvasPoint>();
+      for (const [nodeId, point] of Object.entries(canonicalLayout.positions)) {
+        if (!isSharedCanvasNodeForView(nodeId, canonicalView)) continue;
+        workspacePositionsRef.current = { ...workspacePositionsRef.current, [nodeId]: { ...point, pinned: true } };
+        pinnedNodeIdsRef.current.add(nodeId);
+        visibleCanonicalPositions.set(nodeId, point);
+      }
+      workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: { ...canonical, pinned: true } };
+      setNodes((current) => current.map((node) => {
+        const point = visibleCanonicalPositions.get(node.id) ?? (node.id === id ? canonical : undefined);
+        return point ? { ...node, position: { x: point.x, y: point.y } } : node;
+      }));
+    };
+    const send = async () => {
+      if (!isCurrentScope()) return;
+      if (sequence <= layoutBlockedThroughRef.current) {
+        revertToCanonical();
+        return;
+      }
+      const attempt = async (expectedLayoutRevision: number) => {
+        if (!isCurrentScope()) return null;
+        try {
+          const updated = await onCommand('canvas.layout', { expectedLayoutRevision, positions: { [id]: { ...position, pinned: true } } });
+          return isCurrentScope() && updated && canvasLayoutScopeKey(updated) === workspaceKey ? updated : null;
+        } catch {
+          return null;
+        }
+      };
+      const expectedLayoutRevision = sharedLayoutRef.current?.revision ?? 0;
+      let updated = await attempt(expectedLayoutRevision);
+      if (!updated) {
+        if (!isCurrentScope()) return;
+        // Someone else may have moved a different card at the same moment. Retry once on
+        // the newer layout, but only if nobody moved this card in between (F007).
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
+        if (!isCurrentScope()) return;
+        const latest = sharedLayoutRef.current;
+        const latestPoint = latest?.positions[id];
+        const untouched = !latestPoint || (before !== undefined && Math.abs(latestPoint.x - before.x) < 0.5 && Math.abs(latestPoint.y - before.y) < 0.5);
+        if (latest && latest.revision !== expectedLayoutRevision && untouched && sequence > layoutBlockedThroughRef.current) {
+          updated = await attempt(latest.revision);
+        }
+      }
+      if (!isCurrentScope()) return;
+      if (!updated) {
+        layoutBlockedThroughRef.current = Math.max(layoutBlockedThroughRef.current, layoutMoveSequenceRef.current);
+        revertToCanonical();
+        return;
+      }
+      const canonicalLayout = sharedLayoutForView(updated);
+      if (canonicalLayout) applyCanonicalLayout(canonicalLayout, updated);
+    };
+    layoutCommandQueueRef.current = layoutCommandQueueRef.current.then(send, send);
+  }, [onCommand, remoteLayoutEnabled, rememberPosition, setNodes, view, workspaceKey]);
+
   const moveCanvasObject = useCallback((id: string, dx: number, dy: number) => {
+    cancelPendingOpenObjectFocus();
     const node = flow.getNode(id);
     if (!node) return;
     const position = { x: node.position.x + dx * 48, y: node.position.y + dy * 48 };
-    rememberPosition(id, position);
     setNodes((current) => current.map((candidate) => candidate.id === id ? { ...candidate, position } : candidate));
-  }, [flow, rememberPosition, setNodes]);
+    commitUserPosition(id, position, node.position);
+  }, [cancelPendingOpenObjectFocus, commitUserPosition, flow, setNodes]);
 
   useEffect(() => {
     if (!objectsMenuOpen) return;
@@ -425,25 +622,145 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode]);
   const navigateToObject = useCallback((id: string) => {
     if (!nodes.some((node) => node.id === id)) return;
+    cancelPendingOpenObjectFocus();
     setPreviousView(flow.getViewport());
     if (openedObjectId === undefined) setInternalOpenedId(id);
     onOpenObject?.(id);
     onSelectNode(id);
     setObjectsMenuOpen(false);
-    window.requestAnimationFrame(() => {
-      flow.fitView({ nodes: [{ id }], padding: 0.12, minZoom: 0.92, maxZoom: 1.15, duration: canvasMotionDuration(200) });
+    if (view.kind === 'table') {
+      lastFocusRequestRef.current = `${focusNodeId ?? ''}:${String(focusRequestKey ?? '')}`;
+      requestOpenObjectFocus(id, true, true);
+      return;
+    }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      flow.fitView({ nodes: [{ id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: canvasMotionDuration(200) });
       objectsButtonRef.current?.focus();
-    });
-  }, [flow, nodes, onOpenObject, openedObjectId, onSelectNode]);
+    }));
+  }, [cancelPendingOpenObjectFocus, flow, focusNodeId, focusRequestKey, nodes, onOpenObject, openedObjectId, onSelectNode, requestOpenObjectFocus, view.kind]);
+
+  useEffect(() => {
+    const request = pendingOpenObjectFocusRef.current;
+    if (!request || request.sequence !== openObjectFocusSequence) return;
+    if (request.requireOpened && activeOpenedId !== request.id) {
+      if (request.started) cancelPendingOpenObjectFocus();
+      return;
+    }
+    if (view.kind !== 'table') return;
+
+    request.started = true;
+    let disposed = false;
+    let previousGeometry = '';
+    let stableSince = 0;
+    let stableSamples = 0;
+    const cleanupRequest = () => {
+      if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
+      if (request.timer !== undefined) window.clearTimeout(request.timer);
+      request.frame = undefined;
+      request.timer = undefined;
+    };
+    const sampleGeometry = () => {
+      if (disposed || pendingOpenObjectFocusRef.current !== request) return;
+      if (request.interactionRevision !== canvasInteractionRevisionRef.current) {
+        cancelPendingOpenObjectFocus();
+        return;
+      }
+      if (request.requireOpened && activeOpenedId !== request.id) {
+        cancelPendingOpenObjectFocus();
+        return;
+      }
+
+      const node = flow.getNode(request.id);
+      const target = Array.from(flowWrapRef.current?.querySelectorAll<HTMLElement>('[data-canvas-object]') ?? [])
+        .find((element) => element.dataset.canvasObject === request.id);
+      const measuredWidth = node?.measured?.width;
+      const measuredHeight = node?.measured?.height;
+      const bounds = target?.getBoundingClientRect();
+      if (
+        node &&
+        typeof measuredWidth === 'number' && measuredWidth > 0 &&
+        typeof measuredHeight === 'number' && measuredHeight > 0 &&
+        bounds && bounds.width > 0 && bounds.height > 0
+      ) {
+        const geometry = [node.position.x, node.position.y, measuredWidth, measuredHeight, bounds.left, bounds.top, bounds.width, bounds.height]
+          .map((value) => String(Math.round(value * 2) / 2))
+          .join('|');
+        const now = performance.now();
+        if (geometry === previousGeometry) stableSamples += 1;
+        else {
+          previousGeometry = geometry;
+          stableSince = now;
+          stableSamples = 0;
+        }
+        if (stableSamples >= 3 && now - stableSince >= 90) {
+          cleanupRequest();
+          pendingOpenObjectFocusRef.current = null;
+          flow.fitView({ nodes: [{ id: request.id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: 0 });
+          if (request.returnFocusToObjects) objectsButtonRef.current?.focus();
+          return;
+        }
+      } else {
+        previousGeometry = '';
+        stableSince = 0;
+        stableSamples = 0;
+      }
+
+      request.attempts += 1;
+      if (request.attempts >= 180) {
+        cancelPendingOpenObjectFocus();
+        return;
+      }
+      request.timer = window.setTimeout(() => {
+        request.frame = window.requestAnimationFrame(sampleGeometry);
+      }, 32);
+    };
+
+    request.frame = window.requestAnimationFrame(sampleGeometry);
+    return () => {
+      disposed = true;
+      cleanupRequest();
+    };
+  }, [activeOpenedId, cancelPendingOpenObjectFocus, flow, openObjectFocusSequence, view.kind, workspaceKey]);
 
   useEffect(() => {
     const isNewWorkspace = layoutWorkspaceRef.current !== workspaceKey;
+    const visibleSharedIds = new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)].filter((id) => isSharedCanvasNodeForView(id, view)));
     const storedLayout = isNewWorkspace && persistLayout ? readCanvasLayout(workspaceKey) : null;
+    const remoteLayoutChanged = remoteLayoutEnabled && sharedLayout !== null
+      && (isNewWorkspace || (sharedLayout.revision >= (appliedSharedLayoutRevisionRef.current ?? -1)
+        && appliedSharedLayoutRevisionRef.current !== sharedLayout.revision));
     if (isNewWorkspace) {
       layoutWorkspaceRef.current = workspaceKey;
-      workspacePositionsRef.current = storedLayout?.positions ?? {};
+      workspacePositionsRef.current = { ...(storedLayout?.positions ?? {}) };
+      pinnedNodeIdsRef.current.clear();
+      for (const [id, point] of Object.entries(workspacePositionsRef.current)) {
+        if (remoteLayoutEnabled && isSharedCanvasNodeForView(id, view)) {
+          delete workspacePositionsRef.current[id];
+          continue;
+        }
+        if (point.pinned !== false) pinnedNodeIdsRef.current.add(id);
+      }
       pendingViewportRef.current = storedLayout?.viewport;
       initialViewPendingRef.current = true;
+    }
+    if (remoteLayoutChanged && sharedLayout) {
+      for (const id of Object.keys(workspacePositionsRef.current)) {
+        if (isSharedCanvasNodeForView(id, view)) delete workspacePositionsRef.current[id];
+      }
+      for (const [id, point] of Object.entries(sharedLayout.positions)) {
+        if (!isSharedCanvasNodeForView(id, view) || !visibleSharedIds.has(id)) continue;
+        workspacePositionsRef.current[id] = point;
+        if (point.pinned !== false) pinnedNodeIdsRef.current.add(id);
+      }
+      appliedSharedLayoutRevisionRef.current = sharedLayout.revision;
+    }
+    if (remoteLayoutEnabled && sharedLayout) {
+      for (const id of visibleSharedIds) {
+        const point = sharedLayout.positions[id];
+        if (!point) continue;
+        workspacePositionsRef.current[id] = point;
+        if (point.pinned !== false) pinnedNodeIdsRef.current.add(id);
+      }
     }
     setNodes((existing) => {
       const previousPositions = new Map(existing.map((node) => [node.id, node.position]));
@@ -452,7 +769,19 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         type: 'tabletopObject',
         ariaLabel: spec.title,
         dragHandle: '.tt-canvas-node__head',
-        position: (isNewWorkspace ? storedLayout?.positions[spec.id] : undefined) ?? previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec),
+        position: (() => {
+          const isShared = remoteLayoutEnabled && isSharedCanvasNodeForView(spec.id, view);
+          const remotePosition = isShared ? sharedLayout?.positions[spec.id] : undefined;
+          const isNewNode = !previousPositions.has(spec.id);
+          if ((isNewWorkspace || remoteLayoutChanged || isNewNode) && remotePosition && !draggingNodeIdsRef.current.has(spec.id)) return { x: remotePosition.x, y: remotePosition.y };
+          if (isNewWorkspace && !isShared) {
+            const localPosition = storedLayout?.positions[spec.id];
+            if (localPosition) return { x: localPosition.x, y: localPosition.y };
+          }
+          return previousPositions.get(spec.id)
+            ?? (!isShared ? workspacePositionsRef.current[spec.id] : undefined)
+            ?? defaultCanvasPosition(view.kind, spec);
+        })(),
         selected: spec.id === selectedNodeId,
         zIndex: activeOpenedId === spec.id ? 20 : spec.id === selectedNodeId ? 10 : 0,
         data: {
@@ -479,6 +808,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           localPhysics,
           onLocalPhysicsChange: changeLocalPhysics,
           onResetLocalPhysics: resetLocalPhysics,
+          onEditRules,
         },
       }));
       const maxY = visiblePlanNodes.reduce((maximum, spec) => Math.max(maximum, (previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec)).y), 0);
@@ -487,7 +817,17 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         type: 'tabletopObject',
         ariaLabel: object.title,
         dragHandle: '.tt-canvas-node__head',
-        position: (isNewWorkspace ? storedLayout?.positions[object.id] : undefined) ?? previousPositions.get(object.id) ?? workspacePositionsRef.current[object.id] ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 },
+        position: (() => {
+          // Table-wide cards (people, history) follow the shared layout like plan cards (F007).
+          const isShared = remoteLayoutEnabled && isSharedCanvasNodeForView(object.id, view);
+          const remotePosition = isShared ? sharedLayout?.positions[object.id] : undefined;
+          const isNewNode = !previousPositions.has(object.id);
+          if ((isNewWorkspace || remoteLayoutChanged || isNewNode) && remotePosition && !draggingNodeIdsRef.current.has(object.id)) return { x: remotePosition.x, y: remotePosition.y };
+          return (isNewWorkspace && !isShared ? storedLayout?.positions[object.id] : undefined)
+            ?? previousPositions.get(object.id)
+            ?? (!isShared ? workspacePositionsRef.current[object.id] : undefined)
+            ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 };
+        })(),
         selected: object.id === selectedNodeId,
         zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
         data: {
@@ -505,10 +845,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject]);
+  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
+    if (view.kind === 'table' && layoutReadyKey !== workspaceKey) return;
     initialViewPendingRef.current = false;
     const savedViewport = pendingViewportRef.current;
     pendingViewportRef.current = undefined;
@@ -523,7 +864,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         flow.fitView({ nodes: [{ id: targetId }], padding: 0.12, minZoom: 0.92, maxZoom: 1.1, duration: 0 });
       }
     });
-  }, [workspaceKey, nodes, view.id, view.kind, flow, focusNodeId]);
+  }, [workspaceKey, nodes, view.id, view.kind, flow, focusNodeId, layoutReadyKey]);
 
   const persistViewport = useCallback((_event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
     if (!persistLayout) return;
@@ -538,26 +879,49 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     writeCanvasLayout(workspaceKey, current);
   }, [workspaceKey, persistLayout]);
 
+  const handleNodeDragStart = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
+    cancelPendingOpenObjectFocus();
+    draggingNodeIdsRef.current.add(node.id);
+    dragStartPositionsRef.current.set(node.id, node.position);
+  }, [cancelPendingOpenObjectFocus]);
+
   const persistPosition = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
-    rememberPosition(node.id, { x: node.position.x, y: node.position.y });
-  }, [rememberPosition]);
+    draggingNodeIdsRef.current.delete(node.id);
+    const before = dragStartPositionsRef.current.get(node.id);
+    dragStartPositionsRef.current.delete(node.id);
+    commitUserPosition(node.id, { x: node.position.x, y: node.position.y }, before);
+  }, [commitUserPosition]);
 
   const handleNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
     onNodesChange(changes);
     for (const change of changes) {
-      if (change.type === 'position' && change.position && change.dragging !== true) {
-        rememberPosition(change.id, change.position);
+      if (change.type === 'position' && change.dragging === true) {
+        cancelPendingOpenObjectFocus();
+        draggingNodeIdsRef.current.add(change.id);
+      } else if (change.type === 'position' && change.dragging === false) {
+        draggingNodeIdsRef.current.delete(change.id);
       }
     }
-  }, [onNodesChange, rememberPosition]);
+  }, [cancelPendingOpenObjectFocus, onNodesChange]);
+
+  const handleCanvasMoveStart = useCallback((event: MouseEvent | TouchEvent | null) => {
+    if (event) cancelPendingOpenObjectFocus();
+  }, [cancelPendingOpenObjectFocus]);
 
   useEffect(() => {
     if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId)) return;
     const requestKey = `${focusNodeId}:${String(focusRequestKey ?? '')}`;
     if (lastFocusRequestRef.current === requestKey) return;
+    if (view.kind !== 'table') {
+      if (draggingNodeIdsRef.current.size > 0) return;
+      lastFocusRequestRef.current = requestKey;
+      flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.12, minZoom: 0.92, maxZoom: 1.15, duration: canvasMotionDuration(180) });
+      return;
+    }
+    if (layoutReadyKey !== workspaceKey) return;
     lastFocusRequestRef.current = requestKey;
-        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.12, minZoom: 0.92, maxZoom: 1.15, duration: canvasMotionDuration(180) });
-  }, [focusNodeId, focusRequestKey, nodes, flow]);
+    requestOpenObjectFocus(focusNodeId, false, false);
+  }, [focusNodeId, focusRequestKey, nodes, flow, view.kind, layoutReadyKey, workspaceKey, requestOpenObjectFocus]);
 
   const edges = useMemo(() => {
     const projected: Array<{
@@ -614,6 +978,207 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     });
   }, [plan.bindings, planNodesById, revisionNotice, visibleIds]);
 
+  useEffect(() => {
+    if (view.kind !== 'table' || nodes.length === 0) return;
+    if (!nodes.every((node) => Number.isFinite(node.measured?.width) && Number.isFinite(node.measured?.height))) return;
+    if (draggingNodeIdsRef.current.size > 0 || nodes.some((node) => node.dragging)) return;
+
+    const layoutNodes: CanvasLayoutNode[] = nodes.map((node) => ({
+      id: node.id,
+      role: node.data.kind === 'plan' ? canvasLayoutRole(node.data.spec.capability, node.id) : 'reference',
+      width: node.measured?.width ?? node.width ?? 360,
+      height: node.measured?.height ?? node.height ?? 260,
+      position: node.position,
+      pinned: pinnedNodeIdsRef.current.has(node.id),
+    }));
+    const layoutEdges = edges.map((edge) => ({ source: edge.source, target: edge.target }));
+    const ids = new Set(layoutNodes.map((node) => node.id));
+    const sizes = new Map(layoutNodes.map((node) => [node.id, { width: node.width, height: node.height }]));
+    const edgeKeys = new Set(layoutEdges.map((edge) => `${edge.source}\u0000${edge.target}`));
+    const signature = JSON.stringify({
+      nodes: layoutNodes.map((node) => [node.id, node.width, node.height, node.role]),
+      edges: [...edgeKeys].sort(),
+    });
+    const previous = layoutSnapshotRef.current;
+    if (previous?.workspaceKey === workspaceKey && previous.signature === signature) return;
+    const initial = previous?.workspaceKey !== workspaceKey;
+    const addedIds = initial ? ids : new Set([...ids].filter((id) => !previous?.ids.has(id)));
+    const changedSizes = new Set(initial ? [] : layoutNodes.filter((node) => {
+      const oldSize = previous?.sizes.get(node.id);
+      return !!oldSize && (oldSize.width !== node.width || oldSize.height !== node.height);
+    }).map((node) => node.id));
+    const resizeDisplacedIds = unpinnedNodesOverlappingPinnedResizes(layoutNodes, changedSizes);
+    const fixedIds = new Set<string>();
+    const preferredPositions: Record<string, CanvasPoint> = {};
+    const explicitAuxiliaryPositions = new Set(visibleAuxiliaryObjects.filter((object) => object.position).map((object) => object.id));
+
+    if (initial) {
+      for (const node of layoutNodes) {
+        if (pinnedNodeIdsRef.current.has(node.id) || explicitAuxiliaryPositions.has(node.id)) fixedIds.add(node.id);
+      }
+    } else {
+      for (const node of layoutNodes) {
+        if (addedIds.has(node.id)) continue;
+        if ((changedSizes.has(node.id) && !pinnedNodeIdsRef.current.has(node.id)) || resizeDisplacedIds.has(node.id)) {
+          preferredPositions[node.id] = node.position!;
+          continue;
+        }
+        fixedIds.add(node.id);
+      }
+    }
+
+    const shouldLayout = initial || addedIds.size > 0 || changedSizes.size > 0;
+    if (shouldLayout) {
+      const result = layoutCanvas(layoutNodes, layoutEdges, {
+        fixedIds,
+        relationshipFirst: !initial,
+        preferredPositions,
+      });
+      const changed = new Map<string, CanvasPoint>();
+      for (const node of layoutNodes) {
+        const next = result.positions[node.id];
+        if (next && (Math.abs(next.x - node.position!.x) > 0.25 || Math.abs(next.y - node.position!.y) > 0.25)) changed.set(node.id, next);
+      }
+      if (changed.size > 0) {
+        setNodes((current) => current.map((node) => {
+          const position = changed.get(node.id);
+          return position ? { ...node, position } : node;
+        }));
+      }
+    }
+
+    layoutSnapshotRef.current = { workspaceKey, ids, sizes, edges: edgeKeys, signature };
+    if (initial) setLayoutReadyKey(workspaceKey);
+  }, [view.kind, nodes, edges, workspaceKey, visibleAuxiliaryObjects, setNodes]);
+
+  // Share positions only after newly rendered nodes have measured and settled. Keep
+  // the in-flight IDs private to this actor/epoch scope and seed late arrivals too.
+  useEffect(() => {
+    if (!remoteLayoutEnabled || layoutReadyKey !== workspaceKey || nodes.length === 0) return;
+    if (view.actor.role !== 'owner' && view.actor.role !== 'participant') return;
+    const scope = layoutScopeRef.current;
+    const known = sharedLayoutRef.current?.positions ?? {};
+    const revision = sharedLayoutRef.current?.revision ?? 0;
+    const seedIds = missingSharedCanvasNodeIds(nodes, view, known, pendingSeedNodeIdsRef.current, draggingNodeIdsRef.current, activeOpenedId, 24)
+      .filter((id) => (seedAttemptCountsRef.current.get(`${revision}:${id}`) ?? 0) < 2);
+    if (seedIds.length === 0) return;
+    for (const id of seedIds) {
+      pendingSeedNodeIdsRef.current.add(id);
+      const attemptKey = `${revision}:${id}`;
+      seedAttemptCountsRef.current.set(attemptKey, (seedAttemptCountsRef.current.get(attemptKey) ?? 0) + 1);
+    }
+
+    const isCurrentScope = () => layoutScopeRef.current === scope;
+    const pause = () => new Promise<void>((resolve) => window.setTimeout(resolve, 32));
+    const settledPositions = async (ids: readonly string[]): Promise<Map<string, CanvasPoint> | null> => {
+      let previousGeometry = '';
+      let stableSince = 0;
+      let stableSamples = 0;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await pause();
+        if (!isCurrentScope()) return null;
+        const eligibleIds = ids.filter((id) => activeOpenedIdRef.current !== id && !draggingNodeIdsRef.current.has(id));
+        if (eligibleIds.length === 0) return new Map();
+        const measured = eligibleIds.map((id) => flow.getNode(id));
+        if (measured.some((node) => !node || !Number.isFinite(node.measured?.width) || !Number.isFinite(node.measured?.height))) {
+          previousGeometry = '';
+          stableSince = 0;
+          stableSamples = 0;
+          continue;
+        }
+        const geometry = measured.map((node) => {
+          if (!node) return '';
+          const width = node.measured?.width;
+          const height = node.measured?.height;
+          if (typeof width !== 'number' || typeof height !== 'number') return '';
+          return [node.position.x, node.position.y, width, height]
+            .map((value) => String(Math.round(value * 2) / 2)).join(',');
+        }).join('|');
+        const now = performance.now();
+        if (geometry === previousGeometry) stableSamples += 1;
+        else {
+          previousGeometry = geometry;
+          stableSince = now;
+          stableSamples = 0;
+        }
+        if (stableSamples >= 2 && now - stableSince >= 90) {
+          const positions = new Map<string, CanvasPoint>();
+          for (let index = 0; index < eligibleIds.length; index += 1) {
+            const nodeId = eligibleIds[index];
+            const node = measured[index];
+            if (nodeId === undefined || !node) return null;
+            positions.set(nodeId, { x: node.position.x, y: node.position.y });
+          }
+          return positions;
+        }
+      }
+      return null;
+    };
+    const currentSeedPositions = (ids: readonly string[]) => {
+      const currentView = viewRef.current;
+      const currentKnown = sharedLayoutRef.current?.positions ?? {};
+      const otherPendingIds = new Set(pendingSeedNodeIdsRef.current);
+      for (const id of seedIds) otherPendingIds.delete(id);
+      const eligible = missingSharedCanvasNodeIds(
+        ids.map((id) => ({ id })), currentView, currentKnown, otherPendingIds,
+        draggingNodeIdsRef.current, activeOpenedIdRef.current, 24,
+      );
+      const positions: Record<string, CanvasPoint & { pinned: boolean }> = {};
+      for (const id of eligible) {
+        const node = flow.getNode(id);
+        if (!node || !Number.isFinite(node.position.x) || !Number.isFinite(node.position.y)) continue;
+        positions[id] = { x: Math.round(node.position.x), y: Math.round(node.position.y), pinned: true };
+      }
+      return positions;
+    };
+    const send = async () => {
+      try {
+        if (!isCurrentScope()) return;
+        const settled = await settledPositions(seedIds);
+        if (!isCurrentScope()) return;
+        if (!settled || settled.size === 0) return;
+        const settledIds = [...settled.keys()];
+        let positions = currentSeedPositions(settledIds);
+        if (Object.keys(positions).length === 0) return;
+        const expectedLayoutRevision = sharedLayoutRef.current?.revision ?? 0;
+        const attempt = async (revision: number, currentPositions: Record<string, CanvasPoint & { pinned: boolean }>) => {
+          if (!isCurrentScope()) return null;
+          try {
+            const updated = await onCommand('canvas.layout', { expectedLayoutRevision: revision, positions: currentPositions });
+            return isCurrentScope() && updated && canvasLayoutScopeKey(updated) === workspaceKey ? updated : null;
+          } catch {
+            return null;
+          }
+        };
+        let updated = await attempt(expectedLayoutRevision, positions);
+        if (!updated) {
+          if (!isCurrentScope()) return;
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+          if (!isCurrentScope()) return;
+          const latest = sharedLayoutRef.current;
+          if (latest && latest.revision !== expectedLayoutRevision) {
+            const latestAttemptIds = settledIds.filter((id) => (seedAttemptCountsRef.current.get(`${latest.revision}:${id}`) ?? 0) < 2);
+            for (const id of latestAttemptIds) {
+              const attemptKey = `${latest.revision}:${id}`;
+              seedAttemptCountsRef.current.set(attemptKey, (seedAttemptCountsRef.current.get(attemptKey) ?? 0) + 1);
+            }
+            positions = currentSeedPositions(latestAttemptIds);
+            if (Object.keys(positions).length > 0) updated = await attempt(latest.revision, positions);
+          }
+        }
+        if (!isCurrentScope() || !updated) return;
+        const canonical = sharedLayoutForView(updated);
+        if (!canonical) return;
+        if (!sharedLayoutRef.current || canonical.revision >= sharedLayoutRef.current.revision) sharedLayoutRef.current = canonical;
+      } finally {
+        if (isCurrentScope()) for (const id of seedIds) pendingSeedNodeIdsRef.current.delete(id);
+      }
+    };
+    const queued = layoutCommandQueueRef.current.then(send, send);
+    layoutCommandQueueRef.current = queued;
+    void queued.catch(() => undefined);
+  }, [remoteLayoutEnabled, layoutReadyKey, workspaceKey, nodes, edges, sharedLayout?.revision, onCommand, view, activeOpenedId, flow]);
+
   const choose = useCallback((event: React.MouseEvent, node: CanvasNode) => {
     // A content control may have navigated to another object. Do not select its
     // old container again while that same click bubbles through React Flow.
@@ -638,7 +1203,14 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const hasVisibleObjects = objectTitles.length > 0;
 
   return (
-    <div className="tt-flow-wrap" ref={flowWrapRef} data-canvas-editor data-testid="canvas-object-workspace">
+    <div
+      className="tt-flow-wrap"
+      ref={flowWrapRef}
+      data-canvas-editor
+      data-testid="canvas-object-workspace"
+      onPointerDownCapture={cancelPendingOpenObjectFocus}
+      onKeyDownCapture={cancelPendingOpenObjectFocus}
+    >
       {!hasVisibleObjects ? (
         <div className="tt-canvas-empty">
           <span><Workflow size={19} /></span>
@@ -650,6 +1222,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           edges={visibleEdges}
           nodeTypes={nodeTypes}
           onNodesChange={handleNodesChange}
+          onMoveStart={handleCanvasMoveStart}
+          onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={persistPosition}
           onNodeClick={choose}
           onPaneClick={clear}
@@ -667,7 +1241,13 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={21} size={1} color="#ccd5d7" />
-          <Controls position="bottom-right" showInteractive={false} showFitView={false} />
+          <Controls
+            position="bottom-right"
+            showInteractive={false}
+            showFitView={false}
+            onZoomIn={cancelPendingOpenObjectFocus}
+            onZoomOut={cancelPendingOpenObjectFocus}
+          />
         </ReactFlow>
       )}
       <div className="tt-canvas-tools">
@@ -683,7 +1263,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             <Boxes size={17} aria-hidden="true" /><span>Objects</span><small>{objectTitles.length}</small>
           </button>
           <nav id="tt-canvas-objects-list" className="tt-canvas-objects__panel" aria-label="Canvas objects" data-testid="canvas-object-dock" hidden={!objectsMenuOpen}>
-            {previousView && <button type="button" onClick={() => { void flow.setViewport(previousView, { duration: canvasMotionDuration(180) }); setPreviousView(null); setObjectsMenuOpen(false); objectsButtonRef.current?.focus(); }}><ArrowLeft size={16} aria-hidden="true" />Previous view</button>}
+            {previousView && <button type="button" onClick={() => { cancelPendingOpenObjectFocus(); void flow.setViewport(previousView, { duration: canvasMotionDuration(180) }); setPreviousView(null); setObjectsMenuOpen(false); objectsButtonRef.current?.focus(); }}><ArrowLeft size={16} aria-hidden="true" />Previous view</button>}
             <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} onClick={(event) => { event.stopPropagation(); setShowConnections((shown) => !shown); }}>
               <Workflow size={16} aria-hidden="true" /><span>Connections</span><small>{edges.length}</small><i aria-hidden="true">{showConnections ? 'On' : 'Off'}</i>
             </button>

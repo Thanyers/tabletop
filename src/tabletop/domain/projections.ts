@@ -1,10 +1,12 @@
 import { DomainError, type ActorContext, type DomainState, type EncounterState, type TeachingState } from '../shared/contracts';
 import { clone } from './helpers';
+import { projectCanvasLayout } from './canvas-layout';
 
 export function projectDomain(state: DomainState, ctx: ActorContext): DomainState {
   if (state.kind === 'table') {
     if (ctx.role !== 'owner' && ctx.role !== 'participant') throw new DomainError('FORBIDDEN', 'Only room members may read this table.');
     const projected = clone(state);
+    if (state.canvasLayout) projected.canvasLayout = projectCanvasLayout(state);
     if (ctx.role === 'participant') {
       projected.sources = []; projected.candidate = null; projected.revisions = [];
       if (projected.program) projected.program.evidence = [];

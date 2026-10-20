@@ -1,5 +1,7 @@
 # File-driven shared Canvas
 
+The unreleased Generative Canvas candidate extends this base contract with prompt-only creation, bounded expressions, generated scenes/controls, shared layout and bounded private-history retrieval. See [the current extension contract](GENERATIVE_CANVAS_RUNTIME.md). The deployment and acceptance statements below describe the earlier file-driven release.
+
 Status: implemented and deployed as a testing release on 19 October 2026. [Acceptance](GENERIC_TABLE_ACCEPTANCE.md) records CI, real-provider/two-account staging checks and the approved production migration; [Deployments](DEPLOYMENTS.md) identifies the active source/version. The gates below remain requirements for changes to these paths.
 
 The signed-in app gains a blank `table` room. The existing invoice, lesson and encounter rooms retain their behavior and data. This is a bounded general table runtime: collections, typed fields, records, actions, conditions, atomic effects, unique constraints and optional turns. It does not execute generated code.

@@ -1,10 +1,13 @@
-import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import { AlertCircle, Database, FilePlus2, LockKeyhole, Play, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import { AlertCircle, Database, FilePlus2, LockKeyhole, Pencil, Play, Trash2 } from 'lucide-react';
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
-import type { WorkspaceView } from '../shared/contracts';
+import type { ActorContext, WorkspaceView } from '../shared/contracts';
 import type { PlanNode } from '../runtime';
+import { applyTableChange, handleTableCommand } from '../domain/table';
+import type { GenerativeViewDescriptor } from '../shared/generative-contracts';
 import { CandidateLifecycle } from './WorkbenchShared';
-import type { WorkbenchProps } from './types';
+import type { Command, WorkbenchProps } from './types';
+import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
 import './record-actions.css';
 
 interface TableCanvasObjectProps {
@@ -13,7 +16,9 @@ interface TableCanvasObjectProps {
   busy: string | null;
   onCommand: WorkbenchProps['onCommand'];
   onTableImport?: WorkbenchProps['onTableImport'];
+  outputs: Record<string, unknown>;
   expanded?: boolean;
+  onEditRules?: () => void;
 }
 
 const MAX_SOURCE_FILES = 4;
@@ -25,6 +30,10 @@ export function TableCanvasObject(props: TableCanvasObjectProps) {
   if (props.node.id === 'table.rules') return <TableRules {...props} state={props.view.domain} />;
   if (props.node.id.startsWith('table.collection.')) return <TableCollectionView {...props} state={props.view.domain} />;
   if (props.node.id === 'table.actions') return <TableActions {...props} state={props.view.domain} />;
+  if (props.node.id.startsWith('table.view.')) {
+    const descriptor = props.outputs.descriptor as GenerativeViewDescriptor | undefined;
+    return descriptor ? <GeneratedCanvasObject view={props.view} state={props.view.domain} descriptor={descriptor} busy={props.busy} onCommand={props.onCommand} expanded={props.expanded} /> : <p className="tt-canvas-inline__note">This generated view is not available.</p>;
+  }
   return <p className="tt-canvas-inline__note">This table object is not available.</p>;
 }
 
@@ -87,7 +96,7 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
       </div> : view.actor.role === 'owner' ? <p className="tt-table-limit-note">{state.sources.length >= MAX_SOURCE_FILES ? 'All four source file slots are in use.' : totalBytes >= MAX_SOURCE_BYTES ? 'The 64 KiB source limit has been reached.' : 'Only the table owner can add source files.'}</p> : <p className="tt-table-limit-note">Source files are private to the owner.</p>}
     </>}
     {error && <p className="tt-table-error" role="alert"><AlertCircle size={14} />{error}</p>}
-    {state.sources.length === 0 ? !expanded && <p className="tt-canvas-inline__empty">{readOnly ? 'No files yet.' : 'Add a file, then describe your table.'}</p> : <ul className="tt-table-source-list" aria-label="Table source files">{state.sources.map((source) => <SourceCard key={source.id} source={source} expanded={expanded} canRemove={view.actor.role === 'owner' && !readOnly && !referencedSourceIds.has(source.id)} readOnly={readOnly} referenced={referencedSourceIds.has(source.id)} busy={busy !== null} onRemove={() => void onCommand('table.removeSource', { sourceId: source.id })} />)}</ul>}
+    {state.sources.length === 0 ? !expanded && <p className="tt-canvas-inline__empty">{readOnly ? 'No files yet.' : 'Add a file or describe the table you want.'}</p> : <ul className="tt-table-source-list" aria-label="Table source files">{state.sources.map((source) => <SourceCard key={source.id} source={source} expanded={expanded} canRemove={view.actor.role === 'owner' && !readOnly && !referencedSourceIds.has(source.id)} readOnly={readOnly} referenced={referencedSourceIds.has(source.id)} busy={busy !== null} onRemove={() => void onCommand('table.removeSource', { sourceId: source.id })} />)}</ul>}
   </div>;
 }
 
@@ -99,13 +108,18 @@ function SourceCard({ source, expanded, canRemove, readOnly, referenced, busy, o
   </li>;
 }
 
-function TableRules({ view, state, onCommand, busy, expanded = false }: TableCanvasObjectProps & { state: TableState }) {
+function TableRules({ view, state, onCommand, busy, expanded = false, onEditRules }: TableCanvasObjectProps & { state: TableState }) {
   const [manualChange, setManualChange] = useState('');
   const [manualError, setManualError] = useState('');
   const isOwner = view.actor.role === 'owner';
   const readOnly = busy === 'table.readOnly';
   const program = state.program;
   const candidateChange = state.candidate?.change.kind === 'table' ? state.candidate.change : null;
+  const candidateState = useMemo(() => {
+    if (!candidateChange) return null;
+    try { return applyTableChange(structuredClone(state), structuredClone(candidateChange)); }
+    catch { return null; }
+  }, [candidateChange, state]);
 
   const proposeManual = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -119,14 +133,75 @@ function TableRules({ view, state, onCommand, busy, expanded = false }: TableCan
 
   return <div className="tt-canvas-inline tt-table-rules">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">{isOwner ? 'OWNER REVIEW · SHARED ACTIVE RULES' : 'SHARED ACTIVE RULES'}</span><strong>{program?.title ?? 'Rules and proposal'}</strong><small>{program ? `Active r${state.ruleRevision}` : 'No active program'}</small></div>
+    {isOwner && program && onEditRules && <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || readOnly || Boolean(state.candidate && state.candidate.status !== 'active')} onClick={onEditRules}><Pencil size={13} />Edit rules</button></div>}
     {!expanded ? <p className="tt-canvas-inline__note">{program ? `${program.collections.length} collections · ${program.actions.length} actions · open to inspect rules, evidence and changes.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
-      {program ? <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /> : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Add a file and describe how this table should work.</div>}
-      {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} /></section>}
+      {program ? <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /> : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
+      {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} />
+        {isOwner && candidateState?.program?.canvas?.views.length ? <DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /> : null}
+      </section>}
       {isOwner && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} readOnly={readOnly} />}
       {isOwner && !readOnly && <details className="tt-table-manual-editor"><summary>Advanced manual rule change</summary><p>Paste a prepared table change only if needed. Normal requests can be written in plain language in the AI draft assistant.</p><form onSubmit={proposeManual}><label htmlFor="tt-table-manual-change">Table change</label><textarea id="tt-table-manual-change" rows={7} value={manualChange} onChange={(event) => { setManualChange(event.target.value); setManualError(''); }} placeholder={'{"kind":"table","program":{...},"initialRecords":{...}}'} spellCheck={false} /><small>New tables include initial records. Changes to an active table must preserve its collections and current records.</small>{manualError && <span role="alert" className="tt-table-error">{manualError}</span>}<button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || manualChange.trim().length === 0}>Propose manual change</button></form></details>}
       {!isOwner && <p className="tt-canvas-inline__note">Proposals, source files and review controls are private to the owner. Active rules and records are shared with this table.</p>}
     </>}
   </div>;
+}
+
+function DraftCanvasPreview({ candidateKey, view, initialState, busy }: { candidateKey: string; view: WorkspaceView; initialState: TableState; busy: string | null }) {
+  const [trialState, setTrialState] = useState(() => structuredClone(initialState));
+  const [resetRevision, setResetRevision] = useState(0);
+  const [trialCommitting, setTrialCommitting] = useState(false);
+  const trialLock = useRef(false);
+  const scope = `draft:${candidateKey}:${resetRevision}`;
+  const trialViews = trialState.program?.canvas?.views ?? [];
+  const hasControls = trialViews.some(descriptor => descriptor.kind === 'controls' && descriptor.controls.length > 0);
+  const hasDraggableShapes = trialViews.some(descriptor => descriptor.kind === 'scene' && descriptor.elements.some(element => element.drag));
+  const trialBusy = busy ?? (trialCommitting ? 'table.trial' : null);
+  useEffect(() => () => clearGeneratedCanvasPreview(view, scope), [view.id, view.epoch, view.actor.actorId, view.actor.role, view.actor.seat, scope]);
+  const trialView = useMemo<WorkspaceView>(() => ({
+    ...view,
+    revision: `${view.revision}:draft:${trialState.dataRevision}:${trialState.ruleRevision}:${trialState.actionRevision}`,
+    domain: trialState,
+  }), [view, trialState]);
+  const sandboxCommand = useCallback<Command>(async (type, payload) => {
+    if (type !== 'table.act') return null;
+    if (busy !== null || trialLock.current) throw new Error('Finish the current table update before using the private trial.');
+    trialLock.current = true;
+    setTrialCommitting(true);
+    try {
+      const result = handleTableCommand(structuredClone(trialState), type, payload, localSandboxActor(view));
+      if (!result || result.state.kind !== 'table') return null;
+      setTrialState(result.state);
+      return {
+        ...trialView,
+        revision: `${view.revision}:draft:${result.state.dataRevision}:${result.state.ruleRevision}:${result.state.actionRevision}`,
+        domain: result.state,
+      };
+    } finally { trialLock.current = false; setTrialCommitting(false); }
+  }, [busy, trialState, trialView, view]);
+  const resetTrial = () => {
+    clearGeneratedCanvasPreview(view, scope);
+    setTrialState(structuredClone(initialState));
+    setResetRevision(value => value + 1);
+  };
+
+  return <section className="tt-generated-preview" aria-label="Proposed generated canvas preview">
+    <div className="tt-generated-preview__header"><span className="tt-kicker">VISUAL PREVIEW · PRIVATE TRIAL</span><button type="button" className="tt-button tt-button--quiet" disabled={trialBusy !== null} onClick={resetTrial}>Reset trial</button></div>
+    <p className="tt-canvas-inline__note">{hasControls || hasDraggableShapes ? `Try ${[hasControls ? 'the controls' : '', hasDraggableShapes ? 'dragging marked shapes' : ''].filter(Boolean).join(' and ')}. ` : 'Review the generated view. '}Trial changes stay in this private copy; the active table is unchanged. Reset the trial at any time.</p>
+    <div className="tt-generated-preview__views">{trialViews.map((descriptor) => <GeneratedCanvasObject key={`${descriptor.id}:${scope}`} view={trialView} state={trialState} descriptor={descriptor} busy={trialBusy} onCommand={async () => null} previewOnly sandboxCommand={sandboxCommand} previewScope={scope} />)}</div>
+  </section>;
+}
+
+function localSandboxActor(view: WorkspaceView): ActorContext {
+  return {
+    actorId: view.actor.actorId,
+    name: view.actor.name,
+    role: view.actor.role === 'owner' ? 'owner' : 'participant',
+    ...(view.actor.seat ? { seat: view.actor.seat } : {}),
+    workspaceId: view.id,
+    epoch: view.epoch,
+    now: Date.now(),
+    hash: value => JSON.stringify(value),
+  };
 }
 
 function ProgramOverview({ program, state, label, change, members }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members'] }) {
@@ -368,6 +443,7 @@ function operandLabel(value: TableAction['effects'][number]['value'], action: Ta
     const parameter = action.parameters.find((item) => item.id === value.record);
     return `${parameter?.label ?? 'selected record'} · ${program ? fieldLabel(program, parameter?.collection ?? '', value.field) : value.field}`;
   }
+  if ('expression' in value) return 'a generated expression';
   return value.system === 'actor' ? 'the acting member' : value.system === 'seat' ? 'the current seat' : 'the current turn';
 }
 

@@ -24,10 +24,11 @@
 .tt-table-options__body .tt-account-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 10px; border-top: 1px solid var(--tt-line); }
 .tt-table-options__body .tt-account-badge__identity { order: -1; width: 100%; max-width: none; }
 .tt-app .tt-main--with-assistant.tt-main--canvas { grid-template-columns: minmax(0, 1fr); }
-.tt-app .tt-table-assistant-panel { position: absolute; z-index: 12; right: 16px; bottom: 16px; width: 344px; height: auto; max-height: min(70dvh, calc(100% - 80px)); min-height: 0; overflow: hidden; border: 1px solid var(--tt-card-edge); border-radius: var(--tt-card-radius); background: var(--tt-paper); box-shadow: var(--tt-shadow-piece); }
-.tt-app .tt-table-assistant-panel:has(.tt-table-assistant__rules-mode) { height: min(620px, calc(100% - 80px)); }
+/* Table assistant island: floats bottom-centre over the Canvas (F001-T8). */
+.tt-app .tt-table-assistant-panel { position: absolute; z-index: 12; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); height: auto; max-height: min(46dvh, calc(100% - 80px)); min-height: 0; overflow: hidden; border: 1px solid var(--tt-card-edge); border-radius: 24px; background: var(--tt-paper); box-shadow: var(--tt-shadow-lift); }
+.tt-app .tt-table-assistant-panel:has(.tt-table-assistant__rules-mode) { height: min(46dvh, 520px, calc(100% - 80px)); }
 .tt-app .tt-table-assistant-panel:has(.tt-table-assistant__rules-mode) > .tt-table-assistant.is-compact { height: 100%; max-height: 100%; }
-.tt-app .tt-canvas-panel--assistant { padding-right: 372px; }
+.tt-app .tt-canvas-panel--assistant { padding-bottom: calc(var(--tt-assistant-height, 300px) + 28px); }
 .tt-app .tt-canvas-panel { position: relative; background: var(--tt-canvas); border-right: 0; }
 .tt-app .tt-canvas-panel--composer { padding-bottom: 96px; }
 .tt-app .tt-flow-wrap .react-flow { background: var(--tt-canvas); }
@@ -152,7 +153,7 @@
 .tt-practice-app .tt-practice-footer > details { position: relative; }
 .tt-practice-app .tt-practice-footer > details[open] { max-width: min(360px, 80vw); padding: var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium); }
 .tt-practice-app .tt-practice-footer summary { cursor: pointer; }
-@media (max-width: 1000px) and (min-width: 761px) { .tt-app .tt-table-assistant-panel { width: 320px; } .tt-app .tt-canvas-panel--assistant { padding-right: 344px; } }
+
 @media (max-width: 760px) {
   .tt-app .tt-topbar { height: 56px; flex-basis: 56px; gap: 5px; padding-inline: 10px; }
   .tt-app .tt-brand > span:last-child { display: none; }
@@ -172,3 +173,28 @@
   .tt-chooser .tt-chooser__top { padding-inline: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .tt-app *, .tt-chooser * { scroll-behavior: auto; } }
+
+/* Idle island collapses into a round button (F001-T9). The assistant stays mounted so its state survives. */
+.tt-app .tt-main--with-assistant .tt-table-assistant-panel.is-collapsed[data-collapsed="true"] { left: auto; right: 16px; bottom: 16px; transform: none; width: 56px; height: 56px; max-height: none; padding: 0; overflow: visible; border: 0; border-radius: 50%; background: transparent; box-shadow: none; }
+.tt-app .tt-table-assistant-panel.is-collapsed > :not(.tt-assistant-bubble) { display: none; }
+.tt-app .tt-assistant-bubble { display: grid; place-items: center; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; color: #fff; background: var(--tt-moss); box-shadow: var(--tt-shadow-lift); cursor: pointer; }
+.tt-app .tt-assistant-bubble:focus-visible { outline: 3px solid var(--tt-moss); outline-offset: 3px; }
+.tt-app .tt-assistant-bubble > svg { animation: tt-assistant-wiggle 6s ease-in-out infinite; transform-origin: 50% 70%; }
+@keyframes tt-assistant-wiggle {
+  0%, 12%, 100% { transform: rotate(0); }
+  2% { transform: rotate(-14deg); }
+  4% { transform: rotate(12deg); }
+  6% { transform: rotate(-8deg); }
+  8% { transform: rotate(5deg); }
+  10% { transform: rotate(-2deg); }
+}
+@media (max-width: 760px) { .tt-app .tt-main--with-assistant .tt-table-assistant-panel.is-collapsed[data-collapsed="true"] { right: 12px; bottom: 12px; } }
+@media (prefers-reduced-motion: reduce) { .tt-app .tt-assistant-bubble > svg { animation: none; } }
+
+/* Owner renames the table in place from the top bar (F002). */
+.tt-app .tt-workspace-picker { display: flex; align-items: center; gap: 2px; }
+.tt-app .tt-table-rename-trigger { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--tt-radius-small); color: var(--tt-muted); background: transparent; cursor: pointer; }
+.tt-app .tt-table-rename-trigger:hover:not(:disabled), .tt-app .tt-table-rename-trigger:focus-visible { color: var(--tt-ink); background: var(--tt-canvas); }
+.tt-app .tt-table-rename input { width: min(40vw, 420px); min-height: 40px; padding: 6px 10px; border: 1px solid var(--tt-moss); border-radius: var(--tt-radius-medium); background: var(--tt-card-surface); color: var(--tt-ink); font: inherit; font-size: 15px; font-weight: 650; }
+.tt-app .tt-table-rename input:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
+@media (max-width: 760px) { .tt-app .tt-table-rename input { width: 44vw; font-size: 13px; } }

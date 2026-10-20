@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowRight, BookOpen, Check, ChevronDown, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
@@ -9,10 +9,12 @@ import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, ty
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
-import { TableAssistant } from './ui/TableAssistant';
+import { useTableChat } from './ui/useTableChat';
+import { canApplyWorkspaceRefresh, sameChatRequestScope } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
+import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHARS } from './shared/workspace-title';
 import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
@@ -67,11 +69,8 @@ function isTableWorkspaceView(view: WorkspaceView): view is WorkspaceView & { ki
 }
 
 function workspaceDisplayTitle(workspace: WorkspaceView): string {
-  if (workspace.kind === 'table' && workspace.domain.kind === 'table') {
-    const programTitle = workspace.domain.program?.title.trim();
-    if (programTitle) return programTitle;
-  }
-  return workspace.title;
+  const programTitle = workspace.kind === 'table' && workspace.domain.kind === 'table' ? workspace.domain.program?.title : undefined;
+  return displayWorkspaceTitle(workspace.kind, workspace.title, programTitle);
 }
 
 function workspaceLabel(workspace: WorkspaceView): string {
@@ -116,6 +115,7 @@ export default function TabletopApp() {
   const [starting, setStarting] = useState(true);
   // Which page shows while no table is open: the table list or the /new start page.
   const [page, setPage] = useState<'home' | 'new'>('home');
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const pageRef = useRef<'home' | 'new'>('home');
   pageRef.current = page;
   const [busy, setBusy] = useState<string | null>(null);
@@ -157,20 +157,21 @@ export default function TabletopApp() {
 
   const setWorkspace = useCallback((next: WorkspaceView | null) => {
     const previous = workspaceRef.current;
-    const changedTable = previous?.id !== next?.id || previous?.epoch !== next?.epoch;
+    const changedTable = previous?.id !== next?.id || previous?.epoch !== next?.epoch || previous?.actor.actorId !== next?.actor.actorId;
     workspaceRef.current = next;
     if (next) projectionSequenceRef.current += 1;
     setView(next);
     if (changedTable) {
-      const startWithFiles = next?.kind === 'table' && next.domain.kind === 'table' && !next.domain.program && next.actor.role === 'owner';
       const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && next.actor.role === 'owner' && next.domain.candidate && next.domain.candidate.status !== 'active';
-      const startObject = pendingRules ? 'table.rules' : startWithFiles ? 'table.sources' : null;
+      // Chat-first tables open nothing until there is something to review (F006).
+      const startObject = pendingRules ? 'table.rules' : null;
       setSelectedNodeId(startObject);
       setFocusNodeId(null);
       setOpenedObjectId(startObject);
       setFocusSourceIds([]);
       setDraftPrompt('');
       setAiPrefill(undefined);
+      setRenameDraft(null);
     }
     if (previous?.id !== next?.id) {
       setInviteState(null);
@@ -439,7 +440,7 @@ export default function TabletopApp() {
   const leaveStartPage = useCallback(() => setPage('home'), []);
 
   // A typed description starts an empty shared table and waits in its rule draft;
-  // nothing reaches the model until the owner adds a source and consents.
+  // nothing reaches the model until the owner consents; source files are optional.
   const startFromDescription = useCallback(async (description: string) => {
     const created = await createWorkspace('table');
     if (created) setAiPrefill({ text: description, key: Date.now() });
@@ -453,10 +454,17 @@ export default function TabletopApp() {
       return null;
     }
     const requestSequence = projectionSequenceRef.current;
-    setBusy(type);
+    // Layout writes have their own queue and revision. Background placement must
+    // neither disable the composer nor clear a foreground command's busy state.
+    const blocksForeground = type !== 'canvas.layout';
+    if (blocksForeground) setBusy(type);
     try {
       const ack = await tabletopClient.command(current, type, payload);
+      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(current, workspaceRef.current))) return null;
       const latest = await latestAfterAck(ack, current.id, requestSequence);
+      if (type === 'canvas.layout' && (!workspaceRef.current
+        || !sameChatRequestScope(current, workspaceRef.current)
+        || !sameChatRequestScope(current, latest))) return null;
       setWorkspace(latest);
       if (type === 'evolve.activate') showNotice(`The change is active at revision ${latest.domain.ruleRevision}.`, 'success');
       else if (type === 'workspace.reset') {
@@ -470,16 +478,19 @@ export default function TabletopApp() {
       await refreshSession().catch(() => undefined);
       return latest;
     } catch (error) {
+      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(current, workspaceRef.current))) return null;
       if (error instanceof ApiFailure && error.conflict) {
         try {
+          const sequenceBeforeRead = projectionSequenceRef.current;
           const fresh = await tabletopClient.workspace(current.id);
-          if (workspaceRef.current?.id === current.id) setWorkspace(fresh);
+          if (canApplyWorkspaceRefresh(current, workspaceRef.current, fresh, sequenceBeforeRead, projectionSequenceRef.current)) setWorkspace(fresh);
           await refreshSession().catch(() => undefined);
-          showNotice('This table changed elsewhere. The latest version is loaded; review and repeat your edit if it still applies.', 'error');
+          // Someone else moved a card; the Canvas retries quietly on the newer layout (F007).
+          if (error.code !== 'STALE_LAYOUT') showNotice('This table changed elsewhere. The latest version is loaded; review and repeat your edit if it still applies.', 'error');
         } catch (refreshError) { showNotice(errorText(refreshError), 'error'); }
       } else showNotice(errorText(error), 'error');
       return null;
-    } finally { setBusy(null); }
+    } finally { if (blocksForeground) setBusy(null); }
   }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
   const upload = useCallback(async (kind: 'shipments' | 'invoice' | 'rate-card', file: File) => {
@@ -556,15 +567,17 @@ export default function TabletopApp() {
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
 
   const pollAI = useCallback((workspaceId: string, jobId: string) => tabletopClient.modelJob(workspaceId, jobId), []);
-  const requestTableAssistant = useCallback((targetView: WorkspaceView, prompt: string, commandId: ReturnType<typeof crypto.randomUUID>): Promise<TableAssistantJob> => {
+  const requestTableAssistant = useCallback((targetView: WorkspaceView, prompt: string, commandId: ReturnType<typeof crypto.randomUUID>, sameCommandRetry = false): Promise<TableAssistantJob> => {
     const current = workspaceRef.current;
-    if (!current || !sameWorkspaceActor(current, targetView) || current.kind !== 'table' || !['owner', 'participant'].includes(current.actor.role)) {
+    if (!current || !sameWorkspaceActor(current, targetView) || current.actor.role !== targetView.actor.role || current.kind !== 'table' || !['owner', 'participant'].includes(current.actor.role)) {
       return Promise.reject(new ApiFailure('This table seat changed. Open the current table before sending another request.', 409, 'STALE_EPOCH'));
     }
     if (capabilities.tableReadOnly) return Promise.reject(new ApiFailure('Assistant requests for this table are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('The table assistant is not enabled for this service.', 403));
-    if (current.revision !== targetView.revision) return Promise.reject(new ApiFailure('The table changed. Review its current state and send your question again.', 409, 'STALE_REVISION'));
-    return tabletopClient.requestTableAssistant(current, prompt, commandId);
+    if (!sameCommandRetry && current.revision !== targetView.revision) return Promise.reject(new ApiFailure('The table changed. Review its current state and send your question again.', 409, 'STALE_REVISION'));
+    // A retry carries the original snapshot and command ID. The server decides
+    // whether it is an exact duplicate or a stale, previously unaccepted request.
+    return tabletopClient.requestTableAssistant(targetView, prompt, commandId);
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
 
   const pollTableAssistant = useCallback((targetView: WorkspaceView, jobId: string): Promise<TableAssistantJob> => {
@@ -576,12 +589,6 @@ export default function TabletopApp() {
     if (!sameWorkspaceActor(workspaceRef.current, targetView)) return Promise.reject(new ApiFailure('This table seat changed. Its assistant history belongs to the previous seat.', 409, 'STALE_EPOCH'));
     return tabletopClient.tableAssistantHistory(targetView.id, before, 20);
   }, []);
-
-  const refreshTableAssistant = useCallback(async (targetView: WorkspaceView) => {
-    if (!sameWorkspaceActor(workspaceRef.current, targetView)) return;
-    const fresh = await tabletopClient.workspace(targetView.id);
-    if (sameWorkspaceActor(workspaceRef.current, targetView)) setWorkspace(fresh);
-  }, [setWorkspace]);
 
   const confirmTableAssistantAction = useCallback(async (targetView: WorkspaceView, job: TableAssistantJob, commandId: ReturnType<typeof crypto.randomUUID>): Promise<void> => {
     const current = workspaceRef.current;
@@ -621,8 +628,21 @@ export default function TabletopApp() {
   const loadAdminWorkspaces = useCallback((after?: string) => tabletopClient.adminWorkspaces(after), []);
 
   const refreshWorkspaceProjection = useCallback(async (workspaceId: string) => {
-    const latest = await tabletopClient.workspace(workspaceId);
-    if (workspaceRef.current?.id === workspaceId) setWorkspace(latest);
+    const expected = workspaceRef.current;
+    if (!expected || expected.id !== workspaceId) throw new ApiFailure('The current table changed before it could be refreshed.', 409, 'STALE_EPOCH');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const requestSequence = projectionSequenceRef.current;
+      const latest = await tabletopClient.workspace(workspaceId);
+      const current = workspaceRef.current;
+      if (!current || !sameChatRequestScope(expected, current) || !sameChatRequestScope(expected, latest)) {
+        throw new ApiFailure('The table or seat changed while refreshing. Open the current table before continuing.', 409, 'STALE_EPOCH');
+      }
+      if (canApplyWorkspaceRefresh(expected, current, latest, requestSequence, projectionSequenceRef.current)) {
+        setWorkspace(latest);
+        return;
+      }
+    }
+    throw new ApiFailure('The table kept changing while refreshing. Try the refresh again.', 409, 'STALE_REVISION');
   }, [setWorkspace]);
 
   const download = useCallback(async (format: 'csv' | 'html') => {
@@ -704,6 +724,25 @@ export default function TabletopApp() {
     catch { setCopied(false); showNotice('Select the invitation link and copy it with your keyboard.', 'info'); }
   }, [inviteState, showNotice]);
 
+  const tableChat = useTableChat({
+    view,
+    aiEnabled: capabilities.model.enabled,
+    assistantAvailable: capabilities.tableAssistant?.available === true,
+    readOnly: capabilities.tableReadOnly === true,
+    busy: busy !== null,
+    requestDraft: (target, prompt, commandId) => requestAI(target, prompt, undefined, commandId),
+    pollDraft: pollAI,
+    refresh: refreshWorkspaceProjection,
+    ask: requestTableAssistant,
+    pollAsk: pollTableAssistant,
+    loadHistory: (target) => loadTableAssistantHistory(target),
+    confirm: confirmTableAssistantAction,
+    attach: importTableFile,
+    focusObject: requestCanvasFocus,
+    notify: showNotice,
+    prefill: aiPrefill,
+  });
+
   if (starting) return <LoadingScreen />;
   if (authStatus?.mode === 'google' && !authStatus.authenticated) return <AccountSignIn status={authStatus} notice={notice} hasPendingInvite={Boolean(readPendingInvite() || inviteFromFragment())} checking={false} onRetry={retryBootstrap} onDismissNotice={() => setNotice(null)} />;
   if (!session) return <FailureScreen onRetry={retryBootstrap} notice={notice} />;
@@ -725,33 +764,29 @@ export default function TabletopApp() {
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
   const canInvite = view.kind === 'table' ? view.actor.role === 'owner' && !tableReadOnly : view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
   const canReset = ['owner', 'teacher', 'dm'].includes(view.actor.role) && !tableReadOnly;
+  const canRename = canReset;
+  const submitRename = () => {
+    if (renameDraft === null) return;
+    const title = normalizeWorkspaceTitle(renameDraft);
+    if (title === null) {
+      showNotice(`A table name needs 1 to ${WORKSPACE_TITLE_MAX_CHARS} characters without line breaks.`, 'error');
+      return;
+    }
+    setRenameDraft(null);
+    if (title === workspaceLabel(view)) return;
+    void runCommand('workspace.rename', { title }).then((renamed) => { if (renamed) showNotice(`Table renamed to ${title}.`, 'success'); });
+  };
   const canAskAI = ((view.kind === 'invoice' || view.kind === 'table') && view.actor.role === 'owner') || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
   const connectedSeats = new Set(view.members.map((member) => member.seat).filter(Boolean));
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : view.kind === 'table' ? ['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
   const remainingInviteSeats = inviteSeats.filter((seat) => !connectedSeats.has(seat) && !(inviteIsHeld && inviteState?.seat === seat));
   const aiContent = canAskAI && view.kind !== 'table' && !tableReadOnly ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} prefill={aiPrefill} /> : undefined;
-  const tableAssistant = isTableWorkspaceView(view) ? <TableAssistant compact
-    key={`${view.id}:${view.epoch}:${view.actor.actorId}`}
-    view={view}
-    capabilities={capabilities}
-    readOnly={tableReadOnly}
-    onRequest={requestAI}
-    onPoll={pollAI}
-    onRefresh={refreshWorkspaceProjection}
-    onAttachFile={tableReadOnly ? undefined : importTableFile}
-    onOpenSources={() => requestCanvasFocus('table.sources')}
-    onOpenRules={() => requestCanvasFocus('table.rules')}
-    onOpenActions={() => requestCanvasFocus('table.actions')}
-    onReviewDraft={() => requestCanvasFocus('table.rules')}
-    onChatRequest={requestTableAssistant}
-    onChatPoll={pollTableAssistant}
-    onChatHistory={loadTableAssistantHistory}
-    onChatConfirm={confirmTableAssistantAction}
-    onChatRefresh={refreshTableAssistant}
-    onOpenObject={requestCanvasFocus}
-    rulePrefill={aiPrefill}
-  /> : undefined;
+  // The runtime owns Files/Rules visibility. Keep a truly empty table free of
+  // default cards while still allowing its private chat answers to materialize.
+  const chatVisibleIds = isTableWorkspaceView(view) && compiled.plan?.nodes.length === 0
+    ? tableChat.cards.map((card) => card.id)
+    : undefined;
   const surfaceBusy = tableReadOnly ? 'table.readOnly' : busy;
 
   return (
@@ -761,7 +796,16 @@ export default function TabletopApp() {
         <a className="tt-brand" href="/" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
         <span className="tt-topbar__divider" aria-hidden="true" />
         <div className="tt-workspace-picker">
-          <button type="button" className="tt-workspace-picker__button" aria-label={`Tables: ${workspaceLabel(view)}`} aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
+          {renameDraft !== null ? <form className="tt-table-rename" onSubmit={(event) => { event.preventDefault(); submitRename(); }}>
+            <label className="tt-visually-hidden" htmlFor="tt-table-rename-input">Table name</label>
+            <input id="tt-table-rename-input" value={renameDraft} maxLength={WORKSPACE_TITLE_MAX_CHARS} autoFocus onFocus={(event) => event.currentTarget.select()}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); setRenameDraft(null); } }}
+              onBlur={submitRename} />
+          </form> : <>
+            <button type="button" className="tt-workspace-picker__button" aria-label={`Tables: ${workspaceLabel(view)}`} aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
+            {canRename && <button type="button" className="tt-table-rename-trigger" aria-label="Rename table" title="Rename table" disabled={busy !== null} onClick={() => { setWorkspaceMenuOpen(false); setRenameDraft(workspaceLabel(view)); }}><Pencil size={14} /></button>}
+          </>}
           {workspaceMenuOpen && <>
             <button className="tt-menu-dismiss" type="button" aria-label="Close table menu" onClick={() => setWorkspaceMenuOpen(false)} />
             <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span><button role="menuitem" type="button" onClick={openStartPage}><Plus size={15} /><span><strong>New table</strong><small>Choose a prepared table or describe your own</small></span><ArrowRight size={14} /></button><hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
@@ -804,12 +848,14 @@ export default function TabletopApp() {
         onInvite={canInvite ? openInviteDialog : undefined}
         onFocusObject={requestCanvasFocus}
         aiContent={aiContent}
-        assistantContent={tableAssistant}
-        promptContent={aiContent && capabilities.model.enabled ? <form className="tt-canvas-composer" onSubmit={(event) => { event.preventDefault(); if (!draftPrompt.trim()) return; setAiPrefill({ text: draftPrompt.trim(), key: Date.now() }); setDraftPrompt(''); requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.ai); }}><label className="tt-visually-hidden" htmlFor="tt-canvas-change-prompt">Describe a rule change</label><input id="tt-canvas-change-prompt" value={draftPrompt} maxLength={1200} onChange={(event) => setDraftPrompt(event.target.value)} placeholder="What would you like to change?" /><button type="submit" aria-label="Prepare a change" disabled={!draftPrompt.trim()}><Send size={17} /></button><small>Review a draft before using it.</small></form> : undefined}
+        auxiliaryObjects={isTableWorkspaceView(view) ? tableChat.cards : undefined}
+        visibleNodeIds={chatVisibleIds}
+        promptContent={isTableWorkspaceView(view) ? tableChat.bar : aiContent && capabilities.model.enabled ? <form className="tt-canvas-composer" onSubmit={(event) => { event.preventDefault(); if (!draftPrompt.trim()) return; setAiPrefill({ text: draftPrompt.trim(), key: Date.now() }); setDraftPrompt(''); requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.ai); }}><label className="tt-visually-hidden" htmlFor="tt-canvas-change-prompt">Describe a rule change</label><input id="tt-canvas-change-prompt" value={draftPrompt} maxLength={1200} onChange={(event) => setDraftPrompt(event.target.value)} placeholder="What would you like to change?" /><button type="submit" aria-label="Prepare a change" disabled={!draftPrompt.trim()}><Send size={17} /></button><small>Review a draft before using it.</small></form> : undefined}
         focusNodeId={focusNodeId}
         focusRequestKey={focusRequestKey}
         openedObjectId={openedObjectId}
         onOpenObject={setOpenedObjectId}
+        onEditRules={view.kind === 'table' && view.actor.role === 'owner' && capabilities.model.enabled && !tableReadOnly ? tableChat.editRules : undefined}
         inspectorContent={<>
           {selectedNode && compiled.plan && <ObjectInspector node={selectedNode} plan={compiled.plan} onClose={() => setSelectedNodeId(null)} />}
         </>}

@@ -1,6 +1,8 @@
 import type { DomainState, EncounterState, InvoiceState, PhysicsParams, TeachingState, WorkspaceView } from '../shared/contracts';
 import type { TableState } from '../shared/table-contracts';
+import { GENERATIVE_LIMITS, type GenerativeCanvas, type GenerativeViewDescriptor } from '../shared/generative-contracts';
 import { calculatePhysics, reconcileInvoice } from '../domain';
+import { generativeCanvasSchema, generativeIdSchema, generativeViewDescriptorSchema } from './generative/schema';
 import { z } from 'zod';
 
 export type Visibility = 'private' | 'shared';
@@ -19,6 +21,10 @@ const object = (x: unknown): x is Record<string, unknown> => !!x && typeof x ===
 const stateKind = (value: unknown, kind: DomainState['kind']) => object(value) && value.kind === kind && Number.isSafeInteger(value.dataRevision) && Number.isSafeInteger(value.ruleRevision);
 const validators: Record<string, (value: unknown) => boolean> = {
   TableStateV1: v => stateKind(v, 'table'), TableRowsV1: v => Array.isArray(v) && v.length <= 100 && v.every(r => object(r) && typeof r.id === 'string' && object(r.values)), RuleRevisionV1: v => Number.isSafeInteger(v) && Number(v) >= 0,
+  TableActionsV1: v => Array.isArray(v) && v.length <= 32 && v.every(action => object(action) && typeof action.id === 'string' && typeof action.title === 'string' && typeof action.description === 'string' && Array.isArray(action.roles) && action.roles.every(role => role === 'owner' || role === 'participant') && Array.isArray(action.parameters) && Array.isArray(action.conditions) && Array.isArray(action.effects) && typeof action.requireTurn === 'boolean' && typeof action.advanceTurn === 'boolean'),
+  GenerativeCanvasV1: v => generativeCanvasSchema.safeParse(v).success,
+  GenerativeViewDescriptorV1: v => generativeViewDescriptorSchema.safeParse(v).success,
+  GenerativeViewIdV1: v => generativeIdSchema.safeParse(v).success,
   InvoiceStateV1: v => stateKind(v, 'invoice'), TeachingStateV1: v => stateKind(v, 'teaching'), EncounterStateV1: v => stateKind(v, 'encounter'),
   InvoiceResultV1: v => object(v) && Array.isArray(v.rows) && Array.isArray(v.gaps) && finite(v.knownExpectedSatang) && finite(v.unknownCount),
   'ReviewItemV1[]': v => Array.isArray(v) && v.every(x => object(x) && typeof x.id === 'string' && typeof x.shipmentId === 'string' && typeof x.reason === 'string' && Array.isArray(x.sourceIds)),
@@ -36,14 +42,19 @@ const manifestSchema = z.strictObject({
     position: z.strictObject({ x: z.number().finite(), y: z.number().finite() }),
     inputs: z.record(z.string(), z.unknown()), visibility: z.enum(['private', 'shared']),
     version: z.literal(1), visible: z.boolean().optional(),
-  })).min(1).max(24),
+  })).max(24),
   bindings: z.array(z.strictObject({ id: z.string().min(1).max(300), from: endpointSchema, to: endpointSchema, valueType: z.string().min(1).max(80) })).max(96),
 });
 export const capabilityRegistry: Readonly<Record<string, Capability>> = {
   'table.sources': { version: 1, inputs: { state: port('TableStateV1', 'private') }, outputs: {}, evaluate: () => ({}) },
   'table.rules': { version: 1, inputs: { state: port('TableStateV1', 'private') }, outputs: { revision: port('RuleRevisionV1') }, evaluate: i => ({ revision: (i.state as TableState).ruleRevision }) },
   'table.collection': { version: 1, inputs: { rows: port('TableRowsV1'), revision: port('RuleRevisionV1') }, outputs: { rows: port('TableRowsV1') }, evaluate: identity('rows') },
-  'table.actions': { version: 1, inputs: { revision: port('RuleRevisionV1') }, outputs: {}, evaluate: () => ({}) },
+  'table.actions': { version: 1, inputs: { revision: port('RuleRevisionV1'), actions: port('TableActionsV1') }, outputs: { actions: port('TableActionsV1') }, evaluate: identity('actions') },
+  'table.canvas': { version: 1, inputs: { canvas: port('GenerativeCanvasV1') }, outputs: { canvas: port('GenerativeCanvasV1') }, evaluate: identity('canvas') },
+  'table.generated-view.scene': generatedViewCapability('scene'),
+  'table.generated-view.chart': generatedViewCapability('chart'),
+  'table.generated-view.metric': generatedViewCapability('metric'),
+  'table.generated-view.controls': generatedViewCapability('controls'),
   'invoice.source': { version: 1, inputs: { state: port('InvoiceStateV1', 'private') }, outputs: { invoice: port('InvoiceStateV1', 'private') }, evaluate: i => ({ invoice: i.state }) },
   'invoice.reconcile': { version: 1, inputs: { invoice: port('InvoiceStateV1', 'private') }, outputs: { result: port('InvoiceResultV1', 'private'), exceptions: port('ReviewItemV1[]', 'private'), surchargeExceptions: port('ReviewItemV1[]', 'private') }, evaluate: i => {
     const result = reconcileInvoice(i.invoice as InvoiceState);
@@ -64,6 +75,31 @@ export const capabilityRegistry: Readonly<Record<string, Capability>> = {
   'encounter.actions': { version: 1, inputs: { board: port('EncounterBoardV1') }, outputs: {}, evaluate: () => ({}) },
 };
 
+function generatedViewCapability(kind: GenerativeViewDescriptor['kind']): Capability {
+  const relationInputs: Record<string, Port> = {};
+  for (let index = 0; index < 6; index += 1) relationInputs[`relatedRows${index}`] = port('TableRowsV1', 'shared', false);
+  for (let index = 0; index < GENERATIVE_LIMITS.canvasViews; index += 1) relationInputs[`relatedViews${index}`] = port('GenerativeViewDescriptorV1', 'shared', false);
+  return {
+    version: 1,
+    inputs: {
+      canvas: port('GenerativeCanvasV1'),
+      viewId: port('GenerativeViewIdV1'),
+      rows: port('TableRowsV1', 'shared', false),
+      actions: port('TableActionsV1', 'shared', false),
+      ...relationInputs,
+    },
+    outputs: { descriptor: port('GenerativeViewDescriptorV1') },
+    evaluate: inputs => {
+      const canvas = inputs.canvas as GenerativeCanvas;
+      const descriptor = canvas.views.find(view => view.id === inputs.viewId);
+      if (!descriptor || descriptor.kind !== kind) throw new Error('Generated view descriptor is missing or incompatible.');
+      if (descriptor.kind === 'chart' && !Array.isArray(inputs.rows)) throw new Error('Generated chart rows are unresolved.');
+      if (descriptor.kind === 'controls' && !Array.isArray(inputs.actions)) throw new Error('Generated table actions are unresolved.');
+      return { descriptor };
+    },
+  };
+}
+
 /** Compile a bounded, curated graph. A failure returns no partially executable plan. */
 export function compileManifest(rawManifest: unknown, registry: Readonly<Record<string, Capability>> = capabilityRegistry): Compilation {
   const diagnostics: Diagnostic[] = [];
@@ -71,6 +107,7 @@ export function compileManifest(rawManifest: unknown, registry: Readonly<Record<
   const parsed = manifestSchema.safeParse(rawManifest);
   if (!parsed.success) return { ok: false, diagnostics: [{ code: 'SCHEMA', message: 'Unsupported manifest shape/version or resource limit' }] };
   const manifest: Manifest = parsed.data;
+  if (manifest.kind !== 'table' && manifest.nodes.length === 0) return { ok: false, diagnostics: [{ code: 'SCHEMA', message: 'Unsupported manifest shape/version or resource limit' }] };
   const nodes = new Map<string, PlanNode>();
   const incoming = new Map<string, Binding>(); const edges = new Map<string, string[]>();
   for (const node of manifest.nodes) {
@@ -120,17 +157,92 @@ const binding = (from: string, output: string, to: string, input: string, valueT
 export function manifestForWorkspace(view: WorkspaceView): Manifest {
   const state = view.domain;
   if (state.kind === 'table') {
-    const nodes = [node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private')];
-    if (view.actor.role === 'owner') nodes.unshift(node('table.sources', 'table.sources', 'Files', 40, 40, { state }, 'private'));
+    const nodes: PlanNode[] = [];
+    if (view.actor.role === 'owner' && state.sources.length > 0) nodes.push(node('table.sources', 'table.sources', 'Files', 40, 40, { state }, 'private'));
+    if (state.program !== null || (view.actor.role === 'owner' && state.candidate !== null)) nodes.push(node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private'));
     const bindings: Binding[] = [];
+    const collectionNodeIds = new Map<string, string>();
     for (const [index, collection] of (state.program?.collections ?? []).entries()) {
       const collectionNode = `table.collection.${collection.id}`;
       nodes.push(node(collectionNode, 'table.collection', collection.title, 580 + Math.floor(index / 2) * 540, 40 + index % 2 * 520, { rows: state.records[collection.id] ?? [] }));
+      collectionNodeIds.set(collection.id, collectionNode);
       bindings.push(binding('table.rules', 'revision', collectionNode, 'revision', 'RuleRevisionV1'));
     }
     if (state.program) {
-      nodes.push(node('table.actions', 'table.actions', 'Actions', 580 + Math.ceil(state.program.collections.length / 2) * 540, 40));
+      nodes.push(node('table.actions', 'table.actions', 'Actions', 580 + Math.ceil(state.program.collections.length / 2) * 540, 40, { actions: state.program.actions }));
       bindings.push(binding('table.rules', 'revision', 'table.actions', 'revision', 'RuleRevisionV1'));
+    }
+
+    const canvas = state.program?.canvas;
+    if (canvas && nodes.length < 24) {
+      const canvasNodeId = 'table.canvas';
+      nodes.push(node(canvasNodeId, 'table.canvas', 'Generated views', 0, 0, { canvas }, 'shared', false));
+      const parsedCanvas = generativeCanvasSchema.safeParse(canvas);
+      if (parsedCanvas.success) {
+        const availableViews = Math.max(0, 24 - nodes.length);
+        const generatedViews = parsedCanvas.data.views.slice(0, Math.min(GENERATIVE_LIMITS.canvasViews, availableViews));
+        const generatedNodeIds = new Map(generatedViews.map(descriptor => [descriptor.id, `table.view.${descriptor.id}`]));
+        const nodePositions = new Map(nodes.map(item => [item.id, item.position]));
+        const viewPositions = new Map<string, { x: number; y: number }>();
+        const occupiedAnchors = new Map<string, number>();
+        const positionForView = (descriptor: GenerativeViewDescriptor, index: number): { x: number; y: number } => {
+          const chartAnchor = descriptor.kind === 'chart' ? descriptor.collection : undefined;
+          const collectionAnchor = chartAnchor ?? descriptor.relatedTo?.collections?.find(id => collectionNodeIds.has(id));
+          const viewAnchor = descriptor.relatedTo?.views?.find(id => viewPositions.has(id));
+          const anchorId = collectionAnchor ? collectionNodeIds.get(collectionAnchor) : viewAnchor ? generatedNodeIds.get(viewAnchor) : undefined;
+          const anchor = anchorId ? nodePositions.get(anchorId) ?? viewPositions.get(collectionAnchor ?? viewAnchor ?? '') : undefined;
+          if (!anchor) return { x: 580 + Math.floor(index / 2) * 540, y: 40 + index % 2 * 360 };
+          const key = anchorId ?? 'canvas';
+          const offset = occupiedAnchors.get(key) ?? 0;
+          occupiedAnchors.set(key, offset + 1);
+          return { x: anchor.x + 540, y: anchor.y + offset * 340 };
+        };
+
+        for (const [index, descriptor] of generatedViews.entries()) {
+          const id = generatedNodeIds.get(descriptor.id)!;
+          const position = positionForView(descriptor, index);
+          viewPositions.set(descriptor.id, position);
+          nodePositions.set(id, position);
+          nodes.push(node(id, `table.generated-view.${descriptor.kind}`, descriptor.title.slice(0, 160), position.x, position.y, { viewId: descriptor.id }));
+          if (bindings.length < 96) bindings.push(binding(canvasNodeId, 'canvas', id, 'canvas', 'GenerativeCanvasV1'));
+
+          if (descriptor.kind === 'chart' && collectionNodeIds.has(descriptor.collection) && bindings.length < 96) {
+            bindings.push(binding(collectionNodeIds.get(descriptor.collection)!, 'rows', id, 'rows', 'TableRowsV1'));
+          }
+          if (descriptor.kind === 'controls' && state.program && bindings.length < 96) {
+            bindings.push(binding('table.actions', 'actions', id, 'actions', 'TableActionsV1'));
+          }
+          for (const [relationIndex, collectionId] of (descriptor.relatedTo?.collections ?? []).entries()) {
+            const sourceId = collectionNodeIds.get(collectionId);
+            if (!sourceId || relationIndex >= 6 || bindings.length >= 96) continue;
+            if (descriptor.kind === 'chart' && collectionId === descriptor.collection) continue;
+            bindings.push(binding(sourceId, 'rows', id, `relatedRows${relationIndex}`, 'TableRowsV1'));
+          }
+        }
+
+        const relationPairs = new Set<string>();
+        const viewIndex = new Map(generatedViews.map((descriptor, index) => [descriptor.id, index]));
+        for (const descriptor of generatedViews) {
+          for (const relatedId of descriptor.relatedTo?.views ?? []) {
+            const fromIndex = viewIndex.get(descriptor.id);
+            const toIndex = viewIndex.get(relatedId);
+            if (fromIndex === undefined || toIndex === undefined || fromIndex === toIndex) continue;
+            const [earlierId, laterId] = fromIndex < toIndex ? [descriptor.id, relatedId] : [relatedId, descriptor.id];
+            relationPairs.add(`${earlierId}\u0000${laterId}`);
+          }
+        }
+        const incomingViewRelations = new Map<string, number>();
+        for (const pair of relationPairs) {
+          const [sourceViewId, targetViewId] = pair.split('\u0000');
+          const slot = incomingViewRelations.get(targetViewId) ?? 0;
+          if (slot >= GENERATIVE_LIMITS.canvasViews || bindings.length >= 96) continue;
+          const sourceNodeId = generatedNodeIds.get(sourceViewId);
+          const targetNodeId = generatedNodeIds.get(targetViewId);
+          if (!sourceNodeId || !targetNodeId) continue;
+          incomingViewRelations.set(targetViewId, slot + 1);
+          bindings.push(binding(sourceNodeId, 'descriptor', targetNodeId, `relatedViews${slot}`, 'GenerativeViewDescriptorV1'));
+        }
+      }
     }
     return { version: 1, kind: 'table', nodes, bindings };
   }

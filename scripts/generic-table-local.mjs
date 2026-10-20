@@ -9,16 +9,23 @@ import { tableScenarioSources, equipmentChange, shiftsChange, gameChange } from 
 
 const port = Number(process.env.GENERIC_FIXTURE_PORT ?? '4313');
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error('Invalid loopback port');
+const providerRequestCap = Number(process.env.GENERIC_AI_REQUEST_CAP ?? '6');
+if (!Number.isInteger(providerRequestCap) || providerRequestCap < 1 || providerRequestCap > 6) throw Error('Local provider request cap must be between 1 and 6');
 const origin = `http://127.0.0.1:${port}`;
 const real = process.argv.includes('--real-ai');
-const env = real ? parseEnv(await readFile(resolve('..', '.env.deploy.local'), 'utf8')) : {};
+const env = real ? parseEnv(await readFile(resolve(process.env.TABLETOP_CREDENTIAL_FILE ?? '../.env.deploy.local'), 'utf8')) : {};
 if (real && !env.DEEPSEEK_KEY) throw Error('DEEPSEEK_KEY is not ready');
-const output = resolve('test-results/generic-table-local');
+const selectedCase = process.env.GENERATIVE_CASE;
+if (selectedCase && !['cafe', 'shadow', 'water'].includes(selectedCase)) throw Error('Unknown generative acceptance case');
+const output = resolve(process.argv.includes('--generative-auto') ? `test-results/generative-live${selectedCase ? `-${selectedCase}` : ''}` : 'test-results/generic-table-local');
 await mkdir(output, { recursive: true });
 // Preserve each previous trial, including rejected live proposals, before a rerun.
 const archive = resolve(output, 'runs', new Date().toISOString().replace(/[:.]/g, '-'));
 await mkdir(archive, { recursive: true });
-for (const name of ['live-api-acceptance.json', 'live-ai-receipts.json', 'fixture-api-acceptance.json']) {
+for (const name of [
+  'live-api-acceptance.json', 'live-ai-receipts.json', 'fixture-api-acceptance.json', 'report.json',
+  ...['cafe', 'shadow', 'water'].flatMap(id => [`${id}-generated.json`, `${id}-played.png`, `${id}-failure.png`]),
+]) {
   try { await copyFile(resolve(output, name), resolve(archive, name)); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
@@ -54,11 +61,12 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       DEEPSEEK_KEY: real ? env.DEEPSEEK_KEY : 'synthetic-provider-key', AI_MONTHLY_BUDGET_MICRO_USD: '200000', AI_DAILY_BUDGET_MICRO_USD: '200000' },
     outboundService: async request => {
       if (request.url !== 'https://api.deepseek.com/chat/completions') throw Error('External endpoint blocked by fixture');
-      if (++providerCalls > 6) return Response.json({error:'Local acceptance request cap reached'}, {status:429});
+      if (++providerCalls > providerRequestCap) return Response.json({error:'Local acceptance request cap reached'}, {status:429});
       const body = await request.clone().json();
       if (real) {
         // Miniflare's Request class is separate from Node's built-in fetch.
         let response;
+        const startedAt = Date.now();
         try {
           response = await fetch(request.url, { method: request.method, headers: { authorization: request.headers.get('authorization'), 'content-type': 'application/json' }, body: JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(35_000) });
         } catch (error) {
@@ -66,9 +74,9 @@ const mf = new Miniflare(convertV4MiniflareOptions({
           return Response.json({ error: 'Local provider transport failed' }, { status: 502 });
         }
         const receipt = await response.clone().json().catch(() => ({}));
-        aiReceipts.push({ call: providerCalls, status: response.status, usage: receipt.usage, model: receipt.model,
+        aiReceipts.push({ call: providerCalls, status: response.status, elapsedMs: Date.now() - startedAt, usage: receipt.usage, model: receipt.model,
           output: receipt.choices?.[0]?.message?.content, finishReason: receipt.choices?.[0]?.finish_reason });
-        await writeFile(resolve(output, 'live-ai-receipts.json'), JSON.stringify({ syntheticAccounts: true, realProvider: true, maximumRequests: 6, receipts: aiReceipts }, null, 2));
+        await writeFile(resolve(output, 'live-ai-receipts.json'), JSON.stringify({ syntheticAccounts: true, realProvider: true, maximumRequests: providerRequestCap, receipts: aiReceipts }, null, 2));
         return response;
       }
       const input = JSON.stringify(body);
@@ -92,9 +100,17 @@ for (const actor of actors) await db.batch([
   db.prepare('INSERT INTO users(id,provider_sub,email,name,is_admin,created_at) VALUES(?,?,?,?,?,?)').bind(actor.id, `fixture:${actor.id}`, `${actor.role}@example.test`, actor.name, actor.role === 'owner' ? 1 : 0, now),
   db.prepare('INSERT INTO web_sessions(token_hash,csrf_hash,user_id,created_at,last_seen_at,expires_at) VALUES(?,?,?,?,?,?)').bind(hash(actor.token), hash(csrf(actor.token)), actor.id, now, now, now + 86_400_000),
 ]);
-console.log(JSON.stringify({ ready: true, origin, login: origin + '/__fixture', accounts: 'synthetic', provider: real ? 'real DeepSeek, maximum 6 calls and $0.20 ledger' : 'synthetic', sourceFiles: output }));
-if (process.argv.includes('--auto')) {
-  try { const { runGenericApiAcceptance } = await import('./generic-api-acceptance.mjs'); await runGenericApiAcceptance({ origin, actors, output, real }); }
+console.log(JSON.stringify({ ready: true, origin, login: origin + '/__fixture', accounts: 'synthetic', provider: real ? `real DeepSeek, maximum ${providerRequestCap} calls and $0.20 ledger` : 'synthetic', sourceFiles: output }));
+if (process.argv.includes('--auto') || process.argv.includes('--generative-auto')) {
+  try {
+    if (process.argv.includes('--generative-auto')) {
+      const { runGenerativeLiveAcceptance } = await import('./generative-live-acceptance.mjs');
+      await runGenerativeLiveAcceptance({ origin, actors, output, real });
+    } else {
+      const { runGenericApiAcceptance } = await import('./generic-api-acceptance.mjs');
+      await runGenericApiAcceptance({ origin, actors, output, real });
+    }
+  }
   catch (error) {
     const namespace = await mf.getDurableObjectNamespace('ROOMS');
     const rooms = await db.prepare('SELECT id FROM rooms').all();

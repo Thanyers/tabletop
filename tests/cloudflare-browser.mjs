@@ -61,9 +61,12 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       tableAssistantReply = null;
     } else if (input.kind === 'table') {
       if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
-      expect(input.sources).toHaveLength(1);
-      expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);
-      expect(input.sources[0].text).toBe(tableAIReply.expectedText);
+      if (tableAIReply.expectedSources) expect(input.sources).toEqual(tableAIReply.expectedSources);
+      else {
+        expect(input.sources).toHaveLength(1);
+        expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);
+        expect(input.sources[0].text).toBe(tableAIReply.expectedText);
+      }
       expect(typeof input.prompt).toBe('string');
       change = tableAIReply.change;
       tableAIReply = null;
@@ -106,6 +109,8 @@ try {
   browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
   async function newPage(actor, url = origin) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    // Long scenarios idle between assistant steps; the dedicated collapse check opts back in.
+    await context.addInitScript(() => { try { if (localStorage.getItem('tabletop.assistant.idleMs') === null) localStorage.setItem('tabletop.assistant.idleMs', 'off'); } catch { /* storage blocked */ } });
     if (actor) await context.addCookies([{ name: 'tabletop_local_session', value: actor.token, url: origin, httpOnly: true, sameSite: 'Lax' }]);
     const page = await context.newPage(); pages.push(page);
     page.on('pageerror', error => errors.push(error.message));
@@ -133,6 +138,13 @@ try {
     await expect(editor).toHaveAttribute('data-canvas-object', id);
     await expect(editor).toBeVisible();
     return editor;
+  }
+  async function setTableOptionsOpen(page, open) {
+    const options = page.locator('.tt-table-options');
+    const isOpen = await options.getAttribute('open') !== null;
+    if (isOpen !== open) await options.locator('summary').click();
+    if (open) await expect(options).toHaveAttribute('open', '');
+    else await expect(options).not.toHaveAttribute('open');
   }
   const welcomeIdentityCounts = () => db.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM web_sessions) AS sessions, (SELECT COUNT(*) FROM oauth_states) AS oauth, (SELECT COUNT(*) FROM rooms) AS rooms').first();
   const beforeWelcome = await welcomeIdentityCounts();
@@ -189,6 +201,9 @@ try {
   demo.on('pageerror', error => errors.push(error.message));
   demoContext.on('request', request => {
     const url = new URL(request.url());
+    // Edge may open its internal downloads UI during export checks. Its
+    // browser-owned resources are not application network requests.
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
     if (url.origin !== origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/internal/')) {
       publicDemoRequests.push({ method: request.method(), pathname: url.pathname });
     }
@@ -285,11 +300,11 @@ try {
   await dm.getByTestId('start-page').getByRole('button', { name: /Shared encounter.*Run turns/ }).click();
   const createdResponse = await created;
   expect(createdResponse.status()).toBe(201);
-  let room = await createdResponse.json();
+  const room = await createdResponse.json();
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, true);
   await expect(dm.getByRole('link', { name: 'Try a demo', exact: true })).toHaveAttribute('target', '_blank');
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, false);
   let miraInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'mira' });
   const pipInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'pip' });
   expect(miraInvite.status).toBe(201); expect(pipInvite.status).toBe(201);
@@ -389,12 +404,37 @@ try {
   expect(metadata.status).toBe(200);
   expect(JSON.stringify(metadata.body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
   expect(metadata.body.workspaces.some(item => item.id === room.id)).toBe(true);
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, true);
   await dm.getByRole('button', { name: 'Admin', exact: true }).click();
   await expect(dm.getByRole('dialog', { name: 'Table metadata' })).toContainText(room.id);
   await dm.getByRole('button', { name: 'Close admin panel' }).click();
-  await dm.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(dm, false);
   mark('Admin sees room metadata; an unrelated account cannot read the room or admin directory');
+
+  // F002: the owner renames the table from the top bar; members see it live and in My tables but cannot rename.
+  await expect(pip.getByRole('button', { name: 'Rename table', exact: true })).toHaveCount(0);
+  await dm.getByRole('button', { name: 'Rename table', exact: true }).click();
+  const renameInput = dm.getByLabel('Table name', { exact: true });
+  await expect(renameInput).toBeFocused();
+  await renameInput.fill('Dragon bridge');
+  await renameInput.press('Escape');
+  await expect(dm.locator('.tt-workspace-picker__button')).not.toContainText('Dragon bridge');
+  await dm.getByRole('button', { name: 'Rename table', exact: true }).click();
+  await renameInput.fill('  Dragon bridge  ');
+  await renameInput.press('Enter');
+  await expect(dm.locator('.tt-workspace-picker__button')).toContainText('Dragon bridge');
+  await expect(pip.locator('.tt-workspace-picker__button')).toContainText('Dragon bridge');
+  expect((await api(pip, '/api/session')).body.workspaces.find(item => item.id === room.id)?.title).toBe('Dragon bridge');
+  const memberRename = await command(pip, 'workspace.rename', { title: 'Stolen name' });
+  expect(memberRename.status).toBe(403);
+  await dm.getByRole('button', { name: 'Rename table', exact: true }).click();
+  await renameInput.fill('   ');
+  await renameInput.press('Enter');
+  await expect(dm.getByText('A table name needs 1 to 100 characters', { exact: false })).toBeVisible();
+  await expect(renameInput).toBeVisible();
+  await renameInput.press('Escape');
+  await expect(dm.locator('.tt-workspace-picker__button')).toContainText('Dragon bridge');
+  mark('Owner renames the table from the top bar; members see the new name live and in My tables, cannot rename, and blank names are refused');
 
   // /new start page: prepared cards, reload and history, and a typed description that waits in the rule draft.
   const starter = missingLink;
@@ -418,9 +458,52 @@ try {
   const textRoom = await (await createdFromText).json();
   expect(textRoom.kind).toBe('table');
   await expect(starter).toHaveURL(`${origin}/t/${textRoom.id}`);
-  await expect(starter.getByLabel('How should this table work?', { exact: true })).toHaveValue(description);
+  const chat = starter.getByTestId('table-chat-bar');
+  const composer = chat.getByRole('textbox', { name: 'Message', exact: true });
+  await expect(composer).toHaveValue(description);
+  await expect(starter.locator('.tt-canvas-node')).toHaveCount(0);
+  await expect(starter.getByTestId('table-chat-answer')).toHaveCount(0);
   expect((await api(starter, `/api/workspaces/${textRoom.id}`)).body.domain.program).toBeNull();
-  mark('Start page at /new offers the three prepared tables, survives reload and back/forward, and a typed description opens an empty shared table with the description waiting in its rule draft');
+  mark('Start page at /new offers the prepared tables, survives reload and back/forward, and a typed description opens an empty table with the prompt in its chat bar');
+  await starter.setViewportSize({ width: 390, height: 844 });
+  const canvasBox = await starter.locator('.tt-canvas-panel').boundingBox();
+  const chatBox = await chat.boundingBox();
+  expect(canvasBox).toBeTruthy();
+  expect(chatBox).toBeTruthy();
+  expect(chatBox.x).toBeGreaterThanOrEqual(canvasBox.x - 1);
+  expect(chatBox.x + chatBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width + 1);
+  expect(chatBox.y + chatBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height + 1);
+  expect(await starter.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await composer.fill(Array.from({ length: 8 }, (_, index) => `Line ${index + 1}`).join('\n'));
+  await expect.poll(() => composer.evaluate(element => element.clientHeight)).toBeLessThanOrEqual(110);
+  await composer.fill('first line');
+  await composer.press('Shift+Enter');
+  await composer.type('second line');
+  await expect(composer).toHaveValue('first line\nsecond line');
+  mark('F006 chat bar stays inside the narrow Canvas, has no horizontal overflow, and caps multiline entry at five rows');
+  const requestsBeforeCancel = providerCalls;
+  let modelPosts = 0;
+  const countModelPosts = request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/model')) modelPosts += 1;
+  };
+  starter.on('request', countModelPosts);
+  await composer.fill('Require consent before a table prompt is sent.');
+  await composer.press('Enter');
+  const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+  await expect(consent).toBeVisible();
+  const consentCopy = (await consent.innerText()).replace(/\s+/gu, ' ');
+  expect(consentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
+  expect(consentCopy).toContain('Chat history is not included.');
+  expect(consentCopy).toContain('Private source files included');
+  expect(consentCopy).toContain('No private source files are attached.');
+  expect(modelPosts).toBe(0);
+  await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(composer).toHaveValue('Require consent before a table prompt is sent.');
+  expect(modelPosts).toBe(0);
+  expect(providerCalls).toBe(requestsBeforeCancel);
+  starter.off('request', countModelPosts);
+  mark('F006 Enter opens explicit table-context consent; Cancel preserves the draft message and makes no provider request');
+  await starter.setViewportSize({ width: 1440, height: 1000 });
 
   await openCanvasObject(dm, 'workspace.ai');
   await dm.getByLabel('What would you like to change?', { exact: true }).fill('Allow a shield for an ally, with one AP cost and once each turn.');
@@ -439,7 +522,7 @@ try {
   mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; creates a draft without activating it');
 
   const logoutResponse = pip.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
-  await pip.locator('.tt-table-options > summary').click();
+  await setTableOptionsOpen(pip, true);
   await pip.getByRole('button', { name: 'Sign out of Google account' }).click();
   expect((await logoutResponse).status()).toBe(200);
   await expect(pip.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
