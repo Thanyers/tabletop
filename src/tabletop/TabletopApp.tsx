@@ -4,6 +4,7 @@ import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contra
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
+import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { AccountBadge, AccountSignIn } from './ui/account';
@@ -131,6 +132,9 @@ export default function TabletopApp() {
   const [resetOpen, setResetOpen] = useState(false);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const workspaceRef = useRef<WorkspaceView | null>(null);
+  // How the next change of open table is written to the address bar: the first
+  // sync after boot replaces, user navigation pushes, back/forward writes nothing.
+  const urlSyncRef = useRef<'replace' | 'push' | 'none'>('replace');
   const projectionSequenceRef = useRef(0);
   const inspectorScrollRef = useRef<HTMLDivElement>(null);
   const noticeTimerRef = useRef<number | undefined>(undefined);
@@ -250,6 +254,8 @@ export default function TabletopApp() {
     let alive = true;
     const boot = async () => {
       const fragmentTicket = inviteFromFragment();
+      const returnPath = takeReturnPath();
+      const route = parseRoute(returnPath ?? window.location.pathname);
       const callbackUrl = new URL(window.location.href);
       const googleLoginFailed = callbackUrl.searchParams.get('auth_error') === 'google_login_failed';
       let currentAuth: AuthStatus | null = null;
@@ -271,6 +277,7 @@ export default function TabletopApp() {
             if (savePendingInvite(fragmentTicket)) clearInviteFragment();
             else showNotice('This tab could not save the invitation securely. Keep the invitation link and try again after signing in.', 'error');
           }
+          saveReturnPath(returnPath ?? window.location.pathname);
           setSession(null);
           setWorkspace(null);
           return;
@@ -312,7 +319,19 @@ export default function TabletopApp() {
             clearPendingInvite();
             if (alive) showNotice(errorText(error), 'error');
           }
-        } else {
+        } else if (route?.name === 'table') {
+          try {
+            const opened = await tabletopClient.workspace(route.id);
+            if (alive) setWorkspace(opened);
+          } catch (error) {
+            if (error instanceof ApiFailure && error.status === 401) throw error;
+            if (!alive) return;
+            // Do not reveal whether the table exists; members and outsiders see the same notice.
+            window.history.replaceState({}, document.title, '/');
+            showNotice('This table is not available to this account. Ask the table owner for an invitation.', 'error');
+          }
+        } else if (route?.name !== 'new' && route?.name !== 'join') {
+          if (!route) window.history.replaceState({}, document.title, '/');
           let lastId: string | null = null;
           try { lastId = window.localStorage.getItem(lastWorkspaceKey); } catch { lastId = null; }
           const resumeId = currentSession.workspaces.find((item) => item.id === lastId)?.id ?? currentSession.workspaces[0]?.id;
@@ -333,6 +352,36 @@ export default function TabletopApp() {
     void boot();
     return () => { alive = false; };
   }, [bootstrapAttempt, refreshSession, setWorkspace, showNotice]);
+
+  useEffect(() => {
+    if (starting) return;
+    const current = parseRoute(window.location.pathname);
+    const target = view ? routePath({ name: 'table', id: view.id }) : current && current.name !== 'table' ? routePath(current) : '/';
+    const mode = urlSyncRef.current;
+    urlSyncRef.current = 'push';
+    if (mode === 'none' || window.location.pathname === target) return;
+    if (mode === 'replace') window.history.replaceState({}, document.title, target);
+    else window.history.pushState({}, document.title, target);
+  }, [view?.id, starting]);
+
+  useEffect(() => {
+    const followHistory = () => {
+      const route = parseRoute(window.location.pathname);
+      if (route?.name === 'table') {
+        if (workspaceRef.current?.id === route.id) return;
+        tabletopClient.workspace(route.id).then((opened) => {
+          urlSyncRef.current = 'none';
+          setWorkspace(opened);
+        }, (error) => showNotice(errorText(error), 'error'));
+      } else if (workspaceRef.current) {
+        urlSyncRef.current = 'none';
+        saveLastWorkspace(null);
+        setWorkspace(null);
+      }
+    };
+    window.addEventListener('popstate', followHistory);
+    return () => window.removeEventListener('popstate', followHistory);
+  }, [setWorkspace, showNotice]);
 
   useEffect(() => {
     if (!view) return;
@@ -575,7 +624,7 @@ export default function TabletopApp() {
     setInviteBusy(true);
     try {
       const invite = await tabletopClient.invite(current.id, seat, replaceOutstanding);
-      const url = new URL(window.location.href);
+      const url = new URL(routePath({ name: 'join' }), window.location.origin);
       url.hash = new URLSearchParams({ invite: invite.ticket }).toString();
       setInviteState({ seat, invite, url: url.toString() });
       setPreviousInvitesRevoked(false);
@@ -667,7 +716,7 @@ export default function TabletopApp() {
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
     <div className="tt-app">
       <header className="tt-topbar">
-        <a className="tt-brand" href="#table" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
+        <a className="tt-brand" href="/" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
         <span className="tt-topbar__divider" aria-hidden="true" />
         <div className="tt-workspace-picker">
           <button type="button" className="tt-workspace-picker__button" aria-label={`Tables: ${workspaceLabel(view)}`} aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
@@ -740,7 +789,7 @@ function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'inf
 }
 
 function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onCreate, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onCreate: (kind: CaseKind) => void; onOpen: (id: string) => void }) {
-  return <main className="tt-chooser"><header className="tt-chooser__top"><a className="tt-brand" href="#table" aria-label="Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>
+  return <main className="tt-chooser"><header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop" onClick={(event) => event.preventDefault()}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>
     {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={onDismissNotice}><X size={14} /></button></div>}
     <section className="tt-chooser__content"><h1>What are you here to do?</h1><p>Start with what you're working on. Your table will take shape around it.</p>
       <button className="tt-start-own-table" type="button" disabled={busy !== null || tableReadOnly} onClick={() => onCreate('table')}>{busy === 'workspace.create' ? <LoaderCircle size={18} className="tt-spin" /> : <Plus size={18} />}Start with your files</button>

@@ -891,6 +891,26 @@ describe('tabletop server authority', () => {
     }
   });
 
+  it('serves the app shell for page paths so deep links and reloads work', async () => {
+    const testDirectory = await mkdtemp(join(tmpdir(), 'tabletop-routes-'));
+    const safeDirectory = resolve(testDirectory);
+    let server: StartedServer | undefined;
+    try {
+      await writeFile(join(safeDirectory, 'index.html'), '<!doctype html><title>Tabletop shell</title>');
+      const opened = await openServer(':memory:', undefined, safeDirectory);
+      server = opened.server;
+      for (const path of ['/', '/new', '/join', '/t/0f8fad5b-d9cb-469f-a165-70867728950e']) {
+        const response = await fetch(`${opened.base}${path}`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/html');
+        expect(await response.text()).toContain('Tabletop shell');
+      }
+    } finally {
+      if (server) await closeServer(server);
+      await rm(safeDirectory, { recursive: true, force: true });
+    }
+  });
+
   it('keeps static assets and health checks outside the API request budget', async () => {
     const testDirectory = await mkdtemp(join(tmpdir(), 'tabletop-r1-static-'));
     const safeDirectory = resolve(testDirectory);
