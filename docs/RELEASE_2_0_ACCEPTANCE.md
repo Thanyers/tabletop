@@ -37,4 +37,10 @@ Regression เกิด FAIL ก่อนแก้และผ่านหลั
 
 ใช้ Google sessions จริงที่ล็อกอินอยู่แล้ว ไม่ได้ทำ password/consent flow ใหม่ ไม่ได้ทดสอบโทรศัพท์จริง, load/soak, accessibility ทั้งชุด หรือกู้ D1+Room+Billing ทั้งระบบ Production ตรวจ endpoints/assets/Worker bytes และเปิด UI โดยไม่สร้างห้องหรือใช้ AI เพิ่ม
 
+ตรวจจำนวนหลังส่ง: staging มี 6 ห้อง / 12 memberships / 2 users ตามขอบเขต ส่วน production เพิ่มจาก 5 เป็น 8 ห้องระหว่างช่วงทำงาน ห้องที่ใหม่ที่สุดสร้างเวลา 21:01 น. ก่อนเริ่มส่ง production เวลา 21:36 น. จึงไม่อ้างว่าจำนวนห้อง production คงเดิมตลอดงาน ไม่ได้ระบุว่าใครสร้าง และไม่มีการลบหรือรีเซ็ตห้องเหล่านี้
+
+## CI ของการรวมกลับเข้า dev
+
+[Sync CI 39440392308](https://github.com/Thanyers/tabletop/actions/runs/39440392308) ล้มที่เมนูสลับโต๊ะหลังสร้างห้องใหม่ ทั้งที่ release/main CI บน source เดียวกันผ่านแล้ว พบว่า helper รอเพียง URL และ Canvas ว่าง แต่ขั้นสร้างห้องยังรออัปเดตรายการห้องก่อนปิดเมนู จึงเปิดเมนูใหม่เร็วเกินไป [PR #38](https://github.com/Thanyers/tabletop/pull/38) เพิ่มการรอ fresh ready notice และเมนูปิดใน fixture โดยคง click/URL assertions ไม่มี sleep หรือ force click ไม่เปลี่ยนแอปที่ deploy หรือ tag
+
 หลักฐาน operator และ browser ที่มี room/account context เก็บใน ignored local test-results/release-2.0.0/ ไม่เผยแพร่ค่าเฉพาะบัญชี/ห้องหรือ invite ใน public repo ดู [Deployment](DEPLOYMENTS.md) และ [Handoff](TEAM_HANDOFF_TH.md) สำหรับวิธีเล่นและงานต่อ

@@ -4,7 +4,7 @@
 | --- | --- |
 | สถานะ | `done` — T1–T6ใน#30, T7ใน#32และR200handoff; รวมในrelease2.0.0และdeployแล้ว |
 | เจ้าของฟีเจอร์ | ผู้ใช้ (ผู้สั่งงาน); ทีมเริ่ม implementation และ Codex รับช่วง integration/verification |
-| เวอร์ชันที่คาด | F006 เป็น UI change ไม่มี migration; release รวม F005 ต้องพิจารณาข้อจำกัด rollback ของ F005 ด้วย |
+| เวอร์ชันที่ส่ง | 2.0.0 รวม F005; ไม่มี SQL migration แต่ต้องใช้ writer ที่รองรับ Canvas/expression JSON ใหม่ |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F006-T*` |
 | แทนที่ | F001-T8/T9 (island + ย่อเป็นวงกลม) สำหรับโต๊ะข้อมูล |
 
