@@ -170,6 +170,16 @@ async function openCanvasObject(page, id) {
   return editor;
 }
 
+async function refreshTable(page, tableId) {
+  const options = page.locator('.tt-table-options');
+  if (await options.getAttribute('open') === null) await options.locator('summary').click();
+  await expect(options).toHaveAttribute('open', '');
+  const refreshed = page.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
+  await options.getByRole('button', { name: 'Refresh table', exact: true }).click();
+  const response = await refreshed;
+  expect(response.status()).toBe(200);
+}
+
 async function openNewTable(owner, api) {
   const created = owner.waitForResponse((response) => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   const primary = owner.getByRole('button', { name: 'Start with your files', exact: true });
@@ -559,7 +569,10 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(restored).toContainText(archived[20].prompt);
   await expect(restored).not.toContainText(archived[0].prompt);
   const callsBeforeHistoryRead = getProviderCalls();
-  const older = restored.getByRole('button', { name: 'Load older messages', exact: true });
+  const historyDetails = restored.locator('details.tt-table-chat__history');
+  if (await historyDetails.getAttribute('open') === null) await historyDetails.locator('summary').click();
+  await expect(historyDetails).toHaveAttribute('open', '');
+  const older = historyDetails.getByRole('button', { name: 'Older messages', exact: true });
   await expect(older).toBeVisible();
   await older.click();
   await expect(restored).toContainText(archived[0].prompt);
@@ -714,9 +727,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
 
   await openCanvasObject(member, 'table.collection.boats');
-  const memberRefresh = member.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${room.id}`) && response.request().method() === 'GET');
-  await member.getByRole('button', { name: 'Refresh latest table', exact: true }).click();
-  expect((await memberRefresh).status()).toBe(200);
+  await refreshTable(member, room.id);
   const memberBeforeProposal = (await api(member, `/api/workspaces/${room.id}`)).body;
   const memberCalls = getProviderCalls();
   const memberPrompt = 'Prepare my blue boat advance for this turn.';
@@ -742,9 +753,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   mark('Generic table assistant: action proposal requires a separate confirmation; a direct table action makes a pending proposal stale');
 
   await openCanvasObject(owner, 'table.collection.boats');
-  const refresh = owner.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${room.id}`) && response.request().method() === 'GET');
-  await owner.getByRole('button', { name: 'Refresh latest table', exact: true }).click();
-  expect((await refresh).status()).toBe(200);
+  await refreshTable(owner, room.id);
   await expect(owner.getByTestId('canvas-object-editor').getByRole('cell', { name: '2', exact: true })).toHaveCount(2);
   active = (await api(owner, `/api/workspaces/${room.id}`)).body;
   const revisedProgram = structuredClone(active.domain.program);

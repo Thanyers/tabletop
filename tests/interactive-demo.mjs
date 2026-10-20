@@ -13,8 +13,10 @@ export async function verifyInteractiveDemo(page, origin, output) {
   const node = id => page.locator(`[data-canvas-object="${id}"]`);
   const fileTray = page.getByRole('complementary', { name: 'ไฟล์สำหรับเริ่มโต๊ะ', exact: true });
   async function openAdvancedOptions() {
+    const options = page.locator('.tt-practice-options');
     const summary = page.getByLabel('ตัวเลือกเดโม', { exact: true });
-    if (await summary.getAttribute('aria-expanded') !== 'true') await summary.click();
+    if (await options.getAttribute('open') === null) await summary.click();
+    await expect(options).toHaveAttribute('open', '');
   }
   async function selectActor(actorId) {
     await openAdvancedOptions();
@@ -139,7 +141,7 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(node('invoice.rules')).toHaveCount(0);
   await finish();
   await open('invoice.rules');
-  await expect(editor.getByRole('region', { name: 'Draft lifecycle', exact: true })).toContainText('Active');
+  await expect(editor.getByRole('region', { name:/^(Review this change|Rules in use)$/ })).toContainText('Active');
   await expect(editor.locator('.tt-inline-rule-list > div')).toHaveCount(5);
   await open('invoice.table');
   await expect(editor.locator('.tt-inline-kpis')).toContainText('80.00');
@@ -199,8 +201,11 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(editor).not.toContainText('Correct');
   await selectActor('practice-teacher');
   await open('lesson.source');
+  const historyDetails = page.locator('.tt-practice-footer details');
+  if (await historyDetails.getAttribute('open') === null) await historyDetails.locator('summary').click();
+  await expect(historyDetails).toHaveAttribute('open', '');
   const historyDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'ดาวน์โหลดบันทึก', exact: true }).click();
+  await historyDetails.getByRole('button', { name: 'ดาวน์โหลดบันทึก', exact: true }).click();
   const history = JSON.parse(await readFile(await (await historyDownload).path(), 'utf8'));
   expect(history.currentView.domain.parameters).toEqual({ force: 12, mass: 3, time: 2 });
   expect(history.events.some(event => event.type === 'teaching.setParameters' && event.outcome === 'applied')).toBe(true);

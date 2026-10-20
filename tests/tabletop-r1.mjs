@@ -66,7 +66,6 @@ async function clickCommand(page, locator, type) {
     locator.click(),
   ]);
   expect(response.status(), await response.text()).toBe(200);
-  await expect(page.getByRole('button', { name: 'Refresh latest table' })).toBeEnabled();
   return response.json();
 }
 async function start(page, label) {
@@ -109,7 +108,7 @@ async function upload(page, label, filename) {
   await editor.getByLabel(label, { exact: true }).setInputFiles(resolve('public/samples/r1', filename));
   const response = await result;
   expect(response.status(), await response.text()).toBe(200);
-  await expect(page.getByRole('button', { name: 'Refresh latest table' })).toBeEnabled();
+  await expect(editor.locator('.tt-source-card').filter({ hasText: filename })).toBeVisible();
 }
 async function verifySource(page, filename) {
   const editor = await openObject(page, 'invoice.source');
@@ -123,7 +122,7 @@ async function lifecycle(page, objectId) {
   for (const [label, type] of [['Preview change','evolve.simulate'],['Check rules','evolve.validate'],['Approve rules','evolve.approve'],['Use these rules','evolve.activate']]) {
     editor = await openObject(page, objectId);
     // The lifecycle label describes the next owner decision at each stage.
-    await clickCommand(page, editor.getByRole('region', { name:'Draft lifecycle', exact:true }).getByRole('button', { name:new RegExp('\\b' + label + '$') }), type);
+    await clickCommand(page, editor.getByRole('region', { name:/^(Review this change|Rules in use)$/ }).getByRole('button', { name:new RegExp('\\b' + label + '$') }), type);
   }
   return editor;
 }
@@ -246,7 +245,10 @@ try {
   await learner1.screenshot({ path: join(output, 'teaching-learner.png') });
   mark('Three real sessions share physics; learner exploration, representation and answers stay correctly scoped');
   await learner2.reload(); await expect(learner2.locator('.tt-canvas-node--lesson-scene')).toContainText('4 m');
-  await teacher.getByRole('button', { name: 'Reset table', exact: true }).click();
+  const tableOptions = teacher.locator('.tt-table-options');
+  if (await tableOptions.getAttribute('open') === null) await tableOptions.locator('summary').click();
+  await expect(tableOptions).toHaveAttribute('open', '');
+  await tableOptions.getByRole('button', { name: 'Reset table', exact: true }).click();
   // Wait for the dialog's initial focus effect before testing its keyboard trap.
   // Forcing focus here races the dialog's scheduled autofocus.
   await expect(teacher.getByRole('dialog').getByRole('button', { name: 'Keep current table' })).toBeFocused();
