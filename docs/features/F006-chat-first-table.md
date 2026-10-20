@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — Codex รับช่วง T1–T6 ตามคำสั่งผู้ใช้; รวม F005, F002 และ F007 ผ่าน local acceptance ทั้งชุด; CI ของ commit ล่าสุดอยู่ใน PR #30 |
+| สถานะ | `done` — T1–T6 merge ใน #30 → dev `ce6d69b`; CI ก่อนและหลัง merge ผ่านครบ เอกสารส่งต่อ T7 อยู่สถานะ review ใน PR #32 |
 | เจ้าของฟีเจอร์ | ผู้ใช้ (ผู้สั่งงาน); ทีมเริ่ม implementation และ Codex รับช่วง integration/verification |
 | เวอร์ชันที่คาด | F006 เป็น UI change ไม่มี migration; release รวม F005 ต้องพิจารณาข้อจำกัด rollback ของ F005 ด้วย |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F006-T*` |
