@@ -111,4 +111,42 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
    สำหรับ candidate Generative นี้ ไม่มี SQL migration/runtime dependency/secret/binding ใหม่ แต่ JSON ที่มี expression/canvas ใหม่ต้องใช้ build ที่อ่านสัญญาใหม่นี้ได้ โค้ด `v1.1.0` หรือต่ำกว่าไม่ใช่ compatible writer สำหรับห้องเหล่านั้น
 5. หลัง release ตรวจ `GET /version` ว่า `sha` ตรงกับ commit ที่ส่ง (config deploy ต้องมี `/version` ใน `assets.run_worker_first`) แล้วตรวจ asset parity และ resume ตาม scope ที่อนุมัติ แล้วอัปเดต [Deployment](DEPLOYMENTS.md) ด้วย source, version และหลักฐานที่ไม่มี credential หรือข้อมูลผู้ใช้
 
-ไม่มี deploy step ใน CI อย่าใส่ secret, account/session evidence หรือ operator receipts ใน Git; หลักฐานที่ระบุตัวตนและ runtime config อยู่ใน ignored local `test-results/` และต้องส่งต่อโดยเจ้าของระบบ
+deploy ทำโดย pipeline หลังคน merge release เท่านั้น (ดูหัวข้อถัดไป) อย่าใส่ secret, account/session evidence หรือ operator receipts ใน Git; หลักฐานที่ระบุตัวตนและ runtime config อยู่ใน ignored local `test-results/` และต้องส่งต่อโดยเจ้าของระบบ
+
+## Deploy อัตโนมัติ (CD001)
+
+merge PR `release/X.Y.Z` (หรือ `hotfix/X.Y.Z`) เข้า `main` แล้ว [`release-deploy.yml`](../.github/workflows/release-deploy.yml) ทำต่อเองจนจบ:
+
+1. รอ check `local-validation` ของ merge commit บน `main` ผ่าน (`workflow_run`)
+2. อ่านเลขจากชื่อ branch ใน merge commit และตรวจว่ามี `## X.Y.Z` ใน `CHANGELOG.md`
+3. ตรวจ secret/variable ครบ และตรวจ config ทั้งสอง environment (ชื่อ Worker, `PUBLIC_ORIGIN`, D1 ID ไม่ใช่ placeholder, `/version` อยู่ใน `run_worker_first`)
+4. สร้าง annotated tag `vX.Y.Z` บน merge commit (ถ้ามีอยู่แล้วต้องชี้ commit เดียวกัน)
+5. build ครั้งเดียวจาก tag และตรวจ `dist/version.json`
+6. staging: บันทึก D1 Time Travel bookmark → migration ที่ค้าง → deploy → smoke
+7. production: ทำซ้ำด้วยไฟล์ build ชุดเดียวกัน → smoke
+8. ล้มขั้นไหนก็หยุด เปิด issue "Deploy failed" และไม่ rollback อัตโนมัติ
+
+### ตั้งค่าครั้งแรก (admin ของ repo + เจ้าของบัญชี Cloudflare)
+
+1. สร้าง Cloudflare API token ที่ dashboard → My Profile → API Tokens ใช้สิทธิ์ระดับบัญชีเท่าที่จำเป็น: **Workers Scripts: Edit**, **D1: Edit**, **Account Settings: Read** และจำกัดเฉพาะบัญชีนี้
+2. เตรียม config จริงของแต่ละ environment เป็น **JSON ล้วน ไม่มีคอมเมนต์** โดยเริ่มจาก `wrangler.jsonc` แล้วแก้ `name`, `vars.PUBLIC_ORIGIN`, เพดาน AI, `d1_databases[0].database_name` / `database_id` ให้ตรงกับ environment นั้น (ดูชื่อใน [DEPLOYMENTS](DEPLOYMENTS.md)) · `$schema` ลบออกได้ · path อย่าง `main` และ `assets.directory` ใช้แบบ relative เหมือนเดิม
+3. ใส่ค่าใน GitHub (รันเองบนเครื่องผู้ดูแล อย่าวางค่าในแชทหรือไฟล์ที่ track):
+   ```bash
+   gh secret set CLOUDFLARE_API_TOKEN -R Thanyers/tabletop
+   gh secret set CLOUDFLARE_ACCOUNT_ID -R Thanyers/tabletop
+   gh secret set WRANGLER_CONFIG_STAGING -R Thanyers/tabletop < path/to/staging.json
+   gh secret set WRANGLER_CONFIG_PRODUCTION -R Thanyers/tabletop < path/to/production.json
+   gh variable set STAGING_URL -R Thanyers/tabletop --body https://tabletop-staging.ptchrr.workers.dev
+   gh variable set PRODUCTION_URL -R Thanyers/tabletop --body https://tabletop.ptchrr.workers.dev
+   ```
+   ชื่อ Worker ค่าเริ่มต้นคือ `tabletop-staging` / `tabletop` เปลี่ยนได้ด้วย variable `STAGING_WORKER` / `PRODUCTION_WORKER`
+4. Worker secrets (`GOOGLE_OAUTH_*`, `DEEPSEEK_KEY`, `TABLETOP_ADMIN_EMAIL`) อยู่บน Cloudflare อยู่แล้ว pipeline ไม่แตะ
+5. workflow ที่ทำงานกับ `workflow_run` อ่านไฟล์จาก default branch (`main`) จึงเริ่มทำงานตั้งแต่ release ถัดไปหลัง CD001 เข้า `main`
+
+### เมื่อ deploy ล้ม
+
+- เปิด issue "Deploy failed" ที่ pipeline สร้าง ดูขั้นที่ล้มและลิงก์ run
+- **ล้มก่อน production deploy:** production ยังเป็นรุ่นเดิม แก้แล้วรัน Actions → **Release deploy** → Run workflow ใส่ SHA ของ merge commit เดิม
+- **ล้มหลัง production deploy (smoke ไม่ผ่าน):** ตัดสินใจว่าจะออก hotfix หรือ `npx wrangler rollback` ด้วยมือ · ห้าม rollback ไป writer ที่อ่านข้อมูลรุ่นใหม่ไม่ได้ (ดู Recovery ใน [DEPLOYMENTS](DEPLOYMENTS.md))
+- **migration ทำข้อมูลเสียหาย:** ใช้ bookmark ใน summary ของ run: `npx wrangler d1 time-travel restore <database_name> --bookmark <bookmark>` (เป็นการเขียนฐาน ต้องขออนุมัติตาม [ส่งรุ่นใหม่และกู้คืน](#ส่งรุ่นใหม่และกู้คืน))
+- บันทึกเวลาที่ล้ม (`job_started_at` ใน issue) และเวลาที่แก้ลง `MEMORY.md` → Deploy failures
