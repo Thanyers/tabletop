@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { WebSocket as WebSocketExport } from 'ws';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommandAck, SessionView, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import type { ApiError } from '../src/tabletop/shared/contracts.js';
 import { hashValue } from './codec.js';
@@ -169,6 +169,37 @@ afterEach(async () => {
 });
 
 describe('tabletop server authority', () => {
+  it('relays live cursors to the other member over sockets and rejects spoofed frames (F009)', async () => {
+    const { base, server } = await openServer();
+    const owner = await createSession(base, 'Owner');
+    const member = await createSession(base, 'Member');
+    const view = await createWorkspace(base, owner, 'table');
+    const joined = await redeem(base, member, (await invite(base, owner, view.id, 'member-1')).ticket);
+    const open = (cookie: string) => new WebSocketClient(`ws://127.0.0.1:${server.port}/api/workspaces/${view.id}/socket`, { headers: { cookie, origin: base } }) as TestWebSocket & { send(data: string): void };
+    const ownerSocket = open(owner.cookie);
+    const memberSocket = open(joined.session.cookie);
+    const cursorFrames = (socket: TestWebSocket) => {
+      const seen: unknown[] = [];
+      socket.on('message', (data: Buffer) => { const parsed = JSON.parse(data.toString('utf8')) as { type?: string }; if (parsed.type === 'cursor') seen.push(parsed); });
+      return seen;
+    };
+    try {
+      await Promise.all([receiveSocketProjection(ownerSocket), receiveSocketProjection(memberSocket)]);
+      const ownerFrames = cursorFrames(ownerSocket);
+      const memberFrames = cursorFrames(memberSocket);
+      ownerSocket.send(JSON.stringify({ type: 'cursor', x: 10.7, y: 20 }));
+      ownerSocket.send(JSON.stringify({ type: 'cursor', x: 11, y: 21 }));
+      await vi.waitFor(() => expect(memberFrames).toEqual([{ type: 'cursor', actorId: view.actor.actorId, x: 11, y: 20 }]));
+      expect(ownerFrames).toEqual([]);
+      const closed = waitForSocketClose(memberSocket);
+      memberSocket.send(JSON.stringify({ type: 'cursor', x: 1, y: 1, actorId: view.actor.actorId }));
+      await closed;
+      await vi.waitFor(() => expect(ownerFrames).toEqual([{ type: 'cursor', actorId: joined.workspace.actor.actorId, leave: true }]));
+    } finally {
+      ownerSocket.close();
+      memberSocket.close();
+    }
+  });
   it('shares independent layout revisions over sockets, preserves valid actions, and rejects stale drags', async () => {
     const { base, server } = await openServer();
     const owner = await createSession(base, 'Owner');
