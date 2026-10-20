@@ -29,9 +29,10 @@
 | --- | --- |
 | 2026-10-20 | ใช้ POC เป็น reference ของประสบการณ์ แต่ยึด server authority, CAS, idempotency และ safe interpreter ของแอปจริง |
 | 2026-10-20 | เพิ่ม typed `creates` และ field default ใน JSON program เดิม; ร่างแก้ไขเพิ่ม collection/field ได้แต่ห้ามลบหรือเปลี่ยนของเดิมและห้ามใช้ initialRecords ทับข้อมูล |
-| 2026-10-20 | แชทเลือก builder สำหรับคำขอ UI ที่ชัดเจน และมี owner-only build-request fallback; ส่งต่อคำขอเดิมด้วย consent ใหม่ ไม่ส่งคำสั่งจากข้อความโมเดลไปทำงานอัตโนมัติ |
+| 2026-10-20 | แชทเลือก builder สำหรับคำขอ UI ที่ชัดเจน และมี owner-only build-request fallback; ส่งต่อคำขอเดิมโดยตรวจ consent ของผู้ใช้/โต๊ะ/epoch ตาม F013 ไม่ส่งคำสั่งจากข้อความโมเดลไปทำงานอัตโนมัติ |
 | 2026-10-20 | ปุ่ม Apply to table ใช้คำสั่งตรวจเดิมตามลำดับและตรึง candidate/revision; รายละเอียดและ private trial ยังเปิดได้ ไม่ใช้ autoactivation ตาม POC |
 | 2026-10-20 | สัญญา JSON ใหม่มี creates/default/build-request; writer รุ่นเก่าที่ไม่รู้จักสัญญานี้ใช้ rollback ไม่ได้หลังบันทึก ต้องเลือกเวอร์ชัน release และ compatible recovery แยกก่อน deploy ไม่มี SQL migration |
+| 2026-10-20 | รวม `origin/dev` ที่ `bac174b` ระหว่างส่ง PR: คง F013 ของทีมที่ให้ consent ครั้งเดียวต่อคน/โต๊ะ/epoch ครอบคลุมทั้งสองโหมดและไฟล์ภายหลังตามที่ผู้ใช้เลือก และคง pipeline CD001; แก้เฉพาะบรรทัด Changelog ที่ชนแล้วปรับ focused test ให้ตรวจ consent ครั้งแรก/ไม่ถามซ้ำ |
 
 ## ผลตรวจ
 
@@ -39,7 +40,7 @@ Node `22.23.2`; ใช้ฐาน D1/SQLite Durable Objects local ที่ท�
 
 | การตรวจ | ผล |
 | --- | --- |
-| Focused Vitest: table, record creation, generative validation, provider, intent, chat state, pinned apply | **PASS 61/61** ใน 7 files |
+| Focused Vitest: table, record creation, generative validation, provider, intent, chat state, pinned apply | **PASS 67/67** ใน 8 files (รวม consent F013 หลัง merge) |
 | Cloudflare assistant รวม owner build handoff / participant negative | **PASS 10/10** |
 | `npm run build` / `npm run build:cloudflare` | **PASS**; Cloudflare เป็น dry-run เท่านั้น |
 | `node scripts/canvas-evolution-local.mjs --auto` | **PASS 10 checks**: โต๊ะว่าง → ขอ UI → Apply → กรอกเพิ่มแถว → sample → paid → เพิ่ม summary/collection/default field → reload → member ไม่ได้เปิด builder |

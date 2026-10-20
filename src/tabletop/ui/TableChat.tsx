@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, LoaderCircle, Paperclip, X } from 'lucide-react';
-import { consentKey, consentQuestion, needsConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
+import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
 import './table-chat.css';
 
 const MAX_MESSAGE_CHARS = 1200;
@@ -11,7 +11,7 @@ export interface TableChatProps {
   epoch: number;
   actorId: string;
   mode: TableChatMode;
-  /** Current table files are shown by name in consent for both endpoints. */
+  /** Current table files are shown by name in the one-time consent for both endpoints. */
   sourceFiles: readonly { id: string; filename: string }[];
   placeholder: string;
   aiEnabled: boolean;
@@ -42,7 +42,7 @@ export function TableChat({
   explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
-  const [grantedKey, setGrantedKey] = useState<string | null>(null);
+  const [grantedKey, setGrantedKey] = useState<string | null>(() => storedConsent({ workspaceId, epoch, actorId }));
   const [asking, setAsking] = useState(false);
   const [sending, setSending] = useState(false);
   const [attaching, setAttaching] = useState(false);
@@ -57,8 +57,7 @@ export function TableChat({
   const sendLock = useRef(false);
   const idPrefix = useId().replaceAll(':', '');
   const messageId = `tt-table-chat-message-${idPrefix}`;
-  const sourceIds = sourceFiles.map((source) => source.id);
-  const scope: TableChatConsentScope = { workspaceId, epoch, actorId, mode, sourceIds };
+  const scope: TableChatConsentScope = { workspaceId, epoch, actorId };
   const scopeKey = consentKey(scope);
   const trimmed = message.trim();
   const historyBlocked = mode === 'ask' && historyStatus !== 'ready';
@@ -66,8 +65,10 @@ export function TableChat({
   const canSend = aiEnabled && !controlsBusy && !historyBlocked && trimmed.length >= 3;
 
   useEffect(() => {
-    setGrantedKey(null);
+    setGrantedKey(storedConsent(scope));
     setAsking(false);
+    // scopeKey captures every field of scope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey]);
 
   useEffect(() => {
@@ -150,7 +151,7 @@ export function TableChat({
         </ul> : <small>No table files are attached.</small>}
       </div>
       <div className="tt-table-chat-bar__consent-actions">
-        <button type="button" className="tt-table-chat-bar__consent-yes" disabled={!canSend} onClick={() => { setGrantedKey(scopeKey); void send(); }}>Send</button>
+        <button type="button" className="tt-table-chat-bar__consent-yes" disabled={!canSend} onClick={() => { setGrantedKey(rememberConsent(scope)); void send(); }}>Send</button>
         <button type="button" className="tt-table-chat-bar__consent-no" onClick={() => { setAsking(false); fieldRef.current?.focus(); }}>Cancel</button>
       </div>
     </div>}

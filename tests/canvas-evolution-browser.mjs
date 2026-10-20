@@ -19,6 +19,7 @@ export async function runCanvasEvolutionBrowser({ origin, actors, workspaceId, p
   };
   const mark = label => { report.checks.push(label); console.log(`PASS ${label}`); };
   const contexts = [];
+  let draftRequests = 0;
   const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
   const saveReport = () => writeFile(resolve(output, 'report.json'), JSON.stringify(report, null, 2));
 
@@ -60,13 +61,17 @@ export async function runCanvasEvolutionBrowser({ origin, actors, workspaceId, p
     const bar = page.getByTestId('table-chat-bar');
     const composer = bar.getByRole('textbox', { name: 'Message', exact: true });
     await composer.fill(prompt);
+    const responsePromise = page.waitForResponse(response => response.url().endsWith(`/api/workspaces/${workspaceId}/model`) && response.request().method() === 'POST');
     await bar.getByRole('button', { name: 'Send message', exact: true }).click();
     const consent = page.getByRole('alertdialog', { name: 'Send to AI', exact: true });
-    await expect(consent).toBeVisible();
-    const responsePromise = page.waitForResponse(response => response.url().endsWith(`/api/workspaces/${workspaceId}/model`) && response.request().method() === 'POST');
-    await consent.getByRole('button', { name: 'Send', exact: true }).click();
+    if (draftRequests === 0) {
+      await expect(consent).toBeVisible();
+      await consent.getByRole('button', { name: 'Send', exact: true }).click();
+    } else await expect(consent).toHaveCount(0);
     const accepted = await responsePromise;
     expect(accepted.status()).toBe(202);
+    expect(accepted.request().postDataJSON().consent).toBe(true);
+    draftRequests += 1;
     const acceptedJob = await accepted.json();
     await expect.poll(() => page.evaluate(async ({ workspaceId: roomId, id }) => {
       const response = await fetch(`/api/workspaces/${roomId}/model/${id}`);

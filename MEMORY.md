@@ -128,7 +128,7 @@
 ### 2026-10-20 — Data actions and structural requests share one composer
 - **What happened:** Owner requests to add a form or missing create action were sent to the action-only assistant; a broad routing fix then also caught “Change invoice status in this table to paid.”
 - **Root cause:** The old interpreter had updates but no typed record creation; matching the word “table” anywhere with “change” confused data changes with program changes.
-- **Correct behavior:** Route clear UI/construction requests to the builder, leave data requests on the confirmation path, and offer an owner-only builder handoff for ambiguous requests with renewed consent. Run `npx vitest run src/tabletop/ui/table-build-intent.test.ts src/tabletop/domain/table-record-actions.test.ts`.
+- **Correct behavior:** Route clear UI/construction requests to the builder, leave data requests on the confirmation path, and offer an owner-only builder handoff for ambiguous requests with the actor/table/epoch consent retained by F013. Run `npx vitest run src/tabletop/ui/table-build-intent.test.ts src/tabletop/domain/table-record-actions.test.ts`.
 
 ## Deploy failures
 
