@@ -13,6 +13,7 @@ export function canvasLayoutScopeKey(view: Pick<WorkspaceView, 'id' | 'kind' | '
 /** Rules stay owner-private while they contain only an unactivated candidate. */
 export function isSharedCanvasNodeForView(id: string, view: WorkspaceView): boolean {
   if (view.kind !== 'table' || view.domain.kind !== 'table' || !isSharedCanvasId(id)) return false;
+  if (id === 'table.sources') return view.domain.sources.length > 0;
   return id !== 'table.rules' || view.domain.program !== null;
 }
 

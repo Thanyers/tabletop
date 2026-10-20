@@ -221,7 +221,7 @@ describe('tabletop server authority', () => {
     } finally { socket.close(); }
   });
 
-  it('creates table owners, redeems participant seats, and keeps imported source text out of participant projections', async () => {
+  it('creates table owners, redeems participant seats, and shows imported source text to participants read-only (F008)', async () => {
     const { base } = await openServer();
     const owner = await createSession(base, 'Table owner');
     const participant = await createSession(base, 'Table participant');
@@ -242,9 +242,9 @@ describe('tabletop server authority', () => {
     const ownerView = (imported.body as CommandAck).workspace;
     expect(ownerView.domain.kind).toBe('table');
     const participantView = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: redeemed.session });
-    expect(JSON.stringify(participantView.body)).not.toContain('LOCAL_TABLE_SOURCE_SENTINEL');
+    expect(JSON.stringify(participantView.body)).toContain('LOCAL_TABLE_SOURCE_SENTINEL');
     if ((participantView.body as WorkspaceView).domain.kind !== 'table') throw new Error('Expected participant table projection.');
-    expect(((participantView.body as WorkspaceView).domain as Extract<WorkspaceView['domain'], { kind: 'table' }>).sources).toEqual([]);
+    expect(((participantView.body as WorkspaceView).domain as Extract<WorkspaceView['domain'], { kind: 'table' }>).sources.map(source => source.filename)).toEqual([tableScenarioSources.equipment.filename]);
 
     const denied = await command(base, redeemed.session, participantView.body as WorkspaceView, 'table.import', {
       filename: 'second.txt', text: 'participants cannot add sources',

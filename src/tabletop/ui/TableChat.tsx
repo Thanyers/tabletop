@@ -11,7 +11,7 @@ export interface TableChatProps {
   epoch: number;
   actorId: string;
   mode: TableChatMode;
-  /** Current private sources are shown by name in consent for both endpoints. */
+  /** Current table files are shown by name in consent for both endpoints. */
   sourceFiles: readonly { id: string; filename: string }[];
   placeholder: string;
   aiEnabled: boolean;
@@ -142,10 +142,10 @@ export function TableChat({
     {asking && <div className="tt-table-chat-bar__consent" role="alertdialog" aria-label="Send to AI">
       <div className="tt-table-chat-bar__consent-copy">
         <span>{consentQuestion(mode)}</span>
-        <span className="tt-table-chat-bar__source-label">{mode === 'draft' ? 'Private source files included' : 'Private source files not sent'}</span>
+        <span className="tt-table-chat-bar__source-label">{mode === 'draft' ? 'Table files included' : 'Table files not sent'}</span>
         {sourceFiles.length > 0 ? <ul aria-label={mode === 'draft' ? 'Included source files' : 'Excluded source files'}>
           {sourceFiles.map((source) => <li key={source.id}>{source.filename}</li>)}
-        </ul> : <small>No private source files are attached.</small>}
+        </ul> : <small>No table files are attached.</small>}
       </div>
       <div className="tt-table-chat-bar__consent-actions">
         <button type="button" className="tt-table-chat-bar__consent-yes" disabled={!canSend} onClick={() => { setGrantedKey(scopeKey); void send(); }}>Send</button>

@@ -1083,7 +1083,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(vi.mocked(respondToTablePrompt)).not.toHaveBeenCalled();
   });
 
-  it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with private sources intact', async () => {
+  it('creates table rooms, invites seated participants, runs guarded AI and CAS actions, then resumes with shared read-only sources', async () => {
     const owner = newActor('Table owner');
     const firstMember = newActor('First participant');
     const secondMember = newActor('Second participant');
@@ -1117,9 +1117,9 @@ describe('Cloudflare room Durable Object', () => {
     expect(sourceId).toBeTruthy();
 
     const participantStart = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
-    expect(JSON.stringify(participantStart.body)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(JSON.stringify(participantStart.body)).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     if (participantStart.body.domain.kind !== 'table') throw new Error('Expected participant table projection.');
-    expect(participantStart.body.domain.sources).toEqual([]);
+    expect(participantStart.body.domain.sources.map(source => source.id)).toEqual([sourceId]);
     const ownerOnlyImport = await issueCommand(stub, participantStart.body, firstMember, 'table.import', {
       filename: 'another.txt', text: 'This must be rejected for participants.',
     });
@@ -1201,7 +1201,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(participantWhileReadOnly.response.status).toBe(200);
     expect(participantWhileReadOnly.body.domain.kind).toBe('table');
     if (participantWhileReadOnly.body.domain.kind !== 'table') throw new Error('Expected read-only participant table.');
-    expect(participantWhileReadOnly.body.domain.sources).toEqual([]);
+    expect(participantWhileReadOnly.body.domain.sources).toEqual(ownerWhileReadOnly.body.domain.kind === 'table' ? ownerWhileReadOnly.body.domain.sources : []);
     expect(participantWhileReadOnly.body.domain.records).toEqual(resumedParticipant.body.domain.kind === 'table'
       ? resumedParticipant.body.domain.records : {});
 
