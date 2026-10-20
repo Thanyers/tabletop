@@ -595,6 +595,9 @@ async function verifySharedCardLayout(owner, member, tableId, api) {
 }
 
 async function createBlankTableFromPicker(page) {
+  const readyNotice = page.locator('.tt-notice').filter({ hasText: 'Shared data table is ready.' });
+  if (await readyNotice.count()) await readyNotice.getByRole('button', { name: 'Dismiss message' }).click();
+  await expect(readyNotice).toHaveCount(0);
   const created = page.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   void created.catch(() => {});
   await page.locator('.tt-workspace-picker__button').click();
@@ -608,6 +611,8 @@ async function createBlankTableFromPicker(page) {
   await expect(page).toHaveURL(new RegExp(`/t/${table.id}$`));
   const visibleTitle = await page.locator('.tt-workspace-picker__button strong').innerText();
   await expect(page.locator('.tt-canvas-node')).toHaveCount(0);
+  await expect(readyNotice).toBeVisible();
+  await expect(page.locator('.tt-workspace-picker__button')).toHaveAttribute('aria-expanded', 'false');
   return { ...table, visibleTitle };
 }
 

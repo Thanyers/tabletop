@@ -105,6 +105,16 @@
 - **Root cause:** Generated controls used the speculative preview state for availability, record options and input bindings; that state already contained the next seat. A local metric preview is not evidence of a committed command.
 - **Correct behavior:** Use committed state and bindings for interactions while rendering preview values separately. Run `npm run build && npm run build:cloudflare && npm run test:generative:browser`, then verify a real form submit, both actors' shared records, history and reload on staging before promotion.
 
+### 2026-10-20 — New-table browser test opens the picker before creation finishes
+- **What happened:** Sync CI run `39440392308` timed out clicking the previous table after creating a blank one. The menu item was detached while Playwright waited for it to stabilize; release/main CI on the same source had passed.
+- **Root cause:** `createWorkspace` sets the visible workspace before awaiting `refreshSession`, then closes the picker in `finally`. The browser helper treated a URL and empty Canvas as creation completion and could open the picker before that final close.
+- **Correct behavior:** Dismiss any old creation notice, then wait for the fresh ready notice and collapsed picker before returning from the creation helper. Keep the normal click and URL assertion. Run `npm run build:cloudflare && npm run test:cloudflare:browser` without sleeps, force clicks or weakened assertions.
+
+### 2026-10-20 — Chat visibility differs by branch and local table kind
+- **What happened:** A teammate reported no chat after pulling code locally; their exact branch and table kind were not available.
+- **Root cause:** Pre-release `main` lacked F006, `npm start` serves the existing `dist`, and legacy examples hide their composer when Node local reports AI disabled. The current generic table still shows its new composer, disabled when AI is unavailable.
+- **Correct behavior:** Check `git branch --show-current` and `/version`, then run `npm run build && npm start`. Open `/new` and choose **Start empty with your own files** to verify the generic table. Use staging or the documented Worker setup for real AI; adding a key to Node `.env` does not enable it.
+
 ## Deploy failures
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า
