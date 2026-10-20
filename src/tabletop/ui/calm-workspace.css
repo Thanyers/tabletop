@@ -35,31 +35,85 @@
 .tt-app .tt-flow-wrap .react-flow__controls-button { width: 36px; height: 36px; }
 .tt-app .tt-canvas-node__body { font-size: 14px; }
 .tt-app .tt-flow-wrap .tt-canvas-node {
-  --tt-card-width: 360px;
-  --tt-card-open-width: 520px;
+  --tt-card-width: 400px;
+  --tt-card-open-width: 600px;
   width: var(--tt-card-width);
   max-width: calc(100vw - 32px);
-  overflow: hidden;
+  box-sizing: border-box;
+  overflow: visible;
   border: 1px solid var(--tt-card-edge);
   border-radius: var(--tt-card-radius);
   background: var(--tt-card-surface);
   box-shadow: var(--tt-shadow-piece);
 }
-.tt-app .tt-flow-wrap .tt-canvas-node--role-source { --tt-card-width: 340px; --tt-card-open-width: 480px; --tt-flow-role-color: var(--tt-blue); --tt-flow-role-wash: var(--tt-blue-2); }
-.tt-app .tt-flow-wrap .tt-canvas-node--role-rules { --tt-card-width: 360px; --tt-card-open-width: 540px; --tt-flow-role-color: var(--tt-amber); --tt-flow-role-wash: var(--tt-ochre-2); }
-.tt-app .tt-flow-wrap .tt-canvas-node--role-result { --tt-card-width: 440px; --tt-card-open-width: 620px; --tt-flow-role-color: var(--tt-moss); --tt-flow-role-wash: var(--tt-green-2); }
-.tt-app .tt-flow-wrap .tt-canvas-node--role-actions { --tt-card-width: 340px; --tt-card-open-width: 480px; --tt-flow-role-color: var(--tt-clay-1); --tt-flow-role-wash: var(--tt-clay-2); }
-.tt-app .tt-flow-wrap .tt-canvas-node--role-auxiliary { --tt-card-width: 320px; --tt-card-open-width: 480px; }
+.tt-app .tt-flow-wrap .tt-canvas-node--role-source { --tt-card-width: 380px; --tt-card-open-width: 560px; --tt-flow-role-color: var(--tt-blue); --tt-flow-role-wash: var(--tt-blue-2); }
+.tt-app .tt-flow-wrap .tt-canvas-node--role-rules { --tt-card-width: 400px; --tt-card-open-width: 600px; --tt-flow-role-color: var(--tt-amber); --tt-flow-role-wash: var(--tt-ochre-2); }
+.tt-app .tt-flow-wrap .tt-canvas-node--role-compute { --tt-card-width: 400px; --tt-card-open-width: 600px; --tt-flow-role-color: var(--tt-blue); --tt-flow-role-wash: var(--tt-blue-2); }
+.tt-app .tt-flow-wrap .tt-canvas-node--role-result { --tt-card-width: 480px; --tt-card-open-width: 680px; --tt-flow-role-color: var(--tt-moss); --tt-flow-role-wash: var(--tt-green-2); }
+.tt-app .tt-flow-wrap .tt-canvas-node--role-actions { --tt-card-width: 420px; --tt-card-open-width: 600px; --tt-flow-role-color: var(--tt-clay-1); --tt-flow-role-wash: var(--tt-clay-2); }
+.tt-app .tt-flow-wrap .tt-canvas-node--role-auxiliary { --tt-card-width: 400px; --tt-card-open-width: 600px; }
 .tt-app .tt-flow-wrap .tt-canvas-node.is-expanded { width: var(--tt-card-open-width); }
-.tt-app .tt-flow-wrap .tt-canvas-node:not(.is-expanded) .tt-canvas-node__body { min-height: 156px; max-height: 260px; overflow: auto; }
-.tt-app .tt-flow-wrap .tt-canvas-node__head { min-height: 64px; gap: var(--tt-space-2); padding: var(--tt-space-3); border-color: color-mix(in srgb, var(--tt-card-edge), transparent 30%); background: var(--tt-card-surface); }
+.tt-app .tt-flow-wrap .tt-canvas-node__body {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.tt-app .tt-flow-wrap .tt-canvas-node__body > * { min-width: 0; max-width: 100%; }
+.tt-app .tt-flow-wrap .tt-canvas-node:not(.is-expanded) .tt-canvas-node__body {
+  min-height: 0;
+  max-height: min(58dvh, 560px);
+  overflow-x: auto;
+  overflow-y: auto;
+}
+.tt-app .tt-flow-wrap .tt-canvas-node.is-expanded .tt-canvas-node__body {
+  max-height: min(70dvh, 680px);
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tt-app .tt-flow-wrap .tt-canvas-node__head { min-height: 64px; gap: var(--tt-space-2); padding: var(--tt-space-3); border-color: color-mix(in srgb, var(--tt-card-edge), transparent 30%); border-radius: calc(var(--tt-card-radius) - 1px) calc(var(--tt-card-radius) - 1px) 0 0; background: var(--tt-card-surface); }
+.tt-app .tt-flow-wrap .tt-canvas-node__identity { min-width: 0; }
+.tt-app .tt-flow-wrap .tt-canvas-node__title { min-width: 0; overflow: visible; overflow-wrap: anywhere; white-space: normal; }
 .tt-app .tt-flow-wrap .tt-object-glyph { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--tt-flow-role-color), transparent 65%); color: var(--tt-flow-role-color); background: var(--tt-flow-role-wash); box-shadow: inset 0 0 0 3px var(--tt-card-surface); }
 .tt-app .tt-flow-wrap .tt-canvas-node__title { font-size: var(--tt-type-title); font-weight: 650; line-height: 1.35; letter-spacing: -.3px; }
 .tt-app .tt-flow-wrap .tt-canvas-node__open, .tt-app .tt-flow-wrap .tt-canvas-node__move-toggle { min-height: var(--tt-button-height); border-color: transparent; border-radius: var(--tt-button-radius); background: transparent; font-size: var(--tt-type-small); }
 .tt-app .tt-flow-wrap .tt-canvas-node__open:hover, .tt-app .tt-flow-wrap .tt-canvas-node__move-toggle:hover { background: var(--tt-flow-role-wash); }
 .tt-app .tt-flow-wrap .tt-canvas-node.is-selected { border-color: var(--tt-flow-role-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tt-flow-role-color), transparent 82%), var(--tt-shadow-piece); }
 .tt-app .tt-flow-wrap .react-flow__node.dragging .tt-canvas-node { box-shadow: var(--tt-shadow-lift); }
-.tt-app .tt-flow-wrap .tt-canvas-node .tt-canvas-inline { padding: var(--tt-card-padding); gap: var(--tt-space-3); color: var(--tt-ink); }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-canvas-inline { box-sizing: border-box; min-width: 0; max-width: 100%; padding: var(--tt-card-padding); gap: var(--tt-space-3); color: var(--tt-ink); overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-generated-canvas { overflow: visible; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-generated-scene { max-height: min(58dvh, 520px); }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action,
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-generated-control__form {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: var(--tt-space-4);
+  gap: var(--tt-space-3);
+  border-radius: var(--tt-radius-medium);
+}
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action > header { min-width: 0; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action > header > span:last-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action > header strong { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action > header small { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action__inputs { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--tt-space-3); }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action__inputs > label { gap: 6px; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action__inputs input:not([type='checkbox']),
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action__inputs select { box-sizing: border-box; min-width: 0; min-height: 44px; padding-inline: 10px; font-size: 15px; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-generated-control__form > .tt-button { min-height: 44px; justify-self: start; max-width: 100%; font-size: 14px !important; white-space: normal; overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-chat-card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--tt-space-4) 44px var(--tt-space-4) var(--tt-space-4);
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-chat-card > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-chat-card__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-chat-card__inputs { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-chat-card__dismiss { top: 8px; right: 8px; width: 32px; height: 32px; }
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-canvas-inline__heading > strong { font-weight: 600; }
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-dropzone { gap: var(--tt-space-2); padding: var(--tt-space-5); border-color: var(--tt-card-edge); border-radius: var(--tt-radius-medium); background: var(--tt-paper); }
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-grid, .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-action-form { background: transparent; }
@@ -107,6 +161,10 @@
 .tt-app .tt-table-rules .tt-table-program__summary small { font-size: 12px; }
 .tt-app .tt-table-rules .tt-table-proposal > h3 { margin-block: 4px; font-size: 20px; font-weight: 650; }
 .tt-app .tt-table-rules .tt-table-program__description { color: var(--tt-muted); font-size: 13px; }
+.tt-app .tt-table-proposal__apply { display: grid; justify-items: start; gap: var(--tt-space-2); padding-top: var(--tt-space-2); }
+.tt-app .tt-table-proposal__apply > p { margin: 0; }
+.tt-app .tt-table-private-preview > summary, .tt-app .tt-table-advanced-checks > summary, .tt-app .tt-table-history > summary { min-height: 40px; padding-block: var(--tt-space-2); color: var(--tt-muted); cursor: pointer; }
+.tt-app .tt-table-private-preview[open], .tt-app .tt-table-advanced-checks[open], .tt-app .tt-table-history[open] { border-top: 1px solid var(--tt-line); }
 .tt-app .tt-lifecycle-actions > button { min-height: 44px; padding-inline: 18px; border-radius: 9px; font-size: 14px; }
 .tt-app .tt-ai-proposal { background: transparent; border: 0; padding: 12px; }
 .tt-app .tt-ai-proposal__privacy { border: 0; padding: 0; background: transparent; }

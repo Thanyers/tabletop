@@ -19,6 +19,7 @@ import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHA
 import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
+import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './ui/table-candidate-apply';
 import './ui/tabletop.css';
 import './ui/calm-workspace.css';
 
@@ -139,6 +140,8 @@ export default function TabletopApp() {
   const [resetOpen, setResetOpen] = useState(false);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const workspaceRef = useRef<WorkspaceView | null>(null);
+  const capabilitiesRef = useRef(capabilities);
+  capabilitiesRef.current = capabilities;
   // How the next change of open table is written to the address bar: the first
   // sync after boot replaces, user navigation pushes, back/forward writes nothing.
   const urlSyncRef = useRef<'replace' | 'push' | 'none'>('replace');
@@ -453,10 +456,12 @@ export default function TabletopApp() {
     if (created) setAiPrefill({ text: description, key: Date.now() });
   }, [createWorkspace]);
 
-  const runCommand = useCallback(async (type: string, payload: unknown): Promise<WorkspaceView | null> => {
+  const runCommand = useCallback(async (type: string, payload: unknown, expectedView?: WorkspaceView): Promise<WorkspaceView | null> => {
     const current = workspaceRef.current;
     if (!current) return null;
-    if (current.kind === 'table' && capabilities.tableReadOnly) {
+    if (expectedView && !matchesExpectedTableCandidateView(current, expectedView)) return null;
+    const commandView = expectedView ?? current;
+    if (commandView.kind === 'table' && capabilitiesRef.current.tableReadOnly) {
       showNotice('Editing this table is temporarily paused. You can still inspect its current records and rules.', 'info');
       return null;
     }
@@ -466,12 +471,24 @@ export default function TabletopApp() {
     const blocksForeground = type !== 'canvas.layout';
     if (blocksForeground) setBusy(type);
     try {
-      const ack = await tabletopClient.command(current, type, payload);
-      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(current, workspaceRef.current))) return null;
-      const latest = await latestAfterAck(ack, current.id, requestSequence);
+      const ack = await tabletopClient.command(commandView, type, payload);
+      if (expectedView && !sameTableCandidateScope(ack.workspace, expectedView)) return null;
+      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(commandView, workspaceRef.current))) return null;
+      const latest = await latestAfterAck(ack, commandView.id, requestSequence);
+      if (expectedView) {
+        const live = workspaceRef.current;
+        const liveIsPinned = matchesExpectedTableCandidateView(live, expectedView);
+        const liveIsAccepted = sameTableCandidateScope(live, expectedView) && live?.revision === ack.workspace.revision;
+        if (!sameTableCandidateScope(latest, expectedView)
+          || latest.revision !== ack.workspace.revision
+          || (!liveIsPinned && !liveIsAccepted)
+          || capabilitiesRef.current.tableReadOnly) return null;
+      }
       if (type === 'canvas.layout' && (!workspaceRef.current
-        || !sameChatRequestScope(current, workspaceRef.current)
-        || !sameChatRequestScope(current, latest))) return null;
+        || !sameChatRequestScope(commandView, workspaceRef.current)
+        || !sameChatRequestScope(commandView, latest))) return null;
+      // Keep the pinned next stage current immediately; React state may render later.
+      if (expectedView) workspaceRef.current = latest;
       setWorkspace(latest);
       if (type === 'evolve.activate') showNotice(`The change is active at revision ${latest.domain.ruleRevision}.`, 'success');
       else if (type === 'workspace.reset') {
@@ -483,14 +500,18 @@ export default function TabletopApp() {
       else if (type === 'encounter.endTurn') showNotice('The server started the next turn and updated its action points.', 'success');
 
       await refreshSession().catch(() => undefined);
+      if (expectedView && (!sameTableCandidateScope(workspaceRef.current, expectedView)
+        || workspaceRef.current?.revision !== latest.revision
+        || capabilitiesRef.current.tableReadOnly)) return null;
       return latest;
     } catch (error) {
-      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(current, workspaceRef.current))) return null;
+      if (expectedView && !sameTableCandidateScope(workspaceRef.current, expectedView)) return null;
+      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(commandView, workspaceRef.current))) return null;
       if (error instanceof ApiFailure && error.conflict) {
         try {
           const sequenceBeforeRead = projectionSequenceRef.current;
-          const fresh = await tabletopClient.workspace(current.id);
-          if (canApplyWorkspaceRefresh(current, workspaceRef.current, fresh, sequenceBeforeRead, projectionSequenceRef.current)) setWorkspace(fresh);
+          const fresh = await tabletopClient.workspace(commandView.id);
+          if (canApplyWorkspaceRefresh(commandView, workspaceRef.current, fresh, sequenceBeforeRead, projectionSequenceRef.current)) setWorkspace(fresh);
           await refreshSession().catch(() => undefined);
           // Someone else moved a card; the Canvas retries quietly on the newer layout (F007).
           if (error.code !== 'STALE_LAYOUT') showNotice('This table changed elsewhere. The latest version is loaded; review and repeat your edit if it still applies.', 'error');
@@ -498,7 +519,7 @@ export default function TabletopApp() {
       } else showNotice(errorText(error), 'error');
       return null;
     } finally { if (blocksForeground) setBusy(null); }
-  }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
+  }, [latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
   const upload = useCallback(async (kind: 'shipments' | 'invoice' | 'rate-card', file: File) => {
     if (!capabilities.uploads) throw new Error('File uploads are disabled for this workspace service. Your existing rows and manual editing remain available.');

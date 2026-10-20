@@ -15,6 +15,23 @@ const ownerName = 'Taylor Private Owner';
 const participantName = 'Jordan Private Player';
 const revision = 'a'.repeat(64);
 
+describe('builder handoff from the same conversation', () => {
+  it('offers owners a builder handoff without executing or changing the table', async () => {
+    const input = await assistantInput(undefined, { prompt: 'I want a different way to enter these items' });
+    const before = JSON.stringify(input.workspace.domain);
+    const response = await respondToTablePrompt(testEnv, input, providerFetch({ kind: 'build-request', text: 'We can prepare a data-entry form for review.' }));
+    expect(response.result).toEqual({ kind: 'build-request', text: 'We can prepare a data-entry form for review.' });
+    expect(JSON.stringify(input.workspace.domain)).toBe(before);
+  });
+
+  it('cannot grant a participant access to the builder through a model response', async () => {
+    const workspace = createWorkspace({ actorId: participantId, name: participantName, role: 'participant', seat: 'member-1' });
+    const input = await assistantInput(workspace, { prompt: 'Add a different form' });
+    await expect(respondToTablePrompt(testEnv, input, providerFetch({ kind: 'build-request', text: 'Prepare a form.' })))
+      .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+  });
+});
+
 function hash(value: unknown): string {
   return typeof value === 'string' ? 'b'.repeat(64) : 'c'.repeat(64);
 }

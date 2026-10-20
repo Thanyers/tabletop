@@ -120,6 +120,16 @@
 - **Root cause:** Pre-release `main` lacked F006, `npm start` serves the existing `dist`, and legacy examples hide their composer when Node local reports AI disabled. The current generic table still shows its new composer, disabled when AI is unavailable.
 - **Correct behavior:** Check `git branch --show-current` and `/version`, then run `npm run build && npm start`. Open `/new` and choose **Start empty with your own files** to verify the generic table. Use staging or the documented Worker setup for real AI; adding a key to Node `.env` does not enable it.
 
+### 2026-10-20 — Generated numeric forms silently fail native validation
+- **What happened:** An invoice form accepted a number in the declared range but clicking Add invoice sent no table command. Browser readback showed `min=0.01`, empty `step`, value `651`, and `validity.stepMismatch=true`.
+- **Root cause:** Generated numeric inputs omitted `step`, so HTML applied its default step of 1 from the fractional minimum. The regular table action form already used `step="any"`.
+- **Correct behavior:** Keep generated numeric inputs consistent with the numeric contract and check native validity before submission. Run `npm run build && npm run build:cloudflare && node scripts/canvas-evolution-local.mjs --auto`; require a real form POST and persisted row, not a successful field fill or speculative preview.
+
+### 2026-10-20 — Data actions and structural requests share one composer
+- **What happened:** Owner requests to add a form or missing create action were sent to the action-only assistant; a broad routing fix then also caught “Change invoice status in this table to paid.”
+- **Root cause:** The old interpreter had updates but no typed record creation; matching the word “table” anywhere with “change” confused data changes with program changes.
+- **Correct behavior:** Route clear UI/construction requests to the builder, leave data requests on the confirmation path, and offer an owner-only builder handoff for ambiguous requests with renewed consent. Run `npx vitest run src/tabletop/ui/table-build-intent.test.ts src/tabletop/domain/table-record-actions.test.ts`.
+
 ## Deploy failures
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า

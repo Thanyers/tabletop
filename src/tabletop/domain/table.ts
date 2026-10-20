@@ -14,7 +14,11 @@ const id = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/).refine(x => !forbiddenIde
 const text = z.string().min(1).max(500);
 const value: z.ZodType<TableValue> = z.union([z.string().max(500), z.number().finite().min(-1e9).max(1e9), z.boolean(), z.null(), z.array(z.string().max(100)).max(32)]);
 const bytes = (s: string) => new TextEncoder().encode(s).byteLength;
-const fieldSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'list']), required: z.boolean(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional() });
+const MAX_TABLE_ACTION_CREATES = 12;
+const TABLE_RECORD_ID_PREFIX = 'record_';
+const TABLE_RECORD_ID_HASH_LENGTH = 12;
+const TABLE_RECORD_ORDINAL_WIDTH = String(MAX_TABLE_ACTION_CREATES - 1).length;
+const fieldSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'list']), required: z.boolean(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional(), default: value.optional() });
 const parameterSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'record']), collection: id.optional(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional() });
 const operand: z.ZodType<TableOperand> = z.union([z.strictObject({ literal: value }), z.strictObject({ input: id }), z.strictObject({ record: id, field: id }), z.strictObject({ system: z.enum(['actor', 'seat', 'turn']) }), z.strictObject({ expression: generativeExpressionSchema })]);
 export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
@@ -25,6 +29,7 @@ export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
     parameters: z.array(parameterSchema).max(8),
     conditions: z.array(z.strictObject({ left: operand, op: z.enum(['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'contains']), right: operand, message: text })).max(24),
     effects: z.array(z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand })).max(24),
+    creates: z.array(z.strictObject({ collection: id, values: z.record(id, operand) })).max(MAX_TABLE_ACTION_CREATES).optional(),
     requireTurn: z.boolean(), advanceTurn: z.boolean(),
   })).min(1).max(16),
   invariants: z.array(z.strictObject({ id, collection: id, fields: z.array(id).min(1).max(6), message: text })).max(12),
@@ -87,11 +92,12 @@ function checkProgram(program: TableProgram) {
   for (const c of program.collections) {
     unique(c.fields.map(f => f.id), 'Field identifiers');
     for (const f of c.fields) assert((f.min === undefined && f.max === undefined || f.type === 'number') && (f.min === undefined || f.max === undefined || f.min <= f.max) && (!f.choices || f.type === 'text'), 'TABLE_SCHEMA', 'Field bounds do not match its type.');
+    for (const f of c.fields) if (f.default !== undefined) assert(validValue(f, f.default), 'TABLE_VALUE', `${c.title}: ${f.label} has an invalid default.`);
   }
   for (const action of program.actions) {
     unique(action.parameters.map(p => p.id), 'Action parameter identifiers');
     unique(action.effects.map(e => `${e.record}.${e.field}`), 'Action effect targets');
-    assert(action.effects.length > 0 || action.advanceTurn, 'TABLE_SCHEMA', 'An action must change a field or advance the turn.');
+    assert(action.effects.length > 0 || (action.creates?.length ?? 0) > 0 || action.advanceTurn, 'TABLE_SCHEMA', 'An action must change a field, create a record, or advance the turn.');
     assert(!(action.requireTurn || action.advanceTurn) || program.turnOrder.length > 0, 'TABLE_SCHEMA', 'Turn actions need a turn order.');
     const resolveField = (parameter: string, field: string) => {
       const p = action.parameters.find(p => p.id === parameter && p.type === 'record');
@@ -118,6 +124,17 @@ function checkProgram(program: TableProgram) {
       const f = resolveField(e.record, e.field), t = operandType(e.value);
       assert(e.op === 'add' ? f.type === 'number' && t === 'number' : t === f.type || t === 'null' && !f.required, 'TABLE_SCHEMA', 'Effect value does not match its field.');
     }
+    for (const create of action.creates ?? []) {
+      const collection = program.collections.find(c => c.id === create.collection);
+      assert(collection, 'TABLE_SCHEMA', 'A create action refers to an unknown collection.');
+      for (const [fieldId, createValue] of Object.entries(create.values)) {
+        const field = collection.fields.find(f => f.id === fieldId);
+        assert(field, 'TABLE_SCHEMA', 'A create action refers to an unknown field.');
+        const type = operandType(createValue);
+        assert(type === field.type || type === 'null' && !field.required, 'TABLE_SCHEMA', 'Create value does not match its field.');
+      }
+      for (const field of collection.fields) assert(Object.hasOwn(create.values, field.id) || field.default !== undefined || !field.required, 'TABLE_SCHEMA', `${field.label} must have a create value or a default.`);
+    }
   }
   for (const i of program.invariants) {
     const c = program.collections.find(c => c.id === i.collection);
@@ -136,11 +153,33 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
   }
   if (state.program) {
     assert(Object.keys(change.initialRecords).length === 0, 'TABLE_PRESERVE_DATA', 'A rule edit must preserve current records; initialRecords must be empty.');
-    assert(canonicalJson(state.program.collections) === canonicalJson(change.program.collections), 'TABLE_PRESERVE_DATA', 'A rule edit must retain the current collections and field definitions.');
+    for (const previousCollection of state.program.collections) {
+      const nextCollection = change.program.collections.find(collection => collection.id === previousCollection.id);
+      assert(nextCollection, 'TABLE_PRESERVE_DATA', 'A rule edit must retain every current collection.');
+      for (const previousField of previousCollection.fields) {
+        const nextField = nextCollection.fields.find(field => field.id === previousField.id);
+        assert(nextField && canonicalJson(nextField) === canonicalJson(previousField), 'TABLE_PRESERVE_DATA', 'A rule edit must retain every current field definition.');
+      }
+    }
+    for (const previousInvariant of state.program.invariants) {
+      const nextInvariant = change.program.invariants.find(invariant => invariant.id === previousInvariant.id);
+      assert(nextInvariant && canonicalJson(nextInvariant) === canonicalJson(previousInvariant), 'TABLE_PRESERVE_DATA', 'A rule edit must retain every current invariant.');
+    }
     assert(state.turn === null || change.program.turnOrder.includes(state.turn), 'TABLE_PRESERVE_TURN', 'A rule edit must retain the current turn.');
   }
   const records = structuredClone(state.program ? state.records : change.initialRecords);
   for (const c of change.program.collections) records[c.id] ??= [];
+  if (state.program) {
+    for (const previousCollection of state.program.collections) {
+      const nextCollection = change.program.collections.find(collection => collection.id === previousCollection.id)!;
+      const addedFields = nextCollection.fields.filter(field => !previousCollection.fields.some(previous => previous.id === field.id));
+      const rows = records[previousCollection.id];
+      for (const field of addedFields) {
+        if (field.required && rows.length > 0) assert(field.default !== undefined, 'TABLE_PRESERVE_DATA', `A default is required to add ${field.label} to existing records.`);
+        if (field.default !== undefined) for (const row of rows) row.values[field.id] = structuredClone(field.default);
+      }
+    }
+  }
   checkRows(change.program, records);
   const generativeIssues = validateGenerativeProgram(change.program, records);
   assert(generativeIssues.length === 0, 'TABLE_SCHEMA', generativeIssues[0] ?? 'Generated table program is invalid.');
@@ -298,6 +337,8 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     else assert(validValue({ ...p, type: p.type, required: true }, v), 'TABLE_INPUT', `${p.label} is invalid.`);
   }
   assert(!action.requireTurn || state.turn === (ctx.seat ?? 'host'), 'TABLE_TURN', 'Wait for your turn.');
+  const nextActionRevision = (state.actionRevision ?? 0) + 1;
+  assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
   const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: input.inputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn });
   for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, input.inputs, c.left, ctx, evaluateExpression), resolve(action, state, input.inputs, c.right, ctx, evaluateExpression)), 'TABLE_CONDITION', c.message);
   const next = structuredClone(state), touched = new Set<string>();
@@ -311,11 +352,30 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     if (effect.op === 'add') { const old = row.values[effect.field]; assert(typeof old === 'number' && typeof resolved === 'number', 'TABLE_VALUE', 'Only numeric values can be added.'); row.values[effect.field] = old + resolved; }
     else row.values[effect.field] = structuredClone(resolved);
   }
+  const createdIds = new Map<string, Set<string>>();
+  for (const [index, create] of (action.creates ?? []).entries()) {
+    const collection = program.collections.find(item => item.id === create.collection)!;
+    const values: Record<string, TableValue> = {};
+    for (const field of collection.fields) {
+      const createValue = create.values[field.id];
+      if (createValue !== undefined) values[field.id] = structuredClone(resolve(action, state, input.inputs, createValue, ctx, evaluateExpression));
+      else if (field.default !== undefined) values[field.id] = structuredClone(field.default);
+    }
+    const digest = ctx.hash(canonicalJson([action.id, index])).toLowerCase();
+    const suffix = digest.replace(/[^a-z0-9_-]/g, '').slice(0, TABLE_RECORD_ID_HASH_LENGTH) || 'x';
+    const ordinal = String(index).padStart(TABLE_RECORD_ORDINAL_WIDTH, '0');
+    const recordId = `${TABLE_RECORD_ID_PREFIX}${nextActionRevision}_${ordinal}_${suffix}`;
+    assert(id.safeParse(recordId).success, 'TABLE_LIMIT', 'A bounded record identifier could not be generated.');
+    const ids = createdIds.get(collection.id) ?? new Set<string>();
+    assert(!ids.has(recordId) && !next.records[collection.id].some(row => row.id === recordId), 'TABLE_INPUT', 'A generated record identifier collision prevented this action. No action was applied.');
+    ids.add(recordId);
+    createdIds.set(collection.id, ids);
+    next.records[collection.id].push({ id: recordId, values });
+  }
   checkRows(program, next.records);
   if (action.advanceTurn) next.turn = program.turnOrder[(program.turnOrder.indexOf(state.turn ?? '') + 1) % program.turnOrder.length];
   validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
-  next.dataRevision += 1; next.actionRevision = (next.actionRevision ?? 0) + 1; next.candidate = null;
-  assert(Number.isSafeInteger(next.actionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
+  next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
   next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-100);
   return { state: next, label: action.title };
 }

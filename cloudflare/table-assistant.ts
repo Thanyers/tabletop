@@ -42,6 +42,7 @@ const rawReferenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('turn'), seat: z.enum(['host', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7']) }),
 ]);
 const rawResultSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('build-request'), text: z.string().min(1).max(4000) }),
   z.strictObject({ kind: z.literal('explanation'), text: z.string().min(1).max(4000), references: z.array(rawReferenceSchema).max(40) }),
   z.strictObject({
     kind: z.literal('action-proposal'),
@@ -254,7 +255,8 @@ function systemPrompt(): string {
     'Answer questions only from the supplied active public rules, shared records, role, seat, and turn. Do not mention hidden sources, evidence, assumptions, drafts, revisions, member names, account IDs, or private history.',
     'People play directly by default. Never choose a best move, decide what a player should do, take a turn, continue a game, or execute any command. If asked to choose or play for someone, explain the current rules or ask what exact action they want.',
     'Return an action-proposal only when the current prompt explicitly requests one exact supported action and identifies every required input. A proposal is not execution and always requires separate user confirmation. Use only an action and inputs present in the current context; do not invent an action, row, or input.',
-    'If the request is ambiguous, ask one concise clarification. If it is outside the supported rules or actions, return a concise refusal. Do not make up rules or claim that an action occurred.',
+    'Owners can extend their existing table with new collections, fields, data-entry forms, buttons, charts and scenes through the builder. If the current prompt asks to add or change these capabilities, or asks to create records but no create action exists, return build-request with a brief description of what can be prepared. This offers the builder; it does not change anything. Never tell an owner to edit program JSON or implement the feature manually. Existing supported actions still use action-proposal. Participants cannot change the table setup; explain that the owner can prepare it.',
+    'If the request is ambiguous, ask one concise clarification. Refuse requests outside the application or unsafe requests, rather than refusing useful table changes the builder can prepare. Do not make up rules or claim that an action occurred.',
     'For explanations, cite only current invariant IDs, action IDs, collection/field IDs, existing record IDs, or the current turn seat from the context. References must use the exact IDs and discriminants in the JSON schema.',
     'Return exactly one JSON object matching this schema, without markdown or extra keys:',
     JSON.stringify(z.toJSONSchema(rawResultSchema)),
@@ -520,6 +522,10 @@ function publicResult(
   replacements: IdentityReplacement[],
 ): TableAssistantResult {
   const text = safeText(raw.text, replacements, 8000);
+  if (raw.kind === 'build-request') {
+    if (context.role !== 'owner') return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'Only the table owner can prepare setup changes.');
+    return tableAssistantResultSchema.parse({ kind: 'build-request', text });
+  }
   if (raw.kind === 'explanation') {
     if (safeProgram === null) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'An explanation cannot cite rules before they are active.');
     const references = raw.references.map((reference) => enrichReference(reference, safeProgram, safeRecords, context.turn, replacements));

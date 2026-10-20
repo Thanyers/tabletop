@@ -32,13 +32,14 @@ export interface TableChatProps {
   onAttach: (file: File) => Promise<void>;
   /** Resolves true only when the server has acknowledged this request. */
   onSend: (message: string) => Promise<boolean>;
+  onMessageChange?: (message: string) => void;
 }
 
 /** One-line chat box fixed to the bottom centre of a shared table (F006). */
 export function TableChat({
   workspaceId, epoch, actorId, mode, sourceFiles, placeholder, aiEnabled, canAttach, busy,
   acceptFiles, historyStatus = 'ready', onRetryHistory, prefill, acknowledged, focusKey = 0,
-  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend,
+  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
   const [grantedKey, setGrantedKey] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export function TableChat({
   const fileRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef(message);
   messageRef.current = message;
+  useEffect(() => { onMessageChange?.(message); }, [message, onMessageChange]);
   const appliedAcknowledgement = useRef<string | null>(null);
   const sendLock = useRef(false);
   const idPrefix = useId().replaceAll(':', '');
