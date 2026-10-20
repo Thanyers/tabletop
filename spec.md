@@ -30,12 +30,12 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
-- **Branch:** `main` @ `9fbfdec` (PR #2–#10 merge แล้ว) = release · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection และยังไม่มี release tag
-- **Deploy:** production รัน `c9d3bf0` (Calm Canvas, PR #6) · staging รัน `bec8e30` (tree เดียวกัน) — แหล่งอ้างอิงคือ [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
+- **Branch:** `main` @ `0483568` (PR #2–#14; #12–#14 เข้า `main` ตรงโดยไม่ผ่าน `dev`) = release · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection และยังไม่มี release tag
+- **Deploy:** production และ staging รัน `524d9cc` (PR #13 public welcome) · `/version` ตอบ `0.0.0-dev` / `524d9cc` (ตรวจ 2026-10-20) — แหล่งอ้างอิงคือ [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
 - **Infra:** Cloudflare Workers Free + D1 + SQLite DO + Google OAuth + DeepSeek Flash · ไม่มี R2/Paid · เพดาน AI prod $1/วัน $10/เดือน, staging $0.20/$0.20
 - **CI ล่าสุดของ candidate:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด))
 - **Local (2026-10-20, เครื่องนี้):** clone `main` @ `e8cb73e` แล้ว pull เป็น `48fb2bd` → `npm ci` (0 vulnerabilities) → `npm run build` ผ่าน → `npm start` เปิด `:4310` ได้ ใช้ Node v26.3.1 (ไม่ตรง CI 22.23.2) · `npm run test:cloudflare` 65/65 ผ่าน (room 28, auth 13, ai 9, table-assistant 8, billing 7) ตรงกับจำนวนใน CI · `test:cloudflare:browser` 16/16 ผ่าน (ใช้ `BROWSER_CHANNEL=chrome` หลัง `build:cloudflare`)
-- **`/version` — [PR #10](https://github.com/Thanyers/tabletop/pull/10) merge เข้า `main` แล้ว (`9fbfdec`) ยังไม่ deploy:** `GET /version` → `{"version","sha","built_at"}` ทั้ง Worker และ Node อ่านจาก `dist/version.json` ที่ build เขียน · ตรวจแล้ว: `npm test` 314/314, `npm run build` ผ่าน, `test:cloudflare` 65/65, `build:cloudflare` dry run, `test:cloudflare:browser` 17/17 (มี check `/version`), curl `:4310/version` → 200 `no-store`, `check-public-files` + `check-client-secrets` ไม่มี finding
+- **`/version` — [PR #10](https://github.com/Thanyers/tabletop/pull/10) merge เข้า `main` แล้ว (`9fbfdec`) และ deploy แล้วพร้อม PR #13:** `GET /version` → `{"version","sha","built_at"}` ทั้ง Worker และ Node อ่านจาก `dist/version.json` ที่ build เขียน · ตรวจแล้ว: `npm test` 314/314, `npm run build` ผ่าน, `test:cloudflare` 65/65, `build:cloudflare` dry run, `test:cloudflare:browser` 17/17 (มี check `/version`), curl `:4310/version` → 200 `no-store`, `check-public-files` + `check-client-secrets` ไม่มี finding
 - **Spec-driven + CI/CD สำหรับ AI:** `AGENTS.md` (กติกากลางของ AI ทุกตัว) / `CLAUDE.md` / `spec.md` / `MEMORY.md` · [PR #11](https://github.com/Thanyers/tabletop/pull/11) branch `docs/spec-driven` → `dev` · ใน PR นี้ CONTRIBUTING เปลี่ยนเป็น branch จาก `dev` และ CI รัน push เข้า `dev` ด้วย
 
 ### ข้อจำกัดผลิตภัณฑ์ที่มีผล
@@ -65,12 +65,14 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## งานที่กำลังทำ
 
-_(ว่าง)_ — เขียนก่อนลงมือ: เป้าหมาย · ขอบเขต · ไฟล์ที่จะแตะ · วิธีตรวจ · branch
+### Release v1.0.0 — branch `release/1.0.0`
+- **เป้าหมาย:** tag `v1.0.0` (annotated) บน merge commit ของ `release/1.0.0` ใน `main` · เลขนี้ผู้ใช้เคาะแล้ว 2026-10-20
+- **ขอบเขต:** แตกจาก `dev` แล้ว merge `main` เข้ามา (main มี PR #12–#14 ที่ไม่ได้ผ่าน `dev`) · CHANGELOG `Unreleased` → `1.0.0` · ไม่มีโค้ดแอปต่างจาก `524d9cc` ที่รันบน production
+- **ขั้นที่เหลือ:** PR → `main` → **คน merge** → เช็ค `local-validation` บน merge commit → `git tag -a v1.0.0` + push → PR `main` → `dev` → operator build จาก tag แล้ว deploy ถ้าต้องการให้ `/version` แสดง `1.0.0`
 
 ## ถัดไป
 
 1. **เจ้าของ repo (admin):** รันคำสั่ง ruleset ใน [AGENTS.md §9](AGENTS.md#9-ตั้งค่า-repo-ครั้งเดียว-admin-ของ-repo) เพื่อ protect `main` + `dev` และล็อก tag `v*`
 2. คน review + merge [PR #11](https://github.com/Thanyers/tabletop/pull/11) เข้า `dev` · operator เพิ่ม `/version` ใน `run_worker_first` ของ config deploy ก่อน deploy รุ่นที่มี PR #10
-3. release แรกตามขั้นตอนใหม่ (`release/X.Y.Z` → `main` → tag) — ต้องเคาะเลขก่อน: เสนอ `v1.0.0` เพราะ production เปิดใช้จริงแล้ว
-4. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
-5. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
+3. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
+4. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
