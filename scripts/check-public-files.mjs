@@ -18,7 +18,10 @@ const credentialPatterns = [
 ];
 for (const file of files) {
   const path = resolve(root, file);
-  if (lstatSync(path).isSymbolicLink()) { findings.push({ file, reason: 'Symlink requires explicit review' }); continue; }
+  const stat = lstatSync(path);
+  if (stat.isSymbolicLink()) { findings.push({ file, reason: 'Symlink requires explicit review' }); continue; }
+  // git lists an untracked nested repository (e.g. a worktree) as one directory entry.
+  if (stat.isDirectory()) { findings.push({ file, reason: 'Nested repository must be ignored or reviewed' }); continue; }
   if (/(?:^|\/)(?:node_modules|dist|worker-build|test-results|playwright-report|\.data|\.wrangler|\.npm-cache|\.codex|\.agents|\.aws|\.opencode)(?:\/|$)/.test(file)
       || (/(?:^|\/)\.env(?:\.|$)/.test(file) && !file.endsWith('/.env.example') && file !== '.env.example')
       || /(?:^|\/)\.dev\.vars(?:\.|$)/.test(file)

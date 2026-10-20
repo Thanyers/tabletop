@@ -25,9 +25,13 @@ function getPlanPhysics(outputs: WorkbenchProps['plan']['outputs']): PhysicsResu
 }
 
 export function TeachingWorkbench(props: WorkbenchProps) {
+  if (props.view.domain.kind !== 'teaching') return null;
+  return <TeachingWorkbenchBody {...props} state={props.view.domain} />;
+}
+
+// Split from the guard so every hook below runs on every render.
+function TeachingWorkbenchBody({ state, ...props }: WorkbenchProps & { state: TeachingState }) {
   const { view, plan, onCommand, busy } = props;
-  if (view.domain.kind !== 'teaching') return null;
-  const state: TeachingState = view.domain;
   const isTeacher = view.actor.role === 'teacher';
   const isLearner = view.actor.role === 'learner';
   const currentPlan = getPlanPhysics(plan.outputs);

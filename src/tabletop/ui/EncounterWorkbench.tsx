@@ -25,9 +25,13 @@ function boardFromPlan(plan: WorkbenchProps['plan']): EncounterBoard | null {
 }
 
 export function EncounterWorkbench(props: WorkbenchProps) {
+  if (props.view.domain.kind !== 'encounter') return null;
+  return <EncounterWorkbenchBody {...props} state={props.view.domain} />;
+}
+
+// Split from the guard so every hook below runs on every render.
+function EncounterWorkbenchBody({ state, ...props }: WorkbenchProps & { state: EncounterState }) {
   const { view, plan, onCommand, busy } = props;
-  if (view.domain.kind !== 'encounter') return null;
-  const state: EncounterState = view.domain;
   const board = boardFromPlan(plan);
   const isDm = view.actor.role === 'dm';
   const actorId = view.actor.seat === 'mira' || view.actor.seat === 'pip' ? view.actor.seat : null;
