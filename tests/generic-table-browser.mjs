@@ -420,18 +420,18 @@ async function performContextualAction(page, collectionId, { recordId, recordLab
   await expect(editor.locator('.tt-table-record-select[aria-pressed="true"]')).toHaveCount(1);
   let actions = editor.getByRole('region', { name: `Actions for ${recordLabel} · ${recordId}`, exact: true });
   await expect(actions).toBeVisible();
-  await actions.getByLabel('Action', { exact: true }).selectOption({ label: actionTitle });
+  await actions.getByRole('combobox', { name: 'Action', exact: true }).selectOption({ label: actionTitle });
   let form = actions.locator('form.tt-table-action');
   if (recordParameterChoice) {
-    await actions.getByLabel('Use this record as', { exact: true }).selectOption({ label: recordParameterChoice });
+    await actions.getByRole('combobox', { name: 'Use this record as', exact: true }).selectOption({ label: recordParameterChoice });
   }
   await expect(form).toBeVisible();
   const requirements = form.locator('details.tt-table-action__requirements');
   if (await requirements.count()) await expect(requirements).not.toHaveAttribute('open', '');
-  const prefilledField = form.getByLabel(recordFieldLabel, { exact: true });
+  const prefilledField = form.getByRole('combobox', { name: recordFieldLabel, exact: true });
   await expect(prefilledField).toHaveValue(recordId);
   for (const [label, value] of Object.entries(inputs)) {
-    const field = form.getByLabel(label, { exact: true });
+    const field = form.getByRole('combobox', { name: label, exact: true });
     await expect(field).toHaveValue('');
     await field.selectOption(value);
   }
@@ -444,7 +444,7 @@ async function performContextualAction(page, collectionId, { recordId, recordLab
       form = actions.locator('form.tt-table-action');
       await expect(actions).toBeVisible();
       await expect(form).toBeVisible();
-      await expect(form.getByLabel(recordFieldLabel, { exact: true })).toHaveValue(nextRecord.id);
+      await expect(form.getByRole('combobox', { name: recordFieldLabel, exact: true })).toHaveValue(nextRecord.id);
       await expect(form.getByLabel(resetTextOnRecordChange.label, { exact: true })).toHaveValue('');
     }
     await form.getByLabel(resetTextOnRecordChange.label, { exact: true }).fill(resetTextOnRecordChange.submitValue);
@@ -672,7 +672,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
   const ownerRecordActions = ownerRoster.getByRole('region', { name: 'Actions for Ada · ada', exact: true });
   await expect(ownerRecordActions).toContainText('Actions for this collection are limited to members.');
-  await expect(ownerRecordActions.getByLabel('Action', { exact: true })).toHaveCount(0);
+  await expect(ownerRecordActions.getByRole('combobox', { name: 'Action', exact: true })).toHaveCount(0);
   const invite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
   await performContextualAction(member, 'people', {
