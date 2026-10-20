@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **CI/dev:** เพิ่ม ESLint (`npm run lint`) เข้า CI ห้าม `any` ที่เขียนเอง ห้าม `@ts-ignore` และบังคับกฎของ React hooks · เพิ่ม pre-commit hook (husky + lint-staged) ที่รัน `check-public-files` และ lint ไฟล์ที่ stage · `check-public-files` ไม่ crash เมื่อเจอ nested repository แล้ว แต่รายงานเป็น finding แทน · ไม่เปลี่ยน behavior ของแอป ([CONTRIBUTING → Lint](CONTRIBUTING.md#lint))
+
 ## 1.0.0 — 2026-10-20
 
 release แรกที่ติด tag ตามรูปแบบ `vMAJOR.MINOR.PATCH` · โค้ดแอปตรงกับ `524d9cc` ที่รันบน production และ staging อยู่แล้ว ([Deployment](docs/DEPLOYMENTS.md)) ส่วนที่ต่างจากนั้นมีแค่เอกสารและ CI · จากรุ่นนี้ไป `main` รับเฉพาะ `release/*` และ `hotfix/*` ส่วนงานใหม่เข้า `dev` ตาม [AGENTS.md](AGENTS.md)

@@ -40,3 +40,6 @@
 | F001-T9 | แชทย่อเป็นวงกลมไอคอนดุ๊กดิ๊กเมื่อไม่มีคนพิมพ์ | `todo` | — | — | ไฟล์เดียวกับ T8 | T8 | ต้องรองรับ reduced motion |
 | F001-T10 | ปรับ browser tests ตาม flow ใหม่ | `todo` | — | — | `tests/*.mjs` | T2, T4, T8 | แต่ละงานแก้เทสต์ของตัวเองได้ งานนี้เก็บส่วนที่เหลือ |
 | F001-T11 | คู่มือผู้ใช้ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | T4, T7, T9 | |
+| CI001 | ESLint ใน CI (ห้าม `any`/`@ts-ignore`) + pre-commit hook husky | `review` | JitrudeeDongdee (Claude) | `feat/CI001-eslint-husky` | `eslint.config.js` (ใหม่), `.husky/` (ใหม่), `package.json`, `package-lock.json`, `.github/workflows/validate.yml`, `scripts/check-public-files.mjs`, `.gitignore`, `CONTRIBUTING.md`, `AGENTS.md` | — | |
+| CI002 | เคลียร์ ESLint warning แล้วเลื่อนกฎเป็น error | `todo` | — | — | ทั่ว repo, `eslint.config.js` | CI001 | แตกตามโฟลเดอร์ ระวัง hotspot |
+| CI003 | ย้าย guard ของ workbench ให้ hook ไม่ถูกเรียกแบบมีเงื่อนไข | `todo` | — | — | `src/tabletop/ui/{Encounter,Invoice,Teaching}Workbench.tsx`, `eslint.config.js` | CI001 | บั๊กแฝง ดู spec ถัดไป ข้อ 7 |

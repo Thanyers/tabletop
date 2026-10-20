@@ -37,6 +37,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 - **CI ล่าสุดของ candidate:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด))
 - **Local (2026-10-20, เครื่องนี้):** clone `main` @ `e8cb73e` แล้ว pull เป็น `48fb2bd` → `npm ci` (0 vulnerabilities) → `npm run build` ผ่าน → `npm start` เปิด `:4310` ได้ ใช้ Node v26.3.1 (ไม่ตรง CI 22.23.2) · `npm run test:cloudflare` 65/65 ผ่าน (room 28, auth 13, ai 9, table-assistant 8, billing 7) ตรงกับจำนวนใน CI · `test:cloudflare:browser` 16/16 ผ่าน (ใช้ `BROWSER_CHANNEL=chrome` หลัง `build:cloudflare`)
 - **`/version` — [PR #10](https://github.com/Thanyers/tabletop/pull/10) merge เข้า `main` แล้ว (`9fbfdec`) และ deploy แล้วพร้อม PR #13:** `GET /version` → `{"version","sha","built_at"}` ทั้ง Worker และ Node อ่านจาก `dist/version.json` ที่ build เขียน · ตรวจแล้ว: `npm test` 314/314, `npm run build` ผ่าน, `test:cloudflare` 65/65, `build:cloudflare` dry run, `test:cloudflare:browser` 17/17 (มี check `/version`), curl `:4310/version` → 200 `no-store`, `check-public-files` + `check-client-secrets` ไม่มี finding
+- **Lint + pre-commit (CI001, branch `feat/CI001-eslint-husky` → `dev`):** CI รัน `npm run lint` (ESLint 10 + typescript-eslint 8) · error: `no-explicit-any`, `ban-ts-comment`, `rules-of-hooks`, eslint-disable ที่ไม่ได้ใช้ และกฎ recommended ที่ไม่มีของเดิมค้าง · husky + lint-staged รัน `check-public-files` + eslint ไฟล์ที่ stage · ตรวจแล้ว (Node v26.3.1 ในเครื่อง, CI ใช้ 22.23.2): `npm ci --ignore-scripts` + `npm audit` 0 vulnerabilities, `npm run lint` 0 error / 125 warning, ไฟล์ทดลองที่มี `: any` + `@ts-ignore` → 2 error exit 1, `git commit` ไฟล์ที่มี `any` ถูก hook บล็อก, `npm test` 314/314, `npm run build` ผ่าน, `check-client-secrets` 0 finding, `test:cloudflare` 65/65, `build:cloudflare` dry run ผ่าน, Component Lab ผ่าน · ยังไม่ได้รัน browser acceptance (ไม่ได้แตะโค้ดแอป)
 - **Spec-driven + CI/CD สำหรับ AI:** `AGENTS.md` (กติกากลางของ AI ทุกตัว) / `CLAUDE.md` / `spec.md` / `MEMORY.md` · [PR #11](https://github.com/Thanyers/tabletop/pull/11) branch `docs/spec-driven` → `dev` · ใน PR นี้ CONTRIBUTING เปลี่ยนเป็น branch จาก `dev` และ CI รัน push เข้า `dev` ด้วย
 
 ### ข้อจำกัดผลิตภัณฑ์ที่มีผล
@@ -64,6 +65,9 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | 2026-10-20 | ตั้ง branch protection ไม่ได้จากบัญชีนี้ (push ได้ ไม่ใช่ admin) — เตรียมคำสั่ง ruleset ไว้ใน AGENTS.md §9 | เจ้าของ repo ต้องรัน |
 | 2026-10-20 | release แรกคือ `v1.0.0` | ผู้ใช้เคาะ · production เปิดให้ผู้ใช้จริงแล้ว และตามกฎ global release แรกของ production คือ `v1.0.0` |
 | 2026-10-20 | งานที่กำลังทำย้ายไป `PLAN.md` + `docs/features/` จองงานด้วย draft PR | ผู้ใช้ขอให้ทีมทำงานตรงกันไม่ชนกัน · `spec.md` เหลือแค่สถานะระบบ |
+| 2026-10-20 | ESLint ตั้งกฎที่มีของเดิมค้างเป็น warning แทนการแก้ทั้ง repo ใน PR เดียว; `rules-of-hooks` ยกเว้นแค่ workbench 3 ไฟล์ | ของเดิมหลายจุดอยู่ในไฟล์ hotspot ของ F001–F003 แก้รวดเดียวจะชนกับงานอื่น · ไฟล์ใหม่ยังโดนกฎเต็ม |
+| 2026-10-20 | lint ไม่ใช้ type-aware rules (`recommendedTypeChecked`) | typecheck เป็นงานของ `tsc` อยู่แล้ว · type-aware ช้ากว่าหลายเท่าทั้งใน CI และ hook |
+| 2026-10-20 | pre-commit hook ไม่ `--fix` ให้อัตโนมัติ | ไม่แก้ไฟล์ที่ stage แทนคน · คนเห็นและแก้เอง |
 | ก่อนหน้า | ไม่ rollback Worker ไปรุ่นที่ไม่รู้จักห้อง `table` ใช้ `TABLE_READ_ONLY=true` แทน | ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน) |
 
 ## งานที่กำลังทำ
@@ -77,4 +81,6 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 3. แจ้งทีมว่างานใหม่ต้องเปิด PR เข้า `dev` เท่านั้น — #12–#14 ยังเข้า `main` ตรง
 4. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
 5. F001 เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชท island — รอตอบคำถามเปิดใน [F001](docs/features/F001-guided-table-start.md#คำถามเปิด-ต้องตอบก่อนเริ่มงานที่เกี่ยว)
-6. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
+6. **CI002:** เคลียร์ ESLint warning 125 จุด (unused vars/imports, `no-unsafe-finally` ใน `tests/tabletop-r1.mjs`, `no-empty` ใน `src/state/store.ts` ฯลฯ) แล้วเลื่อนกฎใน `eslint.config.js` จาก `warn` เป็น `error` · แตกตามโฟลเดอร์เพื่อไม่ชนไฟล์ hotspot
+7. **CI003:** `EncounterWorkbench` / `InvoiceWorkbench` / `TeachingWorkbench` return ก่อนเรียก hook (บั๊กแฝง: ถ้า `view.domain.kind` เปลี่ยนโดย component ไม่ remount ใหม่ React จะ throw) → ย้าย guard ไปไว้ที่ component แม่ แล้วเอาข้อยกเว้น `rules-of-hooks` ออก
+8. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
