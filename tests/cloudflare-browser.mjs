@@ -370,7 +370,9 @@ try {
   });
   await dm.screenshot({ path: join(output, 'dm-desktop.png'), fullPage: true });
   await pip.setViewportSize({ width: 390, height: 844 }); await pip.reload();
-  await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveCount(0);
+  await expect(pip.getByRole('button', { name: /^(Use|Arrange)$/ })).toHaveCount(0);
+  await expect(pip.getByTestId('canvas-object-menu-trigger')).toBeVisible();
   await expect(pip.locator('.tt-canvas-panel')).toBeVisible();
   await pip.screenshot({ path: join(output, 'player-mobile.png'), fullPage: true });
   expect(errors).toEqual([]);
