@@ -34,10 +34,13 @@
 [`.github/workflows/validate.yml`](.github/workflows/validate.yml) รันทุก pull request และทุก push เข้า `main` / `dev`
 check ที่ต้องผ่านชื่อ **`local-validation`** · CI ไม่มีขั้น deploy และใช้แต่ credential จำลอง
 
+CI รัน `npm run lint` ด้วย: ห้าม `any` ที่เขียนเอง และห้าม `@ts-ignore` (กฎทั้งหมดอยู่ที่ [CONTRIBUTING → Lint](CONTRIBUTING.md#lint)) · pre-commit hook (husky) รัน `check-public-files` + lint ไฟล์ที่ stage ให้ก่อน commit · **ห้ามใช้ `--no-verify` ข้าม hook**
+
 ก่อน push ให้ตรวจในเครื่องเท่าที่เกี่ยวกับสิ่งที่แก้:
 
 ```bash
 node scripts/check-public-files.mjs
+npm run lint
 npm test
 npm run build
 npm run test:cloudflare

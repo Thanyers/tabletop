@@ -34,6 +34,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Check dependency advisories
         run: npm audit --audit-level=high
+      - name: Lint
+        run: npm run lint
       - name: Unit and local SQL integration tests
         run: npm test -- --reporter=default --reporter=json --outputFile=test-results/unit-report.json
       - name: Legacy local Component Lab regression tests

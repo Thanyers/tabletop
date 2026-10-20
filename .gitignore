@@ -15,3 +15,4 @@ playwright-report/
 worker-build/
 *.log
 !.env.example
+.claude/worktrees/

@@ -8,9 +8,13 @@ import { formatMoney } from './types';
 const dates = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 export function InvoiceWorkbench(props: WorkbenchProps) {
+  if (props.view.domain.kind !== 'invoice') return null;
+  return <InvoiceWorkbenchBody {...props} state={props.view.domain} />;
+}
+
+// Split from the guard so every hook below runs on every render.
+function InvoiceWorkbenchBody({ state, ...props }: WorkbenchProps & { state: InvoiceState }) {
   const { view, plan, onCommand, busy, onUpload, onExport, onFocusEvidence, onBackFromEvidence, focusSourceIds } = props;
-  if (view.domain.kind !== 'invoice') return null;
-  const state: InvoiceState = view.domain;
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [family, setFamily] = useState<'base' | 'step' | 'surcharge'>('base');
   const [zone, setZone] = useState<Zone | '*'>('bangkok');

@@ -45,6 +45,11 @@
 - **Root cause:** หลาย agent ทำงานในโฟลเดอร์เดียวกันพร้อมกัน
 - **Correct behavior:** ทำงานใน worktree ของตัวเอง: `git worktree add .claude/worktrees/<ชื่อ> -b <branch> origin/dev` แล้ว `npm ci --ignore-scripts` ในนั้น · ก่อน commit ทุกครั้งรัน `git branch --show-current` ให้แน่ใจว่าเป็น branch ของงานนี้
 
+### 2026-10-20 — `check-public-files` crash `EISDIR` เมื่อมี worktree ซ้อนใน repo
+- **What happened:** ตอนทดสอบ pre-commit hook สคริปต์ throw `EISDIR` ทำให้ commit ไม่ได้ทุกครั้ง
+- **Root cause:** `git ls-files --others` รายงาน git worktree/repo ที่ไม่ได้ track (เช่น `.claude/worktrees/<name>/`) เป็น entry เดียวที่เป็นโฟลเดอร์ สคริปต์เลย `readFileSync` โฟลเดอร์
+- **Correct behavior:** วาง worktree ของ AI ไว้ใต้ `.claude/worktrees/` (ignored แล้ว) · ถ้า `check-public-files` แจ้ง `Nested repository must be ignored or reviewed` ให้ย้ายหรือเพิ่ม path นั้นใน `.gitignore` · ห้ามใช้ `git commit --no-verify` เพื่อข้าม
+
 ## Deploy failures
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า
