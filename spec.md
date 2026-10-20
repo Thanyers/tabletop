@@ -30,7 +30,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
-- **Branch:** `main` @ `0483568` (PR #2–#14; #12–#14 เข้า `main` ตรงโดยไม่ผ่าน `dev`) = release · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection และยังไม่มี release tag
+- **Release ล่าสุด:** **`v1.0.0`** (annotated tag บน `ce2c50e` = merge PR #15, CI `local-validation` ผ่านก่อน tag) · build จาก tag ได้ `version.json` = `1.0.0` / `ce2c50e` · production ยังรัน build `524d9cc` (โค้ดแอปเท่ากัน) จึงตอบ `0.0.0-dev` จนกว่า operator จะ deploy build จาก tag
+- **Branch:** `main` @ `ce2c50e` = release · PR #12–#14 เคยเข้า `main` ตรงโดยไม่ผ่าน `dev` · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection
 - **Deploy:** production และ staging รัน `524d9cc` (PR #13 public welcome) · `/version` ตอบ `0.0.0-dev` / `524d9cc` (ตรวจ 2026-10-20) — แหล่งอ้างอิงคือ [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
 - **Infra:** Cloudflare Workers Free + D1 + SQLite DO + Google OAuth + DeepSeek Flash · ไม่มี R2/Paid · เพดาน AI prod $1/วัน $10/เดือน, staging $0.20/$0.20
 - **CI ล่าสุดของ candidate:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด))
@@ -61,18 +62,17 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | 2026-10-20 | `dev` = branch รวมงาน, `main` = release เท่านั้น; `main` รับแค่ `release/*` และ `hotfix/*` | ผู้ใช้สั่ง · ตามกฎ Git Flow ใน global โดยใช้ชื่อ `dev` แทน `develop` |
 | 2026-10-20 | กติกา CI/CD ของ AI ทุกตัวอยู่ใน `AGENTS.md`; `CLAUDE.md` เก็บแค่ส่วนเฉพาะ Claude | ผู้ใช้สั่งให้ AI ตัวอื่นทำงานแบบเดียวกัน · `AGENTS.md` เป็นชื่อที่ Codex/Cursor ฯลฯ อ่าน |
 | 2026-10-20 | ตั้ง branch protection ไม่ได้จากบัญชีนี้ (push ได้ ไม่ใช่ admin) — เตรียมคำสั่ง ruleset ไว้ใน AGENTS.md §9 | เจ้าของ repo ต้องรัน |
+| 2026-10-20 | release แรกคือ `v1.0.0` | ผู้ใช้เคาะ · production เปิดให้ผู้ใช้จริงแล้ว และตามกฎ global release แรกของ production คือ `v1.0.0` |
 | ก่อนหน้า | ไม่ rollback Worker ไปรุ่นที่ไม่รู้จักห้อง `table` ใช้ `TABLE_READ_ONLY=true` แทน | ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน) |
 
 ## งานที่กำลังทำ
 
-### Release v1.0.0 — branch `release/1.0.0`
-- **เป้าหมาย:** tag `v1.0.0` (annotated) บน merge commit ของ `release/1.0.0` ใน `main` · เลขนี้ผู้ใช้เคาะแล้ว 2026-10-20
-- **ขอบเขต:** แตกจาก `dev` แล้ว merge `main` เข้ามา (main มี PR #12–#14 ที่ไม่ได้ผ่าน `dev`) · CHANGELOG `Unreleased` → `1.0.0` · ไม่มีโค้ดแอปต่างจาก `524d9cc` ที่รันบน production
-- **ขั้นที่เหลือ:** PR → `main` → **คน merge** → เช็ค `local-validation` บน merge commit → `git tag -a v1.0.0` + push → PR `main` → `dev` → operator build จาก tag แล้ว deploy ถ้าต้องการให้ `/version` แสดง `1.0.0`
+_(ว่าง)_ — เขียนก่อนลงมือ: เป้าหมาย · ขอบเขต · ไฟล์ที่จะแตะ · วิธีตรวจ · branch
 
 ## ถัดไป
 
 1. **เจ้าของ repo (admin):** รันคำสั่ง ruleset ใน [AGENTS.md §9](AGENTS.md#9-ตั้งค่า-repo-ครั้งเดียว-admin-ของ-repo) เพื่อ protect `main` + `dev` และล็อก tag `v*`
-2. คน review + merge [PR #11](https://github.com/Thanyers/tabletop/pull/11) เข้า `dev` · operator เพิ่ม `/version` ใน `run_worker_first` ของ config deploy ก่อน deploy รุ่นที่มี PR #10
-3. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
-4. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
+2. คน merge PR `chore/sync-main-into-dev` → `dev` (นำ #12–#15 และ tag กลับเข้า `dev`) · operator เลือกได้ว่าจะ deploy build จาก tag `v1.0.0` เพื่อให้ `/version` แสดง `1.0.0`
+3. แจ้งทีมว่างานใหม่ต้องเปิด PR เข้า `dev` เท่านั้น — #12–#14 ยังเข้า `main` ตรง
+4. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
+5. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
