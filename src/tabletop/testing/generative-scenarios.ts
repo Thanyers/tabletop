@@ -91,7 +91,7 @@ const withdrawWater = action('withdraw_water', [recordParameter('reservoir', 're
   { record: 'reservoir', field: 'water', op: 'add', value: expression(math('multiply', { op: 'literal', value: -1 }, { op: 'input', id: 'amount' })) },
   { record: 'team', field: 'delivered', op: 'add', value: { input: 'amount' } },
 ], { conditions: [{ left: selected('reservoir', 'water'), op: 'gte', right: { input: 'amount' }, message: 'The reservoir does not hold enough water.' }], requireTurn: true, advanceTurn: true });
-export const cooperativeWaterChange = change(program('Cooperative water allocation', waterCollections, [withdrawWater], ['member-1', 'host', 'member-2'], { version: 1, views: [
+export const cooperativeWaterChange = change(program('Cooperative water allocation', waterCollections, [withdrawWater], ['member-1', 'member-2'], { version: 1, views: [
   { id: 'water-stock', kind: 'metric', title: 'Water remaining', value: { op: 'aggregate', source: { op: 'collection', id: 'reservoirs' }, fn: 'sum', as: 'reservoir', value: { op: 'field', record: 'reservoir', field: 'water' } }, relatedTo: { collections: ['reservoirs'] } },
   { id: 'south-delivery', kind: 'metric', title: 'South team delivered', value: recordField('teams', 'team-south', 'delivered'), format: 'number', relatedTo: { collections: ['teams'] } },
   { id: 'water-controls', kind: 'controls', title: 'Take your turn', relatedTo: { collections: ['reservoirs', 'teams'] }, controls: [

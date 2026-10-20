@@ -80,7 +80,7 @@ Tabletop คือพื้นที่ที่เรากำลังสร�
 
 สามเรื่องข้างต้นผ่าน AI จริงในเครื่อง ส่วนรุ่นรวมสุดท้ายทดสอบซ้ำด้วยบัญชีและคำตอบ AI จำลอง รวมโจทย์คำนวณใหม่อีกหนึ่งเรื่อง [CI หลัง merge](https://github.com/Thanyers/tabletop/actions/runs/39421576811) ผ่านทั้งการเล่นร่วมกัน การทดลองร่าง แก้กฎ และการ์ดที่เพิ่มภายหลัง
 
-รอบก่อนหน้ามีหลักฐาน Helpdesk ในเครื่องจบสามงาน และ staging เคยเล่นด้วย Google สองบัญชีจริง แยกจากรอบ Generative ใหม่นี้ · [ขอบเขตผลทดสอบ](docs/CALM_CANVAS_ACCEPTANCE.md) · [รุ่นที่เปิดใช้อยู่](docs/DEPLOYMENTS.md) · [สรุปรับช่วงและผลทดสอบรุ่นรวม](docs/TEAM_HANDOFF_TH.md#หลักฐานรุ่นรวม)
+รอบก่อนหน้ามีหลักฐาน Helpdesk ในเครื่องจบสามงาน และ staging เคยเล่นด้วย Google สองบัญชีจริง แยกจากรอบ Generative ใหม่นี้ · [ขอบเขตผลทดสอบ](docs/CALM_CANVAS_ACCEPTANCE.md) · [รุ่นที่เปิดใช้อยู่](docs/DEPLOYMENTS.md) · [สรุปรับช่วงและผลทดสอบรุ่นรวม](https://github.com/Thanyers/tabletop/blob/dev/docs/TEAM_HANDOFF_TH.md#หลักฐานรุ่นรวม)
 
 <details>
 <summary>ขอบเขตของรุ่นทดลอง</summary>
@@ -100,4 +100,4 @@ Tabletop คือพื้นที่ที่เรากำลังสร�
 
 **[Bring your work to the table.](https://tabletop.ptchrr.workers.dev/)**
 
-สำหรับทีมที่มารับช่วง: [แนวคิดและน้ำเสียง](product.md) · [คู่มือส่งมอบ](docs/TEAM_HANDOFF_TH.md) · [รันในเครื่องและส่ง PR](CONTRIBUTING.md) · [ระบบภาพ](docs/CALM_CANVAS_DESIGN.md)
+สำหรับทีมที่มารับช่วง: [แนวคิดและน้ำเสียง](product.md) · [คู่มือส่งมอบ](https://github.com/Thanyers/tabletop/blob/dev/docs/TEAM_HANDOFF_TH.md) · [รันในเครื่องและส่ง PR](CONTRIBUTING.md) · [ระบบภาพ](docs/CALM_CANVAS_DESIGN.md)

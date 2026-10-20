@@ -89,6 +89,12 @@ function novelChange(source) {
   return change;
 }
 
+function waterBrowserChange() {
+  const change = structuredClone(cooperativeWaterChange);
+  change.program.turnOrder = ['member-1', 'host', 'member-2'];
+  return change;
+}
+
 function decorateForSource(change, source) {
   const result = structuredClone(change);
   if (source) result.program.evidence = [{ sourceId: source.id, quote: source.text }];
@@ -116,7 +122,7 @@ function scenarioForInput(input) {
   if (prompt.includes('phase:incremental-edit')) return { id, change: incrementalEdit(input), edit: true };
   if (id === 'cafe') return { id, change: cafeQueueChange, edit: false };
   if (id === 'shadow') return { id, change: decorateForSource(lightShadowChange, input.sources?.[0]), edit: false };
-  if (id === 'water') return { id, change: cooperativeWaterChange, edit: false };
+  if (id === 'water') return { id, change: waterBrowserChange(), edit: false };
   const source = input.sources?.[0];
   if (!source) throw new Error('The synthetic loan case requires its attached source file.');
   return { id, change: novelChange(source), edit: false };
