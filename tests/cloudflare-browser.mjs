@@ -76,7 +76,7 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     });
   },
   assets: { directory: resolve('dist'), binding: 'ASSETS',
-    run_worker_first: ['/api/*', '/healthz', '/readyz', '/internal/*'],
+    run_worker_first: ['/api/*', '/healthz', '/readyz', '/version', '/internal/*'],
     routerConfig: { has_user_worker: true },
     assetConfig: { not_found_handling: 'single-page-application' } },
   }],
@@ -140,6 +140,14 @@ try {
   await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
   expect((await api(anonymous, '/api/session')).status).toBe(401);
   mark('Anonymous browser is gated by Google sign-in; no guest account is created');
+
+  const builtVersion = JSON.parse(await readFile('dist/version.json', 'utf8'));
+  const servedVersion = await mf.dispatchFetch(`${origin}/version`);
+  expect(servedVersion.status).toBe(200);
+  expect(servedVersion.headers.get('cache-control')).toBe('no-store');
+  expect(await servedVersion.json()).toEqual(builtVersion);
+  expect(Object.keys(builtVersion).sort()).toEqual(['built_at', 'sha', 'version']);
+  mark('GET /version reports the build identity written next to the static assets');
 
   // Both public experiences must stay separate from authenticated application sessions.
   const publicDemoRequests = []; const publicDemoSockets = [];
