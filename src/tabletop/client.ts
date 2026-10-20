@@ -38,8 +38,8 @@ export interface ModelJob {
   status: 'queued' | 'running' | 'completed' | 'complete' | 'failed';
   message?: string;
   candidateId?: string;
-  /** Present when the AI asked the owner questions instead of drafting rules (F012). */
-  questions?: string[];
+  /** Present when the AI asked the owner one question instead of drafting rules (F012). */
+  clarification?: { question: string; options: string[] };
 }
 
 export interface TabletopCapabilities {

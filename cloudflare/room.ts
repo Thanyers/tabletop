@@ -72,8 +72,8 @@ interface PublicModelJob {
   status: 'running' | 'completed' | 'failed';
   message?: string;
   candidateId?: string;
-  /** Questions for the owner when the model asked instead of drafting (F012). */
-  questions?: string[];
+  /** A question with answer choices when the model asked instead of drafting (F012). */
+  clarification?: { question: string; options: string[] };
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -311,9 +311,15 @@ function modelJobView(job: RoomModelJob): PublicModelJob {
     id: job.id,
     status: 'completed',
     ...(typeof job.data.candidateId === 'string' ? { candidateId: job.data.candidateId } : {}),
-    ...(Array.isArray(job.data.questions) && job.data.questions.every((item) => typeof item === 'string')
-      ? { questions: job.data.questions as string[] } : {}),
+    ...(publicClarification(job.data.clarification) ?? {}),
   };
+}
+
+function publicClarification(value: unknown): { clarification: { question: string; options: string[] } } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { question, options } = value as { question?: unknown; options?: unknown };
+  if (typeof question !== 'string' || !Array.isArray(options) || !options.every((item) => typeof item === 'string')) return null;
+  return { clarification: { question, options: options as string[] } };
 }
 
 function modelFailureMessage(failure: unknown): string {
@@ -1226,10 +1232,10 @@ export class Room extends DurableObject<Env> {
       if (!job || job.status !== 'running') return;
       requireWorkspaceWritable(this.env, authorized.workspace.kind);
 
-      if ('questions' in proposal) {
+      if ('clarification' in proposal) {
         // Nothing to commit: the owner answers in the chat and asks again.
         await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
-          input.actorId, 'completed', { ...initialData, questions: proposal.questions });
+          input.actorId, 'completed', { ...initialData, clarification: proposal.clarification });
         return;
       }
 

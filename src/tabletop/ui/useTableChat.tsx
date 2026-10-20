@@ -314,7 +314,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       pollTimedOut: false,
     });
     // Questions leave the table unchanged, so there is nothing to refresh.
-    if ((next.status === 'completed' || next.status === 'complete') && !next.questions?.length) refreshAfterDraft(targetScope, cardId, workspaceId);
+    if ((next.status === 'completed' || next.status === 'complete') && !next.clarification) refreshAfterDraft(targetScope, cardId, workspaceId);
     return next;
   }, [patchCard, refreshAfterDraft]);
 
@@ -542,7 +542,10 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const prefillCard = useCallback((card: ChatCard) => setRetryPrefill({ text: card.prompt, key: Date.now() }), []);
   // Rule requests carry no chat history, so the answer travels with the original request.
-  const answerQuestion = useCallback((card: ChatCard, question: string) => setRetryPrefill({ text: `${card.prompt}\n\n${question} `, key: Date.now() }), []);
+  const answerQuestion = useCallback((card: ChatCard, answer: string) => {
+    const question = card.modelJob?.clarification?.question;
+    setRetryPrefill({ text: question ? `${card.prompt}\n\n${question} ${answer}` : `${card.prompt}\n\n${answer}`, key: Date.now() });
+  }, []);
 
   const retryHistory = useCallback(() => { void loadHistory(scope); }, [loadHistory, scope]);
 
@@ -590,7 +593,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         onCheck={() => void checkStatus(card)}
         onRetryRefresh={() => void retryDraftRefresh(scope, card.id, table.id)}
         onPrefill={() => prefillCard(card)}
-        onAnswerQuestion={(question) => answerQuestion(card, question)}
+        onAnswerQuestion={(answer) => answerQuestion(card, answer)}
         onDismiss={() => dismiss(card)}
       />,
     }));
@@ -641,7 +644,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   onCheck: () => void;
   onRetryRefresh: () => void;
   onPrefill: () => void;
-  onAnswerQuestion: (question: string) => void;
+  onAnswerQuestion: (answer: string) => void;
   onDismiss: () => void;
 }) {
   const dismissalBlocked = isUncertainRequest(card) || card.confirming === true || card.confirmationPending === true;
@@ -665,13 +668,23 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       {dismissButton}
     </div>;
   }
-  if (card.kind === 'draft' && card.modelJob?.questions?.length) {
+  const clarification = card.kind === 'draft' ? card.modelJob?.clarification : undefined;
+  if (clarification) {
     return <div className="tt-chat-card tt-chat-card--questions" data-testid="table-chat-answer">
       <p><MessageCircleQuestion size={14} /> A few details would help build this table. Nothing on the table changed.</p>
-      <ul className="tt-chat-card__questions" aria-label="Questions from the AI">
-        {card.modelJob.questions.map((question) => <li key={question}><button type="button" disabled={readOnly} onClick={() => onAnswerQuestion(question)}>{question}</button></li>)}
+      <p className="tt-chat-card__question">{clarification.question}</p>
+      <ul className="tt-chat-card__questions" aria-label="Answer choices">
+        {clarification.options.map((option) => <li key={option}><button type="button" disabled={readOnly} onClick={() => onAnswerQuestion(option)}>{option}</button></li>)}
       </ul>
-      <p className="tt-chat-card__hint">Pick a question to add it to your message, answer it, then send.</p>
+      <p className="tt-chat-card__hint">Pick an answer to add it to your message, then send.</p>
+      {dismissButton}
+    </div>;
+  }
+  // A finished request that left no draft (e.g. an older client view of a newer reply) must not offer Review rules.
+  if (card.kind === 'draft' && !card.pollError && !card.checking && !card.modelJob?.candidateId && view.domain.candidate === null) {
+    return <div className="tt-chat-card" data-testid="table-chat-answer">
+      <p className="tt-chat-card__text">No rule draft was created. Try rephrasing your request.</p>
+      <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>
       {dismissButton}
     </div>;
   }

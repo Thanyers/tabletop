@@ -14,8 +14,9 @@
 ## สิ่งที่ผู้ใช้จะเห็น
 
 1. พิมพ์คำขอร่างกฎที่ยังไม่พอ
-2. แทนการ์ด error จะได้การ์ด "A few details would help build this table. Nothing on the table changed." พร้อมคำถาม 1–3 ข้อจาก AI ในภาษาเดียวกับคำขอ
-3. กดคำถาม → ช่องแชทได้คำขอเดิม + คำถามนั้น → พิมพ์คำตอบต่อท้ายแล้วส่ง (โหมดร่างกฎไม่ส่งประวัติแชท จึงต้องรวมไว้ในข้อความเดียว)
+2. แทนการ์ด error จะได้การ์ด "A few details would help build this table. Nothing on the table changed." พร้อม**คำถามเดียว**จาก AI และ**ตัวเลือกคำตอบ 3 ข้อ** ในภาษาเดียวกับคำขอ
+3. กดตัวเลือก → ช่องแชทได้คำขอเดิม + คำถาม + คำตอบที่เลือก → แก้ได้แล้วส่ง (โหมดร่างกฎไม่ส่งประวัติแชท จึงต้องรวมไว้ในข้อความเดียว)
+4. ถ้า job จบโดยไม่มีร่างกฎและไม่มีคำถาม (เช่น แท็บที่ยังรัน JS เก่า) การ์ดบอก "No rule draft was created" แทนปุ่ม Review rules ที่กดแล้วไม่เกิดอะไร
 
 ## ขอบเขต
 
@@ -23,10 +24,10 @@
 
 ## ข้อเท็จจริงจากโค้ด (2026-10-20)
 
-- `server/providers/deepseek-changes.ts` — prompt ของโต๊ะบอกให้ตอบ `{"kind":"clarify","questions":[...]}` เมื่อโจทย์ไม่พอหรือวางข้อมูลแทนการแนบไฟล์ · ตรวจด้วย `tableClarifySchema` (1–3 ข้อ, 3–200 ตัวอักษร) · ผลลัพธ์ `DeepSeekChangeResult` เป็น union `{change}` | `{questions}`
-- `cloudflare/ai.ts` — `proposeGeneratedTable` คืน `{questions}` ทันทีหลัง settle ค่าใช้จ่าย ไม่รันตัวตรวจกฎ · โต๊ะชนิดอื่นถ้าได้ `questions` ถือว่า output ไม่ผ่าน
-- `cloudflare/room.ts` — job ที่ได้คำถามจบเป็น `completed` โดยไม่ commit อะไร เก็บ `questions` ใน `model_jobs.data` (JSON เดิม ไม่เพิ่ม schema) · `modelJobView` ส่ง `questions` ให้ client
-- `src/tabletop/ui/useTableChat.tsx` — การ์ดแสดงคำถามเป็นปุ่ม ไม่ refresh โต๊ะเมื่อได้คำถาม
+- `server/providers/deepseek-changes.ts` — prompt ของโต๊ะบอกให้ตอบ `{"kind":"clarify","question":"...","options":[3 ข้อ]}` เมื่อโจทย์ไม่พอหรือวางข้อมูลแทนการแนบไฟล์ · ตรวจด้วย `tableClarifySchema` (คำถาม 3–200 ตัวอักษร, ตัวเลือกพอดี 3 ข้อ ข้อละ 1–120) · ผลลัพธ์ `DeepSeekChangeResult` เป็น union `{change}` | `{clarification}`
+- `cloudflare/ai.ts` — `proposeGeneratedTable` คืน `{clarification}` ทันทีหลัง settle ค่าใช้จ่าย ไม่รันตัวตรวจกฎ · โต๊ะชนิดอื่นถ้าได้ `clarification` ถือว่า output ไม่ผ่าน
+- `cloudflare/room.ts` — job ที่ได้คำถามจบเป็น `completed` โดยไม่ commit อะไร เก็บ `clarification` ใน `model_jobs.data` (JSON เดิม ไม่เพิ่ม schema) · `modelJobView` ส่ง `clarification` ให้ client (เฉพาะรูปแบบถูก)
+- `src/tabletop/ui/useTableChat.tsx` — การ์ดแสดงคำถาม + ตัวเลือกเป็นปุ่ม ไม่ refresh โต๊ะเมื่อได้คำถาม · job ที่จบโดยไม่มี candidate แสดง "No rule draft was created"
 
 ## งาน
 
@@ -43,5 +44,6 @@
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
 | 2026-10-20 | ให้ AI ถามกลับแทนการร่างตั้งแต่แรก (ไม่ใช่ข้อความ error หรือคำถามสำเร็จรูป) | ผู้ใช้เลือก · ให้คำถามเจาะจงกับไฟล์และคำขอ |
-| 2026-10-20 | กดคำถามแล้วรวมคำขอเดิม + คำถามไว้ในข้อความเดียว | โหมดร่างกฎไม่ส่งประวัติแชทให้ AI ([GENERIC_TABLE_DESIGN](../GENERIC_TABLE_DESIGN.md#table-conversation-and-requested-actions)) |
+| 2026-10-20 | เปลี่ยนจากคำถาม 1–3 ข้อ เป็นคำถามเดียว + ตัวเลือก 3 ข้อ | ผู้ใช้ขอหลังลองใช้จริง: ตอบง่ายกว่า กดได้ทันที |
+| 2026-10-20 | กดตัวเลือกแล้วรวมคำขอเดิม + คำถาม + คำตอบไว้ในข้อความเดียว | โหมดร่างกฎไม่ส่งประวัติแชทให้ AI ([GENERIC_TABLE_DESIGN](../GENERIC_TABLE_DESIGN.md#table-conversation-and-requested-actions)) |
 | 2026-10-20 | อนุญาตให้ถามกลับได้ในรอบซ่อมด้วย | ถ้าซ่อมไม่ได้ การถามดีกว่าจบด้วย error และไม่เสียเงินรอบที่เหลือ |

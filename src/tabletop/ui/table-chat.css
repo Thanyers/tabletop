@@ -59,3 +59,4 @@
 .tt-app .tt-chat-card__questions button:hover:not(:disabled) { border-color: #24796b; }
 .tt-app .tt-chat-card__questions button:focus-visible { outline: 2px solid #24796b; outline-offset: 2px; }
 .tt-app .tt-chat-card__hint { color: var(--tt-muted); font-size: 12px; }
+.tt-app .tt-chat-card__question { font-weight: 650; }
