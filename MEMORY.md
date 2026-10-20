@@ -100,6 +100,11 @@
 - **Root cause:** `git ls-files --others` รายงาน git worktree/repo ที่ไม่ได้ track (เช่น `.claude/worktrees/<name>/`) เป็น entry เดียวที่เป็นโฟลเดอร์ สคริปต์เลย `readFileSync` โฟลเดอร์
 - **Correct behavior:** วาง worktree ของ AI ไว้ใต้ `.claude/worktrees/` (ignored แล้ว) · ถ้า `check-public-files` แจ้ง `Nested repository must be ignored or reviewed` ให้ย้ายหรือเพิ่ม path นั้นใน `.gitignore` · ห้ามใช้ `git commit --no-verify` เพื่อข้าม
 
+### 2026-10-20 — Generated form preview advances the turn before submission
+- **What happened:** Hosted two-account staging acceptance found that filling a turn-advancing generated form disabled its submit button before any command reached the shared table. The other account correctly retained the committed state.
+- **Root cause:** Generated controls used the speculative preview state for availability, record options and input bindings; that state already contained the next seat. A local metric preview is not evidence of a committed command.
+- **Correct behavior:** Use committed state and bindings for interactions while rendering preview values separately. Run `npm run build && npm run build:cloudflare && npm run test:generative:browser`, then verify a real form submit, both actors' shared records, history and reload on staging before promotion.
+
 ## Deploy failures
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า
