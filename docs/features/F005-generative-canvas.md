@@ -35,7 +35,7 @@ Contract, source map, ข้อจำกัด และ recovery: [GENERATIVE_C
 
 ## ผลส่ง review
 
-Node `22.23.2`: unit/SQL 354/354, Cloudflare 71/71, Component Lab 7/7, Node browser 7/7, Worker browser 20/20 และ generated browser สี่เรื่อง/แปดร่างผ่าน; AI จริงผ่านร้านกาแฟ แสง–เงา และเกมแบ่งน้ำบน local Worker โดยไม่แก้ platform ตามชื่อโจทย์ ผลล้มเหลวก่อนหน้าเก็บไว้ด้วย ไม่ใช่ first-attempt success rate
+Node `22.23.2`: unit/SQL 355/355, Cloudflare 71/71, Component Lab 7/7, Node browser 7/7, Worker browser 22/22 และ generated browser สี่เรื่อง/แปดร่างผ่าน; AI จริงผ่านร้านกาแฟ แสง–เงา และเกมแบ่งน้ำบน local Worker โดยไม่แก้ platform ตามชื่อโจทย์ หลังรวมแชท island จาก dev ตรวจ UI ซ้ำด้วย provider จำลอง ผลล้มเหลวก่อนหน้าเก็บไว้ด้วย ไม่ใช่ first-attempt success rate
 
 build/typecheck/Worker dry run และ public/client scans ผ่าน; lint 0 errors/104 warnings ดูขอบเขตทั้งหมดใน [acceptance](../GENERATIVE_CANVAS_ACCEPTANCE.md) สอง actor ในรอบนี้เป็นบัญชีจำลอง; Google สองบัญชีจริง, hosted performance, hidden evaluation และ full recovery ยังเป็น gate ก่อนเปิด beta ทั่วไป ไม่มีการ merge/deploy จากงานนี้
 

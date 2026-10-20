@@ -396,8 +396,18 @@ try {
     return source;
   }
 
+  async function openAssistantIfCollapsed(page) {
+    const island = page.getByTestId('table-assistant-panel');
+    if (await island.getAttribute('data-collapsed') !== 'true') return;
+    const bubble = page.getByTestId('table-assistant-bubble');
+    await expect(bubble).toBeVisible();
+    await bubble.click();
+    await expect(island).toHaveAttribute('data-collapsed', 'false');
+  }
+
   async function askForDraft(owner, tableId, scenario, phase, file) {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    await openAssistantIfCollapsed(owner);
     const assistant = owner.getByTestId('table-assistant');
     await expect(assistant).toBeVisible();
     await assistant.getByRole('button', { name: /Open rules and sources|Set up this table from sources/ }).click();
@@ -420,6 +430,7 @@ try {
   }
 
   async function assertPrivateCandidatePreview(owner, tableId, candidate, expectedControl) {
+    await openAssistantIfCollapsed(owner);
     await owner.getByRole('button', { name: 'Review draft', exact: true }).click();
     const editor = owner.getByTestId('canvas-object-editor');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');

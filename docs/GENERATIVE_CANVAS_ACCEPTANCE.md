@@ -14,20 +14,22 @@ Candidate: `feat/F005-generative-canvas` · Node `22.23.2` · 2026-10-20
 
 | ชุดตรวจ | ที่เก็บผล local | สถานะ |
 | --- | --- | --- |
-| Unit/SQL และขอบเขต interpreter | `test-results/unit-report.json` | PASS 354/354 หลังรวม dev ถึง `3276276` |
+| Unit/SQL และขอบเขต interpreter | `test-results/unit-report.json` | PASS 355/355 หลังรวม dev ถึง `253ac58` |
 | Worker/D1/Room/Billing | `test-results/cloudflare-report.json` | PASS 71/71 |
 | Component Lab เดิม | `node --import tsx --test scripts/component-lab/component-lab.test.ts` | PASS 7/7 |
 | Node browser regression | `test-results/tabletop-r1/report.json` | PASS 7/7 |
-| Worker browser regression | `test-results/cloudflare-browser/report.json` | PASS 20/20 รวม `/new`, Actions หลังแก้กฎ และ desktop/narrow viewport |
+| Worker browser regression | `test-results/cloudflare-browser/report.json` | PASS 22/22 รวม `/new`, Actions หลังแก้กฎ, desktop/narrow viewport และเปิดแชทที่ย่อแล้วจาก Canvas |
 | Generative browser, provider จำลอง | `test-results/generative-canvas/report.json` | PASS 4 เรื่อง, 8 drafts รวมการซูม/ลากระหว่างรอ focus; ไม่มี browser error หรือ external request |
-| Generative browser, provider จริง | `test-results/generative-live-{cafe,shadow,water}/report.json` | PASS ทั้งสามเรื่องบน build ล่าสุด; shadow ตรวจ endpoint ของภาพและสูตรก่อน/หลัง action และลากจริง |
+| Generative browser, provider จริง | `test-results/generative-live-{cafe,shadow,water}/report.json` | PASS ทั้งสามเรื่องบน `8705bd9`; shadow ตรวจ endpoint ของภาพและสูตรก่อน/หลัง action และลากจริง; หลังรวมแชท island ตรวจ UI ซ้ำด้วย provider จำลอง |
 | Lint | `test-results/lint-report.json` | PASS 0 errors; 104 warnings ของ candidate ยังไม่ได้เคลียร์ทั้ง repo |
 | Typecheck / app build / Worker bundle | `npm run build`, `npm run build:cloudflare` | PASS; Worker เป็น dry run |
-| Publication / browser secret boundary | `node scripts/check-public-files.mjs`, `node scripts/check-client-secrets.mjs` | PASS 486 source files / 136 browser assets; ไม่พบ high-confidence pattern ที่ scanner ตรวจ |
+| Publication / browser secret boundary | `node scripts/check-public-files.mjs`, `node scripts/check-client-secrets.mjs` | PASS 488 source files / 136 browser assets; ไม่พบ high-confidence pattern ที่ scanner ตรวจ |
 | เอกสาร | local Markdown target check, `git diff --check` | PASS 170 local links ในเอกสารใช้งาน/ส่งต่อที่แก้; ไม่มี whitespace error |
 | Independent review | ตรวจ source candidate และ regression | ปิดข้อค้นพบปุ่มกดซ้ำ, actor-specific output bounds และ pending focus ทับการซูมแล้ว; ไม่มี material finding ค้างในขอบเขตที่ตรวจ |
 
-โค้ดแอปที่ตรวจคือ `8705bd9` (Node `22.23.2`); การแก้หลัง commit นี้เป็นเอกสาร, การเก็บหลักฐานเดิม และ live acceptance ที่รอ geometry ของการ์ด/ตรวจสูตรภาพเพิ่ม โดยไม่ได้แก้ runtime รวม `dev` ถึง `6cf0244` ที่บันทึก release v1.1.0 แล้วและคง F005 ไว้ใน Unreleased ผลและภาพใน `test-results/` เป็นหลักฐานในเครื่องที่ไม่ commit; CI เก็บเฉพาะผล fixture จำลองเป็น artifacts ไม่มี credential หรือประวัติผู้ใช้จริงใน repo ผล CI ของ PR ต้องตรวจบน head ล่าสุดแยกจากผล local นี้
+AI/authority runtime ที่ทดสอบกับ provider จริงคือ `8705bd9` (Node `22.23.2`) และส่วนนี้ไม่เปลี่ยนหลังจากนั้น รวม `dev` ถึง `253ac58` ซึ่งเพิ่มเอกสาร release v1.1.0 และแชท island ของทีม พร้อมแก้ปุ่ม Write a message ให้เปิดแชทที่ย่ออยู่ได้ แล้วรัน unit/build/Worker browser/generated browser ซ้ำผ่านตามตารางข้างบน F005 ยังคงอยู่ใน Unreleased
+
+ผลและภาพใน `test-results/` เป็นหลักฐานในเครื่องที่ไม่ commit; CI เก็บเฉพาะผล fixture จำลองเป็น artifacts ไม่มี credential หรือประวัติผู้ใช้จริงใน repo ผล CI ของ PR ต้องตรวจบน head ล่าสุดแยกจากผล local นี้
 
 ## สิ่งที่วัดจากการใช้งาน
 

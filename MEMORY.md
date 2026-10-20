@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-20 — ทุกทางเข้า Assistant ต้องกางแชทที่ย่ออยู่ได้
+- **What happened:** หลังรวมแชท island ปุ่ม Write a message บน Canvas พยายามโฟกัส textarea ที่ซ่อนอยู่และไม่เปิดแชทกลับมา
+- **Root cause:** ปุ่มไอคอนใช้ expand handler แต่ปุ่มบนการ์ดใช้เฉพาะ DOM focus
+- **Correct behavior:** ใช้ expand/focus handler ร่วมกันทั้งสองทางเข้า แล้วรัน `npm run test:cloudflare:browser` ให้ผ่านกรณีเปิดจาก Objects หลังแชทย่อ; ห้ามปิด idle ทั้งหมดเพื่อให้กรณีนี้ผ่าน
+
 ### 2026-10-20 — Browser acceptance ต้องตรวจการลงมือใช้ ไม่ใช่แค่เห็นร่าง
 - **What happened:** ร่าง generated views ผ่าน schema และแสดงภาพได้ แต่การทดลองส่วนตัวเคยเปิดเฉพาะภาพ และปุ่มที่ส่งค่าเดิมซ้ำถูกกันหลังคำสั่งแรก
 - **Root cause:** renderer ยังไม่ได้รับ local command adapter สำหรับ draft; duplicate guard ผูกกับค่า input โดยไม่ดู revision ของข้อมูลหลังคำสั่งสำเร็จ

@@ -46,6 +46,14 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
       return response.json();
     }, id);
   }
+  async function openAssistantIfCollapsed(page) {
+    const island = page.getByTestId('table-assistant-panel');
+    if (await island.getAttribute('data-collapsed') !== 'true') return;
+    const bubble = page.getByTestId('table-assistant-bubble');
+    await expect(bubble).toBeVisible();
+    await bubble.click();
+    await expect(island).toHaveAttribute('data-collapsed', 'false');
+  }
   async function waitForStableBoundingBox(locator) {
     let previous = null;
     let stableSince = 0;
@@ -83,6 +91,7 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     return response;
   };
   async function requestDraft(page, id, prompt) {
+    await openAssistantIfCollapsed(page);
     const assistant = page.getByTestId('table-assistant');
     const mode = assistant.getByRole('button', { name: /^(Open rules and sources|Set up this table from sources)$/ });
     if (await mode.getAttribute('aria-pressed') !== 'true') await mode.click();
@@ -99,6 +108,7 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     }, { id, jobId: job.id }), { timeout: 40_000, intervals: [500, 1000] }).not.toBe('running');
     const final = await page.evaluate(async ({ id, jobId }) => (await fetch(`/api/workspaces/${id}/model/${jobId}`)).json(), { id, jobId: job.id });
     if (final.status !== 'completed') throw Error(`Model stopped: ${final.message ?? final.status}`);
+    await openAssistantIfCollapsed(page);
     await expect(assistant.getByRole('button', { name: 'Review draft', exact: true })).toBeVisible({ timeout: 10_000 });
     await assistant.getByRole('button', { name: 'Review draft', exact: true }).click();
     const draft = await read(page, id);
