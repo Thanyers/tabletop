@@ -372,7 +372,19 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await route.continue();
   };
   const workspaceUrl = `**/api/workspaces/${tableId}`;
-  if (failDraftRefresh) await owner.route(workspaceUrl, workspaceRoute);
+  const modelUrl = `**/api/workspaces/${tableId}/model`;
+  // Arm the refresh failure before the browser sees the 202. Setting it after reading the
+  // response in the test raced the app's own refresh on slow CI machines.
+  const modelRoute = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const response = await route.fetch();
+    if (response.status() === 202) modelAccepted = true;
+    await route.fulfill({ response });
+  };
+  if (failDraftRefresh) {
+    await owner.route(workspaceUrl, workspaceRoute);
+    await owner.route(modelUrl, modelRoute);
+  }
   const providerCallsBefore = failDraftRefresh ? getProviderCalls() : undefined;
   const modelResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   void modelResponse.catch(() => {});
@@ -431,6 +443,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     expect(modelRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
     await owner.unroute(workspaceUrl, workspaceRoute);
+    await owner.unroute(modelUrl, modelRoute);
   } else {
     await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
     await expect(draftCard.getByRole('button', { name: 'Retry table refresh', exact: true })).toHaveCount(0);
