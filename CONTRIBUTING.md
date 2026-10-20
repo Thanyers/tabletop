@@ -4,12 +4,12 @@
 
 ## Checkout และ runtime
 
-งาน implementation และเอกสารรวมเข้า `main` แล้ว ดู [สถานะ release](docs/DEPLOYMENTS.md) สำหรับ commit ที่เปิดใช้อยู่ ให้สร้าง branch งานของตัวเองจาก main:
+`dev` คือ branch รวมงาน ส่วน `main` ใช้สำหรับ release ที่ tag `vX.Y.Z` เท่านั้น ดู [สถานะ release](docs/DEPLOYMENTS.md) สำหรับ commit ที่เปิดใช้อยู่ และ [AGENTS.md](AGENTS.md) สำหรับขั้นตอน branch, release และ hotfix ที่คนและ AI ใช้ร่วมกัน ให้สร้าง branch งานของตัวเองจาก `dev`:
 
 ```powershell
-git clone --branch main https://github.com/Thanyers/tabletop.git
+git clone --branch dev https://github.com/Thanyers/tabletop.git
 cd tabletop
-git switch -c docs-or-feature-name
+git switch -c feat/your-change
 npm ci
 npm run build
 npm start
@@ -57,7 +57,7 @@ CI ใน [validate.yml](.github/workflows/validate.yml) ยังตรวจ d
 2. คง server authority, private projections, explicit AI consent และ human confirmation ไม่เพิ่ม scenario-name switch เพื่อให้เคสตัวอย่างผ่าน
 3. เพิ่มหรือปรับการตรวจที่ปกป้องพฤติกรรมที่เปลี่ยน การแก้เอกสารเล็กน้อยให้ตรวจลิงก์/ข้อเท็จจริงตามสัดส่วน ไม่จำเป็นต้องเขียน unit test เลียนแบบข้อความ
 4. ก่อน commit ตรวจ `git status`, diff และ staged paths ใช้รายชื่อไฟล์ที่ตั้งใจส่ง ห้ามส่ง `.env*`, `.dev.vars*`, raw account/session evidence, private receipts หรือ state จาก `test-results/`, `.wrangler/`, `server/.data/`
-5. เปิด PR กลับ `main` พร้อมผลตรวจและข้อจำกัด แล้ว review ก่อน merge
+5. เปิด PR เข้า `dev` พร้อมผลตรวจและข้อจำกัด แล้ว review ก่อน merge · `main` รับเฉพาะ `release/*` และ `hotfix/*` ตาม [AGENTS.md](AGENTS.md#2-branch)
 6. อัปเดตคู่มือเมื่อเปลี่ยนขั้นตอนผู้ใช้หรือข้อจำกัด อัปเดต Deployment เฉพาะเมื่อ deploy และตรวจจริงแล้ว
 
 ผู้ส่ง bug ควรระบุ URL/environment, เวลา, ขั้นตอน, ผลที่คาด/ผลที่เห็น, browser และภาพที่ลบข้อมูลส่วนตัวแล้ว ไม่แนบ token, invite link ที่ยังใช้ได้, cookie หรือข้อมูล source ส่วนตัว
