@@ -89,6 +89,12 @@ function novelChange(source) {
   return change;
 }
 
+function waterBrowserChange() {
+  const change = structuredClone(cooperativeWaterChange);
+  change.program.turnOrder = ['member-1', 'host', 'member-2'];
+  return change;
+}
+
 function decorateForSource(change, source) {
   const result = structuredClone(change);
   if (source) result.program.evidence = [{ sourceId: source.id, quote: source.text }];
@@ -116,7 +122,7 @@ function scenarioForInput(input) {
   if (prompt.includes('phase:incremental-edit')) return { id, change: incrementalEdit(input), edit: true };
   if (id === 'cafe') return { id, change: cafeQueueChange, edit: false };
   if (id === 'shadow') return { id, change: decorateForSource(lightShadowChange, input.sources?.[0]), edit: false };
-  if (id === 'water') return { id, change: cooperativeWaterChange, edit: false };
+  if (id === 'water') return { id, change: waterBrowserChange(), edit: false };
   const source = input.sources?.[0];
   if (!source) throw new Error('The synthetic loan case requires its attached source file.');
   return { id, change: novelChange(source), edit: false };
@@ -868,8 +874,62 @@ try {
       const delivered = updated.domain.records.teams[0].values.delivered;
       expect(water).toBe(100 - selectedAmount);
       expect(delivered).toBe(selectedAmount);
-      expect(updated.domain.turn).toBe('member-2');
-      return updated;
+      expect(updated.domain.turn).toBe('host');
+
+      const beforeForm = (await api(owner, `/api/workspaces/${tableId}`)).body;
+      expect(beforeForm.domain.turn).toBe('host');
+      const requestsBeforeForm = tableActRequests.length;
+      await openCanvasObject(owner, 'table.view.water-controls');
+      const form = owner.locator('[data-canvas-object="table.view.water-controls"] .tt-generated-control__form').filter({ hasText: 'Choose a team and amount' });
+      const team = form.locator('select').first();
+      const amount = form.locator('input[type="number"]').first();
+      await team.selectOption('team-south');
+      await amount.fill('7');
+      await expect.poll(async () => Number(await owner.locator('[data-canvas-object="table.view.water-stock"] .tt-generated-metric strong').innerText()))
+        .toBeCloseTo(beforeForm.domain.records.reservoirs[0].values.water - 7, 8);
+      await expect(owner.locator('[data-canvas-object="table.view.south-delivery"] .tt-generated-metric strong')).toHaveText('7');
+      expect((await api(owner, `/api/workspaces/${tableId}`)).body.domain.records).toEqual(beforeForm.domain.records);
+      expect((await api(owner, `/api/workspaces/${tableId}`)).body.domain.turn).toBe('host');
+      expect((await api(owner, `/api/workspaces/${tableId}`)).body.domain.actionRevision).toBe(beforeForm.domain.actionRevision);
+      expect(tableActRequests).toHaveLength(requestsBeforeForm);
+      const submit = form.getByRole('button', { name: 'Choose a team and amount', exact: true });
+      await expect(submit).toBeEnabled();
+      await expect(team.locator('option[value="team-south"]')).toHaveText('0 · team-south');
+
+      const responsePromise = responseAfter(owner, (response) => isCommandResponse(response, 'table.act'));
+      expect((await responsePromise(() => submit.click())).status()).toBe(200);
+      await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.actionRevision)
+        .toBeGreaterThan(beforeForm.domain.actionRevision);
+      const afterForm = (await api(owner, `/api/workspaces/${tableId}`)).body;
+      expect(afterForm.domain.records.reservoirs[0].values.water).toBe(beforeForm.domain.records.reservoirs[0].values.water - 7);
+      expect(afterForm.domain.records.teams.find((record) => record.id === 'team-south').values.delivered).toBe(7);
+      expect(afterForm.domain.turn).toBe('member-2');
+      expect(tableActRequests).toHaveLength(requestsBeforeForm + 1);
+      for (const actorPage of [owner, member]) {
+        await expect.poll(async () => (await api(actorPage, `/api/workspaces/${tableId}`)).body.domain.records).toEqual(afterForm.domain.records);
+        await expect(actorPage.locator('[data-canvas-object="table.view.south-delivery"] .tt-generated-metric strong')).toHaveText('7');
+        await actorPage.reload();
+        await expect(actorPage.locator('.tt-canvas-panel')).toBeVisible();
+        expect((await api(actorPage, `/api/workspaces/${tableId}`)).body.domain.records).toEqual(afterForm.domain.records);
+      }
+
+      const nextSeat = members[1];
+      expect((await api(nextSeat, `/api/workspaces/${tableId}`)).body.domain.turn).toBe('member-2');
+      const nextEditor = await openCanvasObject(nextSeat, 'table.view.water-controls');
+      const nextSlider = nextEditor.locator('input[type="range"]');
+      await expect(nextSlider).toBeEnabled();
+      const nextBox = await nextSlider.boundingBox();
+      expect(nextBox).toBeTruthy();
+      await pageMouse(nextSeat).click(nextBox.x + nextBox.width * (20 - 1) / (50 - 1), nextBox.y + nextBox.height / 2);
+      await expect.poll(async () => (await api(nextSeat, `/api/workspaces/${tableId}`)).body.domain.actionRevision)
+        .toBeGreaterThan(afterForm.domain.actionRevision);
+      const afterNextSeat = (await api(nextSeat, `/api/workspaces/${tableId}`)).body;
+      expect(afterNextSeat.domain.turn).toBe('member-1');
+      for (const actorPage of [owner, ...members]) {
+        await expect.poll(async () => (await api(actorPage, `/api/workspaces/${tableId}`)).body.domain.records).toEqual(afterNextSeat.domain.records);
+      }
+      mark('Water: member slider, owner form preview with unchanged server state, one committed form action shared and persisted to both pages, then next seat acts');
+      return afterNextSeat;
     }
     const editor = await openCanvasObject(owner, 'table.view.loan-controls');
     const button = editor.locator('.tt-generated-controls').getByRole('button', { name: 'Recalculate payment', exact: true });
@@ -1008,7 +1068,8 @@ try {
     if (scenario.id === 'cafe' || scenario.id === 'shadow') await expect(renderedScene).toBeVisible();
     else await expect(renderedMetric).toBeVisible();
     await owner.screenshot({ path: join(output, `${scenario.id}-canvas.png`), fullPage: true });
-    mark(`${scenario.id}: synthetic ${source ? 'file' : 'prompt'} draft, private preview, activation, real ${scenario.action}, shared rows/layout, reload and incremental edit`);
+    const realAction = scenario.id === 'water' ? 'slider + turn-advancing generated form' : scenario.action;
+    mark(`${scenario.id}: synthetic ${source ? 'file' : 'prompt'} draft, private preview, activation, real ${realAction}, shared rows/layout, reload and incremental edit`);
   }
 
   for (let index = 0; index < cases.length; index += 1) await runCase(cases[index], index);
