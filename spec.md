@@ -34,6 +34,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 - **Release ล่าสุด:** **`v1.0.0`** (annotated tag บน `ce2c50e` = merge PR #15, CI `local-validation` บน main ผ่าน) · staging และ production deploy แล้วและตอบ `1.0.0` / `ce2c50e` เมื่อ 2026-10-20 เวลา 13:32 น. Bangkok · output เทียบกับรุ่นก่อนหน้าต่างเฉพาะ `version.json`
 - **Branch:** `main` @ `ce2c50e` = release · PR #12–#14 เคยเข้า `main` ตรงโดยไม่ผ่าน `dev` · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection
 - **Deploy:** production และ staging ใช้ sealed build ชุดเดียวจาก `v1.0.0` · Node 22.23.2 · `npm ci --ignore-scripts` (0 vulnerabilities), typecheck/build/secret scan ผ่าน · health/readiness/capabilities/version 4/4 และ served-asset hashes 135/135 ผ่านทั้งสอง environment · อ่านหน้า anonymous และห้องเดิมหลังล็อกอินได้ ไม่มี room writes หรือ AI calls — ดู [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
+- **F004 URL paths (branch `feat/F004-url-paths`, รอ review):** `/`, `/t/<id>`, `/join#invite=...` · `/new` จองไว้ · ตรวจแล้ว: `npm test` 318/318, typecheck/build ผ่าน, `test:cloudflare` 65/65, `test:cloudflare:browser` 19/19 (ข้อใหม่: URL ต่อโต๊ะ, รีโหลด, back/forward, กลับโต๊ะหลังล็อกอิน, คนนอกเห็นแค่ข้อความ), `test:r1:browser` 7/7 · Node v26.3.1
 - **Infra:** Cloudflare Workers Free + D1 + SQLite DO + Google OAuth + DeepSeek Flash · ไม่มี R2/Paid · เพดาน AI prod $1/วัน $10/เดือน, staging $0.20/$0.20
 - **CI ล่าสุดของ candidate:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด))
 - **Local (2026-10-20, เครื่องนี้):** clone `main` @ `e8cb73e` แล้ว pull เป็น `48fb2bd` → `npm ci` (0 vulnerabilities) → `npm run build` ผ่าน → `npm start` เปิด `:4310` ได้ ใช้ Node v26.3.1 (ไม่ตรง CI 22.23.2) · `npm run test:cloudflare` 65/65 ผ่าน (room 28, auth 13, ai 9, table-assistant 8, billing 7) ตรงกับจำนวนใน CI · `test:cloudflare:browser` 16/16 ผ่าน (ใช้ `BROWSER_CHANNEL=chrome` หลัง `build:cloudflare`)
@@ -65,16 +66,14 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | 2026-10-20 | กติกา CI/CD ของ AI ทุกตัวอยู่ใน `AGENTS.md`; `CLAUDE.md` เก็บแค่ส่วนเฉพาะ Claude | ผู้ใช้สั่งให้ AI ตัวอื่นทำงานแบบเดียวกัน · `AGENTS.md` เป็นชื่อที่ Codex/Cursor ฯลฯ อ่าน |
 | 2026-10-20 | ตั้ง branch protection ไม่ได้จากบัญชีนี้ (push ได้ ไม่ใช่ admin) — เตรียมคำสั่ง ruleset ไว้ใน AGENTS.md §9 | เจ้าของ repo ต้องรัน |
 | 2026-10-20 | release แรกคือ `v1.0.0` | ผู้ใช้เคาะ · production เปิดให้ผู้ใช้จริงแล้ว และตามกฎ global release แรกของ production คือ `v1.0.0` |
+| 2026-10-20 | งานที่กำลังทำย้ายไป `PLAN.md` + `docs/features/` จองงานด้วย draft PR | ผู้ใช้ขอให้ทีมทำงานตรงกันไม่ชนกัน · `spec.md` เหลือแค่สถานะระบบ |
 | ก่อนหน้า | ไม่ rollback Worker ไปรุ่นที่ไม่รู้จักห้อง `table` ใช้ `TABLE_READ_ONLY=true` แทน | ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน) |
 
 ## งานที่กำลังทำ
 
-- **Generative Canvas implementation — `feat/generative-canvas`:** ผู้ใช้อนุมัติเริ่มพัฒนาตามแผนและใช้ agents เมื่อ 2026-10-20 โดยคง UI/design เดิม เป้าหมาย prompt/file → generated behavior/scene → direct interaction → compatible edit → shared/resumable room พร้อม relationship-aware incremental layout
-  - ขอบเขตไฟล์: `src/tabletop/shared/`, `domain/`, `runtime/`, UI renderer/Canvas/composer, `server/`, `cloudflare/`, tests และเอกสารเจ้าของเรื่อง
-  - แบ่ง ownership: runtime/interpreter และ contracts, renderer/controls, layout และ integration/AI/authority; main รับผิดชอบการรวมและ acceptance
-  - ตรวจ: Node 22.23.2, deterministic/resource-limit/privacy tests, unit/SQL + Cloudflare suites, browser เล่นโจทย์ใหม่สามแบบ/แก้/ลาก/สอง actor/reload, build + Worker dry run, independent security review, public-file scan
-  - ใช้ existing JSON room persistence และ disposable local databases; ไม่มี persistent database/schema/cloud resource mutation หรือ production deploy ในขั้นพัฒนา การปล่อยจริงต้องมีผล hosted acceptance และระบุ scope/version ตาม AGENTS.md
-  - การตัดสินใจเริ่มต้น: ใช้ bounded generated expression/scene program ที่ไม่มี host IO เป็น custom compute path สำหรับ proof; ไม่รัน JavaScript ที่โมเดลส่งใน host process ส่วน VM สำหรับ unrestricted custom JS ยังต้องผ่าน isolation spike แยก
+ดู [PLAN.md](PLAN.md) — กระดานว่าใครทำงานไหน branch อะไร (ย้ายมาจากหัวข้อนี้เพื่อไม่ให้หลายคนแก้ส่วนเดียวกันจนชน)
+
+งาน Generative Canvas ที่เริ่มก่อนมีกระดานทีมย้ายรายละเอียดไป [F005](docs/features/F005-generative-canvas.md) โดยคงขอบเขตและหลักฐานใน [acceptance](docs/GENERATIVE_CANVAS_ACCEPTANCE.md)
 
 ## ถัดไป
 
@@ -83,4 +82,5 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 2. ออก release ถัดไปตาม AGENTS.md; production ปัจจุบันคือ tag `v1.0.0` แล้ว ไม่ต้อง deploy tag นี้ซ้ำเพียงเพื่อให้มีเลขรุ่น
 3. แจ้งทีมว่างานใหม่ต้องเปิด PR เข้า `dev` เท่านั้น — #12–#14 ยังเข้า `main` ตรง
 4. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
-5. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
+5. F001 เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชท island — รอตอบคำถามเปิดใน [F001](docs/features/F001-guided-table-start.md#คำถามเปิด-ต้องตอบก่อนเริ่มงานที่เกี่ยว)
+6. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)

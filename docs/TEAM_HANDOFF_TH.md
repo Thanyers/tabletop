@@ -6,7 +6,7 @@
 
 รุ่นที่บันทึกว่า deploy ล่าสุดคือ `v1.0.0` / `ce2c50e` เมื่อ 20 ตุลาคม 2026 ดู [DEPLOYMENTS](DEPLOYMENTS.md) สำหรับ source/build และหลักฐานของ staging/production โดยตรง
 
-งานรุ่นถัดไปอยู่บน `feat/generative-canvas`: สูตรและภาพแบบข้อมูลที่ AI สร้างได้, ตัวควบคุมและการลากใน scene, ทดลองร่างส่วนตัว, shared semantic layout และการค้นบทสนทนาเก่าแบบจำกัดขอบเขต อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract/วิธีใช้ และ [acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md) สำหรับผลตรวจ ห้ามถือว่า candidate นี้ขึ้น production แล้ว
+งานรุ่นถัดไปอยู่บน `feat/F005-generative-canvas`: สูตรและภาพแบบข้อมูลที่ AI สร้างได้, ตัวควบคุมและการลากใน scene, ทดลองร่างส่วนตัว, shared semantic layout และการค้นบทสนทนาเก่าแบบจำกัดขอบเขต อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract/วิธีใช้ และ [acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md) สำหรับผลตรวจ ห้ามถือว่า candidate นี้ขึ้น production แล้ว
 
 ลำดับงานที่ควรทำต่อ:
 

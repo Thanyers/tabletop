@@ -1,6 +1,6 @@
 # Generative Canvas acceptance
 
-Candidate: `feat/generative-canvas` · Node `22.23.2` · 2026-10-20
+Candidate: `feat/F005-generative-canvas` · Node `22.23.2` · 2026-10-20
 
 สถานะ: กำลังทดสอบ ยังไม่อนุมัติ release และไม่ได้ deploy candidate นี้ไป staging หรือ production
 

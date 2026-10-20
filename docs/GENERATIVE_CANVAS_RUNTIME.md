@@ -1,6 +1,6 @@
 # Generative Canvas — สร้างเครื่องมือแล้วลงมือใช้บนโต๊ะ
 
-สถานะ: candidate บน `feat/generative-canvas` สำหรับตรวจและทดสอบก่อน release; ยังไม่ใช่ความสามารถที่ยืนยันบน production ดูผลตรวจใน [spec.md](../spec.md) และ [acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md)
+สถานะ: candidate บน `feat/F005-generative-canvas` สำหรับตรวจและทดสอบก่อน release; ยังไม่ใช่ความสามารถที่ยืนยันบน production ดูผลตรวจใน [spec.md](../spec.md) และ [acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md)
 
 ## วิธีใช้
 

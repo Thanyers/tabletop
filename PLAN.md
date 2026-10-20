@@ -1,0 +1,62 @@
+# PLAN.md — กระดานงานของทีม
+
+ใช้ไฟล์นี้ดูว่า **ใครกำลังทำอะไร ไฟล์ไหน** ก่อนหยิบงาน เพื่อไม่ให้สองคน (หรือสอง AI) แก้เรื่องเดียวกันพร้อมกัน
+รายละเอียดของแต่ละฟีเจอร์อยู่ใน [`docs/features/`](docs/features/) ส่วนสถานะระบบที่เสร็จแล้วอยู่ใน [`spec.md`](spec.md)
+
+## กติกา
+
+1. **ก่อนหยิบงาน:** ดูตารางด้านล่าง แล้วรัน `gh pr list -R Thanyers/tabletop --state open` ว่าไม่มี PR ที่ชื่อขึ้นต้นด้วย ID เดียวกัน
+2. **จองงาน:** แตก branch จาก `dev` (`feat/<ID>-<ชื่อสั้น>`) แก้แถวของงานนั้นในไฟล์นี้ (สถานะ `doing`, ผู้รับผิดชอบ, branch) แล้ว **เปิด draft PR ทันที** ชื่อ PR ขึ้นต้นด้วย ID เช่น `F001-T4: ...` · draft PR คือการจองที่ทุกคนเห็น
+3. **แก้เฉพาะแถวของตัวเอง** อย่าจัดรูปแบบหรือเรียงตารางใหม่ จะได้ไม่ชนกับคนอื่น
+4. **ดูคอลัมน์ "พื้นที่ที่แตะ":** ถ้างานที่ `doing` อยู่แตะไฟล์เดียวกับงานที่จะหยิบ ให้รอ หรือคุยกันก่อน · งานที่มี "ต้องรอ" ห้ามเริ่มจนงานนั้น `done`
+5. **จบงาน:** PR พร้อม review → เปลี่ยนสถานะเป็น `review` · คน merge แล้ว → `done` (แก้ใน PR ถัดไปของคุณได้)
+6. งานใหม่ที่ยังไม่มีใครจอง ให้เพิ่มไว้ใน feature doc ก่อน แล้วค่อยเพิ่มแถวที่นี่
+
+**สถานะ:** `todo` · `doing` · `review` · `done` · `blocked` (ใส่เหตุผลในคอลัมน์หมายเหตุ)
+
+## จุดที่ชนบ่อย (hotspots)
+
+ไฟล์เหล่านี้หลายงานแตะพร้อมกัน ให้แก้เท่าที่จำเป็นและ merge `dev` เข้า branch ตัวเองบ่อย ๆ:
+`src/tabletop/TabletopApp.tsx` · `tests/generic-table-browser.mjs` · `tests/cloudflare-browser.mjs` · `tests/tabletop-r1.mjs` · `cloudflare/index.ts` · `CHANGELOG.md` (เพิ่มบรรทัดใต้ `Unreleased` เท่านั้น) · `spec.md`
+
+## ฟีเจอร์
+
+| ID | ฟีเจอร์ | สถานะ | เอกสาร |
+| --- | --- | --- | --- |
+| F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `todo` | [F001](docs/features/F001-guided-table-start.md) |
+| F002 | ตั้งชื่อโต๊ะที่แถบด้านบน | `todo` | [F002](docs/features/F002-rename-table.md) |
+| F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
+| F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
+| F005 | สร้างภาพ สูตร และเครื่องมือใหม่บน Canvas พร้อม shared layout | `doing` | [F005](docs/features/F005-generative-canvas.md) |
+
+## งาน
+
+| ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| F001-T1 | ชุดข้อมูลการ์ด starter 3 โจทย์ | `todo` | — | — | `src/tabletop/shared/starters.ts` (ใหม่) | — | |
+| F001-T2 | หน้าเริ่มโต๊ะใหม่: คำถาม + การ์ด + ช่องพิมพ์ | `todo` | — | — | `src/tabletop/ui/StartPrompt.tsx` (ใหม่), `TabletopApp.tsx`, CSS ใหม่ | T1, F004-T2 | hotspot `TabletopApp.tsx` · อยู่ที่ path `/new` |
+| F001-T3 | ตรวจและเตรียม "ตัวอย่าง + กฎให้ตรวจ" ของแรงกับมวลและเกมโล่ | `todo` | — | — | `src/tabletop/domain/` (teaching, encounter) | — | spike ก่อน: ตอนนี้มีแค่ `invoice.sample` |
+| F001-T4 | กดการ์ดแล้วสร้างโต๊ะชนิดนั้นและโหลดตัวอย่าง | `todo` | — | — | `client.ts`, `TabletopApp.tsx` | T2, T3 | |
+| F001-T5 | Endpoint AI แนะนำ starter จากข้อความ (Worker) | `todo` | — | — | `cloudflare/starter-ai.ts` (ใหม่), `cloudflare/index.ts`, `cloudflare/contracts.ts`, `cloudflare/*.test.ts` | — | แตะงบ AI + consent ต้องมีเทสต์ด้านปฏิเสธ |
+| F001-T6 | Node runtime ตอบ endpoint เดียวกันว่า AI ปิด | `todo` | — | — | `server/app.ts`, `server/*.test.ts` | T5 (contract) | |
+| F001-T7 | ช่องพิมพ์เรียก T5 แล้วไฮไลต์การ์ดที่แนะนำ | `todo` | — | — | `StartPrompt.tsx`, `client.ts` | T2, T5 | |
+| F001-T8 | แชทเป็น island ลอย | `todo` | — | — | `TableAssistant.tsx`, `assistant-calm.css`, `calm-workspace.css`, `TableSurface.tsx` | — | T8 + T9 คนเดียวทำ (ไฟล์เดียวกัน) |
+| F001-T9 | แชทย่อเป็นวงกลมไอคอนดุ๊กดิ๊กเมื่อไม่มีคนพิมพ์ | `todo` | — | — | ไฟล์เดียวกับ T8 | T8 | ต้องรองรับ reduced motion |
+| F001-T10 | ปรับ browser tests ตาม flow ใหม่ | `todo` | — | — | `tests/*.mjs` | T2, T4, T8 | แต่ละงานแก้เทสต์ของตัวเองได้ งานนี้เก็บส่วนที่เหลือ |
+| F001-T11 | คู่มือผู้ใช้ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | T4, T7, T9 | |
+| F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–120 ตัวอักษร) | `todo` | — | — | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | |
+| F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | ชนกับ F003-T1/T3 (ไฟล์ Room เดียวกัน) |
+| F002-T3 | UI แก้ชื่อที่แถบด้านบน | `todo` | — | — | `TabletopApp.tsx`, CSS | F002-T2 | hotspot `TabletopApp.tsx` |
+| F002-T4 | คู่มือ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F002-T3 | |
+| F003-T1 | เอาสมาชิกออก (เจ้าของ) | `todo` | — | — | `server/authority.ts`, `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `TabletopApp.tsx` | — | ต้องเสร็จก่อนเปิดลิงก์ใช้ซ้ำ · ชนกับ F002-T2 |
+| F003-T2 | ออกแบบ + security review ลิงก์ใช้ซ้ำ ให้คนอนุมัติ | `todo` | — | — | `docs/features/F003-reusable-invite-link.md` | — | ไม่ใช่โค้ด |
+| F003-T3 | Room: สถานะลิงก์ + เปิด/ปิด/สร้างใหม่ + redeem แบบใช้ซ้ำ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/*.test.ts` | F003-T1, F003-T2 | |
+| F003-T4 | Worker route + rate limit + Node เทียบเท่า | `todo` | — | — | `cloudflare/index.ts`, `server/app.ts`, `server/authority.ts` | F003-T3 | hotspot `cloudflare/index.ts` |
+| F003-T5 | UI หน้าต่าง People: เอา AVAILABLE SEATS ออก แสดงคนในโต๊ะ + `N/7` + ลิงก์เชิญ + ปุ่มเอาออก + หน้าเข้าร่วม | `todo` | — | — | `TabletopApp.tsx` (`InviteDialog`), CSS | F003-T1, F003-T4, F004-T2 | hotspot `TabletopApp.tsx` |
+| F003-T6 | คู่มือ + CHANGELOG + แก้ข้อความ "works once" | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md`, `TabletopApp.tsx` | F003-T5 | |
+| F004-T1 | router เล็กใน client + parse path แบบ allowlist | `review` | Claude Code | `feat/F004-url-paths` | `src/tabletop/routes.ts` (ใหม่), `src/main.tsx` | — | |
+| F004-T2 | TabletopApp ใช้ URL เป็นแหล่งความจริงของโต๊ะที่เปิด | `review` | Claude Code | `feat/F004-url-paths` | `TabletopApp.tsx` | F004-T1 | hotspot `TabletopApp.tsx` |
+| F004-T3 | กลับ path เดิมหลังล็อกอิน + หน้าเปิดโต๊ะไม่ได้ | `review` | Claude Code | `feat/F004-url-paths` | `TabletopApp.tsx`, `src/tabletop/ui/account.tsx` | F004-T2 | |
+| F004-T4 | Worker/Node ส่ง `index.html` ให้ path ลึก + asset โหลดได้ | `review` | Claude Code | `feat/F004-url-paths` | `server/app.ts`, `wrangler.jsonc`, tests | — | |
+| F004-T5 | ปรับ browser tests + เอกสาร | `review` | Claude Code | `feat/F004-url-paths` | `tests/*.mjs`, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F004-T2 | |
+| F005-T1 | Generative runtime, views, private trial, layout, AI repair/memory และ acceptance | `doing` | Codex | `feat/F005-generative-canvas` | `src/tabletop/{shared,domain,runtime,ui}/`, `server/`, `cloudflare/`, tests, docs, workflow | — | เริ่มก่อนมีกระดานทีม; รวม F004 จาก dev แล้ว ไม่หยิบ F001–F003 |

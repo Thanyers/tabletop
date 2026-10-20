@@ -11,7 +11,7 @@
 
 | กฎ global | ในโปรเจกต์นี้ |
 | --- | --- |
-| TASK TRACKING (phak board, `post_task_log`) | ติดตามงานใน [`spec.md`](spec.md) + PR บน GitHub ตาม [AGENTS.md §1](AGENTS.md#1-ทำงานแบบ-spec-driven) · ห้ามเรียก phak MCP หรือ `phak-updater` |
+| TASK TRACKING (phak board, `post_task_log`) | ติดตามงานใน [`PLAN.md`](PLAN.md) (ใครทำอะไร) + [`spec.md`](spec.md) (สถานะ) + PR บน GitHub ตาม [AGENTS.md §1](AGENTS.md#1-ทำงานแบบ-spec-driven) · ห้ามเรียก phak MCP หรือ `phak-updater` |
 | DOCS → phak KB | เอกสารที่ผูกกับโค้ด (`docs/`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `AGENTS.md`) ส่งผ่าน PR · รายงานหรือหลักฐานที่มี room ID, account, invite link หรือข้อมูลผู้ใช้ เก็บใน `test-results/` (ignored) เท่านั้น |
 | DEPLOY FAILURE LOG (phak project) | บันทึกลง [`MEMORY.md`](MEMORY.md) หัวข้อ Deploy failures |
 | GIT FLOW (`develop`) | ใช้ชื่อ **`dev`** เป็น branch รวมงาน และ `main` สำหรับ release ตาม [AGENTS.md §2](AGENTS.md#2-branch) · ไม่มี Docker image `sha-*` เพราะ production คือ Cloudflare Worker ใช้ check `local-validation` บน merge commit แทนการเช็ค artifact |
