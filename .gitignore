@@ -16,3 +16,6 @@ worker-build/
 *.log
 !.env.example
 .claude/worktrees/
+# CD001: real deploy configs are written only inside the pipeline
+wrangler.staging.json
+wrangler.production.json
