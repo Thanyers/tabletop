@@ -36,6 +36,8 @@
 | T1 | สมาชิกอ่านไฟล์ได้ + การ์ด Files ตำแหน่งร่วม + copy + เทสต์ + เอกสาร | unit, Worker tests, browser tests ผ่าน |
 | T2 | สมาชิกเพิ่มไฟล์ได้ (`table.import` รับ participant) โดยไม่ทิ้งร่างของเจ้าของ | unit, Worker tests, browser tests ผ่าน |
 
+**ผลตรวจ 2026-10-20 (fe4c808):** typecheck ผ่าน · lint 0 errors · unit 377 · Cloudflare 71 · `test:cloudflare:browser` 25/25 · `test:generative:browser` 7/7
+
 ## การตัดสินใจ
 
 | วันที่ | การตัดสินใจ | เหตุผล |
