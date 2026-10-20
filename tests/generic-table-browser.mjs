@@ -538,6 +538,22 @@ async function nodeTransforms(page, ids) {
   })), ids);
 }
 
+async function verifyLiveCursor(owner, member) {
+  // F009: the owner's pointer appears on the member's canvas with the owner's name, then leaves.
+  const ownerName = (await owner.evaluate(async () => (await (await fetch('/api/session')).json()).name)) ?? '';
+  const box = await owner.getByTestId('canvas-object-workspace').boundingBox();
+  if (!box) throw new Error('Owner canvas is not visible.');
+  const cursor = member.getByTestId('live-cursor');
+  await expect.poll(async () => {
+    await owner.mouse.move(box.x + box.width / 2 + Math.random() * 40, box.y + box.height / 2);
+    return cursor.count();
+  }, { timeout: 10_000 }).toBe(1);
+  if (ownerName) await expect(cursor).toContainText(ownerName);
+  await expect(owner.getByTestId('live-cursor')).toHaveCount(0);
+  await owner.mouse.move(box.x + box.width + 40, box.y - 40);
+  await expect(cursor).toHaveCount(0);
+}
+
 async function verifySharedCardLayout(owner, member, tableId, api) {
   const shared = ['table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
   // These auxiliary cards are created after activation. Materialize them through
@@ -1074,6 +1090,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   const firstInvite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, firstInvite, room.id, source.filename);
   await verifySharedCardLayout(owner, member, room.id, api);
+  await verifyLiveCursor(owner, member);
   mark('Shared card layout: rules, people, history and table cards sit at the same place for owner and member, and a move reaches the other screen live');
   await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls, capabilities, mark });
   mark('Generic table chat: explicit consent, participant-only answer history, grounded reference, reload continuity, and no table mutation');

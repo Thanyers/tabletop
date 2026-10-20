@@ -2081,6 +2081,52 @@ describe('Cloudflare room Durable Object', () => {
       learnerSocket.socket.close(1000, 'Test complete');
     }
   });
+  it('relays live cursors to other members only, without storing them (F009)', async () => {
+    const owner = newActor('Cursor owner');
+    const learner = newActor('Cursor learner');
+    await Promise.all([saveActor(owner), saveActor(learner)]);
+    const { roomId, stub } = await createRoom(owner);
+    const invite = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'learner-1' }, mutation: true,
+    });
+    const joined = await call<WorkspaceView>(stub, '/internal/redeem', learner, {
+      method: 'POST', body: { ticket: invite.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(joined.response.status).toBe(200);
+    const ownerSocket = await connectProjectionSocket(stub, roomId, owner);
+    const learnerSocket = await connectProjectionSocket(stub, roomId, learner);
+    const frames = (socket: WebSocket) => {
+      const seen: unknown[] = [];
+      socket.addEventListener('message', (event) => {
+        const data = JSON.parse(String(event.data)) as { type?: string };
+        if (data.type === 'cursor') seen.push(data);
+      });
+      return seen;
+    };
+    const ownerFrames = frames(ownerSocket.socket);
+    const learnerFrames = frames(learnerSocket.socket);
+    try {
+      await learnerSocket.projections.waitFor(() => true);
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 120.4, y: -30 }));
+      await vi.waitFor(() => expect(learnerFrames).toEqual([{ type: 'cursor', actorId: owner.id, x: 120, y: -30 }]));
+      // Frames faster than the per-socket interval are dropped; a leave always goes through.
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 1, y: 1 }));
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 2, y: 2 }));
+      ownerSocket.socket.send(JSON.stringify({ type: 'cursor', leave: true }));
+      await vi.waitFor(() => expect(learnerFrames.at(-1)).toEqual({ type: 'cursor', actorId: owner.id, leave: true }));
+      expect(learnerFrames).toContainEqual({ type: 'cursor', actorId: owner.id, x: 1, y: 1 });
+      expect(learnerFrames).not.toContainEqual({ type: 'cursor', actorId: owner.id, x: 2, y: 2 });
+      expect(ownerFrames).toEqual([]);
+      // A spoofed identity is not accepted: unknown fields close the socket.
+      const closed = new Promise<number>((resolve) => learnerSocket.socket.addEventListener('close', (event) => resolve(event.code)));
+      learnerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 1, y: 1, actorId: owner.id }));
+      expect(await closed).toBe(4400);
+      await vi.waitFor(() => expect(ownerFrames.at(-1)).toEqual({ type: 'cursor', actorId: learner.id, leave: true }));
+    } finally {
+      ownerSocket.socket.close();
+      learnerSocket.socket.close();
+    }
+  });
 
   it('revalidates hibernated socket identity before sending a private projection', async () => {
     const owner = newActor('Socket teacher');

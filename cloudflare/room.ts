@@ -26,6 +26,7 @@ import {
   type TableAssistantRequest,
 } from '../src/tabletop/shared/table-assistant-contracts.js';
 import { decideDomain } from '../src/tabletop/domain/index.js';
+import { CURSOR_MIN_INTERVAL_MS, cursorRelay, parseCursorInput, type CursorInput } from '../src/tabletop/shared/cursor-protocol.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
@@ -363,6 +364,8 @@ export class Room extends DurableObject<Env> {
   readonly repository: RoomRepository;
   readonly authority: CommandAuthority;
   private directorySyncTail: Promise<void> = Promise.resolve();
+  /** Last cursor relay per session (sockets are re-wrapped per event, so they cannot be keys). */
+  private readonly cursorSentAt = new Map<string, number>();
 
   get roomId(): string | null {
     return this.repository.roomId;
@@ -899,11 +902,37 @@ export class Room extends DurableObject<Env> {
 
   async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     if (message === 'ping') return;
-    try { socket.close(4400, 'Client messages are not supported'); } catch { /* already closed */ }
+    const input = parseCursorInput(message);
+    if (!input) {
+      try { socket.close(4400, 'Only cursor messages are supported'); } catch { /* already closed */ }
+      return;
+    }
+    const sender = parsePeerAttachment(socket.deserializeAttachment());
+    if (!sender) return;
+    const now = Date.now();
+    if (!('leave' in input) && now - (this.cursorSentAt.get(sender.sessionHash) ?? 0) < CURSOR_MIN_INTERVAL_MS) return;
+    this.cursorSentAt.set(sender.sessionHash, now);
+    this.relayCursor(socket, input);
   }
 
   async webSocketClose(socket: WebSocket): Promise<void> {
+    const closing = parsePeerAttachment(socket.deserializeAttachment());
+    if (closing) this.cursorSentAt.delete(closing.sessionHash);
+    this.relayCursor(socket, { type: 'cursor', leave: true });
     try { socket.close(1000, 'Closed'); } catch { /* already closed */ }
+  }
+
+  /** F009: ephemeral fan-out to the other people in this room; never stored. */
+  private relayCursor(sender: WebSocket, input: CursorInput): void {
+    const from = parsePeerAttachment(sender.deserializeAttachment());
+    if (!from) return;
+    const frame = cursorRelay(from.actorId, input);
+    for (const peer of this.ctx.getWebSockets()) {
+      if (peer === sender) continue;
+      const to = parsePeerAttachment(peer.deserializeAttachment());
+      if (!to || to.workspaceId !== from.workspaceId || to.actorId === from.actorId) continue;
+      try { peer.send(frame); } catch { /* closing */ }
+    }
   }
 
   async webSocketError(socket: WebSocket): Promise<void> {

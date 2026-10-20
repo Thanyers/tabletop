@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Move, Play, Scale, Swords, Table2, Workflow } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
@@ -11,6 +11,8 @@ import { dedupeVisibleCanvasConnections } from './canvas-flow';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
 import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNodeIds } from './canvas-layout-scope';
 import './canvas-visual-flow.css';
+import { LiveCursors, useLiveCursorSender } from './live-cursors';
+import { CURSOR_MIN_INTERVAL_MS } from '../shared/cursor-protocol';
 
 export { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds };
 
@@ -372,6 +374,17 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, CanvasEdge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
+  // F009: share this pointer in canvas coordinates (throttled to the server's ~25 Hz limit).
+  const sendCursor = useLiveCursorSender();
+  const cursorSentAtRef = useRef(0);
+  const shareCursor = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!sendCursor || event.pointerType === 'touch') return;
+    const now = performance.now();
+    if (now - cursorSentAtRef.current < CURSOR_MIN_INTERVAL_MS) return;
+    cursorSentAtRef.current = now;
+    sendCursor(flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+  }, [flow, sendCursor]);
+  const hideCursor = useCallback(() => { cursorSentAtRef.current = 0; sendCursor?.(null); }, [sendCursor]);
   const workspaceKey = canvasLayoutScopeKey(view);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -1210,6 +1223,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       data-testid="canvas-object-workspace"
       onPointerDownCapture={cancelPendingOpenObjectFocus}
       onKeyDownCapture={cancelPendingOpenObjectFocus}
+      onPointerMove={shareCursor}
+      onPointerLeave={hideCursor}
     >
       {!hasVisibleObjects ? (
         <div className="tt-canvas-empty">
@@ -1241,6 +1256,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={21} size={1} color="#ccd5d7" />
+          <LiveCursors members={view.members} selfId={view.actor.actorId} />
           <Controls
             position="bottom-right"
             showInteractive={false}

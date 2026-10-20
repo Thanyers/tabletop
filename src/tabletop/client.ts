@@ -1,5 +1,6 @@
 import type { CommandAck, CommandEnvelope, SessionView, WorkspaceView } from './shared/contracts';
 import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
+import { parseCursorRelay, type CursorRelay } from './shared/cursor-protocol';
 
 export class ApiFailure extends Error {
   constructor(
@@ -379,7 +380,8 @@ export class TabletopClient {
     workspaceId: string,
     onWorkspace: (workspace: WorkspaceView) => void,
     onStatus: (status: ConnectionState) => void,
-  ): () => void {
+    onCursor?: (cursor: CursorRelay | null) => void,
+  ): (() => void) & { sendCursor: (point: { x: number; y: number } | null) => void } {
     let stopped = false;
     let socket: WebSocket | null = null;
     let timer: number | undefined;
@@ -398,12 +400,14 @@ export class TabletopClient {
         try {
           const data = JSON.parse(String(event.data)) as { type?: string; workspace?: WorkspaceView };
           if (data.type === 'projection' && data.workspace) onWorkspace(data.workspace);
+          else if (data.type === 'cursor') { const cursor = parseCursorRelay(data); if (cursor) onCursor?.(cursor); }
         } catch {
           // Ignore malformed push frames; the next reconnect also reads the current projection.
         }
       };
       socket.onerror = () => socket?.close();
       socket.onclose = () => {
+        onCursor?.(null);
         if (stopped) return;
         retry += 1;
         onStatus(retry > 4 ? 'offline' : 'reconnecting');
@@ -414,11 +418,16 @@ export class TabletopClient {
     };
 
     connect();
-    return () => {
+    const stop = () => {
       stopped = true;
       if (timer !== undefined) window.clearTimeout(timer);
       socket?.close();
     };
+    const sendCursor = (point: { x: number; y: number } | null) => {
+      if (socket?.readyState !== WebSocket.OPEN) return;
+      socket.send(JSON.stringify(point ? { type: 'cursor', x: Math.round(point.x), y: Math.round(point.y) } : { type: 'cursor', leave: true }));
+    };
+    return Object.assign(stop, { sendCursor });
   }
 
   private async getJson<T>(path: string): Promise<T> {
