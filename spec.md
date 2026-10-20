@@ -30,12 +30,13 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
-- **Branch:** `main` @ `9fbfdec` (PR #2–#10 merge แล้ว) = release · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection และยังไม่มี release tag
-- **Deploy:** production รัน `c9d3bf0` (Calm Canvas, PR #6) · staging รัน `bec8e30` (tree เดียวกัน) — แหล่งอ้างอิงคือ [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
+- **Release ล่าสุด:** **`v1.0.0`** (annotated tag บน `ce2c50e` = merge PR #15, CI `local-validation` ผ่านก่อน tag) · build จาก tag ได้ `version.json` = `1.0.0` / `ce2c50e` · production ยังรัน build `524d9cc` (โค้ดแอปเท่ากัน) จึงตอบ `0.0.0-dev` จนกว่า operator จะ deploy build จาก tag
+- **Branch:** `main` @ `ce2c50e` = release · PR #12–#14 เคยเข้า `main` ตรงโดยไม่ผ่าน `dev` · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection
+- **Deploy:** production และ staging รัน `524d9cc` (PR #13 public welcome) · `/version` ตอบ `0.0.0-dev` / `524d9cc` (ตรวจ 2026-10-20) — แหล่งอ้างอิงคือ [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
 - **Infra:** Cloudflare Workers Free + D1 + SQLite DO + Google OAuth + DeepSeek Flash · ไม่มี R2/Paid · เพดาน AI prod $1/วัน $10/เดือน, staging $0.20/$0.20
 - **CI ล่าสุดของ candidate:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด))
 - **Local (2026-10-20, เครื่องนี้):** clone `main` @ `e8cb73e` แล้ว pull เป็น `48fb2bd` → `npm ci` (0 vulnerabilities) → `npm run build` ผ่าน → `npm start` เปิด `:4310` ได้ ใช้ Node v26.3.1 (ไม่ตรง CI 22.23.2) · `npm run test:cloudflare` 65/65 ผ่าน (room 28, auth 13, ai 9, table-assistant 8, billing 7) ตรงกับจำนวนใน CI · `test:cloudflare:browser` 16/16 ผ่าน (ใช้ `BROWSER_CHANNEL=chrome` หลัง `build:cloudflare`)
-- **`/version` — [PR #10](https://github.com/Thanyers/tabletop/pull/10) merge เข้า `main` แล้ว (`9fbfdec`) ยังไม่ deploy:** `GET /version` → `{"version","sha","built_at"}` ทั้ง Worker และ Node อ่านจาก `dist/version.json` ที่ build เขียน · ตรวจแล้ว: `npm test` 314/314, `npm run build` ผ่าน, `test:cloudflare` 65/65, `build:cloudflare` dry run, `test:cloudflare:browser` 17/17 (มี check `/version`), curl `:4310/version` → 200 `no-store`, `check-public-files` + `check-client-secrets` ไม่มี finding
+- **`/version` — [PR #10](https://github.com/Thanyers/tabletop/pull/10) merge เข้า `main` แล้ว (`9fbfdec`) และ deploy แล้วพร้อม PR #13:** `GET /version` → `{"version","sha","built_at"}` ทั้ง Worker และ Node อ่านจาก `dist/version.json` ที่ build เขียน · ตรวจแล้ว: `npm test` 314/314, `npm run build` ผ่าน, `test:cloudflare` 65/65, `build:cloudflare` dry run, `test:cloudflare:browser` 17/17 (มี check `/version`), curl `:4310/version` → 200 `no-store`, `check-public-files` + `check-client-secrets` ไม่มี finding
 - **Spec-driven + CI/CD สำหรับ AI:** `AGENTS.md` (กติกากลางของ AI ทุกตัว) / `CLAUDE.md` / `spec.md` / `MEMORY.md` · [PR #11](https://github.com/Thanyers/tabletop/pull/11) branch `docs/spec-driven` → `dev` · ใน PR นี้ CONTRIBUTING เปลี่ยนเป็น branch จาก `dev` และ CI รัน push เข้า `dev` ด้วย
 
 ### ข้อจำกัดผลิตภัณฑ์ที่มีผล
@@ -61,6 +62,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | 2026-10-20 | `dev` = branch รวมงาน, `main` = release เท่านั้น; `main` รับแค่ `release/*` และ `hotfix/*` | ผู้ใช้สั่ง · ตามกฎ Git Flow ใน global โดยใช้ชื่อ `dev` แทน `develop` |
 | 2026-10-20 | กติกา CI/CD ของ AI ทุกตัวอยู่ใน `AGENTS.md`; `CLAUDE.md` เก็บแค่ส่วนเฉพาะ Claude | ผู้ใช้สั่งให้ AI ตัวอื่นทำงานแบบเดียวกัน · `AGENTS.md` เป็นชื่อที่ Codex/Cursor ฯลฯ อ่าน |
 | 2026-10-20 | ตั้ง branch protection ไม่ได้จากบัญชีนี้ (push ได้ ไม่ใช่ admin) — เตรียมคำสั่ง ruleset ไว้ใน AGENTS.md §9 | เจ้าของ repo ต้องรัน |
+| 2026-10-20 | release แรกคือ `v1.0.0` | ผู้ใช้เคาะ · production เปิดให้ผู้ใช้จริงแล้ว และตามกฎ global release แรกของ production คือ `v1.0.0` |
 | ก่อนหน้า | ไม่ rollback Worker ไปรุ่นที่ไม่รู้จักห้อง `table` ใช้ `TABLE_READ_ONLY=true` แทน | ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน) |
 
 ## งานที่กำลังทำ
@@ -70,7 +72,7 @@ _(ว่าง)_ — เขียนก่อนลงมือ: เป้าห
 ## ถัดไป
 
 1. **เจ้าของ repo (admin):** รันคำสั่ง ruleset ใน [AGENTS.md §9](AGENTS.md#9-ตั้งค่า-repo-ครั้งเดียว-admin-ของ-repo) เพื่อ protect `main` + `dev` และล็อก tag `v*`
-2. คน review + merge [PR #11](https://github.com/Thanyers/tabletop/pull/11) เข้า `dev` · operator เพิ่ม `/version` ใน `run_worker_first` ของ config deploy ก่อน deploy รุ่นที่มี PR #10
-3. release แรกตามขั้นตอนใหม่ (`release/X.Y.Z` → `main` → tag) — ต้องเคาะเลขก่อน: เสนอ `v1.0.0` เพราะ production เปิดใช้จริงแล้ว
+2. คน merge PR `chore/sync-main-into-dev` → `dev` (นำ #12–#15 และ tag กลับเข้า `dev`) · operator เลือกได้ว่าจะ deploy build จาก tag `v1.0.0` เพื่อให้ `/version` แสดง `1.0.0`
+3. แจ้งทีมว่างานใหม่ต้องเปิด PR เข้า `dev` เท่านั้น — #12–#14 ยังเข้า `main` ตรง
 4. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
 5. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)

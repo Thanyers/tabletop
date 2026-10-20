@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased — `/version`
+## 1.0.0 — 2026-10-20
 
+release แรกที่ติด tag ตามรูปแบบ `vMAJOR.MINOR.PATCH` · โค้ดแอปตรงกับ `524d9cc` ที่รันบน production และ staging อยู่แล้ว ([Deployment](docs/DEPLOYMENTS.md)) ส่วนที่ต่างจากนั้นมีแค่เอกสารและ CI · จากรุ่นนี้ไป `main` รับเฉพาะ `release/*` และ `hotfix/*` ส่วนงานใหม่เข้า `dev` ตาม [AGENTS.md](AGENTS.md)
+
+- หน้าแรกก่อนล็อกอินอธิบายแนวคิดของ Tabletop พร้อมลิงก์เดโม โดยไม่เปลี่ยน auth, ห้อง, กฎ หรือ storage ดู [Public welcome](docs/PUBLIC_WELCOME_ACCEPTANCE.md)
+- เพิ่ม `AGENTS.md` (กติกา branch/CI/release/hotfix ที่คนและ AI ใช้ร่วมกัน), `spec.md`, `MEMORY.md`, `CLAUDE.md` · CI รันเมื่อ push เข้า `dev` ด้วย
 - เพิ่ม `GET /version` ทั้ง Worker และ Node ตอบ `{"version","sha","built_at"}` จาก `version.json` ที่ build เขียนไว้คู่กับไฟล์เว็บ จึงไม่ต้องแก้คำสั่ง deploy · `version` มาจาก git tag `vX.Y.Z` ของ commit ที่ build; ถ้าไม่มี tag จะเป็น `0.0.0-dev` · ไฟล์ที่ไม่มีหรือรูปแบบผิดตอบ 404
 - **operator:** config deploy ต้องมี `/version` ใน `assets.run_worker_first` (เพิ่มใน `wrangler.jsonc` แล้ว) ไม่อย่างนั้น `/version` จะได้หน้า `index.html` แทน · build มีไฟล์เพิ่ม 1 ไฟล์และ `built_at` ทำให้ build สองครั้งจาก source เดียวกันได้ไฟล์นี้ต่างกัน
 
