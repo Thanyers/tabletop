@@ -30,8 +30,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
-- **Release ล่าสุด:** **`v1.0.0`** (annotated tag บน `ce2c50e` = merge PR #15, CI `local-validation` บน main ผ่าน) · staging และ production deploy แล้วและตอบ `1.0.0` / `ce2c50e` เมื่อ 2026-10-20 เวลา 13:32 น. Bangkok · output เทียบกับรุ่นก่อนหน้าต่างเฉพาะ `version.json`
-- **Release ถัดไป `v1.1.0` (MINOR, เคาะแล้ว):** branch `release/1.1.0` → PR เข้า `main` · รวม F004, F001 T1–T2, CI001/CI003/CI004 · ไม่มี migration/secret/binding ใหม่ · หลัง merge: เช็ค CI บน merge commit → tag `v1.1.0` → PR `main` → `dev` → operator deploy จาก tag
+- **Release ล่าสุด:** **`v1.1.0`** (annotated tag `91d69d0` บน `a2c97cd` = merge PR #26, CI `local-validation` บน main ผ่านก่อน tag) · build จาก tag ได้ `version.json` = `1.1.0` / `a2c97cd` · **ยังไม่ deploy** — production/staging ยังรัน `v1.0.0` รอ operator
+- **Release ก่อนหน้า:** `v1.0.0` (`ce2c50e`) deploy แล้วทั้ง staging และ production
 - **Branch:** `main` @ `ce2c50e` = release · PR #12–#14 เคยเข้า `main` ตรงโดยไม่ผ่าน `dev` · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection
 - **Deploy:** production และ staging ใช้ sealed build ชุดเดียวจาก `v1.0.0` · Node 22.23.2 · `npm ci --ignore-scripts` (0 vulnerabilities), typecheck/build/secret scan ผ่าน · health/readiness/capabilities/version 4/4 และ served-asset hashes 135/135 ผ่านทั้งสอง environment · อ่านหน้า anonymous และห้องเดิมหลังล็อกอินได้ ไม่มี room writes หรือ AI calls — ดู [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
 - **F001 T1–T2 หน้าเริ่ม `/new` — merge เข้า `dev` แล้ว (#25):** การ์ด 3 ใบ + ช่องพิมพ์ (สร้างโต๊ะข้อมูลว่างและเติมช่องร่างกฎ ยังไม่เรียก AI) + เริ่มโต๊ะว่าง · ตรวจแล้ว: `npm test` 319/319, typecheck/build ผ่าน, `test:cloudflare` 65/65, `test:cloudflare:browser` 20/20, `test:r1:browser` 7/7, ภาพหน้าจอ 1280 และ 390 ไม่มีเลื่อนแนวนอน · Node v26.3.1
