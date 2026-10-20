@@ -69,5 +69,5 @@
 | F006-T2 | ซ่อนการ์ด Files/Rules เมื่อยังไม่มีของ | `doing` | Codex | `feat/F006-chat-first` · #30 | `src/tabletop/runtime/index.ts`, `TableCanvasObjects.tsx` | #24 merged | |
 | F006-T3 | ต่อ `TableChat` แทน `TableAssistant` ในโต๊ะข้อมูล | `doing` | Codex | `feat/F006-chat-first` · #30 | `TableSurface.tsx`, `TabletopApp.tsx` | F006-T1 | คง prompt-only generation และการแก้กฎหลังเล่นจาก F005 |
 | F006-T4 | คำตอบแชทเป็นการ์ดบน Canvas + Confirm action | `doing` | Codex | `feat/F006-chat-first` · #30 | `CanvasWorkspace.tsx`, `TableCanvasObjects.tsx` | F006-T3 | ประวัติและการ์ดยังแยกตามผู้ถาม |
-| F006-T5 | ย้าย browser tests ของ setup + chat ไปใช้แชทใหม่ | `doing` | Codex | `feat/F006-chat-first` · #30 | `tests/generic-table-browser.mjs`, `tests/cloudflare-browser.mjs` | F006-T3 | รวม generated scenes, private trial, rename, two actors และ reload |
+| F006-T5 | ย้าย browser tests ของ setup + chat ไปใช้แชทใหม่ | `doing` | Claude Code (รับต่อจาก Codex เพื่อแก้ CI #30) | `feat/F006-chat-first` · #30 | `tests/generic-table-browser.mjs`, `tests/cloudflare-browser.mjs` | F006-T3 | รวม generated scenes, private trial, rename, two actors และ reload |
 | F006-T6 | คู่มือ + CHANGELOG | `doing` | Codex | `feat/F006-chat-first` · #30 | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F006-T4 | |
