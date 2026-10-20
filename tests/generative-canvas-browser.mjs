@@ -887,26 +887,35 @@ try {
     expect(afterSimulation.domain.records).toEqual(recordSnapshot);
     expect(afterSimulation.domain.program).toEqual(beforeEdit.domain.program);
     await advanceLifecycle(owner, tableId, currentEditor);
+    const newViewId = 'table.view.incremental-result';
+    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.canvasLayout?.positions?.[newViewId], { timeout: 15_000 }).toBeTruthy();
     const afterEdit = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const newViewPoint = afterEdit.domain.canvasLayout.positions[newViewId];
     expect(afterEdit.domain.records).toEqual(recordSnapshot);
+    expect(afterEdit.domain.dataRevision).toBe(beforeEdit.domain.dataRevision);
     expect(afterEdit.domain.canvasLayout.positions[`table.view.${pinnedView.id}`]).toEqual(pin.point);
-    expect(afterEdit.domain.canvasLayout.revision).toBe(pin.layout.revision);
+    expect(afterEdit.domain.canvasLayout.revision).toBeGreaterThan(pin.layout.revision);
     expect(afterEdit.domain.program.canvas.views).toHaveLength(viewsBeforeEdit.length + 1);
     expect(afterEdit.domain.program.canvas.views.at(-1).id).toBe('incremental-result');
     await assertSharedPosition(owner, `table.view.${pinnedView.id}`, pin.point);
+    await assertSharedPosition(owner, newViewId, newViewPoint);
 
     for (const member of members) {
       await expect.poll(async () => (await api(member, `/api/workspaces/${tableId}`)).body.domain.program.canvas.views.length).toBe(viewsBeforeEdit.length + 1);
       const projected = (await api(member, `/api/workspaces/${tableId}`)).body;
       expect(projected.domain.records).toEqual(recordSnapshot);
       expect(projected.domain.canvasLayout.positions[`table.view.${pinnedView.id}`]).toEqual(pin.point);
+      expect(projected.domain.canvasLayout.positions[newViewId]).toEqual(newViewPoint);
       await assertSharedPosition(member, `table.view.${pinnedView.id}`, pin.point);
+      await assertSharedPosition(member, newViewId, newViewPoint);
       await member.reload();
       await expect(member.locator('.tt-canvas-panel')).toBeVisible();
       const resumed = (await api(member, `/api/workspaces/${tableId}`)).body;
       expect(resumed.domain.records).toEqual(recordSnapshot);
       expect(resumed.domain.canvasLayout.positions[`table.view.${pinnedView.id}`]).toEqual(pin.point);
+      expect(resumed.domain.canvasLayout.positions[newViewId]).toEqual(newViewPoint);
       await assertSharedPosition(member, `table.view.${pinnedView.id}`, pin.point);
+      await assertSharedPosition(member, newViewId, newViewPoint);
     }
     if (source) await assertMemberCannotUsePrivateTools(memberOne, tableId, afterEdit.revision, afterEdit.epoch, source);
     const screenshotViewId = {

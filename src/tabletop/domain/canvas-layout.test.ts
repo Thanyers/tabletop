@@ -26,19 +26,33 @@ describe('shared arrangement authority', () => {
     expect(() => handleCanvasLayout(next, move(0, 920), owner)).toThrow('arrangement changed');
     expect(handleCanvasLayout(next, move(1, 920), owner).state.canvasLayout.positions['table.collection.equipment'].x).toBe(920);
   });
-  it('shares rules, people and history cards for everyone, even before the table has rules (F007)', () => {
+  it('shares people and history immediately, and rules only after activation (F007)', () => {
     const blank = createTableState();
     const placed = handleCanvasLayout(blank, { expectedLayoutRevision: 0, positions: {
-      'table.rules': { x: 40, y: 40, pinned: true },
       'workspace.people': { x: 600, y: 40, pinned: true },
       'workspace.history': { x: 600, y: 420, pinned: true },
     } }, participant).state;
-    expect(Object.keys(placed.canvasLayout!.positions).sort()).toEqual(['table.rules', 'workspace.history', 'workspace.people']);
+    expect(Object.keys(placed.canvasLayout!.positions).sort()).toEqual(['workspace.history', 'workspace.people']);
     const projected = projectDomain(placed, participant);
     if (projected.kind !== 'table') throw Error('Expected table');
     expect(projected.canvasLayout?.positions['workspace.people']).toEqual({ x: 600, y: 40, pinned: true });
     const withRules = handleCanvasLayout(active(), { expectedLayoutRevision: 0, positions: { 'table.rules': { x: 10, y: 20 } } }, owner).state;
     expect(withRules.canvasLayout?.positions['table.rules']).toEqual({ x: 10, y: 20 });
+  });
+  it('keeps draft-only Rules geometry private, including geometry saved by an older client', () => {
+    const imported = handleTableCommand(createTableState(), 'table.import', tableScenarioSources.equipment, owner)!.state;
+    const draft = decideDomain(imported, { type: 'evolve.propose', payload: { change: equipmentChange(imported.sources[0].id) } }, owner).state;
+    if (draft.kind !== 'table') throw Error('Expected table');
+    expect(draft.program).toBeNull();
+    expect(draft.candidate).not.toBeNull();
+    for (const actor of [owner, participant]) {
+      expect(() => handleCanvasLayout(draft, { expectedLayoutRevision: 0, positions: { 'table.rules': { x: 40, y: 40 } } }, actor)).toThrow('Only active shared objects');
+    }
+    draft.canvasLayout = { revision: 1, positions: { 'table.rules': { x: 40, y: 40 } } };
+    const projected = projectDomain(draft, participant);
+    if (projected.kind !== 'table') throw Error('Expected table');
+    expect(projected.candidate).toBeNull();
+    expect(projected.canvasLayout?.positions).toEqual({});
   });
   it('rejects unavailable, private and arbitrary geometry without mutating existing positions', () => {
     const state = active();

@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-20 — ผังร่วมต้องรองรับโต๊ะว่างและไม่เผยร่างส่วนตัว
+- **What happened:** การจัดผังครั้งเดียวจำว่าเสร็จก่อนมี shared card หรือก่อนตอบรับ ทำให้การ์ดที่เพิ่มทีหลังไม่ถูกแชร์; Rules ก่อนเปิดใช้ถูกอนุญาตให้มี geometry ร่วมทั้งที่เนื้อหาร่างเป็นของเจ้าของ
+- **Root cause:** ใช้ room key เป็นตัวจบการ seed แทนผลยืนยันรายวัตถุ และเลือก shared ID โดยไม่ดูว่ากฎเปิดใช้แล้วหรือยัง
+- **Correct behavior:** seed เฉพาะ shared cards ที่ยังไม่มีตำแหน่งตาม scope ปัจจุบันและผลยืนยัน; เก็บ Rules ก่อนเปิดใช้เป็นส่วนตัวทั้ง UI/authority/projection แล้วรัน `npx vitest run src/tabletop/domain/canvas-layout.test.ts`, `npm run test:cloudflare:browser` และ `npm run test:generative:browser` บน bundle เดียวกัน
+
 ### 2026-10-20 — Retry แชทต้องใช้คำขอเดิม และผล refresh ต้องตรงกับผู้ใช้ปัจจุบัน
 - **What happened:** การส่งที่ไม่ทราบผลอาจเกิดก่อน revision เปลี่ยน และ projection ที่โหลดช้าอาจกลับมาหลัง reset หรือเปลี่ยนผู้ใช้
 - **Root cause:** ใช้ command ID เดิมแต่สร้าง body จาก view ใหม่ หรือเทียบเพียง room ID ก่อนติดตั้งผลโหลด ไม่พอสำหรับ idempotency และการแยกข้อมูล

@@ -526,26 +526,145 @@ async function nodeTransforms(page, ids) {
 
 async function verifySharedCardLayout(owner, member, tableId, api) {
   const shared = ['table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
+  // These auxiliary cards are created after activation. Materialize them through
+  // the Objects menu so late-card layout seeding is exercised without a reload.
+  for (const page of [owner, member]) {
+    for (const id of shared) await openCanvasObject(page, id);
+  }
   await expect.poll(async () => {
-    const layout = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.canvasLayout?.positions ?? {};
-    return shared.filter((id) => id.startsWith('workspace.') || id === 'table.rules').every((id) => layout[id]);
+    const ownerView = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const memberView = (await api(member, `/api/workspaces/${tableId}`)).body;
+    const ownerLayout = ownerView.domain.canvasLayout?.positions ?? {};
+    const memberLayout = memberView.domain.canvasLayout?.positions ?? {};
+    return shared.every((id) => ownerLayout[id] && JSON.stringify(ownerLayout[id]) === JSON.stringify(memberLayout[id]));
   }, { timeout: 15_000 }).toBe(true);
-  await owner.reload(); await member.reload();
-  await expect(owner.locator('.react-flow__node[data-id="workspace.people"]')).toHaveCount(1);
-  await expect(member.locator('.react-flow__node[data-id="workspace.people"]')).toHaveCount(1);
+  const beforeReload = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const memberBeforeReload = (await api(member, `/api/workspaces/${tableId}`)).body;
+  const canonical = Object.fromEntries(shared.map(id => [id, beforeReload.domain.canvasLayout.positions[id]]));
+  expect(memberBeforeReload.domain.canvasLayout.positions).toMatchObject(canonical);
+  for (const domain of [beforeReload.domain, memberBeforeReload.domain]) {
+    expect(Object.keys(domain.canvasLayout?.positions ?? {}).some(id => id.startsWith('chat.'))).toBe(false);
+    expect(domain.canvasLayout?.positions?.['table.sources']).toBeUndefined();
+  }
+  expect(memberBeforeReload.domain.sources).toEqual([]);
   await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
     .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
-  const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  const moved = await api(owner, `/api/workspaces/${tableId}/commands`, {
-    commandId: crypto.randomUUID(), expectedRevision: before.revision, expectedEpoch: before.epoch,
-    type: 'canvas.layout', payload: { expectedLayoutRevision: before.domain.canvasLayout.revision, positions: { 'workspace.history': { x: 1480, y: 960, pinned: true } } },
-  });
-  expect(moved.status).toBe(200);
-  await expect.poll(async () => (await nodeTransforms(member, ['workspace.history']))['workspace.history'], { timeout: 10_000 })
-    .toBe('translate(1480px, 960px)');
+  await owner.reload(); await member.reload();
+  for (const page of [owner, member]) {
+    for (const id of shared) await openCanvasObject(page, id);
+  }
+  await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
+    .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
+  const afterReload = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  expect(afterReload.domain.canvasLayout.positions).toMatchObject(canonical);
+  await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
+    .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
+  const beforeMove = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const historyEditor = await openCanvasObject(owner, 'workspace.history');
+  await historyEditor.getByRole('button', { name: 'Move Table history without dragging', exact: true }).click();
+  const moveResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
+  void moveResponse.catch(() => {});
+  await historyEditor.getByRole('group', { name: 'Move Table history without dragging', exact: true })
+    .getByRole('button', { name: 'Move Table history down', exact: true }).click();
+  expect((await moveResponse).status()).toBe(200);
   const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  expect(after.domain.records).toEqual(before.domain.records);
-  expect(after.domain.dataRevision).toBe(before.domain.dataRevision);
+  expect(after.domain.canvasLayout.positions['workspace.history']).toMatchObject({
+    x: beforeMove.domain.canvasLayout.positions['workspace.history'].x,
+    y: beforeMove.domain.canvasLayout.positions['workspace.history'].y + 48,
+    pinned: true,
+  });
+  await expect.poll(async () => (await nodeTransforms(member, ['workspace.history']))['workspace.history'], { timeout: 10_000 })
+    .toBe(`translate(${after.domain.canvasLayout.positions['workspace.history'].x}px, ${after.domain.canvasLayout.positions['workspace.history'].y}px)`);
+  expect(after.domain.records).toEqual(beforeMove.domain.records);
+  expect(after.domain.dataRevision).toBe(beforeMove.domain.dataRevision);
+}
+
+async function createBlankTableFromPicker(page) {
+  const created = page.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
+  void created.catch(() => {});
+  await page.locator('.tt-workspace-picker__button').click();
+  await page.locator('.tt-workspace-menu').getByRole('menuitem', { name: /New table/u }).click();
+  const startPage = page.getByTestId('start-page');
+  await expect(startPage.getByRole('heading', { name: 'What should we start with?' })).toBeVisible();
+  await startPage.getByRole('button', { name: 'Start empty with your own files', exact: true }).click();
+  const response = await created;
+  expect(response.status()).toBe(201);
+  const table = await response.json();
+  await expect(page).toHaveURL(new RegExp(`/t/${table.id}$`));
+  await expect(page.locator('.tt-canvas-node')).toHaveCount(0);
+  return table;
+}
+
+async function selectOtherTable(page, title, tableId) {
+  const picker = page.locator('.tt-workspace-picker__button');
+  await picker.click();
+  const target = page.locator('.tt-workspace-menu > button[role="menuitem"]:not(.is-current)').filter({ hasText: title });
+  await expect(target).toHaveCount(1);
+  await target.click();
+  await expect(page).toHaveURL(new RegExp(`/t/${tableId}$`));
+  await expect(page.locator('.tt-canvas-panel')).toBeVisible();
+}
+
+async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, privatePrompt, privateAnswer }) {
+  const original = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const otherTable = await createBlankTableFromPicker(owner);
+  await selectOtherTable(owner, original.title, tableId);
+  await openCanvasObject(owner, 'table.actions');
+  const actionNode = owner.getByTestId('canvas-object-editor');
+  await actionNode.getByRole('button', { name: 'Move Actions without dragging', exact: true }).click();
+
+  let releaseAck;
+  const ackGate = new Promise(resolve => { releaseAck = resolve; });
+  let acceptedResolve;
+  const serverAccepted = new Promise(resolve => { acceptedResolve = resolve; });
+  let heldAck = false;
+  const commandUrl = `**/api/workspaces/${tableId}/commands`;
+  const holdLayoutAck = async route => {
+    const request = route.request();
+    if (heldAck || request.method() !== 'POST' || request.postDataJSON()?.type !== 'canvas.layout') return route.continue();
+    heldAck = true;
+    const response = await route.fetch();
+    acceptedResolve(response.status());
+    await ackGate;
+    await route.fulfill({ response });
+  };
+  await owner.route(commandUrl, holdLayoutAck);
+  const layoutResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
+  void layoutResponse.catch(() => {});
+  try {
+    await actionNode.getByRole('group', { name: 'Move Actions without dragging', exact: true })
+      .getByRole('button', { name: 'Move Actions right', exact: true }).click();
+    expect(await Promise.race([serverAccepted, layoutResponse.then(response => response.status())])).toBe(200);
+    const accepted = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const acceptedPoint = accepted.domain.canvasLayout.positions['table.actions'];
+    expect(acceptedPoint.x).toBe(original.domain.canvasLayout.positions['table.actions'].x + 48);
+    expect(acceptedPoint.pinned).toBe(true);
+
+    await selectOtherTable(owner, otherTable.title, otherTable.id);
+    await expect(owner.getByTestId('table-chat-answer')).toHaveCount(0);
+    await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
+    const otherState = (await api(owner, `/api/workspaces/${otherTable.id}`)).body;
+    expect(otherState.domain.canvasLayout?.positions?.['table.actions']).toBeUndefined();
+
+    releaseAck();
+    expect((await layoutResponse).status()).toBe(200);
+    await expect(owner).toHaveURL(new RegExp(`/t/${otherTable.id}$`));
+    await expect(owner.locator('.tt-canvas-node')).toHaveCount(0);
+    expect((await api(owner, `/api/workspaces/${otherTable.id}`)).body.domain.canvasLayout?.positions?.['table.actions']).toBeUndefined();
+
+    await selectOtherTable(owner, original.title, tableId);
+    const privateArticle = owner.getByRole('article', { name: privatePrompt, exact: true });
+    await expect(privateArticle.getByTestId('table-chat-answer')).toContainText(privateAnswer);
+    const resumed = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    expect(resumed.domain.canvasLayout.positions['table.actions']).toEqual(acceptedPoint);
+    expect(Object.keys(resumed.domain.canvasLayout.positions).some(id => id.startsWith('chat.'))).toBe(false);
+    await openCanvasObject(owner, 'table.actions');
+    await expect.poll(async () => (await nodeTransforms(owner, ['table.actions']))['table.actions'], { timeout: 10_000 })
+      .toBe(`translate(${acceptedPoint.x}px, ${acceptedPoint.y}px)`);
+  } finally {
+    releaseAck();
+    await owner.unroute(commandUrl, holdLayoutAck);
+  }
 }
 
 async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
@@ -815,6 +934,9 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await askTableAssistant(owner, ownerPrompt, ownerReply, setAssistantReply);
   expect(getProviderCalls()).toBe(ownerCalls + 1);
   expect((await api(owner, `/api/workspaces/${tableId}`)).body.revision).toBe(ownerProfile.revision);
+  await verifyDelayedLayoutAckDoesNotCrossTables({
+    owner, tableId, api, privatePrompt: ownerPrompt, privateAnswer: ownerReply.result.text,
+  });
 
   const providerCallsBeforeArchive = getProviderCalls();
   const archived = await seedConversationPage({ page: member, tableId, profile: afterFollowup, api, setAssistantReply });

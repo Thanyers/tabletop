@@ -457,7 +457,11 @@ export default function TabletopApp() {
     setBusy(type);
     try {
       const ack = await tabletopClient.command(current, type, payload);
+      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(current, workspaceRef.current))) return null;
       const latest = await latestAfterAck(ack, current.id, requestSequence);
+      if (type === 'canvas.layout' && (!workspaceRef.current
+        || !sameChatRequestScope(current, workspaceRef.current)
+        || !sameChatRequestScope(current, latest))) return null;
       setWorkspace(latest);
       if (type === 'evolve.activate') showNotice(`The change is active at revision ${latest.domain.ruleRevision}.`, 'success');
       else if (type === 'workspace.reset') {
@@ -471,10 +475,12 @@ export default function TabletopApp() {
       await refreshSession().catch(() => undefined);
       return latest;
     } catch (error) {
+      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(current, workspaceRef.current))) return null;
       if (error instanceof ApiFailure && error.conflict) {
         try {
+          const sequenceBeforeRead = projectionSequenceRef.current;
           const fresh = await tabletopClient.workspace(current.id);
-          if (workspaceRef.current?.id === current.id) setWorkspace(fresh);
+          if (canApplyWorkspaceRefresh(current, workspaceRef.current, fresh, sequenceBeforeRead, projectionSequenceRef.current)) setWorkspace(fresh);
           await refreshSession().catch(() => undefined);
           // Someone else moved a card; the Canvas retries quietly on the newer layout (F007).
           if (error.code !== 'STALE_LAYOUT') showNotice('This table changed elsewhere. The latest version is loaded; review and repeat your edit if it still applies.', 'error');
