@@ -409,7 +409,13 @@ async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
   await form.getByRole('button', { name: actionTitle, exact: true }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(expectedStatus);
-  if (expectedStatus !== 200) await expect(editor.getByRole('alert')).toBeVisible();
+  if (expectedStatus !== 200) {
+    const failure = await response.json();
+    expect(failure.message).toEqual(expect.any(String));
+    const notice = page.locator('.tt-notice[role="alert"]');
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText(failure.message);
+  }
   return response;
 }
 
