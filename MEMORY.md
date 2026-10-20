@@ -5,6 +5,21 @@
 
 ## Lessons
 
+### 2026-10-20 — Browser acceptance ต้องตรวจการลงมือใช้ ไม่ใช่แค่เห็นร่าง
+- **What happened:** ร่าง generated views ผ่าน schema และแสดงภาพได้ แต่การทดลองส่วนตัวเคยเปิดเฉพาะภาพ และปุ่มที่ส่งค่าเดิมซ้ำถูกกันหลังคำสั่งแรก
+- **Root cause:** renderer ยังไม่ได้รับ local command adapter สำหรับ draft; duplicate guard ผูกกับค่า input โดยไม่ดู revision ของข้อมูลหลังคำสั่งสำเร็จ
+- **Correct behavior:** ใช้สำเนา draft กับ local authority ตรวจว่ากด/ลาก/รีเซ็ตได้โดยไม่มี `table.act` ไปยังห้องจริง แล้วรัน `npm run test:generative:browser`; ต้องมีการกดปุ่มเดิมสองครั้งและตรวจค่าที่เปลี่ยนจริง
+
+### 2026-10-20 — สูตรที่ AI สร้างต้องมี error ที่ซ่อมได้และ oracle แยก
+- **What happened:** โมเดลส่งจำนวน operand ผิดสำหรับสูตร binary, ส่งตัวเลขให้ scene text และกฎแบ่งน้ำที่อ่านยอดทีมแรกค้างไว้เมื่อทีมที่สองเล่น
+- **Root cause:** ข้อผิดพลาดไม่ระบุ operation/arity ที่ต้องการ และคำแนะนำมีตัวอย่าง fixed record โดยไม่แยกจาก selected record ใน action; schema ผ่านได้แม้ความหมายธุรกิจยังผิด
+- **Correct behavior:** ระบุ operation/arity, แยก text/number และ `selectedField`/`recordField`; รัน `GENERATIVE_CASE=water npm run test:generative:live` ใน disposable fixture ที่ตั้ง credential source ไว้ แล้วตรวจสองตาต่อเนื่องด้วยสูตรอิสระโดยไม่เปลี่ยนค่าที่คาดตามคำตอบโมเดล
+
+### 2026-10-20 — การ fit กล้องต้องรอ geometry หลังขยายการ์ด
+- **What happened:** หลังแก้กฎและเปิด Actions กล้องพาไปตำแหน่งเก่า ปุ่มอยู่พ้นขอบจอ แม้กฎและข้อมูลถูกต้อง
+- **Root cause:** การขยายการ์ดเปลี่ยนความสูงและเรียก incremental layout หลังคำสั่ง fit; การรอเพียงสอง animation frames ไม่รับประกันว่าขนาดกับตำแหน่งนิ่ง
+- **Correct behavior:** ใช้คำขอ focus ครั้งเดียวที่รอ geometry นิ่งและยกเลิกเมื่อคนลาก/เลื่อนเอง แล้วรัน `npm run build`, `npm run build:cloudflare`, `npm run test:cloudflare:browser` ตามลำดับ ห้ามใช้ force-click เพื่อปิดผลล้มของปุ่มที่อยู่นอกจอ
+
 ### 2026-10-20 — ข้อความ handoff ในแชทเก่ากว่า repo
 - **What happened:** ข้อความส่งต่องานบอกให้เริ่มจาก `feat/tabletop-r1` (draft PR), deploy `f1725c8`, commit ล่าสุด `bed5881` แต่ repo จริง PR #2 merge เข้า `main` แล้ว ตามด้วย PR #3–#7 และ prod รัน `c9d3bf0`
 - **Root cause:** ข้อความเขียนก่อนรอบ merge/deploy ถัดไป และ hardcode SHA ไว้

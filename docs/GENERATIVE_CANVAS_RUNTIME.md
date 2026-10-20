@@ -52,6 +52,10 @@
 
 ไม่มี dependency, secret, binding หรือ SQL migration ใหม่ใน candidate นี้ ใช้ optional fields ใน JSON state เดิม ข้อมูลเก่าที่ไม่มี canvas ยังเปิดได้ แต่หลังบันทึก expression/descriptor ใหม่แล้ว **อย่าถอยไปใช้โค้ด v1.0.0 เพื่อเขียนห้องเหล่านั้น** ใช้ build ที่อ่านสัญญาใหม่นี้ได้และพักการเขียนก่อนทำ recovery
 
+ก่อนบันทึกตรวจผลลัพธ์ด้วย actor/seat/turn ของผู้ส่งคำสั่งจริง พร้อม identity probes ที่จำกัด 64 บริบท; ไม่ใช่การพิสูจน์ทุกเงื่อนไขของผู้ชมในอนาคต หากการแสดงผลของผู้ชมชนขอบเขต runtime จะแสดงข้อผิดพลาดแทนการรันเกินงบ ส่วนผลรวมและจำนวนรายการที่ว่างให้ศูนย์; mean/min/max ของชุดว่างต้องมีเงื่อนไขรองรับ
+
 รัน unit/build/Cloudflare ตาม [CONTRIBUTING](../CONTRIBUTING.md) แล้วรัน `npm run test:generative:browser` เพื่อทดสอบด้วยโมเดลและบัญชีจำลอง รุ่น Node ที่ตรวจคือ `22.23.2`
 
 การทดสอบ AI จริงเป็น opt-in: ตั้ง `TABLETOP_CREDENTIAL_FILE` ให้ชี้ไฟล์ credential เดิมที่ไม่อยู่ใน Git และรัน `npm run test:generative:live` เฉพาะข้อมูลสมมติ จะใช้ local Worker/ฐานทดสอบกับ provider จริง สูงสุดหกคำขอและ ledger $0.20 ต่อรอบ ไม่ได้ยืนยัน Google login หรือประสิทธิภาพ hosted Workers Free
+
+หากต้องทดสอบเฉพาะเรื่องที่ยังไม่ผ่าน ให้ตั้ง `GENERATIVE_CASE` เป็น `cafe`, `shadow` หรือ `water` ก่อนรันคำสั่งเดิม ผลจะอยู่ใน `test-results/generative-live-<case>/` แยกจากรอบรวม ไม่เพิ่มเพดานคำขอหรือทับผลเรื่องที่ผ่านแล้ว

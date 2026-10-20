@@ -71,6 +71,18 @@ interface SharedCanvasLayout {
   positions: Record<string, CanvasPoint & { pinned?: boolean }>;
 }
 
+interface OpenObjectFocusRequest {
+  id: string;
+  sequence: number;
+  interactionRevision: number;
+  requireOpened: boolean;
+  returnFocusToObjects: boolean;
+  started: boolean;
+  attempts: number;
+  frame?: number;
+  timer?: number;
+}
+
 function sharedLayoutForView(view: WorkspaceView): SharedCanvasLayout | null {
   if (view.domain.kind !== 'table') return null;
   const raw = (view.domain as unknown as { canvasLayout?: unknown }).canvasLayout;
@@ -384,7 +396,34 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const layoutBlockedThroughRef = useRef(0);
   const appliedSharedLayoutRevisionRef = useRef<number | null>(null);
   const layoutSnapshotRef = useRef<{ workspaceKey: string; ids: Set<string>; sizes: Map<string, { width: number; height: number }>; edges: Set<string>; signature: string } | null>(null);
+  const pendingOpenObjectFocusRef = useRef<OpenObjectFocusRequest | null>(null);
+  const openObjectFocusSequenceRef = useRef(0);
+  const canvasInteractionRevisionRef = useRef(0);
+  const [openObjectFocusSequence, setOpenObjectFocusSequence] = useState(0);
+  const cancelPendingOpenObjectFocus = useCallback(() => {
+    const request = pendingOpenObjectFocusRef.current;
+    if (!request) return;
+    if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
+    if (request.timer !== undefined) window.clearTimeout(request.timer);
+    pendingOpenObjectFocusRef.current = null;
+    canvasInteractionRevisionRef.current += 1;
+  }, []);
+  const requestOpenObjectFocus = useCallback((id: string, requireOpened: boolean, returnFocusToObjects: boolean) => {
+    cancelPendingOpenObjectFocus();
+    const sequence = ++openObjectFocusSequenceRef.current;
+    pendingOpenObjectFocusRef.current = {
+      id,
+      sequence,
+      interactionRevision: canvasInteractionRevisionRef.current,
+      requireOpened,
+      returnFocusToObjects,
+      started: false,
+      attempts: 0,
+    };
+    setOpenObjectFocusSequence(sequence);
+  }, [cancelPendingOpenObjectFocus]);
   const [layoutReadyKey, setLayoutReadyKey] = useState('');
+  useEffect(() => { cancelPendingOpenObjectFocus(); }, [workspaceKey, cancelPendingOpenObjectFocus]);
   const [localPhysics, setLocalPhysics] = useState<PhysicsParams>(() => view.domain.kind === 'teaching' ? view.domain.parameters : { force: 10, mass: 2, time: 2 });
   const localPhysicsDirty = useRef(false);
   const localPhysicsWorkspace = useRef('');
@@ -485,12 +524,13 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [onCommand, remoteLayoutEnabled, rememberPosition, setNodes]);
 
   const moveCanvasObject = useCallback((id: string, dx: number, dy: number) => {
+    cancelPendingOpenObjectFocus();
     const node = flow.getNode(id);
     if (!node) return;
     const position = { x: node.position.x + dx * 48, y: node.position.y + dy * 48 };
     setNodes((current) => current.map((candidate) => candidate.id === id ? { ...candidate, position } : candidate));
     commitUserPosition(id, position, node.position);
-  }, [commitUserPosition, flow, setNodes]);
+  }, [cancelPendingOpenObjectFocus, commitUserPosition, flow, setNodes]);
 
   useEffect(() => {
     if (!objectsMenuOpen) return;
@@ -528,18 +568,105 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode]);
   const navigateToObject = useCallback((id: string) => {
     if (!nodes.some((node) => node.id === id)) return;
+    cancelPendingOpenObjectFocus();
     setPreviousView(flow.getViewport());
     if (openedObjectId === undefined) setInternalOpenedId(id);
     onOpenObject?.(id);
     onSelectNode(id);
     setObjectsMenuOpen(false);
-    // Opening an object changes its measured height. Fit after React Flow has
-    // committed that expanded node so the object body remains reachable.
+    if (view.kind === 'table') {
+      lastFocusRequestRef.current = `${focusNodeId ?? ''}:${String(focusRequestKey ?? '')}`;
+      requestOpenObjectFocus(id, true, true);
+      return;
+    }
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      flow.fitView({ nodes: [{ id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: view.kind === 'table' ? 0 : canvasMotionDuration(200) });
+      flow.fitView({ nodes: [{ id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: canvasMotionDuration(200) });
       objectsButtonRef.current?.focus();
     }));
-  }, [flow, nodes, onOpenObject, openedObjectId, onSelectNode, view.kind]);
+  }, [cancelPendingOpenObjectFocus, flow, focusNodeId, focusRequestKey, nodes, onOpenObject, openedObjectId, onSelectNode, requestOpenObjectFocus, view.kind]);
+
+  useEffect(() => {
+    const request = pendingOpenObjectFocusRef.current;
+    if (!request || request.sequence !== openObjectFocusSequence) return;
+    if (request.requireOpened && activeOpenedId !== request.id) {
+      if (request.started) cancelPendingOpenObjectFocus();
+      return;
+    }
+    if (view.kind !== 'table') return;
+
+    request.started = true;
+    let disposed = false;
+    let previousGeometry = '';
+    let stableSince = 0;
+    let stableSamples = 0;
+    const cleanupRequest = () => {
+      if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
+      if (request.timer !== undefined) window.clearTimeout(request.timer);
+      request.frame = undefined;
+      request.timer = undefined;
+    };
+    const sampleGeometry = () => {
+      if (disposed || pendingOpenObjectFocusRef.current !== request) return;
+      if (request.interactionRevision !== canvasInteractionRevisionRef.current) {
+        cancelPendingOpenObjectFocus();
+        return;
+      }
+      if (request.requireOpened && activeOpenedId !== request.id) {
+        cancelPendingOpenObjectFocus();
+        return;
+      }
+
+      const node = flow.getNode(request.id);
+      const target = Array.from(flowWrapRef.current?.querySelectorAll<HTMLElement>('[data-canvas-object]') ?? [])
+        .find((element) => element.dataset.canvasObject === request.id);
+      const measuredWidth = node?.measured?.width;
+      const measuredHeight = node?.measured?.height;
+      const bounds = target?.getBoundingClientRect();
+      if (
+        node &&
+        typeof measuredWidth === 'number' && measuredWidth > 0 &&
+        typeof measuredHeight === 'number' && measuredHeight > 0 &&
+        bounds && bounds.width > 0 && bounds.height > 0
+      ) {
+        const geometry = [node.position.x, node.position.y, measuredWidth, measuredHeight, bounds.left, bounds.top, bounds.width, bounds.height]
+          .map((value) => String(Math.round(value * 2) / 2))
+          .join('|');
+        const now = performance.now();
+        if (geometry === previousGeometry) stableSamples += 1;
+        else {
+          previousGeometry = geometry;
+          stableSince = now;
+          stableSamples = 0;
+        }
+        if (stableSamples >= 3 && now - stableSince >= 90) {
+          cleanupRequest();
+          pendingOpenObjectFocusRef.current = null;
+          flow.fitView({ nodes: [{ id: request.id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: 0 });
+          if (request.returnFocusToObjects) objectsButtonRef.current?.focus();
+          return;
+        }
+      } else {
+        previousGeometry = '';
+        stableSince = 0;
+        stableSamples = 0;
+      }
+
+      request.attempts += 1;
+      if (request.attempts >= 180) {
+        cancelPendingOpenObjectFocus();
+        return;
+      }
+      request.timer = window.setTimeout(() => {
+        request.frame = window.requestAnimationFrame(sampleGeometry);
+      }, 32);
+    };
+
+    request.frame = window.requestAnimationFrame(sampleGeometry);
+    return () => {
+      disposed = true;
+      cleanupRequest();
+    };
+  }, [activeOpenedId, cancelPendingOpenObjectFocus, flow, openObjectFocusSequence, view.kind, workspaceKey]);
 
   useEffect(() => {
     const isNewWorkspace = layoutWorkspaceRef.current !== workspaceKey;
@@ -688,9 +815,10 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [workspaceKey, persistLayout]);
 
   const handleNodeDragStart = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
+    cancelPendingOpenObjectFocus();
     draggingNodeIdsRef.current.add(node.id);
     dragStartPositionsRef.current.set(node.id, node.position);
-  }, []);
+  }, [cancelPendingOpenObjectFocus]);
 
   const persistPosition = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
     draggingNodeIdsRef.current.delete(node.id);
@@ -703,12 +831,17 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     onNodesChange(changes);
     for (const change of changes) {
       if (change.type === 'position' && change.dragging === true) {
+        cancelPendingOpenObjectFocus();
         draggingNodeIdsRef.current.add(change.id);
       } else if (change.type === 'position' && change.dragging === false) {
         draggingNodeIdsRef.current.delete(change.id);
       }
     }
-  }, [onNodesChange]);
+  }, [cancelPendingOpenObjectFocus, onNodesChange]);
+
+  const handleCanvasMoveStart = useCallback((event: MouseEvent | TouchEvent | null) => {
+    if (event) cancelPendingOpenObjectFocus();
+  }, [cancelPendingOpenObjectFocus]);
 
   useEffect(() => {
     if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId)) return;
@@ -721,19 +854,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       return;
     }
     if (layoutReadyKey !== workspaceKey) return;
-    let secondFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        if (draggingNodeIdsRef.current.size > 0 || !flow.getNode(focusNodeId)) return;
-        lastFocusRequestRef.current = requestKey;
-        flow.fitView({ nodes: [{ id: focusNodeId }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: 0 });
-      });
-    });
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (secondFrame) window.cancelAnimationFrame(secondFrame);
-    };
-  }, [focusNodeId, focusRequestKey, nodes, flow, view.kind, layoutReadyKey, workspaceKey]);
+    lastFocusRequestRef.current = requestKey;
+    requestOpenObjectFocus(focusNodeId, false, false);
+  }, [focusNodeId, focusRequestKey, nodes, flow, view.kind, layoutReadyKey, workspaceKey, requestOpenObjectFocus]);
 
   const edges = useMemo(() => {
     const projected: Array<{
@@ -887,7 +1010,14 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const hasVisibleObjects = objectTitles.length > 0;
 
   return (
-    <div className="tt-flow-wrap" ref={flowWrapRef} data-canvas-editor data-testid="canvas-object-workspace">
+    <div
+      className="tt-flow-wrap"
+      ref={flowWrapRef}
+      data-canvas-editor
+      data-testid="canvas-object-workspace"
+      onPointerDownCapture={cancelPendingOpenObjectFocus}
+      onKeyDownCapture={cancelPendingOpenObjectFocus}
+    >
       {!hasVisibleObjects ? (
         <div className="tt-canvas-empty">
           <span><Workflow size={19} /></span>
@@ -899,6 +1029,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           edges={visibleEdges}
           nodeTypes={nodeTypes}
           onNodesChange={handleNodesChange}
+          onMoveStart={handleCanvasMoveStart}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={persistPosition}
           onNodeClick={choose}
@@ -917,7 +1048,13 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={21} size={1} color="#ccd5d7" />
-          <Controls position="bottom-right" showInteractive={false} showFitView={false} />
+          <Controls
+            position="bottom-right"
+            showInteractive={false}
+            showFitView={false}
+            onZoomIn={cancelPendingOpenObjectFocus}
+            onZoomOut={cancelPendingOpenObjectFocus}
+          />
         </ReactFlow>
       )}
       <div className="tt-canvas-tools">
@@ -933,7 +1070,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             <Boxes size={17} aria-hidden="true" /><span>Objects</span><small>{objectTitles.length}</small>
           </button>
           <nav id="tt-canvas-objects-list" className="tt-canvas-objects__panel" aria-label="Canvas objects" data-testid="canvas-object-dock" hidden={!objectsMenuOpen}>
-            {previousView && <button type="button" onClick={() => { void flow.setViewport(previousView, { duration: canvasMotionDuration(180) }); setPreviousView(null); setObjectsMenuOpen(false); objectsButtonRef.current?.focus(); }}><ArrowLeft size={16} aria-hidden="true" />Previous view</button>}
+            {previousView && <button type="button" onClick={() => { cancelPendingOpenObjectFocus(); void flow.setViewport(previousView, { duration: canvasMotionDuration(180) }); setPreviousView(null); setObjectsMenuOpen(false); objectsButtonRef.current?.focus(); }}><ArrowLeft size={16} aria-hidden="true" />Previous view</button>}
             <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} onClick={(event) => { event.stopPropagation(); setShowConnections((shown) => !shown); }}>
               <Workflow size={16} aria-hidden="true" /><span>Connections</span><small>{edges.length}</small><i aria-hidden="true">{showConnections ? 'On' : 'Off'}</i>
             </button>

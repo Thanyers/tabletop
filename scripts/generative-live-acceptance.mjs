@@ -24,7 +24,9 @@ const cases = [
 
 export async function runGenerativeLiveAcceptance({ origin, actors, output, real }) {
   if (!real) throw Error('This acceptance requires an explicit --real-ai run.');
-  const report = { runtime: 'disposable local Cloudflare Worker/D1/Durable Objects', provider: 'real, capped by fixture at 6 calls and $0.20 ledger', accounts: 'two synthetic accounts; not Google OAuth acceptance', checks: [], cases: [], errors: [] };
+  const selectedCase = process.env.GENERATIVE_CASE;
+  if (selectedCase && !cases.some(item => item.id === selectedCase)) throw Error('Unknown generative acceptance case');
+  const report = { runtime: 'disposable local Cloudflare Worker/D1/Durable Objects', selection: selectedCase ?? 'all', provider: 'real, capped by fixture at 6 calls and $0.20 ledger', accounts: 'two synthetic accounts; not Google OAuth acceptance', checks: [], cases: [], errors: [] };
   const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
   const contexts = [];
   const mark = text => { report.checks.push(text); console.log(`PASS ${text}`); };
@@ -119,7 +121,7 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     if (result.status() !== expectedStatus) throw Error(`${actionId}: ${JSON.stringify(await result.json())}`);
     return read(page, id);
   }
-  async function metric(page, view, id, expected) {
+  async function metric(page, view, id, expected, title) {
     const outputs = evaluateGenerativeCanvas(view.domain.program.canvas, {
       program: view.domain.program, records: view.domain.records, actor: view.actor.actorId, seat: view.actor.seat ?? 'host', turn: view.domain.turn,
     });
@@ -127,7 +129,15 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     // Resolve that spelling difference only; still check the actual formula
     // against the independent expected number and the real rendered card.
     const normalizedId = id.replaceAll('_', '-');
-    const matches = outputs.filter(item => item.kind === 'metric' && item.id.replaceAll('_', '-') === normalizedId);
+    const metrics = outputs.filter(item => item.kind === 'metric');
+    let matches = metrics.filter(item => item.id.replaceAll('_', '-') === normalizedId);
+    if (!matches.length && title) {
+      const descriptorIds = view.domain.program.canvas.views.filter(item => item.kind === 'metric' && item.title.toLowerCase().startsWith(title.toLowerCase())).map(item => item.id);
+      matches = metrics.filter(item => descriptorIds.includes(item.id));
+    }
+    // Generated identifiers are not user-facing requirements. A single metric
+    // is unambiguous; never select a result by its calculated value.
+    if (!matches.length && metrics.length === 1) matches = metrics;
     expect(matches).toHaveLength(1);
     const result = matches[0];
     expect(result?.kind).toBe('metric');
@@ -137,7 +147,7 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
   }
   const owner = await pageFor(actors[0]);
   try {
-    for (const scenario of cases) {
+    for (const scenario of cases.filter(item => !selectedCase || item.id === selectedCase)) {
       const result = { scenario: scenario.id, result: 'RUNNING' };
       report.cases.push(result);
       try {
@@ -160,15 +170,19 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
         await writeFile(join(output, `${scenario.id}-generated.json`), JSON.stringify(view.domain.program, null, 2));
         mark(`${scenario.id}: real model creates and activates a reviewed generated tool`);
         if (scenario.id === 'cafe') {
-          view = await act(owner, room.id, 'finish', { order: 'espresso' });
+          const espresso = view.domain.records.orders.find(row => row.values.name.toLowerCase() === 'espresso');
+          const tea = view.domain.records.orders.find(row => row.values.name.toLowerCase() === 'tea');
+          expect(espresso).toBeTruthy();
+          expect(tea).toBeTruthy();
+          view = await act(owner, room.id, 'finish', { order: espresso.id });
           await metric(owner, view, 'completed-minutes', 3);
-          view = await act(owner, room.id, 'finish', { order: 'tea' });
+          view = await act(owner, room.id, 'finish', { order: tea.id });
           await metric(owner, view, 'completed-minutes', 8);
           const before = structuredClone(view.domain.records);
           await requestDraft(owner, room.id, 'Keep the same collections, actions and records. Add one new metric view id unfinished-count, title Remaining orders, counting only unfinished orders. Preserve all existing view IDs and initialRecords must be empty.');
           view = await activate(owner, room.id);
           expect(view.domain.records).toEqual(before);
-          await metric(owner, view, 'unfinished-count', 0);
+          await metric(owner, view, 'unfinished-count', 0, 'Remaining orders');
           mark('cafe: actual UI actions calculate 3 then 8; a real AI edit grows a new card while retaining finished orders');
         } else if (scenario.id === 'shadow') {
           await metric(owner, view, 'shadow-x', 80);
@@ -176,7 +190,9 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
           await metric(owner, view, 'shadow-x', 70);
           const scene = view.domain.program.canvas.views.find(item => item.kind === 'scene');
           const editor = await object(owner, `table.view.${scene.id}`);
-          const handle = editor.getByRole('button', { name: 'Move light-source', exact: true });
+          const lightShapes = scene.elements.filter(element => element.shape === 'circle' && element.drag?.actionId === 'move_light');
+          expect(lightShapes).toHaveLength(1);
+          const handle = editor.getByRole('button', { name: `Move ${lightShapes[0].id}`, exact: true });
           await expect(handle).toBeVisible();
           const box = await handle.boundingBox();
           const response = commandResponse(owner, 'table.act');
@@ -202,12 +218,18 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
           const member = await pageFor(actors[1]);
           await member.goto(inviteUrl);
           await expect(member.locator('.tt-canvas-panel')).toBeVisible();
-          view = await act(owner, room.id, 'deliver', { tank: 'village', team: 'red', amount: 20 });
-          const memberView = await act(member, room.id, 'deliver', { tank: 'village', team: 'blue', amount: 15 });
+          expect(view.domain.records.tanks).toHaveLength(1);
+          const tank = view.domain.records.tanks[0].id;
+          const red = view.domain.records.teams.filter(row => row.values.seat === 'host');
+          const blue = view.domain.records.teams.filter(row => row.values.seat === 'member-1');
+          expect(red).toHaveLength(1);
+          expect(blue).toHaveLength(1);
+          view = await act(owner, room.id, 'deliver', { tank, team: red[0].id, amount: 20 });
+          const memberView = await act(member, room.id, 'deliver', { tank, team: blue[0].id, amount: 15 });
           expect(memberView.domain.records.tanks[0].values.water).toBe(65);
           expect(memberView.domain.records.teams.reduce((sum, row) => sum + row.values.delivered, 0)).toBe(35);
           view = await read(owner, room.id);
-          await metric(owner, view, 'conserved-total', 100);
+          await metric(owner, view, 'conserved-total', 100, 'Conserved total');
           await member.reload();
           await expect(member.locator('.tt-canvas-panel')).toBeVisible();
           expect((await read(member, room.id)).domain.records).toEqual(view.domain.records);

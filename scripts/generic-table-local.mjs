@@ -13,7 +13,9 @@ const origin = `http://127.0.0.1:${port}`;
 const real = process.argv.includes('--real-ai');
 const env = real ? parseEnv(await readFile(resolve(process.env.TABLETOP_CREDENTIAL_FILE ?? '../.env.deploy.local'), 'utf8')) : {};
 if (real && !env.DEEPSEEK_KEY) throw Error('DEEPSEEK_KEY is not ready');
-const output = resolve(process.argv.includes('--generative-auto') ? 'test-results/generative-live' : 'test-results/generic-table-local');
+const selectedCase = process.env.GENERATIVE_CASE;
+if (selectedCase && !['cafe', 'shadow', 'water'].includes(selectedCase)) throw Error('Unknown generative acceptance case');
+const output = resolve(process.argv.includes('--generative-auto') ? `test-results/generative-live${selectedCase ? `-${selectedCase}` : ''}` : 'test-results/generic-table-local');
 await mkdir(output, { recursive: true });
 // Preserve each previous trial, including rejected live proposals, before a rerun.
 const archive = resolve(output, 'runs', new Date().toISOString().replace(/[:.]/g, '-'));
