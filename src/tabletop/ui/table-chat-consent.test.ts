@@ -15,5 +15,6 @@ describe('chat consent', () => {
     expect(consentQuestion(0)).toBe('Send this message to AI?');
     expect(consentQuestion(1)).toBe('Send this message and 1 file to AI?');
     expect(consentQuestion(3)).toBe('Send this message and 3 files to AI?');
+    expect(consentQuestion(0, true)).toBe("Send this message and this table's current data to AI?");
   });
 });

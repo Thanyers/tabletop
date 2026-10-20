@@ -14,3 +14,22 @@
 .tt-app .tt-table-chat-bar__consent-yes { color: #fff; background: var(--tt-moss); }
 .tt-app .tt-table-chat-bar__consent-no { color: var(--tt-muted); background: transparent; }
 @media (max-width: 760px) { .tt-app .tt-table-chat-bar { bottom: 10px; width: calc(100% - 20px); } }
+
+/* Chat-first tables start blank: no empty-state copy behind the chat bar. */
+.tt-app .tt-canvas-panel:has(.tt-table-chat-bar) .tt-canvas-empty { display: none; }
+.tt-app .tt-canvas-panel:has(.tt-table-chat-bar) { padding-bottom: 92px; }
+
+/* Answer and draft cards placed on the Canvas by the chat. */
+.tt-app .tt-chat-card { position: relative; display: grid; gap: 10px; padding-right: 22px; color: var(--tt-ink); font-size: 14px; line-height: 1.5; }
+.tt-app .tt-chat-card p { display: flex; align-items: flex-start; gap: 7px; margin: 0; }
+.tt-app .tt-chat-card__text { white-space: pre-wrap; }
+.tt-app .tt-chat-card__pending, .tt-app .tt-chat-card__done { color: var(--tt-muted); }
+.tt-app .tt-chat-card__error { color: var(--tt-red); }
+.tt-app .tt-chat-card__references { display: flex; flex-wrap: wrap; gap: 6px; }
+.tt-app .tt-chat-card__references button { padding: 4px 10px; border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-paper); font: inherit; font-size: 12px; cursor: pointer; }
+.tt-app .tt-chat-card__inputs { display: grid; gap: 4px; margin: 0; font-size: 13px; }
+.tt-app .tt-chat-card__inputs > div, .tt-app .tt-chat-card__inputs { grid-template-columns: max-content 1fr; column-gap: 10px; }
+.tt-app .tt-chat-card__inputs dt { color: var(--tt-muted); }
+.tt-app .tt-chat-card__inputs dd { margin: 0; }
+.tt-app .tt-chat-card__dismiss { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; color: var(--tt-muted); background: transparent; cursor: pointer; }
+.tt-app .tt-chat-card__dismiss:hover { background: var(--tt-canvas); color: var(--tt-ink); }
