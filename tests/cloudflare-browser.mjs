@@ -346,6 +346,7 @@ try {
   expect(pausedAction.body.errorCode).toBe('ENCOUNTER_PAUSED');
   await dm.reload();
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
   expect((await api(dm, `/api/workspaces/${room.id}`)).body.domain.paused).toBeTruthy();
   expect((await command(dm, 'encounter.resume')).status).toBe(200);
   expect((await command(pip, 'encounter.shield', { target: 'pip' })).status).toBe(200);
@@ -358,6 +359,29 @@ try {
   const outsider = await newPage(actors[3]);
   expect((await api(outsider, `/api/workspaces/${room.id}`)).status).toBe(403);
   expect((await api(outsider, '/api/admin/workspaces')).status).toBe(403);
+
+  // A table URL is an address, not access: outsiders get the same notice as for a missing table.
+  const outsiderLink = await newPage(actors[3], `${origin}/t/${room.id}`);
+  await expect(outsiderLink.getByText('This table is not available to this account.', { exact: false })).toBeVisible();
+  await expect(outsiderLink).toHaveURL(`${origin}/`);
+  await expect(outsiderLink.locator('.tt-canvas-panel')).toHaveCount(0);
+  const missingLink = await newPage(actors[3], `${origin}/t/${randomUUID()}`);
+  await expect(missingLink.getByText('This table is not available to this account.', { exact: false })).toBeVisible();
+  // Signed-out visitors return to the requested table after signing in.
+  const signedOut = await newPage(null, `${origin}/t/${room.id}`);
+  await expect(signedOut.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await signedOut.context().addCookies([{ name: 'tabletop_local_session', value: actors[0].token, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  await signedOut.goto(origin); await signedOut.waitForLoadState('networkidle');
+  await expect(signedOut).toHaveURL(`${origin}/t/${room.id}`);
+  await expect(signedOut.locator('.tt-canvas-panel')).toBeVisible();
+  // Back and forward move between the table list and the open table.
+  await dm.goBack();
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
+  await dm.goForward();
+  await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  mark('Each table has its own /t/<id> URL: reload and back/forward follow it, sign-in returns to it, and outsiders see only an unavailable notice');
   const metadata = await api(dm, '/api/admin/workspaces');
   expect(metadata.status).toBe(200);
   expect(JSON.stringify(metadata.body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
