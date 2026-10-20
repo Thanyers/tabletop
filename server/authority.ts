@@ -1,8 +1,10 @@
 import type { IncomingMessage } from 'node:http';
 import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
+import { jsonWithinBudget } from '../src/tabletop/shared/json-budget.js';
 import { AuthorityError } from './errors.js';
 import {
   INVITE_TTL_MS,
@@ -44,6 +46,7 @@ const workspaceInputSchema = z.object({
 
 const nameInputSchema = z.object({ name: z.string().max(MAX_NAME_INPUT_CHARS).optional() }).strict();
 
+const renamePayloadSchema = z.object({ title: z.string().max(1_000) }).strict();
 const emptyPayloadSchema = z.object({}).strict();
 const requestFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 
@@ -62,7 +65,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
   table: new Set([
-    'table.import', 'table.removeSource', 'table.act',
+    'table.import', 'table.removeSource', 'table.act', 'canvas.layout',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
 };
@@ -177,6 +180,7 @@ function publicMember(member: StoredMember): Member {
 }
 
 function commandFrom(value: unknown): CommandEnvelope {
+  if (!jsonWithinBudget(value)) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
   const result = commandEnvelopeSchema.safeParse(value);
   if (!result.success) throw new AuthorityError('INVALID_REQUEST');
   try {
@@ -196,7 +200,7 @@ function assertIdentityFieldsAbsent(payload: unknown): void {
 function mapDomainError(error: DomainError): AuthorityError {
   const conflictCodes = new Set([
     'STALE_CANDIDATE', 'STALE_LESSON', 'APPROVAL_EXPIRED', 'APPROVAL_REVOKED', 'APPROVAL_MISMATCH',
-    'CANDIDATE_PENDING', 'REACTION_CLOSED', 'IDEMPOTENCY_MISMATCH',
+    'CANDIDATE_PENDING', 'REACTION_CLOSED', 'IDEMPOTENCY_MISMATCH', 'STALE_LAYOUT',
   ]);
   const status = error.code === 'FORBIDDEN' ? 403 : conflictCodes.has(error.code) ? 409 : 422;
   return new AuthorityError(error.code, error.message, status);
@@ -659,7 +663,7 @@ export class CommandAuthority {
           if (existing.payloadHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           return { ...existing.response, duplicate: true };
         }
-        if (workspace.ownerActorId !== session.record.actorId && envelope.type === 'workspace.reset') {
+        if (workspace.ownerActorId !== session.record.actorId && (envelope.type === 'workspace.reset' || envelope.type === 'workspace.rename')) {
           throw new AuthorityError('ROLE_FORBIDDEN');
         }
         if (envelope.expectedEpoch !== workspace.epoch) throw new AuthorityError('STALE_EPOCH');
@@ -672,10 +676,18 @@ export class CommandAuthority {
           throw error;
         }
         const currentView = this.toWorkspaceView(workspace, member, currentProjection, await transaction.listMembers());
-        if (currentView.revision !== envelope.expectedRevision) throw new AuthorityError('STALE_REVISION');
+        // Layout uses its own CAS and current node whitelist in the domain. A game
+        // action must not make an unrelated drag stale; epoch and membership still apply.
+        if (envelope.type !== 'canvas.layout' && currentView.revision !== envelope.expectedRevision) throw new AuthorityError('STALE_REVISION');
         if (envelope.type === 'workspace.reset') {
           if (!isEmptyPayload(envelope.payload)) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
           return this.resetWorkspace(transaction, workspace, member, session, envelope, requestHash, now);
+        }
+        if (envelope.type === 'workspace.rename') {
+          const parsed = renamePayloadSchema.safeParse(envelope.payload);
+          const title = parsed.success ? normalizeWorkspaceTitle(parsed.data.title) : null;
+          if (title === null) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
+          return this.renameWorkspace(transaction, workspace, member, session, envelope, requestHash, title, now);
         }
         if (envelope.type !== 'teaching.setRepresentation') assertIdentityFieldsAbsent(envelope.payload);
         if (envelope.type === 'teaching.answer' && member.role !== 'learner') throw new AuthorityError('ROLE_FORBIDDEN');
@@ -822,6 +834,59 @@ export class CommandAuthority {
     return ack;
   }
 
+  private async renameWorkspace(
+    transaction: import('./repository.js').WorkspaceTransaction,
+    workspace: StoredWorkspace,
+    member: StoredMember,
+    session: AuthenticatedSession,
+    envelope: CommandEnvelope,
+    requestHash: string,
+    title: string,
+    now: number,
+  ): Promise<CommandAck> {
+    if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+      throw new AuthorityError('ROLE_FORBIDDEN');
+    }
+    // Only the name changes; table data, rules and the epoch stay as they are.
+    const nextWorkspace: StoredWorkspace = { ...workspace, title, revision: workspace.revision + 1 };
+    const context = actorContext(nextWorkspace, member, now);
+    const projected = projectDomain(nextWorkspace.domainState, context);
+    const view = this.toWorkspaceView(nextWorkspace, member, projected, await transaction.listMembers());
+    const ack: CommandAck = { ok: true, commandId: envelope.commandId, duplicate: false, workspace: view };
+    const eventId = randomId();
+    await transaction.commitCommand({
+      workspace: nextWorkspace,
+      command: {
+        workspaceId: workspace.id,
+        epoch: workspace.epoch,
+        actorId: session.record.actorId,
+        commandId: envelope.commandId,
+        payloadHash: requestHash,
+        response: ack,
+        eventId,
+        createdAt: now,
+      },
+      event: {
+        eventId,
+        workspaceId: workspace.id,
+        epoch: workspace.epoch,
+        actorId: session.record.actorId,
+        commandId: envelope.commandId,
+        eventType: 'workspace.rename',
+        eventData: {
+          type: 'workspace.rename',
+          payload: { title },
+          label: 'Table renamed.',
+          beforeRevision: String(workspace.revision),
+          afterRevision: String(nextWorkspace.revision),
+        },
+        createdAt: now,
+      },
+      outboxId: randomId(),
+    });
+    return ack;
+  }
+
   private async resetWorkspace(
     transaction: import('./repository.js').WorkspaceTransaction,
     workspace: StoredWorkspace,
@@ -902,12 +967,16 @@ export class CommandAuthority {
       createdAt: workspace.createdAt,
       expiresAt: workspace.expiresAt,
     };
+    // Geometry is independently revisioned. Moving a card cannot invalidate an
+    // action, rule review, or AI proposal for otherwise unchanged table data.
+    const revisionDomain = { ...domain };
+    if (revisionDomain.kind === 'table') delete revisionDomain.canvasLayout;
     const revision = keyedSha256(workspace.projectionSalt, canonicalJson({
       purpose: 'tabletop-r1-projection-revision-v1',
       actorId: member.actorId,
       workspaceId: workspace.id,
       epoch: workspace.epoch,
-      projection,
+      projection: { ...projection, domain: revisionDomain },
     }));
     return { ...projection, revision };
   }
@@ -941,7 +1010,7 @@ export class CommandAuthority {
 }
 
 function commandAllowed(kind: CaseKind, type: string, trustedOperation: 'artifact-import' | null): boolean {
-  if (type === 'workspace.reset') return true;
+  if (type === 'workspace.reset' || type === 'workspace.rename') return true;
   if (type === 'invoice.import') return trustedOperation === 'artifact-import' && kind === 'invoice';
   return publicCommands[kind].has(type);
 }
@@ -951,9 +1020,4 @@ function isEmptyPayload(payload: unknown): boolean {
   return result.success;
 }
 
-function defaultWorkspaceTitle(kind: CaseKind): string {
-  if (kind === 'invoice') return 'Invoice Review';
-  if (kind === 'teaching') return 'Physics Lesson';
-  if (kind === 'table') return 'Shared Table';
-  return 'Encounter Table';
-}
+

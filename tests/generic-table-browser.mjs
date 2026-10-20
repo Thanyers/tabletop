@@ -276,17 +276,17 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const consentCopy = assistant.locator('.tt-ai-proposal__privacy');
   await expect(consentCopy).not.toHaveAttribute('open', '');
   await consentCopy.locator('summary').click();
-  await expect(consentCopy).toContainText('Your prompt, current rules, and all 1 private source file on this table go to the AI provider after you agree.');
-  await expect(consentCopy).toContainText('Shared records and member activity are excluded.');
-  await expect(consentCopy).toContainText('Original files and drafts stay private to you; active rules and records are shared.');
+  await expect(consentCopy).toContainText('Your prompt, current rules, shared records, and all 1 private source file on this table go to the AI provider after you agree.');
+  await expect(consentCopy).toContainText('Member profiles and activity are excluded.');
+  await expect(consentCopy).toContainText('Review the generated rules, views and records before sharing them through activation.');
   await assistant.getByLabel('How should this table work?').fill('Build a shared table from the source, with bounded actions and checks.');
   const ask = assistant.getByRole('button', { name: 'Prepare rule draft', exact: true });
   await expect(ask).toBeDisabled();
-  await assistant.getByLabel('Send this request and all 1 source file to AI.', { exact: true }).check();
+  await assistant.getByLabel('Send this request, table state and 1 source file to AI.', { exact: true }).check();
   setTableReply({ change, expectedFilename: source.filename, expectedText: source.text });
   await ask.click();
   await expect(assistant.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(assistant.getByLabel('Send this request and all 1 source file to AI.', { exact: true })).not.toBeChecked();
+  await expect(assistant.getByLabel('Send this request, table state and 1 source file to AI.', { exact: true })).not.toBeChecked();
   await expect(ask).toBeDisabled();
   await owner.reload();
   const refreshedAssistant = owner.getByTestId('table-assistant');
@@ -406,6 +406,9 @@ async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
   if (await requirements.count()) await expect(requirements).not.toHaveAttribute('open', '');
   for (const [label, value] of Object.entries(inputs)) await form.getByLabel(label, { exact: false }).selectOption(value);
   const responsePromise = page.waitForResponse((response) => isCommandResponse(response, 'table.act'));
+  // Keep a failed UI click as the primary error so the runner can save its
+  // screenshot; the response waiter is still awaited and must succeed below.
+  void responsePromise.catch(() => {});
   await form.getByRole('button', { name: actionTitle, exact: true }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(expectedStatus);
@@ -617,14 +620,14 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   const ownerAssistant = owner.getByTestId('table-assistant');
   const rulesMode = ownerAssistant.getByRole('button', { name: 'Open rules and sources', exact: true });
   if (await rulesMode.getAttribute('aria-pressed') !== 'true') await rulesMode.click();
-  const initialSourceConsent = ownerAssistant.getByLabel('Send this request and all 1 source file to AI.', { exact: true });
+  const initialSourceConsent = ownerAssistant.getByLabel('Send this request, table state and 1 source file to AI.', { exact: true });
   await initialSourceConsent.check();
   const sourcePrompt = ownerAssistant.getByLabel('How should this table work?', { exact: true });
   await sourcePrompt.fill('Check that approval consent follows the selected source files.');
   const prepareDraft = ownerAssistant.getByRole('button', { name: 'Prepare rule draft', exact: true });
   await expect(prepareDraft).toBeEnabled();
   await addSource(owner, room.id, equipmentNotes, api);
-  const updatedSourceConsent = ownerAssistant.getByLabel('Send this request and all 2 source files to AI.', { exact: true });
+  const updatedSourceConsent = ownerAssistant.getByLabel('Send this request, table state and 2 source files to AI.', { exact: true });
   await expect(updatedSourceConsent).not.toBeChecked();
   await expect(prepareDraft).toBeDisabled();
   await updatedSourceConsent.check();

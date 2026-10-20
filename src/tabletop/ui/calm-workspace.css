@@ -190,3 +190,11 @@
 }
 @media (max-width: 760px) { .tt-app .tt-main--with-assistant .tt-table-assistant-panel.is-collapsed[data-collapsed="true"] { right: 12px; bottom: 12px; } }
 @media (prefers-reduced-motion: reduce) { .tt-app .tt-assistant-bubble > svg { animation: none; } }
+
+/* Owner renames the table in place from the top bar (F002). */
+.tt-app .tt-workspace-picker { display: flex; align-items: center; gap: 2px; }
+.tt-app .tt-table-rename-trigger { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--tt-radius-small); color: var(--tt-muted); background: transparent; cursor: pointer; }
+.tt-app .tt-table-rename-trigger:hover:not(:disabled), .tt-app .tt-table-rename-trigger:focus-visible { color: var(--tt-ink); background: var(--tt-canvas); }
+.tt-app .tt-table-rename input { width: min(40vw, 420px); min-height: 40px; padding: 6px 10px; border: 1px solid var(--tt-moss); border-radius: var(--tt-radius-medium); background: var(--tt-card-surface); color: var(--tt-ink); font: inherit; font-size: 15px; font-weight: 650; }
+.tt-app .tt-table-rename input:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
+@media (max-width: 760px) { .tt-app .tt-table-rename input { width: 44vw; font-size: 13px; } }

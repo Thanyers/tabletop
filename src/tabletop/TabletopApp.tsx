@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowRight, BookOpen, Check, ChevronDown, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
@@ -13,6 +13,7 @@ import { TableAssistant } from './ui/TableAssistant';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
+import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHARS } from './shared/workspace-title';
 import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
@@ -67,11 +68,8 @@ function isTableWorkspaceView(view: WorkspaceView): view is WorkspaceView & { ki
 }
 
 function workspaceDisplayTitle(workspace: WorkspaceView): string {
-  if (workspace.kind === 'table' && workspace.domain.kind === 'table') {
-    const programTitle = workspace.domain.program?.title.trim();
-    if (programTitle) return programTitle;
-  }
-  return workspace.title;
+  const programTitle = workspace.kind === 'table' && workspace.domain.kind === 'table' ? workspace.domain.program?.title : undefined;
+  return displayWorkspaceTitle(workspace.kind, workspace.title, programTitle);
 }
 
 function workspaceLabel(workspace: WorkspaceView): string {
@@ -116,6 +114,7 @@ export default function TabletopApp() {
   const [starting, setStarting] = useState(true);
   // Which page shows while no table is open: the table list or the /new start page.
   const [page, setPage] = useState<'home' | 'new'>('home');
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const pageRef = useRef<'home' | 'new'>('home');
   pageRef.current = page;
   const [busy, setBusy] = useState<string | null>(null);
@@ -171,6 +170,7 @@ export default function TabletopApp() {
       setFocusSourceIds([]);
       setDraftPrompt('');
       setAiPrefill(undefined);
+      setRenameDraft(null);
     }
     if (previous?.id !== next?.id) {
       setInviteState(null);
@@ -439,7 +439,7 @@ export default function TabletopApp() {
   const leaveStartPage = useCallback(() => setPage('home'), []);
 
   // A typed description starts an empty shared table and waits in its rule draft;
-  // nothing reaches the model until the owner adds a source and consents.
+  // nothing reaches the model until the owner consents; source files are optional.
   const startFromDescription = useCallback(async (description: string) => {
     const created = await createWorkspace('table');
     if (created) setAiPrefill({ text: description, key: Date.now() });
@@ -725,6 +725,18 @@ export default function TabletopApp() {
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
   const canInvite = view.kind === 'table' ? view.actor.role === 'owner' && !tableReadOnly : view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
   const canReset = ['owner', 'teacher', 'dm'].includes(view.actor.role) && !tableReadOnly;
+  const canRename = canReset;
+  const submitRename = () => {
+    if (renameDraft === null) return;
+    const title = normalizeWorkspaceTitle(renameDraft);
+    if (title === null) {
+      showNotice(`A table name needs 1 to ${WORKSPACE_TITLE_MAX_CHARS} characters without line breaks.`, 'error');
+      return;
+    }
+    setRenameDraft(null);
+    if (title === workspaceLabel(view)) return;
+    void runCommand('workspace.rename', { title }).then((renamed) => { if (renamed) showNotice(`Table renamed to ${title}.`, 'success'); });
+  };
   const canAskAI = ((view.kind === 'invoice' || view.kind === 'table') && view.actor.role === 'owner') || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
   const connectedSeats = new Set(view.members.map((member) => member.seat).filter(Boolean));
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : view.kind === 'table' ? ['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] : [];
@@ -761,7 +773,16 @@ export default function TabletopApp() {
         <a className="tt-brand" href="/" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
         <span className="tt-topbar__divider" aria-hidden="true" />
         <div className="tt-workspace-picker">
-          <button type="button" className="tt-workspace-picker__button" aria-label={`Tables: ${workspaceLabel(view)}`} aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
+          {renameDraft !== null ? <form className="tt-table-rename" onSubmit={(event) => { event.preventDefault(); submitRename(); }}>
+            <label className="tt-visually-hidden" htmlFor="tt-table-rename-input">Table name</label>
+            <input id="tt-table-rename-input" value={renameDraft} maxLength={WORKSPACE_TITLE_MAX_CHARS} autoFocus onFocus={(event) => event.currentTarget.select()}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); setRenameDraft(null); } }}
+              onBlur={submitRename} />
+          </form> : <>
+            <button type="button" className="tt-workspace-picker__button" aria-label={`Tables: ${workspaceLabel(view)}`} aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
+            {canRename && <button type="button" className="tt-table-rename-trigger" aria-label="Rename table" title="Rename table" disabled={busy !== null} onClick={() => { setWorkspaceMenuOpen(false); setRenameDraft(workspaceLabel(view)); }}><Pencil size={14} /></button>}
+          </>}
           {workspaceMenuOpen && <>
             <button className="tt-menu-dismiss" type="button" aria-label="Close table menu" onClick={() => setWorkspaceMenuOpen(false)} />
             <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span><button role="menuitem" type="button" onClick={openStartPage}><Plus size={15} /><span><strong>New table</strong><small>Choose a prepared table or describe your own</small></span><ArrowRight size={14} /></button><hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>

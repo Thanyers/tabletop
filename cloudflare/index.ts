@@ -6,6 +6,7 @@ import { AuthorityError, safeError } from '../server/errors.js';
 import { accountForSession, authenticateRequest, authStatus, finishGoogle, limit, logout, primary, publicOrigin, requireMutation, requireOrigin, startGoogle } from './auth.js';
 import { GOOGLE_CALLBACK_PATH, type DirectoryReference, type Env } from './contracts.js';
 import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
+import { displayWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 export { Room } from './room.js';
 export { Billing } from './billing.js';
 
@@ -63,10 +64,8 @@ async function sessionView(request: Request, env: Env): Promise<Response> {
       return response.json<WorkspaceView>();
     }));
     for (const view of views) if (view) {
-      const programTitle = view.kind === 'table' && view.domain.kind === 'table'
-        ? view.domain.program?.title.trim()
-        : undefined;
-      workspaces.push({ id: view.id, title: programTitle || view.title, kind: view.kind, role: view.actor.role });
+      const programTitle = view.kind === 'table' && view.domain.kind === 'table' ? view.domain.program?.title : undefined;
+      workspaces.push({ id: view.id, title: displayWorkspaceTitle(view.kind, view.title, programTitle), kind: view.kind, role: view.actor.role });
     }
   }
   return Response.json({ csrfToken: session.csrfToken, actorId: session.record.actorId, name: session.record.name,

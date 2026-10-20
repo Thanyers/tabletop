@@ -1,16 +1,22 @@
 import { z } from 'zod';
-import { DomainError, type ActorContext } from '../shared/contracts';
+import { DomainError, type ActorContext, type Seat } from '../shared/contracts';
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue } from '../shared/table-contracts';
-import { assert, canonicalJson, hasRole, parsePayload } from './helpers';
+import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
+import { assert, canonicalJson, hasRole, ID_SCHEMA, parsePayload } from './helpers';
+import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
+import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
+import { expressionWithinBounds, getGenerativeExpressionType, validateGenerativeProgram } from '../runtime/generative/validation';
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
-const id = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/).refine(x => !['constructor', 'prototype', '__proto__'].includes(x));
+const forbiddenIdentifiers = new Set<string>(GENERATIVE_FORBIDDEN_IDENTIFIERS);
+const id = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/).refine(x => !forbiddenIdentifiers.has(x));
 const text = z.string().min(1).max(500);
 const value: z.ZodType<TableValue> = z.union([z.string().max(500), z.number().finite().min(-1e9).max(1e9), z.boolean(), z.null(), z.array(z.string().max(100)).max(32)]);
+const bytes = (s: string) => new TextEncoder().encode(s).byteLength;
 const fieldSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'list']), required: z.boolean(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional() });
 const parameterSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'record']), collection: id.optional(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional() });
-const operand: z.ZodType<TableOperand> = z.union([z.strictObject({ literal: value }), z.strictObject({ input: id }), z.strictObject({ record: id, field: id }), z.strictObject({ system: z.enum(['actor', 'seat', 'turn']) })]);
+const operand: z.ZodType<TableOperand> = z.union([z.strictObject({ literal: value }), z.strictObject({ input: id }), z.strictObject({ record: id, field: id }), z.strictObject({ system: z.enum(['actor', 'seat', 'turn']) }), z.strictObject({ expression: generativeExpressionSchema })]);
 export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
   version: z.literal(1), title: z.string().min(1).max(100), description: text,
   collections: z.array(z.strictObject({ id, title: text, fields: z.array(fieldSchema).min(1).max(12) })).min(1).max(6),
@@ -25,12 +31,21 @@ export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
   turnOrder: z.array(z.string().regex(/^(host|member-[1-7])$/)).max(8),
   evidence: z.array(z.strictObject({ sourceId: z.string().min(1).max(100), quote: z.string().min(1).max(500) })).max(20),
   assumptions: z.array(text).max(12),
+  canvas: generativeCanvasSchema.optional(),
 });
-const rowSchema = z.strictObject({ id, values: z.record(id, value) });
-export const tableChangeSchema = z.strictObject({ kind: z.literal('table'), program: tableProgramSchema, initialRecords: z.record(id, z.array(rowSchema).max(100)) });
+export const tableRowSchema = z.strictObject({ id, values: z.record(id, value) });
+export const tableRecordsSchema = z.record(id, z.array(tableRowSchema).max(100)).superRefine((records, ctx) => {
+  const rowCount = Object.values(records).reduce((count, rows) => count + rows.length, 0);
+  if (rowCount > 200) ctx.addIssue({ code: 'custom', message: 'A table supports at most 200 records.' });
+  if (bytes(JSON.stringify(records)) > 128 * 1024) ctx.addIssue({ code: 'custom', message: 'The records exceed the 128 KiB table limit.' });
+});
+export const tableChangeSchema = z.strictObject({ kind: z.literal('table'), program: tableProgramSchema, initialRecords: tableRecordsSchema });
+export function parseBoundedTableChange(value: unknown): TableChange {
+  assert(expressionWithinBounds(value), 'TABLE_LIMIT', 'The generated expressions exceed deterministic depth, node, or array limits.');
+  return parsePayload(tableChangeSchema, value);
+}
 const sourceInput = z.strictObject({ filename: z.string().min(1).max(120).regex(/^[^/\\\p{Cc}]+\.(csv|json|txt|md)$/iu), text: z.string().min(1).max(TABLE_FILE_BYTES) });
 const runInput = z.strictObject({ actionId: id, inputs: z.record(id, value) });
-const bytes = (s: string) => new TextEncoder().encode(s).byteLength;
 
 export function createTableState(): TableState {
   return { kind: 'table', sources: [], program: null, records: {}, turn: null, actionRevision: 0, activity: [], dataRevision: 0, ruleRevision: 0, candidate: null, revisions: [] };
@@ -90,6 +105,7 @@ function checkProgram(program: TableProgram) {
     }
     const operandType = (o: TableOperand): string => {
       if ('literal' in o) return o.literal === null ? 'null' : Array.isArray(o.literal) ? 'list' : typeof o.literal === 'string' ? 'text' : typeof o.literal;
+      if ('expression' in o) return getGenerativeExpressionType(o.expression, program, action);
       if ('system' in o) return 'text';
       if ('record' in o) return resolveField(o.record, o.field).type;
       const p = action.parameters.find(p => p.id === o.input); assert(p, 'TABLE_SCHEMA', 'Unknown input reference.'); return p.type === 'record' ? 'text' : p.type;
@@ -109,12 +125,15 @@ function checkProgram(program: TableProgram) {
   }
 }
 
-export function applyTableChange(state: TableState, raw: TableChange): TableState {
-  const change = parsePayload(tableChangeSchema, raw);
+export function applyTableChange(state: TableState, raw: TableChange, actor?: Pick<ActorContext, 'actorId' | 'seat'>): TableState {
+  const change = parseBoundedTableChange(raw);
   assert(bytes(JSON.stringify(change.program)) <= 64 * 1024 && bytes(JSON.stringify(change.initialRecords)) <= 128 * 1024, 'TABLE_LIMIT', 'The proposed rules or records exceed the table size limit.');
   checkProgram(change.program);
-  assert(change.program.evidence.length > 0, 'TABLE_EVIDENCE', 'Cite at least one uploaded source.');
-  for (const evidence of change.program.evidence) assert(state.sources.some(s => s.id === evidence.sourceId && s.text.includes(evidence.quote)), 'TABLE_EVIDENCE', 'A cited quotation is missing from the source.');
+  if (state.sources.length === 0) assert(change.program.evidence.length === 0, 'TABLE_EVIDENCE', 'Prompt-only tables cannot cite a source that is not on the table.');
+  else {
+    assert(change.program.evidence.length > 0, 'TABLE_EVIDENCE', 'Cite at least one uploaded source.');
+    for (const evidence of change.program.evidence) assert(state.sources.some(s => s.id === evidence.sourceId && s.text.includes(evidence.quote)), 'TABLE_EVIDENCE', 'A cited quotation is missing from the source.');
+  }
   if (state.program) {
     assert(Object.keys(change.initialRecords).length === 0, 'TABLE_PRESERVE_DATA', 'A rule edit must preserve current records; initialRecords must be empty.');
     assert(canonicalJson(state.program.collections) === canonicalJson(change.program.collections), 'TABLE_PRESERVE_DATA', 'A rule edit must retain the current collections and field definitions.');
@@ -123,15 +142,115 @@ export function applyTableChange(state: TableState, raw: TableChange): TableStat
   const records = structuredClone(state.program ? state.records : change.initialRecords);
   for (const c of change.program.collections) records[c.id] ??= [];
   checkRows(change.program, records);
-  return { ...structuredClone(state), program: structuredClone(change.program), records, turn: state.turn ?? change.program.turnOrder[0] ?? null };
+  const generativeIssues = validateGenerativeProgram(change.program, records);
+  assert(generativeIssues.length === 0, 'TABLE_SCHEMA', generativeIssues[0] ?? 'Generated table program is invalid.');
+  const turn = state.turn ?? change.program.turnOrder[0] ?? null;
+  validateGenerativeOutput(change.program, records, actor ? { actor: actor.actorId, ...(actor.seat ? { seat: actor.seat } : {}), turn } : undefined);
+  return { ...structuredClone(state), program: structuredClone(change.program), records, turn };
 }
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
 }
-function resolve(action: TableAction, state: TableState, inputs: Record<string, TableValue>, o: TableOperand, ctx: ActorContext): TableValue {
+function isGenerativeArray(value: GenerativeOutput): value is readonly GenerativeScalar[] { return Array.isArray(value); }
+const GENERATIVE_SEATS = ['learner-1', 'learner-2', 'mira', 'pip', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] as const satisfies readonly Seat[];
+const MAX_SUPPORTED_ACTOR_ID_LENGTH = 160; // ID_SCHEMA permits actor IDs up to this length.
+const MAX_ACTOR_ID = '\u0000'.repeat(MAX_SUPPORTED_ACTOR_ID_LENGTH); // JSON escapes each NUL as six UTF-8 bytes.
+const MAX_GENERATIVE_VALIDATION_CONTEXTS = 64;
+
+interface GenerativeValidationContext {
+  actor: string;
+  seat?: Seat;
+  turn: string | null;
+}
+
+function generativeValidationContexts(program: TableProgram, canvas: NonNullable<TableProgram['canvas']>, actualContext?: GenerativeValidationContext): GenerativeValidationContext[] {
+  const systemValues = new Set<'actor' | 'seat' | 'turn'>();
+  const actorCandidates = new Set<string>([MAX_ACTOR_ID, 'host', ...GENERATIVE_SEATS, ...program.turnOrder]);
+  const pending: unknown[] = [canvas];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (Array.isArray(current)) {
+      pending.push(...current);
+    } else if (current && typeof current === 'object') {
+      const object = current as Record<string, unknown>;
+      if (object.op === 'system' && (object.value === 'actor' || object.value === 'seat' || object.value === 'turn')) systemValues.add(object.value);
+      if (object.op === 'literal') {
+        const literal = object.value;
+        const values = typeof literal === 'string' ? [literal] : Array.isArray(literal) ? literal : [];
+        for (const value of values) if (typeof value === 'string' && ID_SCHEMA.safeParse(value).success) actorCandidates.add(value);
+      }
+      pending.push(...Object.values(object));
+    }
+  }
+
+  const maximumSeat = [...GENERATIVE_SEATS].sort((left, right) => right.length - left.length)[0];
+  const maximumTurn = [...program.turnOrder].sort((left, right) => right.length - left.length)[0] ?? null;
+  const contexts: GenerativeValidationContext[] = [];
+  const seen = new Set<string>();
+  const add = (context: GenerativeValidationContext) => {
+    const key = JSON.stringify([context.actor, context.seat ?? null, context.turn]);
+    if (!seen.has(key)) {
+      assert(contexts.length < MAX_GENERATIVE_VALIDATION_CONTEXTS, 'TABLE_GENERATIVE', `Canvas identity validation is limited to ${MAX_GENERATIVE_VALIDATION_CONTEXTS} contexts.`);
+      seen.add(key);
+      contexts.push(context);
+    }
+  };
+
+  // Probe maximum supported lengths and values that can select explicit system-value branches.
+  // These axis-wise probes are deliberately bounded and are not an exhaustive proof over every
+  // possible conjunction of system values or data-dependent comparison.
+  if (systemValues.has('actor')) {
+    for (const actor of actorCandidates) add({ actor, seat: maximumSeat, turn: maximumTurn });
+  }
+  if (systemValues.has('seat')) {
+    add({ actor: MAX_ACTOR_ID, turn: maximumTurn }); // An omitted seat evaluates to "host".
+    for (const seat of GENERATIVE_SEATS) add({ actor: MAX_ACTOR_ID, seat, turn: maximumTurn });
+  }
+  if (systemValues.has('turn')) {
+    add({ actor: MAX_ACTOR_ID, seat: maximumSeat, turn: null });
+    for (const turn of program.turnOrder) add({ actor: MAX_ACTOR_ID, seat: maximumSeat, turn });
+  }
+
+  // Equality between system values can select a branch when their values coincide. Probe each
+  // supported shared value without constructing the full actor × seat × turn product.
+  const sharedValues = new Set(['host', ...GENERATIVE_SEATS, ...program.turnOrder]);
+  for (const value of sharedValues) {
+    const seat = (GENERATIVE_SEATS as readonly string[]).includes(value) ? value as Seat : undefined;
+    const turn = program.turnOrder.includes(value) ? value : null;
+    if (systemValues.has('actor') && (systemValues.has('seat') || systemValues.has('turn'))) add({ actor: value, ...(seat ? { seat } : {}), turn });
+    if (systemValues.has('seat') && systemValues.has('turn') && seat && program.turnOrder.includes(value)) add({ actor: MAX_ACTOR_ID, seat, turn: value });
+  }
+  if (actualContext) add(actualContext);
+  if (contexts.length === 0) add({ actor: MAX_ACTOR_ID, seat: maximumSeat, turn: maximumTurn });
+  return contexts;
+}
+
+function validateGenerativeOutput(program: TableProgram, records: Record<string, TableRecord[]>, actualContext?: GenerativeValidationContext): void {
+  if (!program.canvas) return;
+  try {
+    for (const context of generativeValidationContexts(program, program.canvas, actualContext)) {
+      evaluateGenerativeCanvas(program.canvas, { program, records, ...context });
+    }
+  } catch (error) {
+    throw new DomainError('TABLE_GENERATIVE', error instanceof Error ? error.message : 'The generated canvas could not be evaluated.');
+  }
+}
+function resolve(action: TableAction, state: TableState, inputs: Record<string, TableValue>, o: TableOperand, ctx: ActorContext, evaluateExpression: (expression: GenerativeExpression) => GenerativeOutput): TableValue {
   if ('literal' in o) return o.literal;
   if ('system' in o) return o.system === 'actor' ? ctx.actorId : o.system === 'seat' ? ctx.seat ?? 'host' : state.turn;
   if ('input' in o) return inputs[o.input];
+  if ('expression' in o) {
+    let output: GenerativeOutput;
+    try {
+      output = evaluateExpression(o.expression);
+    } catch (error) {
+      throw new DomainError('TABLE_EXPRESSION', error instanceof Error ? error.message : 'The expression could not be evaluated.');
+    }
+    if (!isGenerativeArray(output)) return output;
+    const strings: string[] = [];
+    for (const value of output) { assert(typeof value === 'string', 'TABLE_VALUE', 'Only text arrays can be stored in table list fields.'); strings.push(value); }
+    return strings;
+  }
   const p = action.parameters.find(p => p.id === o.record)!;
   return state.records[p.collection!].find(row => row.id === inputs[o.record])!.values[o.field] ?? null;
 }
@@ -178,7 +297,8 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     else assert(validValue({ ...p, type: p.type, required: true }, v), 'TABLE_INPUT', `${p.label} is invalid.`);
   }
   assert(!action.requireTurn || state.turn === (ctx.seat ?? 'host'), 'TABLE_TURN', 'Wait for your turn.');
-  for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, input.inputs, c.left, ctx), resolve(action, state, input.inputs, c.right, ctx)), 'TABLE_CONDITION', c.message);
+  const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: input.inputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn });
+  for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, input.inputs, c.left, ctx, evaluateExpression), resolve(action, state, input.inputs, c.right, ctx, evaluateExpression)), 'TABLE_CONDITION', c.message);
   const next = structuredClone(state), touched = new Set<string>();
   // Resolve all effects against the same before-state. A swap is one atomic action.
   for (const effect of action.effects) {
@@ -186,12 +306,13 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const row = next.records[p.collection!].find(row => row.id === input.inputs[p.id])!;
     const key = `${p.collection}.${row.id}.${effect.field}`;
     assert(!touched.has(key), 'TABLE_INPUT', 'Two parameters point at the same effect target.'); touched.add(key);
-    const resolved = resolve(action, state, input.inputs, effect.value, ctx);
+    const resolved = resolve(action, state, input.inputs, effect.value, ctx, evaluateExpression);
     if (effect.op === 'add') { const old = row.values[effect.field]; assert(typeof old === 'number' && typeof resolved === 'number', 'TABLE_VALUE', 'Only numeric values can be added.'); row.values[effect.field] = old + resolved; }
     else row.values[effect.field] = structuredClone(resolved);
   }
   checkRows(program, next.records);
   if (action.advanceTurn) next.turn = program.turnOrder[(program.turnOrder.indexOf(state.turn ?? '') + 1) % program.turnOrder.length];
+  validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
   next.dataRevision += 1; next.actionRevision = (next.actionRevision ?? 0) + 1; next.candidate = null;
   assert(Number.isSafeInteger(next.actionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
   next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-100);

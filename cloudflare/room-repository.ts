@@ -757,7 +757,7 @@ export class RoomRepository implements WorkspaceRepository {
       `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? AND actor_id = ?
        AND json_extract(data, '$.kind') = 'table-assistant' AND status = 'completed'
        ORDER BY created_at DESC, id DESC LIMIT ?`,
-      workspaceId, epoch, actorId, Math.max(1, Math.min(6, Math.trunc(limit))),
+      workspaceId, epoch, actorId, Math.max(1, Math.min(100, Math.trunc(limit))),
     ).map(mapModelJob));
   }
 

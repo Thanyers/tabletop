@@ -47,7 +47,7 @@ export function StartPage({ header, notice, busy, tableReadOnly, renderIcon, onC
           onChange={(event) => setDescription(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) event.currentTarget.form?.requestSubmit(); }} />
         <div className="tt-start-page__describe-foot">
-          <small>Creates an empty shared table and keeps this description for drafting its rules. Nothing is sent to AI until you add a file and agree.</small>
+          <small>Creates an empty shared table and keeps this description for drafting its rules. Add a file if useful; nothing is sent to AI until you agree.</small>
           <button type="submit" className="tt-button tt-button--primary" disabled={!trimmed || busy || tableReadOnly}>{busy ? <LoaderCircle size={15} className="tt-spin" /> : <ArrowRight size={15} />}Start with this</button>
         </div>
       </form>

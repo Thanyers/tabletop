@@ -17,6 +17,8 @@ import { calculatePhysics, physicsParamsSchema } from './physics';
 import { assert, canonicalJson, hash, hasRole, parsePayload } from './helpers';
 import { makeTeachingQuestionId } from './teaching';
 import { applyTableChange, tableChangeIssues, tableChangeSchema } from './table';
+import { jsonWithinBudget } from '../shared/json-budget';
+import { expressionWithinBounds } from '../runtime/generative';
 
 const changeSchema = z.discriminatedUnion('kind', [
   invoiceChangeSchema,
@@ -46,7 +48,10 @@ function sourceHash(state: DomainState, ctx: ActorContext): string {
 }
 
 function planDelta(change: ChangeSet): unknown {
-  if (change.kind === 'table') return { version: 1, kind: 'table', collections: change.program.collections, actions: change.program.actions.map(a => a.id) };
+  if (change.kind === 'table') return {
+    version: 1, kind: 'table', collections: change.program.collections, actions: change.program.actions.map(a => a.id),
+    ...(change.program.canvas ? { canvas: change.program.canvas } : {}),
+  };
   if (change.kind !== 'invoice' || !change.operations.some((operation) => operation.op === 'setSurcharge')) return { version: 1, kind: 'none' };
   return {
     version: 1,
@@ -125,7 +130,7 @@ function simulateEncounter(rule: EncounterRule): { target: 'pip'; preHitHp: 10; 
 
 function simulationFor(state: DomainState, change: ChangeSet, ctx: ActorContext): { before: unknown; after: unknown; checks: ValidationCheck[] } {
   if (state.kind === 'table' && change.kind === 'table') {
-    const after = applyTableChange(state, change);
+    const after = applyTableChange(state, change, ctx);
     const summarize = (s: typeof state) => ({ collections: s.program?.collections.length ?? 0, actions: s.program?.actions.length ?? 0, rowCount: Object.values(s.records).reduce((n, rows) => n + rows.length, 0), turn: s.turn, recordsHash: hash(ctx, s.records) });
     return { before: summarize(state), after: summarize(after), checks: [] };
   }
@@ -238,7 +243,7 @@ function makeRevision(state: DomainState, candidate: Candidate, ctx: ActorContex
 }
 
 function nextStateWithChange(state: DomainState, candidate: Candidate, ctx: ActorContext): DomainState {
-  const next = state.kind === 'table' && candidate.change.kind === 'table' ? applyTableChange(state, candidate.change) : structuredClone(state);
+  const next = state.kind === 'table' && candidate.change.kind === 'table' ? applyTableChange(state, candidate.change, ctx) : structuredClone(state);
   if (next.kind === 'invoice' && candidate.change.kind === 'invoice') next.rules = applyInvoiceOperations(next, candidate.change.operations);
   if (next.kind === 'teaching' && candidate.change.kind === 'teaching') {
     next.parameters = structuredClone(candidate.change.parameters);
@@ -311,6 +316,7 @@ function restoreRevision(state: DomainState, revision: number): ChangeSet {
 export function handleEvolutionCommand(state: DomainState, type: string, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } | null {
   if (type === 'evolve.propose') {
     requireCaseRole(state, ctx);
+    assert(jsonWithinBudget(payload) && expressionWithinBounds(payload), 'INVALID_PAYLOAD', 'The candidate exceeds the allowed structure or expression depth.');
     const input = parsePayload(proposeSchema, payload);
     assertChangeMatchesState(state, input.change);
     return { state: proposeCandidate(state, input.change, ctx), label: 'Candidate created against the current data and rule revisions.' };

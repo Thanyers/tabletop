@@ -101,20 +101,27 @@ export function TableSurface({
       for (const type of events) panel.removeEventListener(type, restart);
     };
   }, [hasAssistant, assistantCollapsed, idleMs]);
+  const focusAssistantInput = useCallback(() => {
+    const panel = assistantPanelRef.current;
+    const input = panel?.querySelector<HTMLTextAreaElement>('#tt-table-chat-prompt:not(:disabled)')
+      ?? panel?.querySelector<HTMLTextAreaElement>('#tt-ai-prompt:not(:disabled)')
+      ?? panel?.querySelector<HTMLTextAreaElement>('textarea:not([disabled])');
+    input?.focus();
+  }, []);
   const expandAssistant = useCallback(() => {
     setAssistantCollapsed(false);
-    window.requestAnimationFrame(() => assistantPanelRef.current?.querySelector<HTMLElement>('textarea:not([disabled])')?.focus());
-  }, []);
+    window.requestAnimationFrame(focusAssistantInput);
+  }, [focusAssistantInput]);
   const focusCanvasObject = useMemo(() => onFocusObject ?? (onOpenObject ? (id: string) => { onSelectNode(id); onOpenObject(id); } : undefined), [onFocusObject, onOpenObject, onSelectNode]);
   const mergedAuxiliaryObjects = useMemo(() => {
     const merged = new Map(createCanvasAuxiliaryObjects({ view, onCommand, busy, onInvite, aiContent, onFocusObject: focusCanvasObject }).map((object) => [object.id, object]));
     for (const object of auxiliaryObjects ?? []) merged.set(object.id, object);
     if (assistantContent) merged.set('workspace.ai', {
       id: 'workspace.ai', title: 'Assistant',
-      content: <div className="tt-canvas-inline"><p>Questions, ideas and rule drafts for this table.</p><button type="button" className="tt-button tt-button--quiet" onClick={() => { const input = document.getElementById('tt-table-chat-prompt') ?? document.getElementById('tt-ai-prompt'); input?.focus(); }}><MessageCircle size={15} />Write a message</button></div>,
+      content: <div className="tt-canvas-inline"><p>Questions, ideas and rule drafts for this table.</p><button type="button" className="tt-button tt-button--quiet" onClick={expandAssistant}><MessageCircle size={15} />Write a message</button></div>,
     });
     return [...merged.values()];
-  }, [view, onCommand, busy, onInvite, aiContent, assistantContent, focusCanvasObject, auxiliaryObjects]);
+  }, [view, onCommand, busy, onInvite, aiContent, assistantContent, focusCanvasObject, auxiliaryObjects, expandAssistant]);
   const layoutSurface = view.kind === 'table' && assistantContent ? 'canvas' : surface;
 
   return (
