@@ -1,6 +1,6 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **20 ตุลาคม 2026 เวลา 11:33 น. (Asia/Bangkok)** ทั้งสอง environment ตอบ health/readiness/capabilities ผ่าน และไฟล์ที่ให้บริการทั้ง **131 ไฟล์** ตรงกับ build ชุดเดียวกัน `GET /version` รายงาน `sha: 9fbfdec` ตรงกับ source ด้านล่าง เป็นผล ณ เวลาตรวจ ไม่ใช่ระบบติดตาม uptime
+ตรวจออนไลน์ล่าสุด **20 ตุลาคม 2026 เวลา 12:15 น. (Asia/Bangkok)** ทั้งสอง environment ตอบ health/readiness/capabilities ผ่าน และไฟล์ที่ให้บริการทั้ง **135 ไฟล์** ตรงกับ build ชุดเดียวกัน `GET /version` รายงาน `sha: 524d9cc` ตรงกับ source ด้านล่าง เป็นผล ณ เวลาตรวจ ไม่ใช่ระบบติดตาม uptime
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
@@ -8,8 +8,8 @@
 | Worker | `tabletop` | `tabletop-staging` |
 | D1 | `tabletop-production` | `tabletop-staging` |
 | Durable Objects | `Room`, `Billing` ของ production | `Room`, `Billing` ใน namespace แยก |
-| Source commit | [`9fbfdec`](https://github.com/Thanyers/tabletop/commit/9fbfdec84e5fd7c3c98e8cdda9b83d85df1cbeba) — รวม PR #9 และ #10 | [`9fbfdec`](https://github.com/Thanyers/tabletop/commit/9fbfdec84e5fd7c3c98e8cdda9b83d85df1cbeba) — build ชุดเดียวกัน |
-| Worker version | `e3f93a51-1be9-4bb9-9369-c2687cbfb1ab` | `d7282778-2c2d-463d-960b-bb429dd4d287` |
+| Source commit | [`524d9cc`](https://github.com/Thanyers/tabletop/commit/524d9cc21198a748ca2dca50d3190e392aec7ed5) — PR #13 | [`524d9cc`](https://github.com/Thanyers/tabletop/commit/524d9cc21198a748ca2dca50d3190e392aec7ed5) — build ชุดเดียวกัน |
+| Worker version | `6277ed24-279d-4c47-b868-fd420f0b05f8` | `923a8a9f-01a4-4d67-a8ab-e855c8def8e7` |
 | แผนที่เลือก | Workers Free | ใช้บัญชี Free เดียวกัน; quota อาจใช้ร่วมระดับบัญชี |
 | เพดาน AI ในแอป | USD 1/วัน UTC และ USD 10/เดือน UTC | USD 0.20/วัน UTC และ USD 0.20/เดือน UTC |
 
@@ -19,19 +19,20 @@ GitHub repository เป็น **public**: [Thanyers/tabletop](https://github.co
 
 ## ผลตรวจ release ล่าสุด
 
-[PR #9](https://github.com/Thanyers/tabletop/pull/9) ปรับเรื่องเล่าตาม [แนวคิดผลิตภัณฑ์](../product.md) และข้อความเริ่มงานสามจุด: **What are you here to do?**, **Start with what you're working on. Your table will take shape around it.**, **Or explore what a table can become** ส่วน [PR #10](https://github.com/Thanyers/tabletop/pull/10) เพิ่มจุดอ่านเลขรุ่น `GET /version` สำหรับยืนยัน build
+[PR #13](https://github.com/Thanyers/tabletop/pull/13) เพิ่มหน้าเล่าแนวคิดสำหรับคนที่ยังไม่ล็อกอิน พร้อมภาพ Remotion การงอกของเครื่องมือ ตัวอย่างงาน/การเรียนรู้/การเล่น ขอบเขต beta และทางเข้า Google/เดโมเดิม หลังล็อกอินยังใช้ข้อความเริ่มงานและ Canvas เดิม ไม่มีข้อความขายเพิ่ม ดู [Public welcome acceptance](PUBLIC_WELCOME_ACCEPTANCE.md)
 
-เมื่อเทียบกับรุ่น production ก่อนหน้า โค้ดกฎการเล่น สิทธิ์ สมาชิก และการเก็บข้อมูลไม่เปลี่ยน ไม่มี schema/migration, secrets, bindings หรืองบ AI เปลี่ยน มีเพียงการเพิ่ม `/version` ในรายการเส้นทางที่ Worker จัดการ ก่อนส่ง staging สร้าง build จาก clean source แล้วผูก source tree กับ asset manifest; production ใช้ไฟล์ชุดเดียวกับ staging ที่ตรวจแล้ว
+เมื่อเทียบกับรุ่น production ก่อนหน้า โค้ดกฎการเล่น สิทธิ์ สมาชิก และการเก็บข้อมูลไม่เปลี่ยน ไม่มี schema/migration, secrets, bindings, เส้นทาง Worker หรืองบ AI เปลี่ยน ตรวจ tree ของ merge ให้ตรงกับ candidate ที่ผ่าน CI แล้วสร้าง build และผูก source tree กับ asset manifest; production ใช้ไฟล์ชุดเดียวกับ staging ที่ตรวจแล้ว
 
-- [CI ของ source ที่ deploy](https://github.com/Thanyers/tabletop/actions/runs/39368620190) ผ่าน unit/local SQL, Cloudflare, Component Lab, build/secret scan, persona demos และ browser acceptance ของ Node/Workers; fixture ไม่ได้เรียก Google หรือ AI provider จริง
-- ทั้งสอง environment ผ่าน health/readiness/capabilities, `/version` ตรงกับ source และ hash ไฟล์เว็บ 131 ไฟล์ตรงกับ build; bindings/settings เดิมครบ
-- ตรวจหน้าเริ่มงานผ่าน browser ที่ล็อกอินอยู่จริงทั้ง staging และ production: ข้อความใหม่ครบ ปุ่ม **Start with your files** ยังอยู่ เปิดส่วนตัวอย่างได้ครบสามแบบ และยังเห็นโต๊ะเดิมสี่ห้อง
-- Staging: เปิด River Race เดิมแบบอ่านอย่างเดียว กฎ active r2, data r8, คะแนน 11/9, เทิร์น member-1 และประวัติ 9 รายการยังอยู่
+- [CI ของ candidate ที่มี tree ตรงกับรุ่นที่ deploy](https://github.com/Thanyers/tabletop/actions/runs/39373019632) ผ่าน unit/local SQL, Cloudflare, Component Lab, build/secret scan, persona demos และ browser acceptance ของ Node/Workers รวมกรณี anonymous/login/invite เดิมและใหม่; fixture ไม่ได้เรียก Google หรือ AI provider จริง
+- ทั้งสอง environment ผ่าน health/readiness/capabilities, `/version` ตรงกับ source และ hash ไฟล์เว็บ 135 ไฟล์ตรงกับ build; bindings/settings เดิมครบ
+- ตรวจหน้า production จาก browser ที่ยังไม่ล็อกอินจริง: เรื่องเล่าใหม่และ Google link ถูกต้อง ไม่มี Canvas, ภาพนิ่งเปิดได้ และ viewport 1280×900 กับ 390×844 ไม่มีแนวนอนล้น
+- ตรวจหน้าเริ่มงานผ่าน browser ที่ล็อกอินอยู่จริงทั้ง staging และ production: **What are you here to do?** กับ **Start with your files** ยังอยู่ และไม่มี public welcome
+- Staging: เปิด Shift Swap เดิมแบบอ่านอย่างเดียว กฎ active r1, data r2, 3 records และประวัติ 2 รายการยังอยู่
 - Production: เปิด Encounter Table เดิมแบบอ่านอย่างเดียว HP Mira/Pip/Goblin = 10/10/6, AP = 2/2/2, เทิร์น Goblin และกฎ ally shield r1 เดิมยังอยู่
 - รอบนี้ไม่ได้สร้างห้อง ทำ action อัปโหลดไฟล์ หรือเรียก AI; ไม่ได้ทดสอบ Google sign-in ใหม่หรือเล่นสองบัญชีรอบใหม่ หลักฐานการเล่นสองบัญชีและ Helpdesk จากไฟล์ใหม่อยู่ใน [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) และประวัติรุ่นก่อนหน้า
 - SKIPPED: physical touch device, automated axe / full contrast / screen-reader audit, load/soak, restart/restore drill และรอบเล่นเต็มเพิ่มเติม
 
-การกลับเข้าห้องเดิมหลัง deploy ยังไม่ใช่หลักฐาน server restart recovery, load test หรือการกู้คืน D1 + Room + Billing ทั้งระบบ หลักฐาน operator ที่มีข้อมูลห้อง/บัญชีอยู่ใน ignored local `test-results/concept-release-2026-10-20/` พร้อมรุ่นก่อนหน้าสำหรับ rollback ที่เข้ากันได้ รอบนี้ไม่ต้องใช้ rollback
+การกลับเข้าห้องเดิมหลัง deploy ยังไม่ใช่หลักฐาน server restart recovery, load test หรือการกู้คืน D1 + Room + Billing ทั้งระบบ หลักฐาน operator อยู่ใน ignored local `test-results/public-welcome-2026-10-20/` พร้อมรุ่นก่อนหน้าสำหรับ rollback ที่เข้ากันได้ รอบนี้ไม่ต้องใช้ rollback
 
 ## สิ่งที่ใช้และค่าใช้จ่าย
 
@@ -56,5 +57,6 @@ GitHub repository เป็น **public**: [Thanyers/tabletop](https://github.co
 | 19 ต.ค. `6216eb3` | Canvas flow, draft lifecycle, ผลตรวจบิลและการปฏิเสธ blank action text | [PR #4](https://github.com/Thanyers/tabletop/pull/4), [Helpdesk acceptance](CANVAS_HELPDESK_ACCEPTANCE.md) |
 | 20 ต.ค. `c9d3bf0` | Calm Canvas, การ์ดโทนอุ่น, ช่องพิมพ์ในโต๊ะ, contextual actions และไม่มี Use/Arrange | [PR #6](https://github.com/Thanyers/tabletop/pull/6), [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) |
 | 20 ต.ค. `9fbfdec` | ข้อความเริ่มงานตามแนวคิดใหม่ ฟีเจอร์หลักเดิม และ `/version` สำหรับตรวจ build | [PR #9](https://github.com/Thanyers/tabletop/pull/9), [PR #10](https://github.com/Thanyers/tabletop/pull/10), [CI ของรุ่นที่ deploy](https://github.com/Thanyers/tabletop/actions/runs/39368620190) |
+| 20 ต.ค. `524d9cc` | หน้าแนวคิดก่อนล็อกอิน พร้อมภาพการงอกของเครื่องมือ; หน้าโต๊ะและฟีเจอร์หลักเดิม | [PR #13](https://github.com/Thanyers/tabletop/pull/13), [Public welcome acceptance](PUBLIC_WELCOME_ACCEPTANCE.md), [CI ของ candidate](https://github.com/Thanyers/tabletop/actions/runs/39373019632) |
 
 Migration 0002 ทำแล้วในทั้งสอง environment ห้ามนำคำสั่ง provisioning รุ่นแรกไปรันซ้ำโดยถือว่าฐานยังว่าง การย้าย production คัดลอกข้อมูล directory 3 ห้องและสมาชิก 3 รายการครบ พร้อมสำรองเฉพาะตารางและทดสอบกู้คืน local; ยังไม่ใช่หลักฐานกู้คืน D1 + Room + Billing ทั้งระบบ ดูขั้นตอนรับงาน operator ใน [ทีมพัฒนาต่อ](TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน)
