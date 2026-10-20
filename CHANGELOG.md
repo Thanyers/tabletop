@@ -3,8 +3,13 @@
 ## Unreleased
 
 - แชทของโต๊ะเป็น island ลอยกึ่งกลางด้านล่างของ Canvas (กว้างสุด 560px สูงไม่เกินราวครึ่งจอ) · ไม่มีการใช้ 20 วินาทีจะย่อเป็นปุ่มวงกลมมุมขวาล่างที่ไอคอนขยับเป็นระยะ (ไม่ขยับเมื่อเปิด reduced motion) · ไม่ย่อขณะพิมพ์ มีข้อความค้าง หรือรอ AI · ประวัติแชทไม่หายตอนย่อ ([F001](docs/features/F001-guided-table-start.md) T8–T9)
+
+## 1.1.0 — 2026-10-20
+
+MINOR: ฟีเจอร์ใหม่ฝั่งหน้าเว็บ ไม่มี migration, schema, secret, binding หรือการเปลี่ยนงบ AI · rollback กลับ `v1.0.0` ได้ทันที · config deploy ไม่ต้องแก้ (path ลึกใช้ SPA fallback ของ Worker ที่มีอยู่)
+
 - หน้าเริ่มโต๊ะใหม่ที่ `/new`: คำถาม "What should we start with?" · การ์ดโต๊ะสำเร็จรูป 3 ใบ (Invoice check, Physics lesson, Shared encounter) · ช่องพิมพ์ที่สร้างโต๊ะข้อมูลว่างและเก็บข้อความไว้ในช่องร่างกฎ (ยังไม่เรียก AI) · ปุ่มเริ่มโต๊ะว่างด้วยไฟล์ตัวเอง · หน้าแรกและเมนูด้านบนพามาหน้านี้ ([F001](docs/features/F001-guided-table-start.md) T1–T2)
-- แต่ละหน้ามี URL ของตัวเอง: รายการโต๊ะ `/` · โต๊ะ `/t/<id>` · ลิงก์เชิญ `/join#invite=...` · รีโหลดอยู่โต๊ะเดิม ปุ่ม back/forward ใช้ได้ และยังไม่ล็อกอินจะกลับโต๊ะเดิมหลังล็อกอิน · URL โต๊ะไม่ใช่สิทธิ์ เซิร์ฟเวอร์ยังตรวจสมาชิกทุกคำขอ คนนอกเห็นข้อความเดียวกับโต๊ะที่ไม่มีอยู่ · `/new` จองไว้สำหรับหน้าเริ่มโต๊ะใหม่ (F001) ตอนนี้แสดงหน้าแรก ([F004](docs/features/F004-url-paths.md))
+- แต่ละหน้ามี URL ของตัวเอง: รายการโต๊ะ `/` · โต๊ะ `/t/<id>` · ลิงก์เชิญ `/join#invite=...` · รีโหลดอยู่โต๊ะเดิม ปุ่ม back/forward ใช้ได้ และยังไม่ล็อกอินจะกลับโต๊ะเดิมหลังล็อกอิน · URL โต๊ะไม่ใช่สิทธิ์ เซิร์ฟเวอร์ยังตรวจสมาชิกทุกคำขอ คนนอกเห็นข้อความเดียวกับโต๊ะที่ไม่มีอยู่ · `/new` คือหน้าเริ่มโต๊ะใหม่ ([F004](docs/features/F004-url-paths.md))
 - **แก้:** workbench ของ invoice / physics / encounter ไม่เรียก React hook หลัง return แบบมีเงื่อนไขแล้ว (กัน React error "Rendered fewer hooks" ถ้าชนิดข้อมูลเปลี่ยนใน component เดิม) · ผู้ใช้ไม่เห็นอะไรเปลี่ยน
 - **CI/dev:** เพิ่ม ESLint (`npm run lint`) เข้า CI ห้าม `any` ที่เขียนเอง ห้าม `@ts-ignore` และบังคับกฎของ React hooks · เพิ่ม pre-commit hook (husky + lint-staged) ที่รัน `check-public-files` และ lint ไฟล์ที่ stage · `check-public-files` ไม่ crash เมื่อเจอ nested repository แล้ว แต่รายงานเป็น finding แทน · ไม่เปลี่ยน behavior ของแอป ([CONTRIBUTING → Lint](CONTRIBUTING.md#lint))
 
