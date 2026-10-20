@@ -30,6 +30,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
+- **Research/design เสร็จ 2026-10-20:** [Generative Canvas plan](docs/GENERATIVE_CANVAS_PLAN_TH.md) + [primary-source research](docs/GENERATIVE_CANVAS_RESEARCH_2026-10-20.md) ครอบคลุม generated UI/scene/custom compute, semantic card layout, revision/multiplayer/memory, เวลาและต้นทุนที่ระบุสมมติฐาน · independent read-only review ผ่านหลังเพิ่มเกณฑ์ custom behavior แยกจาก catalog · Node 22.23.2, `node scripts/check-public-files.mjs` ตรวจ 448 ไฟล์ ไม่มี findings, local Markdown links 46/46 พบไฟล์, สูตรต้นทุนตรวจแล้ว, `git diff --check` ผ่าน · เป็นแผนบน `docs/generative-canvas-plan` ยังไม่มี runtime tests/implementation/deploy ของความสามารถใหม่นี้
 - **Release ล่าสุด:** **`v1.0.0`** (annotated tag บน `ce2c50e` = merge PR #15, CI `local-validation` บน main ผ่าน) · staging และ production deploy แล้วและตอบ `1.0.0` / `ce2c50e` เมื่อ 2026-10-20 เวลา 13:32 น. Bangkok · output เทียบกับรุ่นก่อนหน้าต่างเฉพาะ `version.json`
 - **Branch:** `main` @ `ce2c50e` = release · PR #12–#14 เคยเข้า `main` ตรงโดยไม่ผ่าน `dev` · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection
 - **Deploy:** production และ staging ใช้ sealed build ชุดเดียวจาก `v1.0.0` · Node 22.23.2 · `npm ci --ignore-scripts` (0 vulnerabilities), typecheck/build/secret scan ผ่าน · health/readiness/capabilities/version 4/4 และ served-asset hashes 135/135 ผ่านทั้งสอง environment · อ่านหน้า anonymous และห้องเดิมหลังล็อกอินได้ ไม่มี room writes หรือ AI calls — ดู [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
@@ -54,6 +55,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-20 | รอบพิสูจน์ Generative Canvas ต้องรวมการจัดวางการ์ดตามความสัมพันธ์และ custom behavior ที่ catalog เดิมทำไม่ได้ | ผู้ใช้รับทางเลือกเทคโนโลยีและขอ algorithm จัดวางที่เข้าใจง่าย/สร้างสรรค์; ข้อเสนอ runtime และเกณฑ์ทดสอบอยู่ในแผน ยังไม่ใช่ implementation ที่ผ่านแล้ว |
 | 2026-10-20 | โปรเจกต์นี้ไม่ใช้ phak; ติดตามงานใน `spec.md` + GitHub PR | ผู้ใช้สั่ง — ทับกฎ global ใน [CLAUDE.md](CLAUDE.md) |
 | 2026-10-20 | `CLAUDE.md` / `spec.md` / `MEMORY.md` ขึ้น repo public | ผู้ใช้สั่ง · ห้ามใส่ secret/ID/ข้อมูลผู้ใช้ตามกฎใน CLAUDE.md |
 | 2026-10-20 | เอกสารผูกโค้ดอยู่ใน git ผ่าน PR; หลักฐานที่มีข้อมูลส่วนตัวอยู่ใน `test-results/` | ตรงกับ convention เดิมของ repo และ repo เป็น public |
@@ -67,10 +69,11 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## งานที่กำลังทำ
 
-_(ว่าง)_ — deploy v1.0.0 เสร็จตามคำสั่งผู้ใช้ “deploy + merge” โดยตรงในรอบนี้; exception สำหรับ operator/merge ครั้งนี้ไม่เปลี่ยนกติกาถาวรใน AGENTS.md เอกสารอัปเดตผ่าน branch `docs/v1-deployment` เข้า `dev`
+_(ว่าง)_ — งานวางแผน/รีเสิร์ช Generative Canvas และ algorithm จัดวางเสร็จบน `docs/generative-canvas-plan` จาก `dev` @ `135a367`; รายละเอียดและหลักฐานอยู่ในสถานะปัจจุบัน
 
 ## ถัดไป
 
+0. เริ่มรอบพิสูจน์ Generative Canvas ตาม [แผน §9](docs/GENERATIVE_CANVAS_PLAN_TH.md#9-แผนส่งมอบแบบมีจุดหยุดตัดสินใจ): manifest/renderer/layout + custom compute ใน local, สามโจทย์ใหม่, hidden custom-behavior gate; ทวนประมาณการจากผลจริงก่อนขยาย beta และระบุ scope ทรัพยากรถาวร/งบก่อนจัดการ environment
 1. **เจ้าของ repo (admin):** รันคำสั่ง ruleset ใน [AGENTS.md §9](AGENTS.md#9-ตั้งค่า-repo-ครั้งเดียว-admin-ของ-repo) เพื่อ protect `main` + `dev` และล็อก tag `v*`
 2. ออก release ถัดไปตาม AGENTS.md; production ปัจจุบันคือ tag `v1.0.0` แล้ว ไม่ต้อง deploy tag นี้ซ้ำเพียงเพื่อให้มีเลขรุ่น
 3. แจ้งทีมว่างานใหม่ต้องเปิด PR เข้า `dev` เท่านั้น — #12–#14 ยังเข้า `main` ตรง

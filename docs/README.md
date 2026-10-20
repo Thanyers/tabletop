@@ -16,6 +16,8 @@
 
 ## Design, contract และ acceptance
 
+- [GENERATIVE_CANVAS_PLAN_TH](GENERATIVE_CANVAS_PLAN_TH.md): ข้อเสนอจากโจทย์สู่เครื่องมือ/scene ใหม่บน Canvas, algorithm จัดการ์ดตามความสัมพันธ์, multiplayer/memory, แผนทดลองและต้นทุน — ยังไม่ได้ implement
+- [GENERATIVE_CANVAS_RESEARCH_2026-10-20](GENERATIVE_CANVAS_RESEARCH_2026-10-20.md): แหล่งต้นทางเรื่อง generative UI, sandbox/QuickJS/Dynamic Workers, sync และ animation พร้อมข้อจำกัดที่ยังไม่พิสูจน์
 - [CALM_CANVAS_DESIGN](CALM_CANVAS_DESIGN.md) และ [CALM_CANVAS_ACCEPTANCE](CALM_CANVAS_ACCEPTANCE.md): แนวทาง UI และผลตรวจรุ่นปรับล่าสุด
 - [GENERIC_TABLE_DESIGN](GENERIC_TABLE_DESIGN.md): contract, execution, privacy และขอบเขต context/memory
 - [GENERIC_TABLE_ACCEPTANCE](GENERIC_TABLE_ACCEPTANCE.md): staging, AI, confirmation, continuity, recovery และ migration
