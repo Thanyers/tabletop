@@ -62,6 +62,9 @@ jobs:
         # This independent fixture can report its failures even when Node browser checks fail.
         if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
         run: npm run test:cloudflare:browser
+      - name: Generated scenes, private trials and shared layout acceptance
+        if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
+        run: npm run test:generative:browser
       - name: Retain test summaries
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -86,6 +89,8 @@ jobs:
             test-results/cloudflare-browser/canvas-demo-invoice.png
             test-results/cloudflare-browser/generic-table-*.png
             test-results/cloudflare-browser/failure-*.png
+            test-results/generative-canvas/report.json
+            test-results/generative-canvas/*.png
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore

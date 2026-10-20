@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
-import { tableChangeIssues, tableChangeSchema, tableProgramSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
+import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 
@@ -86,6 +86,7 @@ const tableDomainSchema = z.object({
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
   })).max(4),
   program: tableProgramSchema.nullable(),
+  records: tableRecordsSchema,
   turn: z.string().max(40).nullable(),
 });
 const billingUsageSchema = z.strictObject({
@@ -228,7 +229,6 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
   if (workspace.domain.kind === 'table') {
     const parsed = tableDomainSchema.safeParse(workspace.domain);
     if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current table state is invalid.');
-    if (parsed.data.sources.length === 0) fail('SOURCE_REQUIRED', 'Import a source file before requesting table rules.');
     const sourceBytes = parsed.data.sources.reduce((total, source) => total + new TextEncoder().encode(source.text).byteLength, 0);
     if (sourceBytes > TABLE_TOTAL_SOURCE_BYTES) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The table sources exceed the allowed proposal size.');
     const providerInput: DeepSeekChangeInput = {
@@ -236,6 +236,7 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
       prompt,
       sources: parsed.data.sources.map(({ id, filename, text }) => ({ id, filename, text })),
       program: structuredClone(parsed.data.program),
+      records: structuredClone(parsed.data.records),
       turn: parsed.data.turn,
     };
     return {
@@ -450,6 +451,9 @@ export async function proposeChange(
   if (dispatch.claimed !== true) {
     fail('AI_PROPOSAL_ALREADY_DISPATCHED', 'This proposal request has already been dispatched or is uncertain.');
   }
+  if (prepared.kind === 'table' && prepared.providerInput.kind === 'table') {
+    return proposeGeneratedTable(env, request, prepared.providerInput, binding, fetchImpl);
+  }
 
   let change: ChangeSet;
   let usage: DeepSeekUsage;
@@ -485,6 +489,78 @@ export async function proposeChange(
 
   await settleUsage(env, binding, mapUsage(usage));
   return { change, jobId, usage };
+}
+
+/** Every repair is independently reserved and settled; no retries of transport failures. */
+async function proposeGeneratedTable(
+  env: Env,
+  request: AIProposalRequest,
+  initialInput: Extract<DeepSeekChangeInput, { kind: 'table' }>,
+  initialBinding: BillingBinding,
+  fetchImpl?: typeof fetch,
+): Promise<AIProposalResult> {
+  let input = initialInput;
+  let binding = initialBinding;
+  const deadline = Date.now() + 25_000;
+  const total: DeepSeekUsage = { promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 };
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    let change: ChangeSet | undefined;
+    let usage: DeepSeekUsage;
+    let issues: string[] = [];
+    let previousOutput: string | undefined;
+    try {
+      const remaining = deadline - Date.now();
+      if (remaining < 1) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
+      const provider = new DeepSeekChangeProvider({ apiKey: env.DEEPSEEK_KEY!, fetch: fetchImpl, timeoutMs: remaining });
+      const result = await provider.propose(input, new AbortController().signal);
+      change = result.change;
+      usage = result.usage;
+    } catch (error) {
+      if (error instanceof RejectedChangeReply) {
+        usage = error.usage;
+        issues = error.issues;
+        previousOutput = error.previousOutput;
+      } else {
+        await markAIUsageUncertain(env, binding);
+        throw safeProviderFailure(error);
+      }
+    }
+    await settleUsage(env, binding, mapUsage(usage));
+    total.promptTokens += usage.promptTokens;
+    total.completionTokens += usage.completionTokens;
+    total.cacheHitTokens += usage.cacheHitTokens;
+    total.cacheMissTokens += usage.cacheMissTokens;
+    if (usage.reasoningTokens !== undefined) total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens;
+    if (change?.kind === 'table' && request.workspace.domain.kind === 'table') {
+      issues = tableChangeIssues(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
+      if (!issues.length) return { change, jobId: initialBinding.id, usage: total };
+      previousOutput = JSON.stringify(change).slice(0, 18_000);
+    }
+    if (attempt === 3 || !issues.length) fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation. Nothing was activated.');
+    if (Date.now() >= deadline) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
+    input = { ...initialInput, repair: { attempt: attempt + 1, issues, ...(previousOutput === undefined ? {} : { previousOutput }) } };
+    let maxInputTokens: number;
+    for (;;) {
+      try {
+        maxInputTokens = measureDeepSeekChangeRequest(input) + TABLE_REQUEST_TOKEN_MARGIN;
+        break;
+      } catch (error) {
+        if (!(error instanceof DomainError) || error.code !== 'MODEL_PROVIDER_INPUT_TOO_LARGE' || !input.repair?.previousOutput) throw error;
+        const excerpt = input.repair.previousOutput;
+        input = { ...input, repair: { attempt: attempt + 1, issues, ...(excerpt.length > 256 ? { previousOutput: excerpt.slice(0, Math.floor(excerpt.length / 2)) } : {}) } };
+      }
+    }
+    if (maxInputTokens > MAX_PROVIDER_INPUT_TOKENS) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The repair request exceeds the allowed size.');
+    binding = {
+      ...initialBinding,
+      id: await sha256(`${initialBinding.id}:repair:${attempt + 1}`),
+      inputHash: await sha256(canonical({ initial: initialBinding.inputHash, input })),
+    };
+    await billingCall(env, '/reserve', binding, { maxInputTokens, maxOutputTokens: TABLE_MAX_OUTPUT_TOKENS });
+    const dispatch = await billingCall(env, '/dispatch', binding);
+    if (dispatch.claimed !== true) fail('AI_PROPOSAL_ALREADY_DISPATCHED', 'This repair request has already been dispatched.');
+  }
+  return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation.');
 }
 
 export { invoiceChangeSchema, teachingChangeSchema, encounterChangeSchema };

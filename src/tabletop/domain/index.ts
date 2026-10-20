@@ -4,6 +4,7 @@ import { createTeachingState, handleTeachingCommand } from './teaching';
 import { createEncounterState, handleEncounterCommand } from './encounter';
 import { handleEvolutionCommand } from './evolution';
 import { createTableState, handleTableCommand } from './table';
+import { handleCanvasLayout } from './canvas-layout';
 
 export function createDomain(kind: CaseKind, ctx: ActorContext): DomainState {
   if (kind === 'table') return createTableState();
@@ -22,6 +23,7 @@ export function decideDomain(state: DomainState, command: DomainCommand, ctx: Ac
     throw new DomainError('ENCOUNTER_PAUSED', 'Resume the encounter before activating an encounter rule.');
   }
   let decision: { state: DomainState; label: string } | null = null;
+  if (state.kind === 'table' && command.type === 'canvas.layout') return handleCanvasLayout(state, command.payload, ctx);
   if (state.kind === 'table') decision = handleTableCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'invoice') decision = handleInvoiceCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'teaching') decision = handleTeachingCommand(state, command.type, command.payload, ctx);

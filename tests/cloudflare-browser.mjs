@@ -189,6 +189,9 @@ try {
   demo.on('pageerror', error => errors.push(error.message));
   demoContext.on('request', request => {
     const url = new URL(request.url());
+    // Edge may open its internal downloads UI during export checks. Its
+    // browser-owned resources are not application network requests.
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
     if (url.origin !== origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/internal/')) {
       publicDemoRequests.push({ method: request.method(), pathname: url.pathname });
     }

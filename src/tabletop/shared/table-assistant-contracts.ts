@@ -57,6 +57,7 @@ export const tableAssistantConfirmationSchema = z.strictObject({
 });
 
 export const tableAssistantConversationEntrySchema = z.strictObject({
+  contextSource: z.literal('recalled').optional(),
   prompt: z.string().min(1).max(4_000),
   result: z.strictObject({
     kind: z.enum(['explanation', 'action-proposal', 'clarification', 'refusal']),

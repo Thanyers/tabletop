@@ -69,7 +69,12 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## งานที่กำลังทำ
 
-_(ว่าง)_ — งานวางแผน/รีเสิร์ช Generative Canvas และ algorithm จัดวางเสร็จบน `docs/generative-canvas-plan` จาก `dev` @ `135a367`; รายละเอียดและหลักฐานอยู่ในสถานะปัจจุบัน
+- **Generative Canvas implementation — `feat/generative-canvas`:** ผู้ใช้อนุมัติเริ่มพัฒนาตามแผนและใช้ agents เมื่อ 2026-10-20 โดยคง UI/design เดิม เป้าหมาย prompt/file → generated behavior/scene → direct interaction → compatible edit → shared/resumable room พร้อม relationship-aware incremental layout
+  - ขอบเขตไฟล์: `src/tabletop/shared/`, `domain/`, `runtime/`, UI renderer/Canvas/composer, `server/`, `cloudflare/`, tests และเอกสารเจ้าของเรื่อง
+  - แบ่ง ownership: runtime/interpreter และ contracts, renderer/controls, layout และ integration/AI/authority; main รับผิดชอบการรวมและ acceptance
+  - ตรวจ: Node 22.23.2, deterministic/resource-limit/privacy tests, unit/SQL + Cloudflare suites, browser เล่นโจทย์ใหม่สามแบบ/แก้/ลาก/สอง actor/reload, build + Worker dry run, independent security review, public-file scan
+  - ใช้ existing JSON room persistence และ disposable local databases; ไม่มี persistent database/schema/cloud resource mutation หรือ production deploy ในขั้นพัฒนา การปล่อยจริงต้องมีผล hosted acceptance และระบุ scope/version ตาม AGENTS.md
+  - การตัดสินใจเริ่มต้น: ใช้ bounded generated expression/scene program ที่ไม่มี host IO เป็น custom compute path สำหรับ proof; ไม่รัน JavaScript ที่โมเดลส่งใน host process ส่วน VM สำหรับ unrestricted custom JS ยังต้องผ่าน isolation spike แยก
 
 ## ถัดไป
 

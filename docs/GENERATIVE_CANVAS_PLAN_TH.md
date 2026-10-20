@@ -1,6 +1,6 @@
 # Tabletop — จากโจทย์สู่โต๊ะที่สร้างเครื่องมือขึ้นมาใช้งานได้
 
-วันที่ 2026-10-20 · **ข้อเสนอเพื่อพิจารณา ยังไม่ได้ implement หรือเปลี่ยน contract ของ v1.0.0**
+วันที่ 2026-10-20 · แผนวิจัยต้นทาง; ตอนนี้เริ่ม implement ส่วน bounded runtime, generated views, shared layout และ bounded memory retrieval แล้ว ดู [ขอบเขต candidate](GENERATIVE_CANVAS_RUNTIME.md) และ [ผลทดสอบ](GENERATIVE_CANVAS_ACCEPTANCE.md) ส่วนภาพเป้าหมายและงานระยะถัดไปในเอกสารนี้ไม่ได้หมายความว่าส่งครบหรือ deploy แล้ว
 
 ฐานที่ตรวจ: release `v1.0.0` / `ce2c50e`; เอกสารสถานะจาก `dev` / `135a367`
 

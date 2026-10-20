@@ -128,7 +128,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!prompt.trim() || !consent || readOnly || requesting || attaching || (job && waiting(job)) || (view.kind === 'invoice' && !sourceId) || (view.kind === 'table' && tableSources.length === 0) || !capabilities.model.enabled) return;
+    if (!prompt.trim() || !consent || readOnly || requesting || attaching || (job && waiting(job)) || (view.kind === 'invoice' && !sourceId) || !capabilities.model.enabled) return;
     const token = ++generation.current;
     const commandId = crypto.randomUUID();
     setConsent(false);
@@ -184,7 +184,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
   };
 
   const waitingNow = job ? waiting(job) : false;
-  const canSubmit = capabilities.model.enabled && !readOnly && !requesting && !attaching && !waitingNow && consent && prompt.trim().length > 0 && (view.kind !== 'invoice' || Boolean(sourceId)) && (view.kind !== 'table' || tableSources.length > 0);
+  const canSubmit = capabilities.model.enabled && !readOnly && !requesting && !attaching && !waitingNow && consent && prompt.trim().length >= 3 && (view.kind !== 'invoice' || Boolean(sourceId));
 
   if (view.kind === 'table') {
     const requestStatus = requesting
@@ -225,9 +225,9 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
       <form className="tt-ai-proposal__form" data-testid="table-ai-composer" onSubmit={(event) => void submit(event)}>
         <label htmlFor="tt-ai-prompt">How should this table work?</label>
         <textarea id="tt-ai-prompt" value={prompt} maxLength={1200} rows={3} disabled={readOnly || requesting || waitingNow} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe what people should be able to do…" />
-        {tableSources.length === 0 && <small className="tt-ai-proposal__source-hint">Attach a text file to get started.</small>}
-        <details className="tt-ai-proposal__privacy"><summary>What goes to AI?</summary><p>Your prompt, current rules, and all {tableSources.length} private source file{tableSources.length === 1 ? '' : 's'} on this table go to the AI provider after you agree. Shared records and member activity are excluded. Original files and drafts stay private to you; active rules and records are shared.</p></details>
-        <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} disabled={readOnly || requesting || waitingNow} onChange={(event) => setConsent(event.target.checked)} /><span>Send this request and all {tableSources.length} source file{tableSources.length === 1 ? '' : 's'} to AI.</span></label>
+        {tableSources.length === 0 && <small className="tt-ai-proposal__source-hint">Start with an idea, or attach a file.</small>}
+        <details className="tt-ai-proposal__privacy"><summary>What goes to AI?</summary><p>Your prompt, current rules, shared records, and all {tableSources.length} private source file{tableSources.length === 1 ? '' : 's'} on this table go to the AI provider after you agree. Member profiles and activity are excluded. Original files and drafts stay private to you. Review the generated rules, views and records before sharing them through activation. A request may make up to three bounded attempts to repair invalid output within the configured budget.</p></details>
+        <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} disabled={readOnly || requesting || waitingNow} onChange={(event) => setConsent(event.target.checked)} /><span>Send this request, table state and {tableSources.length} source file{tableSources.length === 1 ? '' : 's'} to AI.</span></label>
         <button type="submit" className="tt-button tt-button--primary" aria-label="Prepare rule draft" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />}Prepare draft</button>
       </form>
       {attachmentError && <p className="tt-ai-proposal__error" role="alert"><AlertCircle size={14} />{attachmentError}</p>}

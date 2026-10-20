@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- เริ่มจากข้อความหรือไฟล์ ให้ AI ร่างภาพ เครื่องมือและสูตรใหม่บน Canvas ด้วย bounded expression runtime; เพิ่ม scene, chart, metric, form, slider, toggle และการลากวัตถุ
+- ทดลองร่างส่วนตัวก่อนเปิดใช้; คำสั่งที่ใช้จริงยังตรวจสิทธิ์ เทิร์น revision และ commit แบบ atomic
+- จัดการ์ดตามความสัมพันธ์และขนาดจริง รักษาตำแหน่งที่คนลากไว้ และบันทึก shared layout แยกจากสถานะการเล่น
+- ส่งข้อมูลปัจจุบันให้ AI เมื่อแก้กฎ พร้อมการซ่อมผลลัพธ์แบบจำกัดงบ; ค้นบทสนทนาเก่าที่เกี่ยวข้องในขอบเขตผู้ถาม/โต๊ะ/epoch
+- ใช้ JSON state เดิม ไม่มี SQL migration หรือ dependency ใหม่ ดู [contract และข้อจำกัด](docs/GENERATIVE_CANVAS_RUNTIME.md); รุ่นนี้ยังไม่ deploy
+
 ## 1.0.0 — 2026-10-20
 
 release แรกที่ติด tag ตามรูปแบบ `vMAJOR.MINOR.PATCH` · โค้ดแอปตรงกับ `524d9cc` ที่รันบน production และ staging อยู่แล้ว ([Deployment](docs/DEPLOYMENTS.md)) ส่วนที่ต่างจากนั้นมีแค่เอกสารและ CI · จากรุ่นนี้ไป `main` รับเฉพาะ `release/*` และ `hotfix/*` ส่วนงานใหม่เข้า `dev` ตาม [AGENTS.md](AGENTS.md)
