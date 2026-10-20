@@ -870,6 +870,27 @@ describe('tabletop server authority', () => {
     }
   });
 
+  it('serves /version from the build identity file and reports 404 when it is missing or malformed', async () => {
+    const testDirectory = await mkdtemp(join(tmpdir(), 'tabletop-version-'));
+    const safeDirectory = resolve(testDirectory);
+    let server: StartedServer | undefined;
+    try {
+      const opened = await openServer(':memory:', undefined, safeDirectory);
+      server = opened.server;
+      expect((await fetch(`${opened.base}/version`)).status).toBe(404);
+      await writeFile(join(safeDirectory, 'version.json'), '{"version":"1.2.0","sha":"a1b2c3d","built_at":"2026-10-20T04:12:00Z","extra":true}');
+      expect((await fetch(`${opened.base}/version`)).status).toBe(404);
+      await writeFile(join(safeDirectory, 'version.json'), '{"version":"1.2.0","sha":"a1b2c3d","built_at":"2026-10-20T04:12:00Z"}\n');
+      const response = await fetch(`${opened.base}/version`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toEqual({ version: '1.2.0', sha: 'a1b2c3d', built_at: '2026-10-20T04:12:00Z' });
+    } finally {
+      if (server) await closeServer(server);
+      await rm(safeDirectory, { recursive: true, force: true });
+    }
+  });
+
   it('keeps static assets and health checks outside the API request budget', async () => {
     const testDirectory = await mkdtemp(join(tmpdir(), 'tabletop-r1-static-'));
     const safeDirectory = resolve(testDirectory);

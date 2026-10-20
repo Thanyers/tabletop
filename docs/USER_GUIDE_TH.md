@@ -1,13 +1,13 @@
 # วิธีใช้และวิธีเล่น Tabletop
 
-คู่มือสำหรับรุ่นที่ตรวจวันที่ 20 ตุลาคม 2026 เริ่มที่ [ภาพรวมผลิตภัณฑ์](../README.md) และดู URL ปัจจุบันที่ [Deployment](DEPLOYMENTS.md)
+คู่มือสำหรับรุ่นที่ตรวจวันที่ 20 ตุลาคม 2026 เริ่มที่ [ภาพรวมผลิตภัณฑ์](../README.md) หน้าเริ่มโต๊ะที่อธิบายด้านล่างเป็น copy ของ candidate; ตรวจ [Deployment](DEPLOYMENTS.md) เพื่อดู source ที่กำลังเปิดใช้อยู่
 
 ## เลือกวิธีลอง
 
 | วิธี | เหมาะกับ | AI / ผู้เล่น / การบันทึก |
 | --- | --- | --- |
 | `/demo` | ดูขั้นตอนแล้วรับช่วงเล่นเอง | ลำดับเตรียมไว้, persona จำลอง, ไม่มี provider call, ข้อมูลอยู่ในแท็บ |
-| แอปหลัก → **Start with your files** | สร้างโต๊ะจากไฟล์ตัวเอง; ตัวอย่างอยู่ใต้ **Or start with an example** | Google account, AI เมื่อยินยอม, ห้องบันทึกที่เซิร์ฟเวอร์ |
+| แอปหลัก → **Start with your files** | สร้างโต๊ะจากไฟล์ตัวเอง; ตัวอย่างอยู่ใต้ **Or explore what a table can become** | Google account, AI เมื่อยินยอม, ห้องบันทึกที่เซิร์ฟเวอร์ |
 | `/demo/replay` | ทบทวนผลทดสอบที่เก็บไว้ | ดูย้อนหลัง 9 เรื่อง; ไม่แก้สถานะ |
 
 ## ลองเดโมใน 5 นาที
@@ -28,8 +28,8 @@
 
 ## สร้างโต๊ะจากไฟล์ของตัวเอง
 
-1. เปิด [แอปหลัก](https://tabletop.ptchrr.workers.dev/) แล้วกด **Continue with Google**; หน้าเริ่มต้นจะแสดง **What are we making?**
-2. เลือก **Start with your files** เพื่อเริ่มโต๊ะว่าง หรือเปิด **Or start with an example** แล้วเลือกการ์ดตัวอย่าง
+1. เปิด [แอปหลัก](https://tabletop.ptchrr.workers.dev/) แล้วกด **Continue with Google**; candidate นี้ถาม **What are you here to do?** และบอก **Start with what you're working on. Your table will take shape around it.**
+2. เลือก **Start with your files** เพื่อเริ่มโต๊ะว่าง หรือเปิด **Or explore what a table can become** แล้วเลือกการ์ดตัวอย่าง
 3. ลากไฟล์ลง Canvas หรือเปิด **Set up** แล้วกด **Attach a file** รองรับ UTF-8 `.csv`, `.json`, `.txt`, `.md` เท่านั้น: **32 KiB ต่อไฟล์, ไม่เกิน 4 ไฟล์, รวม 64 KiB**
 4. เจ้าของใช้ **Set up** ก่อนมีกฎร่วม หรือ **Rules** เมื่อมีชุดกฎแล้ว เขียนเจตนาใน **How should this table work?** ตรวจ checkbox ที่ระบุว่าจะส่งคำขอและไฟล์ต้นทางที่แนบให้ AI แล้วกด **Prepare draft**
 5. ตรวจร่างบน Canvas ทั้ง collection, แถวข้อมูล, actions, เงื่อนไข, ผลที่จะเปลี่ยน และหลักฐาน/สมมติฐาน หาก AI เข้าใจผิดให้ขอแก้ก่อนเปิดใช้

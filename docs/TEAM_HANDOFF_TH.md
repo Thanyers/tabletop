@@ -1,6 +1,6 @@
 # ส่งมอบ Tabletop ให้ทีมวิศวกรรม
 
-สำหรับทีมที่รับช่วงพัฒนา: เริ่มจาก [สถานะ deployment ล่าสุด](DEPLOYMENTS.md) เพื่อยืนยัน source และ environment, ใช้ [CONTRIBUTING](../CONTRIBUTING.md) ตั้งเครื่องและรันในเครื่อง แล้วเปิดเอกสาร design/acceptance ที่ตรงกับส่วนที่จะแก้ ใช้ลำดับด้านล่างเป็นจุดเริ่มงานของทีม
+สำหรับทีมที่รับช่วงพัฒนา: อ่าน [product.md](../product.md) เมื่อจำเป็นต้องเข้าใจเหตุผล ผู้ใช้ และขอบเขตผลิตภัณฑ์ จากนั้นเริ่มที่ [สถานะ deployment ล่าสุด](DEPLOYMENTS.md) เพื่อยืนยัน source และ environment ใช้ [CONTRIBUTING](../CONTRIBUTING.md) ตั้งเครื่องและรันในเครื่อง แล้วเปิดเอกสาร design/acceptance ที่ตรงกับส่วนที่จะแก้
 
 ## สถานะและลำดับงาน
 
@@ -42,9 +42,9 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
 ## สิ่งที่ทดสอบแล้ว
 
 - [รุ่นที่ deploy](DEPLOYMENTS.md) อ้าง source `c9d3bf0` / PR #6; staging และ production ใช้ source tree เดียวกัน และไฟล์เว็บ 130 ไฟล์ตรงกับ build ที่ตรวจ
-- [CI ของรุ่นล่าสุด](https://github.com/Thanyers/tabletop/actions/runs/39358949964) ผ่าน unit/SQL 309 รายการ, Cloudflare 65, Component Lab 7, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ DeepSeek จริง
+- [CI ของรุ่นล่าสุด](https://github.com/Thanyers/tabletop/actions/runs/39358949964) ผ่าน unit/SQL 309 รายการ, Cloudflare 65, Component Lab 7, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ AI provider จริง
 - Staging ผ่านการเล่น River Race ด้วย Google สองบัญชีจริงและกลับเข้าห้องเดิมหลังปิด/เปิดแท็บ; production ตรวจอ่านและกลับเข้า Encounter Table เดิมได้หลัง deploy โดยข้อมูลและกฎเดิมยังอยู่
-- [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) บันทึกการเล่น local ของ Helpdesk ด้วย DeepSeek จริงและบัญชีจำลองสองคน แยกจากหลักฐาน Google สองบัญชีบน staging
+- [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) บันทึกการเล่น local ของ Helpdesk ด้วย AI จริงและบัญชีจำลองสองคน แยกจากหลักฐาน Google สองบัญชีบน staging
 - `SKIPPED`: automated axe/full contrast/screen-reader audit, การใช้นิ้วบนโทรศัพท์จริง และกรณี invoice เปลี่ยนระหว่างหลักฐานสองชิ้น
 - ยังไม่มีหลักฐาน load/soak, restart recovery หรือการกู้ D1 + Room + Billing ทั้งระบบ การกลับเข้าห้องเดิมและการทดสอบ local ไม่ยืนยันความพร้อมทุกกรณี
 
@@ -56,6 +56,6 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
 2. การเขียนฐานข้อมูลต้องอนุมัติ scope ก่อน โดยระบุ environment/table, operation, predicate/record scope, จำนวนแถวที่คาด (หรือ `Unknown`) และ transaction/rollback; ทำและตรวจเฉพาะ scope เดิม
 3. Migration ที่อยู่ใน Git ไม่ได้อนุญาตให้รันกับฐานถาวร และห้ามใช้ provisioning รุ่นแรกซ้ำกับ environment ที่มีข้อมูลแล้ว
 4. เมื่อมี `table` data แล้ว อย่าถอยไป Worker ที่รองรับเพียงสามชนิดเดิม หากต้องหยุด write ให้ใช้ build ที่เข้ากันได้พร้อม `TABLE_READ_ONLY=true`, ตรวจ job ที่ค้าง และทำ recovery ไปข้างหน้า ตาม [compatible recovery](GENERIC_TABLE_ACCEPTANCE.md#compatible-recovery-build)
-5. หลัง release ตรวจ asset parity และ resume ตาม scope ที่อนุมัติ แล้วอัปเดต [Deployment](DEPLOYMENTS.md) ด้วย source, version และหลักฐานที่ไม่มี credential หรือข้อมูลผู้ใช้
+5. หลัง release ตรวจ `GET /version` ว่า `sha` ตรงกับ commit ที่ส่ง (config deploy ต้องมี `/version` ใน `assets.run_worker_first`) แล้วตรวจ asset parity และ resume ตาม scope ที่อนุมัติ แล้วอัปเดต [Deployment](DEPLOYMENTS.md) ด้วย source, version และหลักฐานที่ไม่มี credential หรือข้อมูลผู้ใช้
 
 ไม่มี deploy step ใน CI อย่าใส่ secret, account/session evidence หรือ operator receipts ใน Git; หลักฐานที่ระบุตัวตนและ runtime config อยู่ใน ignored local `test-results/` และต้องส่งต่อโดยเจ้าของระบบ

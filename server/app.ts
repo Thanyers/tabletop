@@ -6,6 +6,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { z } from 'zod';
 import type { SqlDatabase } from './database.js';
 import { CommandAuthority, type AuthenticatedSession, type AuthorizedWorkspace } from './authority.js';
+import { BUILD_INFO_FILE, parseBuildInfo } from './build-info.js';
 import { AuthorityError, safeError } from './errors.js';
 import {
   MAX_EXPIRY_SWEEP_BATCH,
@@ -417,6 +418,13 @@ export function createApp(options: CreateAppOptions): TabletopApp {
       } else if (method === 'GET' && url.pathname === '/readyz') {
         await authority.repository.isReady();
         apiJson(response, 200, { ok: true }, isHttps);
+        status = 200;
+      } else if (method === 'GET' && url.pathname === '/version') {
+        const raw = staticRoot ? await readFile(resolve(staticRoot, BUILD_INFO_FILE), 'utf8').catch(() => null) : null;
+        let info = null;
+        try { info = raw === null ? null : parseBuildInfo(JSON.parse(raw)); } catch { info = null; }
+        if (!info) throw new AuthorityError('NOT_FOUND', 'Build information is unavailable.', 404);
+        apiJson(response, 200, info, isHttps);
         status = 200;
       } else if (url.pathname.startsWith('/api/')) {
         const rate = requestLimiter.take(clientRateKey(request));

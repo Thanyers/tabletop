@@ -1,12 +1,13 @@
 # เอกสาร Tabletop
 
-เริ่มที่ [README ภาพรวมผลิตภัณฑ์](../README.md) เพื่อรู้จัก Tabletop, ใช้ [คู่มือผู้ใช้](USER_GUIDE_TH.md) เพื่อเริ่มใช้งาน, หรือส่งต่อให้ทีมวิศวกรรมที่ [TEAM_HANDOFF_TH](TEAM_HANDOFF_TH.md) ส่วนสถานะ URL และรุ่นที่ deploy อ้างอิงจาก [DEPLOYMENTS](DEPLOYMENTS.md)
+อ่าน [product.md](../product.md) สำหรับเหตุผล ผู้ใช้ และขอบเขตของ Tabletop; ดู [README](../README.md) สำหรับเรื่องเล่าสาธารณะและภาพประกอบ; เริ่มใช้ที่ [คู่มือผู้ใช้](USER_GUIDE_TH.md) หรือส่งต่องานให้ทีมวิศวกรรมที่ [TEAM_HANDOFF_TH](TEAM_HANDOFF_TH.md) สถานะ URL และรุ่นที่ deploy อ้างอิงจาก [DEPLOYMENTS](DEPLOYMENTS.md)
 
 ## เริ่มใช้งานและรับช่วงงาน
 
 | เอกสาร | ใช้เมื่อ |
 | --- | --- |
 | [README](../README.md) | ต้องการภาพรวมและเรื่องราวผลิตภัณฑ์พร้อมภาพประกอบ |
+| [product.md](../product.md) | ต้องการแหล่งอ้างอิงเดียวของ WHY / WHO / WHERE, product intent และขอบเขต beta |
 | [USER_GUIDE_TH](USER_GUIDE_TH.md) | ต้องการเปิดเดโม สร้างโต๊ะ เชิญสมาชิก เล่น และกลับมาใช้ห้องเดิม |
 | [TEAM_HANDOFF_TH](TEAM_HANDOFF_TH.md) | รับช่วงพัฒนา: สถานะล่าสุด แผนที่โค้ด สถาปัตยกรรม หลักฐาน และขอบเขต deploy |
 | [DEPLOYMENTS](DEPLOYMENTS.md) | ตรวจ URL, source/version, resources และผลตรวจ release ล่าสุด |

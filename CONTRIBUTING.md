@@ -1,6 +1,6 @@
 # ร่วมพัฒนา Tabletop
 
-เริ่มจาก [README](README.md), [วิธีใช้](docs/USER_GUIDE_TH.md) และ [ภาพรวมระบบ](docs/TEAM_HANDOFF_TH.md) แล้วทดลองสิ่งที่กำลังจะเปลี่ยนก่อนแก้โค้ด
+เริ่มจาก [README](README.md) สำหรับเรื่องเล่าสาธารณะ, [product.md](product.md) สำหรับเหตุผล/ผู้ใช้/ขอบเขตผลิตภัณฑ์, [วิธีใช้](docs/USER_GUIDE_TH.md) และ [ภาพรวมระบบ](docs/TEAM_HANDOFF_TH.md) แล้วทดลองสิ่งที่กำลังจะเปลี่ยนก่อนแก้โค้ด
 
 ## Checkout และ runtime
 
