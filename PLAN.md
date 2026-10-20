@@ -43,6 +43,7 @@
 | F001-T9 | แชทย่อเป็นวงกลมไอคอนดุ๊กดิ๊กเมื่อไม่มีคนพิมพ์ | `todo` | — | — | ไฟล์เดียวกับ T8 | T8 | ต้องรองรับ reduced motion |
 | F001-T10 | ปรับ browser tests ตาม flow ใหม่ | `todo` | — | — | `tests/*.mjs` | T2, T4, T8 | แต่ละงานแก้เทสต์ของตัวเองได้ งานนี้เก็บส่วนที่เหลือ |
 | F001-T11 | คู่มือผู้ใช้ + CHANGELOG | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | T4, T7, T9 | |
+| CI004 | R1 browser test เปิด server ใหม่ทุก scenario แทนการรอ rate limit | `review` | JitrudeeDongdee (Claude) | `feat/CI004-r1-no-rate-wait` | `tests/tabletop-r1.mjs` | — | hotspot `tests/tabletop-r1.mjs` |
 | F002-T1 | คำสั่ง `workspace.rename` (เจ้าของ, 1–120 ตัวอักษร) | `todo` | — | — | `src/tabletop/domain/`, `server/authority.ts`, `src/tabletop/shared/contracts.ts` | — | |
 | F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | ชนกับ F003-T1/T3 (ไฟล์ Room เดียวกัน) |
 | F002-T3 | UI แก้ชื่อที่แถบด้านบน | `todo` | — | — | `TabletopApp.tsx`, CSS | F002-T2 | hotspot `TabletopApp.tsx` |
