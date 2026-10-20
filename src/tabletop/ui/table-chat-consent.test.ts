@@ -33,6 +33,6 @@ describe('chat consent', () => {
     expect(consentQuestion('draft')).toContain('Chat history is not included');
     expect(consentQuestion('ask')).toContain('up to six of your private chat exchanges');
     expect(consentQuestion('ask')).toContain('including relevant older ones when available');
-    expect(consentQuestion('ask')).toContain('Private source files are excluded');
+    expect(consentQuestion('ask')).toContain('Table files are not sent');
   });
 });
