@@ -193,7 +193,7 @@ async function openNewTable(owner, api) {
   const startPage = owner.getByTestId('start-page');
   await expect(startPage.getByRole('heading', { name: 'What should we start with?' })).toBeVisible();
   await expect(owner).toHaveURL(/\/new$/);
-  await expect(startPage.getByRole('list', { name: 'Prepared tables' }).getByRole('button')).toHaveCount(3);
+  await expect(startPage.getByRole('list', { name: 'Ways to start' }).getByRole('button')).toHaveCount(4);
   await startPage.getByRole('button', { name: 'Start empty with your own files', exact: true }).click();
   const response = await created;
   expect(response.status()).toBe(201);
