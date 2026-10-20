@@ -234,7 +234,7 @@ try {
       modelStatuses.push({ http: response.status(), body });
     }
   });
-  await expect(dm.getByRole('heading', { name: 'What are we making?' })).toBeVisible();
+  await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
   await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   await dm.locator('.tt-template-choices > summary').click();

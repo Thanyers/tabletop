@@ -1,6 +1,6 @@
 # ส่งมอบ Tabletop ให้ทีมวิศวกรรม
 
-สำหรับทีมที่รับช่วงพัฒนา: เริ่มจาก [สถานะ deployment ล่าสุด](DEPLOYMENTS.md) เพื่อยืนยัน source และ environment, ใช้ [CONTRIBUTING](../CONTRIBUTING.md) ตั้งเครื่องและรันในเครื่อง แล้วเปิดเอกสาร design/acceptance ที่ตรงกับส่วนที่จะแก้ ใช้ลำดับด้านล่างเป็นจุดเริ่มงานของทีม
+สำหรับทีมที่รับช่วงพัฒนา: อ่าน [product.md](../product.md) เมื่อจำเป็นต้องเข้าใจเหตุผล ผู้ใช้ และขอบเขตผลิตภัณฑ์ จากนั้นเริ่มที่ [สถานะ deployment ล่าสุด](DEPLOYMENTS.md) เพื่อยืนยัน source และ environment ใช้ [CONTRIBUTING](../CONTRIBUTING.md) ตั้งเครื่องและรันในเครื่อง แล้วเปิดเอกสาร design/acceptance ที่ตรงกับส่วนที่จะแก้
 
 ## สถานะและลำดับงาน
 
