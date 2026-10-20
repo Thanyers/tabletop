@@ -35,6 +35,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F010-T1 | ต่อเติมโต๊ะจากแชท, เพิ่ม record ผ่านปุ่มจริง, ลดขั้นตอนกฎและแก้ card overflow | `doing` | Codex | `fix/F010-canvas-evolution` | table interpreter/contracts, AI prompts/chat routing, Canvas sizing/CSS/review UI, focused tests | — | ผู้ใช้ให้เทียบ POC และเทสเฉพาะที่จำเป็น; docs/features/F010-canvas-evolution.md |
 | R200 | Release2.0.0: stagingสองบัญชี → main/tag → finalstaging → production | `done` | Codex | `release/2.0.0` · #33 merged | CHANGELOG, runtime bugfix, spec, release evidence/docs | F005/F006/F007 merged | mainCIผ่านก่อนannotatedtag; samebuildstaging/prodผ่าน; ไม่มีSQL/secret/งบใหม่; docs/RELEASE_2_0_ACCEPTANCE.md |
 | F001-T1 | ชุดข้อมูลการ์ด starter 3 โจทย์ | `review` | Claude Code | `feat/F001-start-page` | `src/tabletop/shared/starters.ts` (ใหม่) | — | |
 | F001-T2 | หน้าเริ่มโต๊ะใหม่: คำถาม + การ์ด + ช่องพิมพ์ | `review` | Claude Code | `feat/F001-start-page` | `src/tabletop/ui/StartPrompt.tsx` (ใหม่), `TabletopApp.tsx`, CSS ใหม่ | T1, F004-T2 | hotspot `TabletopApp.tsx` · อยู่ที่ path `/new` |
