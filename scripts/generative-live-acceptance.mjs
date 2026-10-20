@@ -112,8 +112,11 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     }, { id, jobId: job.id }), { timeout: 40_000, intervals: [500, 1000] }).not.toBe('running');
     const final = await page.evaluate(async ({ id, jobId }) => (await fetch(`/api/workspaces/${id}/model/${jobId}`)).json(), { id, jobId: job.id });
     if (final.status !== 'completed') throw Error(`Model stopped: ${final.message ?? final.status}`);
-    const draftCard = page.getByTestId('table-chat-answer').filter({ hasText: 'A rule draft is ready' }).first();
+    const draftNode = page.locator('.tt-canvas-node--auxiliary').filter({ hasText: prompt.slice(0, 36) }).first();
+    const draftCard = draftNode.getByTestId('table-chat-answer');
     await expect(draftCard).toBeVisible({ timeout: 10_000 });
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 10_000 });
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
     await draftCard.getByRole('button', { name: 'Review rules', exact: true }).click();
     const draft = await read(page, id);
     expect(draft.domain.candidate.status).toBe('draft');

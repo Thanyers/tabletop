@@ -292,6 +292,7 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
 }
 
 async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls } = {}) {
+  const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
   expect(sourceNames.length).toBeGreaterThan(0);
@@ -337,7 +338,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   await send.click();
   await expect(consent).toBeVisible();
   for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
-  setTableReply({ change, expectedSources: before.domain.sources.map(item => ({ filename: item.filename, text: item.text })) });
+  setTableReply({ change, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -362,22 +363,42 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const modelResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   void modelResponse.catch(() => {});
   await consent.getByRole('button', { name: 'Send', exact: true }).click();
-  const accepted = await modelResponse;
+  let accepted;
+  try {
+    accepted = await modelResponse;
+  } catch (error) {
+    throw new Error(`${stepLabel}: model POST did not return`, { cause: error });
+  }
   expect(accepted.status()).toBe(202);
+  const acceptedJob = await accepted.json();
   modelAccepted = true;
   const draftNode = owner.getByRole('article', { name: /^Build a shared table from the source, with/iu }).first();
   const draftCard = draftNode.getByTestId('table-chat-answer');
+  const expectedDraftText = failDraftRefresh
+    ? 'The rule draft is ready, but the table could not refresh.'
+    : 'A rule draft is ready. Review it before anyone uses it.';
   try {
     await expect(draftCard).toBeVisible({ timeout: 20_000 });
+    await expect(draftCard).toContainText(expectedDraftText, { timeout: 20_000 });
   } catch (error) {
     const answerDiagnostics = await owner.getByTestId('table-chat-answer').evaluateAll(cards => cards.map(card => ({
       text: card.textContent?.trim() ?? '',
       statuses: [...card.querySelectorAll('[role="alert"], [role="status"]')].map(node => node.textContent?.trim() ?? ''),
     })));
-    throw new Error(`${error instanceof Error ? error.message : String(error)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
+    const jobStatus = await api(owner, `/api/workspaces/${tableId}/model/${acceptedJob.id}`).catch(statusError => ({
+      status: 0,
+      body: { message: statusError instanceof Error ? statusError.message : String(statusError) },
+    }));
+    const jobDetails = {
+      id: acceptedJob.id,
+      http: jobStatus.status,
+      status: jobStatus.body?.status,
+      message: jobStatus.body?.message,
+      candidateId: jobStatus.body?.candidateId,
+    };
+    throw new Error(`${stepLabel}\n${error instanceof Error ? error.message : String(error)}\nAccepted model job: ${JSON.stringify(jobDetails)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
   }
   if (failDraftRefresh) {
-    await expect(draftCard).toContainText('The rule draft is ready, but the table could not refresh.');
     const retryRefresh = draftCard.getByRole('button', { name: 'Retry table refresh', exact: true });
     await expect(draftCard.getByRole('alert')).toBeVisible({ timeout: 20_000 });
     await expect(retryRefresh).toBeVisible();
@@ -572,6 +593,10 @@ async function performContextualAction(page, collectionId, { recordId, recordLab
 
 async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply, { cancelFirst = false, loseFirstAck = false, beforeRetry } = {}) {
   const chat = page.getByTestId('table-chat-bar');
+  const answerCardForPrompt = () => page.locator('.tt-canvas-node--auxiliary')
+    .filter({ hasText: promptText.slice(0, 36) })
+    .first()
+    .getByTestId('table-chat-answer');
   const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
   const send = chat.getByRole('button', { name: 'Send message', exact: true });
   await expect(prompt).toBeVisible();
@@ -621,11 +646,14 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
     }
     setAssistantReply(syntheticReply);
     if (loseFirstAck) await page.route('**/api/workspaces/*/assistant', assistantRoute);
+    const initialResponsePromise = loseFirstAck ? null : page.waitForResponse(candidate => candidate.url().endsWith('/assistant') && candidate.request().method() === 'POST');
+    if (initialResponsePromise) void initialResponsePromise.catch(() => {});
     await consent.getByRole('button', { name: 'Send', exact: true }).click();
     let response;
     if (loseFirstAck) {
-      const failedCard = page.getByTestId('table-chat-answer').filter({ hasText: 'Retry same request' }).last();
+      const failedCard = answerCardForPrompt();
       await expect(failedCard).toBeVisible({ timeout: 20_000 });
+      await expect(failedCard.getByRole('button', { name: 'Retry same request', exact: true })).toBeVisible({ timeout: 20_000 });
       await expect(failedCard).toContainText('connection was lost before the request could be confirmed');
       expect([200, 202]).toContain(lostAckStatus);
       expect(assistantBodies).toHaveLength(1);
@@ -634,19 +662,26 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
       void retryResponsePromise.catch(() => {});
       await failedCard.scrollIntoViewIfNeeded();
       await failedCard.getByRole('button', { name: 'Retry same request', exact: true }).click();
-      response = await retryResponsePromise;
+      try {
+        response = await retryResponsePromise;
+      } catch (error) {
+        throw new Error(`Table assistant retry did not return: ${promptText}`, { cause: error });
+      }
       expect(assistantBodies).toHaveLength(2);
       expect(assistantBodies[1]).toEqual(assistantBodies[0]);
       expect(assistantBodies[1].prompt).toBe(promptText);
     } else {
-      const responsePromise = page.waitForResponse(candidate => candidate.url().endsWith('/assistant') && candidate.request().method() === 'POST');
-      void responsePromise.catch(() => {});
-      response = await responsePromise;
+      try {
+        response = await initialResponsePromise;
+      } catch (error) {
+        throw new Error(`Table assistant request did not return: ${promptText}`, { cause: error });
+      }
     }
     expect([200, 202]).toContain(response.status());
     await expect.poll(() => modelRequests).toBe(0);
-    const answer = page.getByTestId('table-chat-answer').filter({ hasText: syntheticReply.result.text }).last();
+    const answer = answerCardForPrompt();
     await expect(answer).toBeVisible({ timeout: 20_000 });
+    await expect(answer).toContainText(syntheticReply.result.text, { timeout: 20_000 });
     expect(assistantRequests).toBe(loseFirstAck ? 2 : 1);
     expect(modelRequests).toBe(0);
     return answer;
@@ -715,8 +750,9 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(member.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', 'table.collection.equipment');
 
   await member.reload();
-  const rehydratedMemberAnswer = member.getByTestId('table-chat-answer').filter({ hasText: firstText });
-  await expect(rehydratedMemberAnswer).toContainText(firstPrompt);
+  const rehydratedMemberNode = member.getByRole('article', { name: firstPrompt, exact: true });
+  const rehydratedMemberAnswer = rehydratedMemberNode.getByTestId('table-chat-answer');
+  await expect(rehydratedMemberNode).toBeVisible();
   await expect(rehydratedMemberAnswer).toContainText(firstText);
   const followup = 'Does that apply to every item in the list?';
   const followupReply = {
@@ -743,7 +779,7 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     expectedPromptContains: ownerPrompt, forbiddenTexts: [...forbidden, firstPrompt, firstText, followup],
   };
   const ownerCalls = getProviderCalls();
-  await expect(owner.getByTestId('table-chat-answer')).not.toContainText(firstPrompt);
+  await expect(owner.getByRole('article', { name: firstPrompt, exact: true })).toHaveCount(0);
   await askTableAssistant(owner, ownerPrompt, ownerReply, setAssistantReply);
   expect(getProviderCalls()).toBe(ownerCalls + 1);
   expect((await api(owner, `/api/workspaces/${tableId}`)).body.revision).toBe(ownerProfile.revision);
@@ -753,8 +789,10 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   expect(getProviderCalls()).toBe(providerCallsBeforeArchive + archived.length);
   await member.reload();
   const restored = member.getByTestId('table-chat-answer');
-  await expect(restored.first()).toContainText(archived[20].prompt);
-  await expect(restored).not.toContainText(archived[0].prompt);
+  const newestHistoryNode = member.getByRole('article', { name: archived[20].prompt, exact: true });
+  await expect(newestHistoryNode).toBeVisible();
+  await expect(newestHistoryNode.getByTestId('table-chat-answer')).toContainText(archived[20].answer);
+  await expect(member.getByRole('article', { name: archived[0].prompt, exact: true })).toHaveCount(0);
   const callsBeforeHistoryRead = getProviderCalls();
   await expect(restored).toHaveCount(6);
   expect(getProviderCalls()).toBe(callsBeforeHistoryRead);
@@ -805,6 +843,11 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await fileConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(ownerPrompt).toHaveValue('Check that consent follows the exact source file set.');
   expect(getProviderCalls()).toBe(callsBeforeSecondSource);
+  const cancelRuleEdit = ownerChat.getByRole('button', { name: 'Cancel rule edit', exact: true });
+  await expect(cancelRuleEdit).toBeVisible();
+  await cancelRuleEdit.click();
+  await expect(cancelRuleEdit).toHaveCount(0);
+  await expect(ownerPrompt).toHaveValue('');
 
   const firstInvite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, firstInvite, room.id, source.filename);

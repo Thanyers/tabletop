@@ -442,6 +442,15 @@ try {
     }
   }
 
+  function draftPrompt(scenario, phase) {
+    return `scenario:${scenario.id}; phase:${phase}. Create a bounded, understandable Canvas for this synthetic fixture.`;
+  }
+
+  function draftCardForPrompt(page, prompt) {
+    const draftNode = page.locator('.tt-canvas-node--auxiliary').filter({ hasText: prompt.slice(0, 36) }).first();
+    return draftNode.getByTestId('table-chat-answer');
+  }
+
   async function askForDraft(owner, tableId, scenario, phase, file, { cancelFirst = false } = {}) {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
     if (before.domain.program || before.domain.candidate?.status === 'active') {
@@ -449,22 +458,24 @@ try {
       await clickVisible(rules.getByRole('button', { name: 'Edit rules', exact: true }));
     }
     const sourceNames = before.domain.sources.map((source) => source.filename);
-    const response = await sendTableMessage(owner,
-      `scenario:${scenario.id}; phase:${phase}. Create a bounded, understandable Canvas for this synthetic fixture.`,
-      { sourceNames, cancelFirst });
+    const prompt = draftPrompt(scenario, phase);
+    const response = await sendTableMessage(owner, prompt, { sourceNames, cancelFirst });
     expect(response?.status()).toBe(202);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('draft');
     const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(candidate.domain.program).toEqual(before.domain.program);
     expect(candidate.domain.records).toEqual(before.domain.records);
     expect(candidate.domain.candidate?.change.kind).toBe('table');
-    const draftCard = owner.getByTestId('table-chat-answer').filter({ hasText: 'A rule draft is ready' });
+    const draftCard = draftCardForPrompt(owner, prompt);
     await expect(draftCard).toBeVisible({ timeout: 30_000 });
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
     return candidate;
   }
 
-  async function assertPrivateCandidatePreview(owner, tableId, candidate, expectedControl) {
-    const draftCard = owner.getByTestId('table-chat-answer').filter({ hasText: 'A rule draft is ready' });
+  async function assertPrivateCandidatePreview(owner, tableId, candidate, expectedControl, prompt) {
+    const draftCard = draftCardForPrompt(owner, prompt);
+    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
     await clickVisible(draftCard.getByRole('button', { name: 'Review rules', exact: true }));
     const editor = owner.getByTestId('canvas-object-editor');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
@@ -829,7 +840,7 @@ try {
     const expectedControl = scenario.action === 'button'
       ? scenario.id === 'cafe' ? 'Advance 5 minutes' : 'Recalculate payment'
       : scenario.action === 'slider' ? 'slider' : 'scene';
-    const simulatedEditor = await assertPrivateCandidatePreview(owner, tableId, draft, expectedControl);
+    const simulatedEditor = await assertPrivateCandidatePreview(owner, tableId, draft, expectedControl, draftPrompt(scenario, 'initial-draft'));
     const activated = await advanceLifecycle(owner, tableId, simulatedEditor);
     expect(activated.domain.program.canvas.views.length).toBeGreaterThan(0);
     expect(activated.domain.records).toEqual(draft.domain.candidate.change.initialRecords);
