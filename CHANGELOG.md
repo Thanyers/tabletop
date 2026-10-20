@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- CI/CD: merge `release/X.Y.Z` เข้า `main` แล้ว pipeline สร้าง tag, รัน D1 migration (บันทึกจุดกู้คืนก่อน), deploy staging, ตรวจ smoke แล้ว deploy production ด้วย build เดียวกันอัตโนมัติ · ล้มแล้วหยุดและเปิด issue ไม่ rollback เอง ([CD001](docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001))
+- แชทบนโต๊ะถามความยินยอมส่ง AI ครั้งเดียวต่อโต๊ะต่อคน ครอบทั้งร่างกฎและถามคำถาม และจำไว้ในเบราว์เซอร์แม้ reload · ไฟล์ที่เพิ่มทีหลังส่งไปกับคำขอร่างกฎครั้งถัดไปโดยไม่ถามซ้ำ · reset โต๊ะ เปิดโต๊ะอื่น หรือใช้บัญชีอื่นจะถามใหม่ (F013)
 - การ์ดแชทระหว่างรอ AI: ไอคอนเป็น Sparkles มีวงแหวนหมุนรอบและหายใจเบา ๆ ข้อความสถานะอยู่กลางการ์ดพร้อมจุดเด้งและ shimmer · ผู้ที่ตั้ง reduced motion เห็นแบบนิ่ง
 - เห็นเมาส์ของคนอื่นบน Canvas พร้อมชื่อและสีประจำตัวแบบสด ส่งผ่าน WebSocket เดิม ไม่เก็บลงฐาน · หายเมื่อออกนอก Canvas หรือไม่ขยับ 10 วินาที ([F009](docs/features/F009-live-cursors.md)) ไม่มี migration
 - หน้า `/new`: ปุ่มข้อความ **Start empty with your own files** เปลี่ยนเป็นการ์ดใบที่สี่ **Start empty** เรียงคู่กับการ์ดตัวอย่าง (เส้นประ) ([F001](docs/features/F001-guided-table-start.md))

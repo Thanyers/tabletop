@@ -54,7 +54,7 @@
 .tt-app .tt-table-chat-bar__box textarea:focus, .tt-app .tt-table-chat-bar__box textarea:focus-visible { outline: none; box-shadow: none; }
 
 /* Waiting on the AI: the header glyph orbits and breathes, the status line pulses (F011). */
-.tt-app .tt-object-glyph.is-busy { --tt-busy-color: #24796b; position: relative; isolation: isolate; color: var(--tt-busy-color); }
+.tt-app .tt-object-glyph.is-busy { --tt-busy-color: var(--tt-moss); position: relative; isolation: isolate; color: var(--tt-busy-color); }
 .tt-app .tt-object-glyph.is-busy::after {
   content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 50%;
   background: conic-gradient(from 0deg, transparent 0 55%, var(--tt-busy-color) 100%);
@@ -67,8 +67,8 @@
 /* The waiting card centres its status in the whole card body. */
 .tt-app .tt-canvas-node__body:has(> .tt-chat-card--working) { display: grid; }
 .tt-app .tt-chat-card--working { align-content: center; justify-items: center; min-height: 100%; padding-inline: 22px; }
-.tt-app .tt-chat-dots { display: inline-flex; gap: 3px; padding: 0 2px; }
-.tt-app .tt-chat-dots i { width: 5px; height: 5px; border-radius: 50%; background: #24796b; animation: tt-chat-dot 1.2s ease-in-out infinite; }
+.tt-app .tt-chat-dots { display: inline-flex; gap: var(--tt-space-1); }
+.tt-app .tt-chat-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--tt-moss); animation: tt-chat-dot 1.2s ease-in-out infinite; }
 .tt-app .tt-chat-dots i:nth-child(2) { animation-delay: .15s; }
 .tt-app .tt-chat-dots i:nth-child(3) { animation-delay: .3s; }
 .tt-app .tt-chat-card__shimmer {

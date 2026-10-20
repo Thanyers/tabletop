@@ -499,6 +499,7 @@ try {
   expect(consentCopy).toContain('Chat history is not included.');
   expect(consentCopy).toContain('Table files included');
   expect(consentCopy).toContain('No table files are attached.');
+  expect(consentCopy).toContain('You will not be asked again on this table');
   expect(modelPosts).toBe(0);
   await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(composer).toHaveValue('Require consent before a table prompt is sent.');
