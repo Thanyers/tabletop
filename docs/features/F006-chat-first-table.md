@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — Codex รับช่วง T1–T6 ตามคำสั่งผู้ใช้; รวม F005, F002 และ F007 ผ่าน local acceptance ทั้งชุด; CI ของ commit ล่าสุดอยู่ใน PR #30 |
+| สถานะ | `done` — T1–T6 merge ใน #30 → dev `ce6d69b`; CI ก่อนและหลัง merge ผ่านครบ เอกสารส่งต่อ T7 อยู่สถานะ review ใน PR #32 |
 | เจ้าของฟีเจอร์ | ผู้ใช้ (ผู้สั่งงาน); ทีมเริ่ม implementation และ Codex รับช่วง integration/verification |
 | เวอร์ชันที่คาด | F006 เป็น UI change ไม่มี migration; release รวม F005 ต้องพิจารณาข้อจำกัด rollback ของ F005 ด้วย |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F006-T*` |
@@ -56,6 +56,7 @@
 | T4 | คำตอบแชทเป็นการ์ดบน Canvas · การ์ด action มี Confirm แยก · การ์ดเป็นของผู้ถามเท่านั้น | browser test: ถาม → การ์ดคำตอบ · เสนอ action → Confirm → Table history · สมาชิกอื่นไม่เห็นการ์ดคำตอบของเรา |
 | T5 | ย้าย/เขียน browser tests ของ setup + chat ใน `tests/generic-table-browser.mjs` ให้ใช้แชทใหม่ | CI `local-validation` ผ่าน |
 | T6 | คู่มือ + CHANGELOG | ลิงก์ถูก |
+| T7 | อัปเดต README และ Handoff ตามรุ่นที่ merge แล้ว โดยคงแนวคิดและประวัติงานทีม | ระบุความสามารถ/ขั้นใช้จริงของ dev, งานที่ต่อจากทีม, หลักฐาน CI และขอบเขต deployment; ลิงก์และ public scan ผ่าน |
 
 ## คำตอบสำหรับการต่อเข้ากับ F005
 

@@ -6,7 +6,59 @@
 
 รุ่นที่บันทึกว่า deploy ล่าสุดคือ `v1.0.0` / `ce2c50e` เมื่อ 20 ตุลาคม 2026 ดู [DEPLOYMENTS](DEPLOYMENTS.md) สำหรับ source/build และหลักฐานของ staging/production โดยตรง
 
-งานรุ่นถัดไปใน `dev` รวม F005 จาก [PR #24](https://github.com/Thanyers/tabletop/pull/24), การตั้งชื่อโต๊ะ F002 จาก [PR #29](https://github.com/Thanyers/tabletop/pull/29) และตำแหน่งการ์ดร่วม F007 จาก [PR #31](https://github.com/Thanyers/tabletop/pull/31) ส่วน [PR #30](https://github.com/Thanyers/tabletop/pull/30) ต่อช่องแชท F006 และแก้การทำงานร่วมกับ F007 บนฐานเดียวกัน สูตร/ภาพ ตัวควบคุม การลากใน scene ทดลองร่างส่วนตัว และการค้นบทสนทนาเก่าแบบจำกัดยังอยู่ครบ อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract/วิธีใช้ และ [spec.md](../spec.md) สำหรับผลตรวจล่าสุด ห้ามถือว่างานใน `dev` ขึ้น production แล้ว
+**รุ่นรวม `dev` อยู่ที่ `ce6d69b`**: F005 จาก [PR #24](https://github.com/Thanyers/tabletop/pull/24), การตั้งชื่อโต๊ะ F002 จาก [PR #29](https://github.com/Thanyers/tabletop/pull/29), แชท F006 จาก [PR #30](https://github.com/Thanyers/tabletop/pull/30) และตำแหน่งการ์ดร่วม F007 จาก [PR #31](https://github.com/Thanyers/tabletop/pull/31) merge แล้วและผ่าน CI หลัง merge สูตร/ภาพ ตัวควบคุม การลากใน scene ทดลองร่างส่วนตัว และการค้นบทสนทนาเก่าแบบจำกัดยังอยู่ครบ อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract และ [spec.md](../spec.md) สำหรับสถานะระบบ
+
+`main` เป็น release branch และเป็นหน้าที่ GitHub เปิดโดยปริยาย ประวัติ merge ชุดนี้อยู่บน `dev` จนกว่าจะผ่านขั้น release; #30 เป็น PR เดิมที่ทีมเปิดไว้แล้ว Codex รับช่วงต่อ ชื่อผู้เปิด PR จึงยังเป็นของทีม แต่ commits การรวมและแก้ไขอยู่ใน [ประวัติ #30](https://github.com/Thanyers/tabletop/pull/30/commits)
+
+## เล่นรุ่นไหน ที่ไหน
+
+ตรวจ public endpoints ล่าสุด **20 ตุลาคม 2026 เวลา 19:36 น. (Asia/Bangkok)** ด้วยการอ่านอย่างเดียว:
+
+| ที่เล่น | รุ่น / สิ่งที่ตรวจแล้ว | วิธีเริ่ม |
+| --- | --- | --- |
+| [Production](https://tabletop.ptchrr.workers.dev/) | `1.0.0` / `ce2c50e`; version, health, readiness และ capabilities ตอบ 200, AI เปิด, โต๊ะไม่ถูกพักการแก้ไข | Google login → Start with your files → นำไฟล์ที่รองรับเข้า → ตรวจและเปิดใช้กฎ → เล่นบน Canvas → Invite; บัญชีเดิมกลับมาเปิดโต๊ะเดิมได้ |
+| [Public demo](https://tabletop.ptchrr.workers.dev/demo) | เดโมที่เตรียมไว้ในรุ่น production; กดเล่นจริงซ้ำเวลา 19:44 น. ผ่านโต๊ะว่าง → เพิ่มการ์ด → เล่น/พัก → ลองเอง | ไม่ต้องล็อกอิน เลือกเรื่อง รอการ์ดปรากฏ แล้วกดพัก/ลองเอง |
+| [Staging](https://tabletop-staging.ptchrr.workers.dev/) | ยังเป็น `1.0.0` / `ce2c50e`; endpoints ชุดเดียวกันตอบ 200 และ AI เปิด | ใช้ตรวจ hosted/OAuth; **ยังไม่ได้ลงรุ่นรวมใหม่** |
+| `dev` ในเครื่อง | `ce6d69b`; Generative Canvas, แชทใหม่, ตั้งชื่อ และผังร่วมผ่านชุดทดสอบ local/CI | ตั้งเครื่องตาม [CONTRIBUTING](../CONTRIBUTING.md); Node local ปิด AI, ชุด Workers/Generative acceptance ใช้ provider และบัญชีจำลอง การใช้ AI จริงต้องมี config local ของ operator |
+
+ผล endpoint บอกเวอร์ชันและความพร้อมของบริการ ณ เวลาตรวจ ไม่ใช่หลักฐานว่าได้เล่นสองบัญชีจริงหรือทดสอบ AI ใหม่บน Cloudflare ในรอบนี้ รายละเอียด production ยึด [DEPLOYMENTS](DEPLOYMENTS.md); การนำไฟล์ของโต๊ะทั่วไปกับ upload ของ Invoice เป็นคนละ capability
+
+รอบ public demo ใช้ browser ใหม่โดยไม่มีบัญชี: เลือกทดลองแรงและมวล กดขั้นบน Canvas ให้การ์ดค่อย ๆ เกิด ตรวจว่า Play เดินต่อและ Pause หยุด จากนั้นรับช่วงเอง เปลี่ยน F=12 N, m=3 kg, t=2 s แล้วกด Update lesson ได้ระยะ 8 m ตามสูตร ไม่มี API request, cookie, WebSocket หรือ uncaught browser error จึงไม่มี paid AI call และไม่แก้ห้องจริง หลักฐานนี้ครอบคลุมเดโมที่เตรียมไว้ ไม่ใช่การสร้างกฎใหม่ด้วย AI หรือ multiplayer บน hosted build ใหม่
+
+## งานทีมและสิ่งที่แก้ตอนรวม
+
+ตรวจ commits ของทีม 17 รายการในช่วงทำงานขนานกันแล้ว ทั้งหมดเป็นส่วนหนึ่งของประวัติ `ce6d69b` การคงประวัติไม่ได้หมายความว่าทุก implementation คงเดิม: แชท island ถูกแทนสำหรับโต๊ะทั่วไปตาม F006 ที่ผู้ใช้อนุมัติ โดยไม่ลบเครดิตหรือเขียนประวัติทีมทับ
+
+| งานที่ทีมส่งมา | สิ่งที่คงไว้ / ต่อหรือแก้ตอนรวม |
+| --- | --- |
+| แผน F001–F004, กระดานงาน และ release notes `v1.1.0` | คงเอกสารและประวัติ; F003 ลิงก์เชิญใช้ซ้ำ/เอาสมาชิกออกยังเป็นแผน ไม่ใช่ฟีเจอร์ที่ส่งแล้ว |
+| ESLint/pre-commit, React hooks และ server แยกต่อ browser scenario | คง safeguards และชุดตรวจเดิม; ปรับ browser flows ให้ตาม UI ปัจจุบันโดยไม่ข้าม hook หรือ force-click |
+| URL แต่ละหน้าและหน้าเริ่ม `/new` | คง reload, back/forward และ sign-in return; ข้อความเริ่มต้นเข้าสู่แชทใหม่โดยยังไม่เรียก AI ก่อนยินยอม |
+| แชท island / ย่อเมื่อว่าง (#28) | แก้ทางเปิดจาก Canvas ในรอบ F005; F006 ใช้แชทด้านล่างแทนในโต๊ะทั่วไป โค้ด `TableAssistant` เดิมไม่ได้ต่อกับหน้าโต๊ะปัจจุบัน |
+| ตั้งชื่อโต๊ะ (#29) | คงสิทธิ์เจ้าของและการแสดงชื่อสด; รักษาชื่อที่คนตั้งไว้เมื่อ AI แก้กฎและเมื่อสมาชิก/เจ้าของรีโหลด |
+| component แชท, การต่อขั้นแรก และช่องห้าบรรทัด (#30) | ต่อข้อความ/ไฟล์ → ร่าง → ทดลองส่วนตัว → review/เปิดใช้ → แก้กฎ; การ์ดคำตอบส่วนตัวและ Confirm action; consent ตรง payload, retry body เดิม และกู้ร่างหลัง refresh ล้มโดยไม่เรียก AI อีก |
+| ตำแหน่งการ์ดร่วมและ initial layout (#31) | seed การ์ดที่เกิดภายหลัง/กลับมาใหม่, ส่ง moves ตามคิว, แยก table/epoch/actor, เก็บ Rules ก่อนเปิดใช้เป็นส่วนตัว และไม่ให้ผลตอบรับโต๊ะเก่าทับโต๊ะใหม่; บันทึก layout ไม่ล็อกแชทหรือปลด busy ของคำสั่งเล่น |
+
+## หลักฐานรุ่นรวม
+
+ทั้ง [CI ก่อน merge ของ `665ef56`](https://github.com/Thanyers/tabletop/actions/runs/39420499206) และ [CI หลัง merge ของ `ce6d69b`](https://github.com/Thanyers/tabletop/actions/runs/39421576811) ผ่านทุกขั้นบน Node `22.23.2`; tree หลัง merge ตรงกับ candidate ที่ตรวจแล้ว
+
+| การตรวจ | ผล |
+| --- | --- |
+| Unit / local SQL | 376/376 |
+| Workers / D1 / Room / Billing | 71/71 |
+| Node browser | 7/7; ไม่มี uncaught errors |
+| Worker multiplayer / แชท / สิทธิ์ / recovery | 25/25; ไม่มี uncaught errors |
+| Generated Canvas | cafe, shadow, water และโจทย์คำนวณใหม่ ผ่าน private trial, actual button/slider/scene drag, เพิ่มการ์ดหลังแก้กฎ, shared layout และ reload; 8 intercepted provider calls, ไม่มี browser errors หรือ external requests |
+| Build / Worker dry-run / secret scans / dependency audit | ผ่าน; lint 0 errors และ warnings เดิม 101 รายการ |
+
+**AI จริง:** ใช้แอป `97ecd98` ก่อนรวม F007 ไม่เกิน 6 คำขอรวมสามเรื่อง: cafe คำนวณ 3 → 8 และเพิ่มการ์ดโดยเก็บงานเดิม, shadow ตรวจเรขาคณิตแยกได้ 80 → 70 พร้อม pointer drag, water สองบัญชีจำลองผลัดกันเล่นและรักษาน้ำรวม 100 หลัง reload ส่วนรุ่นรวมสุดท้ายใช้คำตอบ AI จำลองเพื่อทดสอบซ้ำ ผลนี้ไม่แทน Google สองบัญชีจริงบน hosted build ใหม่ ดู [F006 acceptance](features/F006-chat-first-table.md#ผลตรวจรุ่นรวม) สำหรับขอบเขตและไฟล์หลักฐาน local ที่ ignored
+
+## สิ่งที่ต้องตัดสินใจก่อนส่งรุ่นนี้
+
+1. **เคาะ release version:** เสนอ `2.0.0` ตามกฎ rollback ของ F005 เพราะห้องที่บันทึก expression/canvas ใหม่ต้องใช้ compatible writer; ยังไม่ได้อนุมัติเลขหรือสร้าง tag
+2. **อนุมัติรอบ hosted ของรุ่นใหม่:** เตรียม release branch/PR ตาม [AGENTS](../AGENTS.md#5-ออก-release), ใช้ staging ก่อนแล้วตรวจ Google สองบัญชีจริง การเชิญ/เล่น/แก้กฎ/กลับมาเล่นต่อ และ recovery ก่อนส่ง build เดียวกันไป production
+3. **ขอบเขตกลุ่มทดสอบ:** คง Workers Free และงบ AI เดิมได้สำหรับรอบเล็ก; ก่อนเปิด beta กว้างต้องปิดช่องว่างอุปกรณ์จริง, load และ recovery ด้านล่าง ไม่จำเป็นต้องย้าย hosting หรือเลือกโมเดลใหม่เพื่ออัปเดตเอกสารรอบนี้
 
 ลำดับงานที่ควรทำต่อ:
 
@@ -45,9 +97,9 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
 
 ## หลักฐานรุ่นก่อนหน้า
 
-- [รุ่นที่ deploy](DEPLOYMENTS.md) อ้าง source `9fbfdec`; staging และ production ใช้ source/build ชุดเดียวกัน ไฟล์เว็บ 131 ไฟล์ตรงกับ build และ `/version` รายงาน sha ตรงกัน
-- [CI ของรุ่นล่าสุด](https://github.com/Thanyers/tabletop/actions/runs/39368620190) ผ่าน unit/SQL, Cloudflare, Component Lab, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ AI provider จริง
-- รอบล่าสุดตรวจข้อความใหม่และเปิดตัวอย่างเดิมครบทั้งสอง environment พร้อมกลับเข้า River Race บน staging และ Encounter บน production แบบอ่านอย่างเดียว ข้อมูลและกฎเดิมยังอยู่; การเล่น River Race ด้วย Google สองบัญชีจริงเป็นหลักฐานของรอบก่อน ไม่ได้เล่นสองบัญชีใหม่ใน release นี้
+- [หลักฐาน UI ก่อนรอบนี้](PUBLIC_WELCOME_ACCEPTANCE.md) อ้าง source `9fbfdec`; staging และ production ใช้ source/build ชุดเดียวกันและไฟล์เว็บ 131 ไฟล์ตรงกับ build เป็นผลของรอบนั้น ส่วน source ที่กำลังให้บริการให้ยึด [DEPLOYMENTS](DEPLOYMENTS.md) และตารางด้านบน
+- [CI ของรอบนั้น](https://github.com/Thanyers/tabletop/actions/runs/39368620190) ผ่าน unit/SQL, Cloudflare, Component Lab, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ AI provider จริง
+- รอบนั้นตรวจข้อความใหม่และเปิดตัวอย่างเดิมครบทั้งสอง environment พร้อมกลับเข้า River Race บน staging และ Encounter บน production แบบอ่านอย่างเดียว ข้อมูลและกฎเดิมยังอยู่; การเล่น River Race ด้วย Google สองบัญชีจริงเป็นหลักฐานที่เก่ากว่า ไม่ใช่การตรวจ hosted build Generative ใหม่
 - [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) บันทึกการเล่น local ของ Helpdesk ด้วย AI จริงและบัญชีจำลองสองคน แยกจากหลักฐาน Google สองบัญชีบน staging
 - `SKIPPED`: automated axe/full contrast/screen-reader audit, การใช้นิ้วบนโทรศัพท์จริง และกรณี invoice เปลี่ยนระหว่างหลักฐานสองชิ้น
 - ยังไม่มีหลักฐาน load/soak, restart recovery หรือการกู้ D1 + Room + Billing ทั้งระบบ การกลับเข้าห้องเดิมและการทดสอบ local ไม่ยืนยันความพร้อมทุกกรณี
