@@ -60,7 +60,7 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
 2. การเขียนฐานข้อมูลต้องอนุมัติ scope ก่อน โดยระบุ environment/table, operation, predicate/record scope, จำนวนแถวที่คาด (หรือ `Unknown`) และ transaction/rollback; ทำและตรวจเฉพาะ scope เดิม
 3. Migration ที่อยู่ใน Git ไม่ได้อนุญาตให้รันกับฐานถาวร และห้ามใช้ provisioning รุ่นแรกซ้ำกับ environment ที่มีข้อมูลแล้ว
 4. เมื่อมี `table` data แล้ว อย่าถอยไป Worker ที่รองรับเพียงสามชนิดเดิม หากต้องหยุด write ให้ใช้ build ที่เข้ากันได้พร้อม `TABLE_READ_ONLY=true`, ตรวจ job ที่ค้าง และทำ recovery ไปข้างหน้า ตาม [compatible recovery](GENERIC_TABLE_ACCEPTANCE.md#compatible-recovery-build)
-   สำหรับ candidate Generative นี้ ไม่มี SQL migration/dependency/secret/binding ใหม่ แต่ JSON ที่มี expression/canvas ใหม่ต้องใช้ build ที่อ่านสัญญาใหม่นี้ได้ โค้ด `v1.0.0` ไม่ใช่ compatible writer สำหรับห้องเหล่านั้น
+   สำหรับ candidate Generative นี้ ไม่มี SQL migration/runtime dependency/secret/binding ใหม่ แต่ JSON ที่มี expression/canvas ใหม่ต้องใช้ build ที่อ่านสัญญาใหม่นี้ได้ โค้ด `v1.1.0` หรือต่ำกว่าไม่ใช่ compatible writer สำหรับห้องเหล่านั้น
 5. หลัง release ตรวจ `GET /version` ว่า `sha` ตรงกับ commit ที่ส่ง (config deploy ต้องมี `/version` ใน `assets.run_worker_first`) แล้วตรวจ asset parity และ resume ตาม scope ที่อนุมัติ แล้วอัปเดต [Deployment](DEPLOYMENTS.md) ด้วย source, version และหลักฐานที่ไม่มี credential หรือข้อมูลผู้ใช้
 
 ไม่มี deploy step ใน CI อย่าใส่ secret, account/session evidence หรือ operator receipts ใน Git; หลักฐานที่ระบุตัวตนและ runtime config อยู่ใน ignored local `test-results/` และต้องส่งต่อโดยเจ้าของระบบ

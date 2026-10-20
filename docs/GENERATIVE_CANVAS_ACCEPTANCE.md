@@ -27,7 +27,7 @@ Candidate: `feat/F005-generative-canvas` · Node `22.23.2` · 2026-10-20
 | เอกสาร | local Markdown target check, `git diff --check` | PASS 170 local links ในเอกสารใช้งาน/ส่งต่อที่แก้; ไม่มี whitespace error |
 | Independent review | ตรวจ source candidate และ regression | ปิดข้อค้นพบปุ่มกดซ้ำ, actor-specific output bounds และ pending focus ทับการซูมแล้ว; ไม่มี material finding ค้างในขอบเขตที่ตรวจ |
 
-โค้ดแอปที่ตรวจคือ `8705bd9` (Node `22.23.2`); การแก้หลัง commit นี้เป็นเอกสาร, การเก็บหลักฐานเดิม และ live acceptance ที่รอ geometry ของการ์ด/ตรวจสูตรภาพเพิ่ม โดยไม่ได้แก้ runtime ผลและภาพใน `test-results/` เป็นหลักฐานในเครื่องที่ไม่ commit; CI เก็บเฉพาะผล fixture จำลองเป็น artifacts ไม่มี credential หรือประวัติผู้ใช้จริงใน repo ผล CI ของ PR ต้องตรวจบน head ล่าสุดแยกจากผล local นี้
+โค้ดแอปที่ตรวจคือ `8705bd9` (Node `22.23.2`); การแก้หลัง commit นี้เป็นเอกสาร, การเก็บหลักฐานเดิม และ live acceptance ที่รอ geometry ของการ์ด/ตรวจสูตรภาพเพิ่ม โดยไม่ได้แก้ runtime รวม `dev` ถึง `6cf0244` ที่บันทึก release v1.1.0 แล้วและคง F005 ไว้ใน Unreleased ผลและภาพใน `test-results/` เป็นหลักฐานในเครื่องที่ไม่ commit; CI เก็บเฉพาะผล fixture จำลองเป็น artifacts ไม่มี credential หรือประวัติผู้ใช้จริงใน repo ผล CI ของ PR ต้องตรวจบน head ล่าสุดแยกจากผล local นี้
 
 ## สิ่งที่วัดจากการใช้งาน
 
