@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — T1–T6 merge ใน #30 → dev `ce6d69b`; CI ก่อนและหลัง merge ผ่านครบ เอกสารส่งต่อ T7 อยู่สถานะ review ใน PR #32 |
+| สถานะ | `done` — T1–T6ใน#30, T7ใน#32และR200handoff; รวมในrelease2.0.0และdeployแล้ว |
 | เจ้าของฟีเจอร์ | ผู้ใช้ (ผู้สั่งงาน); ทีมเริ่ม implementation และ Codex รับช่วง integration/verification |
 | เวอร์ชันที่คาด | F006 เป็น UI change ไม่มี migration; release รวม F005 ต้องพิจารณาข้อจำกัด rollback ของ F005 ด้วย |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F006-T*` |
@@ -101,3 +101,9 @@
 รอบ AI จริงก่อนรวม F007 ใช้แอป `97ecd98` และคำขอรวม 6 ครั้ง: cafe คำนวณ 3 → 8 และเพิ่มการ์ดหลังแก้กฎโดยรักษางานเดิม, shadow ตรวจสูตรแยกได้ 80 → 70 และลากวัตถุจริง, water เล่นสองบัญชีจำลองรักษายอดรวม 100 และกลับมาเล่นต่อได้ หลังรวม F007 ตรวจ UI/authority ซ้ำด้วย provider จำลอง; ไม่ถือว่าได้ทดสอบ Google OAuth, production หรือโทรศัพท์สองเครื่องจริงใหม่แล้ว
 
 หลักฐาน local อยู่ใน `test-results/f006-final-*.log`, `test-results/generative-canvas/report.json`, `test-results/cloudflare-browser/report.json` และ `test-results/F006-live-evidence.json` ซึ่งไม่เผยแพร่ใน repo ส่วน CI ของ commit ที่ส่งตรวจให้ดู [PR #30](https://github.com/Thanyers/tabletop/pull/30) การส่งรุ่นขึ้น production เป็นขั้น release แยก
+
+## Release2.0.0
+
+F006รวมกับF005/F002/F007แล้วส่งstagingและproductionจากtag2.0.0 ผ่านสองGoogle sessionsจริง, privatechat/resumeและread-onlyrecovery ดู[Releaseacceptance](../RELEASE_2_0_ACCEPTANCE.md)สำหรับSHAแต่ละขั้น ไม่อ้างว่ารอบlocalก่อนหน้าแทนhosted
+
+แชทใหม่นี้เฉพาะkind=table; legacyInvoice/Physics/Encounterยังใช้AIเดิม Node localปิดAIโดยตั้งใจ npm startเสิร์ฟdistจึงต้องnpm run buildหลังpull วิธีตรวจmissingchatอยู่ใน[Handoff](../TEAM_HANDOFF_TH.md#ถ้าไม่เห็นแชทในเครื่อง)
