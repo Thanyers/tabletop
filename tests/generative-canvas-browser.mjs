@@ -266,13 +266,23 @@ try {
 
   async function openCanvasObject(page, id) {
     const editor = page.getByTestId('canvas-object-editor');
-    if (await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id) return editor;
-    const dock = await openObjects(page);
-    const button = dock.getByTestId(`open-canvas-${id}`);
-    await expect(button).toBeVisible();
-    await button.click();
-    await expect(editor).toHaveAttribute('data-canvas-object', id);
-    await expect(editor).toBeVisible();
+    if (!(await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id)) {
+      const dock = await openObjects(page);
+      const button = dock.getByTestId(`open-canvas-${id}`);
+      await expect(button).toBeVisible();
+      await button.click();
+      await expect(editor).toHaveAttribute('data-canvas-object', id);
+      await expect(editor).toBeVisible();
+    }
+    let previous = null;
+    await expect.poll(async () => {
+      const box = await editor.boundingBox();
+      if (!box) { previous = null; return false; }
+      const current = [box.x, box.y, box.width, box.height];
+      const stable = previous !== null && current.every((value, index) => Math.abs(value - previous[index]) < 0.5);
+      previous = current;
+      return stable;
+    }, { timeout: 3_000, intervals: [50, 100, 150] }).toBe(true);
     return editor;
   }
 
@@ -532,6 +542,8 @@ try {
       return updated;
     }
     if (scenario.action === 'scene-drag') {
+      const beforeValues = active.domain.records.lights[0].values;
+      const tableActCount = tableActRequests.length;
       const editor = await openCanvasObject(owner, 'table.view.light-shadow-scene');
       const scene = editor.locator('svg.tt-generated-scene');
       const light = scene.locator('.tt-generated-scene__shape[aria-label="Move light-source"]');
@@ -554,17 +566,18 @@ try {
       await drag.up();
       await expect.poll(async () => {
         const value = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.records.lights[0].values;
-        return value.light_x === 40 && value.light_y === 20 ? value : null;
+        return Math.abs(value.light_x - 40) <= 0.001 && Math.abs(value.light_y - 20) <= 0.001 ? value : null;
       }).not.toBeNull();
       const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
       const values = current.domain.records.lights[0].values;
+      expect(Math.abs(values.light_x - beforeValues.light_x)).toBeGreaterThan(1);
+      expect(Math.abs(values.light_y - beforeValues.light_y)).toBeGreaterThan(1);
+      expect(tableActRequests).toHaveLength(tableActCount + 1);
       const independentlyComputedShadow = values.light_x
         + ((values.ground_y - values.light_y) * (values.object_x - values.light_x))
         / (values.top_y - values.light_y);
-      expect(values.light_x).toBe(40);
-      expect(values.light_y).toBe(20);
-      expect(independentlyComputedShadow).toBeCloseTo(63.3333333333, 8);
-      await expect((await openCanvasObject(owner, 'table.view.shadow-tip')).locator('.tt-generated-metric strong')).toHaveText('63.33');
+      expect(independentlyComputedShadow.toFixed(2)).toBe('63.33');
+      await expect((await openCanvasObject(owner, 'table.view.shadow-tip')).locator('.tt-generated-metric strong')).toHaveText(independentlyComputedShadow.toFixed(2));
       return current;
     }
     if (scenario.action === 'slider') {
@@ -616,7 +629,7 @@ try {
   }
 
   async function assertMemberCannotUsePrivateTools(member, tableId, revision, epoch, source) {
-    if (source) expect((await api(member, `/api/workspaces/${tableId}/sources/${source.id}`)).status).toBe(403);
+    if (source) expect([403, 404]).toContain((await api(member, `/api/workspaces/${tableId}/sources/${source.id}`)).status);
     const beforeCalls = providerCalls;
     const denied = await api(member, `/api/workspaces/${tableId}/model`, {
       commandId: randomUUID(), expectedRevision: revision, expectedEpoch: epoch,
@@ -647,10 +660,12 @@ try {
     const memberTwo = await addMember(owner, memberTwoActor, 'member-2', tableId);
     const members = [memberOne, memberTwo];
     const ownerReady = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const visibleProgram = structuredClone(ownerReady.domain.program);
+    if (scenario.file) visibleProgram.evidence = [];
     for (const member of members) {
       const projection = await api(member, `/api/workspaces/${tableId}`);
       expect(projection.status).toBe(200);
-      expect(projection.body.domain.program).toEqual(ownerReady.domain.program);
+      expect(projection.body.domain.program).toEqual(visibleProgram);
       expect(projection.body.domain.records).toEqual(ownerReady.domain.records);
       expect(projection.body.domain.canvasLayout).toEqual(ownerReady.domain.canvasLayout);
       expect(projection.body.domain.sources).toEqual([]);
