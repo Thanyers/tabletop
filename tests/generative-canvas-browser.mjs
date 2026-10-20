@@ -419,9 +419,11 @@ try {
       await submit.click();
       await expect(consent).toBeVisible();
       const dialogText = (await consent.innerText()).replace(/\s+/gu, ' ');
-      expect(dialogText).toMatch(/table.{0,40}(context|data)|current table/iu);
+      expect(dialogText).toMatch(/current active rules, records, and turn|current table context/iu);
+      expect(dialogText).toContain('Chat history is not included.');
+      expect(dialogText).toContain('Private source files included');
       for (const filename of sourceNames) expect(dialogText).toContain(filename);
-      if (sourceNames.length === 0) expect(dialogText).toMatch(/no files|not included/iu);
+      if (sourceNames.length === 0) expect(dialogText).toMatch(/no private source files are attached|not included/iu);
       if (cancelFirst) {
         expect(modelPosts).toBe(0);
         await consent.getByRole('button', { name: 'Cancel', exact: true }).click();

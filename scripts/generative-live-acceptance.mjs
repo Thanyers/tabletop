@@ -96,7 +96,9 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
     const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
     await expect(consent).toBeVisible();
     const consentCopy = (await consent.innerText()).replace(/\s+/gu, ' ');
-    expect(consentCopy).toMatch(/table.{0,40}(context|data)|current table/iu);
+    expect(consentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
+    expect(consentCopy).toContain('Chat history is not included.');
+    expect(consentCopy).toContain('Private source files included');
     for (const source of before.domain.sources) expect(consentCopy).toContain(source.filename);
     const request = page.waitForResponse(response => response.url().endsWith(`/api/workspaces/${id}/model`) && response.request().method() === 'POST');
     void request.catch(() => {});

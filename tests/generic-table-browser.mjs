@@ -324,7 +324,9 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   await send.click();
   await expect(consent).toBeVisible();
   const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
-  expect(copy).toMatch(/table.{0,40}(context|data)|current table/iu);
+  expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
+  expect(copy).toContain('Private source files included');
+  expect(copy).toContain('Chat history is not included.');
   for (const filename of sourceNames) expect(copy).toContain(filename);
   expect(modelRequests).toBe(0);
   await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -585,8 +587,9 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
     await send.click();
     await expect(consent).toBeVisible();
     const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
-    expect(copy).toMatch(/table.{0,40}(context|data)|current table/iu);
-    expect(copy).toMatch(/source files?.{0,40}(excluded|not included)|no source files/iu);
+    expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
+    expect(copy).toContain('up to six recent private chat exchanges');
+    expect(copy).toContain('Private source files are excluded.');
     expect(assistantRequests).toBe(0);
     expect(modelRequests).toBe(0);
     if (cancelFirst) {
@@ -778,7 +781,9 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   const fileConsent = ownerChat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
   await expect(fileConsent).toBeVisible();
   const fileConsentCopy = (await fileConsent.innerText()).replace(/\s+/gu, ' ');
-  expect(fileConsentCopy).toMatch(/table.{0,40}(context|data)|current table/iu);
+  expect(fileConsentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
+  expect(fileConsentCopy).toContain('Private source files included');
+  expect(fileConsentCopy).toContain('Chat history is not included.');
   expect(fileConsentCopy).toContain(fixtures.equipment.filename);
   expect(fileConsentCopy).toContain(equipmentNotes.filename);
   await fileConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -866,7 +871,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await resetChat.getByRole('button', { name: 'Send message', exact: true }).click();
   const resetConsent = resetChat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
   await expect(resetConsent).toBeVisible();
-  expect((await resetConsent.innerText()).replace(/\s+/gu, ' ')).toMatch(/table.{0,40}(context|data)|current table/iu);
+  expect((await resetConsent.innerText()).replace(/\s+/gu, ' ')).toMatch(/current active rules, records, and turn|current table context/iu);
   await resetConsent.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(getProviderCalls()).toBe(beforeResetCalls);
   mark('Generic table: text source, reviewed lifecycle, shared equipment actions, borrower-only return, private source projection, and reload persistence');

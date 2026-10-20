@@ -484,7 +484,11 @@ try {
   await composer.press('Enter');
   const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
   await expect(consent).toBeVisible();
-  expect((await consent.innerText()).replace(/\s+/gu, ' ')).toMatch(/table.{0,40}(context|data)|current table/iu);
+  const consentCopy = (await consent.innerText()).replace(/\s+/gu, ' ');
+  expect(consentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
+  expect(consentCopy).toContain('Chat history is not included.');
+  expect(consentCopy).toContain('Private source files included');
+  expect(consentCopy).toContain('No private source files are attached.');
   expect(modelPosts).toBe(0);
   await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(composer).toHaveValue('Require consent before a table prompt is sent.');
