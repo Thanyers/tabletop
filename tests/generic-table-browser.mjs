@@ -305,6 +305,8 @@ async function progressThroughLifecycle(owner, tableId, api, rules) {
   const editor = await openCanvasObject(owner, 'table.rules');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
   const proposedRules = editor.getByRole('region', { name: 'Proposed rules', exact: true });
+  const actionDetails = proposedRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  await actionDetails.locator('summary').click();
   await expect(proposedRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
   for (const rule of rules) {
     const action = proposedRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
@@ -372,12 +374,16 @@ async function joinAndCheckPrivateFiles(newPage, api, actor, inviteUrl, tableId,
   await page.getByTestId('canvas-object-menu-trigger').click();
   const assistant = page.getByTestId('table-assistant');
   await expect(assistant.getByRole('heading', { name: 'Table assistant', exact: true })).toBeVisible();
-  await expect(assistant).toContainText('The owner manages private source files and rule drafts.');
+  const privacy = assistant.locator('.tt-table-chat__privacy');
+  await privacy.locator('summary').click();
+  await expect(privacy).toContainText('The owner manages private source files and rule drafts');
+  await privacy.locator('summary').click();
   const tableTools = assistant.locator('.tt-table-assistant__canvas-tools');
-  await expect(tableTools).not.toHaveAttribute('open', '');
-  await tableTools.locator('summary').click();
-  await expect(assistant.getByRole('button', { name: 'Open actions', exact: true })).toBeVisible();
-  await expect(assistant.getByRole('button', { name: 'View active rules', exact: true })).toBeVisible();
+  await expect(tableTools).toHaveCount(0);
+  await openCanvasObject(page, 'table.rules');
+  await expect(page.getByTestId('canvas-object-editor').getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
+  await openCanvasObject(page, 'table.actions');
+  await expect(page.getByTestId('canvas-object-editor').locator('.tt-table-action-picker')).toBeVisible();
   await expect(assistant.getByTestId('table-ai-composer')).toHaveCount(0);
   await expect(assistant.getByLabel('Choose table source files')).toHaveCount(0);
   await expect(assistant.getByRole('button', { name: 'Prepare rule draft', exact: true })).toHaveCount(0);
@@ -451,12 +457,12 @@ async function performContextualAction(page, collectionId, { recordId, recordLab
   return response;
 }
 
-const tableChatConsent = 'I agree to send this message and the shared table context to the AI provider.';
+const tableChatConsent = 'I agree to share this message and table context with the AI provider.';
 
 async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply) {
   const chat = page.getByTestId('table-chat');
-  const prompt = chat.getByRole('textbox', { name: 'Ask about the shared table' });
-  const send = chat.getByRole('button', { name: 'Send to assistant', exact: true });
+  const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
+  const send = chat.getByRole('button', { name: 'Send', exact: true });
   await expect(prompt).toBeEnabled();
   await prompt.fill(promptText);
   await expect(send).toBeDisabled();
@@ -466,6 +472,8 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
   await send.click();
   const response = await responsePromise;
   expect([200, 202]).toContain(response.status());
+  const history = chat.locator('.tt-table-chat__history');
+  if (await history.getAttribute('open') === null) await history.locator('summary').click();
   await expect(chat).toContainText(syntheticReply.result.text, { timeout: 20_000 });
   return chat;
 }
@@ -786,7 +794,7 @@ export async function verifyGenericTableBrowser({ actors, newPage, api, setTable
   const scenarios = [equipmentScenario, shiftScenario, gameScenario];
   for (let index = 0; index < scenarios.length; index += 1) {
     const owner = await newPage(owners[index]);
-    await expect(owner.getByRole('heading', { name: 'Choose a table' })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: 'What are we making?' })).toBeVisible();
     await scenarios[index]({ owner, member: actors.members[0], secondMember, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark });
     await owner.screenshot({ path: `test-results/cloudflare-browser/generic-table-${['equipment', 'shifts', 'game'][index]}.png`, fullPage: true });
   }
