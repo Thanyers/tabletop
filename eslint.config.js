@@ -55,15 +55,6 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
   },
   {
-    // These return early before their hooks (spec.md → ถัดไป). New files stay strict.
-    files: [
-      'src/tabletop/ui/EncounterWorkbench.tsx',
-      'src/tabletop/ui/InvoiceWorkbench.tsx',
-      'src/tabletop/ui/TeachingWorkbench.tsx',
-    ],
-    rules: { 'react-hooks/rules-of-hooks': 'warn' },
-  },
-  {
     files: ['cloudflare/**/*.ts'],
     languageOptions: { globals: { ...globals.serviceworker } },
   },

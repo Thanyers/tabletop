@@ -58,7 +58,7 @@ Browser runners เปิด loopback fixture ของตัวเอง ใช
 | --- | --- | --- |
 | `@typescript-eslint/no-explicit-any` | error | `strict` กันแค่ `any` ที่ TypeScript อนุมานเอง ไม่กัน `: any` / `as any` ที่เขียนเอง · ใช้ `unknown` แล้ว narrow หรือ zod แทน |
 | `@typescript-eslint/ban-ts-comment` | error | ห้าม `@ts-ignore` / `@ts-nocheck` · `@ts-expect-error` ต้องมีเหตุผลอย่างน้อย 10 ตัวอักษร |
-| `react-hooks/rules-of-hooks` | error | ยกเว้นเป็น warning เฉพาะ workbench 3 ไฟล์ที่ return ก่อนเรียก hook อยู่แล้ว ([spec](spec.md#ถัดไป)) |
+| `react-hooks/rules-of-hooks` | error | component ที่ต้อง return ก่อนตามชนิดข้อมูล ให้แยก guard ออกเป็น component นอก แล้วส่งค่าที่ narrow แล้วให้ component ใน (ดู `InvoiceWorkbench.tsx`) |
 | eslint-disable ที่ไม่ได้ใช้ | error | กัน comment ปิดกฎค้างหลังแก้โค้ดแล้ว |
 | กฎ recommended ที่เหลือ | error | ยกเว้นกฎที่มีของเดิมค้างตอนเริ่มใช้ lint ซึ่งตั้งเป็น warning ไว้ก่อน (ดูใน config) แล้วจะเลื่อนเป็น error เมื่อเคลียร์หมด |
 | `no-control-regex` | off | sanitizer ตั้งใจลบอักขระควบคุม |
