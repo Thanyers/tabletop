@@ -120,8 +120,8 @@ const binding = (from: string, output: string, to: string, input: string, valueT
 export function manifestForWorkspace(view: WorkspaceView): Manifest {
   const state = view.domain;
   if (state.kind === 'table') {
-    const nodes = [node('table.rules', 'table.rules', 'กฎและข้อเสนอ', 40, 480, { state }, 'private')];
-    if (view.actor.role === 'owner') nodes.unshift(node('table.sources', 'table.sources', 'ไฟล์ของโต๊ะ', 40, 40, { state }, 'private'));
+    const nodes = [node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private')];
+    if (view.actor.role === 'owner') nodes.unshift(node('table.sources', 'table.sources', 'Files', 40, 40, { state }, 'private'));
     const bindings: Binding[] = [];
     for (const [index, collection] of (state.program?.collections ?? []).entries()) {
       const collectionNode = `table.collection.${collection.id}`;
@@ -129,7 +129,7 @@ export function manifestForWorkspace(view: WorkspaceView): Manifest {
       bindings.push(binding('table.rules', 'revision', collectionNode, 'revision', 'RuleRevisionV1'));
     }
     if (state.program) {
-      nodes.push(node('table.actions', 'table.actions', 'เล่นและทำรายการ', 580 + Math.ceil(state.program.collections.length / 2) * 540, 40));
+      nodes.push(node('table.actions', 'table.actions', 'Actions', 580 + Math.ceil(state.program.collections.length / 2) * 540, 40));
       bindings.push(binding('table.rules', 'revision', 'table.actions', 'revision', 'RuleRevisionV1'));
     }
     return { version: 1, kind: 'table', nodes, bindings };

@@ -1,0 +1,51 @@
+/* Tabletop · shared tokens · paper pieces on an open, quiet table. */
+.tt-app, .tt-chooser, .tt-account-gate {
+  /* Palette and scales. */
+  --tt-cream-0: #fffdf7;
+  --tt-cream-1: #faf8f0;
+  --tt-cream-2: #eeeee2;
+  --tt-cream-3: #d9d4c4;
+  --tt-ink-1: #303d3a;
+  --tt-ink-2: #667268;
+  --tt-green-1: #356e5d;
+  --tt-green-2: #e8f0e4;
+  --tt-blue-1: #3e6c86;
+  --tt-blue-2: #eaf0f3;
+  --tt-ochre-1: #89632f;
+  --tt-ochre-2: #f7edda;
+  --tt-clay-1: #9a5c4e;
+  --tt-clay-2: #f6e9e2;
+  --tt-space-1: 4px;
+  --tt-space-2: 8px;
+  --tt-space-3: 12px;
+  --tt-space-4: 16px;
+  --tt-space-5: 20px;
+  --tt-space-6: 24px;
+  --tt-radius-small: 8px;
+  --tt-radius-medium: 12px;
+  --tt-radius-large: 18px;
+  --tt-type-small: 12px;
+  --tt-type-body: 14px;
+  --tt-type-title: 17px;
+  --tt-shadow-piece: 0 3px 0 #d8d4c480, 0 8px 20px #303d3a0d;
+  --tt-shadow-lift: 0 5px 0 #d8d4c450, 0 16px 32px #303d3a1a;
+  /* Semantic roles. */
+  --tt-ink: var(--tt-ink-1);
+  --tt-muted: var(--tt-ink-2);
+  --tt-line: var(--tt-cream-3);
+  --tt-paper: var(--tt-cream-1);
+  --tt-canvas: var(--tt-cream-2);
+  --tt-moss: var(--tt-green-1);
+  --tt-blue: var(--tt-blue-1);
+  --tt-amber: var(--tt-ochre-1);
+  --tt-red: var(--tt-clay-1);
+  /* Component roles. */
+  --tt-card-surface: var(--tt-cream-0);
+  --tt-card-edge: var(--tt-cream-3);
+  --tt-card-radius: var(--tt-radius-large);
+  --tt-card-padding: var(--tt-space-4);
+  --tt-button-surface: var(--tt-cream-1);
+  --tt-button-radius: var(--tt-radius-medium);
+  --tt-button-height: 40px;
+  --tt-compose-radius: var(--tt-radius-large);
+}

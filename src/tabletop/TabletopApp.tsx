@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowDownUp, ArrowRight, BookOpen, Check, ChevronDown, CircleAlert, Clipboard, LoaderCircle, Play, Plus, RefreshCw, RotateCcw, ShieldCheck, Sparkles, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowRight, BookOpen, Check, ChevronDown, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
@@ -14,9 +14,8 @@ import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
 import './ui/tabletop.css';
+import './ui/calm-workspace.css';
 
-type SurfaceMode = 'canvas' | 'focus';
-type EditMode = 'use' | 'arrange';
 type InviteState = { seat: Seat; invite: WorkspaceInvite; url: string; revoked?: boolean } | null;
 
 const lastWorkspaceKey = 'tabletop.lastWorkspace';
@@ -73,7 +72,7 @@ function workspaceDisplayTitle(workspace: WorkspaceView): string {
 }
 
 function workspaceLabel(workspace: WorkspaceView): string {
-  return `${caseInfo[workspace.kind].title} · ${workspaceDisplayTitle(workspace)}`;
+  return workspaceDisplayTitle(workspace);
 }
 
 function saveLastWorkspace(id: string | null): void {
@@ -116,8 +115,8 @@ export default function TabletopApp() {
   const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [surface, setSurface] = useState<SurfaceMode>('canvas');
-  const [editMode, setEditMode] = useState<EditMode>('use');
+  const [draftPrompt, setDraftPrompt] = useState('');
+  const [aiPrefill, setAiPrefill] = useState<{ text: string; key: number } | undefined>();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [focusRequestKey, setFocusRequestKey] = useState(0);
@@ -153,11 +152,15 @@ export default function TabletopApp() {
     if (next) projectionSequenceRef.current += 1;
     setView(next);
     if (changedTable) {
-      setSurface('canvas');
-      setSelectedNodeId(null);
+      const startWithFiles = next?.kind === 'table' && next.domain.kind === 'table' && !next.domain.program && next.actor.role === 'owner';
+      const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && next.actor.role === 'owner' && next.domain.candidate && next.domain.candidate.status !== 'active';
+      const startObject = pendingRules ? 'table.rules' : startWithFiles ? 'table.sources' : null;
+      setSelectedNodeId(startObject);
       setFocusNodeId(null);
-      setOpenedObjectId(null);
+      setOpenedObjectId(startObject);
       setFocusSourceIds([]);
+      setDraftPrompt('');
+      setAiPrefill(undefined);
     }
     if (previous?.id !== next?.id) {
       setInviteState(null);
@@ -381,10 +384,10 @@ export default function TabletopApp() {
         setPreviousInvitesRevoked(true);
         setInviteState((previous) => previous ? { seat: previous.seat, invite: previous.invite, url: '', revoked: true } : null);
         showNotice('The table was reset. Previous member access and invitations were revoked.', 'success');
-      } else if (type.startsWith('evolve.')) showNotice('Draft state updated. Active values remain unchanged until activation.', 'success');
+      }
       else if (type === 'teaching.answer') showNotice('Your answer was checked against the current lesson.', 'success');
       else if (type === 'encounter.endTurn') showNotice('The server started the next turn and updated its action points.', 'success');
-      else showNotice('Table updated.', 'success');
+
       await refreshSession().catch(() => undefined);
       return latest;
     } catch (error) {
@@ -590,7 +593,6 @@ export default function TabletopApp() {
   }, []);
 
   const requestCanvasFocus = useCallback((nodeId: string, open = true) => {
-    setSurface('canvas');
     setSelectedNodeId(nodeId);
     setFocusNodeId(nodeId);
     setFocusRequestKey((key) => key + 1);
@@ -611,10 +613,6 @@ export default function TabletopApp() {
   const selectCanvasNode = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId);
   }, []);
-
-  const focusAIProposal = useCallback(() => {
-    requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.ai);
-  }, [requestCanvasFocus]);
 
   const beginReset = useCallback(async () => {
     const result = await runCommand('workspace.reset', {});
@@ -642,8 +640,8 @@ export default function TabletopApp() {
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : view.kind === 'table' ? ['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
   const remainingInviteSeats = inviteSeats.filter((seat) => !connectedSeats.has(seat) && !(inviteIsHeld && inviteState?.seat === seat));
-  const aiContent = canAskAI && view.kind !== 'table' && !tableReadOnly ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} /> : undefined;
-  const tableAssistant = isTableWorkspaceView(view) ? <TableAssistant
+  const aiContent = canAskAI && view.kind !== 'table' && !tableReadOnly ? <AIProposal view={view} capabilities={capabilities} onRequest={requestAI} onPoll={pollAI} onRefresh={refreshWorkspaceProjection} prefill={aiPrefill} /> : undefined;
+  const tableAssistant = isTableWorkspaceView(view) ? <TableAssistant compact
     key={`${view.id}:${view.epoch}:${view.actor.actorId}`}
     view={view}
     capabilities={capabilities}
@@ -669,33 +667,27 @@ export default function TabletopApp() {
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
     <div className="tt-app">
       <header className="tt-topbar">
-        <a className="tt-brand" href="#table" aria-label="Tabletop workspace"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
+        <a className="tt-brand" href="#table" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
         <span className="tt-topbar__divider" aria-hidden="true" />
         <div className="tt-workspace-picker">
-          <button type="button" className="tt-workspace-picker__button" aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><small>TABLE</small><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
+          <button type="button" className="tt-workspace-picker__button" aria-label={`Tables: ${workspaceLabel(view)}`} aria-haspopup="menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span><strong>{workspaceLabel(view)}</strong></span><ChevronDown size={15} /></button>
           {workspaceMenuOpen && <>
             <button className="tt-menu-dismiss" type="button" aria-label="Close table menu" onClick={() => setWorkspaceMenuOpen(false)} />
             <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span>{(['invoice', 'teaching', 'encounter', 'table'] as const).map((kind) => <button role="menuitem" type="button" key={kind} disabled={kind === 'table' && capabilities.tableReadOnly === true} title={kind === 'table' && capabilities.tableReadOnly ? 'Creating shared tables is temporarily paused.' : undefined} onClick={() => void createWorkspace(kind)}><Plus size={15} /><span><strong>{caseInfo[kind].title}</strong><small>{kind === 'table' && capabilities.tableReadOnly ? 'Temporarily paused' : caseInfo[kind].subtitle}</small></span><ArrowRight size={14} /></button>)}<hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
           </>}
         </div>
         <div className="tt-topbar__spacer" />
-        <a className="tt-auto-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)" title="Opens in a new tab"><Play size={13} fill="currentColor" /><span>Auto demo</span><small aria-hidden="true">↗</small></a>
-        {headerAccount && <AccountBadge user={headerAccount} busy={busy === 'auth.logout'} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />}
-        <div className="tt-connection" data-state={connection} role="status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Connected' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Connection lost' : 'Reconnecting'}</span></div>
-        <span className="tt-role-chip">{view.actor.role}</span>
+        <div className="tt-connection" data-state={connection} role="status" title="Live connection status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Offline' : 'Reconnecting'}</span></div>
         {view.kind !== 'invoice' && <button type="button" className="tt-people-button" onClick={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} aria-label={`People at this table, ${view.members.length} connected`}><Users size={16} /><span>{view.members.length}</span></button>}
         {canInvite && <button type="button" className="tt-button tt-button--quiet tt-invite-button" onClick={openInviteDialog}><Plus size={14} /> Invite</button>}
-        {canReset && <button type="button" className="tt-topbar-icon" title="Reset table" aria-label="Reset table" onClick={() => setResetOpen(true)}><RotateCcw size={15} /></button>}
-        <button type="button" className="tt-topbar-icon" title="Refresh latest table" aria-label="Refresh latest table" disabled={busy !== null} onClick={() => void openWorkspace(view.id)}><RefreshCw size={15} className={busy === 'workspace.open' ? 'tt-spin' : ''} /></button>
+        <details className="tt-table-options"><summary aria-label="Table options"><MoreHorizontal size={20} /></summary><div className="tt-table-options__body">
+          <a href="/demo" target="_blank" rel="noopener"><Play size={15} />Try a demo</a>
+          <button type="button" disabled={busy !== null} onClick={() => void openWorkspace(view.id)}><RefreshCw size={15} />Refresh table</button>
+          {canReset && <button type="button" onClick={() => setResetOpen(true)}><RotateCcw size={15} />Reset table</button>}
+          <small>{view.actor.role} · rules r{view.domain.ruleRevision} · data r{view.domain.dataRevision}</small>
+          {headerAccount && <AccountBadge user={headerAccount} busy={busy === 'auth.logout'} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />}
+        </div></details>
       </header>
-
-      <div className="tt-layout-controls">
-        <div className="tt-mode-switch" role="group" aria-label="Edit mode"><button type="button" aria-pressed={editMode === 'use'} className={editMode === 'use' ? 'is-active' : ''} onClick={() => setEditMode('use')}><Check size={13} /> Use</button><button type="button" aria-pressed={editMode === 'arrange'} className={editMode === 'arrange' ? 'is-active' : ''} onClick={() => setEditMode('arrange')}><ArrowDownUp size={13} /> Arrange</button></div>
-        <span className="tt-layout-controls__hint">{editMode === 'use' ? 'Select a source, result, rule, or scene to work with its controls.' : 'Drag objects to arrange this canvas.'}</span>
-        {view.kind !== 'table' && <div className="tt-mobile-switch" role="group" aria-label="Workspace view"><button type="button" aria-pressed={surface === 'canvas'} className={surface === 'canvas' ? 'is-active' : ''} onClick={() => setSurface('canvas')}>Canvas</button><button type="button" aria-pressed={surface === 'focus'} className={surface === 'focus' ? 'is-active' : ''} onClick={() => setSurface('focus')}>Focus table</button></div>}
-        {view.kind !== 'table' && canAskAI && !tableReadOnly && capabilities.model.enabled && <button type="button" className="tt-button tt-button--quiet tt-ai-launch" onClick={focusAIProposal}><Sparkles size={13} /> Ask AI</button>}
-        <span className="tt-layout-controls__revision">r{view.domain.ruleRevision} · data r{view.domain.dataRevision}</span>
-      </div>
 
       {tableReadOnly && <div className="tt-notice tt-notice--info tt-table-readonly-notice" role="status"><span><ShieldCheck size={15} /></span><p>Editing this shared table is temporarily paused. Existing records and rules remain available to inspect.</p></div>}
 
@@ -705,8 +697,7 @@ export default function TabletopApp() {
         view={view}
         plan={compiled.plan}
         planError={compiled.error}
-        surface={surface}
-        editMode={editMode}
+        surface="canvas"
         selectedNodeId={selectedNodeId}
         onSelectNode={selectCanvasNode}
         onCommand={runCommand}
@@ -723,6 +714,7 @@ export default function TabletopApp() {
         onFocusObject={requestCanvasFocus}
         aiContent={aiContent}
         assistantContent={tableAssistant}
+        promptContent={aiContent && capabilities.model.enabled ? <form className="tt-canvas-composer" onSubmit={(event) => { event.preventDefault(); if (!draftPrompt.trim()) return; setAiPrefill({ text: draftPrompt.trim(), key: Date.now() }); setDraftPrompt(''); requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.ai); }}><label className="tt-visually-hidden" htmlFor="tt-canvas-change-prompt">Describe a rule change</label><input id="tt-canvas-change-prompt" value={draftPrompt} maxLength={1200} onChange={(event) => setDraftPrompt(event.target.value)} placeholder="What would you like to change?" /><button type="submit" aria-label="Prepare a change" disabled={!draftPrompt.trim()}><Send size={17} /></button><small>Review a draft before using it.</small></form> : undefined}
         focusNodeId={focusNodeId}
         focusRequestKey={focusRequestKey}
         openedObjectId={openedObjectId}
@@ -750,9 +742,11 @@ function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'inf
 function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onCreate, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onCreate: (kind: CaseKind) => void; onOpen: (id: string) => void }) {
   return <main className="tt-chooser"><header className="tt-chooser__top"><a className="tt-brand" href="#table" aria-label="Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>
     {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={onDismissNotice}><X size={14} /></button></div>}
-    <section className="tt-chooser__content"><span className="tt-kicker">YOUR WORK TABLES</span><h1>Choose a table</h1><p>Open an existing table or start a new one.</p>
-      {session.workspaces.length > 0 && <div className="tt-existing-tables">{session.workspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
-      <div className="tt-start-table"><span className="tt-kicker">START A TABLE</span>{tableReadOnly && <p className="tt-table-readonly-chooser-note" role="status">Creating shared data tables is temporarily paused. Existing tables remain available above.</p>}{(['invoice', 'teaching', 'encounter', 'table'] as const).map((kind) => <button className="tt-case-choice" type="button" key={kind} disabled={busy !== null || kind === 'table' && tableReadOnly} title={kind === 'table' && tableReadOnly ? 'Creating shared tables is temporarily paused.' : undefined} onClick={() => onCreate(kind)}><CaseIcon kind={kind} /><span><strong>{caseInfo[kind].title}</strong><small>{kind === 'table' && tableReadOnly ? 'Temporarily paused' : caseInfo[kind].subtitle}</small></span>{busy === 'workspace.create' ? <LoaderCircle size={15} className="tt-spin" /> : <Plus size={15} />}</button>)}</div>
+    <section className="tt-chooser__content"><h1>What are we making?</h1><p>Bring a file. Make a table. Invite your people.</p>
+      <button className="tt-start-own-table" type="button" disabled={busy !== null || tableReadOnly} onClick={() => onCreate('table')}>{busy === 'workspace.create' ? <LoaderCircle size={18} className="tt-spin" /> : <Plus size={18} />}Start with your files</button>
+      {tableReadOnly && <p role="status">New tables are temporarily paused. You can still open an existing table.</p>}
+      <details className="tt-template-choices"><summary>Or start with an example</summary><div className="tt-start-table">{(['invoice', 'teaching', 'encounter'] as const).map((kind) => <button className="tt-case-choice" type="button" key={kind} disabled={busy !== null} onClick={() => onCreate(kind)}><CaseIcon kind={kind} /><span><strong>{caseInfo[kind].title}</strong><small>{caseInfo[kind].subtitle}</small></span><Plus size={15} /></button>)}</div></details>
+      {session.workspaces.length > 0 && <div className="tt-existing-tables"><h2>Pick up where you left off</h2>{session.workspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
     </section>
   </main>;
 }

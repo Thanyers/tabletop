@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type SyntheticEvent } from 'react';
-import { ArrowDownToLine, ArrowRight, Check, FileText, FolderOpen, Hand, MousePointer2, Pause, Play, Plus, RotateCcw, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowRight, Check, FileText, FolderOpen, Hand, MoreHorizontal, MousePointer2, Pause, Play, Plus, RotateCcw, X } from 'lucide-react';
 import { planForWorkspace } from '../runtime';
 import { PracticeRuntime } from './practice';
 import { PRACTICE_SCENARIOS } from './scenarios';
@@ -11,6 +11,7 @@ import { TableSurface } from '../ui/TableSurface';
 import type { CanvasAuxiliaryObject } from '../ui/CanvasWorkspace';
 import '../ui/tabletop.css';
 import './interactive-demo.css';
+import '../ui/calm-workspace.css';
 
 const modeLabels: Record<string, string> = { ready: 'เริ่มจากโต๊ะว่าง', playing: 'เดโมกำลังทำให้ดู', paused: 'หยุดชั่วคราว', manual: 'คุณกำลังเล่นเอง', complete: 'พร้อมให้คุณเล่นต่อ', blocked: 'ขั้นตอนนี้ยังไม่สำเร็จ' };
 const objectTitles: Record<string, string> = {
@@ -43,6 +44,7 @@ export default function InteractiveDemo() {
   const [restartTarget, setRestartTarget] = useState<string | null | undefined>(undefined);
   const [isDragOver, setIsDragOver] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
   const disposeTimer = useRef<number | undefined>(undefined);
   const importRequest = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -143,7 +145,7 @@ export default function InteractiveDemo() {
   const dragFile = snapshot.mode === 'playing' && nextStep?.command.type === 'practice.importSample' ? samples.find(file => file.id === (nextStep.command.payload as { sampleId?: string }).sampleId) : null;
 
   return <UploadCapabilityProvider enabled={false} reason="โต๊ะทดลองอ่านไฟล์ CSV / JSON จากปุ่มเพิ่มไฟล์บน Canvas; การอัปโหลด PDF ยังไม่เปิด">
-    <div className="tt-app tt-practice-app tt-practice-canvas-first" data-testid="interactive-auto-demo">
+    <div className={`tt-app tt-practice-app tt-practice-canvas-first${snapshot.visibleNodeIds.length > 0 && !showFiles ? ' tt-practice-has-content' : ''}`} data-testid="interactive-auto-demo">
       <header className="tt-practice-header">
         <a className="tt-brand" href="/" aria-label="กลับไปหน้า Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><span className="tt-practice-header__rule" />
         <label className="tt-practice-scenario-select"><span>โต๊ะทดลอง</span><select aria-label="เลือกโจทย์" value={scenario.id} onChange={event => { if (snapshot.mode === 'manual') setRestartTarget(event.target.value); else restart(event.target.value); }}>{PRACTICE_SCENARIOS.map(item => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
@@ -151,11 +153,16 @@ export default function InteractiveDemo() {
       </header>
       <div className="tt-practice-canvas-toolbar" aria-label="การเล่นโต๊ะทดลอง">
         <div className="tt-practice-toolbar__transport" role="group" aria-label="ควบคุมเดโม">
-          {snapshot.mode === 'playing' ? <button className="tt-practice-button tt-practice-button--primary" onClick={() => runtime.pause()}><Pause size={14} /> หยุดเดโม</button> : <button className="tt-practice-button tt-practice-button--primary" disabled={!canPlay || busy !== null} onClick={() => runtime.play()}><Play size={14} fill="currentColor" /> เล่นเดโม</button>}
-          <button className="tt-practice-button tt-practice-button--quiet" disabled={!canPlay || busy !== null} onClick={() => void advance()}><ArrowRight size={14} /> ทำขั้นถัดไป</button><button className="tt-practice-button tt-practice-button--quiet" disabled={snapshot.mode === 'manual'} onClick={takeOver}><Hand size={14} /> หยุดแล้วลองเอง</button><button className="tt-practice-icon-button" aria-label="เริ่มโต๊ะทดลองใหม่" title="เริ่มโต๊ะทดลองใหม่" onClick={() => snapshot.mode === 'manual' ? setRestartTarget(null) : restart()}><RotateCcw size={14} /></button>
+          {snapshot.mode === 'playing' ? <button className="tt-practice-button tt-practice-button--primary" onClick={() => runtime.pause()}><Pause size={14} /> พักเดโม</button> : snapshot.mode !== 'manual' && <button className="tt-practice-button tt-practice-button--primary" disabled={!canPlay || busy !== null} onClick={() => runtime.play()}><Play size={14} fill="currentColor" /> เล่นเดโม</button>}
+          {snapshot.mode !== 'manual' && <button className="tt-practice-button tt-practice-button--quiet" onClick={takeOver}><Hand size={14} /> ลองเอง</button>}
         </div>
         <span data-testid="practice-mode" data-mode={snapshot.mode} className={`tt-practice-mode tt-practice-mode--${snapshot.mode}`} role="status"><i />{modeLabels[snapshot.mode]}</span><span data-testid="practice-step-counter" className="tt-practice-progress">ทำแล้ว {snapshot.stepIndex} / {scenario.steps.length}</span>
-        <label className="tt-practice-actor-select">ลองเป็น <select aria-label="ลองเป็น" value={snapshot.view.actor.actorId} onChange={event => { importRequest.current += 1; setBusy(null); setNotice(null); runtime.selectActor(event.target.value); setOpenedObjectId(null); }}>{snapshot.view.members.map(member => <option key={member.actorId} value={member.actorId}>{member.name} · {member.role}</option>)}</select></label>
+        <details className="tt-practice-options"><summary aria-label="ตัวเลือกเดโม"><MoreHorizontal size={20} /></summary><div>
+          <label className="tt-practice-actor-select">ลองเป็น <select aria-label="ลองเป็น" value={snapshot.view.actor.actorId} onChange={event => { importRequest.current += 1; setBusy(null); setNotice(null); runtime.selectActor(event.target.value); setOpenedObjectId(null); }}>{snapshot.view.members.map(member => <option key={member.actorId} value={member.actorId}>{member.name} · {member.role}</option>)}</select></label>
+          {snapshot.mode !== 'manual' && <button disabled={!canPlay || busy !== null} onClick={() => void advance()}><ArrowRight size={14} />ทำขั้นถัดไป</button>}
+          <button onClick={() => setShowFiles(value => !value)}><FolderOpen size={14} />ไฟล์ตัวอย่าง</button>
+          <button aria-label="เริ่มโต๊ะทดลองใหม่" onClick={() => snapshot.mode === 'manual' ? setRestartTarget(null) : restart()}><RotateCcw size={14} />เริ่มใหม่</button>
+        </div></details>
       </div>
       {notice && <div className="tt-practice-notice" role="status"><span>{notice}</span><button aria-label="ปิดข้อความ" onClick={() => setNotice(null)}><X size={14} /></button></div>}
       <div className="tt-practice-desktop">
@@ -164,20 +171,20 @@ export default function InteractiveDemo() {
           <button className="tt-practice-file-pick" onClick={() => fileInput.current?.click()} disabled={busy !== null}><FolderOpen size={15} /> เลือกไฟล์จากเครื่อง</button><input ref={fileInput} type="file" className="tt-visually-hidden" accept=".csv,.json,.txt" aria-label="เลือกไฟล์เข้า Canvas" onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void importFile(file); }} /><small>CSV / JSON ตามตัวอย่าง · สูงสุด 128 KB<br />ข้อมูลอยู่ในแท็บนี้ รีเฟรชเริ่มใหม่</small>
         </aside>
         <section className={`tt-practice-workarea${isDragOver ? ' is-drop-target' : ''}`} aria-label="พื้นที่ Canvas ทดลอง" onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setIsDragOver(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDragOver(false); }} onDrop={drop}>
-          <div className="tt-practice-build-bar"><span><MousePointer2 size={13} /> เปิดทุกอย่างจาก container บนโต๊ะ</span><button aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}><Plus size={14} /> เพิ่ม container</button></div>
+          <div className="tt-practice-build-bar"><button aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}><Plus size={14} /> เพิ่มบนโต๊ะ</button></div>
           {toolsOpen && <nav className="tt-practice-object-library" aria-label="เพิ่ม container บนโต๊ะ">{caseObjects[scenario.kind].map(id => {
             const present = snapshot.visibleNodeIds.includes(id);
             const available = id.startsWith('workspace.') || id === 'lesson.rules' || compiled.plan?.nodes.some(node => node.id === id && node.visible !== false);
             return <button key={id} disabled={present || !available} title={!available ? 'จะเปิดได้เมื่อมีข้อมูลหรือเลือกมุมมองที่เกี่ยวข้อง' : undefined} onClick={() => addObject(id)}>{present ? <Check size={14} /> : <Plus size={14} />}{objectTitles[id]}{!available && ' · รอข้อมูล'}</button>;
           })}</nav>}
           <div className="tt-practice-surface-wrap" onClick={interact} onInput={interact} onChange={interact} onSubmitCapture={interact}>
-            <PracticeClockProvider now={snapshot.now}><TableSurface key={`${scenario.id}:${snapshot.view.epoch}:${snapshot.view.actor.actorId}`} view={snapshot.view} plan={compiled.plan} planError={compiled.error} surface="canvas" editMode="arrange" persistLayout={false} preparedDemoArt selectedNodeId={selectedNodeId} onSelectNode={selectObject} onCommand={onCommand} busy={busy} onUpload={async (_kind, file) => importFile(file)} onExport={exportResult} onFocusEvidence={focusEvidence} onBackFromEvidence={() => setFocusSourceIds([])} focusSourceIds={focusSourceIds} visibleNodeIds={snapshot.visibleNodeIds} focusNodeId={selectedNodeId} focusRequestKey={lastEvent?.id} openedObjectId={openedObjectId} onOpenObject={openObject} onFocusObject={focusObject} auxiliaryObjects={auxiliaryObjects} emptyContent={empty} /></PracticeClockProvider>
+            <PracticeClockProvider now={snapshot.now}><TableSurface key={`${scenario.id}:${snapshot.view.epoch}:${snapshot.view.actor.actorId}`} view={snapshot.view} plan={compiled.plan} planError={compiled.error} surface="canvas" persistLayout={false} preparedDemoArt selectedNodeId={selectedNodeId} onSelectNode={selectObject} onCommand={onCommand} busy={busy} onUpload={async (_kind, file) => importFile(file)} onExport={exportResult} onFocusEvidence={focusEvidence} onBackFromEvidence={() => setFocusSourceIds([])} focusSourceIds={focusSourceIds} visibleNodeIds={snapshot.visibleNodeIds} focusNodeId={selectedNodeId} focusRequestKey={lastEvent?.id} openedObjectId={openedObjectId} onOpenObject={openObject} onFocusObject={focusObject} auxiliaryObjects={auxiliaryObjects} emptyContent={empty} /></PracticeClockProvider>
           </div>
           {isDragOver && <div className="tt-practice-drop-message"><FileText size={24} />ปล่อยไฟล์เพื่อเพิ่มลง Canvas</div>}{dragFile && <div key={`${snapshot.view.epoch}:${snapshot.stepIndex}`} className="tt-practice-demo-drag" aria-hidden="true"><FileText size={24} /><span>{dragFile.filename}</span><MousePointer2 size={21} /></div>}
           <div className="tt-practice-step-note" aria-live="polite"><span className="tt-practice-step-note__number">{snapshot.mode === 'complete' ? <Check size={17} /> : String(snapshot.stepIndex + 1).padStart(2, '0')}</span><div><strong>{snapshot.mode === 'manual' ? 'โต๊ะอยู่ในมือคุณแล้ว' : nextStep?.title ?? 'โต๊ะพร้อมเล่นต่อ'}</strong><p>{snapshot.mode === 'manual' ? 'เปิด container เพื่อแก้ไข หรือเพิ่มสิ่งที่ต้องใช้จากปุ่มด้านบน' : nextStep?.detail ?? scenario.challenge}</p>{lastEvent && <small className="tt-practice-last-event" data-outcome={lastEvent.outcome}>{lastEvent.step ? lastEvent.title : lastEvent.outcome === 'rejected' ? 'ยังทำรายการนี้ไม่ได้' : 'บันทึกการกระทำแล้ว'} · {lastEvent.type === 'practice.addObject' ? 'เพิ่ม container ลงบนโต๊ะแล้ว' : lastEvent.message}</small>}</div></div>
         </section>
       </div>
-      <footer className="tt-practice-footer"><span>ข้อมูลตัวอย่าง · ฝึกในแท็บนี้ · บางฉากใช้ภาพประกอบเตรียมไว้ · คำนวณและสถานะมาจากโต๊ะทดลอง</span><button onClick={() => downloadText('tabletop-practice-history.json', runtime.exportHistory(), 'application/json')} aria-label="ดาวน์โหลดบันทึก"><ArrowDownToLine size={13} /> บันทึกการเล่นและค่าที่กรอก</button><a href="/demo/replay">คลังบันทึกทดสอบเดิม</a></footer>
+      <footer className="tt-practice-footer"><span>ฝึกในแท็บนี้ · รีเฟรชเริ่มใหม่</span><details><summary>บันทึกและข้อมูลเดโม</summary><p>ข้อมูลตัวอย่าง บางฉากใช้ภาพประกอบเตรียมไว้ คำนวณและสถานะมาจากโต๊ะทดลอง ไม่เรียก AI จริง</p><button onClick={() => downloadText('tabletop-practice-history.json', runtime.exportHistory(), 'application/json')} aria-label="ดาวน์โหลดบันทึก"><ArrowDownToLine size={13} />บันทึกการเล่น</button><a href="/demo/replay">คลังบันทึกทดสอบเดิม</a></details></footer>
       {restartTarget !== undefined && <ConfirmDialog title="เริ่มโต๊ะทดลองใหม่?" confirmLabel="เริ่มโต๊ะใหม่" onClose={() => setRestartTarget(undefined)} onConfirm={() => restart(restartTarget ?? undefined)}><p>การเริ่มใหม่จะล้างไฟล์และการแก้ไขในแท็บนี้ ดาวน์โหลดบันทึกก่อนเริ่มใหม่ได้</p></ConfirmDialog>}
     </div>
   </UploadCapabilityProvider>;

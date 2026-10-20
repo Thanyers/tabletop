@@ -5,11 +5,13 @@ import type { WorkspaceView } from '../shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantReference } from '../shared/table-assistant-contracts';
 import type { TableState } from '../shared/table-contracts';
 import { AIProposal } from './AIProposal';
+import './assistant-calm.css';
 
 type TableWorkspaceView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
 
 interface TableAssistantProps {
+  compact?: boolean;
   view: TableWorkspaceView;
   capabilities: TabletopCapabilities;
   readOnly: boolean;
@@ -76,6 +78,10 @@ function currentTurnLabel(view: WorkspaceView, turn: string | null): string {
   const member = view.members.find((item) => item.seat === turn);
   if (member?.actorId === view.actor.actorId) return 'Your turn.';
   return member ? `${member.name}'s turn.` : `Current seat: ${turn}.`;
+}
+
+function hasTurnOrder(view: TableWorkspaceView): boolean {
+  return (view.domain.program?.turnOrder.length ?? 0) > 0;
 }
 
 function formatInput(view: TableWorkspaceView, actionId: string, key: string, value: unknown): { label: string; value: string } {
@@ -186,6 +192,7 @@ function timeLabel(timestamp: number): string {
 }
 
 function TableConversation({
+  compact,
   view,
   capabilities,
   readOnly,
@@ -196,6 +203,7 @@ function TableConversation({
   onRefresh,
   onOpenObject,
 }: {
+  compact: boolean;
   view: TableWorkspaceView;
   capabilities: TabletopCapabilities;
   readOnly: boolean;
@@ -214,6 +222,7 @@ function TableConversation({
   const [historyError, setHistoryError] = useState('');
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [conversationExpanded, setConversationExpanded] = useState(!compact);
   const threadRef = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
   const historyGeneration = useRef(0);
@@ -238,6 +247,10 @@ function TableConversation({
       generation.current += 1;
     };
   }, []);
+
+  useEffect(() => {
+    if (conversationExpanded) scrollConversation(threadRef.current, 'bottom');
+  }, [conversationExpanded]);
 
   useEffect(() => {
     const token = ++historyGeneration.current;
@@ -289,6 +302,25 @@ function TableConversation({
 
   const uncertainRequest = entries.some((entry) => entry.requestUncertain && !entry.job);
   const canSend = tableAssistantAvailable && capabilities.model.enabled && !readOnly && historyLoaded && consent && prompt.trim().length >= 3 && !busy && !pendingAction && !uncertainRequest;
+  const composerDisabledReason = readOnly
+    ? 'This table is read-only.'
+    : !capabilities.model.enabled
+      ? capabilities.model.reason || 'The assistant is unavailable right now.'
+      : historyError
+        ? 'Refresh conversation history before sending.'
+        : historyLoading || !historyLoaded
+          ? 'Loading conversation history…'
+          : busy
+            ? 'Wait for the current response to finish.'
+            : uncertainRequest
+              ? 'Retry the same request or wait before sending another.'
+              : pendingAction
+                ? 'Review or skip the action proposal above before sending again.'
+                : !consent
+                  ? 'Agree above before sending.'
+                  : prompt.trim().length < 3
+                    ? 'Enter at least 3 characters.'
+                    : '';
 
   const request = async (entry: ChatEntry) => {
     if (!entry.requestCommandId) return;
@@ -449,45 +481,55 @@ function TableConversation({
 
   return <section className="tt-table-chat" aria-labelledby="tt-table-chat-title" data-testid="table-chat">
     <div className="tt-table-chat__intro">
-      <h3 id="tt-table-chat-title">Ask about this table</h3>
-      <p>Ask about rules or shared records, or name one action you want help preparing. The assistant cannot choose or continue turns for you.</p>
+      <h3 id="tt-table-chat-title">Ask about the table</h3>
+      <p>Ask about rules, shared records, or one action to prepare.</p>
     </div>
-    {tableAssistantAvailable && !capabilities.model.enabled && <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />{capabilities.model.reason || 'The table assistant is unavailable right now.'}</p>}
-    {readOnly && <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />This table is temporarily read-only. You can still review its rules and records.</p>}
-
-    {view.actor.role === 'participant' && <p className="tt-table-chat__privacy-note">The owner manages private source files and rule drafts. Your message uses the shared table view and your seat only.</p>}
 
     {!tableAssistantAvailable ? <p className="tt-table-chat__notice" role="status"><AlertCircle size={14} />{tableAssistantUnavailableReason}</p> : <>
-    <div className="tt-table-chat__history-tools">
-      <span>{historyLoading ? 'Loading recent conversation…' : historyLoaded ? 'Recent conversation · private to you on this table' : 'Conversation history could not be loaded'}</span>
-      <button type="button" className="tt-button tt-button--quiet" disabled={historyLoading} onClick={() => void refreshHistory()}>Refresh history</button>
-    </div>
-    {historyError && <p className="tt-table-chat__notice" role="alert"><AlertCircle size={14} />{historyError} Refresh history before sending another message.</p>}
-    {historyCursor && <button type="button" className="tt-button tt-button--quiet tt-table-chat__older" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? <LoaderCircle size={13} className="tt-spin" /> : null}Load older messages</button>}
-    <div ref={threadRef} className="tt-table-chat__thread" aria-live="polite" aria-label="Assistant conversation">
-      {historyLoading && entries.length === 0 ? <div className="tt-table-chat__empty"><LoaderCircle size={16} className="tt-spin" /><p>Loading your recent table conversation…</p></div> : entries.length === 0 ? <div className="tt-table-chat__empty"><MessageCircle size={17} /><p>Your questions and the assistant’s actual responses will appear here.</p></div> : entries.map((entry) => <article className="tt-table-chat__exchange" key={entry.job?.id ?? entry.id}>
-        <time className="tt-table-chat__time" dateTime={new Date(entry.createdAt).toISOString()}>{timeLabel(entry.createdAt)}</time>
-        <div className="tt-table-chat__user"><span>You</span><p>{entry.prompt}</p></div>
-        {entry.job?.result ? <AssistantResultCard entry={entry} view={view} readOnly={readOnly} onOpenObject={onOpenObject} onConfirm={() => void confirm(entry)} onDismiss={() => updateEntry(setEntries, entry.id, (current) => ({ ...current, dismissed: true }))} /> : entry.phase === 'sending' || entry.phase === 'waiting' ? <div className="tt-table-chat__pending" role="status"><LoaderCircle size={14} className="tt-spin" /><span>{entry.phase === 'sending' ? 'Sending your request…' : 'Preparing a response…'} You can keep using the Canvas.</span></div> : <div className="tt-table-chat__error" role="alert"><AlertCircle size={14} /><span>{entry.requestError ?? entry.job?.message ?? 'No response was received.'}</span>{entry.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy} onClick={() => retrySameRequest(entry)}>Retry same request</button>}</div>}
-        {entry.pollError && <p className="tt-table-chat__substatus" role="status">Status check: {entry.pollError}</p>}
-        {entry.pollTimedOut && (entry.phase === 'waiting' || entry.confirmationPending) && <button type="button" className="tt-button tt-button--quiet tt-table-chat__check" disabled={entry.checking} onClick={() => void checkStatus(entry)}>{entry.checking ? <LoaderCircle size={13} className="tt-spin" /> : null}Check status</button>}
-      </article>)}
-    </div>
+    <details
+      className="tt-table-chat__history"
+      open={conversationExpanded}
+      onToggle={(event) => setConversationExpanded(event.currentTarget.open)}
+    >
+      <summary>
+        <span>Conversation</span>
+        <span className="tt-table-chat__history-count" aria-label={historyLoading && !historyLoaded ? 'Loading' : historyError ? 'Unavailable' : `${entries.length} ${entries.length === 1 ? 'exchange' : 'exchanges'}`}>
+          {historyLoading && !historyLoaded ? 'Loading' : historyError ? 'Unavailable' : entries.length}
+        </span>
+      </summary>
+      <div className="tt-table-chat__history-content">
+        <div className="tt-table-chat__history-tools">
+          <span>{historyLoading ? 'Loading history…' : historyLoaded ? 'Private history' : 'History unavailable'}</span>
+          <button type="button" className="tt-button tt-button--quiet" disabled={historyLoading} onClick={() => void refreshHistory()}>Refresh</button>
+        </div>
+        {historyError && <p className="tt-table-chat__notice" role="alert"><AlertCircle size={14} />{historyError} Refresh history before sending another message.</p>}
+        <div ref={threadRef} className="tt-table-chat__thread" aria-live="polite" aria-label="Assistant conversation">
+          {historyCursor && <button type="button" className="tt-button tt-button--quiet tt-table-chat__older" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? <LoaderCircle size={13} className="tt-spin" /> : null}Older messages</button>}
+          {historyLoading && entries.length === 0 ? <div className="tt-table-chat__empty"><LoaderCircle size={16} className="tt-spin" /><p>Loading conversation…</p></div> : entries.length === 0 ? <div className="tt-table-chat__empty"><MessageCircle size={17} /><p>Your conversation will appear here.</p></div> : entries.map((entry) => <article className="tt-table-chat__exchange" key={entry.job?.id ?? entry.id}>
+            <time className="tt-table-chat__time" dateTime={new Date(entry.createdAt).toISOString()}>{timeLabel(entry.createdAt)}</time>
+            <div className="tt-table-chat__user"><span>You</span><p>{entry.prompt}</p></div>
+            {entry.job?.result ? <AssistantResultCard entry={entry} view={view} readOnly={readOnly} onOpenObject={onOpenObject} onConfirm={() => void confirm(entry)} onDismiss={() => updateEntry(setEntries, entry.id, (current) => ({ ...current, dismissed: true }))} /> : entry.phase === 'sending' || entry.phase === 'waiting' ? <div className="tt-table-chat__pending" role="status"><LoaderCircle size={14} className="tt-spin" /><span>{entry.phase === 'sending' ? 'Sending your request…' : 'Preparing a response…'} You can keep using the Canvas.</span></div> : <div className="tt-table-chat__error" role="alert"><AlertCircle size={14} /><span>{entry.requestError ?? entry.job?.message ?? 'No response was received.'}</span>{entry.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy} onClick={() => retrySameRequest(entry)}>Retry same request</button>}</div>}
+            {entry.pollError && <p className="tt-table-chat__substatus" role="status">Status check: {entry.pollError}</p>}
+            {entry.pollTimedOut && (entry.phase === 'waiting' || entry.confirmationPending) && <button type="button" className="tt-button tt-button--quiet tt-table-chat__check" disabled={entry.checking} onClick={() => void checkStatus(entry)}>{entry.checking ? <LoaderCircle size={13} className="tt-spin" /> : null}Check status</button>}
+          </article>)}
+        </div>
+      </div>
+    </details>
 
     <form className="tt-table-chat__form" onSubmit={(event) => void submit(event)}>
-      <label htmlFor="tt-table-chat-prompt">Ask about the shared table</label>
-      <textarea id="tt-table-chat-prompt" value={prompt} maxLength={2000} rows={3} disabled={readOnly || !capabilities.model.enabled || !historyLoaded || Boolean(historyError) || busy || pendingAction || uncertainRequest} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask what a rule means, check whose turn it is, or request help preparing one action…" />
+      <label htmlFor="tt-table-chat-prompt">Message</label>
+      <div className="tt-table-chat__compose-row">
+        <textarea id="tt-table-chat-prompt" value={prompt} maxLength={2000} rows={2} disabled={readOnly || !capabilities.model.enabled || !historyLoaded || Boolean(historyError) || busy || pendingAction || uncertainRequest} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask a question or name one action to prepare…" aria-describedby={composerDisabledReason ? 'tt-table-chat-send-help' : undefined} />
+        <button type="submit" className="tt-button tt-button--primary" disabled={!canSend} aria-describedby={composerDisabledReason ? 'tt-table-chat-send-help' : undefined}>{busy ? <LoaderCircle size={14} className="tt-spin" /> : <Send size={14} />}Send</button>
+      </div>
       <details className="tt-table-chat__privacy">
-        <summary>What is shared with the assistant?</summary>
-        <p>Your message, active rules, shared records, your table role and seat, whose turn it is, and at most six recent conversation exchanges (up to 16 KiB) are sent to the configured AI provider. Older messages stay available for your review but are not sent as context. Account profiles and account IDs, member names, private source files, drafts, rule history and activity are excluded. Shared record text is sent as provided; avoid putting personal names or account IDs in your message or shared records. Rule drafting has a separate source-file consent.</p>
+        <summary>What the AI provider receives</summary>
+        <p>Your message, active rules without source quotations, shared records, your role and seat, whose turn it is, and at most six recent conversation exchanges (up to 16 KiB) are sent to the configured AI provider. Earlier messages remain available here but are not sent as context. Known membership names and account IDs are redacted or mapped to a seat alias in messages, rules, records and recent conversation. Arbitrary user-authored text is not promised to be anonymous; avoid sensitive personal details in messages or shared records. Account profiles, private source files, draft rules, source quotations, assumptions, full rule and event history, and activity are excluded. The owner manages private source files and rule drafts; rule drafting uses separate consent and sends all selected source files.</p>
       </details>
-      <label className="tt-table-chat__consent"><input type="checkbox" checked={consent} disabled={readOnly || !capabilities.model.enabled || !historyLoaded || Boolean(historyError) || busy || pendingAction || uncertainRequest} onChange={(event) => setConsent(event.target.checked)} /><span>I agree to send this message and the shared table context to the AI provider.</span></label>
-      {uncertainRequest && latest && <p className="tt-table-chat__notice" role="status">The request may have reached the provider. Retry only with the same request ID, or wait before starting another request.</p>}
-      {pendingAction && <p className="tt-table-chat__notice" role="status">Review or dismiss the pending action proposal before starting another assistant request.</p>}
+      <label className="tt-table-chat__consent"><input type="checkbox" checked={consent} disabled={readOnly || !capabilities.model.enabled || !historyLoaded || Boolean(historyError) || busy || pendingAction || uncertainRequest} onChange={(event) => setConsent(event.target.checked)} /><span>I agree to share this message and table context with the AI provider.</span></label>
+      {composerDisabledReason && <p id="tt-table-chat-send-help" className="tt-table-chat__send-help" role="status">{composerDisabledReason}</p>}
       {latest?.job?.status === 'completed' && latest.job.confirmationStatus === 'available' && latest.job.result?.kind === 'action-proposal' && isStale(latest.job, view) && <p className="tt-table-chat__notice" role="status">The table changed after this proposal. It cannot be confirmed; review the latest rules and ask again.</p>}
-      <button type="submit" className="tt-button tt-button--primary" disabled={!canSend}>{busy ? <LoaderCircle size={14} className="tt-spin" /> : <Send size={14} />}Send to assistant</button>
     </form>
-    <p className="tt-table-chat__boundary">Answers do not change the table. Every proposed action requires your separate confirmation and is checked against current rules and turn.</p>
     </>}
   </section>;
 }
@@ -539,7 +581,7 @@ function AssistantResultCard({ entry, view, readOnly, onOpenObject, onConfirm, o
 }
 
 export function TableAssistant({
-  view, capabilities, readOnly, onRequest, onPoll, onRefresh, onAttachFile,
+  compact = false, view, capabilities, readOnly, onRequest, onPoll, onRefresh, onAttachFile,
   onOpenSources, onOpenRules, onOpenActions, onReviewDraft,
   onChatRequest, onChatPoll, onChatHistory, onChatConfirm, onChatRefresh, onOpenObject,
 }: TableAssistantProps) {
@@ -559,17 +601,19 @@ export function TableAssistant({
 
   const pendingDraft = Boolean(view.domain.candidate && view.domain.candidate.status !== 'active');
   const isOwner = view.actor.role === 'owner';
+  const turnLabel = hasTurnOrder(view) ? currentTurnLabel(view, view.domain.turn) : null;
+  const rulesModeLabel = view.domain.program ? 'Rules' : 'Set up';
 
-  return <section className="tt-table-assistant" data-testid="table-assistant" aria-labelledby="tt-table-assistant-title">
+  return <section className={`tt-table-assistant${compact ? ' is-compact' : ''}`} data-testid="table-assistant" aria-labelledby="tt-table-assistant-title">
     <header className="tt-table-assistant__head">
       <span className="tt-table-assistant__mark" aria-hidden="true"><Sparkles size={16} /></span>
-      <div><span className="tt-kicker">{isOwner ? 'OWNER TABLE TOOLS' : 'PLAYER TABLE TOOLS'}</span><h2 id="tt-table-assistant-title">Table assistant</h2></div>
+      <div><h2 id="tt-table-assistant-title">Table assistant</h2></div>
+      {turnLabel && <span className="tt-table-assistant__turn" aria-label={`Current turn: ${turnLabel}`}>{turnLabel}</span>}
     </header>
     {isOwner && <nav className="tt-table-assistant__modes" aria-label="Assistant mode">
       <button type="button" aria-pressed={mode === 'chat'} className={mode === 'chat' ? 'is-active' : ''} onClick={() => setMode('chat')}><MessageCircle size={13} />Chat</button>
-      <button type="button" aria-pressed={mode === 'rules'} className={mode === 'rules' ? 'is-active' : ''} onClick={() => setMode('rules')}><BookOpen size={13} />Change rules</button>
+      <button type="button" aria-label={view.domain.program ? 'Open rules and sources' : 'Set up this table from sources'} aria-pressed={mode === 'rules'} className={mode === 'rules' ? 'is-active' : ''} onClick={() => setMode('rules')}><BookOpen size={13} />{rulesModeLabel}</button>
     </nav>}
-    {readOnly && <p className="tt-table-assistant__notice" role="status"><AlertCircle size={14} />This table is temporarily read-only. You can still review its rules and records.</p>}
 
     {isOwner && mode === 'rules' ? <div className="tt-table-assistant__rules-mode">
       <AIProposal
@@ -585,14 +629,17 @@ export function TableAssistant({
         embedded
       />
     </div> : <>
-      <div className="tt-table-assistant__direct-links" aria-label="Open table tools">
-        <button type="button" onClick={onOpenActions} disabled={!view.domain.program}><ArrowRight size={14} />Open actions</button>
-        <button type="button" onClick={onOpenRules}><BookOpen size={14} />View active rules</button>
-        {isOwner && pendingDraft && <button type="button" onClick={onReviewDraft}><Check size={14} />Review rule draft</button>}
-      </div>
-      <div className="tt-table-assistant__turn"><span>Current turn</span><strong>{currentTurnLabel(view, view.domain.turn)}</strong></div>
-      {!view.domain.program && <p className="tt-table-assistant__waiting">Shared rules are not active yet. The owner can add a source and prepare a draft in Change rules.</p>}
+      {!compact && <details className="tt-table-assistant__canvas-tools">
+        <summary>Table tools</summary>
+        <div className="tt-table-assistant__direct-links" aria-label="Open table tools">
+          <button type="button" onClick={onOpenActions} disabled={!view.domain.program}><ArrowRight size={14} />Open actions</button>
+          <button type="button" onClick={onOpenRules}><BookOpen size={14} />View active rules</button>
+          {isOwner && pendingDraft && <button type="button" onClick={onReviewDraft}><Check size={14} />Review rule draft</button>}
+        </div>
+      </details>}
+      {!view.domain.program && <p className="tt-table-assistant__waiting">No shared rules yet. Choose Set up to add a source.</p>}
       <TableConversation
+        compact={compact}
         view={view}
         capabilities={capabilities}
         readOnly={readOnly}

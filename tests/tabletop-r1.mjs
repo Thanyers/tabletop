@@ -66,18 +66,30 @@ async function clickCommand(page, locator, type) {
     locator.click(),
   ]);
   expect(response.status(), await response.text()).toBe(200);
-  await expect(page.getByRole('button', { name: 'Refresh latest table' })).toBeEnabled();
   return response.json();
 }
 async function start(page, label) {
-  await page.getByRole('button', { name: new RegExp(label) }).click();
+  const templates = page.locator('.tt-template-choices');
+  const choice = templates.getByRole('button', { name: new RegExp(label) });
+  if (!(await choice.isVisible().catch(() => false))) {
+    await expect(templates.locator('summary')).toHaveText('Or start with an example');
+    await expect(templates).not.toHaveAttribute('open', '');
+    await templates.locator('summary').click();
+    await expect(choice).toBeVisible();
+  }
+  await choice.click();
   await expect(page.locator('.tt-canvas-node').first()).toBeVisible();
 }
 async function openObject(page, id) {
   const editor = board(page).locator(`.tt-canvas-node[data-testid="canvas-object-editor"][data-object-id="${id}"]`);
   if (await editor.isVisible().catch(() => false)) return editor;
   await closeExpandedObjects(page);
-  await page.getByTestId('canvas-object-dock').getByTestId('open-canvas-' + id).click();
+  const trigger = page.getByTestId('canvas-object-menu-trigger');
+  await expect(trigger).toBeVisible();
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  const dock = page.getByTestId('canvas-object-dock');
+  await expect(dock).toBeVisible();
+  await dock.getByTestId('open-canvas-' + id).click();
   await expect(editor).toBeVisible();
   return editor;
 }
@@ -96,21 +108,21 @@ async function upload(page, label, filename) {
   await editor.getByLabel(label, { exact: true }).setInputFiles(resolve('public/samples/r1', filename));
   const response = await result;
   expect(response.status(), await response.text()).toBe(200);
-  await expect(page.getByRole('button', { name: 'Refresh latest table' })).toBeEnabled();
+  await expect(editor.locator('.tt-source-card').filter({ has: page.getByText(filename, { exact: true }) })).toBeVisible();
 }
 async function verifySource(page, filename) {
   const editor = await openObject(page, 'invoice.source');
-  const card = editor.locator('.tt-source-card').filter({ hasText: filename }).filter({ hasText: 'provided' });
+  const card = editor.locator('.tt-source-card').filter({ has: page.getByText(filename, { exact: true }) }).filter({ hasText: 'provided' });
   if (await card.locator('.tt-source-preview').count() === 0) await card.locator('.tt-source-card__open').click();
   await clickCommand(page, card.getByRole('button', { name: 'Verify', exact: true }), 'invoice.reviewSource');
   await expect(card).toHaveCount(0);
 }
 async function lifecycle(page, objectId) {
   let editor;
-  for (const [label, type] of [['Simulate','evolve.simulate'],['Validate','evolve.validate'],['Approve','evolve.approve'],['Activate','evolve.activate']]) {
+  for (const [label, type] of [['Preview change','evolve.simulate'],['Check rules','evolve.validate'],['Approve rules','evolve.approve'],['Use these rules','evolve.activate']]) {
     editor = await openObject(page, objectId);
-    // Accessible names include the numbered lifecycle step, e.g. "1 Simulate".
-    await clickCommand(page, editor.getByRole('region', { name:'Draft lifecycle', exact:true }).getByRole('button', { name:new RegExp('\\b' + label + '$') }), type);
+    // The lifecycle label describes the next owner decision at each stage.
+    await clickCommand(page, editor.getByRole('region', { name:/^(Review this change|Rules in use)$/ }).getByRole('button', { name:new RegExp('\\b' + label + '$') }), type);
   }
   return editor;
 }
@@ -136,6 +148,14 @@ async function joinSeat(url) {
 try {
   const invoice = await newPage();
   await start(invoice, 'Invoice check');
+  const workspacePicker = invoice.locator('.tt-workspace-picker__button');
+  await expect(workspacePicker).toBeVisible();
+  await workspacePicker.click();
+  await expect(workspacePicker).toHaveAttribute('aria-expanded', 'true');
+  const workspaceMenu = invoice.locator('.tt-workspace-menu');
+  await expect(workspaceMenu).toBeVisible();
+  await expect(workspaceMenu).toContainText('START A TABLE');
+  await invoice.getByRole('button', { name:'Close table menu', exact:true }).click();
   await expect(invoice.locator('.tt-canvas-node--invoice-table')).toContainText('THB');
   await upload(invoice, 'Choose shipment csv', 'shipments.csv');
   await verifySource(invoice, 'shipments.csv');
@@ -225,7 +245,10 @@ try {
   await learner1.screenshot({ path: join(output, 'teaching-learner.png') });
   mark('Three real sessions share physics; learner exploration, representation and answers stay correctly scoped');
   await learner2.reload(); await expect(learner2.locator('.tt-canvas-node--lesson-scene')).toContainText('4 m');
-  await teacher.getByRole('button', { name: 'Reset table', exact: true }).click();
+  const tableOptions = teacher.locator('.tt-table-options');
+  if (await tableOptions.getAttribute('open') === null) await tableOptions.locator('summary').click();
+  await expect(tableOptions).toHaveAttribute('open', '');
+  await tableOptions.getByRole('button', { name: 'Reset table', exact: true }).click();
   // Wait for the dialog's initial focus effect before testing its keyboard trap.
   // Forcing focus here races the dialog's scheduled autofocus.
   await expect(teacher.getByRole('dialog').getByRole('button', { name: 'Keep current table' })).toBeFocused();

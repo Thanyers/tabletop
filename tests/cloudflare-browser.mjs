@@ -122,10 +122,17 @@ try {
     }, { path, body });
   }
   async function openCanvasObject(page, id) {
-    await expect(page.getByRole('button', { name: 'Canvas', exact:true })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByTestId('canvas-object-dock').getByTestId(`open-canvas-${id}`).click();
-    await expect(page.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', id);
-    await expect(page.getByTestId('canvas-object-editor')).toBeVisible();
+    const editor = page.getByTestId('canvas-object-editor');
+    if (await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id) return editor;
+    const trigger = page.getByTestId('canvas-object-menu-trigger');
+    await expect(trigger).toBeVisible();
+    if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+    const dock = page.getByTestId('canvas-object-dock');
+    await expect(dock).toBeVisible();
+    await dock.getByTestId(`open-canvas-${id}`).click();
+    await expect(editor).toHaveAttribute('data-canvas-object', id);
+    await expect(editor).toBeVisible();
+    return editor;
   }
   const anonymous = await newPage();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
@@ -227,15 +234,18 @@ try {
       modelStatuses.push({ http: response.status(), body });
     }
   });
-  await expect(dm.getByRole('heading', { name: 'Choose a table' })).toBeVisible();
+  await expect(dm.getByRole('heading', { name: 'What are we making?' })).toBeVisible();
   await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
+  await dm.locator('.tt-template-choices > summary').click();
   await dm.getByRole('button', { name: /Shared encounter.*Run turns/ }).click();
   const createdResponse = await created;
   expect(createdResponse.status()).toBe(201);
   let room = await createdResponse.json();
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
-  await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
+  await dm.locator('.tt-table-options > summary').click();
+  await expect(dm.getByRole('link', { name: 'Try a demo', exact: true })).toHaveAttribute('target', '_blank');
+  await dm.locator('.tt-table-options > summary').click();
   let miraInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'mira' });
   const pipInvite = await api(dm, `/api/workspaces/${room.id}/invites`, { seat: 'pip' });
   expect(miraInvite.status).toBe(201); expect(pipInvite.status).toBe(201);
@@ -309,16 +319,18 @@ try {
   expect(metadata.status).toBe(200);
   expect(JSON.stringify(metadata.body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
   expect(metadata.body.workspaces.some(item => item.id === room.id)).toBe(true);
+  await dm.locator('.tt-table-options > summary').click();
   await dm.getByRole('button', { name: 'Admin', exact: true }).click();
   await expect(dm.getByRole('dialog', { name: 'Table metadata' })).toContainText(room.id);
   await dm.getByRole('button', { name: 'Close admin panel' }).click();
+  await dm.locator('.tt-table-options > summary').click();
   mark('Admin sees room metadata; an unrelated account cannot read the room or admin directory');
 
   await openCanvasObject(dm, 'workspace.ai');
-  await dm.getByLabel('What should the draft change or explain?').fill('Allow a shield for an ally, with one AP cost and once each turn.');
-  const askAI = dm.getByRole('button', { name: 'Ask AI for a draft', exact: true });
+  await dm.getByLabel('What would you like to change?', { exact: true }).fill('Allow a shield for an ally, with one AP cost and once each turn.');
+  const askAI = dm.getByRole('button', { name: 'Prepare draft', exact: true });
   await expect(askAI).toBeDisabled();
-  await dm.getByLabel('I agree to send this request for an AI draft.').check();
+  await dm.getByLabel('Send this request and current rules or parameters to AI.', { exact: true }).check();
   await askAI.click();
   await expect(dm.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
   const proposed = (await api(dm, `/api/workspaces/${room.id}`)).body;
@@ -326,11 +338,12 @@ try {
   expect(proposed.domain.rule).toEqual({ allyTarget: false, apCost: 0, oncePerTurn: false });
   expect(proposed.domain.candidate.change.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
   expect(providerCalls).toBe(1);
-  await expect(pip.getByLabel('What should the draft change or explain?')).toHaveCount(0);
+  await expect(pip.getByLabel('What would you like to change?', { exact: true })).toHaveCount(0);
   await expect(pip.getByTestId('canvas-object-dock').getByTestId('open-canvas-workspace.ai')).toHaveCount(0);
   mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; creates a draft without activating it');
 
   const logoutResponse = pip.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
+  await pip.locator('.tt-table-options > summary').click();
   await pip.getByRole('button', { name: 'Sign out of Google account' }).click();
   expect((await logoutResponse).status()).toBe(200);
   await expect(pip.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
@@ -357,7 +370,9 @@ try {
   });
   await dm.screenshot({ path: join(output, 'dm-desktop.png'), fullPage: true });
   await pip.setViewportSize({ width: 390, height: 844 }); await pip.reload();
-  await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveCount(0);
+  await expect(pip.getByRole('button', { name: /^(Use|Arrange)$/ })).toHaveCount(0);
+  await expect(pip.getByTestId('canvas-object-menu-trigger')).toBeVisible();
   await expect(pip.locator('.tt-canvas-panel')).toBeVisible();
   await pip.screenshot({ path: join(output, 'player-mobile.png'), fullPage: true });
   expect(errors).toEqual([]);

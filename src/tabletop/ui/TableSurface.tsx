@@ -1,6 +1,5 @@
-import { useMemo, type ReactNode, type RefObject } from 'react';
-import { AlertCircle } from 'lucide-react';
-import type { CaseKind } from '../shared/contracts';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { AlertCircle, MessageCircle } from 'lucide-react';
 import { CanvasWorkspace, type CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { EncounterWorkbench } from './EncounterWorkbench';
 import { InvoiceWorkbench } from './InvoiceWorkbench';
@@ -9,18 +8,11 @@ import { MemberStrip } from './WorkbenchShared';
 import { createCanvasAuxiliaryObjects } from './CanvasAuxiliaryObjects';
 import type { ExecutablePlan, WorkbenchProps } from './types';
 
-const tableTitles: Record<CaseKind, string> = {
-  invoice: 'Invoice check',
-  teaching: 'Physics lesson',
-  encounter: 'Shared encounter',
-  table: 'Shared data table',
-};
-
 export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   plan: ExecutablePlan | null;
   planError: string | null;
   surface: 'canvas' | 'focus';
-  editMode: 'use' | 'arrange';
+  editMode?: 'use' | 'arrange';
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   inspectorContent?: ReactNode;
@@ -38,6 +30,7 @@ export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   onInvite?: () => void;
   aiContent?: ReactNode;
   assistantContent?: ReactNode;
+  promptContent?: ReactNode;
   onFocusObject?: (id: string) => void;
 }
 
@@ -46,7 +39,6 @@ export function TableSurface({
   plan,
   planError,
   surface,
-  editMode,
   selectedNodeId,
   onSelectNode,
   onCommand,
@@ -72,32 +64,53 @@ export function TableSurface({
   onInvite,
   aiContent,
   assistantContent,
+  promptContent,
   onFocusObject,
 }: TableSurfaceProps) {
+  const [dropError, setDropError] = useState('');
+  const [dropping, setDropping] = useState(false);
+  const [assistantHeight, setAssistantHeight] = useState(300);
+  const assistantPanelRef = useRef<HTMLElement>(null);
+  const hasAssistant = Boolean(assistantContent);
+  useEffect(() => {
+    if (!hasAssistant || !assistantPanelRef.current) return;
+    const panel = assistantPanelRef.current;
+    const observer = new ResizeObserver(() => setAssistantHeight(Math.ceil(panel.getBoundingClientRect().height)));
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [hasAssistant]);
   const focusCanvasObject = useMemo(() => onFocusObject ?? (onOpenObject ? (id: string) => { onSelectNode(id); onOpenObject(id); } : undefined), [onFocusObject, onOpenObject, onSelectNode]);
   const mergedAuxiliaryObjects = useMemo(() => {
     const merged = new Map(createCanvasAuxiliaryObjects({ view, onCommand, busy, onInvite, aiContent, onFocusObject: focusCanvasObject }).map((object) => [object.id, object]));
     for (const object of auxiliaryObjects ?? []) merged.set(object.id, object);
+    if (assistantContent) merged.set('workspace.ai', {
+      id: 'workspace.ai', title: 'Assistant',
+      content: <div className="tt-canvas-inline"><p>Questions, ideas and rule drafts for this table.</p><button type="button" className="tt-button tt-button--quiet" onClick={() => { const input = document.getElementById('tt-table-chat-prompt') ?? document.getElementById('tt-ai-prompt'); input?.focus(); }}><MessageCircle size={15} />Write a message</button></div>,
+    });
     return [...merged.values()];
-  }, [view, onCommand, busy, onInvite, aiContent, focusCanvasObject, auxiliaryObjects]);
-  const planIds = new Set(plan?.nodes.map((node) => node.id) ?? []);
-  const visiblePlanCount = plan?.nodes.filter((node) => node.visible !== false && (!visibleNodeIds || visibleNodeIds.includes(node.id))).length ?? 0;
-  const visibleAuxiliaryCount = plan ? mergedAuxiliaryObjects.filter((object) => !planIds.has(object.id) && (!visibleNodeIds || visibleNodeIds.includes(object.id))).length : 0;
-  const objectCount = visiblePlanCount + visibleAuxiliaryCount;
+  }, [view, onCommand, busy, onInvite, aiContent, assistantContent, focusCanvasObject, auxiliaryObjects]);
   const layoutSurface = view.kind === 'table' && assistantContent ? 'canvas' : surface;
 
   return (
     <main className={`tt-main tt-main--${layoutSurface}${view.kind === 'table' && assistantContent ? ' tt-main--with-assistant' : ''}`}>
-      <section className="tt-canvas-panel" aria-label="Table objects canvas">
-        <div className="tt-canvas-panel__head">
-          <div><span className="tt-kicker">TABLE WORK AREA</span><strong>{tableTitles[view.kind]}</strong></div>
-          <span>{objectCount} {objectCount === 1 ? 'working object' : 'working objects'}</span>
-        </div>
+      <section className={`tt-canvas-panel${promptContent ? ' tt-canvas-panel--composer' : ''}${assistantContent ? ' tt-canvas-panel--assistant' : ''}`} style={hasAssistant ? { '--tt-assistant-height': `${assistantHeight}px` } as CSSProperties : undefined} aria-label="Table objects canvas"
+        onDragOver={(event) => { if (view.kind === 'table' && onTableImport && view.actor.role === 'owner' && event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+        onDrop={(event) => {
+          if (view.kind !== 'table' || !onTableImport || view.actor.role !== 'owner' || !event.dataTransfer.files.length) return;
+          event.preventDefault(); event.stopPropagation();
+          if (busy || dropping) return;
+          const files = Array.from(event.dataTransfer.files);
+          setDropping(true); setDropError('');
+          void (async () => { let current = view; for (const file of files) current = await onTableImport(current, file); })()
+            .catch((error: unknown) => setDropError(error instanceof Error ? error.message : 'This file could not be added.'))
+            .finally(() => setDropping(false));
+        }}>
+        {dropError && <p role="alert" className="tt-canvas-file-status">{dropError}</p>}
+        {dropping && <p role="status" className="tt-canvas-file-status">Adding files…</p>}
         {plan ? (
           <CanvasWorkspace
             view={view}
             plan={plan}
-            mode={editMode}
             selectedNodeId={selectedNodeId}
             onSelectNode={onSelectNode}
             onCommand={onCommand}
@@ -125,6 +138,10 @@ export function TableSurface({
             {onReload && <button className="tt-button tt-button--quiet" type="button" onClick={onReload}>Reload table</button>}
           </div>
         )}
+        {promptContent}
+        {assistantContent && <aside ref={assistantPanelRef} className="tt-table-assistant-panel" data-testid="table-assistant-panel" aria-label="Table assistant">
+          {assistantContent}
+        </aside>}
       </section>
 
       {surface === 'focus' && view.kind !== 'table' && <section className="tt-inspector-panel" aria-label="Table workbench">
@@ -138,9 +155,6 @@ export function TableSurface({
         </div>
       </section>}
 
-      {view.kind === 'table' && assistantContent && <aside className="tt-table-assistant-panel" data-testid="table-assistant-panel" aria-label="Table assistant">
-        {assistantContent}
-      </aside>}
     </main>
   );
 }

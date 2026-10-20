@@ -1,8 +1,12 @@
 import { expect } from '@playwright/test';
 
-const equipmentPolicy = 'Borrow only an available item. Only the member who borrowed it may return it.';
+const equipmentPolicy = 'Borrow only an available equipment item and add a completion note. Only the member who borrowed it may return it.';
 const shiftPolicy = 'Swap two different people only when both can work the new slot.';
 const gamePolicy = 'On your turn, move your own boat forward by two points and pass the turn.';
+const equipmentNotes = {
+  filename: 'equipment-recording-notes.md',
+  text: '# Equipment recording notes\nKeep a short completion note with each equipment reservation.\n',
+};
 
 const fixtures = {
   equipment: {
@@ -46,27 +50,31 @@ function buildChange(kind, sourceId) {
     const program = baseProgram('Community equipment', sourceId, source.quote);
     program.collections = [{ id: 'equipment', title: 'Equipment', fields: [
       { id: 'name', label: 'Name', type: 'text', required: true },
-      { id: 'available', label: 'Available', type: 'boolean', required: true },
       { id: 'borrower', label: 'Borrower', type: 'text', required: false },
+      { id: 'available', label: 'Available', type: 'boolean', required: true },
+      { id: 'borrow_note', label: 'Completion note', type: 'text', required: false },
     ] }];
     const itemParameter = { id: 'item', label: 'Item', type: 'record', collection: 'equipment' };
+    const completionNoteParameter = { id: 'note', label: 'Completion note', type: 'text' };
     program.actions = [
-      { id: 'borrow', title: 'Borrow equipment', description: 'Reserve one available item for yourself.', roles: ['owner', 'participant'], parameters: [itemParameter], conditions: [
+      { id: 'borrow', title: 'Borrow equipment', description: 'Reserve one available item for yourself.', roles: ['owner', 'participant'], parameters: [itemParameter, completionNoteParameter], conditions: [
         { left: record('item', 'available'), op: 'eq', right: literal(true), message: 'This item is already reserved.' },
       ], effects: [
         { record: 'item', field: 'available', op: 'set', value: literal(false) },
         { record: 'item', field: 'borrower', op: 'set', value: { system: 'actor' } },
+        { record: 'item', field: 'borrow_note', op: 'set', value: { input: 'note' } },
       ], requireTurn: false, advanceTurn: false },
       { id: 'return', title: 'Return equipment', description: 'Only the borrower can return an item.', roles: ['owner', 'participant'], parameters: [itemParameter], conditions: [
         { left: record('item', 'borrower'), op: 'eq', right: { system: 'actor' }, message: 'Only the borrower may return this item.' },
       ], effects: [
         { record: 'item', field: 'available', op: 'set', value: literal(true) },
         { record: 'item', field: 'borrower', op: 'set', value: literal(null) },
+        { record: 'item', field: 'borrow_note', op: 'set', value: literal(null) },
       ], requireTurn: false, advanceTurn: false },
     ];
     return { kind: 'table', program, initialRecords: { equipment: [
-      { id: 'camera', values: { name: 'Field camera', available: true, borrower: null } },
-      { id: 'tripod', values: { name: 'Tripod', available: true, borrower: null } },
+      { id: 'camera', values: { name: 'Field camera', borrower: null, available: true, borrow_note: null } },
+      { id: 'tripod', values: { name: 'Tripod', borrower: null, available: true, borrow_note: null } },
     ] } };
   }
   if (kind === 'shifts') {
@@ -143,13 +151,60 @@ function isCommandResponse(response, type) {
   catch { return false; }
 }
 
+async function openObjectsMenu(page) {
+  const trigger = page.getByTestId('canvas-object-menu-trigger');
+  await expect(trigger).toBeVisible();
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
+  const dock = page.getByTestId('canvas-object-dock');
+  await expect(dock).toBeVisible();
+  return dock;
+}
+
+async function openCanvasObject(page, id) {
+  const editor = page.getByTestId('canvas-object-editor');
+  if (await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id) return editor;
+  const dock = await openObjectsMenu(page);
+  await dock.getByTestId(`open-canvas-${id}`).click();
+  await expect(editor).toHaveAttribute('data-canvas-object', id);
+  await expect(editor).toBeVisible();
+  return editor;
+}
+
+async function refreshTable(page, tableId) {
+  const options = page.locator('.tt-table-options');
+  if (await options.getAttribute('open') === null) await options.locator('summary').click();
+  await expect(options).toHaveAttribute('open', '');
+  const refreshed = page.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
+  await options.getByRole('button', { name: 'Refresh table', exact: true }).click();
+  const response = await refreshed;
+  expect(response.status()).toBe(200);
+}
+
 async function openNewTable(owner, api) {
   const created = owner.waitForResponse((response) => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
-  await owner.getByRole('button', { name: /Shared data table/ }).click();
+  const primary = owner.getByRole('button', { name: 'Start with your files', exact: true });
+  await expect(primary).toBeVisible();
+  const templates = owner.locator('.tt-template-choices');
+  await expect(templates.locator('summary')).toHaveText('Or start with an example');
+  await expect(templates).not.toHaveAttribute('open', '');
+  await expect(templates.getByRole('button', { name: /Invoice check/ })).toBeHidden();
+  await primary.click();
   const response = await created;
   expect(response.status()).toBe(201);
   const view = await response.json();
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
+  const workspacePicker = owner.locator('.tt-workspace-picker__button');
+  await expect(workspacePicker).toBeVisible();
+  await workspacePicker.click();
+  await expect(workspacePicker).toHaveAttribute('aria-expanded', 'true');
+  await expect(owner.locator('.tt-workspace-menu')).toBeVisible();
+  await owner.getByRole('button', { name: 'Close table menu', exact: true }).click();
+  const assistant = owner.getByTestId('table-assistant');
+  await expect(assistant.getByRole('button', { name: 'Set up this table from sources', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const dock = await openObjectsMenu(owner);
+  await expect(dock.getByTestId('open-canvas-table.sources')).toHaveText('Files');
+  await expect(dock.getByTestId('open-canvas-table.rules')).toHaveText('Rules');
+  await owner.getByTestId('canvas-object-menu-trigger').click();
   expect((await api(owner, `/api/workspaces/${view.id}`)).body.kind).toBe('table');
   return view;
 }
@@ -157,6 +212,7 @@ async function openNewTable(owner, api) {
 async function addSource(page, tableId, source, api, method = 'assistant') {
   const assistant = page.getByTestId('table-assistant');
   await expect(assistant).toBeVisible();
+  const sourceCountBefore = (await api(page, `/api/workspaces/${tableId}`)).body.domain.sources.length;
   let importRequests = 0;
   let modelRequests = 0;
   let assistantRequests = 0;
@@ -172,8 +228,7 @@ async function addSource(page, tableId, source, api, method = 'assistant') {
   page.on('request', trackImport);
   const imported = page.waitForResponse((response) => isCommandResponse(response, 'table.import'));
   if (method === 'drop') {
-    await page.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.sources').click();
-    const editor = page.getByTestId('canvas-object-editor');
+    const editor = await openCanvasObject(page, 'table.sources');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.sources');
     await page.evaluate(({ filename, text }) => {
       const zone = document.querySelector('.tt-table-dropzone');
@@ -184,7 +239,7 @@ async function addSource(page, tableId, source, api, method = 'assistant') {
       zone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
     }, source);
   } else {
-    const prompt = assistant.getByLabel('What should the rule draft change or explain?');
+    const prompt = assistant.getByLabel('How should this table work?');
     const retainedPrompt = 'Keep this request while I attach the source.';
     await prompt.fill(retainedPrompt);
     await assistant.getByLabel('Choose table source files').setInputFiles({ name: source.filename, mimeType: source.filename.endsWith('.json') ? 'application/json' : 'text/plain', buffer: Buffer.from(source.text, 'utf8') });
@@ -203,29 +258,36 @@ async function addSource(page, tableId, source, api, method = 'assistant') {
   page.off('request', trackImport);
   const current = await api(page, `/api/workspaces/${tableId}`);
   expect(current.status).toBe(200);
-  expect(current.body.domain.sources).toHaveLength(1);
-  expect(current.body.domain.sources[0].text).toBe(source.text);
+  expect(current.body.domain.sources).toHaveLength(sourceCountBefore + 1);
+  const importedSource = current.body.domain.sources.find((item) => item.filename === source.filename && item.text === source.text);
+  expect(importedSource).toBeTruthy();
   expect(assistantRequests).toBe(0);
-  return current.body.domain.sources[0];
+  return importedSource;
 }
 
 async function requestProposal(owner, tableId, source, change, setTableReply, api) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const assistant = owner.getByTestId('table-assistant');
   await expect(assistant).toBeVisible();
-  const rulesMode = assistant.getByRole('button', { name: 'Change rules', exact: true });
+  const rulesMode = assistant.getByRole('button', { name: before.domain.program ? 'Open rules and sources' : 'Set up this table from sources', exact: true });
+  await expect(rulesMode).toBeVisible();
+  await expect(rulesMode).toHaveText(before.domain.program ? 'Rules' : 'Set up');
   if (await rulesMode.getAttribute('aria-pressed') !== 'true') await rulesMode.click();
   const consentCopy = assistant.locator('.tt-ai-proposal__privacy');
-  await expect(consentCopy).toContainText('After you consent, your prompt, current rules, and all 1 private source file on this table are sent to the AI provider.');
+  await expect(consentCopy).not.toHaveAttribute('open', '');
+  await consentCopy.locator('summary').click();
+  await expect(consentCopy).toContainText('Your prompt, current rules, and all 1 private source file on this table go to the AI provider after you agree.');
   await expect(consentCopy).toContainText('Shared records and member activity are excluded.');
-  await expect(consentCopy).toContainText('Source files and drafts stay private to the owner; active rules and records are shared with members.');
-  await assistant.getByLabel('What should the rule draft change or explain?').fill('Build a shared table from the source, with bounded actions and checks.');
+  await expect(consentCopy).toContainText('Original files and drafts stay private to you; active rules and records are shared.');
+  await assistant.getByLabel('How should this table work?').fill('Build a shared table from the source, with bounded actions and checks.');
   const ask = assistant.getByRole('button', { name: 'Prepare rule draft', exact: true });
   await expect(ask).toBeDisabled();
-  await assistant.getByLabel('I agree to send this request and all private source files for a rule draft.').check();
+  await assistant.getByLabel('Send this request and all 1 source file to AI.', { exact: true }).check();
   setTableReply({ change, expectedFilename: source.filename, expectedText: source.text });
   await ask.click();
   await expect(assistant.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(assistant.getByLabel('Send this request and all 1 source file to AI.', { exact: true })).not.toBeChecked();
+  await expect(ask).toBeDisabled();
   await owner.reload();
   const refreshedAssistant = owner.getByTestId('table-assistant');
   await expect(refreshedAssistant.getByText('Draft ready for review', { exact: true })).toBeVisible();
@@ -240,10 +302,11 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
 }
 
 async function progressThroughLifecycle(owner, tableId, api, rules) {
-  await owner.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.rules').click();
-  const editor = owner.getByTestId('canvas-object-editor');
+  const editor = await openCanvasObject(owner, 'table.rules');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
   const proposedRules = editor.getByRole('region', { name: 'Proposed rules', exact: true });
+  const actionDetails = proposedRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  await actionDetails.locator('summary').click();
   await expect(proposedRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
   for (const rule of rules) {
     const action = proposedRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
@@ -265,10 +328,10 @@ async function progressThroughLifecycle(owner, tableId, api, rules) {
   if (firstRow) await expect(proposedRows).toContainText(String(Object.values(firstRow.values)[0]));
   else await expect(proposedRows).toContainText('No new rows in this proposal. Existing records stay unchanged.');
   for (const [label, type, nextStatus] of [
-    [/Simulate/, 'evolve.simulate', 'simulated'],
-    [/Validate/, 'evolve.validate', 'validated'],
-    [/Approve/, 'evolve.approve', 'approved'],
-    [/Activate/, 'evolve.activate', 'active'],
+    [/Preview change/, 'evolve.simulate', 'simulated'],
+    [/Check rules/, 'evolve.validate', 'validated'],
+    [/Approve rules/, 'evolve.approve', 'approved'],
+    [/Use these rules/, 'evolve.activate', 'active'],
   ]) {
     const responsePromise = owner.waitForResponse((response) => isCommandResponse(response, type));
     await editor.getByRole('button', { name: label }).click();
@@ -277,6 +340,7 @@ async function progressThroughLifecycle(owner, tableId, api, rules) {
   }
   const active = (await api(owner, `/api/workspaces/${tableId}`)).body;
   expect(active.domain.program).toBeTruthy();
+  await expect(owner.getByTestId('table-assistant').getByRole('button', { name: 'Open rules and sources', exact: true })).toHaveText('Rules');
   return active;
 }
 
@@ -302,13 +366,24 @@ async function joinAndCheckPrivateFiles(newPage, api, actor, inviteUrl, tableId,
   expect(workspace.body.domain.candidate).toBeNull();
   expect(workspace.body.domain.revisions).toEqual([]);
   expect(JSON.stringify(workspace.body.domain)).not.toContain(filename);
-  await expect(page.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.sources')).toHaveCount(0);
-  await expect(page.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.rules')).toBeVisible();
+  const dock = await openObjectsMenu(page);
+  await expect(dock.getByTestId('open-canvas-table.sources')).toHaveCount(0);
+  await expect(dock.getByTestId('open-canvas-table.rules')).toBeVisible();
+  await expect(dock.getByTestId('open-canvas-table.rules')).toHaveText('Rules');
+  await expect(dock.getByTestId('open-canvas-table.actions')).toHaveText('Actions');
+  await page.getByTestId('canvas-object-menu-trigger').click();
   const assistant = page.getByTestId('table-assistant');
   await expect(assistant.getByRole('heading', { name: 'Table assistant', exact: true })).toBeVisible();
-  await expect(assistant).toContainText('The owner manages private source files and rule drafts.');
-  await expect(assistant.getByRole('button', { name: 'Open actions', exact: true })).toBeVisible();
-  await expect(assistant.getByRole('button', { name: 'View active rules', exact: true })).toBeVisible();
+  const privacy = assistant.locator('.tt-table-chat__privacy');
+  await privacy.locator('summary').click();
+  await expect(privacy).toContainText('The owner manages private source files and rule drafts');
+  await privacy.locator('summary').click();
+  const tableTools = assistant.locator('.tt-table-assistant__canvas-tools');
+  await expect(tableTools).toHaveCount(0);
+  await openCanvasObject(page, 'table.rules');
+  await expect(page.getByTestId('canvas-object-editor').getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
+  await openCanvasObject(page, 'table.actions');
+  await expect(page.getByTestId('canvas-object-editor').locator('.tt-table-action-picker')).toBeVisible();
   await expect(assistant.getByTestId('table-ai-composer')).toHaveCount(0);
   await expect(assistant.getByLabel('Choose table source files')).toHaveCount(0);
   await expect(assistant.getByRole('button', { name: 'Prepare rule draft', exact: true })).toHaveCount(0);
@@ -317,23 +392,83 @@ async function joinAndCheckPrivateFiles(newPage, api, actor, inviteUrl, tableId,
 }
 
 async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
-  const editor = page.getByTestId('canvas-object-editor');
+  const editor = await openCanvasObject(page, 'table.actions');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.actions');
+  const forms = editor.locator('form.tt-table-action');
+  const picker = editor.locator('.tt-table-action-picker select');
+  await picker.selectOption('');
+  await expect(forms).toHaveCount(0);
+  await picker.selectOption({ label: actionTitle });
   const form = editor.locator('form.tt-table-action').filter({ hasText: actionTitle });
+  await expect(forms).toHaveCount(1);
+  await expect(form).toBeVisible();
+  const requirements = form.locator('details.tt-table-action__requirements');
+  if (await requirements.count()) await expect(requirements).not.toHaveAttribute('open', '');
   for (const [label, value] of Object.entries(inputs)) await form.getByLabel(label, { exact: false }).selectOption(value);
   const responsePromise = page.waitForResponse((response) => isCommandResponse(response, 'table.act'));
   await form.getByRole('button', { name: actionTitle, exact: true }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(expectedStatus);
+  if (expectedStatus !== 200) {
+    const failure = await response.json();
+    expect(failure.message).toEqual(expect.any(String));
+    const notice = page.locator('.tt-notice[role="alert"]');
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText(failure.message);
+  }
   return response;
 }
 
-const tableChatConsent = 'I agree to send this message and the shared table context to the AI provider.';
+async function performContextualAction(page, collectionId, { recordId, recordLabel, actionTitle, recordFieldLabel, recordParameterChoice, inputs = {}, resetTextOnRecordChange }) {
+  const editor = await openCanvasObject(page, `table.collection.${collectionId}`);
+  const selectRecord = editor.getByRole('button', { name: `Select ${recordLabel} · ${recordId}`, exact: true });
+  await selectRecord.click();
+  await expect(editor.locator('.tt-table-record-select[aria-pressed="true"]')).toHaveCount(1);
+  let actions = editor.getByRole('region', { name: `Actions for ${recordLabel} · ${recordId}`, exact: true });
+  await expect(actions).toBeVisible();
+  await actions.getByRole('combobox', { name: 'Action', exact: true }).selectOption({ label: actionTitle });
+  let form = actions.locator('form.tt-table-action');
+  if (recordParameterChoice) {
+    await actions.getByRole('combobox', { name: 'Use this record as', exact: true }).selectOption({ label: recordParameterChoice });
+  }
+  await expect(form).toBeVisible();
+  const requirements = form.locator('details.tt-table-action__requirements');
+  if (await requirements.count()) await expect(requirements).not.toHaveAttribute('open', '');
+  const prefilledField = form.getByRole('combobox', { name: recordFieldLabel, exact: true });
+  await expect(prefilledField).toHaveValue(recordId);
+  for (const [label, value] of Object.entries(inputs)) {
+    const field = form.getByRole('combobox', { name: label, exact: true });
+    await expect(field).toHaveValue('');
+    await field.selectOption(value);
+  }
+  if (resetTextOnRecordChange) {
+    const textField = form.getByLabel(resetTextOnRecordChange.label, { exact: true });
+    await textField.fill(resetTextOnRecordChange.discardValue);
+    for (const nextRecord of resetTextOnRecordChange.records) {
+      await editor.getByRole('button', { name: `Select ${nextRecord.label} · ${nextRecord.id}`, exact: true }).click();
+      actions = editor.getByRole('region', { name: `Actions for ${nextRecord.label} · ${nextRecord.id}`, exact: true });
+      form = actions.locator('form.tt-table-action');
+      await expect(actions).toBeVisible();
+      await expect(form).toBeVisible();
+      await expect(form.getByRole('combobox', { name: recordFieldLabel, exact: true })).toHaveValue(nextRecord.id);
+      await expect(form.getByLabel(resetTextOnRecordChange.label, { exact: true })).toHaveValue('');
+    }
+    await form.getByLabel(resetTextOnRecordChange.label, { exact: true }).fill(resetTextOnRecordChange.submitValue);
+  }
+  await expect(form).toHaveCount(1);
+  const responsePromise = page.waitForResponse((response) => isCommandResponse(response, 'table.act'));
+  await form.getByRole('button', { name: actionTitle, exact: true }).click();
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+  return response;
+}
+
+const tableChatConsent = 'I agree to share this message and table context with the AI provider.';
 
 async function askTableAssistant(page, promptText, syntheticReply, setAssistantReply) {
   const chat = page.getByTestId('table-chat');
-  const prompt = chat.getByRole('textbox', { name: 'Ask about the shared table' });
-  const send = chat.getByRole('button', { name: 'Send to assistant', exact: true });
+  const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
+  const send = chat.getByRole('button', { name: 'Send', exact: true });
   await expect(prompt).toBeEnabled();
   await prompt.fill(promptText);
   await expect(send).toBeDisabled();
@@ -343,6 +478,8 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
   await send.click();
   const response = await responsePromise;
   expect([200, 202]).toContain(response.status());
+  const history = chat.locator('.tt-table-chat__history');
+  if (await history.getAttribute('open') === null) await history.locator('summary').click();
   await expect(chat).toContainText(syntheticReply.result.text, { timeout: 20_000 });
   return chat;
 }
@@ -446,7 +583,10 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(restored).toContainText(archived[20].prompt);
   await expect(restored).not.toContainText(archived[0].prompt);
   const callsBeforeHistoryRead = getProviderCalls();
-  const older = restored.getByRole('button', { name: 'Load older messages', exact: true });
+  const historyDetails = restored.locator('details.tt-table-chat__history');
+  if (await historyDetails.getAttribute('open') === null) await historyDetails.locator('summary').click();
+  await expect(historyDetails).toHaveAttribute('open', '');
+  const older = historyDetails.getByRole('button', { name: 'Older messages', exact: true });
   await expect(older).toBeVisible();
   await older.click();
   await expect(restored).toContainText(archived[0].prompt);
@@ -458,38 +598,67 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await owner.setViewportSize({ width: 390, height: 844 });
   const canvasBox = await owner.locator('.tt-canvas-panel').boundingBox();
   const assistantBox = await owner.getByTestId('table-assistant-panel').boundingBox();
+  const flowBox = await owner.locator('.tt-canvas-panel .react-flow').boundingBox();
   expect(canvasBox).toBeTruthy();
   expect(assistantBox).toBeTruthy();
-  expect(canvasBox.y + canvasBox.height).toBeLessThanOrEqual(assistantBox.y + 1);
-  expect(assistantBox.x).toBeGreaterThanOrEqual(canvasBox.x);
-  expect(assistantBox.x + assistantBox.width).toBeLessThanOrEqual(391);
+  expect(flowBox).toBeTruthy();
+  expect(assistantBox.x).toBeGreaterThanOrEqual(canvasBox.x - 1);
+  expect(assistantBox.y).toBeGreaterThanOrEqual(canvasBox.y - 1);
+  expect(assistantBox.x + assistantBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width + 1);
+  expect(assistantBox.y + assistantBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height + 1);
+  expect(flowBox.height).toBeGreaterThan(100);
+  expect(flowBox.y + flowBox.height).toBeLessThanOrEqual(assistantBox.y - 1);
   await owner.setViewportSize({ width: 1280, height: 820 });
   const source = await addSource(owner, room.id, fixtures.equipment, api);
   await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api);
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
+  const ownerAssistant = owner.getByTestId('table-assistant');
+  const rulesMode = ownerAssistant.getByRole('button', { name: 'Open rules and sources', exact: true });
+  if (await rulesMode.getAttribute('aria-pressed') !== 'true') await rulesMode.click();
+  const initialSourceConsent = ownerAssistant.getByLabel('Send this request and all 1 source file to AI.', { exact: true });
+  await initialSourceConsent.check();
+  const sourcePrompt = ownerAssistant.getByLabel('How should this table work?', { exact: true });
+  await sourcePrompt.fill('Check that approval consent follows the selected source files.');
+  const prepareDraft = ownerAssistant.getByRole('button', { name: 'Prepare rule draft', exact: true });
+  await expect(prepareDraft).toBeEnabled();
+  await addSource(owner, room.id, equipmentNotes, api);
+  const updatedSourceConsent = ownerAssistant.getByLabel('Send this request and all 2 source files to AI.', { exact: true });
+  await expect(updatedSourceConsent).not.toBeChecked();
+  await expect(prepareDraft).toBeDisabled();
+  await updatedSourceConsent.check();
+  await expect(prepareDraft).toBeEnabled();
+
   const firstInvite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, firstInvite, room.id, source.filename);
   await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls });
   mark('Generic table assistant: explicit consent, participant-only conversation history, grounded reference, reload continuity, and no table mutation');
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
-  await performAction(member, 'Borrow equipment', { Item: 'camera' });
+  await performContextualAction(member, 'equipment', {
+    recordId: 'camera', recordLabel: 'Field camera', actionTitle: 'Borrow equipment', recordFieldLabel: 'Item',
+    resetTextOnRecordChange: {
+      label: 'Completion note', discardValue: 'Draft for the wrong item', submitValue: 'Reserved for the community workshop',
+      records: [{ id: 'tripod', label: 'Tripod' }, { id: 'camera', label: 'Field camera' }],
+    },
+  });
   active = (await api(member, `/api/workspaces/${room.id}`)).body;
   const camera = active.domain.records.equipment.find((row) => row.id === 'camera');
-  expect(camera.values).toMatchObject({ available: false, borrower: active.actor.actorId });
+  expect(camera.values).toMatchObject({ available: false, borrower: active.actor.actorId, borrow_note: 'Reserved for the community workshop' });
+  const expandedEquipment = await openCanvasObject(member, 'table.collection.equipment');
+  await expandedEquipment.getByRole('button', { name: 'Close object', exact: true }).click();
+  const equipmentPreview = member.locator('.tt-canvas-node[data-canvas-object="table.collection.equipment"] .tt-table-collection__preview');
+  await expect(equipmentPreview).toContainText(`Borrower: ${active.actor.name}`);
+  await expect(equipmentPreview).not.toContainText(active.actor.actorId);
 
   const secondInvite = await inviteMember(owner, 2);
   secondMember = await joinAndCheckPrivateFiles(newPage, api, secondMember, secondInvite, room.id, source.filename);
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-workspace.people').click();
-  await expect(member.getByTestId('canvas-object-editor')).toContainText('Second Member');
+  const people = await openCanvasObject(member, 'workspace.people');
+  await expect(people).toContainText('Second Member');
   mark('Generic table: existing participant receives the new membership projection over its live connection');
-  await secondMember.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
   await performAction(secondMember, 'Return equipment', { Item: 'camera' }, 422);
   const rejected = (await api(secondMember, `/api/workspaces/${room.id}`)).body.domain.records.equipment.find((row) => row.id === 'camera');
   expect(rejected.values).toMatchObject({ available: false, borrower: active.actor.actorId });
 
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
   await performAction(member, 'Return equipment', { Item: 'camera' });
   const returned = (await api(member, `/api/workspaces/${room.id}`)).body.domain.records.equipment.find((row) => row.id === 'camera');
   expect(returned.values).toMatchObject({ available: true, borrower: null });
@@ -505,10 +674,17 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
   await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api);
   await progressThroughLifecycle(owner, room.id, api, expectedRules.shifts);
+  const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
+  await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
+  const ownerRecordActions = ownerRoster.getByRole('region', { name: 'Actions for Ada · ada', exact: true });
+  await expect(ownerRecordActions).toContainText('Actions for this collection are limited to members.');
+  await expect(ownerRecordActions.getByRole('combobox', { name: 'Action', exact: true })).toHaveCount(0);
   const invite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
-  await performAction(member, 'Swap shifts', { 'First person': 'bo', 'Second person': 'ada' });
+  await performContextualAction(member, 'people', {
+    recordId: 'bo', recordLabel: 'Bo', actionTitle: 'Swap shifts', recordFieldLabel: 'First person',
+    recordParameterChoice: 'First person', inputs: { 'Second person': 'ada' },
+  });
   let current = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(current.domain.records.people.find((row) => row.id === 'bo').values.slot).toBe('morning');
   expect(current.domain.records.people.find((row) => row.id === 'ada').values.slot).toBe('evening');
@@ -516,8 +692,8 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   current = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(current.domain.records.people.find((row) => row.id === 'bo').values.slot).toBe('morning');
   expect(current.domain.records.people.find((row) => row.id === 'cy').values.slot).toBe('night');
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.collection.people').click();
-  await expect(member.getByTestId('canvas-object-editor')).toContainText('Shift roster');
+  const memberRoster = await openCanvasObject(member, 'table.collection.people');
+  await expect(memberRoster).toContainText('Shift roster');
   mark('Generic table: JSON source, atomic multi-record action, availability check, unique records, and one-import drag/drop');
 }
 
@@ -530,10 +706,15 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   const invite = await inviteMember(owner, 1);
   member = await joinAndCheckPrivateFiles(newPage, api, member, invite, room.id, source.filename);
   const memberName = (await api(member, `/api/workspaces/${room.id}`)).body.actor.name;
-  await owner.getByTestId('canvas-object-dock').getByTestId('open-canvas-workspace.people').click();
-  await expect(owner.getByTestId('canvas-object-editor')).toContainText(memberName);
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
-  await expect(member.getByRole('button', { name: 'Advance boat', exact: true })).toBeDisabled();
+  const people = await openCanvasObject(owner, 'workspace.people');
+  await expect(people).toContainText(memberName);
+  const memberActions = await openCanvasObject(member, 'table.actions');
+  await expect(memberActions.locator('form.tt-table-action')).toHaveCount(0);
+  await memberActions.locator('.tt-table-action-picker select').selectOption({ label: 'Advance boat' });
+  await expect(memberActions.locator('form.tt-table-action')).toHaveCount(1);
+  await expect(memberActions).toContainText('Turn: Owner');
+  await expect(memberActions).toContainText('Waiting for the owner to act.');
+  await expect(memberActions.getByRole('button', { name: 'Advance boat', exact: true })).toBeDisabled();
 
   const ownerBeforeProposal = (await api(owner, `/api/workspaces/${room.id}`)).body;
   const ownerCalls = getProviderCalls();
@@ -559,10 +740,8 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(active.domain.turn).toBe('member-1');
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
 
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.collection.boats').click();
-  const memberRefresh = member.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${room.id}`) && response.request().method() === 'GET');
-  await member.getByRole('button', { name: 'Refresh latest table', exact: true }).click();
-  expect((await memberRefresh).status()).toBe(200);
+  await openCanvasObject(member, 'table.collection.boats');
+  await refreshTable(member, room.id);
   const memberBeforeProposal = (await api(member, `/api/workspaces/${room.id}`)).body;
   const memberCalls = getProviderCalls();
   const memberPrompt = 'Prepare my blue boat advance for this turn.';
@@ -579,7 +758,6 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(afterMemberProposal.domain.records.boats.map((row) => row.values.score)).toEqual([2, 0]);
   expect(afterMemberProposal.domain.turn).toBe('member-1');
 
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
   await performAction(member, 'Advance boat', { 'Your boat': 'blue' });
   active = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(active.domain.turn).toBe('host');
@@ -588,10 +766,8 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await expect(memberChat).toContainText('The table changed after this proposal. It cannot be confirmed');
   mark('Generic table assistant: action proposal requires a separate confirmation; a direct table action makes a pending proposal stale');
 
-  await owner.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.collection.boats').click();
-  const refresh = owner.waitForResponse((response) => response.url().endsWith(`/api/workspaces/${room.id}`) && response.request().method() === 'GET');
-  await owner.getByRole('button', { name: 'Refresh latest table', exact: true }).click();
-  expect((await refresh).status()).toBe(200);
+  await openCanvasObject(owner, 'table.collection.boats');
+  await refreshTable(owner, room.id);
   await expect(owner.getByTestId('canvas-object-editor').getByRole('cell', { name: '2', exact: true })).toHaveCount(2);
   active = (await api(owner, `/api/workspaces/${room.id}`)).body;
   const revisedProgram = structuredClone(active.domain.program);
@@ -603,12 +779,10 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);
   expect(active.domain.turn).toBe('host');
-  await owner.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
   await performAction(owner, 'Advance boat', { 'Your boat': 'red' });
   active = (await api(owner, `/api/workspaces/${room.id}`)).body;
   expect(active.domain.turn).toBe('member-1');
   expect(active.domain.records.boats.map((row) => row.values.score)).toEqual([5, 2]);
-  await member.getByTestId('canvas-object-dock').getByTestId('open-canvas-table.actions').click();
   await performAction(member, 'Advance boat', { 'Your boat': 'blue' });
   active = (await api(member, `/api/workspaces/${room.id}`)).body;
   expect(active.domain.turn).toBe('host');
@@ -626,7 +800,7 @@ export async function verifyGenericTableBrowser({ actors, newPage, api, setTable
   const scenarios = [equipmentScenario, shiftScenario, gameScenario];
   for (let index = 0; index < scenarios.length; index += 1) {
     const owner = await newPage(owners[index]);
-    await expect(owner.getByRole('heading', { name: 'Choose a table' })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: 'What are we making?' })).toBeVisible();
     await scenarios[index]({ owner, member: actors.members[0], secondMember, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark });
     await owner.screenshot({ path: `test-results/cloudflare-browser/generic-table-${['equipment', 'shifts', 'game'][index]}.png`, fullPage: true });
   }
