@@ -447,11 +447,16 @@ try {
     const submit = bar.getByRole('button', { name: 'Send message', exact: true });
     await expect(composer).toBeVisible();
     await composer.fill(promptText);
-    if (!expectConsent) {
-      await submit.click();
-      return null;
-    }
     const consent = bar.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+    if (!expectConsent) {
+      // F013: one grant covers this actor on this table epoch, so a later request sends straight away.
+      const modelPost = (request) => request.method() === 'POST' && /\/api\/workspaces\/[^/]+\/model$/.test(new URL(request.url()).pathname);
+      const response = responseAfter(page, (item) => modelPost(item.request()));
+      const sent = await response(() => submit.click());
+      await expect(consent).toHaveCount(0);
+      expect(sent.request().postDataJSON()).toMatchObject({ prompt: promptText, consent: true });
+      return sent;
+    }
     let modelPosts = 0;
     const countModelPosts = (request) => {
       if (request.method() === 'POST' && /\/api\/workspaces\/[^/]+\/model$/.test(new URL(request.url()).pathname)) modelPosts += 1;
@@ -466,6 +471,7 @@ try {
       expect(dialogText).toContain('Table files included');
       for (const filename of sourceNames) expect(dialogText).toContain(filename);
       if (sourceNames.length === 0) expect(dialogText).toMatch(/no table files are attached|not included/iu);
+      expect(dialogText).toContain('You will not be asked again on this table');
       if (cancelFirst) {
         expect(modelPosts).toBe(0);
         await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -535,7 +541,7 @@ try {
     return draftNode.getByTestId('table-chat-answer');
   }
 
-  async function askForDraft(owner, tableId, scenario, phase, file, { cancelFirst = false } = {}) {
+  async function askForDraft(owner, tableId, scenario, phase, file, { cancelFirst = false, expectConsent = true } = {}) {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
     if (before.domain.program || before.domain.candidate?.status === 'active') {
       const rules = await openCanvasObject(owner, 'table.rules');
@@ -543,7 +549,7 @@ try {
     }
     const sourceNames = before.domain.sources.map((source) => source.filename);
     const prompt = draftPrompt(scenario, phase);
-    const response = await sendTableMessage(owner, prompt, { sourceNames, cancelFirst, workspaceId: tableId });
+    const response = await sendTableMessage(owner, prompt, { sourceNames, cancelFirst, expectConsent, workspaceId: tableId });
     expect(response?.status()).toBe(202);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('draft');
     const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -1009,7 +1015,8 @@ try {
     const pin = await pinViewPosition(owner, members, tableId, `table.view.${pinnedView.id}`, pinnedView.title);
     const beforeEdit = (await api(owner, `/api/workspaces/${tableId}`)).body;
     const recordSnapshot = structuredClone(beforeEdit.domain.records);
-    const editDraft = await askForDraft(owner, tableId, scenario, 'incremental-edit', source);
+    // The owner consented for the initial draft on this table epoch; the edit must not ask again.
+    const editDraft = await askForDraft(owner, tableId, scenario, 'incremental-edit', source, { expectConsent: false });
     expect(editDraft.domain.candidate.change.initialRecords).toEqual({});
     expect(editDraft.domain.records).toEqual(recordSnapshot);
     const editEditor = await openCanvasObject(owner, 'table.rules');

@@ -12,7 +12,7 @@
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
-/demo และ /demo/replay อยู่ใน Worker เดียวกัน CI ไม่ deploy อัตโนมัติ และการ merge เอกสารไม่เปลี่ยน Worker
+/demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
 
 ## ผลตรวจ release ล่าสุด
 
