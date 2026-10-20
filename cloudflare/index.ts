@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { SessionView, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { randomId } from '../server/codec.js';
+import { BUILD_INFO_FILE, parseBuildInfo } from '../server/build-info.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { accountForSession, authenticateRequest, authStatus, finishGoogle, limit, logout, primary, publicOrigin, requireMutation, requireOrigin, startGoogle } from './auth.js';
 import { GOOGLE_CALLBACK_PATH, type DirectoryReference, type Env } from './contracts.js';
@@ -93,6 +94,14 @@ async function adminWorkspaces(request: Request, env: Env): Promise<Response> {
   return Response.json({ workspaces, next: rows.results.length > 50 ? selected.at(-1)!.id : null });
 }
 
+async function buildVersion(request: Request, env: Env): Promise<Response> {
+  // An absent file falls through to the SPA index.html, which fails parsing and reports 404.
+  const asset = await env.ASSETS.fetch(new Request(new URL(`/${BUILD_INFO_FILE}`, request.url)));
+  const info = asset.ok ? parseBuildInfo(await asset.json().catch(() => null)) : null;
+  if (!info) throw new AuthorityError('NOT_FOUND', 'Build information is unavailable.', 404);
+  return Response.json(info, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (url.origin !== publicOrigin(env)) throw new AuthorityError('ORIGIN_REJECTED');
@@ -103,6 +112,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     await primary(env).prepare('SELECT id FROM users LIMIT 1').all();
     return Response.json({ ok: true });
   }
+  if (method === 'GET' && path === '/version') return buildVersion(request, env);
   if (path.startsWith('/internal/')) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
   if (!path.startsWith('/api/')) return env.ASSETS.fetch(request);
   if (method === 'GET' && path === '/api/auth/status') return authStatus(request, env);

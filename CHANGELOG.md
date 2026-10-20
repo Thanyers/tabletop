@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — `/version`
+
+- เพิ่ม `GET /version` ทั้ง Worker และ Node ตอบ `{"version","sha","built_at"}` จาก `version.json` ที่ build เขียนไว้คู่กับไฟล์เว็บ จึงไม่ต้องแก้คำสั่ง deploy · `version` มาจาก git tag `vX.Y.Z` ของ commit ที่ build; ถ้าไม่มี tag จะเป็น `0.0.0-dev` · ไฟล์ที่ไม่มีหรือรูปแบบผิดตอบ 404
+- **operator:** config deploy ต้องมี `/version` ใน `assets.run_worker_first` (เพิ่มใน `wrangler.jsonc` แล้ว) ไม่อย่างนั้น `/version` จะได้หน้า `index.html` แทน · build มีไฟล์เพิ่ม 1 ไฟล์และ `built_at` ทำให้ build สองครั้งจาก source เดียวกันได้ไฟล์นี้ต่างกัน
+
 ## 2026-10-20 — Calm Canvas
 
 - เอา Use/Arrange ออก ลากหัวการ์ดได้ตลอด และเปิดเครื่องมือจาก Objects บน Canvas
