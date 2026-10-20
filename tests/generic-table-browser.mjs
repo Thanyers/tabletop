@@ -193,6 +193,7 @@ async function openNewTable(owner, api) {
   expect(response.status()).toBe(201);
   const view = await response.json();
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
+  await expect(owner).toHaveURL(new RegExp(`/t/${view.id}$`));
   const workspacePicker = owner.locator('.tt-workspace-picker__button');
   await expect(workspacePicker).toBeVisible();
   await workspacePicker.click();

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- แต่ละหน้ามี URL ของตัวเอง: รายการโต๊ะ `/` · โต๊ะ `/t/<id>` · ลิงก์เชิญ `/join#invite=...` · รีโหลดอยู่โต๊ะเดิม ปุ่ม back/forward ใช้ได้ และยังไม่ล็อกอินจะกลับโต๊ะเดิมหลังล็อกอิน · URL โต๊ะไม่ใช่สิทธิ์ เซิร์ฟเวอร์ยังตรวจสมาชิกทุกคำขอ คนนอกเห็นข้อความเดียวกับโต๊ะที่ไม่มีอยู่ · `/new` จองไว้สำหรับหน้าเริ่มโต๊ะใหม่ (F001) ตอนนี้แสดงหน้าแรก ([F004](docs/features/F004-url-paths.md))
 - **CI/dev:** เพิ่ม ESLint (`npm run lint`) เข้า CI ห้าม `any` ที่เขียนเอง ห้าม `@ts-ignore` และบังคับกฎของ React hooks · เพิ่ม pre-commit hook (husky + lint-staged) ที่รัน `check-public-files` และ lint ไฟล์ที่ stage · `check-public-files` ไม่ crash เมื่อเจอ nested repository แล้ว แต่รายงานเป็น finding แทน · ไม่เปลี่ยน behavior ของแอป ([CONTRIBUTING → Lint](CONTRIBUTING.md#lint))
 
 ## 1.0.0 — 2026-10-20
