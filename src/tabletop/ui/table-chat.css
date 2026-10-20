@@ -53,10 +53,17 @@
 /* The bar's own border shows focus; drop the app-wide blue field outline inside it. */
 .tt-app .tt-table-chat-bar__box textarea:focus, .tt-app .tt-table-chat-bar__box textarea:focus-visible { outline: none; box-shadow: none; }
 
-/* The AI asked questions instead of drafting rules (F012). */
-.tt-app .tt-chat-card__questions { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.tt-app .tt-chat-card__questions button { width: 100%; padding: 8px 12px; border: 1px solid var(--tt-line); border-radius: 12px; background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: 13px; line-height: 1.45; text-align: left; cursor: pointer; }
-.tt-app .tt-chat-card__questions button:hover:not(:disabled) { border-color: #24796b; }
-.tt-app .tt-chat-card__questions button:focus-visible { outline: 2px solid #24796b; outline-offset: 2px; }
-.tt-app .tt-chat-card__hint { color: var(--tt-muted); font-size: 12px; }
-.tt-app .tt-chat-card__question { font-weight: 650; }
+/* The AI asked one question with answer choices instead of drafting rules (F012). */
+.tt-app .tt-canvas-node__body:has(> .tt-chat-card--questions) { max-height: none; }
+.tt-app .tt-chat-card--questions { gap: var(--tt-space-3); }
+.tt-app .tt-chat-card .tt-chat-card__intro { align-items: flex-start; color: var(--tt-muted); font-size: var(--tt-type-small); line-height: 16px; }
+.tt-app .tt-chat-card__intro svg { flex: 0 0 auto; margin-top: 1px; }
+.tt-app .tt-chat-card__question { color: var(--tt-ink); font-size: 15px; font-weight: 650; line-height: 22px; }
+.tt-app .tt-chat-card__questions { display: grid; gap: var(--tt-space-2); margin: 0; padding: 0; list-style: none; }
+.tt-app .tt-chat-card__questions button { display: flex; align-items: center; justify-content: space-between; gap: var(--tt-space-3); width: 100%; min-height: var(--tt-button-height); padding: var(--tt-space-2) var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium); background: var(--tt-card-surface); color: var(--tt-ink); font: inherit; font-size: var(--tt-type-body); line-height: 20px; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.tt-app .tt-chat-card__questions button svg { flex: 0 0 auto; color: var(--tt-muted); }
+.tt-app .tt-chat-card__questions button:hover:not(:disabled) { border-color: var(--tt-moss); background: var(--tt-green-2); }
+.tt-app .tt-chat-card__questions button:hover:not(:disabled) svg { color: var(--tt-moss); }
+.tt-app .tt-chat-card__questions button:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 2px; }
+.tt-app .tt-chat-card__questions button:disabled { cursor: not-allowed; opacity: .6; }
+.tt-app .tt-chat-card__hint { color: var(--tt-muted); font-size: var(--tt-type-small); line-height: 16px; }

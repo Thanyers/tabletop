@@ -6,6 +6,7 @@ import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantRefere
 import type { TableState } from '../shared/table-contracts';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
+import { rememberConsent } from './table-chat-consent';
 import { draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
@@ -436,10 +437,10 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     });
   }, [patchCard]);
 
-  const send = useCallback(async (prompt: string): Promise<boolean> => {
+  const send = useCallback(async (prompt: string, forcedMode?: 'draft'): Promise<boolean> => {
     const current = viewRef.current;
     const targetScope = scopeRef.current;
-    const selectedMode = modeRef.current;
+    const selectedMode = forcedMode ?? modeRef.current;
     if (!current || !targetScope || requestLock.current || isBlockedRef.current || !optionsRef.current.aiEnabled || (selectedMode === 'ask' && optionsRef.current.assistantAvailable === false) || prompt.trim().length < 3) return false;
     if (selectedMode === 'draft' && (current.actor.role !== 'owner' || optionsRef.current.readOnly)) return false;
     requestLock.current = true;
@@ -542,10 +543,18 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const prefillCard = useCallback((card: ChatCard) => setRetryPrefill({ text: card.prompt, key: Date.now() }), []);
   // Rule requests carry no chat history, so the answer travels with the original request.
-  const answerQuestion = useCallback((card: ChatCard, answer: string) => {
+  // Picking an answer sends a new rule request at once. Rule requests carry no chat history,
+  // so the original request, the question and the answer travel together.
+  const answerQuestion = useCallback(async (card: ChatCard, answer: string) => {
     const question = card.modelJob?.clarification?.question;
-    setRetryPrefill({ text: question ? `${card.prompt}\n\n${question} ${answer}` : `${card.prompt}\n\n${answer}`, key: Date.now() });
-  }, []);
+    const text = question ? `${card.prompt}\n\n${question} ${answer}` : `${card.prompt}\n\n${answer}`;
+    const current = viewRef.current;
+    if (!current) return;
+    // The question answers a request the owner already consented to send, so this counts as
+    // consent for the table and neither the card nor the composer asks again (user decision, F012).
+    rememberConsent({ workspaceId: current.id, epoch: current.epoch, actorId: current.actor.actorId });
+    if (await send(text, 'draft')) dismiss(card);
+  }, [send, dismiss]);
 
   const retryHistory = useCallback(() => { void loadHistory(scope); }, [loadHistory, scope]);
 
@@ -593,7 +602,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         onCheck={() => void checkStatus(card)}
         onRetryRefresh={() => void retryDraftRefresh(scope, card.id, table.id)}
         onPrefill={() => prefillCard(card)}
-        onAnswerQuestion={(answer) => answerQuestion(card, answer)}
+        onAnswerQuestion={(answer) => void answerQuestion(card, answer)}
         onDismiss={() => dismiss(card)}
       />,
     }));
@@ -671,12 +680,12 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   const clarification = card.kind === 'draft' ? card.modelJob?.clarification : undefined;
   if (clarification) {
     return <div className="tt-chat-card tt-chat-card--questions" data-testid="table-chat-answer">
-      <p><MessageCircleQuestion size={14} /> A few details would help build this table. Nothing on the table changed.</p>
+      <p className="tt-chat-card__intro"><MessageCircleQuestion size={14} /> A few details would help build this table. Nothing on the table changed.</p>
       <p className="tt-chat-card__question">{clarification.question}</p>
       <ul className="tt-chat-card__questions" aria-label="Answer choices">
-        {clarification.options.map((option) => <li key={option}><button type="button" disabled={readOnly} onClick={() => onAnswerQuestion(option)}>{option}</button></li>)}
+        {clarification.options.map((option) => <li key={option}><button type="button" disabled={readOnly || busy} onClick={() => onAnswerQuestion(option)}><span>{option}</span><ArrowRight size={14} aria-hidden="true" /></button></li>)}
       </ul>
-      <p className="tt-chat-card__hint">Pick an answer to add it to your message, then send.</p>
+      <p className="tt-chat-card__hint">Pick an answer to ask again with it. Your request stays the same.</p>
       {dismissButton}
     </div>;
   }
