@@ -197,6 +197,8 @@ export async function runCanvasEvolutionBrowser({ origin, actors, workspaceId, p
       && effect.op === 'set' && Object.hasOwn(effect.value, 'literal') && effect.value.literal === true));
     if (!markPaid) throw Error('The active program lost its mark-paid action.');
     const invoiceTable = await openObject(ownerPage, 'table.collection.invoices');
+    const gridOverflow = await invoiceTable.locator('.tt-table-grid-scroll').evaluate(element => element.scrollWidth - element.clientWidth);
+    expect(gridOverflow, 'Three invoice fields should fit the opened table without a forced 720px floor').toBeLessThanOrEqual(1);
     const createdRow = invoiceTable.locator('tbody tr').filter({ hasText: String(created.values.customer) });
     await expect(createdRow).toBeVisible();
     await createdRow.getByRole('button', { name: /Select/u }).click();

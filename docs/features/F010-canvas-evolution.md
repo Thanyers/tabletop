@@ -44,7 +44,7 @@ Node `22.23.2`; ใช้ฐาน D1/SQLite Durable Objects local ที่ท�
 | Cloudflare assistant รวม owner build handoff / participant negative | **PASS 10/10** |
 | `npm run build` / `npm run build:cloudflare` | **PASS**; Cloudflare เป็น dry-run เท่านั้น |
 | `node scripts/canvas-evolution-local.mjs --auto` | **PASS 10 checks**: โต๊ะว่าง → ขอ UI → Apply → กรอกเพิ่มแถว → sample → paid → เพิ่ม summary/collection/default field → reload → member ไม่ได้เปิด builder |
-| วัด UI ที่เปลี่ยน | **PASS** เปิดฟอร์มจาก Canvas ที่ 320/414/1440 px; กรอบอยู่ในจอและไม่มี horizontal overflow; padding ฟอร์มและคำตอบ 16px; ภาพและค่าจริงเก็บใน ignored test-results |
+| วัด UI ที่เปลี่ยน | **PASS** เปิดฟอร์มจาก Canvas ที่ 320/414/1440 px; กรอบอยู่ในจอและไม่มี horizontal overflow; padding ฟอร์มและคำตอบ 16px; ตาราง invoice สาม field ไม่ถูกบังคับขั้นต่ำ 720px ให้เกิดแถบเลื่อนโดยไม่จำเป็น ภาพและค่าจริงเก็บใน ignored test-results |
 | AI จริงผ่าน browser UI | **PASS หลังลองคำขอแรกใหม่หนึ่งครั้ง**: สร้างฟอร์ม/ปุ่ม, เพิ่ม 1,250.50 และ sample 250, paid รายการแรก, ขอการ์ดสรุปค้าง 250, Apply และ reload แล้วสองแถว/สถานะอยู่ครบ รอบสำเร็จใช้ 3 provider calls สำหรับ 2 คำขอ มีการซ่อม initialRecords หนึ่งครั้ง |
 | รอบ AI แรก | **FAIL validation** ทั้ง 3 attempts; ไม่มีการเปิดใช้ร่างนั้น รวมรอบแรกและรอบสำเร็จ 6 provider calls ไม่ใช่หลักฐานว่าทุกคำขอจะผ่านเสมอ |
 | ตรวจแยกโดย reviewer | **PASS** ไม่พบ material blocker หลังแก้ routing ที่จับ data action ไป builder ผิด; ไม่แก้ไฟล์ระหว่างตรวจ |

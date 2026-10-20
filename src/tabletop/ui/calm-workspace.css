@@ -120,7 +120,7 @@
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-grid th { background: var(--tt-paper); color: var(--tt-muted); font-size: var(--tt-type-small); font-weight: 600; }
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-grid td { font-size: var(--tt-type-body); }
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-grid-scroll { max-height: none; }
-.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-record-grid { min-width: 720px; table-layout: auto; }
+.tt-app .tt-flow-wrap .tt-canvas-node .tt-table-record-grid { min-width: 100%; table-layout: auto; }
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-record-grid th,
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-record-grid td { min-width: 104px; max-width: 260px; overflow-wrap: break-word; word-break: normal; }
 .tt-app .tt-flow-wrap .tt-canvas-node .tt-table-record-grid th:first-child,
