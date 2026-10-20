@@ -73,14 +73,10 @@ async function clickCommand(page, locator, type) {
   return response.json();
 }
 async function start(page, label) {
-  const templates = page.locator('.tt-template-choices');
-  const choice = templates.getByRole('button', { name: new RegExp(label) });
-  if (!(await choice.isVisible().catch(() => false))) {
-    await expect(templates.locator('summary')).toHaveText('Or explore what a table can become');
-    await expect(templates).not.toHaveAttribute('open', '');
-    await templates.locator('summary').click();
-    await expect(choice).toBeVisible();
-  }
+  const startPage = page.getByTestId('start-page');
+  if (!(await startPage.isVisible().catch(() => false))) await page.getByRole('button', { name: 'Start a new table', exact: true }).click();
+  const choice = startPage.getByRole('button', { name: new RegExp(label) });
+  await expect(choice).toBeVisible();
   await choice.click();
   await expect(page.locator('.tt-canvas-node').first()).toBeVisible();
 }
