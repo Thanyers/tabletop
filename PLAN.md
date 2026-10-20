@@ -35,6 +35,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| R200 | Release2.0.0: stagingสองบัญชี → main/tag → finalstaging → production | `done` | Codex | `release/2.0.0` · #33 merged | CHANGELOG, runtime bugfix, spec, release evidence/docs | F005/F006/F007 merged | mainCIผ่านก่อนannotatedtag; samebuildstaging/prodผ่าน; ไม่มีSQL/secret/งบใหม่; docs/RELEASE_2_0_ACCEPTANCE.md |
 | F001-T1 | ชุดข้อมูลการ์ด starter 3 โจทย์ | `review` | Claude Code | `feat/F001-start-page` | `src/tabletop/shared/starters.ts` (ใหม่) | — | |
 | F001-T2 | หน้าเริ่มโต๊ะใหม่: คำถาม + การ์ด + ช่องพิมพ์ | `review` | Claude Code | `feat/F001-start-page` | `src/tabletop/ui/StartPrompt.tsx` (ใหม่), `TabletopApp.tsx`, CSS ใหม่ | T1, F004-T2 | hotspot `TabletopApp.tsx` · อยู่ที่ path `/new` |
 | F001-T3 | ตรวจและเตรียม "ตัวอย่าง + กฎให้ตรวจ" ของแรงกับมวลและเกมโล่ | `todo` | — | — | `src/tabletop/domain/` (teaching, encounter) | — | spike ก่อน: ตอนนี้มีแค่ `invoice.sample` |
@@ -72,5 +73,6 @@
 | F006-T4 | คำตอบแชทเป็นการ์ดบน Canvas + Confirm action | `done` | Codex | `feat/F006-chat-first` · #30 | `CanvasWorkspace.tsx`, `TableCanvasObjects.tsx` | F006-T3 | ประวัติและการ์ดยังแยกตามผู้ถาม |
 | F006-T5 | ย้าย browser tests ของ setup + chat ไปใช้แชทใหม่ | `done` | ทีมเริ่ม · Codex รับช่วงและรวมทดสอบตามคำสั่งผู้ใช้ | `feat/F006-chat-first` · #30 | `tests/generic-table-browser.mjs`, `tests/cloudflare-browser.mjs`, `tests/generative-canvas-browser.mjs` | F006-T3 | CI ก่อนและหลัง merge ผ่าน Node 7 / Worker 25 / generated 4 เรื่อง |
 | F006-T6 | คู่มือ + CHANGELOG | `done` | Codex | `feat/F006-chat-first` · #30 | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F006-T4 | |
-| F006-T7 | อัปเดต README และ Handoff หลังรวมงานทีม | `review` | Codex | `docs/F006-merged-readme-handoff` · #32 | `README.md`, `docs/TEAM_HANDOFF_TH.md`, `spec.md`, feature status | #30 merged | ตรวจลิงก์/ภาพและ public scan; อ่าน endpoints ของ prod/staging โดยไม่เขียนข้อมูล; รอ CI ของ docs commit |
+| F006-T7 | READMEและHandoffหลังรวมงานทีม | `done` | Codex | #32 merged; R200releasehandoff | README, TEAM_HANDOFF_TH, DEPLOYMENTS, spec, acceptance | #30 merged | ตรวจCI, hostedสองบัญชี, provenance, ขอบเขตlocalchatและหลักฐานdeploy2.0 |
 | F007-T1 | ขยายการ์ดที่ใช้ตำแหน่งร่วม + ตำแหน่งเริ่มต้น + ลองส่งใหม่เมื่อชน | `review` | Claude Code | `feat/F007-shared-layout` | `src/tabletop/shared/canvas-layout-ids.ts` (ใหม่), `domain/canvas-layout.ts`, `ui/CanvasWorkspace.tsx`, `TabletopApp.tsx` (runCommand) | — | ชนกับ #30 ที่ `CanvasWorkspace.tsx` (prop `onEditRules`) เล็กน้อย |
+| F008-T1 | ไฟล์บนโต๊ะเห็นได้และเพิ่มได้ทุกคนที่ถูกเชิญ (ลบเฉพาะเจ้าของ) + การ์ด Files ตำแหน่งร่วม | `review` | Claude Code | `feat/F008-shared-files` | `domain/projections.ts`, `runtime/index.ts`, `canvas-layout*.ts`, `TableCanvasObjects.tsx`, `TableChat.tsx`, `table-chat-consent.ts`, `AIProposal.tsx`, tests, docs | — | [F008](docs/features/F008-shared-table-files.md) |

@@ -81,14 +81,14 @@ describe('new Office Helpdesk workflow — isolated real interpreter, authored r
     expect(values(state, 'wifi')).toMatchObject({ status: 'done', assignee: 'tech-b' });
     expect(state.activity.map(a => a.actorId)).toEqual(['tech-a', 'tech-b', 'tech-b', 'dispatcher']);
   });
-  it('invalidates approved rules after work changes, and keeps owner sources and drafts private', () => {
+  it('invalidates approved rules after work changes, and keeps owner drafts private', () => {
     let state = active();
     const edit = helpdeskChange(state.sources[0].id); edit.initialRecords = {};
     state = command(state, 'evolve.propose', { change: edit });
     for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve']) state = command(state, type);
     const projected = projectDomain(state, technician);
     if (projected.kind !== 'table') throw new Error('Wrong domain');
-    expect(projected.sources).toEqual([]); expect(projected.candidate).toBeNull(); expect(projected.revisions).toEqual([]); expect(projected.program?.evidence).toEqual([]);
+    expect(projected.sources).toEqual(state.sources); expect(projected.candidate).toBeNull(); expect(projected.revisions).toEqual([]); expect(projected.program?.evidence).toEqual([]);
     state = act(state, 'claim', { ticket: 'printer' });
     expect(() => command(state, 'evolve.activate')).toThrow();
     expect(values(state).assignee).toBe('tech-a');

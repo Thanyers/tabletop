@@ -263,7 +263,8 @@ function conditionPass(op: string, l: TableValue, r: TableValue): boolean {
 }
 export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } | null {
   if (type === 'table.import') {
-    hasRole(ctx, ['owner']);
+    // F008: any member may add a file; removal stays with the owner.
+    hasRole(ctx, ['owner', 'participant']);
     const input = parsePayload(sourceInput, payload);
     assert(bytes(input.text) <= TABLE_FILE_BYTES && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/u.test(input.text), 'TABLE_FILE', 'Choose a UTF-8 text file up to 32 KiB.');
     assert(state.sources.length < 4 && state.sources.reduce((n, s) => n + bytes(s.text), bytes(input.text)) <= TABLE_TOTAL_SOURCE_BYTES, 'TABLE_LIMIT', 'Use at most four files and 64 KiB of source text.');
@@ -273,7 +274,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     }
     const sha256 = ctx.hash(input.text), sourceId = `source_${sha256.slice(0, 32)}`;
     assert(!state.sources.some(s => s.id === sourceId), 'TABLE_DUPLICATE_SOURCE', 'This source is already on the table.');
-    return { state: { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: null }, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
+    return { state: { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate }, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
   }
   if (type === 'table.removeSource') {
     hasRole(ctx, ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);

@@ -4,30 +4,32 @@
 
 ## สถานะและลำดับงาน
 
-รุ่นที่บันทึกว่า deploy ล่าสุดคือ `v1.0.0` / `ce2c50e` เมื่อ 20 ตุลาคม 2026 ดู [DEPLOYMENTS](DEPLOYMENTS.md) สำหรับ source/build และหลักฐานของ staging/production โดยตรง
+**ส่ง 2.0.0 ขึ้น production และ staging แล้ว** จาก annotated tag `v2.0.0` / `d93620d` ใน [PR #33](https://github.com/Thanyers/tabletop/pull/33) โดย [CI บน main](https://github.com/Thanyers/tabletop/actions/runs/39439056507) ผ่านก่อนสร้าง tag ดู [DEPLOYMENTS](DEPLOYMENTS.md) และ [ผลตรวจรุ่น 2.0](RELEASE_2_0_ACCEPTANCE.md) สำหรับเวลา source และขอบเขตจริง
 
-**รุ่นรวม `dev` อยู่ที่ `ce6d69b`**: F005 จาก [PR #24](https://github.com/Thanyers/tabletop/pull/24), การตั้งชื่อโต๊ะ F002 จาก [PR #29](https://github.com/Thanyers/tabletop/pull/29), แชท F006 จาก [PR #30](https://github.com/Thanyers/tabletop/pull/30) และตำแหน่งการ์ดร่วม F007 จาก [PR #31](https://github.com/Thanyers/tabletop/pull/31) merge แล้วและผ่าน CI หลัง merge สูตร/ภาพ ตัวควบคุม การลากใน scene ทดลองร่างส่วนตัว และการค้นบทสนทนาเก่าแบบจำกัดยังอยู่ครบ อ่าน [Generative runtime](GENERATIVE_CANVAS_RUNTIME.md) สำหรับ contract และ [spec.md](../spec.md) สำหรับสถานะระบบ
+รุ่นนี้รวม F005/#24, ตั้งชื่อ F002/#29, แชท F006/#30 และผังร่วม F007/#31 พร้อมแก้บั๊ก preview ที่เปลี่ยนเทิร์น ไม่มี SQL migration, secret, binding หรืองบใหม่ ประวัติทีมทั้ง 17 commits ยังอยู่ใน main งาน draft #34 (แชร์ไฟล์) และ #35 (การ์ดเริ่มโต๊ะว่าง) แยกจากรุ่นนี้
 
-`main` เป็น release branch และเป็นหน้าที่ GitHub เปิดโดยปริยาย ประวัติ merge ชุดนี้อยู่บน `dev` จนกว่าจะผ่านขั้น release; #30 เป็น PR เดิมที่ทีมเปิดไว้แล้ว Codex รับช่วงต่อ ชื่อผู้เปิด PR จึงยังเป็นของทีม แต่ commits การรวมและแก้ไขอยู่ใน [ประวัติ #30](https://github.com/Thanyers/tabletop/pull/30/commits)
+`main` และ tag ใช้อ้างอิง release ส่วน `dev` เป็นฐานทำงานถัดไป เอกสารสถานะล่าสุดอัปเดตผ่าน PR เข้า `dev` ตาม AGENTS.md การแก้เอกสารไม่ได้ deploy แอปอัตโนมัติ
 
 ## เล่นรุ่นไหน ที่ไหน
 
-ตรวจ public endpoints ล่าสุด **20 ตุลาคม 2026 เวลา 19:36 น. (Asia/Bangkok)** ด้วยการอ่านอย่างเดียว:
+| ที่เล่น | รุ่น / วิธีเริ่ม |
+| --- | --- |
+| [Production](https://tabletop.ptchrr.workers.dev/) | 2.0.0/d93620d; Google login → สร้างโต๊ะที่/new → พิมพ์สิ่งที่จะทำในแชทด้านล่างหรือแนบไฟล์ → ยินยอม → ตรวจร่าง/ลองส่วนตัว → Check/Approve/Use → เล่นด้วย controlsบนCanvas → Invite → บัญชีเดิมเปิดโต๊ะเดิมต่อ |
+| [Staging](https://tabletop-staging.ptchrr.workers.dev/) | buildเดียวกัน; ห้องทดสอบคาเฟ่/น้ำและข้อมูลเก่ายังคงอยู่ เข้าด้วยบัญชีที่เป็นสมาชิก ไม่เผยแพร่ invite ใน repo |
+| [Public demo](https://tabletop.ptchrr.workers.dev/demo) | ไม่ต้องล็อกอิน; ลำดับ/ข้อมูลเตรียมไว้ การ์ดค่อยๆเกิด กดพัก/รับช่วงลองเอง; ไม่เรียก AIหรือสร้างห้องจริง |
+| Local | checkout main/tag2.0.0 หรือ devล่าสุด, npm ci → npm run build → npm start; Node localมี guestและAIปิดโดยตั้งใจ ไม่ใช้ production keys |
 
-| ที่เล่น | รุ่น / สิ่งที่ตรวจแล้ว | วิธีเริ่ม |
-| --- | --- | --- |
-| [Production](https://tabletop.ptchrr.workers.dev/) | `1.0.0` / `ce2c50e`; version, health, readiness และ capabilities ตอบ 200, AI เปิด, โต๊ะไม่ถูกพักการแก้ไข | Google login → Start with your files → นำไฟล์ที่รองรับเข้า → ตรวจและเปิดใช้กฎ → เล่นบน Canvas → Invite; บัญชีเดิมกลับมาเปิดโต๊ะเดิมได้ |
-| [Public demo](https://tabletop.ptchrr.workers.dev/demo) | เดโมที่เตรียมไว้ในรุ่น production; กดเล่นจริงซ้ำเวลา 19:44 น. ผ่านโต๊ะว่าง → เพิ่มการ์ด → เล่น/พัก → ลองเอง | ไม่ต้องล็อกอิน เลือกเรื่อง รอการ์ดปรากฏ แล้วกดพัก/ลองเอง |
-| [Staging](https://tabletop-staging.ptchrr.workers.dev/) | ยังเป็น `1.0.0` / `ce2c50e`; endpoints ชุดเดียวกันตอบ 200 และ AI เปิด | ใช้ตรวจ hosted/OAuth; **ยังไม่ได้ลงรุ่นรวมใหม่** |
-| `dev` ในเครื่อง | `ce6d69b`; Generative Canvas, แชทใหม่, ตั้งชื่อ และผังร่วมผ่านชุดทดสอบ local/CI | ตั้งเครื่องตาม [CONTRIBUTING](../CONTRIBUTING.md); Node local ปิด AI, ชุด Workers/Generative acceptance ใช้ provider และบัญชีจำลอง การใช้ AI จริงต้องมี config local ของ operator |
+### ถ้าไม่เห็นแชทในเครื่อง
 
-ผล endpoint บอกเวอร์ชันและความพร้อมของบริการ ณ เวลาตรวจ ไม่ใช่หลักฐานว่าได้เล่นสองบัญชีจริงหรือทดสอบ AI ใหม่บน Cloudflare ในรอบนี้ รายละเอียด production ยึด [DEPLOYMENTS](DEPLOYMENTS.md); การนำไฟล์ของโต๊ะทั่วไปกับ upload ของ Invoice เป็นคนละ capability
+ตรวจ branch และ `/version` ก่อน: `main` ก่อน #33 ยังเป็น 1.1.0 และไม่มี `TableChat` จาก #30 ส่วน `main` หลัง #33 มีแล้ว `npm start` อ่านไฟล์จาก `dist/` จึงต้อง build ใหม่หลังดึงโค้ด การรีเฟรช browser อย่างเดียวไม่สร้างไฟล์ใหม่
 
-รอบ public demo ใช้ browser ใหม่โดยไม่มีบัญชี: เลือกทดลองแรงและมวล กดขั้นบน Canvas ให้การ์ดค่อย ๆ เกิด ตรวจว่า Play เดินต่อและ Pause หยุด จากนั้นรับช่วงเอง เปลี่ยน F=12 N, m=3 kg, t=2 s แล้วกด Update lesson ได้ระยะ 8 m ตามสูตร ไม่มี API request, cookie, WebSocket หรือ uncaught browser error จึงไม่มี paid AI call และไม่แก้ห้องจริง หลักฐานนี้ครอบคลุมเดโมที่เตรียมไว้ ไม่ใช่การสร้างกฎใหม่ด้วย AI หรือ multiplayer บน hosted build ใหม่
+เปิด `/new` → **Start empty with your own files** เพื่อทดสอบโต๊ะทั่วไป (`kind=table`) จะพบช่อง **Message** ด้านล่าง แม้ AI ปิดและส่งไม่ได้ ส่วน Invoice / Physics / Encounter ใช้ assistant เดิม และ Node local ซ่อนช่องเดิมเมื่อ `model.enabled=false` รอบนี้ตรวจได้ 1 ช่องในโต๊ะทั่วไปและ 0 ช่องใน Physics บน `5e69816` ยังไม่ทราบ branch/ชนิดโต๊ะที่เครื่องทีมเปิด จึงระบุสาเหตุเฉพาะเครื่องนั้นไม่ได้ แต่ไม่พบว่างานแชทถูก merge ทับ
+
+เมื่ออยู่บน branch ที่ต้องการแล้ว ให้รัน `npm ci` → `npm run build` → `npm start` การใส่ key ใน `.env` ไม่ได้เปิด AI ให้ Node อัตโนมัติ ถ้าจะทดสอบ AI จริงให้ใช้ staging หรือ Workers local ตาม [Local development](LOCAL_DEVELOPMENT.md) เก็บ secrets และค่าฐานจริงออกจาก Git
 
 ## งานทีมและสิ่งที่แก้ตอนรวม
 
-ตรวจ commits ของทีม 17 รายการในช่วงทำงานขนานกันแล้ว ทั้งหมดเป็นส่วนหนึ่งของประวัติ `ce6d69b` การคงประวัติไม่ได้หมายความว่าทุก implementation คงเดิม: แชท island ถูกแทนสำหรับโต๊ะทั่วไปตาม F006 ที่ผู้ใช้อนุมัติ โดยไม่ลบเครดิตหรือเขียนประวัติทีมทับ
+ตรวจ commits ของทีม 17 รายการในช่วงทำงานขนานกันแล้ว ทั้งหมดเป็นส่วนหนึ่งของประวัติ `v2.0.0` การคงประวัติไม่ได้หมายความว่าทุก implementation คงเดิม: แชท island ถูกแทนสำหรับโต๊ะทั่วไปตาม F006 ที่ผู้ใช้อนุมัติ โดยไม่ลบเครดิตหรือเขียนประวัติทีมทับ
 
 | งานที่ทีมส่งมา | สิ่งที่คงไว้ / ต่อหรือแก้ตอนรวม |
 | --- | --- |
@@ -41,32 +43,26 @@
 
 ## หลักฐานรุ่นรวม
 
-ทั้ง [CI ก่อน merge ของ `665ef56`](https://github.com/Thanyers/tabletop/actions/runs/39420499206) และ [CI หลัง merge ของ `ce6d69b`](https://github.com/Thanyers/tabletop/actions/runs/39421576811) ผ่านทุกขั้นบน Node `22.23.2`; tree หลัง merge ตรงกับ candidate ที่ตรวจแล้ว
+[CIก่อนmerge5e69816](https://github.com/Thanyers/tabletop/actions/runs/39435691102) และ [CIบนmaind93620d](https://github.com/Thanyers/tabletop/actions/runs/39439056507) ผ่าน Node22.23.2: unit376, Cloudflare71, Node browser7, Worker browser25, generated4เรื่อง/8checks, build/dry-run/scans; lint0errors/101warningsเดิม
 
-| การตรวจ | ผล |
-| --- | --- |
-| Unit / local SQL | 376/376 |
-| Workers / D1 / Room / Billing | 71/71 |
-| Node browser | 7/7; ไม่มี uncaught errors |
-| Worker multiplayer / แชท / สิทธิ์ / recovery | 25/25; ไม่มี uncaught errors |
-| Generated Canvas | cafe, shadow, water และโจทย์คำนวณใหม่ ผ่าน private trial, actual button/slider/scene drag, เพิ่มการ์ดหลังแก้กฎ, shared layout และ reload; 8 intercepted provider calls, ไม่มี browser errors หรือ external requests |
-| Build / Worker dry-run / secret scans / dependency audit | ผ่าน; lint 0 errors และ warnings เดิม 101 รายการ |
+รอบhostedใช้สองGoogle sessionsจริงบนstaging: คาเฟ่เริ่มจากข้อความ → ทดลองร่าง → เปิดใช้ → เล่น3/8 → เพิ่มRemaining0 → ชื่อ/ลากร่วม/แชทส่วนตัว/resume; เกมแบ่งน้ำแนบไฟล์ใหม่ → AIสร้างกฎ → สองบัญชีผลัดเทิร์นจบ65/20/15รวม100 → ปิดและกลับมา ทั้งสองห้องผ่านการพักwrites/AIแล้วเปิดคืน
 
-**AI จริง:** ใช้แอป `97ecd98` ก่อนรวม F007 ไม่เกิน 6 คำขอรวมสามเรื่อง: cafe คำนวณ 3 → 8 และเพิ่มการ์ดโดยเก็บงานเดิม, shadow ตรวจเรขาคณิตแยกได้ 80 → 70 พร้อม pointer drag, water สองบัญชีจำลองผลัดกันเล่นและรักษาน้ำรวม 100 หลัง reload ส่วนรุ่นรวมสุดท้ายใช้คำตอบ AI จำลองเพื่อทดสอบซ้ำ ผลนี้ไม่แทน Google สองบัญชีจริงบน hosted build ใหม่ ดู [F006 acceptance](features/F006-chat-first-table.md#ผลตรวจรุ่นรวม) สำหรับขอบเขตและไฟล์หลักฐาน local ที่ ignored
+บั๊กที่พบ: previewของformadvanceTurnล็อกsubmitก่อนส่งจริง แก้ให้visualspreviewแยกจากcommittedpermissions/bindingsและเพิ่มfail-closedguard; ทดสอบRED/GREENและreviewอิสระก่อนปล่อย ดู[ผลตรวจรุ่น2.0](RELEASE_2_0_ACCEPTANCE.md)สำหรับSHAแต่ละขั้นและSKIPPED ไม่อ้างว่าทุกขั้นhostedเล่นซ้ำบนcommitสุดท้าย
+
+หลักฐานAIจริงในเครื่องรอบก่อนยังคงอยู่ใน[F006acceptance](features/F006-chat-first-table.md#ผลตรวจรุ่นรวม) ไม่ปนกับhostedสองบัญชีรอบนี้
 
 ## สิ่งที่ต้องตัดสินใจก่อนส่งรุ่นนี้
 
-1. **เคาะ release version:** เสนอ `2.0.0` ตามกฎ rollback ของ F005 เพราะห้องที่บันทึก expression/canvas ใหม่ต้องใช้ compatible writer; ยังไม่ได้อนุมัติเลขหรือสร้าง tag
-2. **อนุมัติรอบ hosted ของรุ่นใหม่:** เตรียม release branch/PR ตาม [AGENTS](../AGENTS.md#5-ออก-release), ใช้ staging ก่อนแล้วตรวจ Google สองบัญชีจริง การเชิญ/เล่น/แก้กฎ/กลับมาเล่นต่อ และ recovery ก่อนส่ง build เดียวกันไป production
-3. **ขอบเขตกลุ่มทดสอบ:** คง Workers Free และงบ AI เดิมได้สำหรับรอบเล็ก; ก่อนเปิด beta กว้างต้องปิดช่องว่างอุปกรณ์จริง, load และ recovery ด้านล่าง ไม่จำเป็นต้องย้าย hosting หรือเลือกโมเดลใหม่เพื่ออัปเดตเอกสารรอบนี้
+**ปิดการตัดสินใจของreleaseแล้ว:** ผู้ใช้อนุมัติ2.0.0, hostedสองบัญชี, main merge/tag และproduction; ไม่ต้องเลือกhosting/modelหรือเพิ่มkeysเพื่อเล่นรุ่นนี้
 
-ลำดับงานที่ควรทำต่อ:
+งานต่อที่ยังแยกจากrelease:
 
-1. **ปิดช่องว่างด้านความพร้อมให้บริการ:** ทดสอบโทรศัพท์จริงและสองอุปกรณ์, วัด concurrency/DO duration และซ้อมกู้ D1 + Room + Billing ให้สอดคล้องกันบนข้อมูลจำลอง
-2. **กำหนดความต่อเนื่องระยะยาว:** วาง retention/export/delete และแนวทางเมื่อถึงเพดาน assistant jobs 500 รายการต่อห้อง; candidate เพิ่มการค้นข้อความที่เกี่ยวข้องใน 100 รายการล่าสุด แต่ยังไม่มีการสรุปหรือค้นประวัติแบบไม่จำกัด
-3. **พัฒนาคำสั่งภาษาธรรมชาติ:** ทำให้จับคู่คำขอกับ action ได้ดีขึ้น โดยยังให้คนตรวจข้อเสนอและยืนยัน และตรวจ role/turn/revision ก่อน commit; ไม่มีการเล่นหลายตาอัตโนมัติโดยปริยาย
+1. **งานใหม่ของทีม:** #34 แชร์ไฟล์ให้สมาชิก, #35 การ์ดเริ่มโต๊ะว่าง และ #37 live cursors ยังเป็น draft แยกจาก 2.0.0 ต้องตรวจ contract/สิทธิ์และ regression ก่อนรวม โดยเฉพาะ #34 เพราะ raw source ของ 2.0.0 ยังเป็นของเจ้าของ
+2. **ก่อนbetaกว้าง:** โทรศัพท์/สองอุปกรณ์จริง, accessibilityทั้งชุด, concurrency/DOduration และกู้D1+Room+Billingให้ตรงกัน การพักwritesที่ซ้อมไม่แทนbackuprestore
+3. **ความต่อเนื่องระยะยาว:** retention/export/delete และการถึง500assistantjobsต่อห้อง ปัจจุบันค้นบริบทจำกัดจาก100รายการล่าสุด เลือกได้ถึง6exchanges ยังไม่มีsummaryระยะยาวอัตโนมัติ
+4. **คำสั่งภาษาธรรมชาติ:** จับคู่actionให้ดีขึ้นโดยคงhumanconfirmation/role/turn/revision ไม่เล่นหลายตาแทนผู้ใช้โดยปริยาย
 
-รายการนี้เป็นลำดับแนะนำสำหรับทีม เอกสารไม่ได้ยืนยันว่าเป็นงานที่เริ่มแล้วหรืออนุมัติให้เปลี่ยน production
+รายการนี้เป็นงานแนะนำ ไม่ใช่ขยายscopeproductionโดยอัตโนมัติ
 
 ## แผนที่โค้ด
 
@@ -91,7 +87,7 @@
 - **Worker + D1** จัดการ Google identity, session, CSRF, rate limits และ directory สำหรับ My tables; directory ใช้ค้นหาห้อง ไม่ใช่ authority ของสมาชิก
 - **Room Durable Object** เป็น state ถาวรต่อห้อง รวมสมาชิก/คำเชิญ, revision, receipts, rules, events และ assistant jobs; domain ฝั่ง server ตรวจ role, seat, turn และเงื่อนไขก่อน commit แบบ atomic
 - **AI adapter + Billing Durable Object** ส่งเฉพาะข้อมูลที่ผู้ใช้ยินยอมในขอบเขตที่กำหนด จอง/settle งบ และตรวจ structured output; โมเดลไม่ได้ให้สิทธิ์ อนุมัติกฎ หรือ execute code
-- **ความเป็นส่วนตัว:** source files และ draft rules เป็นของเจ้าของ, conversation เป็นของผู้ถาม, active rules/records เป็นข้อมูลร่วม อย่าส่ง private content เพิ่มเพียงเพื่อจัดหน้า UI
+- **ความเป็นส่วนตัว:** source files สมาชิกทุกคนอ่านและเพิ่มได้ (เจ้าของเท่านั้นลบ), draft rules เป็นของเจ้าของ, conversation เป็นของผู้ถาม, active rules/records เป็นข้อมูลร่วม อย่าส่ง private content เพิ่มเพียงเพื่อจัดหน้า UI
 
 D1 และ Room DO ไม่ได้อยู่ใน transaction เดียวกัน การ sync directory ใช้ ordered outbox; WebSocket ส่ง authorized snapshots และ resync เมื่อ reconnect จึงอย่าตั้งสมมติฐานว่า event จะถูกส่งครั้งเดียวเสมอ รายละเอียด auth และ projection อยู่ใน [R1 architecture](R1_ARCHITECTURE.md); contract และข้อจำกัดของ table อยู่ใน [Generic table design](GENERIC_TABLE_DESIGN.md)
 

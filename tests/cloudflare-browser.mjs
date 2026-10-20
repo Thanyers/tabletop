@@ -494,8 +494,8 @@ try {
   const consentCopy = (await consent.innerText()).replace(/\s+/gu, ' ');
   expect(consentCopy).toMatch(/current active rules, records, and turn|current table context/iu);
   expect(consentCopy).toContain('Chat history is not included.');
-  expect(consentCopy).toContain('Private source files included');
-  expect(consentCopy).toContain('No private source files are attached.');
+  expect(consentCopy).toContain('Table files included');
+  expect(consentCopy).toContain('No table files are attached.');
   expect(modelPosts).toBe(0);
   await consent.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(composer).toHaveValue('Require consent before a table prompt is sent.');

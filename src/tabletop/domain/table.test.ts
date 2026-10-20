@@ -72,23 +72,27 @@ describe('file-driven generic table authority', () => {
     const evaluated = evaluateGenerativeCanvas(revised.program.canvas, { program: revised.program, records: revised.records, actor: owner.actorId, turn: revised.turn });
     expect(evaluated).toMatchObject([{ id: 'current-payment', kind: 'metric', value: calculated.records.loans[0].values.payment }]);
   });
-  it('rejects stale approval after data changes; participant cannot import or propose', () => {
+  it('rejects stale approval after data changes; participant can import but not propose or remove (F008)', () => {
     const initial = source('equipment'); let state: DomainState = activate(initial, equipmentChange(initial.sources[0].id));
     const edit = equipmentChange(initial.sources[0].id); edit.initialRecords = {};
     for (const [type, payload] of [['evolve.propose', { change: edit }], ['evolve.simulate', {}], ['evolve.validate', {}], ['evolve.approve', {}]] as const) state = decideDomain(state, { type, payload }, owner).state;
     state = decideDomain(state, { type: 'table.act', payload: { actionId: 'borrow', inputs: { item: 'camera' } } }, member).state;
     expect(() => decideDomain(state, { type: 'evolve.activate', payload: {} }, owner)).toThrow();
-    expect(() => decideDomain(initial, { type: 'table.import', payload: tableScenarioSources.game }, member)).toThrow('cannot perform');
+    const memberImport = decideDomain(state, { type: 'table.import', payload: tableScenarioSources.game }, member).state;
+    if (memberImport.kind !== 'table' || state.kind !== 'table') throw new Error();
+    expect(memberImport.sources).toHaveLength(2);
+    expect(memberImport.candidate).toEqual(state.candidate); // a member's file never discards the owner's draft
+    expect(() => decideDomain(memberImport, { type: 'table.removeSource', payload: { sourceId: memberImport.sources[1].id } }, member)).toThrow('cannot perform');
     expect(() => decideDomain(initial, { type: 'evolve.propose', payload: { change: edit } }, member)).toThrow('cannot perform');
   });
-  it('keeps source text, source quotations and owner draft history private in participant projection', () => {
+  it('shares source files with participants but keeps quotations and owner draft history private', () => {
     const initial = source('game'), state = activate(initial, gameChange(initial.sources[0].id));
     const participant = projectDomain(state, member);
     expect(participant.kind).toBe('table');
     if (participant.kind !== 'table') throw new Error();
-    expect(participant.sources).toEqual([]); expect(participant.revisions).toEqual([]); expect(participant.candidate).toBeNull(); expect(participant.program?.evidence).toEqual([]);
+    expect(participant.sources).toEqual(state.sources); expect(participant.revisions).toEqual([]); expect(participant.candidate).toBeNull(); expect(participant.program?.evidence).toEqual([]);
     const view: WorkspaceView = { id: 'fixture', title: 'Game', kind: 'table', epoch: 1, revision: 'two', actor: { actorId: member.actorId, name: 'Player', role: 'participant', seat: 'member-1' }, members: [], domain: participant, createdAt: 0, expiresAt: 999999 };
-    expect(planForWorkspace(view).nodes.some(n => n.id === 'table.sources')).toBe(false);
+    expect(planForWorkspace(view).nodes.some(n => n.id === 'table.sources')).toBe(true);
   });
   it('rejects code-shaped output, forged citations, destructive rule edits, oversized text and unsafe keys', () => {
     const initial = source('equipment'), valid = equipmentChange(initial.sources[0].id);

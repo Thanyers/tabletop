@@ -158,7 +158,7 @@ export function manifestForWorkspace(view: WorkspaceView): Manifest {
   const state = view.domain;
   if (state.kind === 'table') {
     const nodes: PlanNode[] = [];
-    if (view.actor.role === 'owner' && state.sources.length > 0) nodes.push(node('table.sources', 'table.sources', 'Files', 40, 40, { state }, 'private'));
+    if (state.sources.length > 0) nodes.push(node('table.sources', 'table.sources', 'Files', 40, 40, { state }));
     if (state.program !== null || (view.actor.role === 'owner' && state.candidate !== null)) nodes.push(node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private'));
     const bindings: Binding[] = [];
     const collectionNodeIds = new Map<string, string>();
