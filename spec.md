@@ -30,9 +30,9 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
-- **Release ล่าสุด:** **`v1.0.0`** (annotated tag บน `ce2c50e` = merge PR #15, CI `local-validation` ผ่านก่อน tag) · build จาก tag ได้ `version.json` = `1.0.0` / `ce2c50e` · production ยังรัน build `524d9cc` (โค้ดแอปเท่ากัน) จึงตอบ `0.0.0-dev` จนกว่า operator จะ deploy build จาก tag
+- **Release ล่าสุด:** **`v1.0.0`** (annotated tag บน `ce2c50e` = merge PR #15, CI `local-validation` บน main ผ่าน) · staging และ production deploy แล้วและตอบ `1.0.0` / `ce2c50e` เมื่อ 2026-10-20 เวลา 13:32 น. Bangkok · output เทียบกับรุ่นก่อนหน้าต่างเฉพาะ `version.json`
 - **Branch:** `main` @ `ce2c50e` = release · PR #12–#14 เคยเข้า `main` ตรงโดยไม่ผ่าน `dev` · **`dev`** สร้างจาก `9fbfdec` เมื่อ 2026-10-20 = branch รวมงาน (มี #11) · ขั้นตอนทั้งหมดอยู่ใน [AGENTS.md](AGENTS.md) · ยังไม่มี branch protection
-- **Deploy:** production และ staging รัน `524d9cc` (PR #13 public welcome) · `/version` ตอบ `0.0.0-dev` / `524d9cc` (ตรวจ 2026-10-20) — แหล่งอ้างอิงคือ [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
+- **Deploy:** production และ staging ใช้ sealed build ชุดเดียวจาก `v1.0.0` · Node 22.23.2 · `npm ci --ignore-scripts` (0 vulnerabilities), typecheck/build/secret scan ผ่าน · health/readiness/capabilities/version 4/4 และ served-asset hashes 135/135 ผ่านทั้งสอง environment · อ่านหน้า anonymous และห้องเดิมหลังล็อกอินได้ ไม่มี room writes หรือ AI calls — ดู [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)
 - **Infra:** Cloudflare Workers Free + D1 + SQLite DO + Google OAuth + DeepSeek Flash · ไม่มี R2/Paid · เพดาน AI prod $1/วัน $10/เดือน, staging $0.20/$0.20
 - **CI ล่าสุดของ candidate:** unit/SQL 309, Cloudflare 65, Component Lab 7, browser acceptance ผ่าน ([DEPLOYMENTS](docs/DEPLOYMENTS.md#ผลตรวจ-release-ล่าสุด))
 - **Local (2026-10-20, เครื่องนี้):** clone `main` @ `e8cb73e` แล้ว pull เป็น `48fb2bd` → `npm ci` (0 vulnerabilities) → `npm run build` ผ่าน → `npm start` เปิด `:4310` ได้ ใช้ Node v26.3.1 (ไม่ตรง CI 22.23.2) · `npm run test:cloudflare` 65/65 ผ่าน (room 28, auth 13, ai 9, table-assistant 8, billing 7) ตรงกับจำนวนใน CI · `test:cloudflare:browser` 16/16 ผ่าน (ใช้ `BROWSER_CHANNEL=chrome` หลัง `build:cloudflare`)
@@ -67,12 +67,12 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## งานที่กำลังทำ
 
-_(ว่าง)_ — เขียนก่อนลงมือ: เป้าหมาย · ขอบเขต · ไฟล์ที่จะแตะ · วิธีตรวจ · branch
+_(ว่าง)_ — deploy v1.0.0 เสร็จตามคำสั่งผู้ใช้ “deploy + merge” โดยตรงในรอบนี้; exception สำหรับ operator/merge ครั้งนี้ไม่เปลี่ยนกติกาถาวรใน AGENTS.md เอกสารอัปเดตผ่าน branch `docs/v1-deployment` เข้า `dev`
 
 ## ถัดไป
 
 1. **เจ้าของ repo (admin):** รันคำสั่ง ruleset ใน [AGENTS.md §9](AGENTS.md#9-ตั้งค่า-repo-ครั้งเดียว-admin-ของ-repo) เพื่อ protect `main` + `dev` และล็อก tag `v*`
-2. คน merge PR `chore/sync-main-into-dev` → `dev` (นำ #12–#15 และ tag กลับเข้า `dev`) · operator เลือกได้ว่าจะ deploy build จาก tag `v1.0.0` เพื่อให้ `/version` แสดง `1.0.0`
+2. ออก release ถัดไปตาม AGENTS.md; production ปัจจุบันคือ tag `v1.0.0` แล้ว ไม่ต้อง deploy tag นี้ซ้ำเพียงเพื่อให้มีเลขรุ่น
 3. แจ้งทีมว่างานใหม่ต้องเปิด PR เข้า `dev` เท่านั้น — #12–#14 ยังเข้า `main` ตรง
 4. ลง Node 22.23.2 ให้ตรง CI · รัน `npm run test:r1:browser` (`BROWSER_CHANNEL=chrome`) ให้ครบ baseline
 5. งานผลิตภัณฑ์ที่ทีมจัดลำดับไว้ (ข้อเสนอ ยังไม่อนุมัติ): ดู [TEAM_HANDOFF_TH → สถานะและลำดับงาน](docs/TEAM_HANDOFF_TH.md#สถานะและลำดับงาน)
