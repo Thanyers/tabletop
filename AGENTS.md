@@ -3,16 +3,16 @@
 ไฟล์นี้คือกติกากลางที่ใช้ร่วมกันสำหรับ AI coding agent ทุกตัว (Claude Code, Codex, Cursor, Copilot ฯลฯ)
 ถ้าเครื่องมือของคุณมีไฟล์กติกาเฉพาะตัว (เช่น [`CLAUDE.md`](CLAUDE.md)) ไฟล์นั้นเพิ่มได้ แต่ห้ามขัดกับไฟล์นี้
 
-อ่านตามลำดับ: ไฟล์นี้ → [`spec.md`](spec.md) → [`MEMORY.md`](MEMORY.md) → เอกสารเจ้าของเรื่องใน [`docs/`](docs/README.md)
+อ่านตามลำดับ: ไฟล์นี้ → [`spec.md`](spec.md) → [`MEMORY.md`](MEMORY.md) → [`PLAN.md`](PLAN.md) → เอกสารเจ้าของเรื่องใน [`docs/`](docs/README.md)
 
 ## 1. ทำงานแบบ spec-driven
 
-`spec.md` คือแหล่งความจริงของสถานะงาน ไม่ใช่แชท · โปรเจกต์นี้ **ไม่ใช้ phak หรือ issue tracker ภายนอก**
+`spec.md` คือแหล่งความจริงของ **สถานะระบบ** · [`PLAN.md`](PLAN.md) คือกระดานว่า **ใครทำงานไหนอยู่** · รายละเอียดฟีเจอร์อยู่ใน [`docs/features/`](docs/features/) · โปรเจกต์นี้ **ไม่ใช้ phak หรือ issue tracker ภายนอก**
 
 1. **เริ่มงาน:** อ่าน `spec.md` และ `MEMORY.md` แล้วเช็ค `git status` / `git log -1` ว่าตรงกับที่ spec บอก
-2. **ก่อนลงมือ:** เขียนงานลง `spec.md` → **งานที่กำลังทำ** (เป้าหมาย · ขอบเขต · ไฟล์ที่จะแตะ · วิธีตรวจ · branch)
+2. **ก่อนลงมือ:** หางานใน `PLAN.md` (หรือเพิ่มฟีเจอร์ใหม่จาก [`docs/features/_TEMPLATE.md`](docs/features/_TEMPLATE.md)) แล้วจองตามกติกาใน `PLAN.md`: เช็ค PR ที่เปิดอยู่ → แก้แถวของงานเป็น `doing` → เปิด **draft PR ทันที** ชื่อขึ้นต้นด้วย ID งาน · ห้ามหยิบงานที่แตะไฟล์เดียวกับงานที่ `doing` อยู่
 3. **ระหว่างทำ:** ตัดสินใจเรื่อง design/contract เมื่อไหร่ ให้บันทึกใน **การตัดสินใจ** ทันที
-4. **จบงาน:** ย้ายงานไป **สถานะปัจจุบัน** พร้อมหลักฐาน (คำสั่ง + ผล) อัปเดต **ถัดไป** และเอกสารเจ้าของเรื่องถ้า contract เปลี่ยน
+4. **จบงาน:** เปลี่ยนแถวใน `PLAN.md` เป็น `review` · บันทึกผลใน **สถานะปัจจุบัน** ของ `spec.md` พร้อมหลักฐาน (คำสั่ง + ผล) · อัปเดตเอกสารเจ้าของเรื่องถ้า contract เปลี่ยน
 5. **พลาดหรือเจอกับดัก:** เพิ่มใน `MEMORY.md` แบบ *what happened / root cause / correct behavior* โดยช่องสุดท้ายต้องเป็นคำสั่งที่ทำได้ทันที
 
 ห้ามบอกว่า "เสร็จ" ถ้ายังไม่มีผลตรวจจริงและยังไม่ได้อัปเดต `spec.md`
@@ -52,10 +52,11 @@ browser acceptance ต้องรัน `build` และ `build:cloudflare` �
 
 ```bash
 git fetch origin
-git switch -c feat/<ชื่อ> origin/dev
-# แก้ → ตรวจ → อัปเดต spec.md
-git push -u origin feat/<ชื่อ>
-gh pr create --base dev --head feat/<ชื่อ>
+git switch -c feat/<ID>-<ชื่อ> origin/dev
+# จองงานใน PLAN.md → commit → push → draft PR ทันที
+git push -u origin feat/<ID>-<ชื่อ>
+gh pr create --draft --base dev --head feat/<ID>-<ชื่อ> --title "<ID>: ..."
+# แก้ → ตรวจ → อัปเดต spec.md + PLAN.md → gh pr ready
 ```
 
 PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใช้เห็นอะไร ผลตรวจ (คำสั่ง + จำนวนที่ผ่าน + รุ่น Node) ข้อจำกัด และสิ่งที่ operator ต้องทำก่อน deploy (ถ้ามี) · จากนั้น **คนเป็นผู้ review และ merge**
