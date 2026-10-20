@@ -1,6 +1,6 @@
 export type TableChatMode = 'draft' | 'ask';
 
-/** One AI consent covers both request modes for one actor on one table epoch (F010). */
+/** One AI consent covers both request modes for one actor on one table epoch (F013). */
 export interface TableChatConsentScope {
   workspaceId: string;
   epoch: number;
