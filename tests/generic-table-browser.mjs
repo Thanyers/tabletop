@@ -185,7 +185,7 @@ async function openNewTable(owner, api) {
   const primary = owner.getByRole('button', { name: 'Start with your files', exact: true });
   await expect(primary).toBeVisible();
   const templates = owner.locator('.tt-template-choices');
-  await expect(templates.locator('summary')).toHaveText('Or start with an example');
+  await expect(templates.locator('summary')).toHaveText('Or explore what a table can become');
   await expect(templates).not.toHaveAttribute('open', '');
   await expect(templates.getByRole('button', { name: /Invoice check/ })).toBeHidden();
   await primary.click();
@@ -800,7 +800,7 @@ export async function verifyGenericTableBrowser({ actors, newPage, api, setTable
   const scenarios = [equipmentScenario, shiftScenario, gameScenario];
   for (let index = 0; index < scenarios.length; index += 1) {
     const owner = await newPage(owners[index]);
-    await expect(owner.getByRole('heading', { name: 'What are we making?' })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
     await scenarios[index]({ owner, member: actors.members[0], secondMember, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark });
     await owner.screenshot({ path: `test-results/cloudflare-browser/generic-table-${['equipment', 'shifts', 'game'][index]}.png`, fullPage: true });
   }

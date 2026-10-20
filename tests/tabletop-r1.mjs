@@ -72,7 +72,7 @@ async function start(page, label) {
   const templates = page.locator('.tt-template-choices');
   const choice = templates.getByRole('button', { name: new RegExp(label) });
   if (!(await choice.isVisible().catch(() => false))) {
-    await expect(templates.locator('summary')).toHaveText('Or start with an example');
+    await expect(templates.locator('summary')).toHaveText('Or explore what a table can become');
     await expect(templates).not.toHaveAttribute('open', '');
     await templates.locator('summary').click();
     await expect(choice).toBeVisible();

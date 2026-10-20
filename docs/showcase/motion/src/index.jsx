@@ -9,7 +9,7 @@ const Root = () => (
     width={960}
     height={540}
     fps={12}
-    durationInFrames={144}
+    durationInFrames={240}
   />
 );
 
