@@ -184,8 +184,11 @@ function GeneratedViewContent({ projected, actionProjected, descriptor, actionSt
 }) {
   if (projected.kind === 'metric' && descriptor.kind === 'metric') return <MetricView projected={projected} />;
   if (projected.kind === 'chart' && descriptor.kind === 'chart') return <ChartView projected={projected} expanded={previewOnly || false} />;
-  if (projected.kind === 'scene' && descriptor.kind === 'scene') return <SceneView projected={projected} actionProjected={actionProjected?.kind === 'scene' ? actionProjected : projected} descriptor={descriptor} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
-  if (projected.kind === 'controls' && descriptor.kind === 'controls') return <ControlsView projected={actionProjected?.kind === 'controls' ? actionProjected : projected} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
+  if (projected.kind === 'scene' && descriptor.kind === 'scene') return <SceneView projected={projected} actionProjected={actionProjected?.kind === 'scene' ? actionProjected : undefined} descriptor={descriptor} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
+  if (projected.kind === 'controls' && descriptor.kind === 'controls') {
+    if (actionProjected?.kind !== 'controls') return <p className="tt-generated-canvas__error" role="status">Controls are unavailable until the committed table state can be evaluated.</p>;
+    return <ControlsView projected={actionProjected} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
+  }
   return <p className="tt-generated-canvas__error" role="status">The generated view type does not match its descriptor.</p>;
 }
 
@@ -241,7 +244,7 @@ function ChartView({ projected, expanded }: { projected: Extract<EvaluatedGenera
 
 function SceneView({ projected, actionProjected, descriptor, state, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
   projected: Extract<EvaluatedGenerativeView, { kind: 'scene' }>;
-  actionProjected: Extract<EvaluatedGenerativeView, { kind: 'scene' }>;
+  actionProjected?: Extract<EvaluatedGenerativeView, { kind: 'scene' }>;
   descriptor: Extract<GenerativeViewDescriptor, { kind: 'scene' }>;
   state: TableState;
   workspaceView: WorkspaceView;
@@ -259,7 +262,7 @@ function SceneView({ projected, actionProjected, descriptor, state, workspaceVie
   const key = previewStoreKey;
   const width = clamp(projected.width, 1, 4096);
   const height = clamp(projected.height, 1, 4096);
-  const actionElements = new Map(actionProjected.elements.map(element => [element.id, element]));
+  const actionElements = new Map(actionProjected?.elements.map(element => [element.id, element]) ?? []);
   const actorRole = tableRole(workspaceView);
   const isEnabled = (actionId: string) => {
     if (previewOnly && !sandboxEnabled || busy) return false;
@@ -338,11 +341,12 @@ function SceneView({ projected, actionProjected, descriptor, state, workspaceVie
     <svg ref={svgRef} className={'tt-generated-scene' + (dragging ? ' is-dragging' : '')} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${descriptor.title} scene`} preserveAspectRatio="xMidYMid meet" onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}>
       <rect className="tt-generated-scene__background" x="0" y="0" width={width} height={height} rx="6" />
       {projected.elements.map(element => {
-        const actionElement = actionElements.get(element.id) ?? element;
-        return <ScenePrimitive key={element.id} element={element} sceneWidth={width} sceneHeight={height} draggable={(!previewOnly || sandboxEnabled) && isEnabled(actionElement.drag?.actionId ?? '')} onPointerDown={event => beginDrag(event, element, actionElement)} onKeyDown={event => moveWithKeyboard(event, element, actionElement)} onKeyUp={event => finishKeyboardDrag(event, element)} />;
+        const actionElement = actionElements.get(element.id);
+        const draggable = Boolean(actionElement?.drag && (!previewOnly || sandboxEnabled) && isEnabled(actionElement.drag.actionId));
+        return <ScenePrimitive key={element.id} element={element} sceneWidth={width} sceneHeight={height} draggable={draggable} onPointerDown={event => { if (actionElement) beginDrag(event, element, actionElement); }} onKeyDown={event => { if (actionElement) moveWithKeyboard(event, element, actionElement); }} onKeyUp={event => finishKeyboardDrag(event, element)} />;
       })}
     </svg>
-    {actionProjected.elements.some(element => element.drag) && <p className="tt-canvas-inline__note">Drag a marked shape or focus it and use the arrow keys. The table changes when you release.</p>}
+    {actionProjected?.elements.some(element => element.drag) && <p className="tt-canvas-inline__note">Drag a marked shape or focus it and use the arrow keys. The table changes when you release.</p>}
   </div>;
 }
 
