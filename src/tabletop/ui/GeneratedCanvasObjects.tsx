@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { ActorContext } from '../shared/contracts';
 import type { GenerativeCanvas, GenerativeScalar, GenerativeViewDescriptor } from '../shared/generative-contracts';
 import type { TableAction, TableParameter, TableRecord, TableState, TableValue } from '../shared/table-contracts';
@@ -90,7 +90,7 @@ function getProjection(state: TableState, view: WorkspaceView, preview?: LocalAc
 }
 
 export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand, previewOnly = false, sandboxCommand, previewScope = 'live', expanded = false }: GeneratedCanvasObjectProps) {
-  const key = useMemo(() => previewKey(view, previewScope), [view.id, view.epoch, view.actor.actorId, view.actor.role, view.actor.seat, previewScope]);
+  const key = previewKey(view, previewScope);
   const subscribe = useCallback((listener: () => void) => subscribeToPreview(key, listener), [key]);
   const getSnapshot = useCallback(() => previewValues.get(key), [key]);
   const localPreview = useSyncExternalStore(subscribe, getSnapshot, () => undefined);
@@ -98,8 +98,10 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
   const sandboxEnabled = previewOnly && sandboxCommand !== undefined;
   const activePreview = !previewOnly || sandboxEnabled ? localPreview : undefined;
   const renderedState = activePreview?.state ?? state;
-  const projection = useMemo(() => getProjection(renderedState, view, activePreview), [renderedState, view.actor.actorId, view.actor.role, view.actor.seat, activePreview]);
+  const projection = getProjection(renderedState, view, activePreview);
+  const actionProjection = getProjection(state, view);
   const projectedView = projection.views?.find(item => item.id === descriptor.id && item.kind === descriptor.kind);
+  const actionProjectedView = actionProjection.views?.find(item => item.id === descriptor.id && item.kind === descriptor.kind);
   const program = renderedState.program;
   const currentDescriptor = program?.canvas?.views.find(item => item.id === descriptor.id && item.kind === descriptor.kind);
   const allBusy = busy !== null || Boolean(activePreview?.committing);
@@ -147,8 +149,9 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
 
   const content = projectedView && currentDescriptor ? <GeneratedViewContent
     projected={projectedView}
+    actionProjected={actionProjectedView}
     descriptor={currentDescriptor}
-    state={renderedState}
+    actionState={state}
     workspaceView={view}
     previewOnly={previewOnly}
     sandboxEnabled={sandboxEnabled}
@@ -166,10 +169,11 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
   </section>;
 }
 
-function GeneratedViewContent({ projected, descriptor, state, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
+function GeneratedViewContent({ projected, actionProjected, descriptor, actionState, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
   projected: EvaluatedGenerativeView;
+  actionProjected?: EvaluatedGenerativeView;
   descriptor: GenerativeViewDescriptor;
-  state: TableState;
+  actionState: TableState;
   workspaceView: WorkspaceView;
   previewOnly: boolean;
   sandboxEnabled: boolean;
@@ -180,8 +184,8 @@ function GeneratedViewContent({ projected, descriptor, state, workspaceView, pre
 }) {
   if (projected.kind === 'metric' && descriptor.kind === 'metric') return <MetricView projected={projected} />;
   if (projected.kind === 'chart' && descriptor.kind === 'chart') return <ChartView projected={projected} expanded={previewOnly || false} />;
-  if (projected.kind === 'scene' && descriptor.kind === 'scene') return <SceneView projected={projected} descriptor={descriptor} state={state} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
-  if (projected.kind === 'controls' && descriptor.kind === 'controls') return <ControlsView projected={projected} state={state} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
+  if (projected.kind === 'scene' && descriptor.kind === 'scene') return <SceneView projected={projected} actionProjected={actionProjected?.kind === 'scene' ? actionProjected : projected} descriptor={descriptor} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
+  if (projected.kind === 'controls' && descriptor.kind === 'controls') return <ControlsView projected={actionProjected?.kind === 'controls' ? actionProjected : projected} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
   return <p className="tt-generated-canvas__error" role="status">The generated view type does not match its descriptor.</p>;
 }
 
@@ -235,8 +239,9 @@ function ChartView({ projected, expanded }: { projected: Extract<EvaluatedGenera
   </div>;
 }
 
-function SceneView({ projected, descriptor, state, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
+function SceneView({ projected, actionProjected, descriptor, state, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
   projected: Extract<EvaluatedGenerativeView, { kind: 'scene' }>;
+  actionProjected: Extract<EvaluatedGenerativeView, { kind: 'scene' }>;
   descriptor: Extract<GenerativeViewDescriptor, { kind: 'scene' }>;
   state: TableState;
   workspaceView: WorkspaceView;
@@ -254,21 +259,23 @@ function SceneView({ projected, descriptor, state, workspaceView, previewOnly, s
   const key = previewStoreKey;
   const width = clamp(projected.width, 1, 4096);
   const height = clamp(projected.height, 1, 4096);
+  const actionElements = new Map(actionProjected.elements.map(element => [element.id, element]));
   const actorRole = tableRole(workspaceView);
   const isEnabled = (actionId: string) => {
     if (previewOnly && !sandboxEnabled || busy) return false;
     const action = state.program?.actions.find(item => item.id === actionId);
     return Boolean(action && action.roles.includes(actorRole) && (!action.requireTurn || state.turn === (workspaceView.actor.seat ?? 'host')));
   };
-  const beginDrag = (event: ReactPointerEvent<SVGElement>, element: EvaluatedScenePrimitive) => {
-    if (!element.drag || !isEnabled(element.drag.actionId) || !svgRef.current) return;
-    const action = state.program?.actions.find(item => item.id === element.drag?.actionId);
+  const beginDrag = (event: ReactPointerEvent<SVGElement>, element: EvaluatedScenePrimitive, actionElement: EvaluatedScenePrimitive) => {
+    const binding = actionElement.drag;
+    if (!binding || !isEnabled(binding.actionId) || !svgRef.current) return;
+    const action = state.program?.actions.find(item => item.id === binding.actionId);
     const startPointer = scenePoint(svgRef.current, event);
     if (!action || !startPointer) return;
     const anchor = sceneAnchor(element);
     event.preventDefault();
     try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Pointer capture is optional in test renderers. */ }
-    dragRef.current = { pointerId: event.pointerId, action, binding: element.drag, startPointer, startAnchor: anchor, lastInputs: dragInputs(element.drag, action, anchor), moved: false };
+    dragRef.current = { pointerId: event.pointerId, action, binding, startPointer, startAnchor: anchor, lastInputs: dragInputs(binding, action, anchor), moved: false };
     setDragging(true);
   };
   const moveDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -305,9 +312,10 @@ function SceneView({ projected, descriptor, state, workspaceView, previewOnly, s
     setDragging(false);
     clearPreview(key, `scene:${descriptor.id}:${session.binding.actionId}`);
   };
-  const moveWithKeyboard = (event: ReactKeyboardEvent<SVGElement>, element: EvaluatedScenePrimitive) => {
-    if (!element.drag || !isEnabled(element.drag.actionId)) return;
-    const action = state.program?.actions.find(item => item.id === element.drag?.actionId);
+  const moveWithKeyboard = (event: ReactKeyboardEvent<SVGElement>, element: EvaluatedScenePrimitive, actionElement: EvaluatedScenePrimitive) => {
+    const binding = actionElement.drag;
+    if (!binding || !isEnabled(binding.actionId)) return;
+    const action = state.program?.actions.find(item => item.id === binding.actionId);
     if (!action) return;
     const delta = event.shiftKey ? 10 : 1;
     const anchor = sceneAnchor(element);
@@ -315,8 +323,8 @@ function SceneView({ projected, descriptor, state, workspaceView, previewOnly, s
     const y = clamp(anchor.y + (event.key === 'ArrowDown' ? delta : event.key === 'ArrowUp' ? -delta : 0), 0, height);
     if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(event.key)) return;
     event.preventDefault();
-    const inputs = dragInputs(element.drag, action, { x, y });
-    onSimulate(action, inputs, `scene:${descriptor.id}:${element.drag.actionId}`);
+    const inputs = dragInputs(binding, action, { x, y });
+    onSimulate(action, inputs, `scene:${descriptor.id}:${binding.actionId}`);
     keyboardActions.current.set(element.id, { action, inputs });
   };
   const finishKeyboardDrag = (event: ReactKeyboardEvent<SVGElement>, element: EvaluatedScenePrimitive) => {
@@ -329,9 +337,12 @@ function SceneView({ projected, descriptor, state, workspaceView, previewOnly, s
   return <div className="tt-generated-scene-wrap">
     <svg ref={svgRef} className={'tt-generated-scene' + (dragging ? ' is-dragging' : '')} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${descriptor.title} scene`} preserveAspectRatio="xMidYMid meet" onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}>
       <rect className="tt-generated-scene__background" x="0" y="0" width={width} height={height} rx="6" />
-      {projected.elements.map(element => <ScenePrimitive key={element.id} element={element} sceneWidth={width} sceneHeight={height} draggable={(!previewOnly || sandboxEnabled) && isEnabled(element.drag?.actionId ?? '')} onPointerDown={event => beginDrag(event, element)} onKeyDown={event => moveWithKeyboard(event, element)} onKeyUp={event => finishKeyboardDrag(event, element)} />)}
+      {projected.elements.map(element => {
+        const actionElement = actionElements.get(element.id) ?? element;
+        return <ScenePrimitive key={element.id} element={element} sceneWidth={width} sceneHeight={height} draggable={(!previewOnly || sandboxEnabled) && isEnabled(actionElement.drag?.actionId ?? '')} onPointerDown={event => beginDrag(event, element, actionElement)} onKeyDown={event => moveWithKeyboard(event, element, actionElement)} onKeyUp={event => finishKeyboardDrag(event, element)} />;
+      })}
     </svg>
-    {projected.elements.some(element => element.drag) && <p className="tt-canvas-inline__note">Drag a marked shape or focus it and use the arrow keys. The table changes when you release.</p>}
+    {actionProjected.elements.some(element => element.drag) && <p className="tt-canvas-inline__note">Drag a marked shape or focus it and use the arrow keys. The table changes when you release.</p>}
   </div>;
 }
 

@@ -91,14 +91,16 @@ const withdrawWater = action('withdraw_water', [recordParameter('reservoir', 're
   { record: 'reservoir', field: 'water', op: 'add', value: expression(math('multiply', { op: 'literal', value: -1 }, { op: 'input', id: 'amount' })) },
   { record: 'team', field: 'delivered', op: 'add', value: { input: 'amount' } },
 ], { conditions: [{ left: selected('reservoir', 'water'), op: 'gte', right: { input: 'amount' }, message: 'The reservoir does not hold enough water.' }], requireTurn: true, advanceTurn: true });
-export const cooperativeWaterChange = change(program('Cooperative water allocation', waterCollections, [withdrawWater], ['member-1', 'member-2'], { version: 1, views: [
+export const cooperativeWaterChange = change(program('Cooperative water allocation', waterCollections, [withdrawWater], ['member-1', 'host', 'member-2'], { version: 1, views: [
   { id: 'water-stock', kind: 'metric', title: 'Water remaining', value: { op: 'aggregate', source: { op: 'collection', id: 'reservoirs' }, fn: 'sum', as: 'reservoir', value: { op: 'field', record: 'reservoir', field: 'water' } }, relatedTo: { collections: ['reservoirs'] } },
+  { id: 'south-delivery', kind: 'metric', title: 'South team delivered', value: recordField('teams', 'team-south', 'delivered'), format: 'number', relatedTo: { collections: ['teams'] } },
   { id: 'water-controls', kind: 'controls', title: 'Take your turn', relatedTo: { collections: ['reservoirs', 'teams'] }, controls: [
     control({ id: 'withdrawal', kind: 'slider', label: 'Withdraw water', actionId: 'withdraw_water', parameter: 'amount', min: 1, max: 50, value: { op: 'literal', value: 10 }, inputs: { reservoir: { kind: 'record', collection: 'reservoirs', recordId: 'north-well' }, team: { kind: 'record', collection: 'teams', recordId: 'team-north' }, amount: { kind: 'control' } } }),
+    control({ id: 'withdrawal-form', kind: 'form', label: 'Choose a team and amount', actionId: 'withdraw_water', inputs: { reservoir: { kind: 'record', collection: 'reservoirs', recordId: 'north-well' }, team: { kind: 'control' }, amount: { kind: 'control' } } }),
   ] },
 ] }), {
   reservoirs: [{ id: 'north-well', values: { water: 100 } }],
-  teams: [{ id: 'team-north', values: { delivered: 0 } }],
+  teams: [{ id: 'team-north', values: { delivered: 0 } }, { id: 'team-south', values: { delivered: 0 } }],
 });
 
 const loanRate = math('divide', selectedField('loan', 'annual_rate'), { op: 'literal', value: 12 });
