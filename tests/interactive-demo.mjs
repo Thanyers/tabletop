@@ -62,6 +62,9 @@ export async function verifyInteractiveDemo(page, origin, output) {
     await options.locator('summary').click();
   }
   async function open(id) {
+    // Dismiss the role/transport popover before using Canvas controls beneath it.
+    const options = page.locator('.tt-practice-options');
+    if (await options.getAttribute('open') !== null) await options.locator('summary').click();
     const isCurrent = await editor.isVisible().catch(() => false) && await editor.getAttribute('data-canvas-object') === id;
     if (!isCurrent) {
       const trigger = page.getByTestId('canvas-object-menu-trigger');
