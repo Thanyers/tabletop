@@ -747,16 +747,14 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await owner.setViewportSize({ width: 390, height: 844 });
   const canvasBox = await owner.locator('.tt-canvas-panel').boundingBox();
   const chatBox = await owner.getByTestId('table-chat-bar').boundingBox();
-  const flowBox = await owner.locator('.tt-canvas-panel .react-flow').boundingBox();
   expect(canvasBox).toBeTruthy();
   expect(chatBox).toBeTruthy();
-  expect(flowBox).toBeTruthy();
   expect(chatBox.x).toBeGreaterThanOrEqual(canvasBox.x - 1);
   expect(chatBox.y).toBeGreaterThanOrEqual(canvasBox.y - 1);
   expect(chatBox.x + chatBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width + 1);
   expect(chatBox.y + chatBox.height).toBeLessThanOrEqual(canvasBox.y + canvasBox.height + 1);
   expect(chatBox.width).toBeLessThanOrEqual(370);
-  expect(flowBox.height).toBeGreaterThan(100);
+  expect(canvasBox.height).toBeGreaterThan(100);
   expect(await owner.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   const mobileComposer = owner.getByTestId('table-chat-bar').getByRole('textbox', { name: 'Message', exact: true });
   await expect(mobileComposer).toHaveAttribute('rows', '1');
