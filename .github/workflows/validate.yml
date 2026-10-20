@@ -75,6 +75,8 @@ jobs:
             test-results/cloudflare-browser/report.json
             test-results/cloudflare-browser/public-demo-desktop.png
             test-results/cloudflare-browser/public-demo-narrow.png
+            test-results/cloudflare-browser/public-welcome-desktop.png
+            test-results/cloudflare-browser/public-welcome-narrow.png
             test-results/cloudflare-browser/interactive-demo-teaching.png
             test-results/cloudflare-browser/interactive-demo-encounter.png
             test-results/cloudflare-browser/interactive-demo-narrow.png
