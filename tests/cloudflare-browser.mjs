@@ -106,6 +106,8 @@ try {
   browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
   async function newPage(actor, url = origin) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    // Long scenarios idle between assistant steps; the dedicated collapse check opts back in.
+    await context.addInitScript(() => { try { if (localStorage.getItem('tabletop.assistant.idleMs') === null) localStorage.setItem('tabletop.assistant.idleMs', 'off'); } catch { /* storage blocked */ } });
     if (actor) await context.addCookies([{ name: 'tabletop_local_session', value: actor.token, url: origin, httpOnly: true, sameSite: 'Lax' }]);
     const page = await context.newPage(); pages.push(page);
     page.on('pageerror', error => errors.push(error.message));
@@ -421,6 +423,34 @@ try {
   await expect(starter.getByLabel('How should this table work?', { exact: true })).toHaveValue(description);
   expect((await api(starter, `/api/workspaces/${textRoom.id}`)).body.domain.program).toBeNull();
   mark('Start page at /new offers the three prepared tables, survives reload and back/forward, and a typed description opens an empty shared table with the description waiting in its rule draft');
+
+  // The assistant island collapses into a round button only when idle, and reopens on demand.
+  await starter.evaluate(() => localStorage.setItem('tabletop.assistant.idleMs', '1500'));
+  await starter.reload(); await starter.waitForLoadState('networkidle');
+  const island = starter.getByTestId('table-assistant-panel');
+  const bubble = starter.getByTestId('table-assistant-bubble');
+  const rulePrompt = starter.getByLabel('How should this table work?', { exact: true });
+  await rulePrompt.fill('Unsent idea that must not be hidden');
+  await starter.locator('.tt-topbar').click({ position: { x: 4, y: 4 } });
+  await starter.waitForTimeout(2600);
+  await expect(bubble).toHaveCount(0);
+  await expect(rulePrompt).toBeVisible();
+  await rulePrompt.fill('');
+  await starter.locator('.tt-topbar').click({ position: { x: 4, y: 4 } });
+  await expect(bubble).toBeVisible({ timeout: 6000 });
+  await expect(island).toHaveAttribute('data-collapsed', 'true');
+  await expect(starter.getByTestId('table-assistant')).toBeHidden();
+  const bubbleBox = await bubble.boundingBox();
+  expect(Math.round(bubbleBox.width)).toBe(56);
+  expect(await bubble.locator('svg').evaluate((icon) => getComputedStyle(icon).animationName)).toBe('none');
+  await bubble.press('Enter');
+  await expect(island).toHaveAttribute('data-collapsed', 'false');
+  await expect(rulePrompt).toBeFocused();
+  const canvasBox = await starter.locator('.tt-canvas-panel').boundingBox();
+  const islandBox = await island.boundingBox();
+  expect(Math.abs((islandBox.x + islandBox.width / 2) - (canvasBox.x + canvasBox.width / 2))).toBeLessThan(2);
+  expect(islandBox.width).toBeLessThanOrEqual(560);
+  mark('Assistant island floats centred over the Canvas, stays open with unsent text, collapses to a still round button when idle under reduced motion, and reopens focused with Enter');
 
   await openCanvasObject(dm, 'workspace.ai');
   await dm.getByLabel('What would you like to change?', { exact: true }).fill('Allow a shield for an ally, with one AP cost and once each turn.');

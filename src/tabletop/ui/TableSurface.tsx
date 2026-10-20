@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { AlertCircle, MessageCircle } from 'lucide-react';
 import { CanvasWorkspace, type CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { EncounterWorkbench } from './EncounterWorkbench';
@@ -6,6 +6,7 @@ import { InvoiceWorkbench } from './InvoiceWorkbench';
 import { TeachingWorkbench } from './TeachingWorkbench';
 import { MemberStrip } from './WorkbenchShared';
 import { createCanvasAuxiliaryObjects } from './CanvasAuxiliaryObjects';
+import { assistantIsInUse, readAssistantIdleMs } from './assistant-idle';
 import type { ExecutablePlan, WorkbenchProps } from './types';
 
 export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
@@ -79,6 +80,31 @@ export function TableSurface({
     observer.observe(panel);
     return () => observer.disconnect();
   }, [hasAssistant]);
+  const idleMs = useMemo(readAssistantIdleMs, []);
+  const [assistantCollapsed, setAssistantCollapsed] = useState(false);
+  useEffect(() => {
+    const panel = assistantPanelRef.current;
+    if (!hasAssistant || assistantCollapsed || idleMs === null || !panel) return;
+    let timer = 0;
+    const restart = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (assistantIsInUse(panel, document.activeElement)) restart();
+        else setAssistantCollapsed(true);
+      }, idleMs);
+    };
+    const events = ['pointerdown', 'keydown', 'input', 'focusin', 'wheel'] as const;
+    for (const type of events) panel.addEventListener(type, restart);
+    restart();
+    return () => {
+      window.clearTimeout(timer);
+      for (const type of events) panel.removeEventListener(type, restart);
+    };
+  }, [hasAssistant, assistantCollapsed, idleMs]);
+  const expandAssistant = useCallback(() => {
+    setAssistantCollapsed(false);
+    window.requestAnimationFrame(() => assistantPanelRef.current?.querySelector<HTMLElement>('textarea:not([disabled])')?.focus());
+  }, []);
   const focusCanvasObject = useMemo(() => onFocusObject ?? (onOpenObject ? (id: string) => { onSelectNode(id); onOpenObject(id); } : undefined), [onFocusObject, onOpenObject, onSelectNode]);
   const mergedAuxiliaryObjects = useMemo(() => {
     const merged = new Map(createCanvasAuxiliaryObjects({ view, onCommand, busy, onInvite, aiContent, onFocusObject: focusCanvasObject }).map((object) => [object.id, object]));
@@ -139,7 +165,8 @@ export function TableSurface({
           </div>
         )}
         {promptContent}
-        {assistantContent && <aside ref={assistantPanelRef} className="tt-table-assistant-panel" data-testid="table-assistant-panel" aria-label="Table assistant">
+        {assistantContent && <aside ref={assistantPanelRef} className={`tt-table-assistant-panel${assistantCollapsed ? ' is-collapsed' : ''}`} data-testid="table-assistant-panel" data-collapsed={assistantCollapsed} aria-label="Table assistant">
+          {assistantCollapsed && <button type="button" className="tt-assistant-bubble" data-testid="table-assistant-bubble" aria-label="Open table assistant" aria-expanded="false" onClick={expandAssistant}><MessageCircle size={22} aria-hidden="true" /></button>}
           {assistantContent}
         </aside>}
       </section>
