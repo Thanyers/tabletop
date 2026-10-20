@@ -4,7 +4,7 @@
 
 ## สถานะและลำดับงาน
 
-รุ่นแอปที่ตรวจล่าสุดคือ `c9d3bf0` จาก PR #6, ตรวจ deployment เมื่อ 20 ตุลาคม 2026 รายละเอียด URL, Worker version, resource และหลักฐานปัจจุบันอยู่ใน [DEPLOYMENTS](DEPLOYMENTS.md); อัปเดตข้อมูลนั้นหลังตรวจ release รุ่นถัดไปแล้ว
+รุ่นแอปที่ตรวจล่าสุดคือ `9fbfdec` รวม PR #9 และ #10 ข้อความเริ่มงานตามแนวคิดใหม่และจุดอ่านเลขรุ่นขึ้นทั้ง staging/production แล้วเมื่อ 20 ตุลาคม 2026 โดยฟีเจอร์หลักเดิม รายละเอียด URL, Worker version, resource และหลักฐานปัจจุบันอยู่ใน [DEPLOYMENTS](DEPLOYMENTS.md); อัปเดตข้อมูลนั้นหลังตรวจ release รุ่นถัดไปแล้ว
 
 ลำดับงานที่ควรทำต่อ:
 
@@ -41,9 +41,9 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
 
 ## สิ่งที่ทดสอบแล้ว
 
-- [รุ่นที่ deploy](DEPLOYMENTS.md) อ้าง source `c9d3bf0` / PR #6; staging และ production ใช้ source tree เดียวกัน และไฟล์เว็บ 130 ไฟล์ตรงกับ build ที่ตรวจ
-- [CI ของรุ่นล่าสุด](https://github.com/Thanyers/tabletop/actions/runs/39358949964) ผ่าน unit/SQL 309 รายการ, Cloudflare 65, Component Lab 7, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ AI provider จริง
-- Staging ผ่านการเล่น River Race ด้วย Google สองบัญชีจริงและกลับเข้าห้องเดิมหลังปิด/เปิดแท็บ; production ตรวจอ่านและกลับเข้า Encounter Table เดิมได้หลัง deploy โดยข้อมูลและกฎเดิมยังอยู่
+- [รุ่นที่ deploy](DEPLOYMENTS.md) อ้าง source `9fbfdec`; staging และ production ใช้ source/build ชุดเดียวกัน ไฟล์เว็บ 131 ไฟล์ตรงกับ build และ `/version` รายงาน sha ตรงกัน
+- [CI ของรุ่นล่าสุด](https://github.com/Thanyers/tabletop/actions/runs/39368620190) ผ่าน unit/SQL, Cloudflare, Component Lab, browser checks, build และ public/secret scans; fixture ใน CI ไม่ได้เรียก Google หรือ AI provider จริง
+- รอบล่าสุดตรวจข้อความใหม่และเปิดตัวอย่างเดิมครบทั้งสอง environment พร้อมกลับเข้า River Race บน staging และ Encounter บน production แบบอ่านอย่างเดียว ข้อมูลและกฎเดิมยังอยู่; การเล่น River Race ด้วย Google สองบัญชีจริงเป็นหลักฐานของรอบก่อน ไม่ได้เล่นสองบัญชีใหม่ใน release นี้
 - [Calm Canvas acceptance](CALM_CANVAS_ACCEPTANCE.md) บันทึกการเล่น local ของ Helpdesk ด้วย AI จริงและบัญชีจำลองสองคน แยกจากหลักฐาน Google สองบัญชีบน staging
 - `SKIPPED`: automated axe/full contrast/screen-reader audit, การใช้นิ้วบนโทรศัพท์จริง และกรณี invoice เปลี่ยนระหว่างหลักฐานสองชิ้น
 - ยังไม่มีหลักฐาน load/soak, restart recovery หรือการกู้ D1 + Room + Billing ทั้งระบบ การกลับเข้าห้องเดิมและการทดสอบ local ไม่ยืนยันความพร้อมทุกกรณี

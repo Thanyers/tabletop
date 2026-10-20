@@ -1,8 +1,10 @@
 # วิธีใช้และวิธีเล่น Tabletop
 
-คู่มือสำหรับรุ่นที่ตรวจวันที่ 20 ตุลาคม 2026 เริ่มที่ [ภาพรวมผลิตภัณฑ์](../README.md) หน้าเริ่มโต๊ะที่อธิบายด้านล่างเป็น copy ของ candidate; ตรวจ [Deployment](DEPLOYMENTS.md) เพื่อดู source ที่กำลังเปิดใช้อยู่
+คู่มือสำหรับรุ่นที่ตรวจวันที่ 20 ตุลาคม 2026 เริ่มที่ [ภาพรวมผลิตภัณฑ์](../README.md) ข้อความเริ่มโต๊ะด้านล่างขึ้น staging และ production แล้ว; ตรวจ [Deployment](DEPLOYMENTS.md) เพื่อดู source ที่กำลังเปิดใช้อยู่
 
 ## เลือกวิธีลอง
+
+ก่อนล็อกอิน หน้าแรกเล่าแนวคิด Tabletop พร้อมภาพโต๊ะที่ค่อย ๆ เข้ารูปตามงาน และตัวอย่างงาน การเรียนรู้ และการเล่นร่วมกัน กด **Sign in** เพื่อไปปุ่ม **Continue with Google** หรือ **Auto demo** เพื่อลองโดยไม่สมัคร หลังล็อกอินจะเข้าสู่หน้าเริ่มโต๊ะเดิม; ใน Canvas ไม่มีข้อความแนะนำผลิตภัณฑ์ชุดนี้
 
 | วิธี | เหมาะกับ | AI / ผู้เล่น / การบันทึก |
 | --- | --- | --- |
@@ -28,7 +30,7 @@
 
 ## สร้างโต๊ะจากไฟล์ของตัวเอง
 
-1. เปิด [แอปหลัก](https://tabletop.ptchrr.workers.dev/) แล้วกด **Continue with Google**; candidate นี้ถาม **What are you here to do?** และบอก **Start with what you're working on. Your table will take shape around it.**
+1. เปิด [แอปหลัก](https://tabletop.ptchrr.workers.dev/) แล้วกด **Continue with Google**; หน้าเริ่มโต๊ะถาม **What are you here to do?** และบอก **Start with what you're working on. Your table will take shape around it.** ถ้ากลับมาที่โต๊ะเดิม ให้กด **All tables** เพื่อกลับมาหน้าเริ่มโต๊ะ
 2. เลือก **Start with your files** เพื่อเริ่มโต๊ะว่าง หรือเปิด **Or explore what a table can become** แล้วเลือกการ์ดตัวอย่าง
 3. ลากไฟล์ลง Canvas หรือเปิด **Set up** แล้วกด **Attach a file** รองรับ UTF-8 `.csv`, `.json`, `.txt`, `.md` เท่านั้น: **32 KiB ต่อไฟล์, ไม่เกิน 4 ไฟล์, รวม 64 KiB**
 4. เจ้าของใช้ **Set up** ก่อนมีกฎร่วม หรือ **Rules** เมื่อมีชุดกฎแล้ว เขียนเจตนาใน **How should this table work?** ตรวจ checkbox ที่ระบุว่าจะส่งคำขอและไฟล์ต้นทางที่แนบให้ AI แล้วกด **Prepare draft**

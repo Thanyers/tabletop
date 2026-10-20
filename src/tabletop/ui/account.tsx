@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AdminWorkspace, AdminWorkspacePage, AuthStatus, GoogleAuthUser } from '../client';
 import './account.css';
+import { PublicWelcome } from './PublicWelcome';
 
 type GoogleAuthStatus = Extract<AuthStatus, { mode: 'google' }>;
 type Notice = { text: string; tone: 'info' | 'error' | 'success' } | null;
@@ -15,13 +16,12 @@ export function AccountSignIn({ status, notice, hasPendingInvite, checking, onRe
   onRetry: () => void;
   onDismissNotice: () => void;
 }) {
-  return <main className="tt-account-gate">
-    <section className="tt-account-gate__card" aria-labelledby="tt-account-gate-title">
-      <a className="tt-brand" href="/" aria-label="Tabletop"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
-      <span className="tt-account-gate__eyebrow"><ShieldCheck size={14} /> TABLE ACCESS</span>
-      <h1 id="tt-account-gate-title">Sign in to open your tables</h1>
-      <p className="tt-account-gate__copy">Sign in with Google to open your tables. An invitation link grants its designated seat to whoever opens it while it is valid; it is not tied to a preselected email.</p>
-      {hasPendingInvite && <p className="tt-account-gate__invite"><ShieldCheck size={15} /> Your invitation is saved in this tab and will be used after sign-in.</p>}
+  return <PublicWelcome>
+    <section id="sign-in" className="tt-public-welcome__auth" aria-labelledby="tt-public-welcome-auth-title">
+      <span className="tt-account-gate__eyebrow"><ShieldCheck size={14} /> YOUR TABLE STARTS HERE</span>
+      <h2 id="tt-public-welcome-auth-title">Bring your work to the table</h2>
+      <p className="tt-public-welcome__auth-copy">Sign in with Google to start a table or return to one you already share.</p>
+      {hasPendingInvite && <p className="tt-account-gate__invite" role="status"><ShieldCheck size={15} /> Your invitation is saved in this tab and will be used after sign-in.</p>}
       {notice && <div className={`tt-account-gate__notice tt-account-gate__notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><AlertCircle size={15} /><span>{notice.text}</span><button type="button" aria-label="Dismiss message" onClick={onDismissNotice}>×</button></div>}
       <a className="tt-account-gate__google" href={status.loginUrl}>
         <span className="tt-account-gate__google-mark" aria-hidden="true">G</span>
@@ -32,10 +32,13 @@ export function AccountSignIn({ status, notice, hasPendingInvite, checking, onRe
         <RefreshCw size={13} className={checking ? 'tt-account-gate__spin' : ''} />
         {checking ? 'Checking sign-in…' : 'Already signed in? Check again'}
       </button>
-      <p className="tt-account-gate__privacy">Table access is checked for every workspace. Invitation links are single-use and expire.</p>
+      <details className="tt-public-welcome__invite-details">
+        <summary>How table invitations work</summary>
+        <p>Invitation links are single-use and expire. They grant a designated seat to whoever opens the link while it is valid; it is not tied to a preselected email. Table access is checked after sign-in.</p>
+      </details>
       <a className="tt-account-gate__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><span>Auto demo</span><small>opens in a new tab</small><ArrowRight size={14} /></a>
     </section>
-  </main>;
+  </PublicWelcome>;
 }
 
 export function AccountBadge({ user, busy, onSignOut, onLoadAdminWorkspaces }: { user: GoogleAuthUser; busy: boolean; onSignOut: () => void; onLoadAdminWorkspaces?: (after?: string) => Promise<AdminWorkspacePage> }) {

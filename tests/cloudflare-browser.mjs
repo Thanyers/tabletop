@@ -134,12 +134,45 @@ try {
     await expect(editor).toBeVisible();
     return editor;
   }
+  const welcomeIdentityCounts = () => db.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM web_sessions) AS sessions, (SELECT COUNT(*) FROM oauth_states) AS oauth, (SELECT COUNT(*) FROM rooms) AS rooms').first();
+  const beforeWelcome = await welcomeIdentityCounts();
   const anonymous = await newPage();
+  await expect(anonymous.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(1);
+  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
   await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
   await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
+  await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
+  await expect(anonymous.locator('.tt-canvas-panel')).toHaveCount(0);
+  const conceptImage = anonymous.locator('.tt-public-welcome__story-frame img');
+  await expect(conceptImage).toHaveAttribute('src', /\.png$/);
+  await anonymous.getByRole('button', { name: 'Replay the concept animation', exact: true }).click();
+  await expect(conceptImage).toHaveAttribute('src', /\.gif\?replay=1$/);
+  await anonymous.getByRole('button', { name: 'Show the still illustration', exact: true }).click();
+  await expect(conceptImage).toHaveAttribute('src', /\.png$/);
+  await anonymous.screenshot({ path: join(output, 'public-welcome-desktop.png'), fullPage: true });
+  await anonymous.setViewportSize({ width: 390, height: 844 });
+  expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await anonymous.getByRole('link', { name: 'Sign in', exact: true }).click();
+  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeInViewport();
+  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await anonymous.screenshot({ path: join(output, 'public-welcome-narrow.png'), fullPage: true });
+  await anonymous.setViewportSize({ width: 1440, height: 1000 });
   expect((await api(anonymous, '/api/session')).status).toBe(401);
-  mark('Anonymous browser is gated by Google sign-in; no guest account is created');
+  mark('Public welcome explains the concept on desktop/mobile, preserves the Google/demo entry points and keeps anonymous users outside the Canvas');
+
+  const failedSignIn = await newPage(null, `${origin}/?auth_error=google_login_failed`);
+  await expect(failedSignIn.getByRole('alert')).toContainText('Google sign-in did not complete.');
+  await expect(failedSignIn.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
+  await failedSignIn.getByRole('button', { name: 'Dismiss message', exact: true }).click();
+  await expect(failedSignIn.getByRole('alert')).toHaveCount(0);
+  await failedSignIn.getByRole('button', { name: 'Already signed in? Check again', exact: true }).click();
+  await expect(failedSignIn.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
+  expect(providerCalls).toBe(0);
+  await failedSignIn.context().close();
+  expect(await welcomeIdentityCounts()).toEqual(beforeWelcome);
+  mark('Public welcome preserves sign-in failure, notice dismissal and retry without a provider call');
 
   const builtVersion = JSON.parse(await readFile('dist/version.json', 'utf8'));
   const servedVersion = await mf.dispatchFetch(`${origin}/version`);
@@ -243,6 +276,8 @@ try {
     }
   });
   await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+  await expect(dm.locator('.tt-public-welcome')).toHaveCount(0);
+  await expect(dm.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toHaveCount(0);
   await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   await dm.locator('.tt-template-choices > summary').click();
