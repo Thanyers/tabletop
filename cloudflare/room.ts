@@ -917,8 +917,12 @@ export class Room extends DurableObject<Env> {
 
   async webSocketClose(socket: WebSocket): Promise<void> {
     const closing = parsePeerAttachment(socket.deserializeAttachment());
-    if (closing) this.cursorSentAt.delete(closing.sessionHash);
-    this.relayCursor(socket, { type: 'cursor', leave: true });
+    if (closing) {
+      this.cursorSentAt.delete(closing.sessionHash);
+      // Another tab of the same person keeps its cursor; only the last socket announces a leave.
+      const stillHere = this.ctx.getWebSockets(`actor:${closing.actorId}`).some((peer) => peer !== socket && peer.readyState === WebSocket.OPEN);
+      if (!stillHere) this.relayCursor(socket, { type: 'cursor', leave: true });
+    }
     try { socket.close(1000, 'Closed'); } catch { /* already closed */ }
   }
 

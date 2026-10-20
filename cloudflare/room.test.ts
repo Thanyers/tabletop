@@ -14,6 +14,7 @@ import type { AIProposalRequest, AIProposalResult } from './ai.js';
 import { respondToTablePrompt } from './table-assistant.js';
 import type { TableAssistantInput, TableAssistantResult } from '../src/tabletop/shared/table-assistant-contracts.js';
 import type { TableAssistantResponse } from './table-assistant.js';
+import { CURSOR_MIN_INTERVAL_MS } from '../src/tabletop/shared/cursor-protocol.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
@@ -2108,7 +2109,8 @@ describe('Cloudflare room Durable Object', () => {
       await learnerSocket.projections.waitFor(() => true);
       ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 120.4, y: -30 }));
       await vi.waitFor(() => expect(learnerFrames).toEqual([{ type: 'cursor', actorId: owner.id, x: 120, y: -30 }]));
-      // Frames faster than the per-socket interval are dropped; a leave always goes through.
+      // Frames faster than the per-session interval are dropped; a leave always goes through.
+      await new Promise((resolve) => setTimeout(resolve, CURSOR_MIN_INTERVAL_MS + 30));
       ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 1, y: 1 }));
       ownerSocket.socket.send(JSON.stringify({ type: 'cursor', x: 2, y: 2 }));
       ownerSocket.socket.send(JSON.stringify({ type: 'cursor', leave: true }));

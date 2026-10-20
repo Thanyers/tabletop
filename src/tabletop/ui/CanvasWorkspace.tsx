@@ -12,7 +12,7 @@ import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, 
 import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNodeIds } from './canvas-layout-scope';
 import './canvas-visual-flow.css';
 import { LiveCursors, useLiveCursorSender } from './live-cursors';
-import { CURSOR_MIN_INTERVAL_MS } from '../shared/cursor-protocol';
+import { CURSOR_SEND_INTERVAL_MS } from '../shared/cursor-protocol';
 
 export { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds };
 
@@ -374,13 +374,13 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
   const flow = useReactFlow<CanvasNode, CanvasEdge>();
   const flowWrapRef = useRef<HTMLDivElement>(null);
-  // F009: share this pointer in canvas coordinates (throttled to the server's ~25 Hz limit).
+  // F009: share this pointer in canvas coordinates (~12 Hz, under the server's limit).
   const sendCursor = useLiveCursorSender();
   const cursorSentAtRef = useRef(0);
   const shareCursor = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!sendCursor || event.pointerType === 'touch') return;
     const now = performance.now();
-    if (now - cursorSentAtRef.current < CURSOR_MIN_INTERVAL_MS) return;
+    if (now - cursorSentAtRef.current < CURSOR_SEND_INTERVAL_MS) return;
     cursorSentAtRef.current = now;
     sendCursor(flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }));
   }, [flow, sendCursor]);

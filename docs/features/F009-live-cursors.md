@@ -27,7 +27,7 @@
 - client → server: `{"type":"cursor","x":<number>,"y":<number>}` หรือ `{"type":"cursor","leave":true}` · สูงสุด 128 ไบต์ · key อื่นใด (เช่น `actorId`, `name`) = ปิด socket ด้วย 4400
 - server → client อื่นในห้อง: `{"type":"cursor","actorId":"…","x":…,"y":…}` / `…"leave":true` · server ใส่ `actorId` จาก session เอง
 - ชื่อที่แสดงมาจาก `view.members` ของผู้รับ ไม่มาจากข้อความ จึงปลอมชื่อไม่ได้ และ actorId ที่ไม่อยู่ในสมาชิกถูกเมิน
-- ไม่เขียน storage, ไม่ผ่าน projection/outbox · server ทิ้งเฟรมที่ถี่กว่า 40 ms ต่อ session (client ก็ throttle เท่ากัน)
+- ไม่เขียน storage, ไม่ผ่าน projection/outbox · client ส่งไม่เกิน 1 เฟรม/80 ms (~12 Hz, CSS transition 80 ms ทำให้ลื่น) · server ทิ้งเฟรมที่ถี่กว่า 60 ms ต่อ session (เผื่อ jitter)
 
 ## งาน
 
@@ -41,4 +41,5 @@
 | --- | --- | --- |
 | 2026-10-20 | ส่งเฉพาะพิกัด ชื่อมาจากรายชื่อสมาชิกฝั่งผู้รับ | กันการปลอมตัวและไม่เพิ่มข้อมูลส่วนบุคคลในข้อความ |
 | 2026-10-20 | throttle ต่อ session ใน memory ของ DO (ไม่ใช่ต่อ socket object) | workerd ห่อ socket ใหม่ทุก event จึงใช้ object เป็น key ไม่ได้ |
-| 2026-10-20 | relay ไม่ตรวจสิทธิ์ซ้ำทุกเฟรม | หนักเกินสำหรับ 25 Hz · socket ที่หมดสิทธิ์จะถูกปิดตอน projection ถัดไป และผู้รับเมิน actorId ที่ไม่ใช่สมาชิก |
+| 2026-10-20 | ส่ง ~12 Hz ไม่ใช่ 25 Hz | ทุกเฟรมปลุก Room DO จาก hibernation และนับเป็น request ที่คิดเงิน · 12 Hz + transition ยังดูลื่นและลดค่าใช้จ่ายครึ่งหนึ่ง |
+| 2026-10-20 | relay ไม่ตรวจสิทธิ์ซ้ำทุกเฟรม | หนักเกินสำหรับเฟรมถี่ระดับ 12 Hz · socket ที่หมดสิทธิ์จะถูกปิดตอน projection ถัดไป และผู้รับเมิน actorId ที่ไม่ใช่สมาชิก |

@@ -4,8 +4,13 @@
 // receiver's own member list, so a client can never claim another identity.
 
 export const CURSOR_MAX_FRAME_BYTES = 128;
-/** Server drops frames that arrive faster than this per socket (~25 Hz). */
-export const CURSOR_MIN_INTERVAL_MS = 40;
+/**
+ * Clients send at most one frame per CURSOR_SEND_INTERVAL_MS (~12 Hz); the 80 ms CSS
+ * transition smooths the gaps. Every frame wakes the hibernating Room DO and counts as
+ * billed traffic, so keep this low. The server allows a little jitter below that rate.
+ */
+export const CURSOR_SEND_INTERVAL_MS = 80;
+export const CURSOR_MIN_INTERVAL_MS = 60;
 const CURSOR_LIMIT = 90_000;
 
 export type CursorInput = { type: 'cursor'; x: number; y: number } | { type: 'cursor'; leave: true };

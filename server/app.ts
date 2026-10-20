@@ -290,7 +290,11 @@ export function createApp(options: CreateAppOptions): TabletopApp {
       peer.cursorSentAt = now;
       relayCursor(peer, input);
     });
-    socket.on('close', () => { peers.delete(peer); relayCursor(peer, { type: 'cursor', leave: true }); });
+    socket.on('close', () => {
+      peers.delete(peer);
+      // Another tab of the same person keeps its cursor; only the last socket announces a leave.
+      if (![...peers].some((other) => other.workspaceId === peer.workspaceId && other.actorId === peer.actorId)) relayCursor(peer, { type: 'cursor', leave: true });
+    });
     socket.on('error', () => { peers.delete(peer); });
     scheduleProjection(peer);
   });

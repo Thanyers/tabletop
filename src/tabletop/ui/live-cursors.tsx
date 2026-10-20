@@ -9,7 +9,7 @@ const CURSOR_IDLE_MS = 10_000;
 
 type Point = { x: number; y: number; at: number };
 
-/** Cursor frames arrive ~25 Hz per person; keep them out of React state so only the overlay re-renders. */
+/** Cursor frames arrive ~12 Hz per person; keep them out of React state so only the overlay re-renders. */
 export function createCursorStore() {
   let points: Record<string, Point> = {};
   const listeners = new Set<() => void>();
