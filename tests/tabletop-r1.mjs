@@ -108,11 +108,11 @@ async function upload(page, label, filename) {
   await editor.getByLabel(label, { exact: true }).setInputFiles(resolve('public/samples/r1', filename));
   const response = await result;
   expect(response.status(), await response.text()).toBe(200);
-  await expect(editor.locator('.tt-source-card').filter({ hasText: filename })).toBeVisible();
+  await expect(editor.locator('.tt-source-card').filter({ has: page.getByText(filename, { exact: true }) })).toBeVisible();
 }
 async function verifySource(page, filename) {
   const editor = await openObject(page, 'invoice.source');
-  const card = editor.locator('.tt-source-card').filter({ hasText: filename }).filter({ hasText: 'provided' });
+  const card = editor.locator('.tt-source-card').filter({ has: page.getByText(filename, { exact: true }) }).filter({ hasText: 'provided' });
   if (await card.locator('.tt-source-preview').count() === 0) await card.locator('.tt-source-card__open').click();
   await clickCommand(page, card.getByRole('button', { name: 'Verify', exact: true }), 'invoice.reviewSource');
   await expect(card).toHaveCount(0);

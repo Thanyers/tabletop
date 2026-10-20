@@ -181,7 +181,8 @@ export async function verifyInteractiveDemo(page, origin, output) {
   await expect(editor.locator('svg.tt-track-svg')).toHaveAttribute('aria-label', 'Cart travels 8 meters in 2 seconds');
   const takenOver = await counter.innerText();
   await page.waitForTimeout(3700); await expect(counter).toHaveText(takenOver);
-  await expect(page.getByRole('button', { name: 'เล่นเดโม', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'เล่นเดโม', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'ทำขั้นถัดไป', exact: true })).toHaveCount(0);
   // Add the question container manually at a partly built table.
   if (await node('lesson.question').count() === 0) {
     await page.getByRole('button', { name: 'เพิ่มบนโต๊ะ', exact: true }).click();
