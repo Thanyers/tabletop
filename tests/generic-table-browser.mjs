@@ -540,7 +540,7 @@ async function nodeTransforms(page, ids) {
 }
 
 async function verifySharedCardLayout(owner, member, tableId, api) {
-  const shared = ['table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
+  const shared = ['table.sources', 'table.rules', 'table.actions', 'table.collection.equipment', 'workspace.people', 'workspace.history'];
   // These auxiliary cards are created after activation. Materialize them through
   // the Objects menu so late-card layout seeding is exercised without a reload.
   for (const page of [owner, member]) {
@@ -559,9 +559,9 @@ async function verifySharedCardLayout(owner, member, tableId, api) {
   expect(memberBeforeReload.domain.canvasLayout.positions).toMatchObject(canonical);
   for (const domain of [beforeReload.domain, memberBeforeReload.domain]) {
     expect(Object.keys(domain.canvasLayout?.positions ?? {}).some(id => id.startsWith('chat.'))).toBe(false);
-    expect(domain.canvasLayout?.positions?.['table.sources']).toBeUndefined();
   }
-  expect(memberBeforeReload.domain.sources).toEqual([]);
+  // F008: the Files card and its files are shared with members.
+  expect(memberBeforeReload.domain.sources).toEqual(beforeReload.domain.sources);
   await expect.poll(async () => JSON.stringify(await nodeTransforms(member, shared)), { timeout: 10_000 })
     .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
   await owner.reload(); await member.reload();
