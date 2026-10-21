@@ -3,7 +3,7 @@ import type { GenerativeCanvas, GenerativeExpression } from './generative-contra
 
 /** Data-only program with a bounded arithmetic AST and optional closed canvas descriptors. */
 export type TableValue = string | number | boolean | null | string[];
-export interface TableField { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'list'; required: boolean; min?: number; max?: number; choices?: string[] }
+export interface TableField { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'list'; required: boolean; min?: number; max?: number; choices?: string[]; default?: TableValue }
 export interface TableCollection { id: string; title: string; fields: TableField[] }
 export interface TableRecord { id: string; values: Record<string, TableValue> }
 export interface TableSource { id: string; filename: string; text: string; sha256: string; createdAt: number }
@@ -11,7 +11,8 @@ export interface TableParameter { id: string; label: string; type: 'text' | 'num
 export type TableOperand = { literal: TableValue } | { input: string } | { record: string; field: string } | { system: 'actor' | 'seat' | 'turn' } | { expression: GenerativeExpression };
 export interface TableCondition { left: TableOperand; op: 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains'; right: TableOperand; message: string }
 export interface TableEffect { record: string; field: string; op: 'set' | 'add'; value: TableOperand }
-export interface TableAction { id: string; title: string; description: string; roles: ('owner' | 'participant')[]; parameters: TableParameter[]; conditions: TableCondition[]; effects: TableEffect[]; requireTurn: boolean; advanceTurn: boolean }
+export interface TableCreate { collection: string; values: Record<string, TableOperand> }
+export interface TableAction { id: string; title: string; description: string; roles: ('owner' | 'participant')[]; parameters: TableParameter[]; conditions: TableCondition[]; effects: TableEffect[]; creates?: TableCreate[]; requireTurn: boolean; advanceTurn: boolean }
 export interface TableInvariant { id: string; collection: string; fields: string[]; message: string }
 export interface TableProgram {
   version: 1; title: string; description: string; collections: TableCollection[]; actions: TableAction[];

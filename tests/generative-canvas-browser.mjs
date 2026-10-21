@@ -571,11 +571,13 @@ try {
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
     await expect(editor).toBeVisible();
     await waitForStableBoundingBox(editor);
+    await openReviewSection(editor, 'tt-table-private-preview');
     const preview = editor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true });
     await expect(preview).toBeVisible();
     await expect(preview).toContainText('Trial changes stay in this private copy; the active table is unchanged.');
     await exercisePrivateTrial(owner, tableId, candidate, preview, expectedControl);
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    await openReviewSection(editor, 'tt-table-advanced-checks');
     const previewStep = editor.getByRole('button', { name: 'Preview change', exact: true });
     await previewStep.scrollIntoViewIfNeeded();
     await expect(previewStep).toBeInViewport();
@@ -594,6 +596,11 @@ try {
     await locator.scrollIntoViewIfNeeded();
     await expect(locator).toBeInViewport();
     await locator.click();
+  }
+
+  async function openReviewSection(editor, className) {
+    const section = editor.locator(`details.${className}`);
+    if (await section.getAttribute('open') === null) await clickVisible(section.locator('summary').first());
   }
 
   async function assertTrialDidNotChangeActiveTable(owner, tableId, before, requestCount) {
@@ -689,6 +696,7 @@ try {
   }
 
   async function advanceLifecycle(owner, tableId, editor) {
+    await openReviewSection(editor, 'tt-table-advanced-checks');
     for (const [label, type, status] of [
       ['Check rules', 'evolve.validate', 'validated'],
       ['Approve rules', 'evolve.approve', 'approved'],
@@ -1020,9 +1028,11 @@ try {
     expect(editDraft.domain.candidate.change.initialRecords).toEqual({});
     expect(editDraft.domain.records).toEqual(recordSnapshot);
     const editEditor = await openCanvasObject(owner, 'table.rules');
+    await openReviewSection(editEditor, 'tt-table-private-preview');
     const editPreview = editEditor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true });
     await expect(editPreview).toBeVisible();
     await exercisePrivateTrial(owner, tableId, editDraft, editPreview, expectedControl);
+    await openReviewSection(editEditor, 'tt-table-advanced-checks');
     const simulateEdit = responseAfter(owner, (response) => isCommandResponse(response, 'evolve.simulate'));
     expect((await simulateEdit(() => editEditor.getByRole('button', { name: 'Preview change', exact: true }).click())).status()).toBe(200);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('simulated');

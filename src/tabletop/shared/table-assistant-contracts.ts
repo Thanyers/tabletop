@@ -23,6 +23,7 @@ export const tableAssistantReferenceSchema = z.discriminatedUnion('kind', [
 ]);
 
 export const tableAssistantResultSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('build-request'), text: z.string().min(1).max(8_000) }),
   z.strictObject({
     kind: z.literal('explanation'),
     text: z.string().min(1).max(8_000),
@@ -60,7 +61,7 @@ export const tableAssistantConversationEntrySchema = z.strictObject({
   contextSource: z.literal('recalled').optional(),
   prompt: z.string().min(1).max(4_000),
   result: z.strictObject({
-    kind: z.enum(['explanation', 'action-proposal', 'clarification', 'refusal']),
+    kind: z.enum(['explanation', 'action-proposal', 'clarification', 'refusal', 'build-request']),
     text: z.string().min(1).max(8_000),
   }),
   expectedRevision: revisionTokenSchema,

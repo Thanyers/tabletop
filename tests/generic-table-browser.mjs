@@ -474,6 +474,8 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
 async function progressThroughLifecycle(owner, tableId, api, rules) {
   const editor = await openCanvasObject(owner, 'table.rules');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
+  const advanced = editor.locator('details.tt-table-advanced-checks');
+  if (await advanced.getAttribute('open') === null) await advanced.locator('summary').first().click();
   const proposedRules = editor.getByRole('region', { name: 'Proposed rules', exact: true });
   const actionDetails = proposedRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
   await actionDetails.locator('summary').click();

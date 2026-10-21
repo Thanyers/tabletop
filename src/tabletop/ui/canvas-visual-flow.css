@@ -9,7 +9,7 @@
 
 .tt-flow-wrap .tt-canvas-node--role-source { --tt-flow-role-color: var(--tt-blue); --tt-flow-role-wash: #edf2fa; }
 .tt-flow-wrap .tt-canvas-node--role-rules { --tt-flow-role-color: var(--tt-amber); --tt-flow-role-wash: #faf3e7; }
-.tt-flow-wrap .tt-canvas-node--role-compute { --tt-flow-role-color: #617b83; --tt-flow-role-wash: #eff3f3; }
+.tt-flow-wrap .tt-canvas-node--role-compute { --tt-flow-role-color: var(--tt-blue); --tt-flow-role-wash: var(--tt-blue-2); }
 .tt-flow-wrap .tt-canvas-node--role-result { --tt-flow-role-color: var(--tt-moss); --tt-flow-role-wash: #e9f3ef; }
 .tt-flow-wrap .tt-canvas-node--role-actions { --tt-flow-role-color: #426179; --tt-flow-role-wash: #edf2f5; }
 .tt-flow-wrap .tt-canvas-node--role-auxiliary { --tt-flow-role-color: #7a8b84; --tt-flow-role-wash: #f0f3f1; }

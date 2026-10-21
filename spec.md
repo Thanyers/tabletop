@@ -30,6 +30,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
+- **F010 — ต่อเติมโต๊ะจากแชท (PR #42, รอ review; ยังไม่ deploy):** owner ขอเพิ่มฟอร์ม/ปุ่ม/การ์ด/collection ได้ในช่องเดิม; typed `creates` เพิ่มแถวผ่าน server แบบ atomic และการเพิ่ม field/default รักษาแถวเดิม ปุ่ม **Apply to table** ตรวจและเปิดใช้ candidate เดียวกัน โดยหยุดเมื่อ revision/ผู้ถาม/ร่างเปลี่ยน รายละเอียดกฎ/private trial/restore ยังเปิดได้ ปรับ padding และความสูงการ์ดพร้อมแก้ numeric form `step` ดู [ขอบเขตและผลตรวจ](docs/features/F010-canvas-evolution.md) ตรวจด้วย Node `22.23.2`: focused Vitest 8 files **67/67**, Cloudflare assistant **10/10**, `npm run build` และ `npm run build:cloudflare` (dry-run) ผ่าน, browser Invoice **10 checks**, หลังจำกัดขนาดการ์ดใหม่เฉพาะ generic table ตรวจ legacy browser **7 checks** และ Workers browser **25 checks** ผ่าน, AI จริงสร้างฟอร์ม+ปุ่ม → กรอก 1,250.50 + sample 250 → paid → เพิ่มสรุปค้าง 250 → reload ข้อมูลครบ; มีร่างที่ถูกปฏิเสธและการซ่อม ไม่ใช่การรับประกันทุก prompt สองบริบท browser เป็นบัญชีจำลอง ไม่ใช่ Google สองบัญชีรอบ release
+
 - **Release 2.0.0 ส่งแล้ว:** `main` / `d93620d`, annotated tag `v2.0.0`, [PR #33](https://github.com/Thanyers/tabletop/pull/33) และ [main CI](https://github.com/Thanyers/tabletop/actions/runs/39439056507) ผ่านก่อน tag ทั้ง staging และ production ใช้ build เดียวกัน; ไฟล์เว็บ 135 ไฟล์และ Worker modules 2 ไฟล์ตรงกัน ไม่มี SQL, secret, binding หรืองบใหม่ ดู [Deployment](docs/DEPLOYMENTS.md) และ [Release acceptance](docs/RELEASE_2_0_ACCEPTANCE.md)
 - **R200 เล่นจริงและแก้ก่อนปล่อย:** Google สองบัญชีเล่นคาเฟ่ได้ 3 → 8 / Remaining 0 และแบ่งน้ำได้ 65/20/15 รวม 100 ผ่าน private trial, activation, privacy, shared drag, resume และการพักแล้วเปิดคืน แก้บั๊ก form preview ที่เปลี่ยนเทิร์นแล้วล็อก submit ให้ใช้ committed control bindings พร้อม guard; regression RED/GREEN และ reviewer ผ่าน CI: unit 376, Cloudflare 71, Node browser 7, Worker browser 25 และ generated 4 เรื่อง ดู SHA แต่ละขั้นและ SKIPPED ใน Release acceptance
 
@@ -62,7 +64,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 - ไฟล์โต๊ะทั่วไป: UTF-8 CSV/JSON/TXT/MD, 32 KiB/ไฟล์, 4 ไฟล์, รวม 64 KiB · ไม่รับ PDF/ภาพ/ไบนารี
 - AI context ของ candidate: สถานะปัจจุบัน + ≤6 คู่/16 KiB (สี่ช่วงล่าสุดและค้นได้อีกสองช่วงจาก 100 รายการของผู้ถาม/ห้อง/epoch เดียวกัน), table input ≤48,000 bytes และ provider request รวม ≤64,000 bytes, ≤500 assistant jobs/ห้อง · ยังไม่มีการสรุปความจำระยะยาวอัตโนมัติ
 - ห้อง: เจ้าของ + สมาชิก ≤7 · invite ใช้ครั้งเดียว หมดอายุ 10 นาที
-- เปลี่ยนโครงสร้างตารางระหว่างเล่นไม่ได้
+- F010 เพิ่ม collection ว่าง/field พร้อม default ได้ แต่ห้ามลบ collection/field เดิม เปลี่ยน definition เดิม หรือลบ invariant; ร่างแก้ไขไม่ใส่ initialRecords ทับข้อมูล ยังไม่เปิดใช้บน hosted environment
 
 ### ยังไม่ได้พิสูจน์
 
