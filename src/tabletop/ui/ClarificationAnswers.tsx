@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { MAX_WRITTEN_ANSWER_CHARS, composeClarificationAnswer } from './clarification-answer';
+import { MAX_WRITTEN_ANSWER_CHARS, composeClarificationAnswer, uniqueChoices } from './clarification-answer';
 
 /** F022: pick one or more of the AI's answers and/or write your own, then send once. */
 export function ClarificationAnswers({ options, disabled, onAnswer }: { options: readonly string[]; disabled: boolean; onAnswer: (answer: string) => void }) {
@@ -17,7 +17,7 @@ export function ClarificationAnswers({ options, disabled, onAnswer }: { options:
 
   return <form className="tt-chat-card__answers" onSubmit={(event) => { event.preventDefault(); if (answer && !disabled) onAnswer(answer); }}>
     <ul className="tt-chat-card__questions" aria-label="Answer choices">
-      {options.map((option, index) => <li key={option}>
+      {uniqueChoices(options).map((option, index) => <li key={option}>
         <label className="tt-chat-card__choice" htmlFor={`${id}-choice-${index}`}>
           <input id={`${id}-choice-${index}`} type="checkbox" checked={selected.has(option)} disabled={disabled} onChange={() => toggle(option)} />
           <span>{option}</span>

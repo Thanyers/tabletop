@@ -556,7 +556,7 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await expect(card.locator('.tt-chat-card__question')).toHaveText(clarification.question);
   await expect(card).toContainText('Pick one or more answers, or write your own, then send. Your request stays the same.');
   const list = card.getByRole('list', { name: 'Answer choices', exact: true });
-  // F020: three AI choices plus "Write my own answer", all multi-select; nothing sends until Send answer.
+  // F022: three AI choices plus "Write my own answer", all multi-select; nothing sends until Send answer.
   await expect(list.getByRole('checkbox')).toHaveCount(4);
   for (const option of clarification.options) await expect(list.getByRole('checkbox', { name: option, exact: true })).toBeEnabled();
   const sendAnswer = card.getByRole('button', { name: 'Send answer', exact: true });
