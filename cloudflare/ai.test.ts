@@ -234,13 +234,15 @@ describe('Cloudflare AI proposal helper', () => {
     expect(reservation?.max_input_tokens).toBeGreaterThanOrEqual(requestBytes);
     expect(reservation?.max_output_tokens).toBe(32_768);
 
+    // F035: the Room checks rules.draft before dispatch; the helper still refuses a caller whose
+    // claimed role does not match their room membership.
     const member: Member = { ...input.workspace.actor, role: 'participant', seat: 'member-1' };
     const participantInput: AIProposalRequest = {
       ...input,
-      workspace: { ...input.workspace, actor: member, members: [member] },
+      workspace: { ...input.workspace, actor: member, members: [{ ...member, role: 'owner' }] },
     };
     let calls = 0;
-    const deniedFetch: typeof fetch = async () => { calls += 1; throw new Error('Provider must not run for a participant.'); };
+    const deniedFetch: typeof fetch = async () => { calls += 1; throw new Error('Provider must not run for a mismatched member.'); };
     await expect(proposeChange(testEnv, participantInput, deniedFetch)).rejects.toMatchObject({ code: 'AI_FORBIDDEN' });
     expect(calls).toBe(0);
   });

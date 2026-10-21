@@ -123,9 +123,10 @@ describe('generic table apply flow', () => {
     expect(matchesExpectedTableCandidateView(changedSeat, expected)).toBe(false);
   });
 
-  it('does not send review stages for read-only tables or non-owner seats', async () => {
+  it('does not send review stages for read-only tables or members without rules.approve (F035)', async () => {
     const ownerView = draftView();
-    const memberView = { ...ownerView, actor: { actorId: 'member-account', name: 'Member', role: 'participant' as const, seat: 'member-1' as const } };
+    const memberActor = { actorId: 'member-account', name: 'Member', role: 'participant' as const, seat: 'member-1' as const };
+    const memberView = { ...ownerView, actor: memberActor, domain: { ...ownerView.domain, access: { roles: [], assignments: { [memberActor.actorId]: 'contributor' } } } };
     let calls = 0;
     const command: Command = async () => { calls += 1; return null; };
 

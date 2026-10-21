@@ -24,11 +24,11 @@ describe('builder handoff from the same conversation', () => {
     expect(JSON.stringify(input.workspace.domain)).toBe(before);
   });
 
-  it('cannot grant a participant access to the builder through a model response', async () => {
+  it('may offer a participant a build request; preparing it is gated by rules.draft at POST /model (F035)', async () => {
     const workspace = createWorkspace({ actorId: participantId, name: participantName, role: 'participant', seat: 'member-1' });
     const input = await assistantInput(workspace, { prompt: 'Add a different form' });
     await expect(respondToTablePrompt(testEnv, input, providerFetch({ kind: 'build-request', text: 'Prepare a form.' })))
-      .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+      .resolves.toMatchObject({ result: { kind: 'build-request', text: 'Prepare a form.' } });
   });
 });
 
