@@ -33,6 +33,7 @@ describe('release deploy helpers (CD001)', () => {
     expect(checkDeployConfig(config({ d1_databases: [{ binding: 'DB', database_name: 'x', database_id: '00000000-0000-0000-0000-000000000000' }] }), { name: 'tabletop-staging', origin: 'https://staging.example' }).ok).toBe(false);
     expect(checkDeployConfig(config({ assets: { run_worker_first: ['/api/*'] } }), { name: 'tabletop-staging', origin: 'https://staging.example' }).ok).toBe(false);
     expect(checkDeployConfig('// jsonc\n{}', { name: 'a', origin: 'b' }).ok).toBe(false);
+    expect(checkDeployConfig(config({ limits: { cpu_ms: 50 } }), { name: 'tabletop-staging', origin: 'https://staging.example' }).problems.join()).toContain('Workers Free');
     expect(databaseName(config())).toBe('tabletop-staging');
   });
   it('passes smoke only when every read-only endpoint answers and /version matches the release', async () => {
