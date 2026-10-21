@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` (implement แล้ว, รอ merge) |
+| สถานะ | `done` — merge #71 (ยังไม่ deploy) |
 | เจ้าของฟีเจอร์ | ทีม Tabletop |
 | เวอร์ชันที่คาด | MINOR — เปลี่ยนพฤติกรรม server-side, ไม่มี schema/migration |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F018-T*` |
