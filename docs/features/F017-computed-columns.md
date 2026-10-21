@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` — เลือก encoding แล้ว, ยังไม่เขียนโค้ด |
+| สถานะ | `review` — implement แล้ว (T1–T3), รอ merge |
 | เจ้าของฟีเจอร์ | ทีม Tabletop |
 | เวอร์ชันที่คาด | **MINOR** — เก็บนิยามใน `TableState.computedColumns` (ไม่แตะ program schema) |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F017-T*` |
@@ -45,10 +45,17 @@
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
-| T1 | `TableState.computedColumns` + คำสั่ง `table.setComputedColumns` + validation + unit tests | program เก่า/ใหม่ทำงานเหมือนเดิม; คำสั่งผิดถูกปฏิเสธ |
-| T2 | ประเมินต่อแถวตอน projection (ไม่เขียน records, ไม่ bump dataRevision) | ค่าถูกต้องตาม AST; ไม่มี eval |
-| T3 | UI: คอลัมน์ read-only + badge, import/action ไม่เขียนทับ | browser check ผ่าน |
-| T4 | (ถ้าทัน) แก้สูตรผ่าน Rules; เอกสาร/คู่มือ | ผ่าน CI + คู่มือ |
+| T1 | ✅ `TableState.computedColumns` + คำสั่ง `table.setComputedColumns` + validation + unit tests (`computed-columns.test.ts`, `table-computed.test.ts`) | program เก่า/ใหม่ทำงานเหมือนเดิม; คำสั่งผิดถูกปฏิเสธ |
+| T2 | ✅ ประเมินต่อแถว (`computeRecordRow`) ตอน projection ไม่เขียน records/ไม่ bump dataRevision | ค่าถูกต้องตาม AST; ไม่มี eval |
+| T3 | ✅ UI: คอลัมน์ read-only + badge, editor ของ owner (label/field/operator/value), browser check ใน `generic-table-browser.mjs` | browser ผ่าน |
+| T4 | ⏳ (ภายหลัง) แก้สูตรผ่าน Rules + คู่มือผู้ใช้ | ผ่าน CI + คู่มือ |
+
+## ผลตรวจ (Node 22.23.2)
+
+- `npm run typecheck` ผ่าน
+- `npm test` **432/432** (เพิ่ม 8: shared 4 + domain 4)
+- `npm run build` + `npm run build:cloudflare` ผ่าน
+- `node tests/cloudflare-browser.mjs` **ผ่าน** — owner สร้างคอลัมน์ "Score plus 5" (score + 5), API มี `computedColumns` 1 รายการ, ตารางแสดง columnheader + ค่า 5 สองแถว
 
 ## คำถามเปิด
 

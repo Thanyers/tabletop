@@ -23,10 +23,18 @@ export interface TableProgram {
   canvas?: GenerativeCanvas;
 }
 export interface TableChange { kind: 'table'; program: TableProgram; initialRecords: Record<string, TableRecord[]> }
+/** Row-relative arithmetic over stored number fields (F017). Kept out of the program schema so old writers still read the table. */
+export type ComputedExpression =
+  | { op: 'field'; field: string }
+  | { op: 'literal'; value: number }
+  | { op: 'add' | 'subtract' | 'multiply' | 'divide'; left: ComputedExpression; right: ComputedExpression };
+export interface ComputedColumn { id: string; collection: string; label: string; expression: ComputedExpression }
 export interface TableState extends DomainBase {
   kind: 'table'; sources: TableSource[]; program: TableProgram | null;
   records: Record<string, TableRecord[]>; turn: string | null;
   canvasLayout?: { revision: number; positions: Record<string, { x: number; y: number; pinned?: boolean }> };
+  /** Display-only computed columns; definitions live in state, not in the program (F017). */
+  computedColumns?: ComputedColumn[];
   actionRevision: number;
   activity: { actorId: string; action: string; at: number }[];
 }
