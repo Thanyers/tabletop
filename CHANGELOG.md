@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 3.1.0 — 2026-10-21
+
+MINOR: ไม่มี migration, secret หรือ config ใหม่ · rollback ไป 3.0.0 ได้ทันที (คอลัมน์คำนวณเก็บนอก JSON ของกฎ รุ่นเก่าแค่ไม่แสดง) · ห้ามถอยต่ำกว่า 3.0.0 ตามหมายเหตุของ 3.0.0
+
 - คอลัมน์คำนวณ: owner กำหนดสูตรต่อ collection (field + − × ÷ field/ตัวเลข) แล้วตารางแสดงค่าอัตโนมัติพร้อม badge "calculated" โดยไม่เรียก AI · เก็บนิยามใน state ไม่แตะ program schema จึง rollback ได้และไม่มี migration (F017)
 - ร่างกฎที่ไม่ผ่านการตรวจแสดงสาเหตุจริงไม่เกิน 3 ข้อ (เช่น ต้องเก็บ field เดิม, เกินจำนวนแถว) แทนข้อความกลาง ([F016](docs/features/F016-validation-reasons.md)) ไม่เปลี่ยน API หรือข้อมูลที่เก็บ
 - นำแถวข้อมูลเข้าตารางได้โดยตรง: การ์ด collection มี **Import rows** ให้วาง CSV หรือเลือกไฟล์ เห็น preview/จับคู่คอลัมน์ แล้ว import แบบ deterministic ไม่เรียก AI · ตรวจชนิด/required/choices/ช่วงค่า, เติม default, ตรวจ unique และเพดานแถวแบบ all-or-nothing (owner เท่านั้น; F015)
