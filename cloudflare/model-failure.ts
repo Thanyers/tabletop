@@ -22,9 +22,9 @@ const AI_FACING_REASONS: Readonly<Record<string, string>> = {
 
 function cleanReason(value: unknown): string | null {
   if (typeof value !== 'string') return null;
-  value = AI_FACING_REASONS[value.trim()] ?? value;
+  const reason = AI_FACING_REASONS[value.trim()] ?? value;
   // Drop control characters and collapse whitespace; keep the text short and on one line.
-  const text = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim();
+  const text = reason.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim();
   if (!text) return null;
   const short = text.length > MAX_FAILURE_REASON_CHARS ? `${text.slice(0, MAX_FAILURE_REASON_CHARS - 1)}…` : text;
   // End every reason as a sentence so the joined message reads cleanly.
