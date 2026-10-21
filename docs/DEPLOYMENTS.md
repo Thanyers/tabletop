@@ -1,18 +1,30 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 19:00 (Asia/Bangkok)** ทั้งสอง environment รายงาน **3.3.1 / 6c6bfcc** จาก annotated tag [v3.3.1](https://github.com/Thanyers/tabletop/tree/v3.3.1) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 20:49 (Asia/Bangkok)** ทั้งสอง environment รายงาน **3.3.2 / 957074d** จาก annotated tag [v3.3.2](https://github.com/Thanyers/tabletop/tree/v3.3.2) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [6c6bfcc](https://github.com/Thanyers/tabletop/commit/6c6bfcc0375648a1776c5b7c8374d867060b2574) — PR #89 | commit และ build เดียวกัน |
-| Release | v3.3.1 / 3.3.1 | v3.3.1 / 3.3.1 |
+| Source | [957074d](https://github.com/Thanyers/tabletop/commit/957074d4db044f689fa52cc8ecc00b2c8b035141) — PR #96 | commit และ build เดียวกัน |
+| Release | v3.3.2 / 3.3.2 | v3.3.2 / 3.3.2 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 3.3.2 (21 ตุลาคม 2569)
+
+Release 3.3.2 (PATCH) ผ่าน pipeline CD001 — [PR #96](https://github.com/Thanyers/tabletop/pull/96) จาก `dev` @ `0f360c9` · รวม F025 (refresh race), F026 (บังคับภาษา clarify), F027 (hint ตอน reject), F028 (fallback ตารางขั้นต่ำ), F029 (golden corpus)
+
+- Tag `v3.3.2` (annotated) → `957074d`; build ครั้งเดียว `3.3.2 / 957074d` (`built_at` 2026-10-21T13:49:50Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production — ไม่มี schema change
+- Staging: Worker version `eaec9c18-56bd-4696-8463-ee71a12f2a72`, smoke PASS
+- Production: Worker version `2f5f6e53-cd9c-4c94-9feb-9f6a0e575b43`, smoke PASS
+- `/version` หลัง deploy ทั้งสอง environment = `3.3.2 / 957074d`
+- ตรวจซ้ำบน production 5 เคส: injection เป็นอังกฤษ, join ได้ draft, dragon ไม่มี refresh error, vague/toomany clarify — ดู [report](../test-results/weird-cases-3.3.2/REPORT.md) (local, ignored)
+- `dev` รับ release คืนผ่าน [PR #97](https://github.com/Thanyers/tabletop/pull/97)
 
 ## ผลตรวจ deploy 3.3.1 (21 ตุลาคม 2569)
 
@@ -114,6 +126,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 
 | Release | สิ่งที่ส่ง | หลักฐาน |
 | --- | --- | --- |
+| 21 ต.ค. `v3.3.2` / `957074d` | F025 refresh race, F026 clarify language, F027 reject hint, F028 minimal fallback, F029 corpus | [PR #96](https://github.com/Thanyers/tabletop/pull/96), [run 39611292996](https://github.com/Thanyers/tabletop/actions/runs/39611292996), [PR #97](https://github.com/Thanyers/tabletop/pull/97) |
 | 21 ต.ค. `v3.3.1` / `6c6bfcc` | F024 repair escalation (issue ซ้ำ → ลดความซับซ้อน) | [PR #89](https://github.com/Thanyers/tabletop/pull/89), [run 39596026230](https://github.com/Thanyers/tabletop/actions/runs/39596026230), [PR #90](https://github.com/Thanyers/tabletop/pull/90) |
 | 21 ต.ค. `v3.3.0` / `457373a` | F023 salvage, F022 multi-answer, F021 type while pending, F020 field messages, F003-T1 remove member, F003-T3 reusable invite link | [PR #84](https://github.com/Thanyers/tabletop/pull/84), [run 39589703856](https://github.com/Thanyers/tabletop/actions/runs/39589703856), [PR #86](https://github.com/Thanyers/tabletop/pull/86) |
 | 21 ต.ค. `v3.2.0` / `430b0c9` | F018 preserve canvas views, F019 capability panel + `/api/capabilities.table` | [PR #76](https://github.com/Thanyers/tabletop/pull/76), [run 39570078824](https://github.com/Thanyers/tabletop/actions/runs/39570078824), [PR #78](https://github.com/Thanyers/tabletop/pull/78) |
