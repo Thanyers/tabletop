@@ -20,6 +20,10 @@ jobs:
     env:
       BROWSER_CHANNEL: chromium
       TABLETOP_ENV: local
+      # CI005: the slow browser suites run only for releases (PRs into main, pushes to
+      # main, hotfixes) and on manual runs. PRs and pushes to dev run the fast checks.
+      # The job keeps its name because rulesets require `local-validation` on both branches.
+      FULL_SUITE: ${{ github.event_name == 'workflow_dispatch' || github.base_ref == 'main' || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -53,21 +57,27 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: false
         run: npm run build:cloudflare
+      - name: Browser suites skipped for this change
+        if: env.FULL_SUITE != 'true'
+        run: echo "::notice::Fast checks only. Browser suites run on the release PR into main, on main, or via Run workflow (workflow_dispatch)."
       - name: Install test browser
         id: install_browser
+        if: env.FULL_SUITE == 'true'
         run: node node_modules/playwright/cli.js install --with-deps chromium
       - name: Repeatable persona demos and replay report
+        if: env.FULL_SUITE == 'true'
         run: npm run demo:auto:run
       - name: Seven-session local browser acceptance
+        if: env.FULL_SUITE == 'true'
         # CD002: browser suites occasionally race layout/timers on the 2-core runner.
         # Retry once; the first failure stays in the log and the step fails if both attempts fail.
         run: npm run test:r1:browser || { echo "::warning::test:r1:browser failed; retrying once"; npm run test:r1:browser; }
       - name: Account multiplayer and AI browser acceptance on Workers
         # This independent fixture can report its failures even when Node browser checks fail.
-        if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
+        if: ${{ !cancelled() && env.FULL_SUITE == 'true' && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
         run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser failed; retrying once"; npm run test:cloudflare:browser; }
       - name: Generated scenes, private trials and shared layout acceptance
-        if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
+        if: ${{ !cancelled() && env.FULL_SUITE == 'true' && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
         run: npm run test:generative:browser || { echo "::warning::test:generative:browser failed; retrying once"; npm run test:generative:browser; }
       - name: Retain test summaries
         if: always()

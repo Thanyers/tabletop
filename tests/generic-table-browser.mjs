@@ -656,15 +656,22 @@ async function progressThroughLifecycle(owner, tableId, api, rules) {
   return active;
 }
 
-async function inviteMember(owner, seatNumber) {
+// F003-T5: data tables on the Worker invite through the reusable link only; the seat picker is gone.
+async function shareInviteLink(owner) {
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-  await dialog.getByRole('button', { name: new RegExp(`Member ${seatNumber}`) }).click();
-  const responsePromise = owner.waitForResponse((response) => response.url().endsWith('/invites') && response.request().method() === 'POST');
-  await dialog.getByRole('button', { name: `Create invitation for Member ${seatNumber}`, exact: true }).click();
-  expect((await responsePromise).status()).toBe(201);
-  const url = await dialog.getByLabel('One-use invitation link').inputValue();
-  expect(url).toContain('#invite=');
+  await expect(dialog.getByText('AVAILABLE SEATS', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: /^Create invitation for/u })).toHaveCount(0);
+  const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
+  const turnOn = panel.getByRole('button', { name: 'Turn on invite link', exact: true });
+  await expect(turnOn.or(panel.getByLabel('Invite link'))).toBeVisible();
+  if (await turnOn.isVisible()) {
+    const created = owner.waitForResponse((response) => response.url().endsWith('/invite-link') && response.request().method() === 'POST');
+    await turnOn.click();
+    expect((await created).status()).toBe(201);
+  }
+  const url = await panel.getByLabel('Invite link').inputValue();
+  expect(url).toContain('#invite=link%3A');
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   return url;
 }
@@ -1365,7 +1372,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
   expect(await owner.evaluate(() => JSON.parse(window.localStorage.getItem('tabletop.aiConsent.v1') ?? '[]').length)).toBe(1);
 
-  const firstInvite = await inviteMember(owner, 1);
+  const firstInvite = await shareInviteLink(owner);
   member = await joinAndCheckSharedFiles(newPage, api, member, firstInvite, room.id, source.filename, owner);
   await verifySharedCardLayout(owner, member, room.id, api);
   await verifyLiveCursor(owner, member);
@@ -1388,7 +1395,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect(equipmentPreview).toContainText(`Borrower: ${active.actor.name}`);
   await expect(equipmentPreview).not.toContainText(active.actor.actorId);
 
-  const secondInvite = await inviteMember(owner, 2);
+  const secondInvite = await shareInviteLink(owner);
   secondMember = await joinAndCheckSharedFiles(newPage, api, secondMember, secondInvite, room.id, source.filename, owner);
   const people = await openCanvasObject(member, 'workspace.people');
   await expect(people).toContainText('Second Member');
@@ -1472,7 +1479,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   const ownerRecordActions = ownerRoster.getByRole('region', { name: 'Actions for Ada · ada', exact: true });
   await expect(ownerRecordActions).toContainText('Actions for this collection are limited to members.');
   await expect(ownerRecordActions.getByRole('combobox', { name: 'Action', exact: true })).toHaveCount(0);
-  const invite = await inviteMember(owner, 1);
+  const invite = await shareInviteLink(owner);
   member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename, owner);
   await performContextualAction(member, 'people', {
     recordId: 'bo', recordLabel: 'Bo', actionTitle: 'Swap shifts', recordFieldLabel: 'First person',
