@@ -69,7 +69,10 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       }
       expect(typeof input.prompt).toBe('string');
       change = tableAIReply.change;
+      const gate = tableAIReply.gate;
       tableAIReply = null;
+      // An armed gate holds the reply so the browser can observe the waiting card.
+      if (gate) await gate;
     } else {
       change = { kind: 'encounter', rule: { allyTarget: true, apCost: 1, oncePerTurn: true } };
     }

@@ -586,6 +586,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       id: chatNodeId(scope, card.id),
       title: card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt,
       eyebrow: card.kind === 'draft' ? 'Rule draft' : 'AI answer',
+      glyph: <Sparkles size={16} />,
+      busy: card.phase === 'sending' || card.phase === 'waiting',
       position: { x: 760, y: 40 + index * 300 },
       content: <ChatCardContent
         card={card}
@@ -660,8 +662,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     ? <button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={onCheck}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Check status</button>
     : null;
   if (card.phase === 'sending' || card.phase === 'waiting') {
-    return <div className="tt-chat-card" role="status" data-testid="table-chat-answer">
-      <p className="tt-chat-card__pending"><LoaderCircle size={14} className="tt-spin" />{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</p>
+    return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer">
+      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span></p>
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
