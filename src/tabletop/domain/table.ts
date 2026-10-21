@@ -6,6 +6,7 @@ import { assert, canonicalJson, hasRole, ID_SCHEMA, parsePayload } from './helpe
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
 import { expressionWithinBounds, getGenerativeExpressionType, validateGenerativeProgram } from '../runtime/generative/validation';
+import { preserveCanvasViews } from '../runtime/generative/preserve';
 import { MAX_COMPUTED_COLUMNS, computedColumnProblems, retainComputedColumns } from '../shared/computed-columns';
 import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
 
@@ -191,6 +192,10 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
     }
   }
   checkRows(change.program, records);
+  // F018: carry views the AI dropped while evolving rules; the new program wins on conflicts.
+  const preservedCanvas = preserveCanvasViews(state.program?.canvas, change.program.canvas, change.program, records);
+  if (preservedCanvas) change.program.canvas = preservedCanvas;
+  else delete change.program.canvas;
   const generativeIssues = validateGenerativeProgram(change.program, records);
   assert(generativeIssues.length === 0, 'TABLE_SCHEMA', generativeIssues[0] ?? 'Generated table program is invalid.');
   const turn = state.turn ?? change.program.turnOrder[0] ?? null;
