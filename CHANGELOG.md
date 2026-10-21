@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- ถ้าซ่อมร่างกฎ 3 รอบไม่ผ่าน ระบบจะลองครั้งสุดท้ายด้วย **ตารางขั้นต่ำ** (1 collection, ไม่มี canvas/join) ก่อน reject — เคส join ข้ามการ์ดที่เคยล้มผ่านที่ attempt 2 (F028)
+
+
 - การ์ดร่างกฎไม่ขึ้น error หลอก ๆ "The table could not refresh: The table changed" อีก: ถ้า refresh แพ้ race กับ projection อื่น ระบบจะรอสั้น ๆ แล้วใช้ projection ล่าสุดให้เอง (F025)
 
 
