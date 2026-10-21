@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` |
+| สถานะ | `done` (merge #63; ยังไม่ deploy) |
 | เจ้าของฟีเจอร์ | ทีม Tabletop |
 | เวอร์ชันที่คาด | MINOR — เพิ่มคำสั่งใหม่, ไม่มี migration/secret/binding |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F015-T*` |
