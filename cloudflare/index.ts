@@ -122,7 +122,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'POST' && path === '/api/auth/logout') return logout(request, env);
   if (method === 'GET' && path === '/api/capabilities') {
     const enabled = Boolean(env.DEEPSEEK_KEY) && Number(env.AI_MONTHLY_BUDGET_MICRO_USD) > 0 && Number(env.AI_DAILY_BUDGET_MICRO_USD) > 0;
-    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), tableAssistant: { available: true }, table: tableCapabilitySummary(), model: { enabled,
+    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), inviteLinks: true, tableAssistant: { available: true }, table: tableCapabilitySummary(), model: { enabled,
       reason: enabled ? 'DeepSeek Flash proposes changes for your review.' : 'AI is awaiting a configured spending allowance.' } });
   }
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);

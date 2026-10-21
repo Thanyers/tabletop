@@ -72,8 +72,8 @@
 | F003-T2 | ออกแบบ + security review ลิงก์ใช้ซ้ำ ให้คนอนุมัติ | `todo` | — | — | `docs/features/F003-reusable-invite-link.md` | — | ไม่ใช่โค้ด |
 | F003-T3 | Room: สถานะลิงก์ + เปิด/ปิด/สร้างใหม่ + redeem แบบใช้ซ้ำ | `review` | Claude Code | `feat/F003-T3-invite-link` | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/*.test.ts` | F003-T1, F003-T2 | |
 | F003-T4 | Worker route + rate limit + Node เทียบเท่า | `todo` | — | — | `cloudflare/index.ts`, `server/app.ts`, `server/authority.ts` | F003-T3 | hotspot `cloudflare/index.ts` |
-| F003-T5 | UI หน้าต่าง People: เอา AVAILABLE SEATS ออก แสดงคนในโต๊ะ + `N/7` + ลิงก์เชิญ + ปุ่มเอาออก + หน้าเข้าร่วม | `todo` | — | — | `TabletopApp.tsx` (`InviteDialog`), CSS | F003-T1, F003-T4, F004-T2 | hotspot `TabletopApp.tsx` |
-| F003-T6 | คู่มือ + CHANGELOG + แก้ข้อความ "works once" | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md`, `TabletopApp.tsx` | F003-T5 | |
+| F003-T5 | UI หน้าต่าง People: เอา AVAILABLE SEATS ออก แสดงคนในโต๊ะ + `N/7` + ลิงก์เชิญ + ปุ่มเอาออก + หน้าเข้าร่วม | `review` | Claude Code | `feat/F003-T5-people-dialog` | `TabletopApp.tsx` (`InviteDialog`), CSS | F003-T1, F003-T4, F004-T2 | hotspot `TabletopApp.tsx` |
+| F003-T6 | คู่มือ + CHANGELOG + แก้ข้อความ "works once" | `review` | Claude Code | `feat/F003-T5-people-dialog` | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md`, `TabletopApp.tsx` | F003-T5 | |
 | F004-T1 | router เล็กใน client + parse path แบบ allowlist | `review` | Claude Code | `feat/F004-url-paths` | `src/tabletop/routes.ts` (ใหม่), `src/main.tsx` | — | |
 | F004-T2 | TabletopApp ใช้ URL เป็นแหล่งความจริงของโต๊ะที่เปิด | `review` | Claude Code | `feat/F004-url-paths` | `TabletopApp.tsx` | F004-T1 | hotspot `TabletopApp.tsx` |
 | F004-T3 | กลับ path เดิมหลังล็อกอิน + หน้าเปิดโต๊ะไม่ได้ | `review` | Claude Code | `feat/F004-url-paths` | `TabletopApp.tsx`, `src/tabletop/ui/account.tsx` | F004-T2 | |
@@ -84,6 +84,7 @@
 | CI002 | เคลียร์ ESLint warning แล้วเลื่อนกฎเป็น error | `todo` | — | — | ทั่ว repo, `eslint.config.js` | CI001 | แตกตามโฟลเดอร์ ระวัง hotspot |
 | CI003 | ย้าย guard ของ workbench ให้ hook ไม่ถูกเรียกแบบมีเงื่อนไข | `review` | JitrudeeDongdee (Claude) | `fix/CI003-workbench-hooks` | `src/tabletop/ui/{Encounter,Invoice,Teaching}Workbench.tsx`, `eslint.config.js` | CI001 | บั๊กแฝง ดู spec ถัดไป ข้อ 7 |
 | CD001 | merge release เข้า `main` แล้ว deploy staging → smoke → production → smoke อัตโนมัติ | `done` | Claude Code | `ci/CD001-auto-deploy` | `.github/workflows/release-deploy.yml` (ใหม่), `.github/scripts/d1-migrate.sh` (ใหม่), `server/release-deploy.ts` (ใหม่), `AGENTS.md` §5–8, `docs/TEAM_HANDOFF_TH.md`, `docs/DEPLOYMENTS.md` | — | ผู้ใช้เลือก prod อัตโนมัติ + migration อัตโนมัติ; ต้องตั้ง secret ก่อนใช้ |
+| CI005 | PR/push เข้า `dev` รันเช็คเร็ว (ข้าม browser suites) · ชุดเต็มรันเฉพาะ release/`main`/Run workflow | `review` | Claude Code | `ci/CI005-fast-dev-checks` | `.github/workflows/validate.yml`, `AGENTS.md` §3 | — | ผู้ใช้ขอ: เช็คนานทุกครั้งที่เข้า dev |
 | F006-T1 | component `TableChat` แถวเดียว ขยาย 5 แถว + คลิปหนีบ + แถบยินยอม | `done` | Codex รับช่วงจากทีม | `feat/F006-chat-first` · #30 | `src/tabletop/ui/TableChat.tsx`, `table-chat.css`, `table-chat-consent.ts` | — | ผู้ใช้มอบหมายให้ต่อให้ครบและทดสอบรวม #24/#29 |
 | F006-T2 | ซ่อนการ์ด Files/Rules เมื่อยังไม่มีของ | `done` | Codex | `feat/F006-chat-first` · #30 | `src/tabletop/runtime/index.ts`, `TableCanvasObjects.tsx` | #24 merged | |
 | F006-T3 | ต่อ `TableChat` แทน `TableAssistant` ในโต๊ะข้อมูล | `done` | Codex | `feat/F006-chat-first` · #30 | `TableSurface.tsx`, `TabletopApp.tsx` | F006-T1 | คง prompt-only generation และการแก้กฎหลังเล่นจาก F005 |

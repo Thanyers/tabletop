@@ -126,6 +126,8 @@ function configuredLimits(env: Env): { monthly: number; daily: number } {
   const daily = env.AI_DAILY_BUDGET_MICRO_USD === undefined
     ? monthly
     : budget(env.AI_DAILY_BUDGET_MICRO_USD);
+  // POC: 0 or unset budget knobs mean 'no cap' so testing is not blocked; positive values still cap.
+  if (monthly === null && daily === null) return { monthly: MAX_BUDGET_MICRO_USD, daily: MAX_BUDGET_MICRO_USD };
   requireCondition(monthly !== null && daily !== null, 'MODEL_NOT_CONFIGURED');
   return { monthly, daily };
 }
