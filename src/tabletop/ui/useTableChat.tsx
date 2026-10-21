@@ -18,6 +18,7 @@ const DRAFT_POLL_LIMIT_MS = 60_000;
 const ANSWER_POLL_MS = 1_000;
 const ANSWER_POLL_LIMIT_MS = 60_000;
 const HISTORY_CARDS = 6;
+const DRAFT_HISTORY_CARDS = 5;
 const LOCAL_CARD_IDS = 80;
 const ACCEPT_FILES = '.csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown';
 
@@ -222,7 +223,9 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       const local = readPrivateChatState(targetScope);
       const dismissed = new Set(local.dismissed);
       const jobs = [...page.items].sort((left, right) => right.createdAt - left.createdAt).slice(0, HISTORY_CARDS);
-      const draftJobs = [...drafts].sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0)).slice(0, HISTORY_CARDS);
+      // Requests stored before prompts were kept (pre-F034) have nothing to show; keep the newest few.
+      const draftJobs = drafts.filter((job) => typeof job.prompt === 'string' && job.prompt.length > 0)
+        .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0)).slice(0, DRAFT_HISTORY_CARDS);
       const incoming = [
         ...jobs.filter((job) => !dismissed.has(job.id)).map((job) => historyCard(job, local.cardIdsByJob[job.id] ?? `answer-${job.id}`)),
         ...draftJobs.filter((job) => !dismissed.has(job.id)).map((job) => draftHistoryCard(job, local.cardIdsByJob[job.id] ?? `draft-${job.id}`)),
