@@ -50,12 +50,12 @@ describe('Cloudflare Billing Durable Object', () => {
     expect(() => usageMicroUsd({ ...usage(), cacheMissTokens: Number.MAX_SAFE_INTEGER })).toThrow();
   });
 
-  it('allows the bounded 8192-token table proposal reservation and prices its full output ceiling', async () => {
+  it('allows the bounded 32768-token table proposal reservation and prices its full output ceiling', async () => {
     const stub = stubFor('table-output-cap');
     const item = binding('c');
-    const result = await call(stub, '/reserve', reserveBody(item, 56_000, 8_192));
+    const result = await call(stub, '/reserve', reserveBody(item, 56_000, 32_768));
     expect(result.response.status).toBe(200);
-    expect(result.value.reservedMicroUsd).toBe(priceMicroUsd(56_000, 8_192));
+    expect(result.value.reservedMicroUsd).toBe(priceMicroUsd(56_000, 32_768));
   });
 
   it('reserves once per immutable binding, rejects changed hashes, dispatches once, and settles idempotently', async () => {
