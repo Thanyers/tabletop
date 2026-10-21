@@ -822,7 +822,7 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
-  /** Any member's job in this table epoch, for read-only polling under open visibility (F015). */
+  /** Any member's job in this table epoch, for read-only polling under open visibility (F034). */
   async getTableModelJob(id: string, workspaceId: string, epoch: number): Promise<RoomModelJob | null> {
     return this.serialized(async () => {
       const row = this.rows(
@@ -839,7 +839,7 @@ export class RoomRepository implements WorkspaceRepository {
     actorId: string;
     before?: string;
     limit: number;
-    /** 'table' lists every member's chat (open visibility, F015); 'actor' only the caller's. */
+    /** 'table' lists every member's chat (open visibility, F034); 'actor' only the caller's. */
     scope?: 'actor' | 'table';
   }): Promise<{ jobs: RoomModelJob[]; hasMore: boolean }> {
     const byActor = (input.scope ?? 'actor') === 'actor';

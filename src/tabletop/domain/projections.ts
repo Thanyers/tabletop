@@ -16,7 +16,7 @@ function assertCanRead(state: DomainState, ctx: ActorContext): void {
   }
 }
 
-/** What one member receives. Under the 'open' policy (F015) members see the whole state. */
+/** What one member receives. Under the 'open' policy (F034) members see the whole state. */
 export function projectDomain(state: DomainState, ctx: ActorContext, policy: VisibilityPolicy = VISIBILITY_POLICY): DomainState {
   assertCanRead(state, ctx);
   if (policy === 'open') {

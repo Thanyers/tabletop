@@ -255,7 +255,7 @@ function tableAssistantConfirmationMessage(status: unknown, failure: unknown): s
   return undefined;
 }
 
-/** Every assistant job view names who asked, so open history (F015) can label other members' chats. */
+/** Every assistant job view names who asked, so open history (F034) can label other members' chats. */
 function tableAssistantJobView(job: RoomModelJob): TableAssistantJob {
   return { ...tableAssistantJobViewFor(job), askedBy: job.actorId };
 }
@@ -725,7 +725,7 @@ export class Room extends DurableObject<Env> {
       if (request.method === 'GET' && /^assistant\/[a-f0-9]{64}$/u.test(suffix)) {
         const authorized = await this.authorize(request, workspaceId);
         const jobId = suffix.slice('assistant/'.length);
-        // Open visibility (F015): any member may read any member's chat; confirming stays with the asker.
+        // Open visibility (F034): any member may read any member's chat; confirming stays with the asker.
         const job = VISIBILITY_POLICY === 'open'
           ? await this.repository.getTableModelJob(jobId, workspaceId, authorized.workspace.epoch)
           : await this.repository.getModelJob(jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch);
