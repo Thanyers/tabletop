@@ -103,6 +103,13 @@ const TABLES = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS room_active_invite_seat_idx ON room_invitations(workspace_id, epoch, seat)
     WHERE redeemed_at IS NULL AND revoked_at IS NULL`,
+  // F003-T3: one reusable link per table epoch; only its hash is stored.
+  `CREATE TABLE IF NOT EXISTS room_invite_links (
+    token_hash TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, epoch INTEGER NOT NULL, created_by TEXT NOT NULL,
+    created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS room_active_invite_link_idx ON room_invite_links(workspace_id, epoch)
+    WHERE revoked_at IS NULL`,
   `CREATE TABLE IF NOT EXISTS room_snapshots (
     workspace_id TEXT NOT NULL, epoch INTEGER NOT NULL, revision INTEGER NOT NULL,
     schema_version INTEGER NOT NULL, state TEXT NOT NULL, state_hash TEXT NOT NULL, created_at INTEGER NOT NULL,
@@ -373,6 +380,7 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec('DELETE FROM room_events WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec('DELETE FROM room_snapshots WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec('DELETE FROM room_invitations WHERE workspace_id = ?', workspace.id);
+      this.storage.sql.exec('DELETE FROM room_invite_links WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec('DELETE FROM room_approvals WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec(
         `UPDATE model_jobs SET status = 'revoked',
@@ -551,6 +559,103 @@ export class RoomRepository implements WorkspaceRepository {
     throw new Error('ROOM_INVITE_REDEMPTION_USES_GLOBAL_IDENTITY');
   }
 
+  /** F003-T3: replace the table's reusable link (any earlier link stops working at once). */
+  async createInviteLink(workspaceId: string, createdBy: string, tokenHash: string, now: number, expiresAt: number): Promise<{ expiresAt: number }> {
+    return this.serialized(async () => {
+      const workspace = this.workspaceSync(workspaceId);
+      if (!workspace || workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
+      this.storage.transactionSync(() => {
+        this.storage.sql.exec(
+          'UPDATE room_invite_links SET revoked_at = ? WHERE workspace_id = ? AND revoked_at IS NULL',
+          now, workspaceId,
+        );
+        this.storage.sql.exec(
+          `INSERT INTO room_invite_links(token_hash, workspace_id, epoch, created_by, created_at, expires_at, revoked_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+          tokenHash, workspaceId, workspace.epoch, createdBy, now, expiresAt,
+        );
+      });
+      return { expiresAt };
+    });
+  }
+
+  async disableInviteLink(workspaceId: string, now: number): Promise<void> {
+    await this.serialized(async () => {
+      this.storage.sql.exec(
+        'UPDATE room_invite_links SET revoked_at = ? WHERE workspace_id = ? AND revoked_at IS NULL',
+        now, workspaceId,
+      );
+    });
+  }
+
+  inviteLinkStatus(workspaceId: string, now: number): { enabled: boolean; expiresAt: number | null } {
+    const workspace = this.workspaceSync(workspaceId);
+    const row = workspace ? this.rows(
+      `SELECT expires_at FROM room_invite_links WHERE workspace_id = ? AND epoch = ? AND revoked_at IS NULL AND expires_at > ?`,
+      workspaceId, workspace.epoch, now,
+    )[0] : undefined;
+    return row ? { enabled: true, expiresAt: readNumber(row.expires_at, 'expires_at') } : { enabled: false, expiresAt: null };
+  }
+
+  /**
+   * F003-T3: join through the table's reusable link and take the first free member seat.
+   * An active member gets a replay; a member the owner removed must get a new invitation.
+   */
+  async joinByInviteLink(tokenHash: string, actorId: string, name: string, now: number): Promise<RedeemedRoomInvitation> {
+    return this.serialized(async () => {
+      const link = this.rows('SELECT * FROM room_invite_links WHERE token_hash = ?', tokenHash)[0];
+      if (!link) throw new AuthorityError('INVITE_INVALID');
+      const workspace = this.workspaceSync(readString(link.workspace_id, 'workspace_id'));
+      if (!workspace || workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
+      if (link.revoked_at !== null || readNumber(link.expires_at, 'expires_at') <= now
+          || readNumber(link.epoch, 'epoch') !== workspace.epoch) throw new AuthorityError('INVITE_EXPIRED');
+      if (workspace.kind !== 'table') throw new AuthorityError('INVITE_NOT_ALLOWED');
+      const memberRow = this.rows(
+        `SELECT actor_id, actor_name, role, seat, created_at, revoked_at FROM room_memberships
+         WHERE workspace_id = ? AND epoch = ? AND actor_id = ?`,
+        workspace.id, workspace.epoch, actorId,
+      )[0];
+      if (memberRow && memberRow.revoked_at === null) return { workspace, member: mapMember(memberRow), replay: true };
+      if (memberRow) throw new AuthorityError('INVITE_MEMBER_REMOVED', 'The owner removed you from this table. Ask them for a new invitation.');
+      const active = this.rows(
+        `SELECT seat FROM room_memberships WHERE workspace_id = ? AND epoch = ? AND revoked_at IS NULL`,
+        workspace.id, workspace.epoch,
+      );
+      if (active.length >= MAX_MEMBERS_PER_WORKSPACE) throw new AuthorityError('MEMBER_LIMIT_REACHED');
+      const taken = new Set(active.map((row) => row.seat));
+      const reserved = new Set(this.rows(
+        `SELECT seat FROM room_invitations WHERE workspace_id = ? AND epoch = ? AND redeemed_at IS NULL
+         AND revoked_at IS NULL AND expires_at > ?`,
+        workspace.id, workspace.epoch, now,
+      ).map((row) => row.seat));
+      // Prefer a seat no single-use invitation is waiting for; fall back to any free seat.
+      const seats = (['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] as const).filter((seat) => !taken.has(seat));
+      const seat = seats.find((candidate) => !reserved.has(candidate)) ?? seats[0];
+      if (!seat) throw new AuthorityError('MEMBER_LIMIT_REACHED');
+      const member: StoredMember = {
+        actorId,
+        name: Array.from(name.replace(/\p{Cc}/gu, '').trim()).slice(0, 64).join('') || 'Guest',
+        role: 'participant',
+        seat,
+        createdAt: now,
+        revokedAt: null,
+      };
+      this.storage.transactionSync(() => {
+        if (reserved.has(seat)) {
+          // Every free seat had a waiting single-use link; that link gives way to this join.
+          this.storage.sql.exec(
+            `UPDATE room_invitations SET revoked_at = ? WHERE workspace_id = ? AND epoch = ? AND seat = ?
+             AND redeemed_at IS NULL AND revoked_at IS NULL`,
+            now, workspace.id, workspace.epoch, seat,
+          );
+        }
+        insertMember(this.storage, workspace.id, workspace.epoch, member);
+        this.insertDirectory(actorId, workspace.epoch, true);
+      });
+      return { workspace, member, replay: false };
+    });
+  }
+
   async redeemRoomInvitation(ticketHash: string, actorId: string, name: string, now: number): Promise<RedeemedRoomInvitation> {
     return this.serialized(async () => {
       const invitationRow = this.rows('SELECT * FROM room_invitations WHERE ticket_hash = ?', ticketHash)[0];
@@ -575,7 +680,8 @@ export class RoomRepository implements WorkspaceRepository {
         return { workspace, member, replay: true };
       }
       if (invitation.epoch !== workspace.epoch) throw new AuthorityError('STALE_EPOCH');
-      if (memberRow) throw new AuthorityError('INVITE_ALREADY_USED');
+      // An active member cannot redeem again; a member the owner removed may return with a new invitation (F003).
+      if (memberRow && memberRow.revoked_at === null) throw new AuthorityError('INVITE_ALREADY_USED');
       const expectedRole = workspace.kind === 'table' && invitation.seat.startsWith('member-')
         ? 'participant'
         : workspace.kind === 'teaching' && (invitation.seat === 'learner-1' || invitation.seat === 'learner-2')
@@ -611,6 +717,12 @@ export class RoomRepository implements WorkspaceRepository {
            WHERE ticket_hash = ? AND redeemed_at IS NULL AND revoked_at IS NULL`,
           now, actorId, ticketHash,
         );
+        if (memberRow) {
+          this.storage.sql.exec(
+            'DELETE FROM room_memberships WHERE workspace_id = ? AND epoch = ? AND actor_id = ? AND revoked_at IS NOT NULL',
+            workspace.id, workspace.epoch, actorId,
+          );
+        }
         insertMember(this.storage, workspace.id, workspace.epoch, member);
         this.insertDirectory(actorId, workspace.epoch, true);
       });
@@ -1073,6 +1185,7 @@ export class RoomRepository implements WorkspaceRepository {
       const stagedInvitations: InvitationRecord[] = [];
       const expiredInvitations = new Map<string, number>();
       const replacedInvitations = new Map<Seat, number>();
+      const revokedMembers = new Map<string, number>();
       let commandCommit: CommandCommit | null = null;
       const repository = this;
       const transaction: WorkspaceTransaction = {
@@ -1144,6 +1257,9 @@ export class RoomRepository implements WorkspaceRepository {
         async revokeOutstandingInvitations(seat, now): Promise<void> {
           replacedInvitations.set(seat, now);
         },
+        async revokeMember(actorId, now): Promise<void> {
+          revokedMembers.set(actorId, now);
+        },
         async getApproval(approvalId, epoch): Promise<{ actorId: string; candidateHash: string; proofHash: string; expiresAt: number; revoked: boolean } | null> {
           const row = repository.rows(
             `SELECT approving_actor_id, candidate_hash, proof_hash, expires_at, revoked FROM room_approvals
@@ -1172,7 +1288,7 @@ export class RoomRepository implements WorkspaceRepository {
         },
       };
       const result = await operation(transaction);
-      if (stagedInvitations.length || expiredInvitations.size || replacedInvitations.size || commandCommit) {
+      if (stagedInvitations.length || expiredInvitations.size || replacedInvitations.size || revokedMembers.size || commandCommit) {
         const completedCommit = commandCommit;
         this.storage.transactionSync(() => {
           for (const [ticketHash, revokedAt] of expiredInvitations) {
@@ -1187,6 +1303,14 @@ export class RoomRepository implements WorkspaceRepository {
                AND expires_at > ? AND redeemed_at IS NULL AND revoked_at IS NULL`,
               revokedAt, workspaceId, workspace.epoch, seat, revokedAt,
             );
+          }
+          for (const [actorId, revokedAt] of revokedMembers) {
+            // F003: the removed member loses access now; the D1 directory hides the room on next sync.
+            this.storage.sql.exec(
+              `UPDATE room_memberships SET revoked_at = ? WHERE workspace_id = ? AND epoch = ? AND actor_id = ? AND revoked_at IS NULL`,
+              revokedAt, workspaceId, workspace.epoch, actorId,
+            );
+            this.insertDirectory(actorId, workspace.epoch, false);
           }
           for (const invitation of stagedInvitations) {
             this.storage.sql.exec(

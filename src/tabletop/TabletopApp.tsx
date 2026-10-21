@@ -5,7 +5,8 @@ import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/tabl
 import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
 import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
-import { ApiFailure, clearInviteFragment, inviteFromFragment, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
+import { ApiFailure, clearInviteFragment, inviteFromFragment, isInviteLink, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
+import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { AccountBadge, AccountSignIn } from './ui/account';
@@ -327,7 +328,7 @@ export default function TabletopApp() {
             if (!alive) return;
             setWorkspace(joined);
             await refreshSession();
-            showNotice(`You joined ${joined.title}. This invitation is now used.`, 'success');
+            showNotice(isInviteLink(inviteTicket) ? `You joined ${joined.title}.` : `You joined ${joined.title}. This invitation is now used.`, 'success');
           } catch (error) {
             clearInviteFragment();
             clearPendingInvite();
@@ -692,6 +693,20 @@ export default function TabletopApp() {
     finally { setBusy(null); }
   }, [showNotice]);
 
+  // F003-T1: the table owner removes a member; their access ends at once.
+  const removeMember = useCallback(async (actorId: string) => {
+    const current = workspaceRef.current;
+    if (!current) return;
+    const name = current.members.find((member) => member.actorId === actorId)?.name ?? 'This person';
+    setInviteBusy(true);
+    try {
+      const next = await tabletopClient.removeMember(current.id, actorId);
+      if (workspaceRef.current?.id === next.id) setWorkspace(next);
+      showNotice(`${name} was removed from the table. They need a new invitation to come back.`, 'success');
+    } catch (error) { showNotice(errorText(error), 'error'); }
+    finally { setInviteBusy(false); }
+  }, [setWorkspace, showNotice]);
+
   const createInvite = useCallback(async (seat: Seat, replaceOutstanding = false) => {
     const current = workspaceRef.current;
     if (!current) return;
@@ -890,7 +905,7 @@ export default function TabletopApp() {
         </>}
       />
 
-      {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} />}
+      {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} onRemoveMember={view.kind === 'table' && canInvite ? (actorId) => void removeMember(actorId) : undefined} onInviteLinkNotice={view.kind === 'table' && canInvite ? showNotice : undefined} />}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
     </UploadCapabilityProvider>
@@ -938,7 +953,9 @@ function ObjectInspector({ node, plan, onClose }: { node: ExecutablePlan['nodes'
   return <section className="tt-object-inspector" aria-labelledby="tt-selected-object-title"><header><span className="tt-object-inspector__glyph"><Activity size={15} /></span><div><span className="tt-kicker">SELECTED OBJECT</span><h2 id="tt-selected-object-title">{node.title}</h2></div><button type="button" aria-label="Close object details" onClick={onClose}><X size={14} /></button></header><p className="tt-object-capability">{node.capability} · version {node.version}</p><div className="tt-object-facts">{inputs.length > 0 ? inputs.map(([key, value]) => <div key={key}><span>Input · {key}</span><strong title={summarize(value)}>{summarize(value)}</strong></div>) : <div><span>Inputs</span><strong>No literal values; data comes through a connected object.</strong></div>}{outputs.map(([key, value]) => <div key={`out-${key}`}><span>Output · {key}</span><strong title={summarize(value)}>{summarize(value)}</strong></div>)}</div>{links.length > 0 && <ul className="tt-object-links">{links.slice(0, 4).map((link) => <li key={link.id}><span>{link.from.node === node.id ? 'Sends' : 'Receives'}</span><strong>{link.valueType}</strong><small>{link.from.node === node.id ? `${link.to.node} · ${link.to.port}` : `${link.from.node} · ${link.from.port}`}</small></li>)}</ul>}</section>;
 }
 
-function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousInvitesRevoked, copied, onSelectSeat, selectedSeat, onCreate, onCopy, onClose }: { view: WorkspaceView; availableSeats: Seat[]; canInvite: boolean; busy: boolean; invite: InviteState; previousInvitesRevoked: boolean; copied: boolean; onSelectSeat: (seat: Seat | null) => void; selectedSeat: Seat | null; onCreate: (seat: Seat, replaceOutstanding?: boolean) => void; onCopy: () => void; onClose: () => void }) {
+function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousInvitesRevoked, copied, onSelectSeat, selectedSeat, onCreate, onCopy, onClose, onRemoveMember, onInviteLinkNotice }: { view: WorkspaceView; availableSeats: Seat[]; canInvite: boolean; busy: boolean; invite: InviteState; previousInvitesRevoked: boolean; copied: boolean; onSelectSeat: (seat: Seat | null) => void; selectedSeat: Seat | null; onCreate: (seat: Seat, replaceOutstanding?: boolean) => void; onCopy: () => void; onClose: () => void; onRemoveMember?: (actorId: string) => void; onInviteLinkNotice?: (text: string, tone: 'success' | 'error' | 'info') => void }) {
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const removable = onRemoveMember ? view.members.filter((member) => member.actorId !== view.actor.actorId) : [];
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
@@ -967,6 +984,18 @@ function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousI
   };
   return <div className="tt-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><section ref={dialogRef} className="tt-dialog tt-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="tt-invite-title" tabIndex={-1} onKeyDown={closeOnEscape}>
     <span className="tt-dialog__mark"><Users size={17} /></span><h2 id="tt-invite-title">People at this table</h2><p>Only invited seats can join. Each invitation works once and expires after ten minutes.</p><MemberStrip view={view} />
+    {view.kind === 'table' && <p className="tt-member-count" aria-label="Seats in use">{view.members.filter((member) => member.seat?.startsWith('member-')).length}/7 members</p>}
+    {onInviteLinkNotice && <InviteLinkPanel workspaceId={view.id} epoch={view.epoch} disabled={busy} onNotice={onInviteLinkNotice} />}
+    {removable.length > 0 && <ul className="tt-member-manage" aria-label="Members">
+      {removable.map((member) => <li key={member.actorId}>
+        {confirmRemove === member.actorId
+          ? <><span>Remove <strong>{member.name}</strong>? They lose access now and need a new invitation to return.</span>
+            <button type="button" className="tt-button tt-button--danger" disabled={busy} onClick={() => { setConfirmRemove(null); onRemoveMember?.(member.actorId); }}>Remove</button>
+            <button type="button" className="tt-button tt-button--quiet" disabled={busy} onClick={() => setConfirmRemove(null)}>Cancel</button></>
+          : <><span>{member.name}{member.seat ? <small> · {seatLabel(member.seat)}</small> : null}</span>
+            <button type="button" className="tt-button tt-button--quiet" disabled={busy} aria-label={`Remove ${member.name}`} onClick={() => setConfirmRemove(member.actorId)}>Remove</button></>}
+      </li>)}
+    </ul>}
     {previousInvitesRevoked && <div className="tt-invite-status tt-invite-status--revoked"><ShieldCheck size={15} /><span><strong>Previous invitation links revoked</strong><small>The table reset invalidated links and removed the previous members.</small></span></div>}
     {invite && !invite.revoked && activeMember ? <div className="tt-invite-status tt-invite-status--joined"><Check size={15} /><span><strong>{activeMember.name} joined as {seatLabel(invite.seat)}</strong><small>This one-use invitation has been accepted.</small></span></div> : invite && !invite.revoked && expired ? <div className="tt-invite-status tt-invite-status--expired"><CircleAlert size={15} /><span><strong>Invitation expired</strong><small>Create a new one for this seat.</small></span></div> : invite && !invite.revoked ? <div className="tt-invite-created"><div className="tt-invite-status"><Activity size={15} /><span><strong>Waiting for {seatLabel(invite.seat)}</strong><small>Expires {new Date(invite.invite.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span></div><label htmlFor="tt-invite-link">One-use invitation link</label><div className="tt-invite-link-row"><input id="tt-invite-link" value={invite.url} readOnly onFocus={(event) => event.currentTarget.select()} /><button type="button" className="tt-button tt-button--primary" onClick={onCopy}><Clipboard size={14} /> {copied ? 'Copied' : 'Copy link'}</button></div><small>The link is held only in this open panel. Send it to the person taking this seat.</small></div> : null}
     {canInvite ? <div className="tt-invite-choose"><span className="tt-kicker">AVAILABLE SEATS</span>{seatChoices.length === 0 ? <p>All supported seats are filled. Reset a table to revoke access or choose another table.</p> : seatChoices.map((seat) => <button type="button" className={selectedSeat === seat ? 'is-selected' : ''} key={seat} onClick={() => onSelectSeat(seat)}><span><strong>{seatLabel(seat)}</strong><small>{view.kind === 'teaching' ? 'Learner view and private answer' : view.kind === 'encounter' ? 'Player view and character actions' : 'Shared active records and table actions'}</small></span>{selectedSeat === seat ? <Check size={14} /> : <ArrowRight size={14} />}</button>)}</div> : <div className="tt-invite-status"><Users size={15} /><span><strong>Table members</strong><small>{view.kind === 'table' ? 'Only the table owner can send invitations.' : 'Only the teacher or Dungeon Master can send invitations.'}</small></span></div>}

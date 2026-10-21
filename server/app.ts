@@ -106,6 +106,7 @@ const mimeTypes: Readonly<Record<string, string>> = {
 };
 
 const inviteRedemptionSchema = z.object({ ticket: z.string() }).strict();
+const removeMemberSchema = z.strictObject({ actorId: z.string().regex(/^[A-Za-z0-9_-]{1,160}$/u) });
 const inviteCreationSchema = z.object({
   seat: z.enum([
     'learner-1', 'learner-2', 'mira', 'pip',
@@ -496,6 +497,7 @@ export function createApp(options: CreateAppOptions): TabletopApp {
           const workspaceId = workspaceIdFrom(path, '');
           const commandsWorkspaceId = workspaceIdFrom(path, 'commands');
           const invitesWorkspaceId = workspaceIdFrom(path, 'invites');
+          const removeMemberWorkspaceId = workspaceIdFrom(path, 'members/remove');
           const eventsWorkspaceId = workspaceIdFrom(path, 'events');
           if (workspaceId && method === 'GET') {
             const authorized = await authority.authorize(request, workspaceId);
@@ -520,6 +522,14 @@ export function createApp(options: CreateAppOptions): TabletopApp {
             const authorized = await authority.authorize(request, commandsWorkspaceId);
             enforceMutation(request, authorized.session);
             const result = await authority.execute(authorized.session, await readJsonBody(request, MAX_JSON_BODY_BYTES), commandsWorkspaceId);
+            apiJson(response, 200, result, isHttps);
+            status = 200;
+          } else if (removeMemberWorkspaceId && method === 'POST') {
+            const authorized = await authority.authorize(request, removeMemberWorkspaceId);
+            enforceMutation(request, authorized.session);
+            const parsed = removeMemberSchema.safeParse(await readJsonBody(request, MAX_JSON_BODY_BYTES));
+            if (!parsed.success) throw new AuthorityError('INVALID_REQUEST');
+            const result = await authority.removeMember(authorized.session, removeMemberWorkspaceId, parsed.data.actorId);
             apiJson(response, 200, result, isHttps);
             status = 200;
           } else if (invitesWorkspaceId && method === 'POST') {

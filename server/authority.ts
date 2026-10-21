@@ -398,6 +398,33 @@ export class CommandAuthority {
     return authorized.workspace;
   }
 
+  /**
+   * F003-T1: the owner removes one member of a shared data table. The member's
+   * session stops authorizing at once (reads, commands, sockets); they can only
+   * come back through a new invitation.
+   */
+  async removeMember(session: AuthenticatedSession, workspaceId: string, targetActorId: string): Promise<WorkspaceView> {
+    const now = this.now();
+    let epoch = 0;
+    await this.repository.withWorkspaceTransaction(workspaceId, async (transaction) => {
+      const workspace = transaction.workspace;
+      epoch = workspace.epoch;
+      const member = await transaction.getMember(session.record.actorId);
+      if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
+      if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
+      if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+        throw new AuthorityError('ROLE_FORBIDDEN');
+      }
+      if (workspace.kind !== 'table') throw new AuthorityError('MEMBER_NOT_REMOVABLE', 'Only members of a shared data table can be removed.');
+      if (targetActorId === workspace.ownerActorId) throw new AuthorityError('MEMBER_NOT_REMOVABLE', 'The table owner cannot be removed.');
+      const target = await transaction.getMember(targetActorId);
+      if (!target || target.revokedAt !== null) throw new AuthorityError('MEMBER_NOT_FOUND', 'This person is not at the table.');
+      await transaction.revokeMember(targetActorId, now);
+    });
+    this.onWorkspaceChanged(workspaceId, epoch);
+    return (await this.authorizeSession(session, workspaceId)).workspace;
+  }
+
   async createInvite(
     session: AuthenticatedSession,
     workspaceId: string,

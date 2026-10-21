@@ -1341,3 +1341,18 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
   .tt-table-chat__thread { max-height: 240px; }
   .tt-table-chat__links > button { min-height: 38px; font-size: 11px; }
 }
+
+/* F003-T1: owner removes members from the People dialog. */
+.tt-member-manage { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.tt-member-manage li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 8px; }
+.tt-member-manage li > span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.tt-member-manage small { color: var(--tt-muted, #66756f); }
+
+/* F003-T3: reusable invite link panel. */
+.tt-invite-link { display: grid; gap: 8px; margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 10px; }
+.tt-invite-link .tt-kicker { display: inline-flex; align-items: center; gap: 6px; }
+.tt-invite-link p { margin: 0; }
+.tt-invite-link__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tt-invite-link__row input { flex: 1 1 220px; min-width: 0; padding: 6px 8px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 8px; font: inherit; font-size: 13px; }
+.tt-invite-link__note { color: var(--tt-muted, #66756f); font-size: 13px; }
+.tt-member-count { margin: 6px 0 0; color: var(--tt-muted, #66756f); font-size: 13px; font-weight: 600; }

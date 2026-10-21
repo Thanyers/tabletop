@@ -288,6 +288,47 @@ describe('tabletop server authority', () => {
     expect((removeDenied.body as ApiError).errorCode).toBe('FORBIDDEN');
   });
 
+  it('lets only the table owner remove a participant, who then loses access (F003-T1)', async () => {
+    const { base } = await openServer();
+    const owner = await createSession(base, 'Remove owner');
+    const first = await createSession(base, 'First participant');
+    const second = await createSession(base, 'Second participant');
+    const workspace = await createWorkspace(base, owner, 'table');
+    const firstJoin = await redeem(base, first, (await invite(base, owner, workspace.id, 'member-1')).ticket);
+    const secondJoin = await redeem(base, second, (await invite(base, owner, workspace.id, 'member-2')).ticket);
+    const path = `/api/workspaces/${workspace.id}/members/remove`;
+
+    const byParticipant = await call<WorkspaceView>(base, path, { session: firstJoin.session, body: { actorId: second.actorId } });
+    expect(byParticipant.response.status).toBe(403);
+    expect((byParticipant.body as ApiError).errorCode).toBe('ROLE_FORBIDDEN');
+    const removeOwner = await call<WorkspaceView>(base, path, { session: owner, body: { actorId: owner.actorId } });
+    expect(removeOwner.response.status).toBe(409);
+    expect((removeOwner.body as ApiError).errorCode).toBe('MEMBER_NOT_REMOVABLE');
+    const malformed = await call<WorkspaceView>(base, path, { session: owner, body: { actorId: second.actorId, extra: 1 } });
+    expect(malformed.response.status).toBe(400);
+    expect((malformed.body as ApiError).errorCode).toBe('INVALID_REQUEST');
+
+    const memberBefore = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: secondJoin.session });
+    expect(memberBefore.response.status).toBe(200);
+    const removed = await call<WorkspaceView>(base, path, { session: owner, body: { actorId: second.actorId } });
+    expect(removed.response.status).toBe(200);
+    expect((removed.body as WorkspaceView).members.map((member) => member.actorId).sort())
+      .toEqual([owner.actorId, first.actorId].sort());
+
+    const revokedRead = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: secondJoin.session });
+    expect(revokedRead.response.status).toBe(403);
+    expect((revokedRead.body as ApiError).errorCode).toBe('MEMBERSHIP_REVOKED');
+    const revokedCommand = await command(base, secondJoin.session, memberBefore.body as WorkspaceView, 'table.import', {
+      filename: 'after-removal.txt', text: 'a removed participant cannot write',
+    });
+    expect(revokedCommand.response.status).toBe(403);
+    const removeAgain = await call<WorkspaceView>(base, path, { session: owner, body: { actorId: second.actorId } });
+    expect(removeAgain.response.status).toBe(404);
+    expect((removeAgain.body as ApiError).errorCode).toBe('MEMBER_NOT_FOUND');
+    const stillThere = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: firstJoin.session });
+    expect(stillThere.response.status).toBe(200);
+  });
+
   it('isolates sessions, projects private notes, rejects learner teacher actions, and enforces command idempotency/CAS', async () => {
     const { base } = await openServer();
     const teacher = await createSession(base, 'Teacher');
