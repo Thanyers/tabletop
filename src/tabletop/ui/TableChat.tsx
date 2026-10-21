@@ -169,14 +169,16 @@ export function TableChat({
       </>}
       {explicitRuleEdit && <button type="button" className="tt-table-chat-bar__cancel-edit" aria-label="Cancel rule edit" title="Cancel rule edit" disabled={controlsBusy} onClick={cancelRuleEdit}><X size={16} /></button>}
       <label className="tt-visually-hidden" htmlFor={messageId}>Message</label>
-      <textarea id={messageId} ref={fieldRef} rows={1} value={message} maxLength={MAX_MESSAGE_CHARS} placeholder={placeholder} disabled={controlsBusy}
+      {/* F021: keep the box editable while a draft or answer is pending so the next message can be written; send stays gated by canSend. */}
+      <textarea id={messageId} ref={fieldRef} rows={1} value={message} maxLength={MAX_MESSAGE_CHARS} placeholder={placeholder} aria-describedby={busy ? `${messageId}-wait` : undefined}
         onChange={(event) => { setMessage(event.target.value); setAsking(false); setSendError(''); }}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
           event.preventDefault();
           submit();
         }} />
-      <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
+      {busy && <span id={`${messageId}-wait`} className="tt-visually-hidden">You can keep typing. Send is available when the current request finishes.</span>}
+      <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend} title={busy ? 'Send is available when the current request finishes' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
     </form>
   </div>;
 }
