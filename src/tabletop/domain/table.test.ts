@@ -174,4 +174,17 @@ describe('file-driven generic table authority', () => {
     expect(state.revisions.at(-1)?.revision).toBe(22);
     expect(state.records.equipment).toHaveLength(2);
   });
+  it('names the field and the problem when bounds or choices do not fit its type (F018)', () => {
+    const initial = source('equipment');
+    const withField = (patch: Record<string, unknown>) => {
+      const change = equipmentChange(initial.sources[0].id);
+      Object.assign(change.program.collections[0].fields[0], patch);
+      return () => applyTableChange(structuredClone(initial), change);
+    };
+    expect(withField({ min: 1, max: 40 })).toThrow('Equipment: name is a text field; only number fields can have min or max.');
+    expect(withField({ type: 'list', choices: ['a'] })).toThrow('only text fields can have choices.');
+    const bounded = equipmentChange(initial.sources[0].id);
+    bounded.program.collections[0].fields.push({ id: 'count', label: 'Count', type: 'number', required: false, min: 5, max: 1 });
+    expect(() => applyTableChange(structuredClone(initial), bounded)).toThrow('Equipment: Count has min greater than max.');
+  });
 });
