@@ -389,10 +389,14 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
+  // Keep failing every post-draft refresh until the test observes the failure UI and disarms.
+  // The app can refresh more than once (POST response, poll, and retry), and a single armed
+  // failure could be consumed by an earlier refresh than the one that renders the card.
+  let failRefresh = Boolean(failDraftRefresh);
   const workspaceRoute = async route => {
     if (route.request().method() === 'GET' && modelAccepted) {
       workspaceRefreshRequests += 1;
-      if (failDraftRefresh && !failedDraftRefresh) {
+      if (failDraftRefresh && failRefresh) {
         failedDraftRefresh = true;
         await route.fulfill({
           status: 503,
@@ -477,8 +481,11 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await expect(retryRefresh).toBeVisible();
     await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeDisabled();
     expect(failedDraftRefresh).toBe(true);
-    expect(workspaceRefreshRequests).toBe(1);
+    expect(workspaceRefreshRequests).toBeGreaterThanOrEqual(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
+    const requestsBeforeRetry = workspaceRefreshRequests;
+    // The retry must reach the server; stop intercepting right before the click.
+    failRefresh = false;
     const refreshResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
     void refreshResponse.catch(() => {});
     await retryRefresh.click();
@@ -486,7 +493,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await expect(retryRefresh).toHaveCount(0);
     await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
     await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
-    expect(workspaceRefreshRequests).toBe(2);
+    expect(workspaceRefreshRequests).toBeGreaterThan(requestsBeforeRetry);
     expect(modelRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
     await owner.unroute(workspaceUrl, workspaceRoute);
