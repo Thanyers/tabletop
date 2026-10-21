@@ -323,6 +323,54 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
       'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it with the room.');
     return { state: { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null }, label: 'Unused source removed.' };
   }
+  if (type === 'table.importRows') {
+    // Direct row import changes shared data, so it stays with the owner; members add files (F008).
+    hasRole(ctx, ['owner']);
+    const input = parsePayload(z.strictObject({
+      collection: id,
+      rows: z.array(z.record(z.string().min(1).max(100), value)).min(1).max(100),
+    }), payload);
+    const program = state.program;
+    assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
+    const collection = program.collections.find(item => item.id === input.collection);
+    assert(collection, 'TABLE_SCHEMA', 'Choose an existing collection.');
+    const nextActionRevision = (state.actionRevision ?? 0) + 1;
+    assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
+    const next = structuredClone(state);
+    const existing = next.records[collection.id] ?? [];
+    const created: TableRecord[] = [];
+    input.rows.forEach((raw, index) => {
+      const rowNumber = index + 1;
+      for (const key of Object.keys(raw)) {
+        assert(collection.fields.some(field => field.id === key), 'TABLE_INPUT', `Row ${rowNumber}: unknown field "${key}".`);
+      }
+      const values: Record<string, TableValue> = {};
+      for (const field of collection.fields) {
+        const supplied = raw[field.id];
+        if (supplied === undefined || supplied === null) {
+          if (field.default !== undefined) values[field.id] = structuredClone(field.default);
+          else if (field.required) throw new DomainError('TABLE_INPUT', `Row ${rowNumber}: ${field.label} is required.`);
+          else values[field.id] = null;
+          continue;
+        }
+        assert(validValue(field, supplied), 'TABLE_INPUT', `Row ${rowNumber}: ${field.label} is invalid.`);
+        values[field.id] = structuredClone(supplied);
+      }
+      const digest = ctx.hash(canonicalJson(['importRows', collection.id, index, values])).toLowerCase();
+      const suffix = digest.replace(/[^a-z0-9_-]/g, '').slice(0, TABLE_RECORD_ID_HASH_LENGTH) || 'x';
+      const recordId = `${TABLE_RECORD_ID_PREFIX}${nextActionRevision}_${String(index).padStart(TABLE_RECORD_ORDINAL_WIDTH, '0')}_${suffix}`;
+      assert(id.safeParse(recordId).success, 'TABLE_LIMIT', 'A bounded record identifier could not be generated.');
+      assert(!existing.some(row => row.id === recordId) && !created.some(row => row.id === recordId), 'TABLE_INPUT', 'A generated record identifier collision prevented this import. No rows were imported.');
+      created.push({ id: recordId, values });
+    });
+    next.records[collection.id] = [...existing, ...created];
+    // Validate the whole table once, so a limit or unique violation imports nothing.
+    checkRows(program, next.records);
+    validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
+    next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
+    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-100);
+    return { state: next, label: `Imported ${created.length} rows into ${collection.title}.` };
+  }
   if (type !== 'table.act') return null;
   hasRole(ctx, ['owner', 'participant']);
   const input = parsePayload(runInput, payload);
