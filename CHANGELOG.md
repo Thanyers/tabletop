@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 3.4.1 — 2026-10-21
+
+PATCH: การจองงบ AI ใช้เพดาน output จริง (16K) แทน 32K ทำให้ไม่ชน "budget reached" ก่อนเวลาอันควร · ไม่มี schema/migration · rollback กลับ v3.4.0 ได้
+
+- AI ไม่ขึ้น "The configured AI budget has been reached" ก่อนที่ยอดใช้จริงจะใกล้เต็ม เพราะการจองต่อ request ใช้ min(max_tokens, 16,384) ขณะที่ settle ยังคิดตาม usage จริง (F032)
+
 ## 3.4.0 — 2026-10-21
 
 MINOR: AI table generation ใช้ thinking + 32K output + compact schema guide + deadline 180s (F031), corpus หลายรอบ/stability (F029/F030) และ reliability ก่อนหน้า · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v3.3.2 ได้ทันที
