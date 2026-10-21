@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **เปลี่ยนการมองเห็น (MAJOR):** สมาชิกทุกคนในโต๊ะเห็นข้อมูลโต๊ะครบทุกอย่าง (ร่างกฎ, โน้ต DM/ครู, ค่าทอยที่ยังไม่เปิด, คำตอบของผู้เรียนคนอื่น) และเห็นแชท AI ของทุกคนพร้อมชื่อผู้ถาม · ยืนยัน action ได้เฉพาะคนถาม · คนนอกโต๊ะยังอ่านไม่ได้ · **ข้อมูลที่เคยซ่อนบน environment ที่ deploy จะถูกเห็นย้อนหลัง** · กลับไปแบบเดิมได้ด้วย `VISIBILITY_POLICY = 'private'` ([F015](docs/features/F015-open-visibility.md))
 ## 3.4.0 — 2026-10-21
 
 MINOR: AI table generation ใช้ thinking + 32K output + compact schema guide + deadline 180s (F031), corpus หลายรอบ/stability (F029/F030) และ reliability ก่อนหน้า · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v3.3.2 ได้ทันที

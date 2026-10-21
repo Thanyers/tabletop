@@ -31,6 +31,7 @@
 | F006 | โต๊ะข้อมูลเริ่มจากแชท: แชทแถวเดียวกึ่งกลางล่าง · โต๊ะว่างไม่มีการ์ด · คำตอบเป็นการ์ด | `done` (#30 → dev; T7 เอกสารส่งต่อแยก) | [F006](docs/features/F006-chat-first-table.md) |
 | F007 | ตำแหน่งการ์ดเป็นของทั้งโต๊ะ ทุกคนเห็นเหมือนกัน | `review` | [F007](docs/features/F007-shared-card-layout.md) |
 | F012 | AI ถามกลับแทนการร่างกฎเมื่อโจทย์ยังไม่พอ | `done` | [F012](docs/features/F012-ai-clarifying-questions.md) |
+| F015 | สมาชิกเห็นทุกอย่างในโต๊ะ (สวิตช์นโยบายการมองเห็น) | `review` | [F015](docs/features/F015-open-visibility.md) |
 
 ## งาน
 
@@ -101,3 +102,4 @@
 | F021 | พิมพ์ข้อความต่อได้ระหว่างรอร่างกฎ/คำตอบ (ช่องข้อความไม่ล็อก ปุ่มส่งยังรอ) | `review` | Claude Code | `fix/F019-type-while-drafting` | `src/tabletop/ui/TableChat.tsx` | — | |
 | F020 | ร่างกฎล้มซ้ำเพราะ "Field bounds do not match its type": แยกข้อความตรวจ field เป็น 3 กรณีพร้อมชื่อ field + ใส่กฎลงคำสั่ง AI | `review` | Claude Code | `fix/F018-field-bounds` | `src/tabletop/domain/table.ts` (checkProgram), `server/providers/deepseek-changes.ts` (prompt), `table.test.ts` | — | พบจากข้อความ F016 บน staging |
 | F012 | AI ถามกลับเป็นคำถามเดียว + ตัวเลือก 3 ข้อแทนการร่างกฎเมื่อโจทย์ไม่พอ | `done` | JitrudeeDongdee (Claude) | `feat/F012-ai-clarifying-questions` | `server/providers/deepseek-changes.ts`, `cloudflare/ai.ts`, `cloudflare/room.ts`, `src/tabletop/client.ts`, `useTableChat.tsx`, `table-chat.css` | — | hotspot `cloudflare/room.ts` · [F012](docs/features/F012-ai-clarifying-questions.md) · PR #55 |
+| F015 | สมาชิกเห็นทุกอย่างในโต๊ะ + แชท AI ของทุกคน (สวิตช์ `VISIBILITY_POLICY`, เก็บแบบ private ไว้) | `review` | JitrudeeDongdee (Claude) | `feat/F015-open-visibility` | `src/tabletop/shared/visibility.ts` (ใหม่), `domain/projections.ts`, `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `useTableChat.tsx`, `TableChat.tsx`, `table-chat-consent.ts`, tests | — | hotspot `cloudflare/room.ts` · MAJOR · [F015](docs/features/F015-open-visibility.md) |

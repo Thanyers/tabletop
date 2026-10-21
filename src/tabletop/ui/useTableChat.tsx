@@ -732,10 +732,15 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   const result = job?.result;
   if (!result || !job) return <div className="tt-chat-card" data-testid="table-chat-answer"><p className="tt-chat-card__text">No answer was received.</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>{dismissButton}</div>;
   const references = result.kind === 'explanation' ? result.references : [];
+  // Open visibility (F015): members also see other members' chats; only the asker can act on them.
+  const foreign = Boolean(job.askedBy && job.askedBy !== view.actor.actorId);
+  const askerName = foreign ? view.members.find((member) => member.actorId === job.askedBy)?.name ?? 'Another member' : null;
+  const askerLine = askerName ? <p className="tt-chat-card__asker">Asked by {askerName}</p> : null;
   if (result.kind !== 'action-proposal') {
     return <div className="tt-chat-card" data-testid="table-chat-answer">
+      {askerLine}
       <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
-      {result.kind === 'build-request' && view.actor.role === 'owner' && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
+      {result.kind === 'build-request' && view.actor.role === 'owner' && !foreign && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
       {references.length > 0 && <div className="tt-chat-card__references">{references.map((reference, index) => <button type="button" key={`${reference.kind}-${index}`} onClick={() => onOpenObject(objectForReference(reference))}>{reference.label}</button>)}</div>}
       {dismissButton}
     </div>;
@@ -748,6 +753,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   const confirmed = status === 'confirmed';
   const terminal = status === 'stale' || status === 'rejected';
   return <div className="tt-chat-card is-proposal" data-testid="table-chat-answer">
+    {askerLine}
     <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
     <dl className="tt-chat-card__inputs">
       <dt>Action</dt><dd>{action?.title ?? result.actionId}</dd>
@@ -757,6 +763,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       : terminal ? <p className="tt-chat-card__error" role="status">{job.message ?? (status === 'stale' ? 'The table changed after this proposal. It cannot be confirmed.' : 'The current rules or turn did not allow this proposal.')}</p>
         : status === 'processing' || card.confirmationPending ? <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Checking the saved action status…</p>
           : stale ? <p className="tt-chat-card__error" role="status">The table changed after this proposal. Ask again for a fresh proposal.</p>
+            : foreign ? <p className="tt-chat-card__pending" role="status">Only {askerName} can confirm this proposal.</p>
             : !roleAllowed ? <p className="tt-chat-card__error" role="status">This seat cannot confirm the proposed action.</p>
               : !turnAllowed ? <p className="tt-chat-card__error" role="status">This action is only available on the required turn.</p>
                 : <div className="tt-chat-card__action-buttons"><button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy || card.confirming || status !== 'available'} onClick={onConfirm}>{card.confirming ? <LoaderCircle size={14} className="tt-spin" /> : <Check size={14} />}Confirm action</button><button type="button" className="tt-button tt-button--quiet" disabled={busy || card.confirmationPending} onClick={onDismiss}>Skip this proposal</button></div>}

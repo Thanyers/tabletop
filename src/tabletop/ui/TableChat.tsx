@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, LoaderCircle, Paperclip, X } from 'lucide-react';
 import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
+import { VISIBILITY_POLICY } from '../shared/visibility';
 import './table-chat.css';
 
 const MAX_MESSAGE_CHARS = 1200;
@@ -141,8 +142,8 @@ export function TableChat({
   };
 
   return <div className="tt-table-chat-bar" data-testid="table-chat-bar">
-    {historyStatus === 'loading' && mode === 'ask' && <p className="tt-table-chat-bar__status" role="status"><LoaderCircle size={13} className="tt-spin" />Loading private conversation…</p>}
-    {historyStatus === 'error' && mode === 'ask' && <p className="tt-table-chat-bar__status is-error" role="alert">Private conversation history could not be loaded. <button type="button" className="tt-table-chat-bar__retry" onClick={onRetryHistory}>Retry</button></p>}
+    {historyStatus === 'loading' && mode === 'ask' && <p className="tt-table-chat-bar__status" role="status"><LoaderCircle size={13} className="tt-spin" />{VISIBILITY_POLICY === 'open' ? 'Loading table conversation…' : 'Loading private conversation…'}</p>}
+    {historyStatus === 'error' && mode === 'ask' && <p className="tt-table-chat-bar__status is-error" role="alert">{VISIBILITY_POLICY === 'open' ? 'Table conversation history could not be loaded.' : 'Private conversation history could not be loaded.'} <button type="button" className="tt-table-chat-bar__retry" onClick={onRetryHistory}>Retry</button></p>}
     {attachmentError && <p className="tt-table-chat-bar__status is-error" role="alert">{attachmentError}</p>}
     {sendError && <p className="tt-table-chat-bar__status is-error" role="alert">{sendError}</p>}
     {asking && <div className="tt-table-chat-bar__consent" role="alertdialog" aria-label="Send to AI">

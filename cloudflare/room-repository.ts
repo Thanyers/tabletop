@@ -822,38 +822,54 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
+  /** Any member's job in this table epoch, for read-only polling under open visibility (F015). */
+  async getTableModelJob(id: string, workspaceId: string, epoch: number): Promise<RoomModelJob | null> {
+    return this.serialized(async () => {
+      const row = this.rows(
+        `SELECT * FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ?`,
+        id, workspaceId, epoch,
+      )[0];
+      return row ? mapModelJob(row) : null;
+    });
+  }
+
   async listTableAssistantJobs(input: {
     workspaceId: string;
     epoch: number;
     actorId: string;
     before?: string;
     limit: number;
+    /** 'table' lists every member's chat (open visibility, F015); 'actor' only the caller's. */
+    scope?: 'actor' | 'table';
   }): Promise<{ jobs: RoomModelJob[]; hasMore: boolean }> {
+    const byActor = (input.scope ?? 'actor') === 'actor';
+    const actorClause = byActor ? 'AND actor_id = ?' : '';
+    const actorArgs = byActor ? [input.actorId] : [];
     return this.serialized(async () => {
       let anchor: { created_at: SqlStorageValue; id: SqlStorageValue } | undefined;
       if (input.before !== undefined) {
         anchor = this.rows<{ created_at: SqlStorageValue; id: SqlStorageValue }>(
-          `SELECT created_at, id FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ?
+          `SELECT created_at, id FROM model_jobs WHERE id = ? AND workspace_id = ? AND epoch = ? ${actorClause}
            AND json_extract(data, '$.kind') = 'table-assistant'`,
-          input.before, input.workspaceId, input.epoch, input.actorId,
+          input.before, input.workspaceId, input.epoch, ...actorArgs,
         )[0];
         if (!anchor) throw new AuthorityError('WORKSPACE_NOT_FOUND');
       }
       const rows = anchor
         ? this.rows(
-          `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? AND actor_id = ?
+          `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? ${actorClause}
            AND json_extract(data, '$.kind') = 'table-assistant'
            AND (created_at < ? OR (created_at = ? AND id < ?))
            ORDER BY created_at DESC, id DESC LIMIT ?`,
-          input.workspaceId, input.epoch, input.actorId,
+          input.workspaceId, input.epoch, ...actorArgs,
           readNumber(anchor.created_at, 'created_at'), readNumber(anchor.created_at, 'created_at'),
           readString(anchor.id, 'id'), input.limit + 1,
         )
         : this.rows(
-          `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? AND actor_id = ?
+          `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? ${actorClause}
            AND json_extract(data, '$.kind') = 'table-assistant'
            ORDER BY created_at DESC, id DESC LIMIT ?`,
-          input.workspaceId, input.epoch, input.actorId, input.limit + 1,
+          input.workspaceId, input.epoch, ...actorArgs, input.limit + 1,
         );
       return { jobs: rows.slice(0, input.limit).map(mapModelJob), hasMore: rows.length > input.limit };
     });
