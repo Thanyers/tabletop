@@ -43,6 +43,10 @@ export function cleanReasons(values: unknown): string[] {
   return out;
 }
 
+/** F027: validation reasons that point at an unsupported cross-record/cross-collection lookup. */
+const STRUCTURAL_REASON = /unknown record field|unknown field|cross-collection|join|lookup/iu;
+export const STRUCTURAL_HINT = 'This table cannot join rows across collections yet; keep the data in one collection or attach a CSV file.';
+
 export function modelFailureMessage(failure: unknown, reasons: readonly string[] = []): string {
   if (failure === 'SOURCE_REQUIRED') return 'Import a source file before asking for a proposal.';
   if (failure === 'TABLE_READ_ONLY') return 'This table workspace is currently read-only. The proposal was not applied.';
@@ -50,7 +54,8 @@ export function modelFailureMessage(failure: unknown, reasons: readonly string[]
   if (failure === 'MODEL_PROVIDER_OUTPUT_REJECTED' || (typeof failure === 'string' && failure.startsWith('TABLE_'))) {
     const shown = cleanReasons(reasons);
     if (!shown.length) return 'The proposed table rules did not pass validation. Review the sources or revise the request, then try again.';
-    return `The proposed table rules did not pass validation: ${shown.join(' · ')} Revise the request and try again.`;
+    const hint = STRUCTURAL_REASON.test(shown.join(' ')) ? ` ${STRUCTURAL_HINT}` : '';
+    return `The proposed table rules did not pass validation: ${shown.join(' · ')}${hint} Revise the request and try again.`;
   }
   if (failure === 'MODEL_PROVIDER_TIMEOUT') return 'The proposal timed out. Try again.';
   if (failure === 'MODEL_NOT_CONFIGURED' || failure === 'MODEL_PROVIDER_NOT_CONFIGURED') {

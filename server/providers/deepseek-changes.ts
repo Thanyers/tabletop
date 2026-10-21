@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CLARIFY_LANGUAGE_ISSUE, clarifyMatchesRequestLanguage } from './clarify-language.js';
 import { encounterRuleSchema, physicsParamsSchema } from '../../src/tabletop/domain/index.js';
 import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
 import { DomainError, type ChangeSet } from '../../src/tabletop/shared/contracts.js';
@@ -279,7 +280,7 @@ function formatValidationIssues(issues: readonly z.core.$ZodIssue[], output: unk
     .map(issue => formatValidationIssue(issue, output).slice(0, MAX_REPAIR_ISSUE_CHARS));
 }
 
-function changeFrom(content: string, kind: DeepSeekChangeInput['kind'], usage: DeepSeekChangeUsage): ChangeSet | { clarification: TableClarification } {
+function changeFrom(content: string, kind: DeepSeekChangeInput['kind'], usage: DeepSeekChangeUsage, requestPrompt: string): ChangeSet | { clarification: TableClarification } {
   if (!content || content.length > MAX_OUTPUT_CHARS) throw fail('MODEL_PROVIDER_OUTPUT_REJECTED');
   let output: unknown;
   try { output = JSON.parse(content) as unknown; } catch { throw new RejectedChangeReply(usage, ['Return a complete JSON object, without Markdown.'], content.slice(0, 18_000)); }
@@ -289,6 +290,10 @@ function changeFrom(content: string, kind: DeepSeekChangeInput['kind'], usage: D
   if (kind === 'table' && typeof output === 'object' && output !== null && (output as { kind?: unknown }).kind === 'clarify') {
     const clarify = tableClarifySchema.safeParse(output);
     if (!clarify.success) throw new RejectedChangeReply(usage, formatValidationIssues(clarify.error.issues, output), content.slice(0, 18_000));
+    // F026: a question in the wrong language is a repairable defect, not a usable clarification.
+    if (!clarifyMatchesRequestLanguage(requestPrompt, `${clarify.data.question} ${clarify.data.options.join(' ')}`)) {
+      throw new RejectedChangeReply(usage, [CLARIFY_LANGUAGE_ISSUE], content.slice(0, 18_000));
+    }
     return { clarification: { question: clarify.data.question, options: clarify.data.options } };
   }
   const parsed = kind === 'teaching' ? teachingChangeSchema.safeParse(output)
@@ -455,7 +460,7 @@ export class DeepSeekChangeProvider {
       }
       const usage = parseUsage(raw.usage);
       if (usage.completionTokens > serialized.outputTokens) throw fail('MODEL_PROVIDER_RESPONSE_INVALID');
-      const output = changeFrom(choice.message.content, serialized.value.kind, usage);
+      const output = changeFrom(choice.message.content, serialized.value.kind, usage, serialized.value.prompt);
       return 'clarification' in output ? { clarification: output.clarification, usage } : { change: output, usage };
     } finally {
       clearTimeout(timer);
