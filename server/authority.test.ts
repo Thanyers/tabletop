@@ -329,7 +329,7 @@ describe('tabletop server authority', () => {
     expect(stillThere.response.status).toBe(200);
   });
 
-  it('isolates sessions, projects private notes, rejects learner teacher actions, and enforces command idempotency/CAS', async () => {
+  it('isolates sessions, shares teacher notes with members (F015 open visibility), rejects learner teacher actions, and enforces command idempotency/CAS', async () => {
     const { base } = await openServer();
     const teacher = await createSession(base, 'Teacher');
     const learner = await createSession(base, 'Learner');
@@ -360,8 +360,10 @@ describe('tabletop server authority', () => {
     const teacherView = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: teacher });
     const learnerView = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: learnerSession });
     expect((teacherView.body as WorkspaceView).domain).toMatchObject({ teacherNote: 'Answer key: private.' });
-    expect((learnerView.body as WorkspaceView).domain).not.toHaveProperty('teacherNote');
-    expect((learnerView.body as WorkspaceView).revision).toBe(learnerWorkspaceBeforePrivateChange.revision);
+    // Was: the learner projection hid the note and kept its revision. Under open visibility (F015) the
+    // learner reads the note and their revision moves; non-members above are still rejected with 403.
+    expect((learnerView.body as WorkspaceView).domain).toMatchObject({ teacherNote: 'Answer key: private.' });
+    expect((learnerView.body as WorkspaceView).revision).not.toBe(learnerWorkspaceBeforePrivateChange.revision);
 
     const deniedTeacherAction = await command(base, learnerSession, learnerView.body as WorkspaceView, 'teaching.setParameters', { force: 20, mass: 2, time: 2 });
     expect(deniedTeacherAction.response.status).toBe(403);
@@ -572,7 +574,7 @@ describe('tabletop server authority', () => {
     expect(hashes.rows.some((row) => row.ticket_hash === (replacement.body as InviteResponse).ticket)).toBe(false);
   });
 
-  it('serializes socket projections and skips private changes for learners', async () => {
+  it('serializes socket projections and pushes teacher-note changes to learners under open visibility (F015)', async () => {
     const { base, server } = await openServer();
     const owner = await createSession(base, 'Teacher');
     const guest = await createSession(base, 'Learner');
@@ -598,11 +600,17 @@ describe('tabletop server authority', () => {
       unexpectedMessage = false;
       const ownerViewResponse = await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: owner });
       let ownerView = ownerViewResponse.body as WorkspaceView;
+      // Was: a private teacher note sent the learner nothing. Under open visibility (F015) the learner's
+      // projection changes, so exactly one projection carrying the note arrives.
+      const noteProjection = receiveSocketProjection(socket);
       const privateNote = await command(base, owner, ownerView, 'teaching.saveNote', { text: 'Private teacher key.' });
       expect(privateNote.response.status).toBe(200);
       ownerView = (privateNote.body as CommandAck).workspace;
+      expect((await noteProjection).workspace.domain).toMatchObject({ teacherNote: 'Private teacher key.' });
       await new Promise<void>((resolveWait) => setTimeout(resolveWait, 100));
-      expect(receivedCount).toBe(0);
+      expect(receivedCount).toBe(1);
+      expect(unexpectedMessage).toBe(false);
+      receivedCount = 0;
 
       let markAuthStarted: () => void = () => undefined;
       const authStarted = new Promise<void>((resolveStarted) => { markAuthStarted = resolveStarted; });

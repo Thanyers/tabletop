@@ -85,9 +85,11 @@ describe('file-driven generic table authority', () => {
     expect(() => decideDomain(memberImport, { type: 'table.removeSource', payload: { sourceId: memberImport.sources[1].id } }, member)).toThrow('cannot perform');
     expect(() => decideDomain(initial, { type: 'evolve.propose', payload: { change: edit } }, member)).toThrow('cannot perform');
   });
-  it('shares source files with participants but keeps quotations and owner draft history private', () => {
+  it('private policy: shares source files with participants but keeps quotations and owner draft history private', () => {
     const initial = source('game'), state = activate(initial, gameChange(initial.sources[0].id));
-    const participant = projectDomain(state, member);
+    // Open visibility (F015, default): the participant receives quotations and draft history too.
+    expect(projectDomain(state, member)).toEqual(state);
+    const participant = projectDomain(state, member, 'private');
     expect(participant.kind).toBe('table');
     if (participant.kind !== 'table') throw new Error();
     expect(participant.sources).toEqual(state.sources); expect(participant.revisions).toEqual([]); expect(participant.candidate).toBeNull(); expect(participant.program?.evidence).toEqual([]);

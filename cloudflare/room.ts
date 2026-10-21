@@ -1,3 +1,4 @@
+import { VISIBILITY_POLICY } from '../src/tabletop/shared/visibility.js';
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
 import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
@@ -254,7 +255,12 @@ function tableAssistantConfirmationMessage(status: unknown, failure: unknown): s
   return undefined;
 }
 
+/** Every assistant job view names who asked, so open history (F034) can label other members' chats. */
 function tableAssistantJobView(job: RoomModelJob): TableAssistantJob {
+  return { ...tableAssistantJobViewFor(job), askedBy: job.actorId };
+}
+
+function tableAssistantJobViewFor(job: RoomModelJob): TableAssistantJob {
   const expectedRevision = typeof job.data.expectedRevision === 'string' ? job.data.expectedRevision : '';
   const prompt = typeof job.data.prompt === 'string' ? job.data.prompt : '';
   if (!MODEL_JOB_ID_PATTERN.test(job.id) || !PROJECTION_CURSOR_PATTERN.test(expectedRevision)
@@ -630,6 +636,7 @@ export class Room extends DurableObject<Env> {
           actorId: authorized.session.record.actorId,
           ...(query.before === undefined ? {} : { before: query.before }),
           limit: query.limit,
+          scope: VISIBILITY_POLICY === 'open' ? 'table' : 'actor',
         });
         const items = await Promise.all(page.jobs.map(async (job) =>
           tableAssistantJobView(await this.reconcileTableAssistantJob(job))));
@@ -718,9 +725,10 @@ export class Room extends DurableObject<Env> {
       if (request.method === 'GET' && /^assistant\/[a-f0-9]{64}$/u.test(suffix)) {
         const authorized = await this.authorize(request, workspaceId);
         const jobId = suffix.slice('assistant/'.length);
-        const job = await this.repository.getModelJob(
-          jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch,
-        );
+        // Open visibility (F034): any member may read any member's chat; confirming stays with the asker.
+        const job = VISIBILITY_POLICY === 'open'
+          ? await this.repository.getTableModelJob(jobId, workspaceId, authorized.workspace.epoch)
+          : await this.repository.getModelJob(jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch);
         if (!job || job.data.kind !== 'table-assistant') throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
         const reconciled = await this.reconcileTableAssistantJob(job);
         const view = tableAssistantJobView(reconciled);

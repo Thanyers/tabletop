@@ -70,6 +70,8 @@ export const tableAssistantConversationEntrySchema = z.strictObject({
 
 export const tableAssistantJobSchema = z.strictObject({
   id: revisionTokenSchema,
+  /** Opaque actor id of the member who asked; lets open history (F034) label other members' chats. */
+  askedBy: z.string().min(1).max(200).optional(),
   createdAt: z.number().int().nonnegative().safe(),
   prompt: z.string().min(1).max(4_000),
   status: z.enum(['running', 'completed', 'failed']),
