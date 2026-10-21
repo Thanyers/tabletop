@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ActorContext, DomainState } from '../shared/contracts';
 import {
-  CUSTOM_ROLE_PREFIX, MAX_CUSTOM_ROLES, MAX_ROLE_NAME_CHARS, availableRoles, isPermission, permissionsFor,
+  CUSTOM_ROLE_PREFIX, MAX_CUSTOM_ROLES, MAX_ROLE_NAME_CHARS, assignedRole, availableRoles, isPermission, permissionsFor,
   type AccessConfig, type AccessRole, type Permission,
 } from '../shared/permissions';
 import { assert, parsePayload, requirePermission } from './helpers';
@@ -78,6 +78,11 @@ export function handleAccessCommand(state: DomainState, type: string, payload: u
   const role = availableRoles(state.kind, access).find((item) => item.id === input.roleId);
   assert(role, 'ROLE_NOT_FOUND', 'That role does not exist at this table.');
   assertWithinOwn(ctx, role.permissions);
+  // Nobody can change the role of someone who holds a permission they lack (no demoting a stronger manager).
+  const current = assignedRole(state.kind, access, input.actorId);
+  if (ctx.permissions && current.permissions.some((permission) => !ctx.permissions?.has(permission))) {
+    assert(false, 'FORBIDDEN', 'You cannot change the role of someone with permissions you do not have.');
+  }
   if (role.id === 'default') delete access.assignments[input.actorId];
   else access.assignments[input.actorId] = role.id;
   return { state: withAccess(state, access), label: `Role set to ${role.name}.` };

@@ -740,11 +740,10 @@ export class CommandAuthority {
           if (title === null) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
           return this.renameWorkspace(transaction, workspace, member, session, envelope, requestHash, title, now);
         }
-        if (envelope.type !== 'teaching.setRepresentation') assertIdentityFieldsAbsent(envelope.payload);
+        // access.assign names its target member; the block above already checked it is a current non-owner member.
+        if (envelope.type !== 'teaching.setRepresentation' && envelope.type !== 'access.assign') assertIdentityFieldsAbsent(envelope.payload);
         if (envelope.type === 'teaching.answer' && member.role !== 'learner') throw new AuthorityError('ROLE_FORBIDDEN');
-        if (envelope.type.startsWith('teaching.') && envelope.type !== 'teaching.answer' && member.role !== 'teacher') {
-          throw new AuthorityError('ROLE_FORBIDDEN');
-        }
+        // F035: other lesson commands are decided by the member's permissions in the domain (requirePermission).
 
         const context = currentContext;
         if (envelope.type === 'evolve.activate') await this.verifyActivationApproval(transaction, workspace, context);
