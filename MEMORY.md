@@ -155,6 +155,11 @@
 - **Root cause:** ไม่ได้เช็คสถานะปัจจุบันก่อนสั่ง action ที่ deploy · คำยืนยันของผู้ใช้อิงข้อมูลที่ผมรายงานไว้ก่อนหน้า ซึ่งเก่าไปแล้ว
 - **Correct behavior:** ก่อน `gh workflow run release-deploy.yml` ทุกครั้ง รัน `gh run list -R Thanyers/tabletop --workflow release-deploy.yml --limit 3` และ `curl -s <url>/version` ของทั้งสอง environment · ถ้ามีรอบของ SHA นั้นสำเร็จแล้วหรือ `/version` ตรง tag แล้ว ให้หยุดและแจ้งผู้ใช้แทนการรัน
 
+### 2026-10-21 — push โค้ดที่ typecheck ไม่ผ่านเพราะดูแค่ผลเทสต์
+- **What happened:** แก้ `cloudflare/model-failure.ts` ใน F016 แล้วรัน `npm run test:cloudflare` ผ่าน 85/85 จึง commit + push · แต่ `tsc -p tsconfig.cloudflare.json` แจ้ง `TS18046: 'value' is of type 'unknown'` ซึ่ง CI จะล้มที่ขั้น typecheck
+- **Root cause:** vitest ตัด type ทิ้งตอนรัน จึงไม่จับ type error · pre-commit hook รันแค่ ESLint ไม่รัน `tsc`
+- **Correct behavior:** ก่อน commit ทุกครั้งที่แก้ `.ts` ให้รัน `npm run typecheck` (ครอบทั้ง app, server และ cloudflare) และอ่านผลก่อน `git commit` · ห้ามถือว่าเทสต์ผ่านแปลว่า type ผ่าน
+
 ## Deploy failures
 
 ### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
