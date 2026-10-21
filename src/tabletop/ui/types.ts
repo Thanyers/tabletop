@@ -3,7 +3,7 @@ import type { ExecutablePlan, PlanNode } from '../runtime';
 
 export type { ExecutablePlan, PlanNode };
 
-export type Command = (type: string, payload: unknown) => Promise<WorkspaceView | null>;
+export type Command = (type: string, payload: unknown, expectedView?: WorkspaceView) => Promise<WorkspaceView | null>;
 
 export interface WorkbenchProps {
   view: WorkspaceView;

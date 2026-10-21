@@ -120,6 +120,21 @@
 - **Root cause:** Pre-release `main` lacked F006, `npm start` serves the existing `dist`, and legacy examples hide their composer when Node local reports AI disabled. The current generic table still shows its new composer, disabled when AI is unavailable.
 - **Correct behavior:** Check `git branch --show-current` and `/version`, then run `npm run build && npm start`. Open `/new` and choose **Start empty with your own files** to verify the generic table. Use staging or the documented Worker setup for real AI; adding a key to Node `.env` does not enable it.
 
+### 2026-10-20 — Generated numeric forms silently fail native validation
+- **What happened:** An invoice form accepted a number in the declared range but clicking Add invoice sent no table command. Browser readback showed `min=0.01`, empty `step`, value `651`, and `validity.stepMismatch=true`.
+- **Root cause:** Generated numeric inputs omitted `step`, so HTML applied its default step of 1 from the fractional minimum. The regular table action form already used `step="any"`.
+- **Correct behavior:** Keep generated numeric inputs consistent with the numeric contract and check native validity before submission. Run `npm run build && npm run build:cloudflare && node scripts/canvas-evolution-local.mjs --auto`; require a real form POST and persisted row, not a successful field fill or speculative preview.
+
+### 2026-10-20 — Data actions and structural requests share one composer
+- **What happened:** Owner requests to add a form or missing create action were sent to the action-only assistant; a broad routing fix then also caught “Change invoice status in this table to paid.”
+- **Root cause:** The old interpreter had updates but no typed record creation; matching the word “table” anywhere with “change” confused data changes with program changes.
+- **Correct behavior:** Route clear UI/construction requests to the builder, leave data requests on the confirmation path, and offer an owner-only builder handoff for ambiguous requests with the actor/table/epoch consent retained by F013. Run `npx vitest run src/tabletop/ui/table-build-intent.test.ts src/tabletop/domain/table-record-actions.test.ts`.
+
+### 2026-10-21 — Generic card sizing broke legacy demo geometry
+- **What happened:** F010's first CI run failed the seven-session and public-demo overlap assertions after wider cards and growing bodies were applied globally. The generated Invoice fixture itself passed.
+- **Root cause:** Legacy examples use their established card dimensions; their geometry does not follow the measured layout used by generic tables. Reaching a later CI step also did not prove earlier independent steps passed.
+- **Correct behavior:** Scope the new card rules to `data-workspace-kind="table"`, preserve legacy dimensions, and read actual job/step conclusions. Run `npm run build && npm run build:cloudflare`, then `npm run test:r1:browser`, `npm run test:cloudflare:browser`, and `node scripts/canvas-evolution-local.mjs --auto`. All three browser checks passed locally after the scope fix (7, 25, and 10 checks).
+
 ## Deploy failures
 
 ### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
