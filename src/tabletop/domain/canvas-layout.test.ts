@@ -88,6 +88,19 @@ describe('shared arrangement authority', () => {
     expect(Object.keys(projected.canvasLayout!.positions)).toEqual(['table.collection.equipment']);
     expect(projected.sources).toEqual(moved.sources);
   });
+  it('open policy (F034): every member still gets retired and auxiliary geometry dropped, while the rest of the state is shared', () => {
+    const moved = handleCanvasLayout(active(), move(0, 900), participant).state;
+    moved.canvasLayout.positions['chat.answer-1'] = { x: 150, y: 20 };
+    moved.canvasLayout.positions['table.view.retired'] = { x: 450, y: 20 };
+    for (const actor of [owner, participant]) {
+      const projected = projectDomain(moved, actor, 'open');
+      if (projected.kind !== 'table') throw Error('Expected table');
+      expect(projected.canvasLayout).toEqual({ revision: 1, positions: { 'table.collection.equipment': { x: 900, y: 240, pinned: true } } });
+      expect({ ...projected, canvasLayout: moved.canvasLayout }).toEqual(moved);
+      expect(projectDomain(moved, actor)).toEqual(projected);
+    }
+    expect(Object.keys(moved.canvasLayout.positions)).toContain('table.view.retired');
+  });
   it('shares the Files card position once the table has files (F008)', () => {
     expect(() => handleCanvasLayout(createTableState(), { expectedLayoutRevision: 0, positions: { 'table.sources': { x: 0, y: 0 } } }, participant)).toThrow();
     const placed = handleCanvasLayout(active(), { expectedLayoutRevision: 0, positions: { 'table.sources': { x: 40, y: 60, pinned: true } } }, participant).state;
