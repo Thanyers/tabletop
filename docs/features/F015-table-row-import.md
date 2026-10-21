@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` (backend เสร็จ, UI ยังไม่ทำ) |
+| สถานะ | `review` |
 | เจ้าของฟีเจอร์ | ทีม Tabletop |
 | เวอร์ชันที่คาด | MINOR — เพิ่มคำสั่งใหม่, ไม่มี migration/secret/binding |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F015-T*` |
@@ -19,7 +19,7 @@
 4. กด **Import** → แถวเข้าตารางทันทีโดยไม่เรียก AI และไม่ถาม consent
 5. ถ้ามีแถวผิดหรือชน unique → ไม่ import เลย (all-or-nothing) พร้อมบอกแถวที่ผิด
 
-_(UI ยังไม่ทำใน PR นี้ — backend contract พร้อมก่อน)_
+_(UI ทำแล้วใน PR เดียวกัน: ปุ่ม Import rows ในการ์ด collection แบบขยาย)_
 
 ## ขอบเขต
 

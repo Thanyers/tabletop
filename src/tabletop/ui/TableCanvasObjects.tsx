@@ -9,6 +9,7 @@ import { CandidateLifecycle } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
 import { applyTableCandidate } from './table-candidate-apply';
+import { autoMapping, buildImportRows, parseCsv } from './table-row-import';
 import './record-actions.css';
 
 interface TableCanvasObjectProps {
@@ -330,8 +331,53 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
       </>}
       {actionController.message && <p className="tt-table-error" role="alert">{actionController.message}</p>}
     </section>}
+    {expanded && collection && view.actor.role === 'owner' && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
     <p className="tt-table-turn-indicator">{view.actor.role === 'owner' ? 'Owner' : view.actor.name} · shared active data</p>
   </div>;
+}
+
+function TableRowImport({ collection, busy, onCommand }: {
+  collection: TableCollection;
+  busy: string | null;
+  onCommand: WorkbenchProps['onCommand'];
+}) {
+  const [open, setOpen] = useState(false);
+  const [csv, setCsv] = useState('');
+  const parsed = useMemo(() => parseCsv(csv), [csv]);
+  const [mapping, setMapping] = useState<Record<number, string>>({});
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState('');
+  const detailId = `${useId().replace(/:/g, '')}-tt-import`;
+  useEffect(() => { setMapping(autoMapping(parsed.headers, collection.fields)); }, [parsed, collection]);
+  const preview = useMemo(() => buildImportRows(parsed, mapping, collection.fields), [parsed, mapping, collection]);
+  const canImport = preview.rows.length > 0 && preview.rows.length <= 100 && preview.invalid.length === 0 && busy === null && !pending;
+  const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 32 * 1024) { setMessage('CSV files must be 32 KiB or smaller.'); return; }
+    setMessage(''); setCsv(await file.text()); setOpen(true);
+  };
+  const runImport = async () => {
+    setPending(true); setMessage('');
+    try {
+      const result = await onCommand('table.importRows', { collection: collection.id, rows: preview.rows });
+      if (result) { setMessage(`Imported ${preview.rows.length} rows into ${collection.title}.`); setCsv(''); }
+      else setMessage('Import failed. Fix the invalid rows and try again.');
+    } finally { setPending(false); }
+  };
+  return <section className="tt-table-import" aria-label={`Import rows into ${collection.title}`}>
+    {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={() => setOpen(true)}>Import rows</button> : <>
+      <div className="tt-table-import__head"><strong>Import rows into {collection.title}</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => { setOpen(false); setCsv(''); setMessage(''); }}>Close</button></div>
+      <label className="tt-table-import__file">CSV file<input type="file" accept=".csv,text/csv,text/plain" onChange={(event) => void chooseFile(event)} /></label>
+      <label htmlFor={detailId}>Or paste CSV<textarea id={detailId} rows={5} value={csv} placeholder={'sku,qty\nCAM-1,4'} onChange={(event) => setCsv(event.target.value)} aria-describedby={`${detailId}-summary`} /></label>
+      {parsed.headers.length > 0 && <div className="tt-table-import__mapping">{parsed.headers.map((header, index) => <label key={`${index}-${header}`}>{header || `Column ${index + 1}`}<select value={mapping[index] ?? ''} onChange={(event) => { const value = event.target.value; setMapping((current) => ({ ...current, [index]: value })); }}><option value="">Ignore</option>{collection.fields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>)}</div>}
+      <p id={`${detailId}-summary`} className="tt-table-import__summary" role="status">{preview.rows.length} {preview.rows.length === 1 ? 'row' : 'rows'} ready · {preview.invalid.length} invalid{preview.ignoredHeaders.length > 0 ? ` · ignored: ${preview.ignoredHeaders.join(', ')}` : ''}</p>
+      {preview.invalid.length > 0 && <ul className="tt-table-error">{preview.invalid.slice(0, 3).map((item) => <li key={item.row}>Row {item.row}: {item.message}</li>)}</ul>}
+      {preview.rows.length > 100 && <p className="tt-table-error" role="alert">Import at most 100 rows per command.</p>}
+      <button type="button" className="tt-button tt-button--primary" disabled={!canImport} onClick={() => void runImport()}>{pending ? 'Importing…' : `Import ${preview.rows.length} rows`}</button>
+      {message && <p className="tt-table-inline-hint" role="status">{message}</p>}
+    </>}
+  </section>;
 }
 
 function TableActions({ view, state, busy, onCommand, expanded = false }: TableCanvasObjectProps & { state: TableState }) {

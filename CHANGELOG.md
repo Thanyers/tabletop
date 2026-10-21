@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- นำแถวข้อมูลเข้าตารางได้โดยตรงจาก CSV (owner): ตรวจชนิด/required/choices/ช่วงค่า, เติม default, ตรวจ unique และเพดานแถวแบบ all-or-nothing โดยไม่เรียก AI — backend พร้อม, UI อยู่ในงานถัดไป (F015)
+- นำแถวข้อมูลเข้าตารางได้โดยตรง: การ์ด collection มี **Import rows** ให้วาง CSV หรือเลือกไฟล์ เห็น preview/จับคู่คอลัมน์ แล้ว import แบบ deterministic ไม่เรียก AI · ตรวจชนิด/required/choices/ช่วงค่า, เติม default, ตรวจ unique และเพดานแถวแบบ all-or-nothing (owner เท่านั้น; F015)
 ## 3.0.0 — 2026-10-21
 
 MAJOR: กฎของโต๊ะข้อมูลเก็บ field ใหม่ (`action.creates` สร้างแถวใหม่, `field.default`) ที่ 2.2.0 อ่านไม่ได้ · ไม่มี SQL migration, secret หรือ config ใหม่ deploy เหมือนเดิม · **หลังมีโต๊ะที่ใช้กฎแบบใหม่แล้ว ห้าม rollback ไป 2.2.0 หรือต่ำกว่า** (การแก้กฎด้วย AI จะขึ้น "The current table state is invalid" และ action ที่สร้างแถวจะไม่สร้าง) · ถ้าต้องถอย ให้ออก hotfix บน 3.x หรือเปิด `TABLE_READ_ONLY`
