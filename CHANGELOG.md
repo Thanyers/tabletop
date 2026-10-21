@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- การ์ด Rules มี **What this table can do**: ความสามารถที่ใช้ได้ + ขีดจำกัดจริง (6 collections · 12 fields · 100 rows/collection · 200 rows · 12 views · 6 computed columns) และ **Known gaps** 5 ข้อพร้อมทางไปต่อ · `/api/capabilities` เพิ่มข้อมูลชุดเดียวกันแบบ additive (F019)
 - ขอแก้กฎบนโต๊ะเดิมแล้วการ์ด/metric/chart ที่มีอยู่ไม่หายอีกต่อไป: server merge view ที่ AI ไม่ส่งกลับมา (ของใหม่ชนะ, view ที่ bind ไม่ได้ถูกตัดทิ้ง, ไม่เกิน 12 views) (F018)
 ## 3.1.0 — 2026-10-21
 
