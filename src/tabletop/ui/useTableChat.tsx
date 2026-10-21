@@ -6,6 +6,7 @@ import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantRefere
 import type { TableState } from '../shared/table-contracts';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
+import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
@@ -706,10 +707,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     return <div className="tt-chat-card tt-chat-card--questions" data-testid="table-chat-answer">
       <p className="tt-chat-card__intro"><MessageCircleQuestion size={14} /> A few details would help build this table. Nothing on the table changed.</p>
       <p className="tt-chat-card__question">{clarification.question}</p>
-      <ul className="tt-chat-card__questions" aria-label="Answer choices">
-        {clarification.options.map((option) => <li key={option}><button type="button" disabled={readOnly || busy} onClick={() => onAnswerQuestion(option)}><span>{option}</span><ArrowRight size={14} aria-hidden="true" /></button></li>)}
-      </ul>
-      <p className="tt-chat-card__hint">Pick an answer to ask again with it. Your request stays the same.</p>
+      <ClarificationAnswers options={clarification.options} disabled={readOnly || busy} onAnswer={onAnswerQuestion} />
+      <p className="tt-chat-card__hint">Pick one or more answers, or write your own, then send. Your request stays the same.</p>
       {dismissButton}
     </div>;
   }
