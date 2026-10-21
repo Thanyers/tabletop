@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-21 — browser acceptance บน CI ล้มเป็นครั้งคราว (layout/timer race)
+- **What happened:** PR #55 ล้ม 3 รอบติดที่จุดต่างกัน (generative private preview ไม่อยู่ใน viewport, draft-refresh failure ของ generic table) ทั้งที่ dev CI ของ suite เดียวกันผ่าน และ test ในเครื่องผ่าน
+- **Root cause:** runner 2-core ทำให้การรอ layout/animation ในเทสต์ไม่คงที่; ไม่ใช่ logic ของ branch ที่แก้
+- **Correct behavior:** `validate.yml` รัน browser 3 ชุดซ้ำ 1 ครั้งเมื่อล้ม; ถ้ายังล้มให้ถือว่าแดงจริงและไล่จาก log ครั้งแรก; อย่าปิด step หรือใช้ `--no-verify` เพื่อให้ผ่าน
+
 ### 2026-10-20 — การบันทึกตำแหน่งพื้นหลังต้องไม่ล็อกแชท
 - **What happened:** แชทพร้อมส่งและ AI เปิดอยู่ แต่หลังขยับการ์ด textarea กับ Send ถูกปิดจนผลบันทึกตำแหน่งกลับมา
 - **Root cause:** `canvas.layout` ใช้ busy state เดียวกับคำสั่งเล่น ทั้งที่มีคิวและ revision แยกอยู่แล้ว; ผลตอบรับของ layout ยังอาจล้าง busy ของคำสั่งอื่น
