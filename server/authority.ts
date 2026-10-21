@@ -2,6 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
+import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
@@ -55,19 +56,23 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
   invoice: new Set([
     'invoice.reviewSource', 'invoice.sample', 'invoice.saveRun',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
   teaching: new Set([
     'teaching.setParameters', 'teaching.setRepresentation', 'teaching.answer', 'teaching.saveNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
   encounter: new Set([
     'encounter.declareHit', 'encounter.shield', 'encounter.resolve', 'encounter.endTurn', 'encounter.saveNote',
     'encounter.pause', 'encounter.resume',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
   table: new Set([
     'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.setComputedColumns', 'canvas.layout',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
 };
 
@@ -700,6 +705,13 @@ export class CommandAuthority {
         if (existing) {
           if (existing.payloadHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           return { ...existing.response, duplicate: true };
+        }
+        if (envelope.type === 'access.assign') {
+          // F035: roles go to current members only, and the owner's access never changes.
+          const target = (envelope.payload as { actorId?: unknown } | null)?.actorId;
+          if (typeof target !== 'string' || target === workspace.ownerActorId) throw new AuthorityError('ROLE_FORBIDDEN');
+          const targetMember = await transaction.getMember(target);
+          if (!targetMember || targetMember.revokedAt !== null) throw new AuthorityError('MEMBER_NOT_FOUND', 'This person is not at the table.');
         }
         if ((envelope.type === 'workspace.reset' && workspace.ownerActorId !== session.record.actorId)
             || (envelope.type === 'workspace.rename' && !may(workspace, member, 'table.rename'))) {

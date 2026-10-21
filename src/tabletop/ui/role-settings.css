@@ -1,0 +1,22 @@
+/* Roles and permissions in the People dialog (F035). */
+.tt-app .tt-role-settings { display: grid; gap: var(--tt-space-2); margin-top: var(--tt-space-3); padding-top: var(--tt-space-3); border-top: 1px solid var(--tt-line); }
+.tt-app .tt-role-settings__members { display: grid; gap: var(--tt-space-2); margin: 0; padding: 0; list-style: none; }
+.tt-app .tt-role-settings__members li { display: flex; align-items: center; justify-content: space-between; gap: var(--tt-space-3); min-height: var(--tt-button-height); }
+.tt-app .tt-role-settings__name { min-width: 0; overflow: hidden; color: var(--tt-ink); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-role-settings__members select { min-height: 32px; max-width: 60%; padding: 0 var(--tt-space-2); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-small); background: var(--tt-card-surface); color: var(--tt-ink); font: inherit; font-size: var(--tt-type-body); }
+.tt-app .tt-role-settings__role { color: var(--tt-muted); font-size: var(--tt-type-body); }
+.tt-app .tt-role-settings__note, .tt-app .tt-role-settings__empty, .tt-app .tt-role-manager__presets { margin: 0; color: var(--tt-muted); font-size: var(--tt-type-small); line-height: 16px; }
+.tt-app .tt-role-manager { display: grid; gap: var(--tt-space-2); }
+.tt-app .tt-role-manager > summary { color: var(--tt-moss); font-weight: 650; cursor: pointer; }
+.tt-app .tt-role-manager__list { display: grid; gap: var(--tt-space-2); margin: 0; padding: 0; list-style: none; }
+.tt-app .tt-role-manager__list li { display: flex; align-items: center; gap: var(--tt-space-2); }
+.tt-app .tt-role-manager__list li > span { display: grid; flex: 1 1 auto; min-width: 0; }
+.tt-app .tt-role-manager__list small { color: var(--tt-muted); font-size: var(--tt-type-small); }
+.tt-app .tt-role-manager__form { display: grid; gap: var(--tt-space-3); padding: var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium); }
+.tt-app .tt-role-manager__form > label { display: grid; gap: var(--tt-space-1); font-weight: 600; }
+.tt-app .tt-role-manager__form input[type="text"], .tt-app .tt-role-manager__form > label > input { min-height: 36px; padding: 0 var(--tt-space-2); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-small); font: inherit; }
+.tt-app .tt-role-manager__form fieldset { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--tt-space-2); margin: 0; padding: 0; border: 0; }
+.tt-app .tt-role-manager__form legend { margin-bottom: var(--tt-space-1); font-weight: 600; }
+.tt-app .tt-role-manager__form fieldset label { display: flex; align-items: center; gap: var(--tt-space-2); font-size: var(--tt-type-body); }
+.tt-app .tt-role-manager__form fieldset label.is-unavailable { color: var(--tt-muted); }
+.tt-app .tt-role-manager__actions { display: flex; justify-content: flex-end; gap: var(--tt-space-2); }
