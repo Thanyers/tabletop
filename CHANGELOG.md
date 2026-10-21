@@ -2,10 +2,17 @@
 
 ## Unreleased
 
-- POC: `AI_DAILY_BUDGET_MICRO_USD` / `AI_MONTHLY_BUDGET_MICRO_USD` = 0 หรือไม่ตั้ง = **ไม่จำกัดงบ** (ยังวัด usage) เพื่อไม่ให้เทสติด "budget reached" (F033)
+## 3.4.2 — 2026-10-21
 
-- หน้าต่าง People ของโต๊ะข้อมูลเหลือแค่รายชื่อ ตัวนับ `N/7 members` ลิงก์เชิญใช้ซ้ำ และปุ่ม Remove · เอาส่วน AVAILABLE SEATS และคำเชิญครั้งเดียวต่อที่นั่งออก (โต๊ะสอนและโต๊ะเกม รวมถึง Node guest runtime ยังเชิญทีละที่นั่ง) · `/api/capabilities` บอก `inviteLinks` · คู่มือเชิญเพื่อนเขียนใหม่ ([F003](docs/features/F003-reusable-invite-link.md) T5–T6)
-- CI: PR และ push เข้า `dev` รันเฉพาะเช็คเร็ว (lint, unit, typecheck, build, Worker tests) · browser suites ทั้งสามรันเฉพาะ release PR เข้า `main`, push เข้า `main` และ Run workflow เอง (CI005)
+PATCH: POC — ตั้ง AI budget เป็น 0/ไม่ตั้ง = ไม่จำกัดงบ (ยังวัด usage) ไม่ต้องชน "budget reached" ระหว่างเทส · ไม่มี schema/migration · rollback กลับ v3.4.1 ได้
+
+- งบ AI แบบ 0/unset ถือเป็นไม่จำกัด; ค่าบวกยังคุมเพดานตามเดิม (F033)
+
+## 3.4.1 — 2026-10-21
+
+PATCH: การจองงบ AI ใช้เพดาน output จริง (16K) แทน 32K ทำให้ไม่ชน "budget reached" ก่อนเวลาอันควร · ไม่มี schema/migration · rollback กลับ v3.4.0 ได้
+
+- AI ไม่ขึ้น "The configured AI budget has been reached" ก่อนที่ยอดใช้จริงจะใกล้เต็ม เพราะการจองต่อ request ใช้ min(max_tokens, 16,384) ขณะที่ settle ยังคิดตาม usage จริง (F032)
 
 ## 3.4.0 — 2026-10-21
 
