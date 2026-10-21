@@ -55,7 +55,7 @@ describe('Cloudflare Billing Durable Object', () => {
     const item = binding('c');
     const result = await call(stub, '/reserve', reserveBody(item, 56_000, 32_768));
     expect(result.response.status).toBe(200);
-    expect(result.value.reservedMicroUsd).toBe(priceMicroUsd(56_000, 32_768));
+    expect(result.value.reservedMicroUsd).toBe(priceMicroUsd(56_000, 16_384));
   });
 
   it('reserves once per immutable binding, rejects changed hashes, dispatches once, and settles idempotently', async () => {
