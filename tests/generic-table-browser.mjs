@@ -305,7 +305,34 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
   return importedSource;
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true } = {}) {
+// F011: while the provider is held, the card is busy, its glyph orbits (still under reduced motion), and its status is centred.
+async function verifyPendingChatMotion(owner, draftNode, draftCard) {
+  const glyph = draftNode.locator('.tt-object-glyph');
+  await expect(draftCard).toContainText('Preparing a rule draft…');
+  await expect(draftNode).toHaveAttribute('aria-busy', 'true');
+  await expect(glyph).toHaveClass(/\bis-busy\b/u);
+  const motion = () => glyph.evaluate(node => ({
+    orbit: getComputedStyle(node, '::after').animationName,
+    breathe: getComputedStyle(node.querySelector('svg')).animationName,
+    dot: getComputedStyle(node.closest('.tt-canvas-node').querySelector('.tt-chat-dots i')).animationName,
+  }));
+  expect(await motion()).toEqual({ orbit: 'none', breathe: 'none', dot: 'none' });
+  await owner.emulateMedia({ reducedMotion: 'no-preference' });
+  try {
+    await expect.poll(motion).toEqual({ orbit: 'tt-glyph-orbit', breathe: 'tt-glyph-breathe', dot: 'tt-chat-dot' });
+  } finally {
+    await owner.emulateMedia({ reducedMotion: 'reduce' });
+  }
+  const offset = await draftNode.evaluate(node => {
+    const body = node.querySelector('.tt-canvas-node__body').getBoundingClientRect();
+    const text = node.querySelector('.tt-chat-card__pending--working').getBoundingClientRect();
+    return { x: Math.abs((body.left + body.right) / 2 - (text.left + text.right) / 2), y: Math.abs((body.top + body.bottom) / 2 - (text.top + text.bottom) / 2) };
+  });
+  expect(offset.x, JSON.stringify(offset)).toBeLessThanOrEqual(2);
+  expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
+}
+
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
@@ -356,7 +383,9 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await expect(consent).toBeVisible();
     for (const filename of sourceNames) expect((await consent.innerText()).replace(/\s+/gu, ' ')).toContain(filename);
   }
-  setTableReply({ change, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  let releaseProvider = () => {};
+  const gate = observePending ? new Promise(resolve => { releaseProvider = resolve; }) : undefined;
+  setTableReply({ change, gate, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -376,7 +405,19 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await route.continue();
   };
   const workspaceUrl = `**/api/workspaces/${tableId}`;
-  if (failDraftRefresh) await owner.route(workspaceUrl, workspaceRoute);
+  const modelUrl = `**/api/workspaces/${tableId}/model`;
+  // Arm the refresh failure before the browser sees the 202. Setting it after reading the
+  // response in the test raced the app's own refresh on slow CI machines.
+  const modelRoute = async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const response = await route.fetch();
+    if (response.status() === 202) modelAccepted = true;
+    await route.fulfill({ response });
+  };
+  if (failDraftRefresh) {
+    await owner.route(workspaceUrl, workspaceRoute);
+    await owner.route(modelUrl, modelRoute);
+  }
   const providerCallsBefore = failDraftRefresh ? getProviderCalls() : undefined;
   const modelResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   void modelResponse.catch(() => {});
@@ -399,7 +440,18 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     : 'A rule draft is ready. Review it before anyone uses it.';
   try {
     await expect(draftCard).toBeVisible({ timeout: 20_000 });
+    if (observePending) {
+      try {
+        await verifyPendingChatMotion(owner, draftNode, draftCard);
+      } finally {
+        releaseProvider();
+      }
+    }
     await expect(draftCard).toContainText(expectedDraftText, { timeout: 20_000 });
+    if (observePending) {
+      await expect(draftNode).not.toHaveAttribute('aria-busy', /.*/u);
+      await expect(draftNode.locator('.tt-object-glyph')).not.toHaveClass(/\bis-busy\b/u);
+    }
   } catch (error) {
     const answerDiagnostics = await owner.getByTestId('table-chat-answer').evaluateAll(cards => cards.map(card => ({
       text: card.textContent?.trim() ?? '',
@@ -437,6 +489,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     expect(modelRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
     await owner.unroute(workspaceUrl, workspaceRoute);
+    await owner.unroute(modelUrl, modelRoute);
   } else {
     await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
     await expect(draftCard.getByRole('button', { name: 'Retry table refresh', exact: true })).toHaveCount(0);
@@ -543,6 +596,8 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
 async function progressThroughLifecycle(owner, tableId, api, rules) {
   const editor = await openCanvasObject(owner, 'table.rules');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
+  const advanced = editor.locator('details.tt-table-advanced-checks');
+  if (await advanced.getAttribute('open') === null) await advanced.locator('summary').first().click();
   const proposedRules = editor.getByRole('region', { name: 'Proposed rules', exact: true });
   const actionDetails = proposedRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
   await actionDetails.locator('summary').click();
@@ -1341,7 +1396,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
   await requestClarifyingQuestion(owner, room.id, setTableReply, api);
   // F013: the owner consented on this table epoch during the clarifying exchange.
-  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false });
+  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true });
   await progressThroughLifecycle(owner, room.id, api, expectedRules.shifts);
   const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();

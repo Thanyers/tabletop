@@ -129,7 +129,7 @@ merge PR `release/X.Y.Z` (หรือ `hotfix/X.Y.Z`) เข้า `main` แ�
 ### ตั้งค่าครั้งแรก (admin ของ repo + เจ้าของบัญชี Cloudflare)
 
 1. สร้าง Cloudflare API token ที่ dashboard → My Profile → API Tokens ใช้สิทธิ์ระดับบัญชีเท่าที่จำเป็น: **Workers Scripts: Edit**, **D1: Edit**, **Account Settings: Read** และจำกัดเฉพาะบัญชีนี้
-2. เตรียม config จริงของแต่ละ environment เป็น **JSON ล้วน ไม่มีคอมเมนต์** โดยเริ่มจาก `wrangler.jsonc` แล้วแก้ `name`, `vars.PUBLIC_ORIGIN`, เพดาน AI, `d1_databases[0].database_name` / `database_id` ให้ตรงกับ environment นั้น (ดูชื่อใน [DEPLOYMENTS](DEPLOYMENTS.md)) · `$schema` ลบออกได้ · path อย่าง `main` และ `assets.directory` ใช้แบบ relative เหมือนเดิม
+2. เตรียม config จริงของแต่ละ environment เป็น **JSON ล้วน ไม่มีคอมเมนต์** โดยเริ่มจาก `wrangler.jsonc` แล้วแก้ `name`, `vars.PUBLIC_ORIGIN`, เพดาน AI, `d1_databases[0].database_name` / `database_id` ให้ตรงกับ environment นั้น (ดูชื่อใน [DEPLOYMENTS](DEPLOYMENTS.md)) · `$schema` ลบออกได้ · **ลบ `limits` ออก** เพราะบัญชีนี้ใช้ Workers Free ซึ่งไม่รับ CPU limits (pipeline ตรวจให้) · path อย่าง `main` และ `assets.directory` ใช้แบบ relative เหมือนเดิม
 3. ใส่ค่าใน GitHub (รันเองบนเครื่องผู้ดูแล อย่าวางค่าในแชทหรือไฟล์ที่ track):
    ```bash
    gh secret set CLOUDFLARE_API_TOKEN -R Thanyers/tabletop

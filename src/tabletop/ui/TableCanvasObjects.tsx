@@ -8,6 +8,7 @@ import type { GenerativeViewDescriptor } from '../shared/generative-contracts';
 import { CandidateLifecycle } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
+import { applyTableCandidate } from './table-candidate-apply';
 import './record-actions.css';
 
 interface TableCanvasObjectProps {
@@ -111,15 +112,32 @@ function SourceCard({ source, expanded, canRemove, readOnly, referenced, busy, o
 function TableRules({ view, state, onCommand, busy, expanded = false, onEditRules }: TableCanvasObjectProps & { state: TableState }) {
   const [manualChange, setManualChange] = useState('');
   const [manualError, setManualError] = useState('');
+  const [applying, setApplying] = useState(false);
+  const [applyFeedback, setApplyFeedback] = useState('');
   const isOwner = view.actor.role === 'owner';
   const readOnly = busy === 'table.readOnly';
   const program = state.program;
   const candidateChange = state.candidate?.change.kind === 'table' ? state.candidate.change : null;
+  const candidateKey = state.candidate ? `${state.candidate.id}:${state.candidate.hash}` : '';
   const candidateState = useMemo(() => {
     if (!candidateChange) return null;
     try { return applyTableChange(structuredClone(state), structuredClone(candidateChange)); }
     catch { return null; }
   }, [candidateChange, state]);
+
+  useEffect(() => { setApplyFeedback(''); }, [candidateKey]);
+
+  const applyProposal = async () => {
+    if (!isOwner || readOnly || busy !== null || applying || state.candidate?.status === 'active') return;
+    setApplyFeedback('');
+    setApplying(true);
+    try {
+      const result = await applyTableCandidate(view, onCommand, { readOnly });
+      if (!result.ok) setApplyFeedback(result.reason);
+    } catch {
+      setApplyFeedback('A review step could not be completed. Review the latest proposal and try again.');
+    } finally { setApplying(false); }
+  };
 
   const proposeManual = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -135,11 +153,19 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">{isOwner ? 'OWNER REVIEW · SHARED ACTIVE RULES' : 'SHARED ACTIVE RULES'}</span><strong>{program?.title ?? 'Rules and proposal'}</strong><small>{program ? `Active r${state.ruleRevision}` : 'No active program'}</small></div>
     {isOwner && program && onEditRules && <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || readOnly || Boolean(state.candidate && state.candidate.status !== 'active')} onClick={onEditRules}><Pencil size={13} />Edit rules</button></div>}
     {!expanded ? <p className="tt-canvas-inline__note">{program ? `${program.collections.length} collections · ${program.actions.length} actions · open to inspect rules, evidence and changes.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
-      {program ? <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /> : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
+      {program ? candidateChange && state.candidate?.status !== 'active'
+        ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /></details>
+        : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} />
+        : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
       {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} />
-        {isOwner && candidateState?.program?.canvas?.views.length ? <DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /> : null}
+        {isOwner && <div className="tt-table-proposal__apply">
+          <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
+          {applying && <p className="tt-canvas-inline__note" role="status">Simulating and checking this proposal before activation.</p>}
+          {applyFeedback && <p className="tt-table-error" role="alert">{applyFeedback}</p>}
+        </div>}
+        {isOwner && candidateState?.program?.canvas?.views.length ? <details className="tt-table-private-preview"><summary>Private preview</summary><DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /></details> : null}
       </section>}
-      {isOwner && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} readOnly={readOnly} />}
+      {isOwner && state.candidate && <details className={state.candidate.status === 'active' ? 'tt-table-history' : 'tt-table-advanced-checks'}><summary>{state.candidate.status === 'active' ? 'History and restore' : 'Advanced checks'}</summary><CandidateLifecycle view={view} onCommand={onCommand} busy={busy} readOnly={readOnly} /></details>}
       {isOwner && !readOnly && <details className="tt-table-manual-editor"><summary>Advanced manual rule change</summary><p>Paste a prepared table change only if needed. Normal requests can be written in plain language in the AI draft assistant.</p><form onSubmit={proposeManual}><label htmlFor="tt-table-manual-change">Table change</label><textarea id="tt-table-manual-change" rows={7} value={manualChange} onChange={(event) => { setManualChange(event.target.value); setManualError(''); }} placeholder={'{"kind":"table","program":{...},"initialRecords":{...}}'} spellCheck={false} /><small>New tables include initial records. Changes to an active table must preserve its collections and current records.</small>{manualError && <span role="alert" className="tt-table-error">{manualError}</span>}<button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || manualChange.trim().length === 0}>Propose manual change</button></form></details>}
       {!isOwner && <p className="tt-canvas-inline__note">Proposals and review controls are private to the owner. Files, active rules and records are shared with this table.</p>}
     </>}
@@ -208,7 +234,7 @@ function ProgramOverview({ program, state, label, change, members }: { program: 
   const sources = new Map(state.sources.map((source) => [source.id, source.filename]));
   const evidence = program.evidence ?? [];
   return <section className="tt-table-program" aria-label={label}>
-    <div className="tt-table-program__summary"><span><small>Collections</small><strong>{program.collections.length}</strong></span><span><small>Actions</small><strong>{program.actions.length}</strong></span><span><small>Unique rules</small><strong>{program.invariants.length}</strong></span></div>
+    <div className="tt-table-program__summary"><span><small>Tables</small><strong>{program.collections.length}</strong></span><span><small>Actions</small><strong>{program.actions.length}</strong></span><span><small>Checks</small><strong>{program.invariants.length}</strong></span></div>
     {program.description && <p className="tt-table-program__description">{program.description}</p>}
     <details className="tt-table-rule-details"><summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>{program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} />)}</details>
     <details className="tt-table-rule-details"><summary>Actions · {program.actions.length}</summary>{program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} />)}</details>

@@ -185,6 +185,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const [focusKey, setFocusKey] = useState(0);
   const [acknowledgedRetry, setAcknowledgedRetry] = useState<{ prompt: string; key: string }>();
   const [retryPrefill, setRetryPrefill] = useState<{ text: string; key: number }>();
+  const [composerMessage, setComposerMessage] = useState('');
 
   const updateCards = useCallback((targetScope: string, update: (current: ChatCard[]) => ChatCard[]) => {
     if (!targetScope || targetScope !== scopeRef.current) return;
@@ -237,6 +238,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setExplicitDraftScope(null);
     setAcknowledgedRetry(undefined);
     setRetryPrefill(undefined);
+    setComposerMessage('');
   }, [scope, updateCards]);
 
   useEffect(() => {
@@ -249,7 +251,10 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [scope, assistantAvailable, loadHistory]);
 
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
-  const mode = table ? tableChatMode(table.actor.role === 'owner' ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope) : 'ask';
+  const mode = table ? tableChatMode(table.actor.role === 'owner' ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
+    prompt: composerMessage,
+    hasCreateAction: table.domain.program?.actions.some(action => Boolean(action.creates?.length)) ?? false,
+  }) : 'ask';
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const historyStatus = historyState.scope === scope ? historyState.status : 'loading';
@@ -580,6 +585,13 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setFocusKey((key) => key + 1);
   }, []);
 
+  const prepareFromCard = useCallback((card: ChatCard) => {
+    const current = viewRef.current;
+    if (!current || current.actor.role !== 'owner' || optionsRef.current.readOnly || requestLock.current) return;
+    editRules();
+    setRetryPrefill({ text: card.prompt, key: Date.now() });
+  }, [editRules]);
+
   const currentLocalState = readPrivateChatState(scope);
   const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState));
   const operationBusy = externalBusy || requestsBusy;
@@ -589,6 +601,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       id: chatNodeId(scope, card.id),
       title: card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt,
       eyebrow: card.kind === 'draft' ? 'Rule draft' : 'AI answer',
+      glyph: <Sparkles size={16} />,
+      busy: card.phase === 'sending' || card.phase === 'waiting',
       position: { x: 760, y: 40 + index * 300 },
       content: <ChatCardContent
         card={card}
@@ -604,16 +618,17 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         onPrefill={() => prefillCard(card)}
         onAnswerQuestion={(answer) => void answerQuestion(card, answer)}
         onDismiss={() => dismiss(card)}
+        onBuild={() => prepareFromCard(card)}
       />,
     }));
-  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss]);
+  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard]);
 
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
   const owner = table.actor.role === 'owner';
   const modeCanAsk = mode === 'draft' || assistantAvailable;
   const placeholder = !aiEnabled || (mode === 'ask' && !assistantAvailable) ? 'AI is off for this table'
-    : mode === 'draft' ? 'Describe the table you want'
-      : 'Ask about this table';
+    : mode === 'draft' ? table.domain.program ? 'Describe what you want to add or change' : 'Describe the table you want'
+      : owner ? 'Ask, add something, or change this table' : 'Ask about this table';
   const sourceFiles = table.domain.sources.map((source) => ({ id: source.id, filename: source.filename }));
   const prefill = retryPrefill ?? options.prefill;
   const bar = <TableChat
@@ -637,11 +652,12 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onCancelRuleEdit={cancelEditRules}
     onAttach={async (file) => { await optionsRef.current.attach(table, file); }}
     onSend={send}
+    onMessageChange={setComposerMessage}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
 
-function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss }: {
+function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild }: {
   card: ChatCard;
   view: TableView;
   readOnly: boolean;
@@ -655,6 +671,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   onPrefill: () => void;
   onAnswerQuestion: (answer: string) => void;
   onDismiss: () => void;
+  onBuild: () => void;
 }) {
   const dismissalBlocked = isUncertainRequest(card) || card.confirming === true || card.confirmationPending === true;
   const dismissButton = <button type="button" className="tt-chat-card__dismiss" aria-label="Close this card" disabled={dismissalBlocked} onClick={onDismiss}><X size={13} /></button>;
@@ -662,8 +679,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     ? <button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={onCheck}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Check status</button>
     : null;
   if (card.phase === 'sending' || card.phase === 'waiting') {
-    return <div className="tt-chat-card" role="status" data-testid="table-chat-answer">
-      <p className="tt-chat-card__pending"><LoaderCircle size={14} className="tt-spin" />{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</p>
+    return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer">
+      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span></p>
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
@@ -712,6 +729,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   if (result.kind !== 'action-proposal') {
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
+      {result.kind === 'build-request' && view.actor.role === 'owner' && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
       {references.length > 0 && <div className="tt-chat-card__references">{references.map((reference, index) => <button type="button" key={`${reference.kind}-${index}`} onClick={() => onOpenObject(objectForReference(reference))}>{reference.label}</button>)}</div>}
       {dismissButton}
     </div>;

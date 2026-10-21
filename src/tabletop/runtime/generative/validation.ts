@@ -251,6 +251,19 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
         const type = getGenerativeExpressionType(effect.value.expression, program, action, records);
         assert(compatibleFieldType(target, type, effect.op === 'add'), 'Expression effect result does not match its target field.');
       }
+      for (const create of action.creates ?? []) {
+        const collection = program.collections.find(item => item.id === create.collection);
+        assert(collection, 'A create action refers to an unknown collection.');
+        for (const [fieldId, operand] of Object.entries(create.values)) {
+          if (!('expression' in operand)) continue;
+          const expressionIssues = validateGenerativeExpression(operand.expression, program, action, records);
+          for (const issue of expressionIssues) addIssue(issue);
+          if (expressionIssues.length > 0) continue;
+          const target = fieldFor(program, collection.id, fieldId);
+          const type = getGenerativeExpressionType(operand.expression, program, action, records);
+          assert(compatibleFieldType(target, type, false), 'Expression create result does not match its target field.');
+        }
+      }
     }
     const canvas = program.canvas;
     if (!canvas) return issues;
