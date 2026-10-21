@@ -9,6 +9,7 @@ import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeReque
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { ReasonedDomainError } from './model-failure.js';
+import { nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
@@ -503,6 +504,7 @@ async function proposeGeneratedTable(
   let binding = initialBinding;
   const deadline = Date.now() + 25_000;
   const total: DeepSeekUsage = { promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 };
+  let previousIssues: string[] = [];
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     let change: ChangeSet | undefined;
     let clarification: TableClarification | undefined;
@@ -541,7 +543,9 @@ async function proposeGeneratedTable(
     }
     if (attempt === 3 || !issues.length) throw new ReasonedDomainError('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation. Nothing was activated.', issues);
     if (Date.now() >= deadline) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
-    input = { ...initialInput, repair: { attempt: attempt + 1, issues, ...(previousOutput === undefined ? {} : { previousOutput }) } };
+    const repairIssues = nextRepairIssues(previousIssues, issues);
+    previousIssues = issues;
+    input = { ...initialInput, repair: { attempt: attempt + 1, issues: repairIssues, ...(previousOutput === undefined ? {} : { previousOutput }) } };
     let maxInputTokens: number;
     for (;;) {
       try {
