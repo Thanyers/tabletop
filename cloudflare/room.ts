@@ -45,6 +45,8 @@ const ROOM_EXPIRES_AT = 253_402_300_799_000;
 const ROOM_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const COMMAND_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{40,64}$/u;
+/** Actor ids are opaque account ids (UUIDs today); bound the shape before touching storage. */
+const MEMBER_ACTOR_ID_PATTERN = /^[A-Za-z0-9_-]{1,160}$/u;
 const PROJECTION_CURSOR_PATTERN = /^[a-f0-9]{64}$/u;
 const MODEL_JOB_ID_PATTERN = /^[a-f0-9]{64}$/u;
 
@@ -431,7 +433,7 @@ export class Room extends DurableObject<Env> {
             : workspace.domainState.kind === 'encounter' && workspace.domainState.paused ? 'paused' : 'active',
         }, { 'x-request-id': requestId });
       }
-      const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu.exec(url.pathname);
+      const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|members\/remove|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu.exec(url.pathname);
       if (!route || this.roomId === null || route[1] !== this.roomId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
       const workspaceId = route[1];
       const suffix = route[2] ?? '';
@@ -464,6 +466,19 @@ export class Room extends DurableObject<Env> {
         const result = await this.authority.execute(authorized.session, envelope, workspaceId);
         this.scheduleDirectorySync();
         return json(200, result, { 'x-request-id': requestId });
+      }
+      if (request.method === 'POST' && suffix === 'members/remove') {
+        const authorized = await this.authorize(request, workspaceId);
+        requireMutation(request, this.env, authorized.session);
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
+        const body = await readJson(request);
+        if (!isRecord(body) || typeof body.actorId !== 'string' || !MEMBER_ACTOR_ID_PATTERN.test(body.actorId)
+            || Object.keys(body).some((key) => key !== 'actorId')) {
+          throw new AuthorityError('INVALID_REQUEST');
+        }
+        const workspace = await this.authority.removeMember(authorized.session, workspaceId, body.actorId);
+        this.scheduleDirectorySync();
+        return json(200, workspace, { 'x-request-id': requestId });
       }
       if (request.method === 'POST' && suffix === 'invites') {
         const authorized = await this.authorize(request, workspaceId);

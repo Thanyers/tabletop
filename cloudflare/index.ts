@@ -12,7 +12,7 @@ export { Room } from './room.js';
 export { Billing } from './billing.js';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}))?$`, 'u');
+const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}))?$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
 const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
 const redeemSchema = z.object({ ticket: z.string().max(100) }).strict();

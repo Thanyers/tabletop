@@ -1263,6 +1263,165 @@ describe('Cloudflare room Durable Object', () => {
     expect(teachingUpdate.response.status).toBe(200);
   });
 
+  it('lets the table owner remove a member, closes their socket, hides the room in D1, and lets them rejoin by a new invite (F003-T1)', async () => {
+    const owner = newActor('Remove owner');
+    const member = newActor('Removed member');
+    await Promise.all([saveActor(owner), saveActor(member)]);
+    const { roomId, stub } = await createRoom(owner, 'table');
+    const joinSeat = async () => {
+      const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+        method: 'POST', body: { seat: 'member-1' }, mutation: true,
+      });
+      expect(invitation.response.status).toBe(201);
+      return call<WorkspaceView | PublicError>(stub, '/internal/redeem', member, {
+        method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+      });
+    };
+    const joined = await joinSeat();
+    expect(joined.response.status).toBe(200);
+    expect((joined.body as WorkspaceView).actor).toMatchObject({ role: 'participant', seat: 'member-1' });
+    await runInDurableObject(stub, (instance) => instance.alarm());
+    const directoryRow = () => runtime.DB.prepare(
+      'SELECT active FROM room_members WHERE room_id = ? AND user_id = ?',
+    ).bind(roomId, member.id).first<{ active: number }>();
+    expect(await directoryRow()).toMatchObject({ active: 1 });
+
+    const memberView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, member);
+    expect(memberView.response.status).toBe(200);
+    const ownerSocket = await connectProjectionSocket(stub, roomId, owner);
+    const memberSocket = await connectProjectionSocket(stub, roomId, member);
+    try {
+      await ownerSocket.projections.waitFor((view) => view.members.length === 2);
+      await memberSocket.projections.waitFor((view) => view.members.length === 2);
+      let memberCloseCode: number | null = null;
+      memberSocket.socket.addEventListener('close', (event) => { memberCloseCode = (event as CloseEvent).code; }, { once: true });
+
+      const removed = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}/members/remove`, owner, {
+        method: 'POST', body: { actorId: member.id }, mutation: true,
+      });
+      expect(removed.response.status).toBe(200);
+      expect(removed.body.actor).toMatchObject({ actorId: owner.id, role: 'owner' });
+      expect(removed.body.members.map((entry) => entry.actorId)).toEqual([owner.id]);
+
+      await vi.waitFor(() => expect(memberCloseCode).toBe(4403));
+      const ownerAfter = await ownerSocket.projections.waitFor((view) => view.members.length === 1);
+      expect(ownerAfter.members.some((entry) => entry.actorId === member.id)).toBe(false);
+    } finally {
+      ownerSocket.socket.close(1000, 'Test complete');
+      try { memberSocket.socket.close(1000, 'Test complete'); } catch { /* already closed by the room */ }
+    }
+
+    const revokedRead = await call<PublicError>(stub, `/api/workspaces/${roomId}`, member);
+    expect(revokedRead.response.status).toBe(403);
+    expect(revokedRead.body.errorCode).toBe('MEMBERSHIP_REVOKED');
+    const revokedCommand = await issueCommand(stub, memberView.body, member, 'table.import', {
+      filename: 'after-removal.txt', text: 'a removed member cannot write',
+    });
+    expect(revokedCommand.response.status).toBe(403);
+    expect((revokedCommand.body as PublicError).errorCode).toBe('MEMBERSHIP_REVOKED');
+    const membershipRows = await inspectRoom<{ revoked_at: SqlStorageValue }>(stub,
+      `SELECT revoked_at FROM room_memberships WHERE actor_id = '${member.id}'`);
+    expect(membershipRows).toHaveLength(1);
+    expect(membershipRows[0]?.revoked_at).not.toBeNull();
+
+    await runInDurableObject(stub, (instance) => instance.alarm());
+    expect(await directoryRow()).toMatchObject({ active: 0 });
+
+    // A removed member returns only through a new invitation for the seat.
+    const rejoined = await joinSeat();
+    expect(rejoined.response.status).toBe(200);
+    expect((rejoined.body as WorkspaceView).actor).toMatchObject({ actorId: member.id, role: 'participant', seat: 'member-1' });
+    expect((rejoined.body as WorkspaceView).members.map((entry) => entry.actorId).sort()).toEqual([owner.id, member.id].sort());
+    const ownerView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(ownerView.body.members.some((entry) => entry.actorId === member.id && entry.seat === 'member-1')).toBe(true);
+    const memberBack = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, member);
+    expect(memberBack.response.status).toBe(200);
+    const rejoinRows = await inspectRoom<{ revoked_at: SqlStorageValue }>(stub,
+      `SELECT revoked_at FROM room_memberships WHERE actor_id = '${member.id}'`);
+    expect(rejoinRows).toEqual([{ revoked_at: null }]);
+    await runInDurableObject(stub, (instance) => instance.alarm());
+    expect(await directoryRow()).toMatchObject({ active: 1 });
+
+    // An active member still cannot redeem a second invitation.
+    const otherSeat = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-2' }, mutation: true,
+    });
+    expect(otherSeat.response.status).toBe(201);
+    const doubleJoin = await call<PublicError>(stub, '/internal/redeem', member, {
+      method: 'POST', body: { ticket: otherSeat.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(doubleJoin.response.status).toBe(409);
+    expect(doubleJoin.body.errorCode).toBe('INVITE_ALREADY_USED');
+  });
+
+  it('rejects member removal by non-owners, of the owner, of unknown actors, with malformed bodies, and outside tables (F003-T1)', async () => {
+    const owner = newActor('Guard owner');
+    const firstMember = newActor('Guard first member');
+    const secondMember = newActor('Guard second member');
+    const outsider = newActor('Guard outsider');
+    await Promise.all([saveActor(owner), saveActor(firstMember), saveActor(secondMember), saveActor(outsider)]);
+    const { roomId, stub } = await createRoom(owner, 'table');
+    for (const [actor, seat] of [[firstMember, 'member-1'], [secondMember, 'member-2']] as const) {
+      const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+        method: 'POST', body: { seat }, mutation: true,
+      });
+      const redeemed = await call<WorkspaceView>(stub, '/internal/redeem', actor, {
+        method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+      });
+      expect(redeemed.response.status).toBe(200);
+    }
+    const remove = (actor: TestActor, body: unknown, targetRoomId = roomId, targetStub = stub) =>
+      call<PublicError>(targetStub, `/api/workspaces/${targetRoomId}/members/remove`, actor, {
+        method: 'POST', body, mutation: true,
+      });
+
+    const byMember = await remove(firstMember, { actorId: secondMember.id });
+    expect(byMember.response.status).toBe(403);
+    expect(byMember.body.errorCode).toBe('ROLE_FORBIDDEN');
+    const ownerSelf = await remove(owner, { actorId: owner.id });
+    expect(ownerSelf.response.status).toBe(409);
+    expect(ownerSelf.body.errorCode).toBe('MEMBER_NOT_REMOVABLE');
+    const unknown = await remove(owner, { actorId: outsider.id });
+    expect(unknown.response.status).toBe(404);
+    expect(unknown.body.errorCode).toBe('MEMBER_NOT_FOUND');
+    for (const body of [
+      { actorId: secondMember.id, extra: true },
+      { actorId: 'not an id!' },
+      { actorId: '' },
+      { actorId: 42 },
+      {},
+    ]) {
+      const malformed = await remove(owner, body);
+      expect(malformed.response.status).toBe(400);
+      expect(malformed.body.errorCode).toBe('INVALID_REQUEST');
+    }
+    const withoutCsrf = await call<PublicError>(stub, `/api/workspaces/${roomId}/members/remove`, owner, {
+      method: 'POST', body: { actorId: secondMember.id }, mutation: false,
+    });
+    expect(withoutCsrf.response.status).toBe(403);
+    const outsiderAttempt = await remove(outsider, { actorId: secondMember.id });
+    expect(outsiderAttempt.response.status).toBe(403);
+
+    // Nothing above removed anyone.
+    const ownerView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(ownerView.body.members.map((entry) => entry.actorId).sort()).toEqual([owner.id, firstMember.id, secondMember.id].sort());
+
+    const teacher = newActor('Guard teacher');
+    const learner = newActor('Guard learner');
+    await Promise.all([saveActor(teacher), saveActor(learner)]);
+    const teaching = await createRoom(teacher, 'teaching');
+    const teachingInvite = await call<{ ticket: string }>(teaching.stub, `/api/workspaces/${teaching.roomId}/invites`, teacher, {
+      method: 'POST', body: { seat: 'learner-1' }, mutation: true,
+    });
+    const learnerJoin = await call<WorkspaceView>(teaching.stub, '/internal/redeem', learner, {
+      method: 'POST', body: { ticket: teachingInvite.body.ticket.slice(`${teaching.roomId}_`.length) }, mutation: true,
+    });
+    expect(learnerJoin.response.status).toBe(200);
+    const notTable = await remove(teacher, { actorId: learner.id }, teaching.roomId, teaching.stub);
+    expect(notTable.response.status).toBe(409);
+    expect(notTable.body.errorCode).toBe('MEMBER_NOT_REMOVABLE');
+  });
+
   it('creates in its canonical named DO, isolates actors, and rejects forged target room IDs', async () => {
     const owner = newActor('Teacher');
     const outsider = newActor('Outsider');

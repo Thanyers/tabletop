@@ -575,7 +575,8 @@ export class RoomRepository implements WorkspaceRepository {
         return { workspace, member, replay: true };
       }
       if (invitation.epoch !== workspace.epoch) throw new AuthorityError('STALE_EPOCH');
-      if (memberRow) throw new AuthorityError('INVITE_ALREADY_USED');
+      // An active member cannot redeem again; a member the owner removed may return with a new invitation (F003).
+      if (memberRow && memberRow.revoked_at === null) throw new AuthorityError('INVITE_ALREADY_USED');
       const expectedRole = workspace.kind === 'table' && invitation.seat.startsWith('member-')
         ? 'participant'
         : workspace.kind === 'teaching' && (invitation.seat === 'learner-1' || invitation.seat === 'learner-2')
@@ -611,6 +612,12 @@ export class RoomRepository implements WorkspaceRepository {
            WHERE ticket_hash = ? AND redeemed_at IS NULL AND revoked_at IS NULL`,
           now, actorId, ticketHash,
         );
+        if (memberRow) {
+          this.storage.sql.exec(
+            'DELETE FROM room_memberships WHERE workspace_id = ? AND epoch = ? AND actor_id = ? AND revoked_at IS NOT NULL',
+            workspace.id, workspace.epoch, actorId,
+          );
+        }
         insertMember(this.storage, workspace.id, workspace.epoch, member);
         this.insertDirectory(actorId, workspace.epoch, true);
       });
@@ -1073,6 +1080,7 @@ export class RoomRepository implements WorkspaceRepository {
       const stagedInvitations: InvitationRecord[] = [];
       const expiredInvitations = new Map<string, number>();
       const replacedInvitations = new Map<Seat, number>();
+      const revokedMembers = new Map<string, number>();
       let commandCommit: CommandCommit | null = null;
       const repository = this;
       const transaction: WorkspaceTransaction = {
@@ -1144,6 +1152,9 @@ export class RoomRepository implements WorkspaceRepository {
         async revokeOutstandingInvitations(seat, now): Promise<void> {
           replacedInvitations.set(seat, now);
         },
+        async revokeMember(actorId, now): Promise<void> {
+          revokedMembers.set(actorId, now);
+        },
         async getApproval(approvalId, epoch): Promise<{ actorId: string; candidateHash: string; proofHash: string; expiresAt: number; revoked: boolean } | null> {
           const row = repository.rows(
             `SELECT approving_actor_id, candidate_hash, proof_hash, expires_at, revoked FROM room_approvals
@@ -1172,7 +1183,7 @@ export class RoomRepository implements WorkspaceRepository {
         },
       };
       const result = await operation(transaction);
-      if (stagedInvitations.length || expiredInvitations.size || replacedInvitations.size || commandCommit) {
+      if (stagedInvitations.length || expiredInvitations.size || replacedInvitations.size || revokedMembers.size || commandCommit) {
         const completedCommit = commandCommit;
         this.storage.transactionSync(() => {
           for (const [ticketHash, revokedAt] of expiredInvitations) {
@@ -1187,6 +1198,14 @@ export class RoomRepository implements WorkspaceRepository {
                AND expires_at > ? AND redeemed_at IS NULL AND revoked_at IS NULL`,
               revokedAt, workspaceId, workspace.epoch, seat, revokedAt,
             );
+          }
+          for (const [actorId, revokedAt] of revokedMembers) {
+            // F003: the removed member loses access now; the D1 directory hides the room on next sync.
+            this.storage.sql.exec(
+              `UPDATE room_memberships SET revoked_at = ? WHERE workspace_id = ? AND epoch = ? AND actor_id = ? AND revoked_at IS NULL`,
+              revokedAt, workspaceId, workspace.epoch, actorId,
+            );
+            this.insertDirectory(actorId, workspace.epoch, false);
           }
           for (const invitation of stagedInvitations) {
             this.storage.sql.exec(
