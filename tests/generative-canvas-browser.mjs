@@ -1001,8 +1001,9 @@ try {
     const memberTwo = await addMember(owner, memberTwoActor, 'member-2', tableId);
     const members = [memberOne, memberTwo];
     const ownerReady = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    // F015 open visibility: members receive the owner's whole table, including evidence quotations,
+    // draft and draft history (was: evidence stripped and draft hidden for members).
     const visibleProgram = structuredClone(ownerReady.domain.program);
-    if (scenario.file) visibleProgram.evidence = [];
     for (const member of members) {
       const projection = await api(member, `/api/workspaces/${tableId}`);
       expect(projection.status).toBe(200);
@@ -1010,7 +1011,8 @@ try {
       expect(projection.body.domain.records).toEqual(ownerReady.domain.records);
       expect(projection.body.domain.canvasLayout).toEqual(ownerReady.domain.canvasLayout);
       expect(projection.body.domain.sources).toEqual(ownerReady.domain.sources);
-      expect(projection.body.domain.candidate).toBeNull();
+      expect(projection.body.domain.candidate).toEqual(ownerReady.domain.candidate);
+      expect(projection.body.domain.revisions).toEqual(ownerReady.domain.revisions);
     }
     await assertMemberCannotUsePrivateTools(memberOne, tableId, ownerReady.revision, ownerReady.epoch, source);
 

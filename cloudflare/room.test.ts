@@ -61,6 +61,7 @@ interface TestModelJob {
 
 interface TestTableAssistantJob {
   id: string;
+  askedBy?: string;
   createdAt: number;
   prompt: string;
   status: 'running' | 'completed' | 'failed';
@@ -446,7 +447,7 @@ describe('Cloudflare room Durable Object', () => {
     }
   });
 
-  it('keeps table assistant history actor-scoped, returns exact lost-ack retries, and applies actions only after confirmed CAS', async () => {
+  it('shares table assistant history with every member (F015 open visibility), keeps confirmation and AI context with the asker, returns exact lost-ack retries, and applies actions only after confirmed CAS', async () => {
     const owner = newActor('Assistant table owner');
     const participant = newActor('Assistant table participant');
     await Promise.all([saveActor(owner), saveActor(participant)]);
@@ -503,14 +504,22 @@ describe('Cloudflare room Durable Object', () => {
     const afterExplanation = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
     expect(afterExplanation.body.revision).toBe(ownerView.body.revision);
 
-    const participantCannotPollOwnerJob = await call<PublicError>(stub,
+    // Was: history and polling were actor-scoped (404 / empty for the other member). Under open
+    // visibility (F015) every member reads every member's job, labelled with the asker.
+    const participantPollsOwnerJob = await call<TestTableAssistantJob>(stub,
       `/api/workspaces/${roomId}/assistant/${ownerJobId}`, participant);
-    expect(participantCannotPollOwnerJob.response.status).toBe(404);
+    expect(participantPollsOwnerJob.response.status).toBe(200);
+    expect(participantPollsOwnerJob.body).toMatchObject({
+      id: ownerJobId, askedBy: owner.id, status: 'completed', prompt: ownerRequest.prompt, result: { kind: 'explanation' },
+    });
     const ownerHistory = await call<TestTableAssistantHistoryPage>(stub, `/api/workspaces/${roomId}/assistant`, owner);
     const participantHistoryBeforeAsk = await call<TestTableAssistantHistoryPage>(stub,
       `/api/workspaces/${roomId}/assistant`, participant);
     expect(ownerHistory.body.items.map((item) => item.id)).toEqual([ownerJobId]);
-    expect(participantHistoryBeforeAsk.body.items).toEqual([]);
+    expect(ownerHistory.body.items[0]?.askedBy).toBe(owner.id);
+    expect(participantHistoryBeforeAsk.response.status).toBe(200);
+    expect(participantHistoryBeforeAsk.body.items.map((item) => ({ id: item.id, askedBy: item.askedBy })))
+      .toEqual([{ id: ownerJobId, askedBy: owner.id }]);
 
     const participantView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, participant);
     const borrowed = await issueCommand(stub, participantView.body, participant, 'table.act', {
@@ -564,6 +573,17 @@ describe('Cloudflare room Durable Object', () => {
           expectedEpoch: actionRequest.expectedEpoch }, mutation: true,
       });
     expect(ownerCannotConfirmParticipantJob.response.status).toBe(404);
+    // The owner can read the participant's proposal (F015) but the confirm above stayed bound to the asker.
+    const ownerReadsParticipantProposal = await call<TestTableAssistantJob>(stub,
+      `/api/workspaces/${roomId}/assistant/${actionJobId}`, owner);
+    expect(ownerReadsParticipantProposal.response.status).toBe(200);
+    expect(ownerReadsParticipantProposal.body).toMatchObject({
+      id: actionJobId, askedBy: participant.id, confirmationStatus: 'available', result: { kind: 'action-proposal' },
+    });
+    const cameraAfterRejectedConfirm = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    if (cameraAfterRejectedConfirm.body.domain.kind !== 'table') throw new Error('EXPECTED_TABLE_DOMAIN');
+    expect(cameraAfterRejectedConfirm.body.domain.records.equipment?.find((row) => row.id === 'camera')?.values)
+      .toMatchObject({ available: false, borrower: participant.id });
 
     const ownerBeforeStaleConfirm = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
     const interveningAction = await issueCommand(stub, ownerBeforeStaleConfirm.body, owner, 'table.act', {
@@ -634,11 +654,16 @@ describe('Cloudflare room Durable Object', () => {
 
     const participantHistory = await call<TestTableAssistantHistoryPage>(stub,
       `/api/workspaces/${roomId}/assistant`, participant);
-    expect(participantHistory.body.items).toHaveLength(2);
+    expect(participantHistory.body.items).toHaveLength(3);
     expect(participantHistory.body.items[0]).toMatchObject({
-      id: currentActionJobId, prompt: currentActionRequest.prompt, confirmationStatus: 'confirmed',
+      id: currentActionJobId, askedBy: participant.id, prompt: currentActionRequest.prompt, confirmationStatus: 'confirmed',
     });
-    expect(participantHistory.body.items[1]).toMatchObject({ id: actionJobId, confirmationStatus: 'stale' });
+    expect(participantHistory.body.items[1]).toMatchObject({ id: actionJobId, askedBy: participant.id, confirmationStatus: 'stale' });
+    expect(participantHistory.body.items[2]).toMatchObject({ id: ownerJobId, askedBy: owner.id });
+    const ownerHistoryAfterConfirm = await call<TestTableAssistantHistoryPage>(stub,
+      `/api/workspaces/${roomId}/assistant`, owner);
+    expect(ownerHistoryAfterConfirm.body.items.map((item) => item.id)).toEqual([currentActionJobId, actionJobId, ownerJobId]);
+    // AI context stays the asker's own exchanges even though the history is shared.
     expect(observedInputs[1]?.conversation).toEqual([]);
     expect(observedInputs[1]?.actorId).toBe(participant.id);
 
@@ -658,6 +683,10 @@ describe('Cloudflare room Durable Object', () => {
         { prompt: actionRequest.prompt, status: 'stale' },
         { prompt: currentActionRequest.prompt, status: 'confirmed' },
       ]);
+    for (const input of observedInputs.slice(1)) {
+      expect(input.actorId).toBe(participant.id);
+      expect(input.conversation.map((entry) => entry.prompt)).not.toContain(ownerRequest.prompt);
+    }
 
     const resetView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
     const reset = await issueCommand(stub, resetView.body, owner, 'workspace.reset', {});
@@ -1153,9 +1182,11 @@ describe('Cloudflare room Durable Object', () => {
 
     let ownerView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
     expect(ownerView.body.domain.candidate).toMatchObject({ status: 'draft' });
+    // Was: the participant projection hid the owner's draft. Under open visibility (F015) members
+    // read the draft; the job record itself still never stores the source text (asserted above).
     const participantDraft = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
-    expect(participantDraft.body.domain.candidate).toBeNull();
-    expect(JSON.stringify(participantDraft.body.domain.candidate)).not.toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
+    expect(participantDraft.body.domain.candidate).toMatchObject({ status: 'draft' });
+    expect(participantDraft.body.domain.candidate).toEqual(ownerView.body.domain.candidate);
     for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) {
       const step = await issueCommand(stub, ownerView.body, owner, type, {});
       expect(step.response.status).toBe(200);
@@ -1810,8 +1841,9 @@ describe('Cloudflare room Durable Object', () => {
     const ownerAfterNote = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
     const learnerAfterNote = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, learner);
     expect(ownerAfterNote.body.domain).toHaveProperty('teacherNote', 'private teacher key');
-    expect(learnerAfterNote.body.domain).not.toHaveProperty('teacherNote');
-    expect(learnerAfterNote.body.revision).toBe(redeemed.body.revision);
+    // Was: hidden from the learner with an unchanged revision. Open visibility (F015): the learner reads it.
+    expect(learnerAfterNote.body.domain).toHaveProperty('teacherNote', 'private teacher key');
+    expect(learnerAfterNote.body.revision).not.toBe(redeemed.body.revision);
     const ownerCurrent = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
     expect(ownerCurrent.response.status).toBe(200);
 
@@ -2524,7 +2556,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(await inspectRoom(stub, 'SELECT * FROM model_jobs')).toHaveLength(0);
   });
 
-  it('pushes membership revisions to connected actors with their own private projection', async () => {
+  it('pushes membership revisions to connected actors with their own projection (F015 open visibility: the teacher note and draft reach learners)', async () => {
     const owner = newActor('Socket owner');
     const firstLearner = newActor('Socket first learner');
     const secondLearner = newActor('Socket second learner');
@@ -2549,7 +2581,9 @@ describe('Cloudflare room Durable Object', () => {
       const ownerInitial = await ownerSocket.projections.waitFor((view) => view.members.length === 2);
       const learnerInitial = await learnerSocket.projections.waitFor((view) => view.members.length === 2);
       expect(ownerInitial.domain).toHaveProperty('teacherNote', 'private teacher context');
-      expect(learnerInitial.domain).not.toHaveProperty('teacherNote');
+      // Was: hidden from learners. Open visibility (F015): the learner projection carries the note too.
+      expect(learnerInitial.domain).toHaveProperty('teacherNote', 'private teacher context');
+      expect(learnerInitial.actor.actorId).toBe(firstLearner.id);
 
       const secondInvite = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
         method: 'POST', body: { seat: 'learner-2' }, mutation: true,
@@ -2566,7 +2600,7 @@ describe('Cloudflare room Durable Object', () => {
       expect(ownerUpdated.members.some((member) => member.actorId === secondLearner.id && member.seat === 'learner-2')).toBe(true);
       expect(learnerUpdated.members.some((member) => member.actorId === secondLearner.id && member.seat === 'learner-2')).toBe(true);
       expect(ownerUpdated.domain).toHaveProperty('teacherNote', 'private teacher context');
-      expect(learnerUpdated.domain).not.toHaveProperty('teacherNote');
+      expect(learnerUpdated.domain).toHaveProperty('teacherNote', 'private teacher context');
 
       const proposalInput = {
         commandId: randomUUID(),
@@ -2586,7 +2620,8 @@ describe('Cloudflare room Durable Object', () => {
       const learnerAfterAction = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstLearner);
       expect(ownerAfterAction.body.domain).toHaveProperty('teacherNote', 'private teacher context');
       expect(ownerAfterAction.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.id });
-      expect(learnerAfterAction.body.domain).not.toHaveProperty('teacherNote');
+      expect(learnerAfterAction.body.domain).toHaveProperty('teacherNote', 'private teacher context');
+      expect(learnerAfterAction.body.domain.candidate).toEqual(ownerAfterAction.body.domain.candidate);
     } finally {
       ownerSocket.socket.close(1000, 'Test complete');
       learnerSocket.socket.close(1000, 'Test complete');

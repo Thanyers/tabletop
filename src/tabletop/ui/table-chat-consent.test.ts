@@ -61,12 +61,25 @@ describe('chat consent', () => {
   it('states the distinct table context and history scope for each endpoint and that it will not ask again', () => {
     expect(consentQuestion('draft')).toContain('active rules, records, and turn');
     expect(consentQuestion('draft')).toContain('Chat history is not included');
-    expect(consentQuestion('ask')).toContain('up to six of your private chat exchanges');
+    expect(consentQuestion('ask')).toContain('up to six of your recent chat exchanges');
     expect(consentQuestion('ask')).toContain('including relevant older ones when available');
     expect(consentQuestion('ask')).toContain('Table files are not sent');
     for (const mode of ['draft', 'ask'] as const) {
       expect(consentQuestion(mode)).toContain('You will not be asked again on this table');
       expect(consentQuestion(mode)).toContain('later rule requests also send the table files');
     }
+  });
+
+  it('says under the default open policy that everyone at the table can see questions, answers and drafts (F015)', () => {
+    const notice = 'Everyone at this table can see your questions, the answers and rule drafts.';
+    for (const mode of ['draft', 'ask'] as const) {
+      expect(consentQuestion(mode)).toBe(consentQuestion(mode, 'open'));
+      expect(consentQuestion(mode, 'open').endsWith(` ${notice}`)).toBe(true);
+      expect(consentQuestion(mode, 'private')).not.toContain('Everyone at this table');
+      expect(consentQuestion(mode, 'private')).toContain('You will not be asked again on this table');
+    }
+    expect(consentQuestion('ask', 'open')).not.toContain('private');
+    expect(consentQuestion('ask', 'private')).toContain('up to six of your private chat exchanges');
+    expect(consentQuestion('draft', 'private')).toBe(consentQuestion('draft', 'open').slice(0, -(notice.length + 1)));
   });
 });

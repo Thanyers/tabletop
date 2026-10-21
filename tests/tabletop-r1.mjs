@@ -212,7 +212,8 @@ try {
   await clickCommand(teacher, teacherQuestions.getByRole('button', { name: 'Save note', exact: true }), 'teaching.saveNote');
   const firstLearner = await current(learner1);
   const secondLearner = await current(learner2);
-  expect(JSON.stringify(firstLearner)).not.toContain('private-teacher-browser-marker');
+  // F015 open visibility: learners now read the teacher note (was: hidden from learners).
+  expect(JSON.stringify(firstLearner)).toContain('private-teacher-browser-marker');
   const teacherSource = await openObject(teacher, 'lesson.source');
   await teacherSource.getByLabel('Mass value in kg', { exact: true }).fill('5');
   await clickCommand(teacher, teacherSource.getByRole('button', { name: 'Update lesson', exact: true }), 'teaching.setParameters');
@@ -233,17 +234,18 @@ try {
   await clickCommand(learner1, learnerQuestion.getByRole('button', { name: 'Check answer', exact: true }), 'teaching.answer');
   teacherQuestions = await openObject(teacher, 'lesson.question');
   await expect(teacherQuestions.locator('.tt-inline-answers')).toContainText('Correct');
+  // F015 open visibility: learner 2 now sees learner 1's answer, view and level (was: none of them).
   const peer = await current(learner2);
-  expect(peer.domain.answers).toEqual([]);
-  expect(peer.domain.representations[firstLearner.actor.actorId]).toBeUndefined();
-  expect(peer.domain.difficulties[firstLearner.actor.actorId]).toBeUndefined();
+  expect(peer.domain.answers.map(answer => answer.actorId)).toEqual([firstLearner.actor.actorId]);
+  expect(peer.domain.representations[firstLearner.actor.actorId]).toBe('graph');
+  expect(peer.domain.difficulties[firstLearner.actor.actorId]).toBe('advanced');
   const forbidden = await commandFrom(learner2, 'teaching.setParameters', { force: 0, mass: 1, time: 2 });
   expect(forbidden.status).toBe(403);
   await expectSeparatedObjects(teacher);
   await expectSeparatedObjects(learner1);
   await teacher.screenshot({ path: join(output, 'teaching-teacher.png') });
   await learner1.screenshot({ path: join(output, 'teaching-learner.png') });
-  mark('Three real sessions share physics; learner exploration, representation and answers stay correctly scoped');
+  mark('Three real sessions share physics; local exploration stays per learner, teacher note, representations and answers are visible to every member (F015 open visibility; was: scoped per learner), learners still cannot change the lesson');
   await learner2.reload(); await expect(learner2.locator('.tt-canvas-node--lesson-scene')).toContainText('4 m');
   const tableOptions = teacher.locator('.tt-table-options');
   if (await tableOptions.getAttribute('open') === null) await tableOptions.locator('summary').click();
@@ -273,11 +275,14 @@ try {
   await lifecycle(dm, 'encounter.source');
   const dmActions = await openObject(dm, 'encounter.actions');
   await clickCommand(dm, dmActions.getByRole('button', { name: 'Hit Pip', exact: true }), 'encounter.declareHit');
+  // F015 open visibility: players now see the pending roll/damage, the goblin and the DM note (was: hidden).
   const playerProjection = await current(mira);
-  expect(playerProjection.domain.pendingHit.roll).toBeNull();
-  expect(playerProjection.domain.pendingHit.damage).toBeNull();
-  expect(playerProjection.domain.characters.some(c => c.id === 'goblin')).toBe(false);
-  expect(JSON.stringify(playerProjection)).not.toContain('private-dm-browser-marker');
+  const dmProjection = await current(dm);
+  expect(playerProjection.domain.pendingHit.roll).toBe(dmProjection.domain.pendingHit.roll);
+  expect(typeof playerProjection.domain.pendingHit.roll).toBe('number');
+  expect(playerProjection.domain.pendingHit.damage).toBe(dmProjection.domain.pendingHit.damage);
+  expect(playerProjection.domain.characters.some(c => c.id === 'goblin')).toBe(true);
+  expect(JSON.stringify(playerProjection)).toContain('private-dm-browser-marker');
   const miraActions = await openObject(mira, 'encounter.actions');
   await clickCommand(mira, miraActions.getByRole('button', { name: /Shield Pip as ally/ }), 'encounter.shield');
   const refreshedDmActions = await openObject(dm, 'encounter.actions');
@@ -294,7 +299,7 @@ try {
   await clickCommand(dm, endTurnActions.getByRole('button', { name: /End .*turn/ }), 'encounter.endTurn');
   await expect(mira.locator('.tt-inline-character-list')).toContainText('2 AP');
   await pip.reload(); await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
-  mark('DM + two players share a real reaction; private hit values stay hidden, ally shield consumes AP, turn restores AP and reload preserves HP');
+  mark('DM + two players share a real reaction; hit values and DM note are visible to players (F015 open visibility; was: hidden), players still cannot resolve, ally shield consumes AP, turn restores AP and reload preserves HP');
   expect(errors).toEqual([]);
   mark('No uncaught browser JavaScript errors across all seven independent contexts');
   await writeFile(join(output, 'report.json'), JSON.stringify({ checks, errors, date: new Date().toISOString(), liveModel: 'not configured', hosting: 'local loopback' }, null, 2));

@@ -242,7 +242,7 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
     await expect(disabledComposer).toHaveValue('Keep this message ready while AI is off.');
     await expect(disabledChat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
     await expect(disabledChat.getByRole('button', { name: 'Attach a file', exact: true })).toBeEnabled();
-    if (failHistory) await expect(disabledChat.getByRole('alert')).toContainText('Private conversation history could not be loaded.');
+    if (failHistory) await expect(disabledChat.getByRole('alert')).toContainText('Table conversation history could not be loaded.');
   }
   const sourceCountBefore = (await api(page, `/api/workspaces/${tableId}`)).body.domain.sources.length;
   let importRequests = 0;
@@ -694,15 +694,18 @@ async function turnOffInviteLink(owner) {
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 }
 
-async function joinAndCheckSharedFiles(newPage, api, actor, inviteUrl, tableId, filename) {
+async function joinAndCheckSharedFiles(newPage, api, actor, inviteUrl, tableId, filename, owner) {
   const page = await newPage(actor, inviteUrl);
   await expect(page.locator('.tt-canvas-panel')).toBeVisible();
   const workspace = await api(page, `/api/workspaces/${tableId}`);
   expect(workspace.status).toBe(200);
-  // F008: members read the table files; drafts and draft history stay with the owner.
+  // F008: members read the table files. F015 open visibility: members also read the owner's draft and
+  // draft history (was: hidden from members), so the member's copy matches the owner's.
   expect(workspace.body.domain.sources.map((source) => source.filename)).toContain(filename);
-  expect(workspace.body.domain.candidate).toBeNull();
-  expect(workspace.body.domain.revisions).toEqual([]);
+  const ownerDomain = (await api(owner, `/api/workspaces/${tableId}`)).body.domain;
+  expect(workspace.body.domain.candidate).toEqual(ownerDomain.candidate);
+  expect(workspace.body.domain.revisions).toEqual(ownerDomain.revisions);
+  expect(workspace.body.domain.program?.evidence).toEqual(ownerDomain.program?.evidence);
   const files = page.locator('[data-canvas-object="table.sources"]');
   await expect(files).toContainText(filename);
   await expect(page.getByRole('button', { name: `Remove ${filename}`, exact: true })).toHaveCount(0);
@@ -1085,7 +1088,8 @@ async function askTableAssistant(page, promptText, syntheticReply, setAssistantR
       await expect(consent).toBeVisible();
       const copy = (await consent.innerText()).replace(/\s+/gu, ' ');
       expect(copy).toMatch(/current active rules, records, and turn|current table context/iu);
-      expect(copy).toContain('up to six of your private chat exchanges, including relevant older ones when available');
+      expect(copy).toContain('up to six of your recent chat exchanges, including relevant older ones when available');
+      expect(copy).toContain('Everyone at this table can see your questions, the answers and rule drafts.');
       expect(copy).toContain('Table files are not sent.');
       expect(copy).toContain('You will not be asked again on this table');
       expect(assistantRequests).toBe(0);
@@ -1232,7 +1236,8 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   expect(afterFollowup.revision).toBe(beforeFollowup.revision);
   expect(afterFollowup.domain.records).toEqual(beforeFollowup.domain.records);
 
-  // A different actor at the same room must see only their own assistant history.
+  // F015 open visibility: a different actor at the same room sees the member's chat, labelled with the
+  // asker (was: only their own history). The AI context sent for the owner's question stays the owner's own.
   await owner.reload();
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
   const ownerProfile = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -1243,7 +1248,10 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     expectedPromptContains: ownerPrompt, forbiddenTexts: [...forbidden, firstPrompt, firstText, followup],
   };
   const ownerCalls = getProviderCalls();
-  await expect(owner.getByRole('article', { name: firstPrompt, exact: true })).toHaveCount(0);
+  const memberCardForOwner = owner.getByRole('article', { name: firstPrompt, exact: true });
+  await expect(memberCardForOwner).toBeVisible();
+  await expect(memberCardForOwner.getByTestId('table-chat-answer')).toContainText(firstText);
+  await expect(memberCardForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${profile.actor.name}`);
   // The owner consented for a rule draft on this table epoch; one grant also covers questions.
   await askTableAssistant(owner, ownerPrompt, ownerReply, setAssistantReply, { expectConsent: false });
   expect(getProviderCalls()).toBe(ownerCalls + 1);
@@ -1252,6 +1260,12 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     owner, tableId, api, privatePrompt: ownerPrompt, privateAnswer: ownerReply.result.text,
     capabilities, getProviderCalls, mark,
   });
+  // The member sees the owner's card too, labelled with the owner as the asker.
+  await member.reload();
+  const ownerCardForMember = member.getByRole('article', { name: ownerPrompt, exact: true });
+  await expect(ownerCardForMember.getByTestId('table-chat-answer')).toContainText(ownerReply.result.text);
+  await expect(ownerCardForMember.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${ownerProfile.actor.name}`);
+  await expect(member.getByRole('article', { name: firstPrompt, exact: true }).locator('.tt-chat-card__asker')).toHaveCount(0);
 
   const providerCallsBeforeArchive = getProviderCalls();
   const archived = await seedConversationPage({ page: member, tableId, profile: afterFollowup, api, setAssistantReply });
@@ -1352,12 +1366,12 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   expect(await owner.evaluate(() => JSON.parse(window.localStorage.getItem('tabletop.aiConsent.v1') ?? '[]').length)).toBe(1);
 
   const firstInvite = await inviteMember(owner, 1);
-  member = await joinAndCheckSharedFiles(newPage, api, member, firstInvite, room.id, source.filename);
+  member = await joinAndCheckSharedFiles(newPage, api, member, firstInvite, room.id, source.filename, owner);
   await verifySharedCardLayout(owner, member, room.id, api);
   await verifyLiveCursor(owner, member);
   mark('Shared card layout: rules, people, history and table cards sit at the same place for owner and member, and a move reaches the other screen live');
   await verifyParticipantConversation({ owner, member, tableId: room.id, source, api, setAssistantReply, getProviderCalls, capabilities, mark });
-  mark('Generic table chat: explicit consent, participant-only answer history, grounded reference, reload continuity, and no table mutation');
+  mark('Generic table chat: explicit consent, shared answer history labelled "Asked by" (F015 open visibility; was: participant-only), asker-only AI context, grounded reference, reload continuity, and no table mutation');
   await performContextualAction(member, 'equipment', {
     recordId: 'camera', recordLabel: 'Field camera', actionTitle: 'Borrow equipment', recordFieldLabel: 'Item',
     resetTextOnRecordChange: {
@@ -1375,7 +1389,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await expect(equipmentPreview).not.toContainText(active.actor.actorId);
 
   const secondInvite = await inviteMember(owner, 2);
-  secondMember = await joinAndCheckSharedFiles(newPage, api, secondMember, secondInvite, room.id, source.filename);
+  secondMember = await joinAndCheckSharedFiles(newPage, api, secondMember, secondInvite, room.id, source.filename, owner);
   const people = await openCanvasObject(member, 'workspace.people');
   await expect(people).toContainText('Second Member');
   mark('Generic table: existing participant receives the new membership projection over its live connection');
@@ -1459,7 +1473,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   await expect(ownerRecordActions).toContainText('Actions for this collection are limited to members.');
   await expect(ownerRecordActions.getByRole('combobox', { name: 'Action', exact: true })).toHaveCount(0);
   const invite = await inviteMember(owner, 1);
-  member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename);
+  member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename, owner);
   await performContextualAction(member, 'people', {
     recordId: 'bo', recordLabel: 'Bo', actionTitle: 'Swap shifts', recordFieldLabel: 'First person',
     recordParameterChoice: 'First person', inputs: { 'Second person': 'ada' },
@@ -1512,7 +1526,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect((await api(owner, `/api/workspaces/${room.id}`)).body.title).toBe(generatedTableTitle);
   // F003-T3: this member joins through the table's reusable invite link instead of a one-seat invitation.
   const invite = await turnOnInviteLink(owner);
-  member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename);
+  member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename, owner);
   expect((await api(member, `/api/workspaces/${room.id}`)).body.actor.seat).toBe('member-1');
   await turnOffInviteLink(owner);
   await expect(member.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
@@ -1587,6 +1601,16 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(afterMemberProposal.revision).toBe(memberBeforeProposal.revision);
   expect(afterMemberProposal.domain.records.boats.map((row) => row.values.score)).toEqual([2, 0]);
   expect(afterMemberProposal.domain.turn).toBe('member-1');
+  // F015 open visibility: the owner sees the member's pending proposal, labelled with the asker, but only the
+  // asker can confirm it (no Confirm button on the owner's screen).
+  await owner.reload();
+  await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
+  const memberProposalForOwner = owner.getByRole('article', { name: memberPrompt, exact: true });
+  await expect(memberProposalForOwner.getByTestId('table-chat-answer')).toContainText(memberProposal.result.text);
+  await expect(memberProposalForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${memberName}`);
+  await expect(memberProposalForOwner).toContainText(`Only ${memberName} can confirm this proposal.`);
+  await expect(memberProposalForOwner.getByRole('button', { name: 'Confirm action', exact: true })).toHaveCount(0);
+  await expect(memberChat.getByRole('button', { name: 'Confirm action', exact: true })).toBeVisible();
 
   await performAction(member, 'Advance boat', { 'Your boat': 'blue' });
   active = (await api(member, `/api/workspaces/${room.id}`)).body;
@@ -1594,7 +1618,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);
   await expect(memberChat.getByRole('button', { name: 'Confirm action', exact: true })).toHaveCount(0);
   await expect(memberChat).toContainText('The table changed after this proposal. Ask again for a fresh proposal.');
-  mark('Generic table chat: lost ask and confirm acknowledgements retry or reconcile once; a direct table action makes a pending proposal stale');
+  mark('Generic table chat: lost ask and confirm acknowledgements retry or reconcile once; another member sees the proposal with "Asked by" and no Confirm button (F015); a direct table action makes a pending proposal stale');
 
   await openCanvasObject(owner, 'table.collection.boats');
   await refreshTable(owner, room.id);

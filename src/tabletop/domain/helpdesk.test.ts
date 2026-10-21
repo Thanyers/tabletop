@@ -81,12 +81,16 @@ describe('new Office Helpdesk workflow — isolated real interpreter, authored r
     expect(values(state, 'wifi')).toMatchObject({ status: 'done', assignee: 'tech-b' });
     expect(state.activity.map(a => a.actorId)).toEqual(['tech-a', 'tech-b', 'tech-b', 'dispatcher']);
   });
-  it('invalidates approved rules after work changes, and keeps owner drafts private', () => {
+  it('invalidates approved rules after work changes, and keeps owner drafts private under the private policy', () => {
     let state = active();
     const edit = helpdeskChange(state.sources[0].id); edit.initialRecords = {};
     state = command(state, 'evolve.propose', { change: edit });
     for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve']) state = command(state, type);
-    const projected = projectDomain(state, technician);
+    // Open visibility (F015, default): the technician sees the owner's approved draft and history.
+    const open = projectDomain(state, technician);
+    if (open.kind !== 'table') throw new Error('Wrong domain');
+    expect(open.candidate).toEqual(state.candidate); expect(open.revisions).toEqual(state.revisions);
+    const projected = projectDomain(state, technician, 'private');
     if (projected.kind !== 'table') throw new Error('Wrong domain');
     expect(projected.sources).toEqual(state.sources); expect(projected.candidate).toBeNull(); expect(projected.revisions).toEqual([]); expect(projected.program?.evidence).toEqual([]);
     state = act(state, 'claim', { ticket: 'printer' });

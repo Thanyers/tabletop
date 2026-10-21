@@ -111,7 +111,7 @@ describe('public practice runtime', () => {
     runtime.dispose();
   });
 
-  it('updates the shared lesson, records separate answers, and applies role projections', async () => {
+  it('updates the shared lesson, records separate answers, and applies the open visibility projection (F015)', async () => {
     const runtime = new PracticeRuntime('teaching-physics');
     await runEveryStep(runtime);
 
@@ -129,10 +129,12 @@ describe('public practice runtime', () => {
     expect(teachingView(runtime).teacherNote).toBe('คำตอบอ้างอิง: 4 เมตร');
 
     runtime.selectActor('practice-learner-1');
+    // Was: the learner saw only their own answer and no teacher note. Under open visibility (F015)
+    // the learner sees every answer and the teacher note; the private projection is covered in domain tests.
     const learner = teachingView(runtime);
-    expect(learner.answers.map((answer) => answer.actorId)).toEqual(['practice-learner-1']);
-    expect(learner.representations).toEqual({ 'practice-learner-1': 'graph' });
-    expect('teacherNote' in learner).toBe(false);
+    expect(learner.answers.map((answer) => answer.actorId)).toEqual(['practice-learner-1', 'practice-learner-2']);
+    expect(learner.representations).toMatchObject({ 'practice-learner-1': 'graph' });
+    expect(learner.teacherNote).toBe('คำตอบอ้างอิง: 4 เมตร');
     runtime.dispose();
   });
 
