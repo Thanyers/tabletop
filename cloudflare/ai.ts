@@ -20,7 +20,7 @@ const MAX_STANDARD_PROVIDER_INPUT_TOKENS = 56_000;
 const MAX_PROVIDER_INPUT_TOKENS = 65_000;
 const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
 const CHANGE_MAX_OUTPUT_TOKENS = 512;
-const TABLE_MAX_OUTPUT_TOKENS = 8_192;
+const TABLE_MAX_OUTPUT_TOKENS = 32_768;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -502,7 +502,7 @@ async function proposeGeneratedTable(
 ): Promise<AIProposalResult> {
   let input = initialInput;
   let binding = initialBinding;
-  const deadline = Date.now() + 25_000;
+  const deadline = Date.now() + 180_000;
   const MAX_ATTEMPTS = 4;
   const total: DeepSeekUsage = { promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 };
   let previousIssues: string[] = [];

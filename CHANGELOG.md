@@ -1,9 +1,15 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
 
-- corpus วัดผลได้หลายรอบ (`TABLE_CORPUS_ROUNDS`) พร้อมค่าความเสถียรต่อเคส — 3 รอบล่าสุด matched 29/30, reject 0, join ได้ draft 100% (F030)
 - หน้าต่าง People ของโต๊ะข้อมูลเหลือแค่รายชื่อ ตัวนับ `N/7 members` ลิงก์เชิญใช้ซ้ำ และปุ่ม Remove · เอาส่วน AVAILABLE SEATS และคำเชิญครั้งเดียวต่อที่นั่งออก (โต๊ะสอนและโต๊ะเกม รวมถึง Node guest runtime ยังเชิญทีละที่นั่ง) · `/api/capabilities` บอก `inviteLinks` · คู่มือเชิญเพื่อนเขียนใหม่ ([F003](docs/features/F003-reusable-invite-link.md) T5–T6)
+
+## 3.4.0 — 2026-10-21
+
+MINOR: AI table generation ใช้ thinking + 32K output + compact schema guide + deadline 180s (F031), corpus หลายรอบ/stability (F029/F030) และ reliability ก่อนหน้า · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v3.3.2 ได้ทันที
+
+- AI ร่างกฎใช้ **thinking + 32K output + deadline 180s** และ prompt แบบ compact guide (5KB แทน schema 36KB): แนบไฟล์ได้มากขึ้น ร่างยากมีโอกาสผ่านมากขึ้น · reply ที่ถูกตัด (`finish_reason=length`) ถือเป็น repairable และ invalid JSON รายงานตำแหน่ง+บริบท · ช่วง repair ห้ามกลับไปถาม clarify (F031)
+- corpus วัดผลได้หลายรอบ (`TABLE_CORPUS_ROUNDS`) พร้อมค่าความเสถียรต่อเคส — 3 รอบล่าสุด matched 29/30, reject 0, join ได้ draft 100% (F030)
 
 ## 3.3.2 — 2026-10-21
 

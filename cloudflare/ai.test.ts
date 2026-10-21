@@ -193,7 +193,7 @@ describe('Cloudflare AI proposal helper', () => {
     expect(observed).not.toContain('ENCOUNTER_EVENT_PRIVATE_SENTINEL');
   });
 
-  it('sends every table source and current program under the reserved 8192-token output cap', async () => {
+  it('sends every table source and current program under the reserved 32768-token output cap', async () => {
     const input = request('table');
     const table = input.workspace.domain;
     if (table.kind !== 'table') throw new Error('Expected table fixture.');
@@ -207,7 +207,7 @@ describe('Cloudflare AI proposal helper', () => {
     let observed = '';
     const result = await proposeChange(testEnv, input, providerFetch(proposal('table'), (content, body) => {
       observed = content;
-      expect(body.max_tokens).toBe(8_192);
+      expect(body.max_tokens).toBe(32_768);
       const sent = JSON.parse(content) as {
         kind: string;
         sources: Array<{ id: string; filename: string; text: string }>;
@@ -232,7 +232,7 @@ describe('Cloudflare AI proposal helper', () => {
         'SELECT max_input_tokens, max_output_tokens FROM billing_jobs WHERE id = ?', result.jobId,
       ).toArray()[0]);
     expect(reservation?.max_input_tokens).toBeGreaterThanOrEqual(requestBytes);
-    expect(reservation?.max_output_tokens).toBe(8_192);
+    expect(reservation?.max_output_tokens).toBe(32_768);
 
     const member: Member = { ...input.workspace.actor, role: 'participant', seat: 'member-1' };
     const participantInput: AIProposalRequest = {
@@ -327,29 +327,24 @@ describe('Cloudflare AI proposal helper', () => {
     expect(rows).toEqual([{ id: result.jobId, status: 'settled', completion_tokens: 12 }]);
   });
 
-  it('returns a clarification asked on a repair attempt with the usage of both attempts and stops repairing (F012)', async () => {
+  it('does not turn a repairable failure into a clarification (F031)', async () => {
     const input = request('table');
     const bad = equipmentChange('source_fixture');
     bad.program.actions[0].effects[0].field = 'missing_field';
-    const clarification = { question: 'Which field records who borrowed the item?', options: ['Borrower', 'Owner', 'Nobody'] };
+    const clarification = { kind: 'clarify', question: 'Which field records who borrowed the item?', options: ['Borrower', 'Owner', 'Nobody'] };
     let calls = 0;
     const fetchImpl: typeof fetch = async (url, init) => {
       calls += 1;
-      if (calls === 2) {
-        const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
-        expect((JSON.parse(data.messages[1].content) as { repair: { attempt: number } }).repair.attempt).toBe(2);
-      }
-      return providerFetch(calls === 1 ? bad : { kind: 'clarify', ...clarification })(url, init);
+      return providerFetch(calls === 1 ? bad : clarification)(url, init);
     };
-    const result = await proposeChange(testEnv, input, fetchImpl);
-    expect(calls).toBe(2);
-    if (!('clarification' in result)) throw new Error('Expected a clarification.');
-    expect(result.clarification).toEqual(clarification);
-    expect(result.usage).toEqual({ promptTokens: 40, completionTokens: 24, cacheHitTokens: 10, cacheMissTokens: 30 });
+    const rejection = await proposeChange(testEnv, input, fetchImpl).catch((error: unknown) => error);
+    expect(rejection).toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+    expect((rejection as { reasons?: string[] }).reasons?.join(' ')).toContain('Do not ask a clarifying question');
+    expect(calls).toBe(4);
     const stub = testEnv.BILLING.get(testEnv.BILLING.idFromName('global'));
     const rows = await runInDurableObject(stub, (_instance, state) => state.storage.sql
       .exec<{ status: string }>('SELECT status FROM billing_jobs WHERE workspace_id = ?', input.workspace.id).toArray());
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(4);
     expect(rows.every(row => row.status === 'settled')).toBe(true);
   });
 

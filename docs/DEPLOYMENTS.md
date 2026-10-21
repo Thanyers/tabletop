@@ -1,14 +1,14 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 20:49 (Asia/Bangkok)** ทั้งสอง environment รายงาน **3.3.2 / 957074d** จาก annotated tag [v3.3.2](https://github.com/Thanyers/tabletop/tree/v3.3.2) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 22:54 (Asia/Bangkok)** ทั้งสอง environment รายงาน **3.4.0 / 442e074** จาก annotated tag [v3.4.0](https://github.com/Thanyers/tabletop/tree/v3.4.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [957074d](https://github.com/Thanyers/tabletop/commit/957074d4db044f689fa52cc8ecc00b2c8b035141) — PR #96 | commit และ build เดียวกัน |
-| Release | v3.3.2 / 3.3.2 | v3.3.2 / 3.3.2 |
+| Source | [442e074](https://github.com/Thanyers/tabletop/commit/442e074a743c654dbbb448488b46165936a3c4d9) — PR #102 | commit และ build เดียวกัน |
+| Release | v3.4.0 / 3.4.0 | v3.4.0 / 3.4.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
@@ -126,6 +126,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 
 | Release | สิ่งที่ส่ง | หลักฐาน |
 | --- | --- | --- |
+| 21 ต.ค. `v3.4.0` / `442e074` | F031 thinking/caps/compact guide/180s, F030 corpus rounds | [PR #102](https://github.com/Thanyers/tabletop/pull/102), [run 39629734074](https://github.com/Thanyers/tabletop/actions/runs/39629734074) |
 | 21 ต.ค. `v3.3.2` / `957074d` | F025 refresh race, F026 clarify language, F027 reject hint, F028 minimal fallback, F029 corpus | [PR #96](https://github.com/Thanyers/tabletop/pull/96), [run 39611292996](https://github.com/Thanyers/tabletop/actions/runs/39611292996), [PR #97](https://github.com/Thanyers/tabletop/pull/97) |
 | 21 ต.ค. `v3.3.1` / `6c6bfcc` | F024 repair escalation (issue ซ้ำ → ลดความซับซ้อน) | [PR #89](https://github.com/Thanyers/tabletop/pull/89), [run 39596026230](https://github.com/Thanyers/tabletop/actions/runs/39596026230), [PR #90](https://github.com/Thanyers/tabletop/pull/90) |
 | 21 ต.ค. `v3.3.0` / `457373a` | F023 salvage, F022 multi-answer, F021 type while pending, F020 field messages, F003-T1 remove member, F003-T3 reusable invite link | [PR #84](https://github.com/Thanyers/tabletop/pull/84), [run 39589703856](https://github.com/Thanyers/tabletop/actions/runs/39589703856), [PR #86](https://github.com/Thanyers/tabletop/pull/86) |
