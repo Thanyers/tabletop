@@ -136,3 +136,8 @@ export function draftRefreshPatch(targetScope: string, currentScope: string, err
     ? { checking: false, pollError: `The draft is ready, but the table could not refresh: ${error}` }
     : { checking: false, pollError: undefined, pollTimedOut: false };
 }
+
+/** F025: when a concurrent projection wins the race, wait briefly and reapply instead of failing the draft. */
+export function draftRefreshBackoffMs(attempt: number): number {
+  return 150 * (attempt + 1);
+}
