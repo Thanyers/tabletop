@@ -2,8 +2,13 @@
 
 ## Unreleased
 
-- การ์ด Rules มี **What this table can do**: ความสามารถที่ใช้ได้ + ขีดจำกัดจริง (6 collections · 12 fields · 100 rows/collection · 200 rows · 12 views · 6 computed columns) และ **Known gaps** 5 ข้อพร้อมทางไปต่อ · `/api/capabilities` เพิ่มข้อมูลชุดเดียวกันแบบ additive (F019)
+## 3.2.0 — 2026-10-21
+
+MINOR: การแก้กฎไม่ทำให้ canvas view หาย (F018) และการ์ด Rules บอกความสามารถ/ข้อจำกัดของโต๊ะ (F019) · ไม่มี migration, secret หรือ binding ใหม่ · rollback กลับ v3.1.0 ได้ทันที
+
 - ขอแก้กฎบนโต๊ะเดิมแล้วการ์ด/metric/chart ที่มีอยู่ไม่หายอีกต่อไป: server merge view ที่ AI ไม่ส่งกลับมา (ของใหม่ชนะ, view ที่ bind ไม่ได้ถูกตัดทิ้ง, ไม่เกิน 12 views) (F018)
+- การ์ด Rules มี **What this table can do**: ความสามารถที่ใช้ได้ + ขีดจำกัดจริง (6 collections · 12 fields · 100 rows/collection · 200 rows · 12 views · 6 computed columns) และ **Known gaps** 5 ข้อพร้อมทางไปต่อ · `/api/capabilities` เพิ่มข้อมูลชุดเดียวกันแบบ additive (F019)
+
 ## 3.1.0 — 2026-10-21
 
 MINOR: ไม่มี migration, secret หรือ config ใหม่ · rollback ไป 3.0.0 ได้ทันที (คอลัมน์คำนวณเก็บนอก JSON ของกฎ รุ่นเก่าแค่ไม่แสดง) · ห้ามถอยต่ำกว่า 3.0.0 ตามหมายเหตุของ 3.0.0
