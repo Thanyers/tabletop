@@ -56,9 +56,45 @@ export const tableRecordsSchema = z.record(id, z.array(tableRowSchema).max(100))
   if (bytes(JSON.stringify(records)) > 128 * 1024) ctx.addIssue({ code: 'custom', message: 'The records exceed the 128 KiB table limit.' });
 });
 export const tableChangeSchema = z.strictObject({ kind: z.literal('table'), program: tableProgramSchema, initialRecords: tableRecordsSchema });
+/** F023: drop only canvas views that fail the schema so one broken view cannot sink the whole draft. */
+function canvasSalvagedChange(value: unknown): TableChange | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const raw = value as { kind?: unknown; program?: unknown };
+  if (raw.kind !== 'table' || typeof raw.program !== 'object' || raw.program === null) return null;
+  const program = raw.program as Record<string, unknown>;
+  const canvas = program.canvas;
+  if (typeof canvas !== 'object' || canvas === null || !Array.isArray((canvas as { views?: unknown }).views)) return null;
+  const { canvas: _dropped, ...core } = program;
+  // Depth/node limits still apply to the salvaged core; only the views are allowed to be broken.
+  if (!expressionWithinBounds({ ...raw, program: core })) return null;
+  let base: TableChange;
+  try { base = parsePayload(tableChangeSchema, { ...raw, program: core }); } catch { return null; }
+  const kept: unknown[] = [];
+  for (const view of (canvas as { views: unknown[] }).views) {
+    if (!expressionWithinBounds(view)) continue;
+    try {
+      parsePayload(tableChangeSchema, { ...raw, program: { ...core, canvas: { version: 1, views: [view] } } });
+      kept.push(view);
+    } catch { /* an unrepresentable view is skipped, not fatal */ }
+  }
+  return { ...base, program: { ...core, ...(kept.length ? { canvas: { version: 1, views: kept } } : {}) } as TableProgram };
+}
+
+/** F023: provider-side parse that tolerates malformed canvas views. */
+export function parseTableChangeSalvagingCanvas(value: unknown): TableChange | null {
+  const direct = tableChangeSchema.safeParse(value);
+  return direct.success ? direct.data : canvasSalvagedChange(value);
+}
+
 export function parseBoundedTableChange(value: unknown): TableChange {
-  assert(expressionWithinBounds(value), 'TABLE_LIMIT', 'The generated expressions exceed deterministic depth, node, or array limits.');
-  return parsePayload(tableChangeSchema, value);
+  try {
+    assert(expressionWithinBounds(value), 'TABLE_LIMIT', 'The generated expressions exceed deterministic depth, node, or array limits.');
+    return parsePayload(tableChangeSchema, value);
+  } catch (error) {
+    const salvaged = canvasSalvagedChange(value);
+    if (salvaged) return salvaged;
+    throw error;
+  }
 }
 const sourceInput = z.strictObject({ filename: z.string().min(1).max(120).regex(/^[^/\\\p{Cc}]+\.(csv|json|txt|md)$/iu), text: z.string().min(1).max(TABLE_FILE_BYTES) });
 const runInput = z.strictObject({ actionId: id, inputs: z.record(id, value) });
