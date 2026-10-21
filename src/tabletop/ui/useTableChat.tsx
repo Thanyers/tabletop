@@ -177,6 +177,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const requestLock = useRef(false);
   const confirmLocks = useRef(new Set<string>());
   const draftRefreshLocks = useRef(new Set<string>());
+  // A settled draft is refreshed once; the POST response and the poll can both report completion.
+  const refreshedDraftJobs = useRef(new Set<string>());
   const isBlockedRef = useRef(false);
   const [explicitDraftScope, setExplicitDraftScope] = useState<string | null>(null);
   const explicitDraftScopeRef = useRef<string | null>(null);
@@ -305,22 +307,27 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }
   }, [patchCard]);
 
-  const refreshAfterDraft = useCallback((targetScope: string, cardId: string, workspaceId: string) => {
+  const refreshAfterDraft = useCallback((targetScope: string, cardId: string, workspaceId: string, jobId: string) => {
+    const key = `${targetScope}:${cardId}:${jobId}`;
+    if (refreshedDraftJobs.current.has(key)) return;
+    refreshedDraftJobs.current.add(key);
     void retryDraftRefresh(targetScope, cardId, workspaceId);
   }, [retryDraftRefresh]);
 
   const pollModelOnce = useCallback(async (targetScope: string, cardId: string, workspaceId: string, jobId: string) => {
     const next = await optionsRef.current.pollDraft(workspaceId, jobId);
     if (targetScope !== scopeRef.current) return next;
+    const settled = next.status === 'completed' || next.status === 'complete';
     patchCard(targetScope, cardId, {
       modelJob: next,
       phase: modelPhase(next),
       error: next.status === 'failed' ? next.message ?? 'The draft could not be prepared.' : undefined,
-      pollError: undefined,
+      // A settled poll must not wipe the follow-up refresh failure; only an in-flight poll resets it.
+      ...(settled ? {} : { pollError: undefined }),
       pollTimedOut: false,
     });
     // Questions leave the table unchanged, so there is nothing to refresh.
-    if ((next.status === 'completed' || next.status === 'complete') && !next.clarification) refreshAfterDraft(targetScope, cardId, workspaceId);
+    if ((next.status === 'completed' || next.status === 'complete') && !next.clarification) refreshAfterDraft(targetScope, cardId, workspaceId, next.id);
     return next;
   }, [patchCard, refreshAfterDraft]);
 
@@ -420,7 +427,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       error: job.status === 'failed' ? job.message ?? 'The draft could not be prepared.' : undefined,
       pollTimedOut: false,
     });
-    if (job.status === 'completed' || job.status === 'complete') refreshAfterDraft(targetScope, card.id, current.id);
+    if (job.status === 'completed' || job.status === 'complete') refreshAfterDraft(targetScope, card.id, current.id, job.id);
     if (current.domain.program && explicitDraftScopeRef.current === targetScope) {
       explicitDraftScopeRef.current = null;
       explicitDraftEntryRef.current = null;

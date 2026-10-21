@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-21 — ข้อความ "refresh failed" หายเพราะ poll ที่จบแล้วล้าง pollError
+- **What happened:** browser test `Community equipment` ล้มไม่คงที่; การ์ดขึ้น "A rule draft is ready" แทน "The rule draft is ready, but the table could not refresh."
+- **Root cause:** `pollModelOnce` patch `pollError: undefined` ทุกครั้ง รวมถึง poll ที่ job settled แล้ว ทำให้ poll ที่มาถึงช้ากว่าการ refresh failure ล้าง error ที่เพิ่งตั้ง
+- **Correct behavior:** เมื่อ job settled (completed/complete) ห้ามล้าง `pollError`; ล้างเฉพาะระหว่าง queued/running หรือเมื่อ Retry refresh สำเร็จ; รัน `npm test`, `npm run test:cloudflare`, `npm run test:cloudflare:browser`
+
 ### 2026-10-21 — browser acceptance บน CI ล้มเป็นครั้งคราว (layout/timer race)
 - **What happened:** PR #55 ล้ม 3 รอบติดที่จุดต่างกัน (generative private preview ไม่อยู่ใน viewport, draft-refresh failure ของ generic table) ทั้งที่ dev CI ของ suite เดียวกันผ่าน และ test ในเครื่องผ่าน
 - **Root cause:** runner 2-core ทำให้การรอ layout/animation ในเทสต์ไม่คงที่; ไม่ใช่ logic ของ branch ที่แก้
