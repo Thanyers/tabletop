@@ -65,7 +65,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
   table: new Set([
-    'table.import', 'table.removeSource', 'table.act', 'canvas.layout',
+    'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.setComputedColumns', 'canvas.layout',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
   ]),
 };

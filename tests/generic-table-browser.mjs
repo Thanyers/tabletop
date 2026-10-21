@@ -1261,6 +1261,18 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
+  // F015: the owner imports rows straight into the active collection, with no model call or consent.
+  const callsBeforeImport = getProviderCalls();
+  const collectionEditor = await openCanvasObject(owner, 'table.collection.equipment');
+  await collectionEditor.getByRole('button', { name: 'Import rows', exact: true }).click();
+  await collectionEditor.getByRole('textbox', { name: 'Or paste CSV', exact: true }).fill('name,available,borrower,borrow_note\nMegaphone,yes,,Imported in bulk\nSpare tripod,no,owner,');
+  await expect(collectionEditor.getByText('2 rows ready · 0 invalid', { exact: true })).toBeVisible();
+  await collectionEditor.getByRole('button', { name: 'Import 2 rows', exact: true }).click();
+  await expect(collectionEditor.getByText('Imported 2 rows into Equipment.', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await api(owner, `/api/workspaces/${room.id}`)).body.domain.records.equipment.length).toBe(4);
+  await expect(collectionEditor.getByText('Megaphone', { exact: true })).toBeVisible();
+  expect(getProviderCalls()).toBe(callsBeforeImport);
+
   const callsBeforeSecondSource = getProviderCalls();
   await addSource(owner, room.id, equipmentNotes, api, 'chat', { aiDisabled: true, failHistory: true });
   expect(getProviderCalls()).toBe(callsBeforeSecondSource);
@@ -1435,6 +1447,20 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await requestProposal(owner, room.id, source, buildChange('game', source.id), setTableReply, api);
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
   expect(active.domain.turn).toBe('host');
+
+  // F017: the owner defines a computed column; the table shows it without a model call.
+  const boatsEditor = await openCanvasObject(owner, 'table.collection.boats');
+  await boatsEditor.getByRole('button', { name: 'Add computed column', exact: true }).click();
+  const computedSection = boatsEditor.getByRole('region', { name: 'Computed columns for Boats and scores', exact: true });
+  await computedSection.getByRole('button', { name: 'Add row', exact: true }).click();
+  await computedSection.getByLabel('Label', { exact: true }).fill('Score plus 5');
+  await computedSection.getByLabel('Number', { exact: true }).fill('5');
+  await computedSection.getByRole('button', { name: 'Save computed columns', exact: true }).click();
+  const computedState = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
+  expect(computedState.computedColumns).toHaveLength(1);
+  expect(computedState.computedColumns[0].collection).toBe('boats');
+  await expect(boatsEditor.getByRole('columnheader', { name: /Score plus 5/u })).toBeVisible();
+  await expect(boatsEditor.getByRole('cell', { name: '5', exact: true })).toHaveCount(2);
   const generatedTableTitle = 'River Race: Active Canvas';
   await owner.getByRole('button', { name: 'Rename table', exact: true }).click();
   const renameInput = owner.getByLabel('Table name', { exact: true });

@@ -6,6 +6,8 @@ import { assert, canonicalJson, hasRole, ID_SCHEMA, parsePayload } from './helpe
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
 import { expressionWithinBounds, getGenerativeExpressionType, validateGenerativeProgram } from '../runtime/generative/validation';
+import { MAX_COMPUTED_COLUMNS, computedColumnProblems, retainComputedColumns } from '../shared/computed-columns';
+import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
@@ -21,6 +23,14 @@ const TABLE_RECORD_ORDINAL_WIDTH = String(MAX_TABLE_ACTION_CREATES - 1).length;
 const fieldSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'list']), required: z.boolean(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional(), default: value.optional() });
 const parameterSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'record']), collection: id.optional(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional() });
 const operand: z.ZodType<TableOperand> = z.union([z.strictObject({ literal: value }), z.strictObject({ input: id }), z.strictObject({ record: id, field: id }), z.strictObject({ system: z.enum(['actor', 'seat', 'turn']) }), z.strictObject({ expression: generativeExpressionSchema })]);
+const computedExpressionSchema: z.ZodType<ComputedExpression> = z.lazy(() => z.union([
+  z.strictObject({ op: z.literal('field'), field: id }),
+  z.strictObject({ op: z.literal('literal'), value: z.number().finite().min(-1e9).max(1e9) }),
+  ...(['add', 'subtract', 'multiply', 'divide'] as const).map((op) => z.strictObject({
+    op: z.literal(op), left: computedExpressionSchema, right: computedExpressionSchema,
+  })),
+]));
+const computedColumnSchema: z.ZodType<ComputedColumn> = z.strictObject({ id, collection: id, label: z.string().min(1).max(40), expression: computedExpressionSchema });
 export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
   version: z.literal(1), title: z.string().min(1).max(100), description: text,
   collections: z.array(z.strictObject({ id, title: text, fields: z.array(fieldSchema).min(1).max(12) })).min(1).max(6),
@@ -185,7 +195,8 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
   assert(generativeIssues.length === 0, 'TABLE_SCHEMA', generativeIssues[0] ?? 'Generated table program is invalid.');
   const turn = state.turn ?? change.program.turnOrder[0] ?? null;
   validateGenerativeOutput(change.program, records, actor ? { actor: actor.actorId, ...(actor.seat ? { seat: actor.seat } : {}), turn } : undefined);
-  return { ...structuredClone(state), program: structuredClone(change.program), records, turn };
+  const computedColumns = retainComputedColumns(state.computedColumns, change.program);
+  return { ...structuredClone(state), program: structuredClone(change.program), records, turn, computedColumns };
 }
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
@@ -322,6 +333,67 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
       && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
       'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it with the room.');
     return { state: { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null }, label: 'Unused source removed.' };
+  }
+  if (type === 'table.setComputedColumns') {
+    hasRole(ctx, ['owner']);
+    const input = parsePayload(z.strictObject({ columns: z.array(computedColumnSchema).max(MAX_COMPUTED_COLUMNS) }), payload);
+    const program = state.program;
+    assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
+    const problems = computedColumnProblems(input.columns, program);
+    assert(problems.length === 0, 'TABLE_SCHEMA', problems[0] ?? 'The computed columns are invalid.');
+    const next = structuredClone(state);
+    next.computedColumns = structuredClone(input.columns);
+    next.dataRevision += 1;
+    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Computed columns updated (${input.columns.length})`, at: ctx.now }].slice(-100);
+    return { state: next, label: `Computed columns updated (${input.columns.length}).` };
+  }
+  if (type === 'table.importRows') {
+    // Direct row import changes shared data, so it stays with the owner; members add files (F008).
+    hasRole(ctx, ['owner']);
+    const input = parsePayload(z.strictObject({
+      collection: id,
+      rows: z.array(z.record(z.string().min(1).max(100), value)).min(1).max(100),
+    }), payload);
+    const program = state.program;
+    assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
+    const collection = program.collections.find(item => item.id === input.collection);
+    assert(collection, 'TABLE_SCHEMA', 'Choose an existing collection.');
+    const nextActionRevision = (state.actionRevision ?? 0) + 1;
+    assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
+    const next = structuredClone(state);
+    const existing = next.records[collection.id] ?? [];
+    const created: TableRecord[] = [];
+    input.rows.forEach((raw, index) => {
+      const rowNumber = index + 1;
+      for (const key of Object.keys(raw)) {
+        assert(collection.fields.some(field => field.id === key), 'TABLE_INPUT', `Row ${rowNumber}: unknown field "${key}".`);
+      }
+      const values: Record<string, TableValue> = {};
+      for (const field of collection.fields) {
+        const supplied = raw[field.id];
+        if (supplied === undefined || supplied === null) {
+          if (field.default !== undefined) values[field.id] = structuredClone(field.default);
+          else if (field.required) throw new DomainError('TABLE_INPUT', `Row ${rowNumber}: ${field.label} is required.`);
+          else values[field.id] = null;
+          continue;
+        }
+        assert(validValue(field, supplied), 'TABLE_INPUT', `Row ${rowNumber}: ${field.label} is invalid.`);
+        values[field.id] = structuredClone(supplied);
+      }
+      const digest = ctx.hash(canonicalJson(['importRows', collection.id, index, values])).toLowerCase();
+      const suffix = digest.replace(/[^a-z0-9_-]/g, '').slice(0, TABLE_RECORD_ID_HASH_LENGTH) || 'x';
+      const recordId = `${TABLE_RECORD_ID_PREFIX}${nextActionRevision}_${String(index).padStart(TABLE_RECORD_ORDINAL_WIDTH, '0')}_${suffix}`;
+      assert(id.safeParse(recordId).success, 'TABLE_LIMIT', 'A bounded record identifier could not be generated.');
+      assert(!existing.some(row => row.id === recordId) && !created.some(row => row.id === recordId), 'TABLE_INPUT', 'A generated record identifier collision prevented this import. No rows were imported.');
+      created.push({ id: recordId, values });
+    });
+    next.records[collection.id] = [...existing, ...created];
+    // Validate the whole table once, so a limit or unique violation imports nothing.
+    checkRows(program, next.records);
+    validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
+    next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
+    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-100);
+    return { state: next, label: `Imported ${created.length} rows into ${collection.title}.` };
   }
   if (type !== 'table.act') return null;
   hasRole(ctx, ['owner', 'participant']);

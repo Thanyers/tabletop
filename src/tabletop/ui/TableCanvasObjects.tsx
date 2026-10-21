@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { AlertCircle, Database, FilePlus2, Pencil, Play, Trash2, Users } from 'lucide-react';
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
+import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
+import { computeRecordRow } from '../shared/computed-columns';
 import type { ActorContext, WorkspaceView } from '../shared/contracts';
 import type { PlanNode } from '../runtime';
 import { applyTableChange, handleTableCommand } from '../domain/table';
@@ -9,6 +11,7 @@ import { CandidateLifecycle } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
 import { applyTableCandidate } from './table-candidate-apply';
+import { autoMapping, buildImportRows, parseCsv } from './table-row-import';
 import './record-actions.css';
 
 interface TableCanvasObjectProps {
@@ -273,6 +276,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   const collectionId = node.id.slice('table.collection.'.length);
   const collection = state.program?.collections.find((item) => item.id === collectionId);
   const rows = (node.inputs.rows as TableRecord[] | undefined) ?? state.records[collectionId] ?? [];
+  const computed = (state.computedColumns ?? []).filter((column) => column.collection === collectionId);
   const actionController = useTableActionController(view, onCommand);
   const contextId = useId().replace(/:/g, '');
   const actionSelectId = `${contextId}-tt-table-record-action`;
@@ -319,7 +323,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
 
   return <div className="tt-canvas-inline tt-table-collection">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">SHARED RECORDS</span><strong>{collection?.title ?? node.title}</strong><small>{rows.length} {rows.length === 1 ? 'record' : 'records'} · data r{state.dataRevision}</small></div>
-    {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">No records are available in this collection.</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}</tr>)}</tbody></table></div>}
+    {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">No records are available in this collection.</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => <td key={column.id}>{formatComputed(computeRecordRow(computed, collectionId, row)[column.id])}</td>)}</tr>)}</tbody></table></div>}
     {expanded && selectedRecord && <section className="tt-table-record-actions" aria-label={`Actions for ${recordLabel(selectedRecord, collection, view.members)}`}>
       <div><strong>{recordLabel(selectedRecord, collection, view.members)}</strong></div>
       {eligibleActions.length === 0 ? <p className="tt-canvas-inline__note">{collectionActions.length === 0 ? 'No table actions use this collection.' : `Actions for this collection are limited to ${formatActionRoles(collectionActions)}.`}</p> : <>
@@ -330,8 +334,128 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
       </>}
       {actionController.message && <p className="tt-table-error" role="alert">{actionController.message}</p>}
     </section>}
+    {expanded && collection && view.actor.role === 'owner' && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
+    {expanded && collection && view.actor.role === 'owner' && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
     <p className="tt-table-turn-indicator">{view.actor.role === 'owner' ? 'Owner' : view.actor.name} · shared active data</p>
   </div>;
+}
+
+interface ComputedDraft { label: string; leftField: string; op: 'add' | 'subtract' | 'multiply' | 'divide'; rightKind: 'field' | 'number'; rightField: string; rightValue: string }
+
+function TableComputedColumns({ collection, state, busy, onCommand }: {
+  collection: TableCollection;
+  state: TableState;
+  busy: string | null;
+  onCommand: WorkbenchProps['onCommand'];
+}) {
+  const numberFields = collection.fields.filter((field) => field.type === 'number');
+  const existing = (state.computedColumns ?? []).filter((column) => column.collection === collection.id);
+  const [open, setOpen] = useState(false);
+  const [drafts, setDrafts] = useState<ComputedDraft[]>([]);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState('');
+  const start = () => {
+    setDrafts(existing.map((column) => draftFromColumn(column, numberFields)));
+    setMessage(''); setOpen(true);
+  };
+  const update = (index: number, patch: Partial<ComputedDraft>) => setDrafts((current) => current.map((item, at) => at === index ? { ...item, ...patch } : item));
+  const save = async () => {
+    const columns = drafts.map((draft, index) => ({
+      id: `calc${index + 1}`, collection: collection.id,
+      label: draft.label.trim() || `Calculated ${index + 1}`,
+      expression: draftExpression(draft),
+    }));
+    setPending(true); setMessage('');
+    try {
+      const result = await onCommand('table.setComputedColumns', { columns });
+      if (result) { setMessage(`Saved ${columns.length} computed column${columns.length === 1 ? '' : 's'}.`); setOpen(false); }
+      else setMessage('The computed columns were rejected. Check the fields and number.');
+    } finally { setPending(false); }
+  };
+  if (numberFields.length === 0) return null;
+  return <section className="tt-table-computed" aria-label={`Computed columns for ${collection.title}`}>
+    {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={start}>{existing.length ? `Computed columns (${existing.length})` : 'Add computed column'}</button> : <>
+      <div className="tt-table-computed__head"><strong>Computed columns</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => setOpen(false)}>Close</button></div>
+      {drafts.length === 0 && <p className="tt-table-inline-hint">No computed columns yet.</p>}
+      {drafts.map((draft, index) => <div className="tt-table-computed__row" key={index}>
+        <label>Label<input value={draft.label} maxLength={40} placeholder={`Calculated ${index + 1}`} onChange={(event) => update(index, { label: event.target.value })} /></label>
+        <label>Field<select value={draft.leftField} onChange={(event) => update(index, { leftField: event.target.value })}>{numberFields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>
+        <label>Operator<select value={draft.op} onChange={(event) => update(index, { op: event.target.value as ComputedDraft['op'] })}><option value="add">+</option><option value="subtract">−</option><option value="multiply">×</option><option value="divide">÷</option></select></label>
+        <label>Value<select value={draft.rightKind} onChange={(event) => update(index, { rightKind: event.target.value as ComputedDraft['rightKind'] })}><option value="number">number</option><option value="field">field</option></select></label>
+        {draft.rightKind === 'number'
+          ? <label>Number<input type="number" inputMode="decimal" value={draft.rightValue} onChange={(event) => update(index, { rightValue: event.target.value })} /></label>
+          : <label>Field<select value={draft.rightField} onChange={(event) => update(index, { rightField: event.target.value })}>{numberFields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>}
+        <button type="button" className="tt-button tt-button--quiet" disabled={pending} onClick={() => setDrafts((current) => current.filter((_, at) => at !== index))}>Remove</button>
+      </div>)}
+      <div className="tt-table-computed__actions">
+        <button type="button" className="tt-button tt-button--quiet" disabled={pending || drafts.length >= 6} onClick={() => setDrafts((current) => [...current, { label: '', leftField: numberFields[0].id, op: 'add', rightKind: 'number', rightField: numberFields[1]?.id ?? '', rightValue: '0' }])}>Add row</button>
+        <button type="button" className="tt-button tt-button--primary" disabled={pending || busy !== null} onClick={() => void save()}>{pending ? 'Saving…' : 'Save computed columns'}</button>
+      </div>
+      {message && <p className="tt-table-inline-hint" role="status">{message}</p>}
+    </>}
+  </section>;
+}
+
+function draftFromColumn(column: ComputedColumn, numberFields: TableField[]): ComputedDraft {
+  const fallback: ComputedDraft = { label: column.label, leftField: numberFields[0]?.id ?? '', op: 'add', rightKind: 'number', rightField: numberFields[1]?.id ?? '', rightValue: '0' };
+  const expression = column.expression;
+  if (expression.op === 'field' || expression.op === 'literal') return fallback;
+  if (expression.left.op !== 'field') return fallback;
+  if (expression.right.op === 'field') return { ...fallback, leftField: expression.left.field, op: expression.op, rightKind: 'field', rightField: expression.right.field };
+  if (expression.right.op === 'literal') return { ...fallback, leftField: expression.left.field, op: expression.op, rightKind: 'number', rightValue: String(expression.right.value) };
+  return fallback;
+}
+
+function draftExpression(draft: ComputedDraft): ComputedExpression {
+  return {
+    op: draft.op,
+    left: { op: 'field', field: draft.leftField },
+    right: draft.rightKind === 'field' ? { op: 'field', field: draft.rightField } : { op: 'literal', value: Number(draft.rightValue) },
+  };
+}
+
+function TableRowImport({ collection, busy, onCommand }: {
+  collection: TableCollection;
+  busy: string | null;
+  onCommand: WorkbenchProps['onCommand'];
+}) {
+  const [open, setOpen] = useState(false);
+  const [csv, setCsv] = useState('');
+  const parsed = useMemo(() => parseCsv(csv), [csv]);
+  const [mapping, setMapping] = useState<Record<number, string>>({});
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState('');
+  const detailId = `${useId().replace(/:/g, '')}-tt-import`;
+  useEffect(() => { setMapping(autoMapping(parsed.headers, collection.fields)); }, [parsed, collection]);
+  const preview = useMemo(() => buildImportRows(parsed, mapping, collection.fields), [parsed, mapping, collection]);
+  const canImport = preview.rows.length > 0 && preview.rows.length <= 100 && preview.invalid.length === 0 && busy === null && !pending;
+  const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 32 * 1024) { setMessage('CSV files must be 32 KiB or smaller.'); return; }
+    setMessage(''); setCsv(await file.text()); setOpen(true);
+  };
+  const runImport = async () => {
+    setPending(true); setMessage('');
+    try {
+      const result = await onCommand('table.importRows', { collection: collection.id, rows: preview.rows });
+      if (result) { setMessage(`Imported ${preview.rows.length} rows into ${collection.title}.`); setCsv(''); }
+      else setMessage('Import failed. Fix the invalid rows and try again.');
+    } finally { setPending(false); }
+  };
+  return <section className="tt-table-import" aria-label={`Import rows into ${collection.title}`}>
+    {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={() => setOpen(true)}>Import rows</button> : <>
+      <div className="tt-table-import__head"><strong>Import rows into {collection.title}</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => { setOpen(false); setCsv(''); setMessage(''); }}>Close</button></div>
+      <label className="tt-table-import__file">CSV file<input type="file" accept=".csv,text/csv,text/plain" onChange={(event) => void chooseFile(event)} /></label>
+      <label htmlFor={detailId}>Or paste CSV<textarea id={detailId} rows={5} value={csv} placeholder={'sku,qty\nCAM-1,4'} onChange={(event) => setCsv(event.target.value)} aria-describedby={`${detailId}-summary`} /></label>
+      {parsed.headers.length > 0 && <div className="tt-table-import__mapping">{parsed.headers.map((header, index) => <label key={`${index}-${header}`}>{header || `Column ${index + 1}`}<select value={mapping[index] ?? ''} onChange={(event) => { const value = event.target.value; setMapping((current) => ({ ...current, [index]: value })); }}><option value="">Ignore</option>{collection.fields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>)}</div>}
+      <p id={`${detailId}-summary`} className="tt-table-import__summary" role="status">{preview.rows.length} {preview.rows.length === 1 ? 'row' : 'rows'} ready · {preview.invalid.length} invalid{preview.ignoredHeaders.length > 0 ? ` · ignored: ${preview.ignoredHeaders.join(', ')}` : ''}</p>
+      {preview.invalid.length > 0 && <ul className="tt-table-error">{preview.invalid.slice(0, 3).map((item) => <li key={item.row}>Row {item.row}: {item.message}</li>)}</ul>}
+      {preview.rows.length > 100 && <p className="tt-table-error" role="alert">Import at most 100 rows per command.</p>}
+      <button type="button" className="tt-button tt-button--primary" disabled={!canImport} onClick={() => void runImport()}>{pending ? 'Importing…' : `Import ${preview.rows.length} rows`}</button>
+      {message && <p className="tt-table-inline-hint" role="status">{message}</p>}
+    </>}
+  </section>;
 }
 
 function TableActions({ view, state, busy, onCommand, expanded = false }: TableCanvasObjectProps & { state: TableState }) {
@@ -445,6 +569,11 @@ function recordLabel(record: TableRecord, collection?: TableCollection, members?
   const title = titleField ? displayValue(record.values[titleField.id], members) : recordId;
   if (!title || title === '—' || title === recordId) return recordId;
   return `${title} · ${recordId}`;
+}
+
+function formatComputed(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—';
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10_000) / 10_000);
 }
 
 function displayValue(value: TableValue | undefined, members?: WorkspaceView['members']): string {

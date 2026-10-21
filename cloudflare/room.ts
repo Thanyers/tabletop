@@ -1,7 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
 import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
-import { DomainError } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
@@ -27,6 +26,7 @@ import {
 } from '../src/tabletop/shared/table-assistant-contracts.js';
 import { decideDomain } from '../src/tabletop/domain/index.js';
 import { CURSOR_MIN_INTERVAL_MS, cursorRelay, parseCursorInput, type CursorInput } from '../src/tabletop/shared/cursor-protocol.js';
+import { modelFailureMessage, safeModelFailureCode, safeModelFailureReasons } from './model-failure.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
@@ -305,7 +305,7 @@ function tableAssistantJobView(job: RoomModelJob): TableAssistantJob {
 
 function modelJobView(job: RoomModelJob): PublicModelJob {
   if (job.status === 'revoked') return { id: job.id, status: 'failed', message: 'This proposal was cancelled.' };
-  if (job.status === 'failed') return { id: job.id, status: 'failed', message: modelFailureMessage(job.data.failure) };
+  if (job.status === 'failed') return { id: job.id, status: 'failed', message: modelFailureMessage(job.data.failure, Array.isArray(job.data.reasons) ? job.data.reasons : []) };
   if (job.status === 'running' || job.status === 'committing') return { id: job.id, status: 'running' };
   return {
     id: job.id,
@@ -320,47 +320,6 @@ function publicClarification(value: unknown): { clarification: { question: strin
   const { question, options } = value as { question?: unknown; options?: unknown };
   if (typeof question !== 'string' || !Array.isArray(options) || !options.every((item) => typeof item === 'string')) return null;
   return { clarification: { question, options: options as string[] } };
-}
-
-function modelFailureMessage(failure: unknown): string {
-  if (failure === 'SOURCE_REQUIRED') return 'Import a source file before asking for a proposal.';
-  if (failure === 'TABLE_READ_ONLY') return 'This table workspace is currently read-only. The proposal was not applied.';
-  if (failure === 'MODEL_PROVIDER_INPUT_TOO_LARGE') return 'The files and request are too large. Shorten them or remove a file, then try again.';
-  if (failure === 'MODEL_PROVIDER_OUTPUT_REJECTED' || (typeof failure === 'string' && failure.startsWith('TABLE_'))) {
-    return 'The proposed table rules did not pass validation. Review the sources or revise the request, then try again.';
-  }
-  if (failure === 'MODEL_PROVIDER_TIMEOUT') return 'The proposal timed out. Try again.';
-  if (failure === 'MODEL_NOT_CONFIGURED' || failure === 'MODEL_PROVIDER_NOT_CONFIGURED') {
-    return 'AI proposals are not configured for this workspace.';
-  }
-  if (failure === 'BILLING_BUDGET') return 'The configured AI budget has been reached.';
-  if (failure === 'BILLING_QUOTA') return 'The AI request limit has been reached. Try again later.';
-  if (failure === 'AI_BILLING_UNCERTAIN' || failure === 'AI_BILLING_UNAVAILABLE') {
-    return 'The billing service could not confirm this proposal. No draft was created.';
-  }
-  if (failure === 'STALE_WORKSPACE') return 'The workspace changed while the proposal was running. Review the latest state and try again.';
-  if (failure === 'MODEL_JOB_INTERRUPTED' || failure === 'MODEL_PROPOSAL_FAILED') {
-    return 'The proposal could not be completed. Review the files and request, then try again.';
-  }
-  return 'The proposal could not be completed.';
-}
-
-function safeModelFailureCode(error: unknown): string {
-  if (error instanceof AuthorityError && error.code === 'TABLE_READ_ONLY') return error.code;
-  if (error instanceof DomainError) {
-    const code = error.code;
-    if (code === 'SOURCE_REQUIRED' || code === 'MODEL_PROVIDER_INPUT_TOO_LARGE'
-        || code === 'TABLE_READ_ONLY'
-        || code === 'MODEL_PROVIDER_OUTPUT_REJECTED' || code === 'MODEL_PROVIDER_TIMEOUT'
-        || code === 'MODEL_PROVIDER_INPUT_INVALID' || code === 'MODEL_PROVIDER_RESPONSE_INVALID'
-        || code === 'MODEL_PROVIDER_RESPONSE_TOO_LARGE' || code === 'MODEL_PROVIDER_HTTP_ERROR'
-        || code === 'MODEL_PROVIDER_REQUEST_FAILED' || code === 'MODEL_PROVIDER_ABORTED'
-        || code === 'MODEL_PROVIDER_NOT_CONFIGURED' || code === 'MODEL_NOT_CONFIGURED'
-        || code === 'BILLING_BUDGET' || code === 'BILLING_QUOTA'
-        || code === 'AI_BILLING_UNCERTAIN' || code === 'AI_BILLING_UNAVAILABLE') return code;
-    if (code.startsWith('TABLE_')) return 'MODEL_PROVIDER_OUTPUT_REJECTED';
-  }
-  return 'MODEL_PROPOSAL_FAILED';
 }
 
 function parsePeerAttachment(value: unknown): PeerAttachment | null {
@@ -1293,7 +1252,7 @@ export class Room extends DurableObject<Env> {
           return;
         }
         await this.repository.failModelJobAfterReceiptCheck(
-          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, safeModelFailureCode(error),
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, safeModelFailureCode(error), safeModelFailureReasons(error),
         );
       } catch {
         try { await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS); } catch { /* retry on the next room alarm */ }
