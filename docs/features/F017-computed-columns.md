@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — implement แล้ว (T1–T3), รอ merge |
+| สถานะ | `done` — merge #66 (ยังไม่ deploy) |
 | เจ้าของฟีเจอร์ | ทีม Tabletop |
 | เวอร์ชันที่คาด | **MINOR** — เก็บนิยามใน `TableState.computedColumns` (ไม่แตะ program schema) |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F017-T*` |
