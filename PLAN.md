@@ -36,6 +36,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F015-T1 | นำแถวข้อมูลเข้า collection โดยตรง (CSV → records) แบบ deterministic ไม่เรียก AI | `review` | ทีม Tabletop | `feat/F015-import-rows` | `src/tabletop/domain/table.ts`, `server/authority.ts`, `ui/TableCanvasObjects.tsx`, `ui/table-row-import.ts`, tests | — | backend + UI พร้อม; browser check อยู่ใน `generic-table-browser` ([F015](docs/features/F015-table-row-import.md)) |
 | F010-T1 | ต่อเติมโต๊ะจากแชท, เพิ่ม record ผ่านปุ่มจริง, ลดขั้นตอนกฎและแก้ card overflow | `done` | Codex | `fix/F010-canvas-evolution` (merged #42) | table interpreter/contracts, AI prompts/chat routing, Canvas sizing/CSS/review UI, focused tests | — | PR #42; focused unit 67 + assistant 10; browser Invoice 10 checks; AI จริงสร้าง/ใช้/ต่อเติม/กลับมาเล่นต่อได้ ดู docs/features/F010-canvas-evolution.md; ยังไม่ deploy |
 | R200 | Release2.0.0: stagingสองบัญชี → main/tag → finalstaging → production | `done` | Codex | `release/2.0.0` · #33 merged | CHANGELOG, runtime bugfix, spec, release evidence/docs | F005/F006/F007 merged | mainCIผ่านก่อนannotatedtag; samebuildstaging/prodผ่าน; ไม่มีSQL/secret/งบใหม่; docs/RELEASE_2_0_ACCEPTANCE.md |
 | F001-T1 | ชุดข้อมูลการ์ด starter 3 โจทย์ | `review` | Claude Code | `feat/F001-start-page` | `src/tabletop/shared/starters.ts` (ใหม่) | — | |

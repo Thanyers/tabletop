@@ -1261,6 +1261,18 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
+  // F015: the owner imports rows straight into the active collection, with no model call or consent.
+  const callsBeforeImport = getProviderCalls();
+  const collectionEditor = await openCanvasObject(owner, 'table.collection.equipment');
+  await collectionEditor.getByRole('button', { name: 'Import rows', exact: true }).click();
+  await collectionEditor.getByRole('textbox', { name: 'Or paste CSV', exact: true }).fill('name,available,borrower,borrow_note\nMegaphone,yes,,Imported in bulk\nSpare tripod,no,owner,');
+  await expect(collectionEditor.getByText('2 rows ready · 0 invalid', { exact: true })).toBeVisible();
+  await collectionEditor.getByRole('button', { name: 'Import 2 rows', exact: true }).click();
+  await expect(collectionEditor.getByText('Imported 2 rows into Equipment.', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await api(owner, `/api/workspaces/${room.id}`)).body.domain.records.equipment.length).toBe(4);
+  await expect(collectionEditor.getByText('Megaphone', { exact: true })).toBeVisible();
+  expect(getProviderCalls()).toBe(callsBeforeImport);
+
   const callsBeforeSecondSource = getProviderCalls();
   await addSource(owner, room.id, equipmentNotes, api, 'chat', { aiDisabled: true, failHistory: true });
   expect(getProviderCalls()).toBe(callsBeforeSecondSource);
