@@ -2,9 +2,17 @@
 
 ## Unreleased
 
-- การ์ด Rules มี **What this table can do**: ความสามารถที่ใช้ได้ + ขีดจำกัดจริง (6 collections · 12 fields · 100 rows/collection · 200 rows · 12 views · 6 computed columns) และ **Known gaps** 5 ข้อพร้อมทางไปต่อ · `/api/capabilities` เพิ่มข้อมูลชุดเดียวกันแบบ additive (F019)
-- ขอแก้กฎบนโต๊ะเดิมแล้วการ์ด/metric/chart ที่มีอยู่ไม่หายอีกต่อไป: server merge view ที่ AI ไม่ส่งกลับมา (ของใหม่ชนะ, view ที่ bind ไม่ได้ถูกตัดทิ้ง, ไม่เกิน 12 views) (F018)
+- การ์ดคำถามจาก AI เลือกได้หลายคำตอบ และมีตัวเลือก **Write my own answer** ให้พิมพ์คำตอบเอง แล้วกด **Send answer** ครั้งเดียว (เลือกข้อเดียวส่งข้อความเหมือนเดิม) (F022)
+- ระหว่างรอร่างกฎหรือคำตอบจาก AI พิมพ์ข้อความถัดไปในช่องแชทได้ (ปุ่มส่งใช้ได้เมื่องานเดิมเสร็จ) ข้อความที่พิมพ์ระหว่างรอไม่หาย
+- แก้ร่างกฎจาก AI ที่ล้มซ้ำด้วย "Field bounds do not match its type": ข้อความตรวจบอกชื่อ field และปัญหา (min/max ใช้ได้กับ number เท่านั้น, min ≤ max, choices ใช้ได้กับ text เท่านั้น) และคำสั่ง AI ระบุกฎนี้ตั้งแต่แรก
 - เจ้าของโต๊ะข้อมูลเอาสมาชิกออกได้จากหน้าต่าง People (ยืนยันก่อน) · คนที่ถูกเอาออกหมดสิทธิ์อ่าน/สั่ง/รับข้อมูลสดทันที โต๊ะหายจาก My tables และกลับมาได้ด้วยคำเชิญใหม่เท่านั้น ([F003](docs/features/F003-reusable-invite-link.md) T1) ไม่มี migration
+
+## 3.2.0 — 2026-10-21
+
+MINOR: การแก้กฎไม่ทำให้ canvas view หาย (F018) และการ์ด Rules บอกความสามารถ/ข้อจำกัดของโต๊ะ (F019) · ไม่มี migration, secret หรือ binding ใหม่ · rollback กลับ v3.1.0 ได้ทันที
+
+- ขอแก้กฎบนโต๊ะเดิมแล้วการ์ด/metric/chart ที่มีอยู่ไม่หายอีกต่อไป: server merge view ที่ AI ไม่ส่งกลับมา (ของใหม่ชนะ, view ที่ bind ไม่ได้ถูกตัดทิ้ง, ไม่เกิน 12 views) (F018)
+- การ์ด Rules มี **What this table can do**: ความสามารถที่ใช้ได้ + ขีดจำกัดจริง (6 collections · 12 fields · 100 rows/collection · 200 rows · 12 views · 6 computed columns) และ **Known gaps** 5 ข้อพร้อมทางไปต่อ · `/api/capabilities` เพิ่มข้อมูลชุดเดียวกันแบบ additive (F019)
 
 ## 3.1.0 — 2026-10-21
 
