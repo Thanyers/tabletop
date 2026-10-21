@@ -118,7 +118,10 @@ export function TableChat({
 
   const submit = () => {
     if (!canSend) return;
-    if (needsConsent(grantedKey, scope)) setAsking(true);
+    // Another control (e.g. a clarifying-answer card) may have stored consent since mount.
+    const granted = grantedKey ?? storedConsent(scope);
+    if (granted !== grantedKey) setGrantedKey(granted);
+    if (needsConsent(granted, scope)) setAsking(true);
     else void send();
   };
 

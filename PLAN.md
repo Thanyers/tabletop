@@ -30,6 +30,7 @@
 | F005 | สร้างภาพ สูตร และเครื่องมือใหม่บน Canvas พร้อม shared layout | `done` (#24 → dev) | [F005](docs/features/F005-generative-canvas.md) |
 | F006 | โต๊ะข้อมูลเริ่มจากแชท: แชทแถวเดียวกึ่งกลางล่าง · โต๊ะว่างไม่มีการ์ด · คำตอบเป็นการ์ด | `done` (#30 → dev; T7 เอกสารส่งต่อแยก) | [F006](docs/features/F006-chat-first-table.md) |
 | F007 | ตำแหน่งการ์ดเป็นของทั้งโต๊ะ ทุกคนเห็นเหมือนกัน | `review` | [F007](docs/features/F007-shared-card-layout.md) |
+| F012 | AI ถามกลับแทนการร่างกฎเมื่อโจทย์ยังไม่พอ | `done` | [F012](docs/features/F012-ai-clarifying-questions.md) |
 
 ## งาน
 
@@ -82,3 +83,4 @@
 | F009-T1 | เห็นเมาส์ของแต่ละคนพร้อมชื่อบน Canvas (live cursors) | `done` | Claude Code | `feat/F009-live-cursors` | `src/tabletop/shared/cursor-protocol.ts` (ใหม่), `ui/live-cursors.tsx` (ใหม่), `cloudflare/room.ts` (webSocketMessage), `server/app.ts` (socket), `client.ts` (subscribe), `CanvasWorkspace.tsx`, `TabletopApp.tsx`, tests | — | [F009](docs/features/F009-live-cursors.md) · ชน F008 ที่ PLAN/CHANGELOG/generic-table-browser.mjs เล็กน้อย |
 | F013 | ขอความยินยอมส่ง AI ครั้งเดียวต่อโต๊ะ (ต่อ epoch ต่อคน) จำไว้ในเบราว์เซอร์ | `done` | JitrudeeDongdee (Claude) | `feat/F010-ai-consent-once` · #44 merged | `src/tabletop/ui/table-chat-consent.ts`, `TableChat.tsx`, `tests/generic-table-browser.mjs`, `tests/generative-canvas-browser.mjs`, `tests/cloudflare-browser.mjs`, `docs/GENERIC_TABLE_DESIGN.md` | — | ID F010 ถูกใช้แล้วโดย #42 จึงใช้ F013 แต่ชื่อ branch คงเดิม |
 | F014 | การ์ดบน Canvas ลง grid 4px + responsive: padding การ์ดแชท/AI proposal, เลิกบังคับความสูง, กฎจอ ≤760px ที่ถูกทับ | `done` | JitrudeeDongdee (Claude) | `feat/F014-canvas-card-layout` · #46 merged | `src/tabletop/ui/calm-workspace.css` | — | CSS อย่างเดียว |
+| F012 | AI ถามกลับเป็นคำถามเดียว + ตัวเลือก 3 ข้อแทนการร่างกฎเมื่อโจทย์ไม่พอ | `done` | JitrudeeDongdee (Claude) | `feat/F012-ai-clarifying-questions` | `server/providers/deepseek-changes.ts`, `cloudflare/ai.ts`, `cloudflare/room.ts`, `src/tabletop/client.ts`, `useTableChat.tsx`, `table-chat.css` | — | hotspot `cloudflare/room.ts` · [F012](docs/features/F012-ai-clarifying-questions.md) · PR #55 |

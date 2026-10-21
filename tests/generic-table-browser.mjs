@@ -468,7 +468,8 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
       message: jobStatus.body?.message,
       candidateId: jobStatus.body?.candidateId,
     };
-    throw new Error(`${stepLabel}\n${error instanceof Error ? error.message : String(error)}\nAccepted model job: ${JSON.stringify(jobDetails)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
+    const refreshDiagnostics = { failDraftRefresh, modelAccepted, failedDraftRefresh, workspaceRefreshRequests };
+    throw new Error(`${stepLabel}\n${error instanceof Error ? error.message : String(error)}\nAccepted model job: ${JSON.stringify(jobDetails)}\nRefresh arm: ${JSON.stringify(refreshDiagnostics)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
   }
   if (failDraftRefresh) {
     const retryRefresh = draftCard.getByRole('button', { name: 'Retry table refresh', exact: true });
@@ -509,6 +510,88 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   expect(current.domain.program).toEqual(before.domain.program);
   expect(current.domain.records).toEqual(before.domain.records);
   return current;
+}
+
+// F012: the model asks the owner one question with three answers instead of drafting; nothing on the table changes.
+// Picking an answer sends a new rule request at once under the table consent.
+async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
+  const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
+  const expectUnchanged = async () => {
+    const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    expect(current.revision).toBe(before.revision);
+    expect(current.domain.candidate).toEqual(before.domain.candidate);
+    expect(current.domain.program).toEqual(before.domain.program);
+    expect(current.domain.records).toEqual(before.domain.records);
+  };
+  const chat = owner.getByTestId('table-chat-bar');
+  const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
+  const consent = chat.getByRole('alertdialog', { name: 'Send to AI', exact: true });
+  const modelPosts = [];
+  const recordModelPost = request => {
+    if (request.method() === 'POST' && request.url().endsWith(`/api/workspaces/${tableId}/model`)) modelPosts.push(request.postDataJSON());
+  };
+  owner.on('request', recordModelPost);
+
+  const clarifyPrompt = 'Make a shift table.';
+  const clarification = { question: 'Who must agree before two people swap shifts?', options: ['Both people', 'Only the owner', 'Nobody'] };
+  await prompt.fill(clarifyPrompt);
+  setTableReply({ change: { kind: 'clarify', ...clarification }, expectedSources });
+  const firstPost = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
+  await chat.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(consent).toBeVisible();
+  await consent.getByRole('button', { name: 'Send', exact: true }).click();
+  expect((await firstPost).status()).toBe(202);
+  const questionArticle = owner.getByRole('article', { name: clarifyPrompt, exact: true });
+  const card = questionArticle.getByTestId('table-chat-answer');
+  await expect(card).toHaveClass(/tt-chat-card--questions/u, { timeout: 20_000 });
+  await expect(card).toContainText('A few details would help build this table. Nothing on the table changed.');
+  await expect(card.locator('.tt-chat-card__question')).toHaveText(clarification.question);
+  await expect(card).toContainText('Pick an answer to ask again with it. Your request stays the same.');
+  const list = card.getByRole('list', { name: 'Answer choices', exact: true });
+  await expect(list.getByRole('button')).toHaveCount(3);
+  for (const option of clarification.options) await expect(list.getByRole('button', { name: option, exact: true })).toBeEnabled();
+  await expect(card.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
+  await expectUnchanged();
+  expect(modelPosts).toHaveLength(1);
+
+  // The follow-up job completes with neither a candidate nor a clarification (the poll response is stripped),
+  // so its card must offer the message again instead of Review rules.
+  const answeredPrompt = `${clarifyPrompt}\n\n${clarification.question} ${clarification.options[1]}`;
+  setTableReply({ change: { kind: 'clarify', question: 'Which shifts exist?', options: ['Morning and evening', 'Three shifts', 'I will attach a file'] }, expectedSources });
+  const pollUrl = `**/api/workspaces/${tableId}/model/*`;
+  const stripClarification = async route => {
+    if (route.request().method() !== 'GET') { await route.continue(); return; }
+    const response = await route.fetch();
+    const body = await response.json();
+    if (body.status === 'completed') {
+      expect(body.candidateId).toBeUndefined();
+      expect(body.clarification?.question).toBe('Which shifts exist?');
+      delete body.clarification;
+    }
+    await route.fulfill({ response, json: body });
+  };
+  await owner.route(pollUrl, stripClarification);
+  const answerPost = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
+  await list.getByRole('button', { name: clarification.options[1], exact: true }).click();
+  await expect(consent).toHaveCount(0);
+  expect((await answerPost).status()).toBe(202);
+  expect(modelPosts).toHaveLength(2);
+  expect(modelPosts[1]).toMatchObject({ prompt: answeredPrompt, consent: true });
+  await expect(questionArticle).toHaveCount(0);
+  // Long prompts are shortened with an ellipsis in the card's accessible name.
+  const answeredCard = owner.getByRole('article', { name: /^Make a shift table\. Who must agree/u }).getByTestId('table-chat-answer');
+  await expect(answeredCard).toBeVisible();
+  await expect(answeredCard).toContainText('No rule draft was created. Try rephrasing your request.', { timeout: 20_000 });
+  await expect(answeredCard.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
+  await expect(answeredCard.getByRole('list', { name: 'Answer choices', exact: true })).toHaveCount(0);
+  await answeredCard.getByRole('button', { name: 'Use this message again', exact: true }).click();
+  await expect(prompt).toHaveValue(answeredPrompt);
+  await owner.unroute(pollUrl, stripClarification);
+  owner.off('request', recordModelPost);
+  expect(modelPosts).toHaveLength(2);
+  await expectUnchanged();
+  await prompt.fill('');
 }
 
 async function progressThroughLifecycle(owner, tableId, api, rules) {
@@ -1312,7 +1395,9 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
 async function shiftScenario({ owner, member, newPage, api, setTableReply, mark }) {
   const room = await openNewTable(owner, api);
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
-  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { observePending: true });
+  await requestClarifyingQuestion(owner, room.id, setTableReply, api);
+  // F013: the owner consented on this table epoch during the clarifying exchange.
+  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true });
   await progressThroughLifecycle(owner, room.id, api, expectedRules.shifts);
   const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
@@ -1334,7 +1419,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   expect(current.domain.records.people.find((row) => row.id === 'cy').values.slot).toBe('night');
   const memberRoster = await openCanvasObject(member, 'table.collection.people');
   await expect(memberRoster).toContainText('Shift roster');
-  mark('Generic table: JSON source, atomic multi-record action, availability check, unique records, and one-import drag/drop');
+  mark('Generic table: AI clarifying question with three answers sends the picked answer under table consent, empty completed job offers the message again, table unchanged (F012), JSON source, atomic multi-record action, availability check, unique records, and one-import drag/drop');
 }
 
 async function gameScenario({ owner, member, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
