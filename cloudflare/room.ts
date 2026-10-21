@@ -718,8 +718,9 @@ export class Room extends DurableObject<Env> {
           sessionHash: authorized.session.record.tokenHash,
           conversation: context.conversation,
           conversationOmittedCount: context.omittedCount,
-        }));
+        }).finally(() => this.notifyAssistantActivity()));
         await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
+        this.notifyAssistantActivity();
         return json(202, tableAssistantJobView(reservation.job), { 'x-request-id': requestId });
       }
       if (request.method === 'GET' && /^assistant\/[a-f0-9]{64}$/u.test(suffix)) {
@@ -826,6 +827,7 @@ export class Room extends DurableObject<Env> {
               { ...latest.data, confirmationStatus: 'confirmed' },
             );
           }
+          this.notifyAssistantActivity();
           return json(200, acknowledgement, { 'x-request-id': requestId });
         } catch (error) {
           const receipt = await this.repository.findCommandReceipt(
@@ -1405,6 +1407,20 @@ export class Room extends DurableObject<Env> {
     if (pending.length === 0) return;
     await this.repository.markOutboxDelivered(pending.map((item) => item.outboxId), Date.now());
     if (this.repository.pendingOutboxCount() > 0) await this.scheduleAlarm();
+  }
+
+  /**
+   * Open visibility (F015): tell every connected member that the table's AI chat changed so their
+   * history reloads through the authorized API. The frame carries no chat content.
+   */
+  private notifyAssistantActivity(): void {
+    if (VISIBILITY_POLICY !== 'open' || this.roomId === null) return;
+    const frame = JSON.stringify({ type: 'assistant' });
+    for (const socket of this.ctx.getWebSockets()) {
+      const attachment = parsePeerAttachment(socket.deserializeAttachment());
+      if (!attachment || attachment.workspaceId !== this.roomId) continue;
+      try { socket.send(frame); } catch { /* already closed */ }
+    }
   }
 
   private async broadcastAuthorizedProjections(): Promise<void> {
