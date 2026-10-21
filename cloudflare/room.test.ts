@@ -15,6 +15,7 @@ import { respondToTablePrompt } from './table-assistant.js';
 import type { TableAssistantInput, TableAssistantResult } from '../src/tabletop/shared/table-assistant-contracts.js';
 import type { TableAssistantResponse } from './table-assistant.js';
 import { CURSOR_MIN_INTERVAL_MS } from '../src/tabletop/shared/cursor-protocol.js';
+import { ReasonedDomainError } from './model-failure.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
@@ -1761,6 +1762,26 @@ describe('Cloudflare room Durable Object', () => {
     expect(visible.response.status).toBe(200);
     expect(visible.body.message).toMatch(/shorten them or remove a file/iu);
     expect(JSON.stringify(visible.body)).not.toContain('PRIVATE_PROVIDER_TEXT_SENTINEL');
+  });
+
+  it('shows the real validation reasons of a rejected table draft to its requester (F016)', async () => {
+    const owner = newActor('Rejected draft owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    vi.mocked(proposeChange).mockRejectedValue(new ReasonedDomainError(
+      'MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation.',
+      ['A rule edit must retain every current field definition.', 'Use at most 100 rows in a collection.'],
+    ));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Rename the status field.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, { method: 'POST', body: input, mutation: true });
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('failed');
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.body.message).toContain('did not pass validation: A rule edit must retain every current field definition. · Use at most 100 rows in a collection.');
   });
 
   it('settles an in-flight table proposal but blocks its commit after read-only mode is enabled', async () => {

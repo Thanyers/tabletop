@@ -972,6 +972,7 @@ export class RoomRepository implements WorkspaceRepository {
     epoch: number,
     actorId: string,
     failure: string,
+    reasons: readonly string[] = [],
   ): Promise<'completed' | 'failed' | 'inactive'> {
     return this.serialized(async () => this.storage.transactionSync(() => {
       const jobRow = this.rows(
@@ -1009,7 +1010,7 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec(
         `UPDATE model_jobs SET status = 'failed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
          AND actor_id = ? AND status IN ('running', 'committing') AND revoked_at IS NULL`,
-        JSON.stringify({ ...job.data, failure }), id, workspaceId, epoch, actorId,
+        JSON.stringify({ ...job.data, failure, ...(reasons.length ? { reasons } : {}) }), id, workspaceId, epoch, actorId,
       );
       return 'failed';
     }));
