@@ -1,4 +1,4 @@
-# PLAN.md — กระดานงานของทีม
+﻿# PLAN.md — กระดานงานของทีม
 
 ใช้ไฟล์นี้ดูว่า **ใครกำลังทำอะไร ไฟล์ไหน** ก่อนหยิบงาน เพื่อไม่ให้สองคน (หรือสอง AI) แก้เรื่องเดียวกันพร้อมกัน
 รายละเอียดของแต่ละฟีเจอร์อยู่ใน [`docs/features/`](docs/features/) ส่วนสถานะระบบที่เสร็จแล้วอยู่ใน [`spec.md`](spec.md)
@@ -38,6 +38,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F017-T1 | คอลัมน์คำนวณ (computed columns) ด้วย AST เดิม ประเมินตอน projection ไม่เก็บลง records | `done` | ทีม Tabletop | `feat/F017-computed-columns` · #66 merged | `shared/table-contracts.ts`, `shared/computed-columns.ts`, `domain/table.ts`, `ui/TableCanvasObjects.tsx`, tests | — | encoding: `TableState.computedColumns` (MINOR) · unit 432, browser ผ่าน; รอขึ้น hosted ใน release ถัดไป ([F017](docs/features/F017-computed-columns.md)) |
 | F018-T1 | รักษา canvas views ตอน evolve (server-side merge + validate ต่อ view) | `done` | ทีม Tabletop | `feat/F018-preserve-views` · #71 merged | `runtime/generative/preserve.ts`, `domain/table.ts`, tests | — | unit 440 + CI browser ผ่าน; รอขึ้น hosted ใน release ถัดไป ([F018](docs/features/F018-preserve-canvas-views.md)) |
+| F024-T1 | repair escalation: ถ้า issue เดิมวนซ้ำ สั่งให้ลดความซับซ้อน (ตัด action/view ที่ทำให้พัง) | `review` | ทีม Tabletop | `feat/F024-repair-escalation` | `cloudflare/repair.ts`, `cloudflare/ai.ts`, tests | — | live: มังกรผ่าน attempt 3, มัดจำผ่าน attempt 2 ([F024](docs/features/F024-repair-escalation.md)) |
 | F023-T1 | กู้ตารางเมื่อการ์ด canvas พัง: salvage view ที่ชั้น provider parse + domain validation, prompt บอกให้ omit view ที่เขียนไม่ได้ | `review` | ทีม Tabletop | `feat/F023-canvas-salvage` | `domain/table.ts`, `server/providers/deepseek-changes.ts`, tests | — | live: prompt เดิมผ่านรอบแรกหลังแก้ ([F023](docs/features/F023-canvas-salvage.md)) |
 | F019-T1 | capability registry + panel "What this table can do" + `/api/capabilities.table` | `review` | ทีม Tabletop | `feat/F019-capabilities` | `shared/table-capabilities.ts`, `cloudflare/index.ts`, `ui/TableCanvasObjects.tsx`, tests | — | additive; unit + browser ([F019](docs/features/F019-table-capabilities.md)) |
 | F015-T1 | นำแถวข้อมูลเข้า collection โดยตรง (CSV → records) แบบ deterministic ไม่เรียก AI | `done` | ทีม Tabletop | `feat/F015-import-rows` · #63 merged | `src/tabletop/domain/table.ts`, `server/authority.ts`, `ui/TableCanvasObjects.tsx`, `ui/table-row-import.ts`, tests | — | backend + UI + browser check ผ่าน; รอขึ้น hosted ใน release ถัดไป ([F015](docs/features/F015-table-row-import.md)) |
