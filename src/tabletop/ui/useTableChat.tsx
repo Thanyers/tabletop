@@ -33,6 +33,8 @@ export interface UseTableChatOptions {
   ask: (view: TableView, prompt: string, commandId: CommandId, sameCommandRetry?: boolean) => Promise<TableAssistantJob>;
   pollAsk: (view: TableView, jobId: string) => Promise<TableAssistantJob>;
   loadHistory: (view: TableView) => Promise<TableAssistantHistoryPage>;
+  /** Changes when the table's AI chat changed elsewhere; reloads history quietly. */
+  historyRefreshKey?: number;
   confirm: (view: TableView, job: TableAssistantJob, commandId: CommandId) => Promise<void>;
   attach: (view: WorkspaceView, file: File) => Promise<WorkspaceView>;
   focusObject: (id: string) => void;
@@ -203,11 +205,12 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     updateCards(targetScope, (current) => current.map((card) => card.id === id ? { ...card, ...change } : card));
   }, [updateCards]);
 
-  const loadHistory = useCallback(async (targetScope: string) => {
+  const loadHistory = useCallback(async (targetScope: string, { quiet = false }: { quiet?: boolean } = {}) => {
     const current = viewRef.current;
     if (!current || targetScope !== scopeRef.current) return;
     const generation = ++historyGeneration.current;
-    setHistoryState({ scope: targetScope, status: 'loading' });
+    // A quiet refresh keeps the composer usable and does not flash a loading state.
+    if (!quiet) setHistoryState({ scope: targetScope, status: 'loading' });
     try {
       const page = await optionsRef.current.loadHistory(current);
       if (targetScope !== scopeRef.current || generation !== historyGeneration.current) return;
@@ -230,7 +233,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       writePrivateChatState(targetScope, { ...local, cardIdsByJob });
       setHistoryState({ scope: targetScope, status: 'ready' });
     } catch {
-      if (targetScope === scopeRef.current && generation === historyGeneration.current) setHistoryState({ scope: targetScope, status: 'error' });
+      if (!quiet && targetScope === scopeRef.current && generation === historyGeneration.current) setHistoryState({ scope: targetScope, status: 'error' });
     }
   }, [updateCards]);
 
@@ -252,6 +255,14 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     void loadHistory(scope);
     return () => { historyGeneration.current += 1; };
   }, [scope, assistantAvailable, loadHistory]);
+
+  const historyRefreshKey = options.historyRefreshKey ?? 0;
+  const seenRefreshKey = useRef(historyRefreshKey);
+  useEffect(() => {
+    if (historyRefreshKey === seenRefreshKey.current) return;
+    seenRefreshKey.current = historyRefreshKey;
+    if (viewRef.current && assistantAvailable) void loadHistory(scope, { quiet: true });
+  }, [historyRefreshKey, scope, assistantAvailable, loadHistory]);
 
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
   const mode = table ? tableChatMode(table.actor.role === 'owner' ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
