@@ -143,7 +143,7 @@
 ## Deploy failures
 
 ### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
-- **What happened:** Release deploy ของ v2.2.0 ([run 39464889970](https://github.com/Thanyers/tabletop/actions/runs/39464889970), issue #49) ล้มที่ขั้น Staging — deploy เวลา 2026-10-20T17:19:20Z (job เริ่ม 17:18:20Z) ด้วย `CPU limits are not supported for the Free plan [code: 100328]` · staging/production ยังเป็น 2.0.0 ไม่มีผลต่อผู้ใช้ · แก้ secret config เวลา 2026-10-20T19:18:30Z
+- **What happened:** Release deploy ของ v2.2.0 ([run 39464889970](https://github.com/Thanyers/tabletop/actions/runs/39464889970), issue #49) ล้มที่ขั้น Staging — deploy เวลา 2026-10-20T17:19:20Z (job เริ่ม 17:18:20Z) ด้วย `CPU limits are not supported for the Free plan [code: 100328]` · staging/production ยังเป็น 2.0.0 ไม่มีผลต่อผู้ใช้ · แก้ secret config เวลา 2026-10-20T19:18:30Z · deploy สำเร็จทั้ง staging/production ด้วย SHA เดิมเวลา 2026-10-21T01:27Z ([run 39527338589](https://github.com/Thanyers/tabletop/actions/runs/39527338589)) และ issue #49 ปิดเวลา 01:33Z
 - **Root cause:** config ใน GitHub secrets สร้างจาก `wrangler.jsonc` ใน repo ซึ่งมี `"limits": {"cpu_ms": 50}` แต่บัญชีจริงเป็น Workers Free · config ของ operator เดิมไม่มี key นี้ · `wrangler deploy --dry-run` ไม่ตรวจข้อจำกัดของ plan
 - **Correct behavior:** ก่อนตั้ง `WRANGLER_CONFIG_*` ให้เทียบกับ Worker ที่ deploy อยู่จริงใน dashboard (Settings → Variables/Bindings/Runtime) และลบ `limits` ออกเมื่อเป็น Free · `npx tsx server/release-deploy.ts check-config <file> <worker> <origin>` ตอนนี้ปฏิเสธ `limits` แล้ว
 
