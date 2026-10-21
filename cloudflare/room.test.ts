@@ -30,7 +30,7 @@ vi.mock('./table-assistant.js', async (importOriginal) => {
 const runtime = env as Env;
 const migrationEnv = env as Env & { TEST_MIGRATION: string };
 const ORIGIN = 'https://tabletop.test';
-const MODEL_RECOVERY_DELAY_MS = 120_000;
+const MODEL_RECOVERY_DELAY_MS = 240_000;
 const MODEL_TEST_DELAY_MS = 100;
 const MODEL_RACE_DELAY_MS = MODEL_TEST_DELAY_MS * 4;
 const MODEL_WAIT_ATTEMPTS = 50;
@@ -2256,7 +2256,7 @@ describe('Cloudflare room Durable Object', () => {
         });
         expect(response.status).toBe(200);
       };
-      await billingRequest('/reserve', { ...binding, maxInputTokens: 65_000, maxOutputTokens: 8_192 });
+      await billingRequest('/reserve', { ...binding, maxInputTokens: 65_000, maxOutputTokens: 32_768 });
       await billingRequest('/dispatch', binding);
       await billingRequest('/settle', { ...binding, outcome: 'settled', usage: fixtureUsage });
 
@@ -2291,7 +2291,7 @@ describe('Cloudflare room Durable Object', () => {
             FROM billing_jobs WHERE id = ?`, jobId).toArray()[0] ?? null);
       expect(billingJob).toMatchObject({
         status: 'settled',
-        max_output_tokens: 8_192,
+        max_output_tokens: 32_768,
         prompt_tokens: fixtureUsage.promptTokens,
         completion_tokens: fixtureUsage.completionTokens,
         cache_hit_tokens: fixtureUsage.cacheHitTokens,

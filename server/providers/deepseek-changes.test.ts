@@ -46,7 +46,7 @@ describe('DeepSeekChangeProvider', () => {
     expect(body.stream).toBe(false);
     expect(body.max_tokens).toBe(512);
     expect(body.response_format).toEqual({ type: 'json_object' });
-    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect(body.thinking).toEqual({ type: 'enabled' });
     expect(body.tool_choice).toBe('none');
     expect(body.tools).toBeUndefined();
     expect(JSON.stringify(body.messages)).toContain('parameters');
@@ -107,11 +107,13 @@ describe('DeepSeekChangeProvider', () => {
       .resolves.toMatchObject({ change: tableChange });
     const body = captured.body;
     if (!body) throw new Error('Provider request body was not captured.');
-    expect(body?.max_tokens).toBe(8_192);
+    expect(body?.max_tokens).toBe(32_768);
     expect(measureDeepSeekChangeRequest(tableInput)).toBe(new TextEncoder().encode(JSON.stringify(body)).byteLength);
     const messages = body?.messages as Array<{ role: string; content: string }>;
-    expect(messages[0]?.content).toContain('"properties"');
-    expect(messages[0]?.content).toContain('"contains"');
+    expect(messages[0]?.content).toContain('TABLE-CHANGE COMPACT SCHEMA v1');
+    expect(messages[0]?.content).not.toContain('"$schema"');
+    expect(messages[0]?.content.length).toBeLessThan(20_000);
+    expect(messages[0]?.content).toContain('contains');
     expect(messages[0]?.content).toContain('exact existing source id');
     expect(messages[0]?.content).toContain('compare distinct selected rows with {"input":"first"} neq {"input":"second"}');
     expect(messages[0]?.content).toContain('{"record":"first","field":"name"} must use a field declared');
@@ -298,7 +300,7 @@ describe('DeepSeekChangeProvider', () => {
       { fetch: async () => response(JSON.stringify({ kind: 'teaching', parameters: { force: 8, mass: 2, time: 2 } }), { usage: { prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 20, prompt_cache_miss_tokens: 10 } }), code: 'MODEL_PROVIDER_RESPONSE_INVALID' },
       { fetch: async () => new Response(`provider echoed ${API_KEY}`, { status: 401 }), code: 'MODEL_PROVIDER_HTTP_ERROR' },
       { fetch: async () => { throw new Error(`raw error ${API_KEY}`); }, code: 'MODEL_PROVIDER_REQUEST_FAILED' },
-      { fetch: async () => new Response('x'.repeat(130_000)), code: 'MODEL_PROVIDER_RESPONSE_TOO_LARGE' },
+      { fetch: async () => new Response('x'.repeat(1_100_000)), code: 'MODEL_PROVIDER_RESPONSE_TOO_LARGE' },
     ];
     for (const testCase of cases) {
       const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: testCase.fetch });
@@ -325,9 +327,47 @@ describe('DeepSeekChangeProvider', () => {
     expect(calls).toBe(1);
   });
 
+  it('accepts a 180s timeout and rejects longer ones (F031)', () => {
+    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 180_000 })).not.toThrow();
+    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 180_001 })).toThrow(DomainError);
+  });
+
+  it('treats a length-truncated reply as a repairable issue (F031)', async () => {
+    const content = '{"kind":"table","program":{';
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async () => response(content, { choices: [{ finish_reason: 'length', message: { role: 'assistant', content } }] }),
+    });
+    let rejection: unknown;
+    try {
+      await provider.propose({ kind: 'table', prompt: 'build a table', sources: [], program: null, turn: null }, new AbortController().signal);
+    } catch (error) {
+      rejection = error;
+    }
+    expect(rejection).toBeInstanceOf(RejectedChangeReply);
+    if (!(rejection instanceof RejectedChangeReply)) throw new Error('Expected a rejected truncation.');
+    expect(rejection.issues[0]).toContain('truncated at the max_tokens limit');
+  });
+
+  it('reports the position and a bounded excerpt for invalid JSON (F031)', async () => {
+    const content = '{"kind":"table","program":{"version":1,OPS}';
+    const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(content) });
+    let rejection: unknown;
+    try {
+      await provider.propose({ kind: 'table', prompt: 'build a table', sources: [], program: null, turn: null }, new AbortController().signal);
+    } catch (error) {
+      rejection = error;
+    }
+    expect(rejection).toBeInstanceOf(RejectedChangeReply);
+    if (!(rejection instanceof RejectedChangeReply)) throw new Error('Expected a rejected JSON payload.');
+    expect(rejection.issues[0]).toContain('Invalid JSON');
+    const context = rejection.issues[0].split('Context: ')[1] ?? '';
+    expect(context.length).toBeGreaterThan(0);
+    expect(context.length).toBeLessThanOrEqual(400);
+  });
   it('uses fixed safe configuration errors', () => {
     expect(() => new DeepSeekChangeProvider({ apiKey: ` ${API_KEY} ` })).toThrow(DomainError);
-    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 60_001 })).toThrow(DomainError);
+    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 180_001 })).toThrow(DomainError);
   });
 });
 

@@ -1,6 +1,9 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
+
+- AI ร่างกฎใช้ **thinking + 32K output + deadline 180s** และ prompt แบบ compact guide (5KB แทน schema 36KB): แนบไฟล์ได้มากขึ้น ร่างยากมีโอกาสผ่านมากขึ้น · reply ที่ถูกตัด (`finish_reason=length`) ถือเป็น repairable และ invalid JSON รายงานตำแหน่ง+บริบท · ช่วง repair ห้ามกลับไปถาม clarify (F031)
+
 
 - corpus วัดผลได้หลายรอบ (`TABLE_CORPUS_ROUNDS`) พร้อมค่าความเสถียรต่อเคส — 3 รอบล่าสุด matched 29/30, reject 0, join ได้ draft 100% (F030)
 
