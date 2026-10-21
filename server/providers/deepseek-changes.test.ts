@@ -141,23 +141,28 @@ describe('DeepSeekChangeProvider', () => {
       .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
   });
 
-  it('accepts bounded table clarifying questions and asks for them in the table prompt (F012)', async () => {
+  it('accepts one bounded table clarifying question with three answers and asks for it in the table prompt (F012)', async () => {
     const tableInput: DeepSeekChangeInput = { kind: 'table', prompt: 'Make a table.', sources: [], program: null, turn: null };
     const captured: { body?: Record<string, unknown> } = {};
     const provider = new DeepSeekChangeProvider({
       apiKey: API_KEY,
       fetch: async (_url, options) => {
         captured.body = JSON.parse(String(options?.body)) as Record<string, unknown>;
-        return response(JSON.stringify({ kind: 'clarify', questions: ['  What records does the table track?  ', 'Who may change them?'] }));
+        return response(JSON.stringify({
+          kind: 'clarify',
+          question: '  What records does the table track?  ',
+          options: [' Equipment loans ', 'Shift swaps', 'I will attach a file'],
+        }));
       },
     });
     await expect(provider.propose(tableInput, new AbortController().signal)).resolves.toEqual({
-      questions: ['What records does the table track?', 'Who may change them?'],
+      clarification: { question: 'What records does the table track?', options: ['Equipment loans', 'Shift swaps', 'I will attach a file'] },
       usage: { promptTokens: 40, completionTokens: 30, cacheHitTokens: 10, cacheMissTokens: 30, reasoningTokens: 0 },
     });
     const messages = captured.body?.messages as Array<{ role: string; content: string }>;
     expect(messages[0]?.content).toContain('Ask instead of guessing');
-    expect(messages[0]?.content).toContain('{"kind":"clarify","questions":[...]}');
+    expect(messages[0]?.content).toContain('{"kind":"clarify","question":"...","options":["...","...","..."]}');
+    expect(messages[0]?.content).toContain('exactly 3 short, distinct answers');
 
     const teachingPrompt: { body?: Record<string, unknown> } = {};
     const teaching = new DeepSeekChangeProvider({
@@ -173,14 +178,20 @@ describe('DeepSeekChangeProvider', () => {
 
   it('rejects out-of-bound clarify replies as metered repairable replies, and clarify for teaching or encounter (F012)', async () => {
     const tableInput: DeepSeekChangeInput = { kind: 'table', prompt: 'Make a table.', sources: [], program: null, turn: null };
+    const three = ['One', 'Two', 'Three'];
     const invalid: unknown[] = [
-      { kind: 'clarify', questions: [] },
-      { kind: 'clarify', questions: ['Question one?', 'Question two?', 'Question three?', 'Question four?'] },
-      { kind: 'clarify', questions: ['x'.repeat(201)] },
-      { kind: 'clarify', questions: ['  ok  '] },
-      { kind: 'clarify', questions: ['What records?'], change: { kind: 'table' } },
-      { kind: 'clarify', questions: [42] },
-      { kind: 'clarify' },
+      { kind: 'clarify', question: 'Which records?', options: ['One', 'Two'] },
+      { kind: 'clarify', question: 'Which records?', options: ['One', 'Two', 'Three', 'Four'] },
+      { kind: 'clarify', question: 'Which records?', options: [] },
+      { kind: 'clarify', question: 'Which records?', options: ['One', '   ', 'Three'] },
+      { kind: 'clarify', question: 'Which records?', options: ['One', 'x'.repeat(121), 'Three'] },
+      { kind: 'clarify', question: 'Which records?', options: ['One', 2, 'Three'] },
+      { kind: 'clarify', question: 'x'.repeat(201), options: three },
+      { kind: 'clarify', question: '  ok  ', options: three },
+      { kind: 'clarify', options: three },
+      { kind: 'clarify', question: 'Which records?' },
+      { kind: 'clarify', question: 'Which records?', options: three, extra: true },
+      { kind: 'clarify', questions: ['Which records?'] },
     ];
     for (const output of invalid) {
       const content = JSON.stringify(output);
@@ -197,12 +208,18 @@ describe('DeepSeekChangeProvider', () => {
 
     const exactlyBounded = new DeepSeekChangeProvider({
       apiKey: API_KEY,
-      fetch: async () => response(JSON.stringify({ kind: 'clarify', questions: ['abc', 'y'.repeat(200), 'Third?'] })),
+      fetch: async () => response(JSON.stringify({ kind: 'clarify', question: 'abc', options: ['a', 'y'.repeat(120), 'z'.repeat(119)] })),
     });
     await expect(exactlyBounded.propose(tableInput, new AbortController().signal))
-      .resolves.toMatchObject({ questions: ['abc', 'y'.repeat(200), 'Third?'] });
+      .resolves.toMatchObject({ clarification: { question: 'abc', options: ['a', 'y'.repeat(120), 'z'.repeat(119)] } });
+    const longestQuestion = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async () => response(JSON.stringify({ kind: 'clarify', question: 'q'.repeat(200), options: three })),
+    });
+    await expect(longestQuestion.propose(tableInput, new AbortController().signal))
+      .resolves.toMatchObject({ clarification: { question: 'q'.repeat(200), options: three } });
 
-    const clarify = JSON.stringify({ kind: 'clarify', questions: ['What should change?'] });
+    const clarify = JSON.stringify({ kind: 'clarify', question: 'What should change?', options: three });
     const teaching = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(clarify) });
     await expect(teaching.propose(input(), new AbortController().signal)).rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
     const encounter = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(clarify) });

@@ -55,6 +55,7 @@ interface TestModelJob {
   status: 'running' | 'completed' | 'failed';
   message?: string;
   candidateId?: string;
+  clarification?: { question: string; options: string[] };
 }
 
 interface TestTableAssistantJob {
@@ -1663,7 +1664,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(poll.body).toMatchObject({ status: 'completed', candidateId });
   });
 
-  it('completes a table model job with the AI questions and commits nothing (F012)', async () => {
+  it('completes a table model job with the AI clarification and commits nothing (F012)', async () => {
     const owner = newActor('Clarify table owner');
     await saveActor(owner);
     const { roomId, stub, workspace: emptyWorkspace } = await createRoom(owner, 'table');
@@ -1673,11 +1674,11 @@ describe('Cloudflare room Durable Object', () => {
     });
     expect(imported.response.status).toBe(200);
     const readyWorkspace = (imported.body as CommandAck).workspace;
-    const questions = ['Which items can be borrowed?', 'How long may someone keep an item?'];
+    const clarification = { question: 'How long may someone keep an item?', options: ['One day', 'One week', 'No limit'] };
     const usage = { promptTokens: 100, completionTokens: 20, cacheHitTokens: 0, cacheMissTokens: 100 };
     vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
       jobId: modelJobId(request.workspace.id, request.workspace.epoch, request.actorId, request.commandId),
-      questions,
+      clarification,
       usage,
     }));
     const eventsBefore = await inspectRoom<{ event_type: SqlStorageValue }>(stub, 'SELECT event_type FROM room_events');
@@ -1695,18 +1696,18 @@ describe('Cloudflare room Durable Object', () => {
     expect(accepted.response.status).toBe(202);
     const job = await waitForModelJob(stub, jobId, owner.id, roomId, readyWorkspace.epoch);
     expect(job.status).toBe('completed');
-    expect(job.data.questions).toEqual(questions);
+    expect(job.data.clarification).toEqual(clarification);
     expect(job.data.candidateId).toBeUndefined();
 
-    const poll = await call<TestModelJob & { questions?: string[] }>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
     expect(poll.response.status).toBe(200);
-    expect(poll.body).toEqual({ id: jobId, status: 'completed', questions });
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification });
 
-    const retry = await call<TestModelJob & { questions?: string[] }>(stub, `/api/workspaces/${roomId}/model`, owner, {
+    const retry = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
       method: 'POST', body: input, mutation: true,
     });
     expect(retry.response.status).toBe(200);
-    expect(retry.body).toEqual({ id: jobId, status: 'completed', questions });
+    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification });
     expect(vi.mocked(proposeChange)).toHaveBeenCalledTimes(1);
 
     const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
@@ -1717,13 +1718,13 @@ describe('Cloudflare room Durable Object', () => {
     expect(eventsAfter.map((row) => row.event_type)).not.toContain('evolve.propose');
   });
 
-  it('omits malformed stored questions from the public model job view (F012)', async () => {
-    const owner = newActor('Malformed questions owner');
+  it('omits a malformed stored clarification from the public model job view (F012)', async () => {
+    const owner = newActor('Malformed clarification owner');
     await saveActor(owner);
     const { roomId, stub, workspace } = await createRoom(owner, 'table');
     vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
       jobId: modelJobId(request.workspace.id, request.workspace.epoch, request.actorId, request.commandId),
-      questions: ['Valid question?', 42 as unknown as string],
+      clarification: { question: 'Valid question?', options: ['A', 42 as unknown as string, 'C'] },
       usage: { promptTokens: 1, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 1 },
     }));
     const input = {
@@ -1734,7 +1735,7 @@ describe('Cloudflare room Durable Object', () => {
     await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, { method: 'POST', body: input, mutation: true });
     const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
     expect(job.status).toBe('completed');
-    const poll = await call<TestModelJob & { questions?: string[] }>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
     expect(poll.body).toEqual({ id: jobId, status: 'completed' });
   });
 

@@ -117,7 +117,7 @@ function proposal(kind: CaseKind): ChangeSet {
   return { kind, rule: { allyTarget: true, apCost: 1, oncePerTurn: true } };
 }
 
-type ClarifyReply = { kind: 'clarify'; questions: string[] };
+type ClarifyReply = { kind: 'clarify'; question: string; options: string[] };
 
 function providerFetch(change: ChangeSet | ClarifyReply, inspect?: (userContent: string, body: Record<string, unknown>) => void): typeof fetch {
   return async (input, init) => {
@@ -307,15 +307,15 @@ describe('Cloudflare AI proposal helper', () => {
     expect(rows.every(row => row.status === 'settled')).toBe(true);
   });
 
-  it('returns table clarifying questions after one settled attempt without validating rules (F012)', async () => {
+  it('returns a table clarification after one settled attempt without validating rules (F012)', async () => {
     const input = request('table');
-    const questions = ['Which records should the table track?', 'Please attach the data as a file.'];
+    const clarification = { question: 'Which records should the table track?', options: ['Equipment', 'Shifts', 'I will attach a file'] };
     let calls = 0;
-    const result = await proposeChange(testEnv, input, providerFetch({ kind: 'clarify', questions }, () => { calls += 1; }));
+    const result = await proposeChange(testEnv, input, providerFetch({ kind: 'clarify', ...clarification }, () => { calls += 1; }));
     expect(calls).toBe(1);
     expect('change' in result).toBe(false);
-    if (!('questions' in result)) throw new Error('Expected clarifying questions.');
-    expect(result.questions).toEqual(questions);
+    if (!('clarification' in result)) throw new Error('Expected a clarification.');
+    expect(result.clarification).toEqual(clarification);
     expect(result.jobId).toMatch(/^[a-f0-9]{64}$/u);
     expect(result.usage).toEqual({ promptTokens: 20, completionTokens: 12, cacheHitTokens: 5, cacheMissTokens: 15 });
     expect(input.workspace.domain.candidate).toBeNull();
@@ -327,11 +327,11 @@ describe('Cloudflare AI proposal helper', () => {
     expect(rows).toEqual([{ id: result.jobId, status: 'settled', completion_tokens: 12 }]);
   });
 
-  it('returns questions asked on a repair attempt with the usage of both attempts and stops repairing (F012)', async () => {
+  it('returns a clarification asked on a repair attempt with the usage of both attempts and stops repairing (F012)', async () => {
     const input = request('table');
     const bad = equipmentChange('source_fixture');
     bad.program.actions[0].effects[0].field = 'missing_field';
-    const questions = ['Which field records who borrowed the item?'];
+    const clarification = { question: 'Which field records who borrowed the item?', options: ['Borrower', 'Owner', 'Nobody'] };
     let calls = 0;
     const fetchImpl: typeof fetch = async (url, init) => {
       calls += 1;
@@ -339,12 +339,12 @@ describe('Cloudflare AI proposal helper', () => {
         const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
         expect((JSON.parse(data.messages[1].content) as { repair: { attempt: number } }).repair.attempt).toBe(2);
       }
-      return providerFetch(calls === 1 ? bad : { kind: 'clarify', questions })(url, init);
+      return providerFetch(calls === 1 ? bad : { kind: 'clarify', ...clarification })(url, init);
     };
     const result = await proposeChange(testEnv, input, fetchImpl);
     expect(calls).toBe(2);
-    if (!('questions' in result)) throw new Error('Expected clarifying questions.');
-    expect(result.questions).toEqual(questions);
+    if (!('clarification' in result)) throw new Error('Expected a clarification.');
+    expect(result.clarification).toEqual(clarification);
     expect(result.usage).toEqual({ promptTokens: 40, completionTokens: 24, cacheHitTokens: 10, cacheMissTokens: 30 });
     const stub = testEnv.BILLING.get(testEnv.BILLING.idFromName('global'));
     const rows = await runInDurableObject(stub, (_instance, state) => state.storage.sql
@@ -364,7 +364,7 @@ describe('Cloudflare AI proposal helper', () => {
         expect(sent.repair.attempt).toBe(2);
         expect(sent.repair.issues.length).toBeGreaterThan(0);
       }
-      return providerFetch(calls === 1 ? { kind: 'clarify', questions: [] } : proposal('table'))(url, init);
+      return providerFetch(calls === 1 ? { kind: 'clarify', question: 'Which records?', options: ['Only two', 'answers'] } : proposal('table'))(url, init);
     };
     const result = await proposeChange(testEnv, input, fetchImpl);
     expect(calls).toBe(2);
@@ -374,7 +374,7 @@ describe('Cloudflare AI proposal helper', () => {
 
   it('treats a clarify reply for teaching or encounter as rejected output (F012)', async () => {
     for (const kind of ['teaching', 'encounter'] as const) {
-      await expect(proposeChange(testEnv, request(kind), providerFetch({ kind: 'clarify', questions: ['What should change?'] })))
+      await expect(proposeChange(testEnv, request(kind), providerFetch({ kind: 'clarify', question: 'What should change?', options: ['A', 'B', 'C'] })))
         .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
     }
   });
