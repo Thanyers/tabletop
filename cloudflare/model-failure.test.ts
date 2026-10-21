@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AuthorityError } from '../server/errors.js';
 import { DomainError } from '../src/tabletop/shared/contracts.js';
-import { MAX_FAILURE_REASON_CHARS, ReasonedDomainError, cleanReasons, modelFailureMessage, safeModelFailureCode, safeModelFailureReasons } from './model-failure.js';
+import { MAX_FAILURE_REASON_CHARS, ReasonedDomainError, STRUCTURAL_HINT, cleanReasons, modelFailureMessage, safeModelFailureCode, safeModelFailureReasons } from './model-failure.js';
 
 describe('model failure messages (F016)', () => {
   it('shows the real validation reasons instead of one generic sentence', () => {
@@ -33,3 +33,16 @@ describe('model failure messages (F016)', () => {
     expect(safeModelFailureCode(new DomainError('TABLE_SCHEMA', 'bad'))).toBe('MODEL_PROVIDER_OUTPUT_REJECTED');
   });
 });
+
+describe('structural reject hint (F027)', () => {
+  it('adds the join hint when a reason points at an unknown record field', () => {
+    const message = modelFailureMessage('MODEL_PROVIDER_OUTPUT_REJECTED', ['An action refers to an unknown record field.']);
+    expect(message).toContain(STRUCTURAL_HINT);
+    expect(message).toContain('did not pass validation');
+  });
+
+  it('does not add the join hint for unrelated reasons', () => {
+    expect(modelFailureMessage('MODEL_PROVIDER_OUTPUT_REJECTED', ['Use at most 100 rows.'])).not.toContain(STRUCTURAL_HINT);
+  });
+});
+

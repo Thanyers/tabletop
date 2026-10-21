@@ -330,3 +330,38 @@ describe('DeepSeekChangeProvider', () => {
     expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 60_001 })).toThrow(DomainError);
   });
 });
+
+describe('clarify language enforcement (F026)', () => {
+  it('rejects a Chinese clarification for an English request', async () => {
+    const clarify = JSON.stringify({
+      kind: 'clarify',
+      question: '你的请求需要更多细节，请问要管理什么数据？',
+      options: ['选项一', '选项二', '选项三'],
+    });
+    const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(clarify) });
+    const tableInput: DeepSeekChangeInput = { kind: 'table', prompt: 'create a table for cookies with numbers', sources: [], program: null, turn: null };
+    let rejection: unknown;
+    try {
+      await provider.propose(tableInput, new AbortController().signal);
+    } catch (error) {
+      rejection = error;
+    }
+    expect(rejection).toBeInstanceOf(RejectedChangeReply);
+    if (!(rejection instanceof RejectedChangeReply)) throw new Error('Expected a rejected clarification.');
+    expect(rejection.issues).toHaveLength(1);
+    expect(rejection.issues[0]).toContain('language of the request');
+  });
+
+  it('accepts a Thai clarification for a Thai request', async () => {
+    const clarify = JSON.stringify({
+      kind: 'clarify',
+      question: 'ต้องการให้ตารางนี้เก็บข้อมูลอะไรบ้าง?',
+      options: ['รายการงาน', 'รายรับรายจ่าย', 'แนบไฟล์ข้อมูล'],
+    });
+    const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(clarify) });
+    const thaiInput: DeepSeekChangeInput = { kind: 'table', prompt: 'สร้างตารางให้หน่อย', sources: [], program: null, turn: null };
+    const result = await provider.propose(thaiInput, new AbortController().signal);
+    expect('clarification' in result).toBe(true);
+  });
+});
+
