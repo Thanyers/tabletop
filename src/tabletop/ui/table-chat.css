@@ -105,3 +105,15 @@
 .tt-app .tt-chat-card__questions button:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 2px; }
 .tt-app .tt-chat-card__questions button:disabled { cursor: not-allowed; opacity: .6; }
 .tt-app .tt-chat-card__hint { color: var(--tt-muted); font-size: var(--tt-type-small); line-height: 16px; }
+
+/* F020: multi-select answers with a written option. */
+.tt-app .tt-chat-card__answers { display: grid; gap: var(--tt-space-3); }
+.tt-app .tt-chat-card__choice { display: flex; align-items: center; gap: var(--tt-space-3); width: 100%; min-height: var(--tt-button-height, 40px); padding: var(--tt-space-2) var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px); background: var(--tt-card-surface); cursor: pointer; }
+.tt-app .tt-chat-card__choice:hover { border-color: var(--tt-moss); background: var(--tt-green-2); }
+.tt-app .tt-chat-card__choice:has(input:checked) { border-color: var(--tt-moss); background: var(--tt-green-2); }
+.tt-app .tt-chat-card__choice:has(input:focus-visible) { outline: 2px solid var(--tt-moss); outline-offset: 2px; }
+.tt-app .tt-chat-card__choice:has(input:disabled) { cursor: not-allowed; opacity: .6; }
+.tt-app .tt-chat-card__choice input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: var(--tt-moss); }
+.tt-app .tt-chat-card__own-answer { width: 100%; margin-top: var(--tt-space-2); padding: var(--tt-space-2) var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px); background: var(--tt-paper); color: var(--tt-ink); font: inherit; }
+.tt-app .tt-chat-card__own-answer:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
+.tt-app .tt-chat-card__send-answer { justify-self: start; display: inline-flex; align-items: center; gap: var(--tt-space-2); }

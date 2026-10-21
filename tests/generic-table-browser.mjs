@@ -554,10 +554,18 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await expect(card).toHaveClass(/tt-chat-card--questions/u, { timeout: 20_000 });
   await expect(card).toContainText('A few details would help build this table. Nothing on the table changed.');
   await expect(card.locator('.tt-chat-card__question')).toHaveText(clarification.question);
-  await expect(card).toContainText('Pick an answer to ask again with it. Your request stays the same.');
+  await expect(card).toContainText('Pick one or more answers, or write your own, then send. Your request stays the same.');
   const list = card.getByRole('list', { name: 'Answer choices', exact: true });
-  await expect(list.getByRole('button')).toHaveCount(3);
-  for (const option of clarification.options) await expect(list.getByRole('button', { name: option, exact: true })).toBeEnabled();
+  // F020: three AI choices plus "Write my own answer", all multi-select; nothing sends until Send answer.
+  await expect(list.getByRole('checkbox')).toHaveCount(4);
+  for (const option of clarification.options) await expect(list.getByRole('checkbox', { name: option, exact: true })).toBeEnabled();
+  const sendAnswer = card.getByRole('button', { name: 'Send answer', exact: true });
+  await expect(sendAnswer).toBeDisabled();
+  await list.getByRole('checkbox', { name: 'Write my own answer', exact: true }).check();
+  await expect(card.getByRole('textbox', { name: 'Your answer', exact: true })).toBeFocused();
+  await expect(sendAnswer).toBeDisabled();
+  await list.getByRole('checkbox', { name: 'Write my own answer', exact: true }).uncheck();
+  await expect(card.getByRole('textbox', { name: 'Your answer', exact: true })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
   await expectUnchanged();
   expect(modelPosts).toHaveLength(1);
@@ -580,7 +588,9 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   };
   await owner.route(pollUrl, stripClarification);
   const answerPost = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
-  await list.getByRole('button', { name: clarification.options[1], exact: true }).click();
+  await list.getByRole('checkbox', { name: clarification.options[1], exact: true }).check();
+  expect(modelPosts).toHaveLength(1);
+  await sendAnswer.click();
   await expect(consent).toHaveCount(0);
   expect((await answerPost).status()).toBe(202);
   expect(modelPosts).toHaveLength(2);
