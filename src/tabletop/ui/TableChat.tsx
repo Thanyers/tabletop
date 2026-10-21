@@ -169,7 +169,7 @@ export function TableChat({
       </>}
       {explicitRuleEdit && <button type="button" className="tt-table-chat-bar__cancel-edit" aria-label="Cancel rule edit" title="Cancel rule edit" disabled={controlsBusy} onClick={cancelRuleEdit}><X size={16} /></button>}
       <label className="tt-visually-hidden" htmlFor={messageId}>Message</label>
-      {/* F019: keep the box editable while a draft or answer is pending so the next message can be written; send stays gated by canSend. */}
+      {/* F021: keep the box editable while a draft or answer is pending so the next message can be written; send stays gated by canSend. */}
       <textarea id={messageId} ref={fieldRef} rows={1} value={message} maxLength={MAX_MESSAGE_CHARS} placeholder={placeholder} aria-describedby={busy ? `${messageId}-wait` : undefined}
         onChange={(event) => { setMessage(event.target.value); setAsking(false); setSendError(''); }}
         onKeyDown={(event) => {
