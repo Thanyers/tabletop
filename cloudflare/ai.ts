@@ -9,7 +9,7 @@ import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeReque
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { ReasonedDomainError } from './model-failure.js';
-import { nextRepairIssues } from './repair.js';
+import { FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
@@ -503,9 +503,10 @@ async function proposeGeneratedTable(
   let input = initialInput;
   let binding = initialBinding;
   const deadline = Date.now() + 25_000;
+  const MAX_ATTEMPTS = 4;
   const total: DeepSeekUsage = { promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 };
   let previousIssues: string[] = [];
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let change: ChangeSet | undefined;
     let clarification: TableClarification | undefined;
     let usage: DeepSeekUsage;
@@ -541,11 +542,17 @@ async function proposeGeneratedTable(
       if (!issues.length) return { change, jobId: initialBinding.id, usage: total };
       previousOutput = JSON.stringify(change).slice(0, 18_000);
     }
-    if (attempt === 3 || !issues.length) throw new ReasonedDomainError('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation. Nothing was activated.', issues);
+    if (attempt === MAX_ATTEMPTS || !issues.length) throw new ReasonedDomainError('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation. Nothing was activated.', issues);
     if (Date.now() >= deadline) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
-    const repairIssues = nextRepairIssues(previousIssues, issues);
-    previousIssues = issues;
-    input = { ...initialInput, repair: { attempt: attempt + 1, issues: repairIssues, ...(previousOutput === undefined ? {} : { previousOutput }) } };
+    if (attempt === MAX_ATTEMPTS - 1) {
+      // F028: the final attempt asks for the smallest table that can still activate.
+      previousIssues = issues;
+      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...FALLBACK_SIMPLIFY_ISSUES] } };
+    } else {
+      const repairIssues = nextRepairIssues(previousIssues, issues);
+      previousIssues = issues;
+      input = { ...initialInput, repair: { attempt: (attempt + 1) as 2 | 3, issues: repairIssues, ...(previousOutput === undefined ? {} : { previousOutput }) } };
+    }
     let maxInputTokens: number;
     for (;;) {
       try {
