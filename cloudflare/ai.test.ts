@@ -379,7 +379,7 @@ describe('Cloudflare AI proposal helper', () => {
     }
   });
 
-  it('caps generated repairs at three without accepting a broken artifact', async () => {
+  it('caps generated repairs at four attempts (three repairs plus one minimal fallback) without accepting a broken artifact', async () => {
     const input = request('table');
     const invalid = equipmentChange('source_fixture');
     invalid.program.actions[0].effects[0].field = 'missing_field';
@@ -388,8 +388,41 @@ describe('Cloudflare AI proposal helper', () => {
     expect(rejection).toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
     // F016: the last validation issues travel with the error so the requester sees the real cause.
     expect((rejection as { reasons?: string[] }).reasons?.length).toBeGreaterThan(0);
-    expect(calls).toBe(3);
+    expect(calls).toBe(4);
     expect(input.workspace.domain.candidate).toBeNull();
+  });
+
+  it('falls back to the smallest valid table on the final attempt', async () => {
+    const input = request('table');
+    const invalid = equipmentChange('source_fixture');
+    invalid.program.actions[0].effects[0].field = 'missing_field';
+    const minimal: ChangeSet = {
+      kind: 'table',
+      program: {
+        version: 1, title: 'Minimal', description: 'Smallest table that satisfies the request.',
+        collections: [{ id: 'items', title: 'Items', fields: [{ id: 'name', label: 'Name', type: 'text', required: true }] }],
+        actions: [{
+          id: 'add_item', title: 'Add item', description: 'Add one item.', roles: ['owner'],
+          parameters: [], conditions: [], effects: [],
+          creates: [{ collection: 'items', values: { name: { literal: 'Sample' } } }],
+          requireTurn: false, advanceTurn: false,
+        }],
+        invariants: [], turnOrder: [], evidence: structuredClone(invalid.program.evidence), assumptions: [],
+      },
+      initialRecords: { items: [] },
+    };
+    const sequence: ChangeSet[] = [invalid, invalid, invalid, minimal];
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (fetchInput, init) => {
+      const change = sequence[Math.min(calls, sequence.length - 1)];
+      calls += 1;
+      return providerFetch(change)(fetchInput, init);
+    };
+    const result = await proposeChange(testEnv, input, fetchImpl);
+    expect(calls).toBe(4);
+    expect(result.change.kind).toBe('table');
+    if (result.change.kind !== 'table') throw new Error('Expected a table change.');
+    expect(result.change.program.title).toBe('Minimal');
   });
 
   it('reserves and dispatches each stable command once, rejecting replay and changed input', async () => {

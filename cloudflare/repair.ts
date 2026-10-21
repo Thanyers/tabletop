@@ -11,3 +11,13 @@ export function nextRepairIssues(previous: readonly string[], issues: readonly s
   const repeated = base.length > 0 && previous.length > 0 && base[0] === previous[0];
   return repeated ? [...base, SIMPLIFY_DIRECTIVE] : base;
 }
+
+/**
+ * F028: the last attempt asks for the smallest table that can still satisfy the request.
+ * A minimal draft that activates beats a rich draft that never leaves validation.
+ */
+export const FALLBACK_SIMPLIFY_ISSUES = [
+  'Return the smallest valid table that still satisfies the request: one collection with at most four fields, at most one action, no canvas views, no cross-collection field lookups.',
+] as const;
+export const FALLBACK_REPAIR_ATTEMPT = 3;
+
