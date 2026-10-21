@@ -297,8 +297,30 @@ export class TabletopClient {
     return this.postJson<WorkspaceInvite>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites`, { seat, ...(replaceOutstanding ? { replaceOutstanding: true } : {}) });
   }
 
+  /** F003-T3: owner-only status of the table's reusable link (never returns the link itself). */
+  async inviteLinkStatus(workspaceId: string): Promise<InviteLinkStatus> {
+    return this.getJson<InviteLinkStatus>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invite-link`);
+  }
+
+  /** Creates a new reusable link (any earlier one stops working); the link is returned only now. */
+  async createInviteLink(workspaceId: string, days: 1 | 7 | 30): Promise<InviteLinkStatus> {
+    return this.postJson<InviteLinkStatus>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invite-link`, { action: 'create', days });
+  }
+
+  async disableInviteLink(workspaceId: string): Promise<InviteLinkStatus> {
+    return this.postJson<InviteLinkStatus>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invite-link`, { action: 'disable' });
+  }
+
+  /** F003-T1: the table owner removes a member; returns the owner's refreshed view. */
+  async removeMember(workspaceId: string, actorId: string): Promise<WorkspaceView> {
+    return this.postJson<WorkspaceView>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/remove`, { actorId });
+  }
+
   async redeem(ticket: string): Promise<WorkspaceView> {
-    const view = await this.postJson<WorkspaceView>('/api/invites/redeem', { ticket });
+    // F003-T3: a reusable table link travels in the same #invite= fragment with a "link:" prefix.
+    const view = isInviteLink(ticket)
+      ? await this.postJson<WorkspaceView>('/api/invites/join', { link: ticket.slice(INVITE_LINK_PREFIX.length) })
+      : await this.postJson<WorkspaceView>('/api/invites/redeem', { ticket });
     await this.openSession();
     return view;
   }
@@ -487,6 +509,11 @@ export function clearInviteFragment(): void {
   url.hash = '';
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
 }
+
+export const INVITE_LINK_PREFIX = 'link:';
+export function isInviteLink(ticket: string): boolean { return ticket.startsWith(INVITE_LINK_PREFIX); }
+
+export interface InviteLinkStatus { enabled: boolean; expiresAt: number | null; link?: string }
 
 export function inviteFromFragment(): string | null {
   const fragment = new URLSearchParams(window.location.hash.slice(1));

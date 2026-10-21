@@ -3,7 +3,7 @@ import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/author
 import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
 import { AuthorityError, safeError } from '../server/errors.js';
-import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
+import { canonicalJson, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
 import { exportInvoice } from '../server/exports.js';
 import { projectionCursor } from '../server/projection-cursor.js';
 import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
@@ -45,6 +45,9 @@ const ROOM_EXPIRES_AT = 253_402_300_799_000;
 const ROOM_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const COMMAND_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{40,64}$/u;
+/** Actor ids are opaque account ids (UUIDs today); bound the shape before touching storage. */
+const MEMBER_ACTOR_ID_PATTERN = /^[A-Za-z0-9_-]{1,160}$/u;
+const INVITE_LINK_DAYS: readonly number[] = [1, 7, 30];
 const PROJECTION_CURSOR_PATTERN = /^[a-f0-9]{64}$/u;
 const MODEL_JOB_ID_PATTERN = /^[a-f0-9]{64}$/u;
 
@@ -396,6 +399,20 @@ export class Room extends DurableObject<Env> {
     return authorized.workspace;
   }
 
+  async joinByInviteLink(request: Request, rawToken: string): Promise<WorkspaceView> {
+    const session = await authenticateRequest(request, this.env);
+    requireMutation(request, this.env, session);
+    if (!INVITE_TOKEN_PATTERN.test(rawToken)) throw new AuthorityError('INVITE_INVALID');
+    const roomId = this.requireBoundRoomId();
+    const workspace = await this.repository.getWorkspace(roomId);
+    if (workspace) requireWorkspaceWritable(this.env, workspace.kind);
+    await this.repository.joinByInviteLink(sha256(rawToken), session.record.actorId, session.record.name, Date.now());
+    const authorized = await this.authority.authorizeSession(session, roomId);
+    this.scheduleDirectorySync();
+    this.scheduleOutboxDrain();
+    return authorized.workspace;
+  }
+
   async fetch(request: Request): Promise<Response> {
     const requestId = randomId();
     try {
@@ -408,6 +425,11 @@ export class Room extends DurableObject<Env> {
       if (url.pathname === '/internal/redeem' && request.method === 'POST') {
         const input = parseRedeemInput(await readJson(request));
         const workspace = await this.redeemInvite(request, input.ticket);
+        return json(200, workspace, { 'x-request-id': requestId });
+      }
+      if (url.pathname === '/internal/join-link' && request.method === 'POST') {
+        const input = parseRedeemInput(await readJson(request));
+        const workspace = await this.joinByInviteLink(request, input.ticket);
         return json(200, workspace, { 'x-request-id': requestId });
       }
       if (url.pathname === '/internal/view' && request.method === 'GET') {
@@ -431,7 +453,7 @@ export class Room extends DurableObject<Env> {
             : workspace.domainState.kind === 'encounter' && workspace.domainState.paused ? 'paused' : 'active',
         }, { 'x-request-id': requestId });
       }
-      const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu.exec(url.pathname);
+      const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|invite-link|members\/remove|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu.exec(url.pathname);
       if (!route || this.roomId === null || route[1] !== this.roomId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
       const workspaceId = route[1];
       const suffix = route[2] ?? '';
@@ -464,6 +486,43 @@ export class Room extends DurableObject<Env> {
         const result = await this.authority.execute(authorized.session, envelope, workspaceId);
         this.scheduleDirectorySync();
         return json(200, result, { 'x-request-id': requestId });
+      }
+      if (suffix === 'invite-link' && (request.method === 'GET' || request.method === 'POST')) {
+        const authorized = await this.authorize(request, workspaceId);
+        // F003-T3: only the owner of a data table manages its reusable link.
+        if (authorized.workspace.kind !== 'table' || authorized.workspace.actor.role !== 'owner') throw new AuthorityError('ROLE_FORBIDDEN');
+        if (request.method === 'GET') return json(200, this.repository.inviteLinkStatus(workspaceId, Date.now()), { 'x-request-id': requestId });
+        requireMutation(request, this.env, authorized.session);
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
+        const body = await readJson(request);
+        if (isRecord(body) && body.action === 'disable' && Object.keys(body).length === 1) {
+          await this.repository.disableInviteLink(workspaceId, Date.now());
+          return json(200, { enabled: false, expiresAt: null }, { 'x-request-id': requestId });
+        }
+        if (!isRecord(body) || body.action !== 'create' || !INVITE_LINK_DAYS.includes(body.days as number)
+            || Object.keys(body).some((key) => key !== 'action' && key !== 'days')) {
+          throw new AuthorityError('INVALID_REQUEST');
+        }
+        const token = randomToken();
+        const now = Date.now();
+        const created = await this.repository.createInviteLink(
+          workspaceId, authorized.session.record.actorId, sha256(token), now, now + (body.days as number) * 86_400_000,
+        );
+        // The raw link is returned once; only its hash is stored.
+        return json(201, { enabled: true, expiresAt: created.expiresAt, link: `${workspaceId}_${token}` }, { 'x-request-id': requestId });
+      }
+      if (request.method === 'POST' && suffix === 'members/remove') {
+        const authorized = await this.authorize(request, workspaceId);
+        requireMutation(request, this.env, authorized.session);
+        requireWorkspaceWritable(this.env, authorized.workspace.kind);
+        const body = await readJson(request);
+        if (!isRecord(body) || typeof body.actorId !== 'string' || !MEMBER_ACTOR_ID_PATTERN.test(body.actorId)
+            || Object.keys(body).some((key) => key !== 'actorId')) {
+          throw new AuthorityError('INVALID_REQUEST');
+        }
+        const workspace = await this.authority.removeMember(authorized.session, workspaceId, body.actorId);
+        this.scheduleDirectorySync();
+        return json(200, workspace, { 'x-request-id': requestId });
       }
       if (request.method === 'POST' && suffix === 'invites') {
         const authorized = await this.authorize(request, workspaceId);

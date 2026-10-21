@@ -554,10 +554,18 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await expect(card).toHaveClass(/tt-chat-card--questions/u, { timeout: 20_000 });
   await expect(card).toContainText('A few details would help build this table. Nothing on the table changed.');
   await expect(card.locator('.tt-chat-card__question')).toHaveText(clarification.question);
-  await expect(card).toContainText('Pick an answer to ask again with it. Your request stays the same.');
+  await expect(card).toContainText('Pick one or more answers, or write your own, then send. Your request stays the same.');
   const list = card.getByRole('list', { name: 'Answer choices', exact: true });
-  await expect(list.getByRole('button')).toHaveCount(3);
-  for (const option of clarification.options) await expect(list.getByRole('button', { name: option, exact: true })).toBeEnabled();
+  // F022: three AI choices plus "Write my own answer", all multi-select; nothing sends until Send answer.
+  await expect(list.getByRole('checkbox')).toHaveCount(4);
+  for (const option of clarification.options) await expect(list.getByRole('checkbox', { name: option, exact: true })).toBeEnabled();
+  const sendAnswer = card.getByRole('button', { name: 'Send answer', exact: true });
+  await expect(sendAnswer).toBeDisabled();
+  await list.getByRole('checkbox', { name: 'Write my own answer', exact: true }).check();
+  await expect(card.getByRole('textbox', { name: 'Your answer', exact: true })).toBeFocused();
+  await expect(sendAnswer).toBeDisabled();
+  await list.getByRole('checkbox', { name: 'Write my own answer', exact: true }).uncheck();
+  await expect(card.getByRole('textbox', { name: 'Your answer', exact: true })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
   await expectUnchanged();
   expect(modelPosts).toHaveLength(1);
@@ -580,7 +588,9 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   };
   await owner.route(pollUrl, stripClarification);
   const answerPost = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
-  await list.getByRole('button', { name: clarification.options[1], exact: true }).click();
+  await list.getByRole('checkbox', { name: clarification.options[1], exact: true }).check();
+  expect(modelPosts).toHaveLength(1);
+  await sendAnswer.click();
   await expect(consent).toHaveCount(0);
   expect((await answerPost).status()).toBe(202);
   expect(modelPosts).toHaveLength(2);
@@ -657,6 +667,31 @@ async function inviteMember(owner, seatNumber) {
   expect(url).toContain('#invite=');
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   return url;
+}
+
+async function turnOnInviteLink(owner) {
+  await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+  const dialog = owner.getByRole('dialog', { name: 'People at this table' });
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/7 members');
+  const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
+  await panel.getByLabel('Expires after').selectOption('7');
+  const created = owner.waitForResponse((response) => response.url().endsWith('/invite-link') && response.request().method() === 'POST');
+  await panel.getByRole('button', { name: 'Turn on invite link', exact: true }).click();
+  expect((await created).status()).toBe(201);
+  const url = await panel.getByLabel('Invite link').inputValue();
+  expect(url).toContain('#invite=link%3A');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  return url;
+}
+
+async function turnOffInviteLink(owner) {
+  await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+  const dialog = owner.getByRole('dialog', { name: 'People at this table' });
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/7 members');
+  const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
+  await panel.getByRole('button', { name: 'Turn off link', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Turn on invite link', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 }
 
 async function joinAndCheckSharedFiles(newPage, api, actor, inviteUrl, tableId, filename) {
@@ -1475,8 +1510,11 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await renameInput.press('Enter');
   await expect(owner.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
   expect((await api(owner, `/api/workspaces/${room.id}`)).body.title).toBe(generatedTableTitle);
-  const invite = await inviteMember(owner, 1);
+  // F003-T3: this member joins through the table's reusable invite link instead of a one-seat invitation.
+  const invite = await turnOnInviteLink(owner);
   member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename);
+  expect((await api(member, `/api/workspaces/${room.id}`)).body.actor.seat).toBe('member-1');
+  await turnOffInviteLink(owner);
   await expect(member.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
   await expect(member.getByRole('button', { name: 'Rename table', exact: true })).toHaveCount(0);
   const memberName = (await api(member, `/api/workspaces/${room.id}`)).body.actor.name;
