@@ -13,11 +13,16 @@ describe('model failure messages (F016)', () => {
   it('keeps reasons short, single-line, de-duplicated and capped at three', () => {
     const reasons = cleanReasons(['  one\n\ttwo  ', 'one two', 'x'.repeat(1000), 'three', 'four', 42, '']);
     expect(reasons).toHaveLength(3);
-    expect(reasons[0]).toBe('one two');
+    expect(reasons[0]).toBe('one two.');
     expect(reasons[1]).toHaveLength(MAX_FAILURE_REASON_CHARS);
     expect(reasons[1].endsWith('…')).toBe(true);
     expect(cleanReasons('not an array')).toEqual([]);
-    expect(cleanReasons(['\u0000\u0007bell'])).toEqual(['bell']);
+    expect(cleanReasons(['\u0000\u0007bell'])).toEqual(['bell.']);
+    expect(cleanReasons(['program.collections[0].fields[1].type: Invalid option'])).toEqual(['program.collections[0].fields[1].type: Invalid option.']);
+  });
+  it('rewrites repair instructions meant for the AI into what went wrong', () => {
+    expect(cleanReasons(['Return a complete JSON object, without Markdown.'])).toEqual(['The AI did not return a complete draft.']);
+    expect(cleanReasons(['Reduce expression nesting and program size to the documented limits.'])).toEqual(['The draft was too large or too deeply nested.']);
   });
   it('extracts reasons only from validation failures', () => {
     expect(safeModelFailureReasons(new ReasonedDomainError('MODEL_PROVIDER_OUTPUT_REJECTED', 'x', ['Field "status" is missing.']))).toEqual(['Field "status" is missing.']);

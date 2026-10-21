@@ -13,12 +13,22 @@ export class ReasonedDomainError extends DomainError {
   constructor(code: string, message: string, readonly reasons: readonly string[]) { super(code, message); }
 }
 
+// Repair instructions written for the AI (server/providers/deepseek-changes.ts) read as orders
+// to a person; show what went wrong instead.
+const AI_FACING_REASONS: Readonly<Record<string, string>> = {
+  'Return a complete JSON object, without Markdown.': 'The AI did not return a complete draft.',
+  'Reduce expression nesting and program size to the documented limits.': 'The draft was too large or too deeply nested.',
+};
+
 function cleanReason(value: unknown): string | null {
   if (typeof value !== 'string') return null;
+  value = AI_FACING_REASONS[value.trim()] ?? value;
   // Drop control characters and collapse whitespace; keep the text short and on one line.
   const text = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim();
   if (!text) return null;
-  return text.length > MAX_FAILURE_REASON_CHARS ? `${text.slice(0, MAX_FAILURE_REASON_CHARS - 1)}…` : text;
+  const short = text.length > MAX_FAILURE_REASON_CHARS ? `${text.slice(0, MAX_FAILURE_REASON_CHARS - 1)}…` : text;
+  // End every reason as a sentence so the joined message reads cleanly.
+  return /[.!?…]$/u.test(short) ? short : `${short}.`;
 }
 
 export function cleanReasons(values: unknown): string[] {
