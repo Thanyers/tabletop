@@ -122,10 +122,13 @@ function budget(value: string | undefined): number | null {
 
 function configuredLimits(env: Env): { monthly: number; daily: number } {
   requireCondition(typeof env.DEEPSEEK_KEY === 'string' && env.DEEPSEEK_KEY.length > 0, 'MODEL_NOT_CONFIGURED');
+  // POC: an explicit 0/empty budget means 'no cap' so testing is not blocked; positive values still cap.
   const monthly = budget(env.AI_MONTHLY_BUDGET_MICRO_USD);
   const daily = env.AI_DAILY_BUDGET_MICRO_USD === undefined
     ? monthly
     : budget(env.AI_DAILY_BUDGET_MICRO_USD);
+  // POC: 0 or empty in both knobs = unlimited spend (usage is still metered).
+  if (monthly === null && daily === null) return { monthly: MAX_BUDGET_MICRO_USD, daily: MAX_BUDGET_MICRO_USD };
   requireCondition(monthly !== null && daily !== null, 'MODEL_NOT_CONFIGURED');
   return { monthly, daily };
 }

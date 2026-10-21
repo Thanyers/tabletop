@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- POC: ตั้ง `AI_DAILY_BUDGET_MICRO_USD` / `AI_MONTHLY_BUDGET_MICRO_USD` เป็น 0 (หรือเว้นว่าง) = **ไม่จำกัดงบ** (ยังวัด usage) เพื่อไม่ให้การเทสติด "budget reached" (F033)
+
 - AI ร่างกฎใช้ **thinking + 32K output + deadline 180s** และ prompt แบบ compact guide (5KB แทน schema 36KB): แนบไฟล์ได้มากขึ้น ร่างยากมีโอกาสผ่านมากขึ้น · reply ที่ถูกตัด (`finish_reason=length`) ถือเป็น repairable และ invalid JSON รายงานตำแหน่ง+บริบท · ช่วง repair ห้ามกลับไปถาม clarify (F031)
 
 
