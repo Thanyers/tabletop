@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
-import { tableManagerRoles } from '../src/tabletop/shared/visibility.js';
+import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
@@ -145,10 +145,13 @@ function parseName(value: unknown): string {
   return bounded || 'Guest';
 }
 
-/** Owner, or any table member under equal permissions (F015). Reset and removing the owner stay with the owner. */
-function managesWorkspace(workspace: StoredWorkspace, member: StoredMember): boolean {
-  if (workspace.ownerActorId === member.actorId && member.role === primaryRole(workspace.kind)) return true;
-  return workspace.kind === 'table' && (tableManagerRoles() as Role[]).includes(member.role);
+/** F035: what this member may do here, from the table's access settings. The owner holds everything. */
+function permissionsOf(workspace: StoredWorkspace, member: StoredMember): Set<Permission> {
+  return memberPermissions(workspace.kind, workspace.domainState.access, member.actorId, workspace.ownerActorId === member.actorId);
+}
+
+function may(workspace: StoredWorkspace, member: StoredMember, permission: Permission): boolean {
+  return permissionsOf(workspace, member).has(permission);
 }
 
 function primaryRole(kind: CaseKind): Role {
@@ -170,6 +173,7 @@ function actorContext(workspace: StoredWorkspace, member: StoredMember, now: num
     name: member.name,
     role: member.role,
     ...(member.seat ? { seat: member.seat } : {}),
+    permissions: permissionsOf(workspace, member),
     workspaceId: workspace.id,
     epoch: workspace.epoch,
     now,
@@ -419,7 +423,7 @@ export class CommandAuthority {
       const member = await transaction.getMember(session.record.actorId);
       if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
       if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-      if (!managesWorkspace(workspace, member)) {
+      if (!may(workspace, member, 'members.remove')) {
         throw new AuthorityError('ROLE_FORBIDDEN');
       }
       if (workspace.kind !== 'table') throw new AuthorityError('MEMBER_NOT_REMOVABLE', 'Only members of a shared data table can be removed.');
@@ -447,7 +451,7 @@ export class CommandAuthority {
       const member = await transaction.getMember(session.record.actorId);
       if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
       if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-      if (!managesWorkspace(workspace, member)) {
+      if (!may(workspace, member, 'members.invite')) {
         throw new AuthorityError('ROLE_FORBIDDEN');
       }
       const roleSeat = inviteForSeat(workspace.kind, seat);
@@ -698,7 +702,7 @@ export class CommandAuthority {
           return { ...existing.response, duplicate: true };
         }
         if ((envelope.type === 'workspace.reset' && workspace.ownerActorId !== session.record.actorId)
-            || (envelope.type === 'workspace.rename' && !managesWorkspace(workspace, member))) {
+            || (envelope.type === 'workspace.rename' && !may(workspace, member, 'table.rename'))) {
           throw new AuthorityError('ROLE_FORBIDDEN');
         }
         if (envelope.expectedEpoch !== workspace.epoch) throw new AuthorityError('STALE_EPOCH');
@@ -797,7 +801,7 @@ export class CommandAuthority {
     }
     const approvingMember = await transaction.getMember(approval.actorId);
     if (!approvingMember || approvingMember.revokedAt !== null
-        || !managesWorkspace(workspace, approvingMember)) {
+        || !may(workspace, approvingMember, 'rules.approve')) {
       throw new AuthorityError('APPROVER_NOT_AUTHORIZED');
     }
   }
@@ -878,7 +882,7 @@ export class CommandAuthority {
     title: string,
     now: number,
   ): Promise<CommandAck> {
-    if (!managesWorkspace(workspace, member)) {
+    if (!may(workspace, member, 'table.rename')) {
       throw new AuthorityError('ROLE_FORBIDDEN');
     }
     // Only the name changes; table data, rules and the epoch stay as they are.

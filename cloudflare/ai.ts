@@ -1,4 +1,3 @@
-import { tableManagerRoles } from '../src/tabletop/shared/visibility.js';
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
 import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
@@ -183,11 +182,7 @@ function actorAndRole(request: AIProposalRequest): void {
   if (actor.actorId !== actorId || !member || member.role !== actor.role) {
     fail('AI_FORBIDDEN', 'The current room membership cannot request this proposal.');
   }
-  const requiredRole = workspace.kind === 'invoice' ? 'owner'
-    : workspace.kind === 'table' ? 'owner' : workspace.kind === 'teaching' ? 'teacher' : 'dm';
-  const mayDraft = actor.role === requiredRole
-    || (workspace.kind === 'table' && (tableManagerRoles() as string[]).includes(actor.role));
-  if (!mayDraft) fail('AI_FORBIDDEN', 'The current room role cannot request this proposal.');
+  // F035: the Room checks the rules.draft permission before dispatching; here only the caller's membership.
   if (workspace.domain.kind !== workspace.kind || !Number.isSafeInteger(workspace.epoch)
     || workspace.epoch < 0 || typeof workspace.revision !== 'string' || workspace.revision.length > 256) {
     fail('AI_CONTEXT_INVALID', 'The current room state is invalid.');

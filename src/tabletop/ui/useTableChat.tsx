@@ -8,7 +8,7 @@ import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
-import { managesTable } from '../shared/visibility';
+import { viewerCan } from '../shared/permissions';
 import { draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
@@ -266,7 +266,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [historyRefreshKey, scope, assistantAvailable, loadHistory]);
 
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
-  const mode = table ? tableChatMode(managesTable(table) ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
+  const mode = table ? tableChatMode(viewerCan(table, 'rules.draft') ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
     prompt: composerMessage,
     hasCreateAction: table.domain.program?.actions.some(action => Boolean(action.creates?.length)) ?? false,
   }) : 'ask';
@@ -281,7 +281,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   isBlockedRef.current = sendBlocked;
 
   useEffect(() => {
-    if (!table || explicitDraftScope !== scope || !managesTable(table)) return;
+    if (!table || explicitDraftScope !== scope || !viewerCan(table, 'rules.draft')) return;
     const entry = explicitDraftEntryRef.current;
     const candidate = table.domain.candidate;
     if (entry?.scope === scope && candidate?.status === 'active' && (table.domain.ruleRevision > entry.ruleRevision || candidate.id !== entry.candidateId)) {
@@ -467,7 +467,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     const targetScope = scopeRef.current;
     const selectedMode = forcedMode ?? modeRef.current;
     if (!current || !targetScope || requestLock.current || isBlockedRef.current || !optionsRef.current.aiEnabled || (selectedMode === 'ask' && optionsRef.current.assistantAvailable === false) || prompt.trim().length < 3) return false;
-    if (selectedMode === 'draft' && (!managesTable(current) || optionsRef.current.readOnly)) return false;
+    if (selectedMode === 'draft' && (!viewerCan(current, 'rules.draft') || optionsRef.current.readOnly)) return false;
     requestLock.current = true;
     const commandId = crypto.randomUUID();
     const requestView = structuredClone(current);
@@ -585,7 +585,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const editRules = useCallback(() => {
     const current = viewRef.current;
-    if (!current || !managesTable(current) || optionsRef.current.readOnly || !current.domain.program) return;
+    if (!current || !viewerCan(current, 'rules.draft') || optionsRef.current.readOnly || !current.domain.program) return;
     explicitDraftScopeRef.current = scopeRef.current;
     setExplicitDraftScope(scopeRef.current);
     explicitDraftEntryRef.current = {
@@ -607,7 +607,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const prepareFromCard = useCallback((card: ChatCard) => {
     const current = viewRef.current;
-    if (!current || !managesTable(current) || optionsRef.current.readOnly || requestLock.current) return;
+    if (!current || !viewerCan(current, 'rules.draft') || optionsRef.current.readOnly || requestLock.current) return;
     editRules();
     setRetryPrefill({ text: card.prompt, key: Date.now() });
   }, [editRules]);
@@ -644,7 +644,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard]);
 
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
-  const owner = managesTable(table);
+  const owner = viewerCan(table, 'rules.draft');
   const modeCanAsk = mode === 'draft' || assistantAvailable;
   const placeholder = !aiEnabled || (mode === 'ask' && !assistantAvailable) ? 'AI is off for this table'
     : mode === 'draft' ? table.domain.program ? 'Describe what you want to add or change' : 'Describe the table you want'
@@ -752,7 +752,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       {askerLine}
       <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
-      {result.kind === 'build-request' && managesTable(view) && !foreign && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
+      {result.kind === 'build-request' && viewerCan(view, 'rules.draft') && !foreign && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
       {references.length > 0 && <div className="tt-chat-card__references">{references.map((reference, index) => <button type="button" key={`${reference.kind}-${index}`} onClick={() => onOpenObject(objectForReference(reference))}>{reference.label}</button>)}</div>}
       {dismissButton}
     </div>;

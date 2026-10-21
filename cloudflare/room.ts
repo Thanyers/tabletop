@@ -1,4 +1,4 @@
-import { VISIBILITY_POLICY, tableManagerRoles } from '../src/tabletop/shared/visibility.js';
+import { VISIBILITY_POLICY } from '../src/tabletop/shared/visibility.js';
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
 import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
@@ -510,7 +510,7 @@ export class Room extends DurableObject<Env> {
         const authorized = await this.authorize(request, workspaceId);
         // F003-T3: only the owner of a data table manages its reusable link.
         if (authorized.workspace.kind !== 'table'
-            || !(tableManagerRoles() as string[]).includes(authorized.workspace.actor.role)) throw new AuthorityError('ROLE_FORBIDDEN');
+            || !authorized.context.permissions?.has('members.invite')) throw new AuthorityError('ROLE_FORBIDDEN');
         if (request.method === 'GET') return json(200, this.repository.inviteLinkStatus(workspaceId, Date.now()), { 'x-request-id': requestId });
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
@@ -563,12 +563,8 @@ export class Room extends DurableObject<Env> {
         const authorized = await this.authorize(request, workspaceId);
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
-        const requiredModelRole = authorized.workspace.kind === 'invoice' || authorized.workspace.kind === 'table' ? 'owner'
-          : authorized.workspace.kind === 'teaching' ? 'teacher' : 'dm';
-        // Equal permissions (F015): any table member may ask the AI for a rule draft.
-        const mayDraft = authorized.member.role === requiredModelRole
-          || (authorized.workspace.kind === 'table' && (tableManagerRoles() as string[]).includes(authorized.member.role));
-        if (!mayDraft) throw new AuthorityError('ROLE_FORBIDDEN');
+        // F035: drafting rules (incl. AI drafts) needs the rules.draft permission.
+        if (!authorized.context.permissions?.has('rules.draft')) throw new AuthorityError('ROLE_FORBIDDEN');
         const input = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({
@@ -679,6 +675,8 @@ export class Room extends DurableObject<Env> {
         if (authorized.member.role !== 'owner' && authorized.member.role !== 'participant') {
           throw new AuthorityError('ROLE_FORBIDDEN');
         }
+        // F035: asking the table AI needs the ai.ask permission.
+        if (!authorized.context.permissions?.has('ai.ask')) throw new AuthorityError('ROLE_FORBIDDEN');
         const input = parseTableAssistantRequest(await readJson(request, MAX_COMMAND_BODY_BYTES));
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({

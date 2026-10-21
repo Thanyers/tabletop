@@ -1,4 +1,3 @@
-import { tableManagerRoles } from '../src/tabletop/shared/visibility.js';
 import { z } from 'zod';
 import { tableProgramSchema, handleTableCommand } from '../src/tabletop/domain/table.js';
 import { DomainError, type ActorContext, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
@@ -524,7 +523,7 @@ function publicResult(
 ): TableAssistantResult {
   const text = safeText(raw.text, replacements, 8000);
   if (raw.kind === 'build-request') {
-    if (!(tableManagerRoles() as string[]).includes(context.role)) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'Only a table manager can prepare setup changes.');
+    // F035: any member may be offered setup changes; preparing them (POST /model) checks rules.draft.
     return tableAssistantResultSchema.parse({ kind: 'build-request', text });
   }
   if (raw.kind === 'explanation') {

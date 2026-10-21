@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DomainError, type ActorContext } from '../shared/contracts';
+import type { Permission } from '../shared/permissions';
 
 export const MAX_SATANG = 9_000_000_000_000;
 export const MAX_ROWS = 10_000;
@@ -64,4 +65,16 @@ export function isWithinWindow(date: string, from: string, to: string | null): b
 
 export function hasRole(ctx: ActorContext, allowed: ActorContext['role'][]): void {
   assert(allowed.includes(ctx.role), 'FORBIDDEN', `Role ${ctx.role} cannot perform this action.`);
+}
+
+/**
+ * F035: management commands require a permission from the table's access settings. When the server did not
+ * attach permissions (demo practice, legacy callers) the previous role rule applies.
+ */
+export function requirePermission(ctx: ActorContext, permission: Permission, legacyRoles: ActorContext['role'][]): void {
+  if (ctx.permissions) {
+    assert(ctx.permissions.has(permission), 'FORBIDDEN', 'Your role at this table cannot do this.');
+    return;
+  }
+  hasRole(ctx, legacyRoles);
 }

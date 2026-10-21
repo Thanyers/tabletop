@@ -1,9 +1,8 @@
-import { tableManagerRoles } from '../shared/visibility';
 import { z } from 'zod';
 import { DomainError, type ActorContext, type Seat } from '../shared/contracts';
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue } from '../shared/table-contracts';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
-import { assert, canonicalJson, hasRole, ID_SCHEMA, parsePayload } from './helpers';
+import { assert, canonicalJson, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
 import { expressionWithinBounds, getGenerativeExpressionType, validateGenerativeProgram } from '../runtime/generative/validation';
@@ -361,7 +360,7 @@ function conditionPass(op: string, l: TableValue, r: TableValue): boolean {
 export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } | null {
   if (type === 'table.import') {
     // F008: any member may add a file; removal stays with the owner.
-    hasRole(ctx, ['owner', 'participant']);
+    requirePermission(ctx, 'files.add', ['owner', 'participant']);
     const input = parsePayload(sourceInput, payload);
     assert(bytes(input.text) <= TABLE_FILE_BYTES && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/u.test(input.text), 'TABLE_FILE', 'Choose a UTF-8 text file up to 32 KiB.');
     assert(state.sources.length < 4 && state.sources.reduce((n, s) => n + bytes(s.text), bytes(input.text)) <= TABLE_TOTAL_SOURCE_BYTES, 'TABLE_LIMIT', 'Use at most four files and 64 KiB of source text.');
@@ -374,7 +373,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     return { state: { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate }, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
   }
   if (type === 'table.removeSource') {
-    hasRole(ctx, tableManagerRoles()); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
+    requirePermission(ctx, 'files.remove', ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
     assert(state.sources.some(s => s.id === input.sourceId), 'TABLE_FILE', 'Source not found.');
     assert(!state.program?.evidence.some(e => e.sourceId === input.sourceId)
       && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
@@ -382,7 +381,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     return { state: { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null }, label: 'Unused source removed.' };
   }
   if (type === 'table.setComputedColumns') {
-    hasRole(ctx, tableManagerRoles());
+    requirePermission(ctx, 'data.columns', ['owner']);
     const input = parsePayload(z.strictObject({ columns: z.array(computedColumnSchema).max(MAX_COMPUTED_COLUMNS) }), payload);
     const program = state.program;
     assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
@@ -396,7 +395,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   }
   if (type === 'table.importRows') {
     // Direct row import changes shared data, so it stays with the owner; members add files (F008).
-    hasRole(ctx, tableManagerRoles());
+    requirePermission(ctx, 'data.import', ['owner']);
     const input = parsePayload(z.strictObject({
       collection: id,
       rows: z.array(z.record(z.string().min(1).max(100), value)).min(1).max(100),
@@ -443,7 +442,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     return { state: next, label: `Imported ${created.length} rows into ${collection.title}.` };
   }
   if (type !== 'table.act') return null;
-  hasRole(ctx, ['owner', 'participant']);
+  requirePermission(ctx, 'table.act', ['owner', 'participant']);
   const input = parsePayload(runInput, payload);
   const program = state.program;
   assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');

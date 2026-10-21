@@ -6,7 +6,7 @@ import {
   type EncounterState,
   type RevisionRecord,
 } from '../shared/contracts';
-import { assert, hash, hasRole, makeId, parsePayload } from './helpers';
+import { assert, hash, hasRole, requirePermission, makeId, parsePayload } from './helpers';
 
 const noPayloadSchema = z.object({}).strict();
 const hitSchema = z.object({ target: z.enum(['mira', 'pip']) }).strict();
@@ -119,17 +119,17 @@ function resumeEncounter(state: EncounterState, ctx: ActorContext): EncounterSta
 
 export function handleEncounterCommand(state: EncounterState, type: string, payload: unknown, ctx: ActorContext): { state: EncounterState; label: string } | null {
   if (type === 'encounter.pause') {
-    hasRole(ctx, ['dm']);
+    requirePermission(ctx, 'game.direct', ['dm']);
     parsePayload(noPayloadSchema, payload);
     return { state: pauseEncounter(state, ctx), label: 'Encounter paused; any remaining reaction time is frozen.' };
   }
   if (type === 'encounter.resume') {
-    hasRole(ctx, ['dm']);
+    requirePermission(ctx, 'game.direct', ['dm']);
     parsePayload(noPayloadSchema, payload);
     return { state: resumeEncounter(state, ctx), label: 'Encounter resumed with the remaining reaction time restored.' };
   }
   if (type === 'encounter.declareHit') {
-    hasRole(ctx, ['dm']);
+    requirePermission(ctx, 'game.direct', ['dm']);
     const input = parsePayload(hitSchema, payload);
     assertNotPaused(state);
     assert(state.turn === 'goblin' && state.phase === 'turn.start' && state.pendingHit === null, 'ACTION_NOT_AVAILABLE', 'The goblin can declare one hit only during its own turn.');
@@ -169,7 +169,7 @@ export function handleEncounterCommand(state: EncounterState, type: string, payl
     return { state: next, label: 'Shield reaction recorded for the current hit.' };
   }
   if (type === 'encounter.resolve') {
-    hasRole(ctx, ['dm']);
+    requirePermission(ctx, 'game.direct', ['dm']);
     parsePayload(noPayloadSchema, payload);
     assertNotPaused(state);
     const currentPending = state.pendingHit;
@@ -203,12 +203,14 @@ export function handleEncounterCommand(state: EncounterState, type: string, payl
     return { state: next, label: `Hit resolved for ${appliedDamage} damage.` };
   }
   if (type === 'encounter.endTurn') {
-    assert(ctx.role === 'dm' || ctx.role === 'player', 'FORBIDDEN', 'Only the DM or an active player can end this turn.');
+    // F035: whoever may run the encounter ends any turn; a player without that permission ends only their own.
+    const directs = ctx.permissions ? ctx.permissions.has('game.direct') : ctx.role === 'dm';
+    assert(directs || ctx.role === 'player', 'FORBIDDEN', 'Only the DM or an active player can end this turn.');
     parsePayload(noPayloadSchema, payload);
     assertNotPaused(state);
     assert(state.phase === 'turn.start' || state.phase === 'action.resolved', 'TURN_NOT_READY', 'Resolve or close the current action before ending the turn.');
     assert(state.pendingHit === null, 'ACTION_PENDING', 'An unresolved hit blocks ending the turn.');
-    if (ctx.role === 'player') {
+    if (!directs) {
       assert((state.turn === 'mira' || state.turn === 'pip') && ctx.seat === state.turn, 'FORBIDDEN', 'A player may end only their own active character turn.');
     }
     const order: Character['id'][] = ['goblin', 'mira', 'pip'];
@@ -226,7 +228,7 @@ export function handleEncounterCommand(state: EncounterState, type: string, payl
     return { state: next, label: `${started.name}'s turn started; AP reset once.` };
   }
   if (type === 'encounter.saveNote') {
-    hasRole(ctx, ['dm']);
+    requirePermission(ctx, 'game.note', ['dm']);
     const input = parsePayload(noteSchema, payload);
     const next = structuredClone(state);
     next.dmNote = input.text;
