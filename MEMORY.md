@@ -135,6 +135,11 @@
 - **Root cause:** Legacy examples use their established card dimensions; their geometry does not follow the measured layout used by generic tables. Reaching a later CI step also did not prove earlier independent steps passed.
 - **Correct behavior:** Scope the new card rules to `data-workspace-kind="table"`, preserve legacy dimensions, and read actual job/step conclusions. Run `npm run build && npm run build:cloudflare`, then `npm run test:r1:browser`, `npm run test:cloudflare:browser`, and `node scripts/canvas-evolution-local.mjs --auto`. All three browser checks passed locally after the scope fix (7, 25, and 10 checks).
 
+### 2026-10-21 — สั่ง Release deploy ซ้ำทั้งที่มีคนรันสำเร็จไปแล้ว
+- **What happened:** หลังแก้ config ของ CD001 ผมสั่ง `gh workflow run release-deploy.yml -f sha=f29e799…` ตามที่ผู้ใช้ยืนยัน แต่เจ้าของ repo รันสำเร็จไปแล้วตั้งแต่ 01:27Z · พอเห็นจึงสั่ง cancel แต่ไปถึงหลัง job จบ ผลคือ deploy code เดิมซ้ำอีกรอบ (ไม่มีผลต่อผู้ใช้ แต่ `built_at` และ Worker version เปลี่ยน)
+- **Root cause:** ไม่ได้เช็คสถานะปัจจุบันก่อนสั่ง action ที่ deploy · คำยืนยันของผู้ใช้อิงข้อมูลที่ผมรายงานไว้ก่อนหน้า ซึ่งเก่าไปแล้ว
+- **Correct behavior:** ก่อน `gh workflow run release-deploy.yml` ทุกครั้ง รัน `gh run list -R Thanyers/tabletop --workflow release-deploy.yml --limit 3` และ `curl -s <url>/version` ของทั้งสอง environment · ถ้ามีรอบของ SHA นั้นสำเร็จแล้วหรือ `/version` ตรง tag แล้ว ให้หยุดและแจ้งผู้ใช้แทนการรัน
+
 ## Deploy failures
 
 ### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
