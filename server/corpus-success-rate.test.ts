@@ -63,36 +63,70 @@ async function runCase(testCase: CorpusCase): Promise<CaseResult> {
   return { id: testCase.id, expect: testCase.expect, outcome: 'reject', attempts: MAX_ATTEMPTS, ms: Date.now() - startedAt, detail: lastIssue };
 }
 
-describe.skipIf(!KEY)('golden corpus success rate (F029)', () => {
-  it('measures draft/clarify/reject rates over the golden prompts', async () => {
-    const results: CaseResult[] = [];
-    for (const testCase of corpus.cases) results.push(await runCase(testCase));
-    const counts = {
-      draft: results.filter((result) => result.outcome === 'draft').length,
-      clarify: results.filter((result) => result.outcome === 'clarify').length,
-      reject: results.filter((result) => result.outcome === 'reject').length,
-      error: results.filter((result) => result.outcome === 'error').length,
-    };
-    const matched = results.filter((result) => result.outcome === result.expect).length;
+const ROUNDS = Math.min(5, Math.max(1, Number.parseInt(process.env.TABLE_CORPUS_ROUNDS ?? '1', 10) || 1));
+
+interface RoundSummary { draft: number; clarify: number; reject: number; error: number; matched: number; total: number }
+
+function summarize(results: CaseResult[]): RoundSummary {
+  return {
+    draft: results.filter((result) => result.outcome === 'draft').length,
+    clarify: results.filter((result) => result.outcome === 'clarify').length,
+    reject: results.filter((result) => result.outcome === 'reject').length,
+    error: results.filter((result) => result.outcome === 'error').length,
+    matched: results.filter((result) => result.outcome === result.expect).length,
+    total: results.length,
+  };
+}
+
+describe.skipIf(!KEY)('golden corpus success rate (F029/F030)', () => {
+  it(`measures ${ROUNDS} round(s) of draft/clarify/reject and per-case stability`, async () => {
+    const rounds: CaseResult[][] = [];
+    for (let round = 1; round <= ROUNDS; round += 1) {
+      const results: CaseResult[] = [];
+      for (const testCase of corpus.cases) results.push(await runCase(testCase));
+      rounds.push(results);
+      console.log(`CORPUS round ${round}/${ROUNDS} ${JSON.stringify(summarize(results))}`);
+      for (const result of results) console.log(`CORPUS ${result.id}: ${result.outcome} (expect ${result.expect}) attempts=${result.attempts} ${result.ms}ms`);
+    }
+    const all = rounds.flat();
+    const totals = summarize(all);
+    const stability = corpus.cases.map((testCase) => {
+      const hits = all.filter((result) => result.id === testCase.id);
+      const outcomes = [...new Set(hits.map((result) => result.outcome))];
+      const matches = hits.filter((result) => result.outcome === result.expect).length;
+      return { id: testCase.id, expect: testCase.expect, outcomes, stable: outcomes.length === 1, matchRate: Math.round(100 * matches / hits.length) };
+    });
     const outDir = 'test-results/corpus';
     mkdirSync(outDir, { recursive: true });
     const stamp = new Date().toISOString().replaceAll(':', '-');
     const reportPath = `${outDir}/corpus-${stamp}.md`;
     const lines = [
-      `# Corpus success rate — ${new Date().toISOString()}`,
+      `# Corpus success rate — ${new Date().toISOString()} (${ROUNDS} round${ROUNDS === 1 ? '' : 's'})`,
       '',
-      `- cases: ${results.length} · matched expectation: **${matched}/${results.length}**`,
-      `- draft: ${counts.draft} · clarify: ${counts.clarify} · reject: ${counts.reject} · error: ${counts.error}`,
+      `- cases per round: ${corpus.cases.length} · rounds: ${ROUNDS}`,
+      `- matched: **${totals.matched}/${totals.total}** (${Math.round(100 * totals.matched / totals.total)}%)`,
+      `- draft: ${totals.draft} · clarify: ${totals.clarify} · reject: ${totals.reject} · error: ${totals.error}`,
       '',
-      '| id | expect | outcome | attempts | ms | detail |',
+      '## Per round',
+      '',
+      '| round | draft | clarify | reject | error | matched |',
       '| --- | --- | --- | --- | --- | --- |',
-      ...results.map((result) => `| ${result.id} | ${result.expect} | ${result.outcome}${result.outcome === result.expect ? '' : ' ⚠️'} | ${result.attempts} | ${result.ms} | ${result.detail.replaceAll('|', '/').slice(0, 160)} |`),
+      ...rounds.map((results, index) => {
+        const summary = summarize(results);
+        return `| r${index + 1} | ${summary.draft} | ${summary.clarify} | ${summary.reject} | ${summary.error} | ${summary.matched}/${summary.total} |`;
+      }),
+      '',
+      '## Per case',
+      '',
+      '| id | expect | outcomes | stable | match rate |',
+      '| --- | --- | --- | --- | --- |',
+      ...stability.map((row) => `| ${row.id} | ${row.expect} | ${row.outcomes.join(', ')} | ${row.stable ? 'yes' : 'no'} | ${row.matchRate}% |`),
       '',
     ];
     writeFileSync(reportPath, lines.join('\n'));
-    console.log(`CORPUS summary ${JSON.stringify({ ...counts, matched, total: results.length })}`);
-    for (const result of results) console.log(`CORPUS ${result.id}: ${result.outcome} (expect ${result.expect}) attempts=${result.attempts} ${result.ms}ms`);
+    console.log(`CORPUS total ${JSON.stringify(totals)}`);
+    console.log(`CORPUS unstable ${stability.filter((row) => !row.stable).map((row) => row.id).join(',') || 'none'}`);
     console.log(`CORPUS report ${reportPath}`);
-    expect(results).toHaveLength(corpus.cases.length);
-  }, 1_800_000);
+    expect(all).toHaveLength(corpus.cases.length * ROUNDS);
+  }, 3_600_000);
 });
