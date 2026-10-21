@@ -5,6 +5,7 @@ import type { Env } from './contracts.js';
 const MAX_BUDGET_MICRO_USD = 100_000_000_000;
 const MAX_INPUT_TOKENS = 65_000;
 const MAX_OUTPUT_TOKENS = 32_768;
+const RESERVED_OUTPUT_TOKENS = 16_384;
 const MAX_BODY_BYTES = 16_384;
 const RESERVED_LEASE_MS = 5 * 60_000;
 const DISPATCH_LEASE_MS = 2 * 60_000;
@@ -267,7 +268,8 @@ export class Billing extends DurableObject<Env> {
     const limits = configuredLimits(this.env);
     const now = Date.now();
     const keys = utcKeys(now);
-    const reserved = priceMicroUsd(input.maxInputTokens, input.maxOutputTokens);
+    // F032: thinking runs can request 32K output, but reserving that much per call trips the daily/monthly cap long before real spend. Reserve a realistic ceiling; settlement still charges actual usage.
+  const reserved = priceMicroUsd(input.maxInputTokens, Math.min(input.maxOutputTokens, RESERVED_OUTPUT_TOKENS));
     const result = this.ctx.storage.transactionSync(() => {
       const existing = rowFor(this.sql, input.id);
       if (existing) {
