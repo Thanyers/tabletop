@@ -12,7 +12,7 @@ import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
-import { canApplyWorkspaceRefresh, sameChatRequestScope } from './ui/table-chat-state';
+import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
@@ -659,6 +659,7 @@ export default function TabletopApp() {
   const refreshWorkspaceProjection = useCallback(async (workspaceId: string) => {
     const expected = workspaceRef.current;
     if (!expected || expected.id !== workspaceId) throw new ApiFailure('The current table changed before it could be refreshed.', 409, 'STALE_EPOCH');
+    let newest: WorkspaceView | null = null;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const requestSequence = projectionSequenceRef.current;
       const latest = await tabletopClient.workspace(workspaceId);
@@ -670,6 +671,14 @@ export default function TabletopApp() {
         setWorkspace(latest);
         return;
       }
+      // F025: a concurrent projection won the race; keep the freshest response and give it a moment to settle
+      // instead of failing a draft that is already ready.
+      newest = latest;
+      await new Promise((resolve) => setTimeout(resolve, draftRefreshBackoffMs(attempt)));
+    }
+    if (newest) {
+      setWorkspace(newest);
+      return;
     }
     throw new ApiFailure('The table kept changing while refreshing. Try the refresh again.', 409, 'STALE_REVISION');
   }, [setWorkspace]);

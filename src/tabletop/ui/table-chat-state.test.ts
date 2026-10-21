@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { canApplyWorkspaceRefresh, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
   id: 'a'.repeat(64),
@@ -111,5 +111,11 @@ describe('private table chat recovery state', () => {
     expect(merged.map((card) => card.id)).toEqual(['answer-pending', 'answer-running', 'answer-failed']);
     expect(merged.find((card) => card.id === 'answer-running')?.phase).toBe('waiting');
     expect(merged.find((card) => card.id === 'answer-failed')).toMatchObject({ phase: 'failed', error: 'Provider unavailable.' });
+  });
+});
+
+describe('draft refresh backoff (F025)', () => {
+  it('grows with each attempt so a racing projection can settle', () => {
+    expect([0, 1, 2].map(draftRefreshBackoffMs)).toEqual([150, 300, 450]);
   });
 });
