@@ -1,4 +1,4 @@
-// F020: build the answer sent back after an AI clarifying question.
+// F022: build the answer sent back after an AI clarifying question.
 // Several choices and a written answer are joined in the order shown; one choice
 // produces exactly the text the single-pick card sent before.
 

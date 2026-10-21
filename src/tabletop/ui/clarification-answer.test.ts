@@ -3,7 +3,7 @@ import { MAX_WRITTEN_ANSWER_CHARS, composeClarificationAnswer } from './clarific
 
 const options = ['Both people', 'Only the owner', 'Nobody'];
 
-describe('clarification answers (F020)', () => {
+describe('clarification answers (F022)', () => {
   it('sends one choice exactly as before', () => {
     expect(composeClarificationAnswer(options, new Set(['Only the owner']), '')).toBe('Only the owner');
   });

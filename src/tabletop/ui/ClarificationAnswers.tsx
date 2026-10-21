@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { MAX_WRITTEN_ANSWER_CHARS, composeClarificationAnswer } from './clarification-answer';
 
-/** F020: pick one or more of the AI's answers and/or write your own, then send once. */
+/** F022: pick one or more of the AI's answers and/or write your own, then send once. */
 export function ClarificationAnswers({ options, disabled, onAnswer }: { options: readonly string[]; disabled: boolean; onAnswer: (answer: string) => void }) {
   const id = useId().replaceAll(':', '');
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
