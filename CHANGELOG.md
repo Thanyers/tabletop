@@ -3,6 +3,7 @@
 ## Unreleased
 
 - หน้าต่าง People ของโต๊ะข้อมูลเหลือแค่รายชื่อ ตัวนับ `N/7 members` ลิงก์เชิญใช้ซ้ำ และปุ่ม Remove · เอาส่วน AVAILABLE SEATS และคำเชิญครั้งเดียวต่อที่นั่งออก (โต๊ะสอนและโต๊ะเกม รวมถึง Node guest runtime ยังเชิญทีละที่นั่ง) · `/api/capabilities` บอก `inviteLinks` · คู่มือเชิญเพื่อนเขียนใหม่ ([F003](docs/features/F003-reusable-invite-link.md) T5–T6)
+- CI: PR และ push เข้า `dev` รันเฉพาะเช็คเร็ว (lint, unit, typecheck, build, Worker tests) · browser suites ทั้งสามรันเฉพาะ release PR เข้า `main`, push เข้า `main` และ Run workflow เอง (CI005)
 
 ## 3.4.0 — 2026-10-21
 
