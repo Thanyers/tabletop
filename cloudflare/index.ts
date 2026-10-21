@@ -12,9 +12,10 @@ export { Room } from './room.js';
 export { Billing } from './billing.js';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}))?$`, 'u');
+const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|invite-link|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}))?$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
 const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
+const joinLinkSchema = z.strictObject({ link: z.string().max(100) });
 const redeemSchema = z.object({ ticket: z.string().max(100) }).strict();
 
 async function smallJson(request: Request): Promise<unknown> {
@@ -146,6 +147,14 @@ async function route(request: Request, env: Env): Promise<Response> {
     const match = input.success ? ticketPattern.exec(input.data.ticket) : null;
     if (!match) throw new AuthorityError('INVITE_INVALID');
     return room(env, match[1]).fetch(internalRequest(request, '/internal/redeem', { ticket: match[2] }));
+  }
+  if (method === 'POST' && path === '/api/invites/join') {
+    // F003-T3: reusable table link; same limiter as single-use invitations.
+    await limit(env, `redeem:${session.record.actorId}`, 20, 60_000);
+    const input = joinLinkSchema.safeParse(await smallJson(request));
+    const match = input.success ? ticketPattern.exec(input.data.link) : null;
+    if (!match) throw new AuthorityError('INVITE_INVALID');
+    return room(env, match[1]).fetch(internalRequest(request, '/internal/join-link', { ticket: match[2] }));
   }
   const matched = workspaceRoute.exec(path);
   if (matched) {

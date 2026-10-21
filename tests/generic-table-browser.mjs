@@ -669,6 +669,31 @@ async function inviteMember(owner, seatNumber) {
   return url;
 }
 
+async function turnOnInviteLink(owner) {
+  await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+  const dialog = owner.getByRole('dialog', { name: 'People at this table' });
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/7 members');
+  const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
+  await panel.getByLabel('Expires after').selectOption('7');
+  const created = owner.waitForResponse((response) => response.url().endsWith('/invite-link') && response.request().method() === 'POST');
+  await panel.getByRole('button', { name: 'Turn on invite link', exact: true }).click();
+  expect((await created).status()).toBe(201);
+  const url = await panel.getByLabel('Invite link').inputValue();
+  expect(url).toContain('#invite=link%3A');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  return url;
+}
+
+async function turnOffInviteLink(owner) {
+  await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+  const dialog = owner.getByRole('dialog', { name: 'People at this table' });
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/7 members');
+  const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
+  await panel.getByRole('button', { name: 'Turn off link', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Turn on invite link', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+}
+
 async function joinAndCheckSharedFiles(newPage, api, actor, inviteUrl, tableId, filename) {
   const page = await newPage(actor, inviteUrl);
   await expect(page.locator('.tt-canvas-panel')).toBeVisible();
@@ -1485,8 +1510,11 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await renameInput.press('Enter');
   await expect(owner.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
   expect((await api(owner, `/api/workspaces/${room.id}`)).body.title).toBe(generatedTableTitle);
-  const invite = await inviteMember(owner, 1);
+  // F003-T3: this member joins through the table's reusable invite link instead of a one-seat invitation.
+  const invite = await turnOnInviteLink(owner);
   member = await joinAndCheckSharedFiles(newPage, api, member, invite, room.id, source.filename);
+  expect((await api(member, `/api/workspaces/${room.id}`)).body.actor.seat).toBe('member-1');
+  await turnOffInviteLink(owner);
   await expect(member.locator('.tt-workspace-picker__button')).toContainText(generatedTableTitle);
   await expect(member.getByRole('button', { name: 'Rename table', exact: true })).toHaveCount(0);
   const memberName = (await api(member, `/api/workspaces/${room.id}`)).body.actor.name;
