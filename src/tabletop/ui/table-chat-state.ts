@@ -2,8 +2,23 @@ import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
-export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: boolean, explicitDraft: boolean): 'draft' | 'ask' {
-  return role === 'owner' && (!hasActiveProgram || explicitDraft) ? 'draft' : 'ask';
+export interface TableChatRequestContext { prompt: string; hasCreateAction: boolean }
+
+export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: boolean, explicitDraft: boolean, request?: TableChatRequestContext): 'draft' | 'ask' {
+  if (role !== 'owner') return 'ask';
+  if (!hasActiveProgram || explicitDraft) return 'draft';
+  const prompt = request?.prompt.trim() ?? '';
+  // Only an obvious construction request takes this fast path. Ambiguous intent
+  // stays conversational; the assistant can offer the same builder explicitly.
+  if (!prompt || /^(?:(?:how many|what|which|why|explain|summari[sz]e)\b|อธิบาย|สรุป|ทำไม|มี.{0,32}กี่)/iu.test(prompt)) return 'ask';
+  const asksForChange = /\b(?:add|creat\w*|build|make|design|extend|chang\w*|edit|new|simplify)\b|เพิ่ม|สร้าง|ปรับ|แก้|ทำ|ขอ|อยาก/iu.test(prompt);
+  const asksForUi = asksForChange && /\b(?:forms?|buttons?|cards?|charts?|graphs?|diagrams?|views?|ui)\b|ฟอร์ม|ปุ่ม|การ์ด|กราฟ|แผนภูมิ|หน้าจอ/iu.test(prompt);
+  // "Change status in this table" is a data action. Require a direct
+  // structural request before treating table/field words as builder intent.
+  const asksForStructure = /\b(?:add|creat\w*|build|make|design|extend)\s+(?:(?:a|an|the|this|new|another|extra)\s+)*(?:tables?|collections?|columns?|fields?)\b|\b(?:new|another|extra)\s+(?:tables?|collections?|columns?|fields?)\b|(?:เพิ่ม|สร้าง)\s*(?:ตาราง|คอลัมน์|ฟิลด์)/iu.test(prompt);
+  const newRows = /\b(?:add|creat\w*|generat\w*|seed|mock\w*|sample)\b|เพิ่ม|สร้าง|จำลอง|ตัวอย่าง/iu.test(prompt)
+    && /\b(?:records?|rows?|data|mock\w*|samples?)\b|รายการ|แถว|ข้อมูล|จำลอง|ตัวอย่าง/iu.test(prompt);
+  return asksForUi || asksForStructure || (newRows && !request?.hasCreateAction) ? 'draft' : 'ask';
 }
 
 export interface ChatRequestScope {

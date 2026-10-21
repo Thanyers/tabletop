@@ -63,6 +63,10 @@ export interface CanvasAuxiliaryObject {
   position?: { x: number; y: number };
   content?: ReactNode;
   renderContent?: (expanded: boolean) => ReactNode;
+  /** Replaces the generic header glyph, e.g. an AI mark on chat cards. */
+  glyph?: ReactNode;
+  /** True while the object waits on work it cannot show yet; animates the header glyph. */
+  busy?: boolean;
 }
 
 interface SavedCanvasLayout {
@@ -237,7 +241,7 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
   return <>
     <header className="tt-canvas-node__head">
       <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
-      <span className="tt-object-glyph" aria-hidden="true">{capabilityGlyph(data.capability, data.kind)}</span>
+      <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
       <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span></span>
       <button className="tt-canvas-node__open nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onKeyDown={(event) => {
         if (event.key === 'Escape' && data.opened) {
@@ -289,6 +293,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         data-object-id={data.opened ? data.id : undefined}
         data-canvas-role="auxiliary"
         aria-label={data.title}
+        aria-busy={data.auxiliary.busy || undefined}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && data.opened) {
             const target = event.target instanceof Element ? event.target : null;

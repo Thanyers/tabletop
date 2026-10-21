@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, Check, CircleAlert, LoaderCircle, RotateCcw, Sparkles, X } from 'lucide-react';
+import { ArrowRight, Check, CircleAlert, LoaderCircle, MessageCircleQuestion, RotateCcw, Sparkles, X } from 'lucide-react';
 import { ApiFailure, type ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantReference } from '../shared/table-assistant-contracts';
 import type { TableState } from '../shared/table-contracts';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
+import { rememberConsent } from './table-chat-consent';
 import { draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
@@ -176,6 +177,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const requestLock = useRef(false);
   const confirmLocks = useRef(new Set<string>());
   const draftRefreshLocks = useRef(new Set<string>());
+  // A settled draft is refreshed once; the POST response and the poll can both report completion.
+  const refreshedDraftJobs = useRef(new Set<string>());
   const isBlockedRef = useRef(false);
   const [explicitDraftScope, setExplicitDraftScope] = useState<string | null>(null);
   const explicitDraftScopeRef = useRef<string | null>(null);
@@ -184,6 +187,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const [focusKey, setFocusKey] = useState(0);
   const [acknowledgedRetry, setAcknowledgedRetry] = useState<{ prompt: string; key: string }>();
   const [retryPrefill, setRetryPrefill] = useState<{ text: string; key: number }>();
+  const [composerMessage, setComposerMessage] = useState('');
 
   const updateCards = useCallback((targetScope: string, update: (current: ChatCard[]) => ChatCard[]) => {
     if (!targetScope || targetScope !== scopeRef.current) return;
@@ -236,6 +240,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setExplicitDraftScope(null);
     setAcknowledgedRetry(undefined);
     setRetryPrefill(undefined);
+    setComposerMessage('');
   }, [scope, updateCards]);
 
   useEffect(() => {
@@ -248,7 +253,10 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [scope, assistantAvailable, loadHistory]);
 
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
-  const mode = table ? tableChatMode(table.actor.role === 'owner' ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope) : 'ask';
+  const mode = table ? tableChatMode(table.actor.role === 'owner' ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
+    prompt: composerMessage,
+    hasCreateAction: table.domain.program?.actions.some(action => Boolean(action.creates?.length)) ?? false,
+  }) : 'ask';
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const historyStatus = historyState.scope === scope ? historyState.status : 'loading';
@@ -299,21 +307,27 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }
   }, [patchCard]);
 
-  const refreshAfterDraft = useCallback((targetScope: string, cardId: string, workspaceId: string) => {
+  const refreshAfterDraft = useCallback((targetScope: string, cardId: string, workspaceId: string, jobId: string) => {
+    const key = `${targetScope}:${cardId}:${jobId}`;
+    if (refreshedDraftJobs.current.has(key)) return;
+    refreshedDraftJobs.current.add(key);
     void retryDraftRefresh(targetScope, cardId, workspaceId);
   }, [retryDraftRefresh]);
 
   const pollModelOnce = useCallback(async (targetScope: string, cardId: string, workspaceId: string, jobId: string) => {
     const next = await optionsRef.current.pollDraft(workspaceId, jobId);
     if (targetScope !== scopeRef.current) return next;
+    const settled = next.status === 'completed' || next.status === 'complete';
     patchCard(targetScope, cardId, {
       modelJob: next,
       phase: modelPhase(next),
       error: next.status === 'failed' ? next.message ?? 'The draft could not be prepared.' : undefined,
-      pollError: undefined,
+      // A settled poll must not wipe the follow-up refresh failure; only an in-flight poll resets it.
+      ...(settled ? {} : { pollError: undefined }),
       pollTimedOut: false,
     });
-    if (next.status === 'completed' || next.status === 'complete') refreshAfterDraft(targetScope, cardId, workspaceId);
+    // Questions leave the table unchanged, so there is nothing to refresh.
+    if ((next.status === 'completed' || next.status === 'complete') && !next.clarification) refreshAfterDraft(targetScope, cardId, workspaceId, next.id);
     return next;
   }, [patchCard, refreshAfterDraft]);
 
@@ -413,7 +427,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       error: job.status === 'failed' ? job.message ?? 'The draft could not be prepared.' : undefined,
       pollTimedOut: false,
     });
-    if (job.status === 'completed' || job.status === 'complete') refreshAfterDraft(targetScope, card.id, current.id);
+    if (job.status === 'completed' || job.status === 'complete') refreshAfterDraft(targetScope, card.id, current.id, job.id);
     if (current.domain.program && explicitDraftScopeRef.current === targetScope) {
       explicitDraftScopeRef.current = null;
       explicitDraftEntryRef.current = null;
@@ -435,10 +449,10 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     });
   }, [patchCard]);
 
-  const send = useCallback(async (prompt: string): Promise<boolean> => {
+  const send = useCallback(async (prompt: string, forcedMode?: 'draft'): Promise<boolean> => {
     const current = viewRef.current;
     const targetScope = scopeRef.current;
-    const selectedMode = modeRef.current;
+    const selectedMode = forcedMode ?? modeRef.current;
     if (!current || !targetScope || requestLock.current || isBlockedRef.current || !optionsRef.current.aiEnabled || (selectedMode === 'ask' && optionsRef.current.assistantAvailable === false) || prompt.trim().length < 3) return false;
     if (selectedMode === 'draft' && (current.actor.role !== 'owner' || optionsRef.current.readOnly)) return false;
     requestLock.current = true;
@@ -540,6 +554,19 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [scope, updateCards]);
 
   const prefillCard = useCallback((card: ChatCard) => setRetryPrefill({ text: card.prompt, key: Date.now() }), []);
+  // Rule requests carry no chat history, so the answer travels with the original request.
+  // Picking an answer sends a new rule request at once. Rule requests carry no chat history,
+  // so the original request, the question and the answer travel together.
+  const answerQuestion = useCallback(async (card: ChatCard, answer: string) => {
+    const question = card.modelJob?.clarification?.question;
+    const text = question ? `${card.prompt}\n\n${question} ${answer}` : `${card.prompt}\n\n${answer}`;
+    const current = viewRef.current;
+    if (!current) return;
+    // The question answers a request the owner already consented to send, so this counts as
+    // consent for the table and neither the card nor the composer asks again (user decision, F012).
+    rememberConsent({ workspaceId: current.id, epoch: current.epoch, actorId: current.actor.actorId });
+    if (await send(text, 'draft')) dismiss(card);
+  }, [send, dismiss]);
 
   const retryHistory = useCallback(() => { void loadHistory(scope); }, [loadHistory, scope]);
 
@@ -565,6 +592,13 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setFocusKey((key) => key + 1);
   }, []);
 
+  const prepareFromCard = useCallback((card: ChatCard) => {
+    const current = viewRef.current;
+    if (!current || current.actor.role !== 'owner' || optionsRef.current.readOnly || requestLock.current) return;
+    editRules();
+    setRetryPrefill({ text: card.prompt, key: Date.now() });
+  }, [editRules]);
+
   const currentLocalState = readPrivateChatState(scope);
   const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState));
   const operationBusy = externalBusy || requestsBusy;
@@ -574,6 +608,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       id: chatNodeId(scope, card.id),
       title: card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt,
       eyebrow: card.kind === 'draft' ? 'Rule draft' : 'AI answer',
+      glyph: <Sparkles size={16} />,
+      busy: card.phase === 'sending' || card.phase === 'waiting',
       position: { x: 760, y: 40 + index * 300 },
       content: <ChatCardContent
         card={card}
@@ -587,17 +623,19 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         onCheck={() => void checkStatus(card)}
         onRetryRefresh={() => void retryDraftRefresh(scope, card.id, table.id)}
         onPrefill={() => prefillCard(card)}
+        onAnswerQuestion={(answer) => void answerQuestion(card, answer)}
         onDismiss={() => dismiss(card)}
+        onBuild={() => prepareFromCard(card)}
       />,
     }));
-  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, dismiss]);
+  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard]);
 
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
   const owner = table.actor.role === 'owner';
   const modeCanAsk = mode === 'draft' || assistantAvailable;
   const placeholder = !aiEnabled || (mode === 'ask' && !assistantAvailable) ? 'AI is off for this table'
-    : mode === 'draft' ? 'Describe the table you want'
-      : 'Ask about this table';
+    : mode === 'draft' ? table.domain.program ? 'Describe what you want to add or change' : 'Describe the table you want'
+      : owner ? 'Ask, add something, or change this table' : 'Ask about this table';
   const sourceFiles = table.domain.sources.map((source) => ({ id: source.id, filename: source.filename }));
   const prefill = retryPrefill ?? options.prefill;
   const bar = <TableChat
@@ -621,11 +659,12 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onCancelRuleEdit={cancelEditRules}
     onAttach={async (file) => { await optionsRef.current.attach(table, file); }}
     onSend={send}
+    onMessageChange={setComposerMessage}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
 
-function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onDismiss }: {
+function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild }: {
   card: ChatCard;
   view: TableView;
   readOnly: boolean;
@@ -637,7 +676,9 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   onCheck: () => void;
   onRetryRefresh: () => void;
   onPrefill: () => void;
+  onAnswerQuestion: (answer: string) => void;
   onDismiss: () => void;
+  onBuild: () => void;
 }) {
   const dismissalBlocked = isUncertainRequest(card) || card.confirming === true || card.confirmationPending === true;
   const dismissButton = <button type="button" className="tt-chat-card__dismiss" aria-label="Close this card" disabled={dismissalBlocked} onClick={onDismiss}><X size={13} /></button>;
@@ -645,8 +686,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     ? <button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={onCheck}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Check status</button>
     : null;
   if (card.phase === 'sending' || card.phase === 'waiting') {
-    return <div className="tt-chat-card" role="status" data-testid="table-chat-answer">
-      <p className="tt-chat-card__pending"><LoaderCircle size={14} className="tt-spin" />{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</p>
+    return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer">
+      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span></p>
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
@@ -657,6 +698,26 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       <p className="tt-chat-card__error" role="alert"><CircleAlert size={14} />{message}</p>
       {card.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy || retryDisabled} onClick={onRetry}><RotateCcw size={13} />Retry same request</button>}
       {!card.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>}
+      {dismissButton}
+    </div>;
+  }
+  const clarification = card.kind === 'draft' ? card.modelJob?.clarification : undefined;
+  if (clarification) {
+    return <div className="tt-chat-card tt-chat-card--questions" data-testid="table-chat-answer">
+      <p className="tt-chat-card__intro"><MessageCircleQuestion size={14} /> A few details would help build this table. Nothing on the table changed.</p>
+      <p className="tt-chat-card__question">{clarification.question}</p>
+      <ul className="tt-chat-card__questions" aria-label="Answer choices">
+        {clarification.options.map((option) => <li key={option}><button type="button" disabled={readOnly || busy} onClick={() => onAnswerQuestion(option)}><span>{option}</span><ArrowRight size={14} aria-hidden="true" /></button></li>)}
+      </ul>
+      <p className="tt-chat-card__hint">Pick an answer to ask again with it. Your request stays the same.</p>
+      {dismissButton}
+    </div>;
+  }
+  // A finished request that left no draft (e.g. an older client view of a newer reply) must not offer Review rules.
+  if (card.kind === 'draft' && !card.pollError && !card.checking && !card.modelJob?.candidateId && view.domain.candidate === null) {
+    return <div className="tt-chat-card" data-testid="table-chat-answer">
+      <p className="tt-chat-card__text">No rule draft was created. Try rephrasing your request.</p>
+      <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>
       {dismissButton}
     </div>;
   }
@@ -675,6 +736,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   if (result.kind !== 'action-proposal') {
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
+      {result.kind === 'build-request' && view.actor.role === 'owner' && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
       {references.length > 0 && <div className="tt-chat-card__references">{references.map((reference, index) => <button type="button" key={`${reference.kind}-${index}`} onClick={() => onOpenObject(objectForReference(reference))}>{reference.label}</button>)}</div>}
       {dismissButton}
     </div>;

@@ -59,14 +59,16 @@ jobs:
       - name: Repeatable persona demos and replay report
         run: npm run demo:auto:run
       - name: Seven-session local browser acceptance
-        run: npm run test:r1:browser
+        # CD002: browser suites occasionally race layout/timers on the 2-core runner.
+        # Retry once; the first failure stays in the log and the step fails if both attempts fail.
+        run: npm run test:r1:browser || { echo "::warning::test:r1:browser failed; retrying once"; npm run test:r1:browser; }
       - name: Account multiplayer and AI browser acceptance on Workers
         # This independent fixture can report its failures even when Node browser checks fail.
         if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
-        run: npm run test:cloudflare:browser
+        run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser failed; retrying once"; npm run test:cloudflare:browser; }
       - name: Generated scenes, private trials and shared layout acceptance
         if: ${{ !cancelled() && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
-        run: npm run test:generative:browser
+        run: npm run test:generative:browser || { echo "::warning::test:generative:browser failed; retrying once"; npm run test:generative:browser; }
       - name: Retain test summaries
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

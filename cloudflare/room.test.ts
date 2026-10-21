@@ -55,6 +55,7 @@ interface TestModelJob {
   status: 'running' | 'completed' | 'failed';
   message?: string;
   candidateId?: string;
+  clarification?: { question: string; options: string[] };
 }
 
 interface TestTableAssistantJob {
@@ -1661,6 +1662,81 @@ describe('Cloudflare room Durable Object', () => {
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${expectedId}`, owner);
     expect(poll.response.status).toBe(200);
     expect(poll.body).toMatchObject({ status: 'completed', candidateId });
+  });
+
+  it('completes a table model job with the AI clarification and commits nothing (F012)', async () => {
+    const owner = newActor('Clarify table owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: emptyWorkspace } = await createRoom(owner, 'table');
+    const imported = await issueCommand(stub, emptyWorkspace, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    expect(imported.response.status).toBe(200);
+    const readyWorkspace = (imported.body as CommandAck).workspace;
+    const clarification = { question: 'How long may someone keep an item?', options: ['One day', 'One week', 'No limit'] };
+    const usage = { promptTokens: 100, completionTokens: 20, cacheHitTokens: 0, cacheMissTokens: 100 };
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
+      jobId: modelJobId(request.workspace.id, request.workspace.epoch, request.actorId, request.commandId),
+      clarification,
+      usage,
+    }));
+    const eventsBefore = await inspectRoom<{ event_type: SqlStorageValue }>(stub, 'SELECT event_type FROM room_events');
+    const input = {
+      commandId: randomUUID(),
+      expectedRevision: readyWorkspace.revision,
+      expectedEpoch: readyWorkspace.epoch,
+      prompt: 'Make a table.',
+      consent: true,
+    };
+    const jobId = modelJobId(roomId, readyWorkspace.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, readyWorkspace.epoch);
+    expect(job.status).toBe('completed');
+    expect(job.data.clarification).toEqual(clarification);
+    expect(job.data.candidateId).toBeUndefined();
+
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(poll.response.status).toBe(200);
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification });
+
+    const retry = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(retry.response.status).toBe(200);
+    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification });
+    expect(vi.mocked(proposeChange)).toHaveBeenCalledTimes(1);
+
+    const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(current.body.revision).toBe(readyWorkspace.revision);
+    expect(current.body.domain.candidate).toBeNull();
+    const eventsAfter = await inspectRoom<{ event_type: SqlStorageValue }>(stub, 'SELECT event_type FROM room_events');
+    expect(eventsAfter).toEqual(eventsBefore);
+    expect(eventsAfter.map((row) => row.event_type)).not.toContain('evolve.propose');
+  });
+
+  it('omits a malformed stored clarification from the public model job view (F012)', async () => {
+    const owner = newActor('Malformed clarification owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
+      jobId: modelJobId(request.workspace.id, request.workspace.epoch, request.actorId, request.commandId),
+      clarification: { question: 'Valid question?', options: ['A', 42 as unknown as string, 'C'] },
+      usage: { promptTokens: 1, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 1 },
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Make a table.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, { method: 'POST', body: input, mutation: true });
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('completed');
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(poll.body).toEqual({ id: jobId, status: 'completed' });
   });
 
   it('maps failed model jobs to actionable safe messages without exposing provider details', async () => {

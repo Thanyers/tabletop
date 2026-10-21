@@ -1,18 +1,31 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **20 ตุลาคม 2569 เวลา 21:39 (Asia/Bangkok)** ทั้งสอง environment รายงาน **2.0.0 / d93620d** จาก annotated tag [v2.0.0](https://github.com/Thanyers/tabletop/tree/v2.0.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 09:27 (Asia/Bangkok)** ทั้งสอง environment รายงาน **2.2.0 / f29e799** จาก annotated tag [v2.2.0](https://github.com/Thanyers/tabletop/tree/v2.2.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [d93620d](https://github.com/Thanyers/tabletop/commit/d93620da7cb9a5a97a56d0cfb4275b0fb0fcfda7) — PR #33 | commit และ build เดียวกัน |
-| Release | v2.0.0 / 2.0.0 | v2.0.0 / 2.0.0 |
+| Source | [f29e799](https://github.com/Thanyers/tabletop/commit/f29e799e5e6c25c9aafe57e8cd7d2a9ae61da542) — PR #48 | commit และ build เดียวกัน |
+| Release | v2.2.0 / 2.2.0 | v2.2.0 / 2.2.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 2.2.0 (21 ตุลาคม 2569)
+
+Release deploy รอบแรกของ CD001 ล้มที่ staging เพราะ config secret ยังมี `limits.cpu_ms` ซึ่ง Workers Free ไม่รับ (Cloudflare error 100328, [issue #49](https://github.com/Thanyers/tabletop/issues/49)) หลังแก้ config แล้วรันซ้ำด้วย SHA เดิม `f29e799` ([run 39527338589](https://github.com/Thanyers/tabletop/actions/runs/39527338589)) สำเร็จใน 81 วินาที
+
+- Tag `v2.2.0` (annotated) → `f29e799`; build ครั้งเดียว `2.2.0 / f29e799` (`built_at` 2026-10-21T01:27:27Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production — ไม่มี schema change
+- Staging: Worker version `1f739525-09bf-4df0-8c22-8fbbcca0c717`, smoke PASS
+- Production: Worker version `95d45422-f2f8-460c-9696-7a01744f93d1`, smoke PASS (`/healthz`, `/readyz`, `/api/capabilities`, `/version` ตรงกับ tag, `/`, `/new`)
+- `/version` หลัง deploy ทั้งสอง environment = `2.2.0 / f29e799`
+- **deploy ซ้ำโดยไม่จำเป็น 09:24–09:25 (Asia/Bangkok):** [run 39532864723](https://github.com/Thanyers/tabletop/actions/runs/39532864723) ถูกสั่งรันด้วย SHA เดิมหลังจากรอบ 01:27Z สำเร็จไปแล้ว (ผู้สั่งไม่เห็นรอบก่อนหน้า) และสั่งยกเลิกไม่ทันก่อนจบ ผลคือ code เดิม `2.2.0 / f29e799` ที่ build ใหม่ (`built_at` 2026-10-21T02:25:24Z) · D1 ไม่มี migration ค้าง · smoke ผ่านทุกจุดทั้งสอง environment · Worker version ปัจจุบัน: staging `d38a193d-9bcb-4962-9758-f0a1bc2dfee9`, production `b55d3f12-5d89-4718-9f75-04df5ead15a1` · ก่อนสั่ง Release deploy ด้วยมือ ให้ดู Actions ว่ามีรอบของ SHA นั้นสำเร็จแล้วหรือยัง
+- รุ่นนี้รวมงาน 2.1.0 (F008/F009/F001) และ 2.2.0 (F013 consent ครั้งเดียว + CD001) — ยังไม่อัปเกรดแผน ยังใช้ Workers Free
+- รอบนี้ตรวจเฉพาะ build/version/smoke ตาม pipeline; ไม่ได้เล่นสองบัญชีหรือทดสอบ F013 บน hosted ใหม่ (หลักฐานสองบัญชีล่าสุดยังเป็นรุ่น 2.0.0)
 
 ## ผลตรวจ release ล่าสุด
 
@@ -45,6 +58,7 @@
 
 | Release | สิ่งที่ส่ง | หลักฐาน |
 | --- | --- | --- |
+| 21 ต.ค. `v2.2.0` / `f29e799` | Consent ส่ง AI ครั้งเดียวต่อโต๊ะ (F013) รวมงาน 2.1.0 ที่ยังไม่เคยขึ้น hosted และ pipeline CD001 ที่ใช้งานจริงบน Workers Free | [PR #48](https://github.com/Thanyers/tabletop/pull/48), [run 39527338589](https://github.com/Thanyers/tabletop/actions/runs/39527338589), [issue #49](https://github.com/Thanyers/tabletop/issues/49) |
 | 20 ต.ค. `v1.0.0` / `ce2c50e` | Build จาก release tag; UI และ runtime เดิม เปลี่ยนเฉพาะข้อมูล version | [PR #15](https://github.com/Thanyers/tabletop/pull/15), [CI main](https://github.com/Thanyers/tabletop/actions/runs/39376131015) |
 | 18 ต.ค. รุ่นแรก | Google, ห้องเดิมสามแบบ, ledger และ Cloudflare Free | [บันทึกรุ่นแรก](CLOUDFLARE_RELEASE.md) |
 | 19 ต.ค. `ba29062` | Shared data table, ไฟล์ข้อความ, แชทส่วนตัว/confirmation และ migration 0002 | [Generic table acceptance](GENERIC_TABLE_ACCEPTANCE.md) |

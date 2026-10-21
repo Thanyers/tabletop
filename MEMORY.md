@@ -5,6 +5,21 @@
 
 ## Lessons
 
+### 2026-10-21 — arm failure ครั้งเดียวใน browser test ไม่พอ เพราะแอป refresh ได้หลายครั้ง
+- **What happened:** หลังแก้ CD003 (dedupe + sticky error) CI ยังล้ม `Community equipment` ด้วย `workspaceRefreshRequests=2` — GET ครั้งแรกถูก synthetic failure แต่ครั้งที่สองสำเร็จและล้าง error
+- **Root cause:** route interception แบบ fail ครั้งเดียวพึ่งจำนวน refresh ที่แน่นอน; แอปมี refresh จาก POST response, poll และ retry
+- **Correct behavior:** fail ทุก refresh จนกว่าเทสต์จะเห็น error UI แล้วค่อย `failRefresh = false` ก่อนกด Retry; assert แบบ `>=` ไม่ผูกจำนวนครั้ง
+
+### 2026-10-21 — ข้อความ "refresh failed" หายเพราะ poll ที่จบแล้วล้าง pollError
+- **What happened:** browser test `Community equipment` ล้มไม่คงที่; การ์ดขึ้น "A rule draft is ready" แทน "The rule draft is ready, but the table could not refresh."
+- **Root cause:** `pollModelOnce` patch `pollError: undefined` ทุกครั้ง รวมถึง poll ที่ job settled แล้ว ทำให้ poll ที่มาถึงช้ากว่าการ refresh failure ล้าง error ที่เพิ่งตั้ง
+- **Correct behavior:** เมื่อ job settled (completed/complete) ห้ามล้าง `pollError`; ล้างเฉพาะระหว่าง queued/running หรือเมื่อ Retry refresh สำเร็จ; รัน `npm test`, `npm run test:cloudflare`, `npm run test:cloudflare:browser`
+
+### 2026-10-21 — browser acceptance บน CI ล้มเป็นครั้งคราว (layout/timer race)
+- **What happened:** PR #55 ล้ม 3 รอบติดที่จุดต่างกัน (generative private preview ไม่อยู่ใน viewport, draft-refresh failure ของ generic table) ทั้งที่ dev CI ของ suite เดียวกันผ่าน และ test ในเครื่องผ่าน
+- **Root cause:** runner 2-core ทำให้การรอ layout/animation ในเทสต์ไม่คงที่; ไม่ใช่ logic ของ branch ที่แก้
+- **Correct behavior:** `validate.yml` รัน browser 3 ชุดซ้ำ 1 ครั้งเมื่อล้ม; ถ้ายังล้มให้ถือว่าแดงจริงและไล่จาก log ครั้งแรก; อย่าปิด step หรือใช้ `--no-verify` เพื่อให้ผ่าน
+
 ### 2026-10-20 — การบันทึกตำแหน่งพื้นหลังต้องไม่ล็อกแชท
 - **What happened:** แชทพร้อมส่งและ AI เปิดอยู่ แต่หลังขยับการ์ด textarea กับ Send ถูกปิดจนผลบันทึกตำแหน่งกลับมา
 - **Root cause:** `canvas.layout` ใช้ busy state เดียวกับคำสั่งเล่น ทั้งที่มีคิวและ revision แยกอยู่แล้ว; ผลตอบรับของ layout ยังอาจล้าง busy ของคำสั่งอื่น
@@ -120,7 +135,32 @@
 - **Root cause:** Pre-release `main` lacked F006, `npm start` serves the existing `dist`, and legacy examples hide their composer when Node local reports AI disabled. The current generic table still shows its new composer, disabled when AI is unavailable.
 - **Correct behavior:** Check `git branch --show-current` and `/version`, then run `npm run build && npm start`. Open `/new` and choose **Start empty with your own files** to verify the generic table. Use staging or the documented Worker setup for real AI; adding a key to Node `.env` does not enable it.
 
+### 2026-10-20 — Generated numeric forms silently fail native validation
+- **What happened:** An invoice form accepted a number in the declared range but clicking Add invoice sent no table command. Browser readback showed `min=0.01`, empty `step`, value `651`, and `validity.stepMismatch=true`.
+- **Root cause:** Generated numeric inputs omitted `step`, so HTML applied its default step of 1 from the fractional minimum. The regular table action form already used `step="any"`.
+- **Correct behavior:** Keep generated numeric inputs consistent with the numeric contract and check native validity before submission. Run `npm run build && npm run build:cloudflare && node scripts/canvas-evolution-local.mjs --auto`; require a real form POST and persisted row, not a successful field fill or speculative preview.
+
+### 2026-10-20 — Data actions and structural requests share one composer
+- **What happened:** Owner requests to add a form or missing create action were sent to the action-only assistant; a broad routing fix then also caught “Change invoice status in this table to paid.”
+- **Root cause:** The old interpreter had updates but no typed record creation; matching the word “table” anywhere with “change” confused data changes with program changes.
+- **Correct behavior:** Route clear UI/construction requests to the builder, leave data requests on the confirmation path, and offer an owner-only builder handoff for ambiguous requests with the actor/table/epoch consent retained by F013. Run `npx vitest run src/tabletop/ui/table-build-intent.test.ts src/tabletop/domain/table-record-actions.test.ts`.
+
+### 2026-10-21 — Generic card sizing broke legacy demo geometry
+- **What happened:** F010's first CI run failed the seven-session and public-demo overlap assertions after wider cards and growing bodies were applied globally. The generated Invoice fixture itself passed.
+- **Root cause:** Legacy examples use their established card dimensions; their geometry does not follow the measured layout used by generic tables. Reaching a later CI step also did not prove earlier independent steps passed.
+- **Correct behavior:** Scope the new card rules to `data-workspace-kind="table"`, preserve legacy dimensions, and read actual job/step conclusions. Run `npm run build && npm run build:cloudflare`, then `npm run test:r1:browser`, `npm run test:cloudflare:browser`, and `node scripts/canvas-evolution-local.mjs --auto`. All three browser checks passed locally after the scope fix (7, 25, and 10 checks).
+
+### 2026-10-21 — สั่ง Release deploy ซ้ำทั้งที่มีคนรันสำเร็จไปแล้ว
+- **What happened:** หลังแก้ config ของ CD001 ผมสั่ง `gh workflow run release-deploy.yml -f sha=f29e799…` ตามที่ผู้ใช้ยืนยัน แต่เจ้าของ repo รันสำเร็จไปแล้วตั้งแต่ 01:27Z · พอเห็นจึงสั่ง cancel แต่ไปถึงหลัง job จบ ผลคือ deploy code เดิมซ้ำอีกรอบ (ไม่มีผลต่อผู้ใช้ แต่ `built_at` และ Worker version เปลี่ยน)
+- **Root cause:** ไม่ได้เช็คสถานะปัจจุบันก่อนสั่ง action ที่ deploy · คำยืนยันของผู้ใช้อิงข้อมูลที่ผมรายงานไว้ก่อนหน้า ซึ่งเก่าไปแล้ว
+- **Correct behavior:** ก่อน `gh workflow run release-deploy.yml` ทุกครั้ง รัน `gh run list -R Thanyers/tabletop --workflow release-deploy.yml --limit 3` และ `curl -s <url>/version` ของทั้งสอง environment · ถ้ามีรอบของ SHA นั้นสำเร็จแล้วหรือ `/version` ตรง tag แล้ว ให้หยุดและแจ้งผู้ใช้แทนการรัน
+
 ## Deploy failures
+
+### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
+- **What happened:** Release deploy ของ v2.2.0 ([run 39464889970](https://github.com/Thanyers/tabletop/actions/runs/39464889970), issue #49) ล้มที่ขั้น Staging — deploy เวลา 2026-10-20T17:19:20Z (job เริ่ม 17:18:20Z) ด้วย `CPU limits are not supported for the Free plan [code: 100328]` · staging/production ยังเป็น 2.0.0 ไม่มีผลต่อผู้ใช้ · แก้ secret config เวลา 2026-10-20T19:18:30Z · deploy สำเร็จทั้ง staging/production ด้วย SHA เดิมเวลา 2026-10-21T01:27Z ([run 39527338589](https://github.com/Thanyers/tabletop/actions/runs/39527338589)) และ issue #49 ปิดเวลา 01:33Z
+- **Root cause:** config ใน GitHub secrets สร้างจาก `wrangler.jsonc` ใน repo ซึ่งมี `"limits": {"cpu_ms": 50}` แต่บัญชีจริงเป็น Workers Free · config ของ operator เดิมไม่มี key นี้ · `wrangler deploy --dry-run` ไม่ตรวจข้อจำกัดของ plan
+- **Correct behavior:** ก่อนตั้ง `WRANGLER_CONFIG_*` ให้เทียบกับ Worker ที่ deploy อยู่จริงใน dashboard (Settings → Variables/Bindings/Runtime) และลบ `limits` ออกเมื่อเป็น Free · `npx tsx server/release-deploy.ts check-config <file> <worker> <origin>` ตอนนี้ปฏิเสธ `limits` แล้ว
 
 ใช้แทน phak Deploy Fail Log (ดู [CLAUDE.md](CLAUDE.md)) · บันทึก: เวลาที่ fail (จาก log), environment, อาการ/สาเหตุ, เวลาที่แก้, อ้างอิงเหตุการณ์คล้ายกันก่อนหน้า
 
