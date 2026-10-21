@@ -160,6 +160,11 @@
 - **Root cause:** vitest ตัด type ทิ้งตอนรัน จึงไม่จับ type error · pre-commit hook รันแค่ ESLint ไม่รัน `tsc`
 - **Correct behavior:** ก่อน commit ทุกครั้งที่แก้ `.ts` ให้รัน `npm run typecheck` (ครอบทั้ง app, server และ cloudflare) และอ่านผลก่อน `git commit` · ห้ามถือว่าเทสต์ผ่านแปลว่า type ผ่าน
 
+### 2026-10-21 — แก้ conflict แล้วภาษาไทยใน PLAN.md / CHANGELOG.md กลายเป็นตัวอักษรเพี้ยน
+- **What happened:** merge commit แก้ conflict (b2df1e2 สำหรับ #73, 1218fef สำหรับ #75) บันทึก PLAN.md และ CHANGELOG.md ใหม่ทั้งไฟล์แบบ double-encoded (UTF-8 → อ่านเป็น Windows-874 → เขียนเป็น UTF-8 อีกรอบ) ภาษาไทยกลายเป็น "เธเธญเธฅ…" 82 + 61 บรรทัด แล้วหลุดเข้า `dev` ผ่าน #75/#77 · `main`/3.2.0 ไม่โดน
+- **Root cause:** เครื่องมือหรือ editor ที่ใช้แก้ conflict อ่านไฟล์ด้วย encoding ภาษาไทยของ Windows ไม่ใช่ UTF-8 · CI ไม่ตรวจ encoding ของเอกสาร
+- **Correct behavior:** หลังแก้ conflict ใน `.md` ทุกครั้ง รัน `git diff --cached -- '*.md' | grep -cE 'เธ|โ€'` ต้องได้ 0 ก่อน commit · ตั้ง editor/เครื่องมือให้อ่านเขียน UTF-8 · ถ้าเจอแล้ว ซ่อมโดยแปลงกลับ (Windows-874 → bytes → UTF-8) และเทียบกับเวอร์ชันก่อนเสีย ไม่แก้ทีละบรรทัดด้วยมือ
+
 ## Deploy failures
 
 ### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
