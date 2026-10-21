@@ -1422,6 +1422,261 @@ describe('Cloudflare room Durable Object', () => {
     expect(notTable.body.errorCode).toBe('MEMBER_NOT_REMOVABLE');
   });
 
+  describe('reusable table invite link (F003-T3)', () => {
+    interface LinkStatus { enabled: boolean; expiresAt: number | null; link?: string }
+    const DAY_MS = 86_400_000;
+
+    async function linkTable(ownerName: string) {
+      const owner = newActor(ownerName);
+      await saveActor(owner);
+      const room = await createRoom(owner, 'table');
+      const createLink = async (days: number) => {
+        const created = await call<LinkStatus>(room.stub, `/api/workspaces/${room.roomId}/invite-link`, owner, {
+          method: 'POST', body: { action: 'create', days }, mutation: true,
+        });
+        expect(created.response.status).toBe(201);
+        expect(created.body.enabled).toBe(true);
+        expect(created.body.link).toMatch(new RegExp(`^${room.roomId}_[A-Za-z0-9_-]{43}$`, 'u'));
+        return created.body as LinkStatus & { link: string; expiresAt: number };
+      };
+      const status = () => call<LinkStatus>(room.stub, `/api/workspaces/${room.roomId}/invite-link`, owner);
+      const join = (actor: TestActor, link: string) => call<WorkspaceView | PublicError>(room.stub, '/internal/join-link', actor, {
+        method: 'POST', body: { ticket: link.slice(`${room.roomId}_`.length) }, mutation: true,
+      });
+      const joiner = async (name: string) => {
+        const actor = newActor(name);
+        await saveActor(actor);
+        return actor;
+      };
+      return { owner, ...room, createLink, status, join, joiner };
+    }
+
+    function expectError(result: { response: Response; body: unknown }, status: number, errorCode: string) {
+      expect(result.response.status).toBe(status);
+      expect((result.body as PublicError).errorCode).toBe(errorCode);
+    }
+
+    it('creates a 7-day link that seats joiners in order and replays an existing member without a duplicate row (F003-T3)', async () => {
+      const table = await linkTable('Link owner');
+      const before = await table.status();
+      expect(before.response.status).toBe(200);
+      expect(before.body).toEqual({ enabled: false, expiresAt: null });
+
+      const startedAt = Date.now();
+      const created = await table.createLink(7);
+      const finishedAt = Date.now();
+      expect(created.expiresAt).toBeGreaterThanOrEqual(startedAt + 7 * DAY_MS);
+      expect(created.expiresAt).toBeLessThanOrEqual(finishedAt + 7 * DAY_MS);
+      const after = await table.status();
+      expect(after.body).toEqual({ enabled: true, expiresAt: created.expiresAt });
+      expect(JSON.stringify(after.body)).not.toContain(created.link.slice(`${table.roomId}_`.length));
+
+      const joiners = [];
+      for (const [index, seat] of ['member-1', 'member-2', 'member-3'].entries()) {
+        const actor = await table.joiner(`Link joiner ${index + 1}`);
+        const joined = await table.join(actor, created.link);
+        expect(joined.response.status).toBe(200);
+        expect((joined.body as WorkspaceView).actor).toMatchObject({ actorId: actor.id, role: 'participant', seat });
+        joiners.push(actor);
+      }
+      const ownerView = await call<WorkspaceView>(table.stub, `/api/workspaces/${table.roomId}`, table.owner);
+      expect(ownerView.body.members.map((entry) => entry.actorId).sort())
+        .toEqual([table.owner.id, ...joiners.map((actor) => actor.id)].sort());
+      for (const [index, actor] of joiners.entries()) {
+        expect(ownerView.body.members.find((entry) => entry.actorId === actor.id)?.seat).toBe(`member-${index + 1}`);
+      }
+
+      const first = joiners[0]!;
+      const replay = await table.join(first, created.link);
+      expect(replay.response.status).toBe(200);
+      expect((replay.body as WorkspaceView).actor).toMatchObject({ actorId: first.id, seat: 'member-1' });
+      const rows = await inspectRoom<{ seat: SqlStorageValue }>(table.stub,
+        `SELECT seat FROM room_memberships WHERE actor_id = '${first.id}'`);
+      expect(rows).toEqual([{ seat: 'member-1' }]);
+      const allRows = await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships');
+      expect(allRows).toHaveLength(4);
+      // Only the hash is stored.
+      const stored = await inspectRoom<{ token_hash: SqlStorageValue }>(table.stub, 'SELECT token_hash FROM room_invite_links');
+      expect(stored).toEqual([{ token_hash: sha256(created.link.slice(`${table.roomId}_`.length)) }]);
+    });
+
+    it('revokes the old link on regenerate and stops joins after disable (F003-T3)', async () => {
+      const table = await linkTable('Regenerate owner');
+      const oldLink = await table.createLink(7);
+      const newLink = await table.createLink(30);
+      expect(newLink.link).not.toBe(oldLink.link);
+      expect((await table.status()).body).toEqual({ enabled: true, expiresAt: newLink.expiresAt });
+
+      const late = await table.joiner('Old link joiner');
+      expectError(await table.join(late, oldLink.link), 403, 'INVITE_EXPIRED');
+      const fresh = await table.joiner('New link joiner');
+      const joined = await table.join(fresh, newLink.link);
+      expect(joined.response.status).toBe(200);
+      expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: 'member-1' });
+
+      const disabled = await call<LinkStatus>(table.stub, `/api/workspaces/${table.roomId}/invite-link`, table.owner, {
+        method: 'POST', body: { action: 'disable' }, mutation: true,
+      });
+      expect(disabled.response.status).toBe(200);
+      expect(disabled.body).toEqual({ enabled: false, expiresAt: null });
+      expect((await table.status()).body).toEqual({ enabled: false, expiresAt: null });
+      expectError(await table.join(late, newLink.link), 403, 'INVITE_EXPIRED');
+      // The member who already joined keeps access.
+      const stillMember = await call<WorkspaceView>(table.stub, `/api/workspaces/${table.roomId}`, fresh);
+      expect(stillMember.response.status).toBe(200);
+    });
+
+    it('rejects a member the owner removed even while the link is still enabled (F003-T3)', async () => {
+      const table = await linkTable('Removal link owner');
+      const link = await table.createLink(7);
+      const member = await table.joiner('Removed link member');
+      expect((await table.join(member, link.link)).response.status).toBe(200);
+      const removed = await call<WorkspaceView>(table.stub, `/api/workspaces/${table.roomId}/members/remove`, table.owner, {
+        method: 'POST', body: { actorId: member.id }, mutation: true,
+      });
+      expect(removed.response.status).toBe(200);
+      expect((await table.status()).body.enabled).toBe(true);
+
+      expectError(await table.join(member, link.link), 403, 'INVITE_MEMBER_REMOVED');
+      const rows = await inspectRoom<{ revoked_at: SqlStorageValue }>(table.stub,
+        `SELECT revoked_at FROM room_memberships WHERE actor_id = '${member.id}'`);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.revoked_at).not.toBeNull();
+      // Someone else still joins and may take the freed seat.
+      const other = await table.joiner('Replacement link member');
+      const joined = await table.join(other, link.link);
+      expect(joined.response.status).toBe(200);
+      expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: 'member-1' });
+    });
+
+    it('fills all seven member seats through the link and rejects the eighth joiner (F003-T3)', async () => {
+      const table = await linkTable('Capacity link owner');
+      const link = await table.createLink(1);
+      for (let index = 1; index <= 7; index += 1) {
+        const actor = await table.joiner(`Capacity joiner ${index}`);
+        const joined = await table.join(actor, link.link);
+        expect(joined.response.status).toBe(200);
+        expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: `member-${index}` });
+      }
+      const eighth = await table.joiner('Capacity joiner 8');
+      expectError(await table.join(eighth, link.link), 429, 'MEMBER_LIMIT_REACHED');
+      expect(await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships WHERE revoked_at IS NULL')).toHaveLength(8);
+      expect(await inspectRoom(table.stub, `SELECT actor_id FROM room_memberships WHERE actor_id = '${eighth.id}'`)).toHaveLength(0);
+    });
+
+    it('skips a seat that has a pending single-use invite and leaves that invite redeemable (F003-T3)', async () => {
+      const table = await linkTable('Pending invite owner');
+      const invitation = await call<{ ticket: string }>(table.stub, `/api/workspaces/${table.roomId}/invites`, table.owner, {
+        method: 'POST', body: { seat: 'member-1' }, mutation: true,
+      });
+      expect(invitation.response.status).toBe(201);
+      const link = await table.createLink(7);
+      const linkJoiner = await table.joiner('Pending link joiner');
+      const joined = await table.join(linkJoiner, link.link);
+      expect(joined.response.status).toBe(200);
+      expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: 'member-2' });
+
+      const invited = await table.joiner('Pending invited member');
+      const redeemed = await call<WorkspaceView>(table.stub, '/internal/redeem', invited, {
+        method: 'POST', body: { ticket: invitation.body.ticket.slice(`${table.roomId}_`.length) }, mutation: true,
+      });
+      expect(redeemed.response.status).toBe(200);
+      expect(redeemed.body.actor).toMatchObject({ actorId: invited.id, seat: 'member-1' });
+    });
+
+    it('limits link management to the table owner, validates bodies, and rejects unknown, expired, and non-table links (F003-T3)', async () => {
+      const table = await linkTable('Auth link owner');
+      const link = await table.createLink(1);
+      const participant = await table.joiner('Auth link participant');
+      expect((await table.join(participant, link.link)).response.status).toBe(200);
+      const outsider = await table.joiner('Auth link outsider');
+      const path = `/api/workspaces/${table.roomId}/invite-link`;
+
+      expectError(await call<PublicError>(table.stub, path, participant), 403, 'ROLE_FORBIDDEN');
+      expectError(await call<PublicError>(table.stub, path, participant, {
+        method: 'POST', body: { action: 'create', days: 7 }, mutation: true,
+      }), 403, 'ROLE_FORBIDDEN');
+      expectError(await call<PublicError>(table.stub, path, participant, {
+        method: 'POST', body: { action: 'disable' }, mutation: true,
+      }), 403, 'ROLE_FORBIDDEN');
+      expect((await call<PublicError>(table.stub, path, outsider)).response.status).toBe(403);
+      const withoutCsrf = await call<PublicError>(table.stub, path, table.owner, {
+        method: 'POST', body: { action: 'create', days: 7 }, mutation: false,
+      });
+      expect(withoutCsrf.response.status).toBe(403);
+
+      for (const body of [
+        { action: 'create', days: 2 },
+        { action: 'create', days: '7' },
+        { action: 'create' },
+        { action: 'create', days: 7, extra: true },
+        { action: 'disable', extra: true },
+        { action: 'rotate' },
+        {},
+        [],
+      ]) {
+        expectError(await call<PublicError>(table.stub, path, table.owner, {
+          method: 'POST', body, mutation: true,
+        }), 400, 'INVALID_REQUEST');
+      }
+      // None of the rejected requests replaced the link.
+      expect((await table.status()).body).toEqual({ enabled: true, expiresAt: link.expiresAt });
+
+      const unknownToken = randomBytes(32).toString('base64url');
+      const stranger = await table.joiner('Auth link stranger');
+      expectError(await table.join(stranger, `${table.roomId}_${unknownToken}`), 403, 'INVITE_INVALID');
+      expectError(await table.join(stranger, `${table.roomId}_not-a-token`), 403, 'INVITE_INVALID');
+
+      // Expiry: move the stored deadline into the past.
+      await runInDurableObject(table.stub, (instance) => {
+        instance.repository.storage.sql.exec('UPDATE room_invite_links SET expires_at = ?', Date.now() - 1);
+      });
+      expect((await table.status()).body).toEqual({ enabled: false, expiresAt: null });
+      expectError(await table.join(stranger, link.link), 403, 'INVITE_EXPIRED');
+
+      const teacher = newActor('Auth link teacher');
+      await saveActor(teacher);
+      const teaching = await createRoom(teacher, 'teaching');
+      const teachingPath = `/api/workspaces/${teaching.roomId}/invite-link`;
+      expectError(await call<PublicError>(teaching.stub, teachingPath, teacher), 403, 'ROLE_FORBIDDEN');
+      expectError(await call<PublicError>(teaching.stub, teachingPath, teacher, {
+        method: 'POST', body: { action: 'create', days: 7 }, mutation: true,
+      }), 403, 'ROLE_FORBIDDEN');
+      // A link row that somehow exists outside a table still cannot seat anyone.
+      const teachingToken = randomBytes(32).toString('base64url');
+      await runInDurableObject(teaching.stub, (instance) => {
+        const now = Date.now();
+        instance.repository.storage.sql.exec(
+          `INSERT INTO room_invite_links(token_hash, workspace_id, epoch, created_by, created_at, expires_at, revoked_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+          sha256(teachingToken), teaching.roomId, teaching.workspace.epoch, teacher.id, now, now + DAY_MS,
+        );
+      });
+      const learner = newActor('Auth link learner');
+      await saveActor(learner);
+      const notTable = await call<PublicError>(teaching.stub, '/internal/join-link', learner, {
+        method: 'POST', body: { ticket: teachingToken }, mutation: true,
+      });
+      expectError(notTable, 403, 'INVITE_NOT_ALLOWED');
+    });
+
+    it('drops the link when the owner resets the table (F003-T3)', async () => {
+      const table = await linkTable('Reset link owner');
+      const link = await table.createLink(7);
+      const current = await call<WorkspaceView>(table.stub, `/api/workspaces/${table.roomId}`, table.owner);
+      const reset = await issueCommand(table.stub, current.body, table.owner, 'workspace.reset', {});
+      expect(reset.response.status).toBe(200);
+      expect((reset.body as CommandAck).workspace.epoch).toBe(current.body.epoch + 1);
+      expect(await inspectRoom(table.stub, 'SELECT token_hash FROM room_invite_links')).toHaveLength(0);
+      expect((await table.status()).body).toEqual({ enabled: false, expiresAt: null });
+
+      const late = await table.joiner('Reset link joiner');
+      const rejected = await table.join(late, link.link);
+      expect(rejected.response.status).toBe(403);
+      expect(['INVITE_EXPIRED', 'INVITE_INVALID']).toContain((rejected.body as PublicError).errorCode);
+    });
+  });
+
   it('creates in its canonical named DO, isolates actors, and rejects forged target room IDs', async () => {
     const owner = newActor('Teacher');
     const outsider = newActor('Outsider');
