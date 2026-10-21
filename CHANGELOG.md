@@ -2,12 +2,6 @@
 
 ## Unreleased
 
-## 3.4.2 — 2026-10-21
-
-PATCH: POC — ตั้ง AI budget เป็น 0/ไม่ตั้ง = ไม่จำกัดงบ (ยังวัด usage) ไม่ต้องชน "budget reached" ระหว่างเทส · ไม่มี schema/migration · rollback กลับ v3.4.1 ได้
-
-- งบ AI แบบ 0/unset ถือเป็นไม่จำกัด; ค่าบวกยังคุมเพดานตามเดิม (F033)
-
 ## 3.4.1 — 2026-10-21
 
 PATCH: การจองงบ AI ใช้เพดาน output จริง (16K) แทน 32K ทำให้ไม่ชน "budget reached" ก่อนเวลาอันควร · ไม่มี schema/migration · rollback กลับ v3.4.0 ได้
