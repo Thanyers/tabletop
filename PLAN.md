@@ -72,8 +72,8 @@
 | F003-T2 | ออกแบบ + security review ลิงก์ใช้ซ้ำ ให้คนอนุมัติ | `todo` | — | — | `docs/features/F003-reusable-invite-link.md` | — | ไม่ใช่โค้ด |
 | F003-T3 | Room: สถานะลิงก์ + เปิด/ปิด/สร้างใหม่ + redeem แบบใช้ซ้ำ | `review` | Claude Code | `feat/F003-T3-invite-link` | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/*.test.ts` | F003-T1, F003-T2 | |
 | F003-T4 | Worker route + rate limit + Node เทียบเท่า | `todo` | — | — | `cloudflare/index.ts`, `server/app.ts`, `server/authority.ts` | F003-T3 | hotspot `cloudflare/index.ts` |
-| F003-T5 | UI หน้าต่าง People: เอา AVAILABLE SEATS ออก แสดงคนในโต๊ะ + `N/7` + ลิงก์เชิญ + ปุ่มเอาออก + หน้าเข้าร่วม | `todo` | — | — | `TabletopApp.tsx` (`InviteDialog`), CSS | F003-T1, F003-T4, F004-T2 | hotspot `TabletopApp.tsx` |
-| F003-T6 | คู่มือ + CHANGELOG + แก้ข้อความ "works once" | `todo` | — | — | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md`, `TabletopApp.tsx` | F003-T5 | |
+| F003-T5 | UI หน้าต่าง People: เอา AVAILABLE SEATS ออก แสดงคนในโต๊ะ + `N/7` + ลิงก์เชิญ + ปุ่มเอาออก + หน้าเข้าร่วม | `review` | Claude Code | `feat/F003-T5-people-dialog` | `TabletopApp.tsx` (`InviteDialog`), CSS | F003-T1, F003-T4, F004-T2 | hotspot `TabletopApp.tsx` |
+| F003-T6 | คู่มือ + CHANGELOG + แก้ข้อความ "works once" | `review` | Claude Code | `feat/F003-T5-people-dialog` | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md`, `TabletopApp.tsx` | F003-T5 | |
 | F004-T1 | router เล็กใน client + parse path แบบ allowlist | `review` | Claude Code | `feat/F004-url-paths` | `src/tabletop/routes.ts` (ใหม่), `src/main.tsx` | — | |
 | F004-T2 | TabletopApp ใช้ URL เป็นแหล่งความจริงของโต๊ะที่เปิด | `review` | Claude Code | `feat/F004-url-paths` | `TabletopApp.tsx` | F004-T1 | hotspot `TabletopApp.tsx` |
 | F004-T3 | กลับ path เดิมหลังล็อกอิน + หน้าเปิดโต๊ะไม่ได้ | `review` | Claude Code | `feat/F004-url-paths` | `TabletopApp.tsx`, `src/tabletop/ui/account.tsx` | F004-T2 | |
