@@ -45,6 +45,8 @@ export interface ModelJob {
 export interface TabletopCapabilities {
   uploads: boolean;
   tableReadOnly?: boolean;
+  /** F003: the server supports reusable table invite links (Worker); the Node guest runtime does not. */
+  inviteLinks?: boolean;
   tableAssistant?: { available: boolean; reason?: string };
   model: { enabled: boolean; reason: string };
 }
@@ -170,7 +172,7 @@ export class TabletopClient {
       tableAssistant: { available: false, reason: unavailableAssistantReason },
       model: { enabled: false, reason: 'AI proposals are not configured on this local server.' },
     };
-    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; tableAssistant?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; tableAssistant?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
     const tableAssistant = body.tableAssistant;
     const validTableAssistant = tableAssistant === undefined || (
       typeof tableAssistant === 'object'
@@ -186,6 +188,7 @@ export class TabletopClient {
     return {
       uploads: body.uploads,
       ...(typeof body.tableReadOnly === 'boolean' ? { tableReadOnly: body.tableReadOnly } : {}),
+      ...(body.inviteLinks === true ? { inviteLinks: true } : {}),
       tableAssistant: assistantCapability
         ? { available: assistantCapability.available, ...(assistantCapability.reason ? { reason: assistantCapability.reason } : {}) }
         : { available: false, reason: unavailableAssistantReason },

@@ -34,6 +34,11 @@
 [`.github/workflows/validate.yml`](.github/workflows/validate.yml) รันทุก pull request และทุก push เข้า `main` / `dev`
 check ที่ต้องผ่านชื่อ **`local-validation`** · CI ไม่มีขั้น deploy และใช้แต่ credential จำลอง
 
+**สองระดับ (CI005):**
+- PR และ push เข้า `dev` → **เช็คเร็ว** (public files, audit, lint, unit, typecheck+build, Worker tests, bundle) ราว 2–3 นาที · ข้าม browser suites
+- PR เข้า `main` (release/hotfix), push เข้า `main` และกด **Run workflow** เอง → **ครบทุกชุด** รวม browser suites ทั้งสาม · pipeline deploy (CD001) รอชุดเต็มบน merge commit ของ `main` ก่อน deploy เสมอ
+- ข้อแลก: browser regression จะเห็นตอนเปิด release PR · ถ้า PR แตะ UI/canvas/ขั้นตอนเชิญ ให้รัน browser suite ในเครื่อง หรือกด Run workflow บน branch นั้นก่อนขอ merge
+
 CI รัน `npm run lint` ด้วย: ห้าม `any` ที่เขียนเอง และห้าม `@ts-ignore` (กฎทั้งหมดอยู่ที่ [CONTRIBUTING → Lint](CONTRIBUTING.md#lint)) · pre-commit hook (husky) รัน `check-public-files` + lint ไฟล์ที่ stage ให้ก่อน commit · **ห้ามใช้ `--no-verify` ข้าม hook**
 
 ก่อน push ให้ตรวจในเครื่องเท่าที่เกี่ยวกับสิ่งที่แก้:

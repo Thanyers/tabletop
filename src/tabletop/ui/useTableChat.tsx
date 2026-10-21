@@ -744,7 +744,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   const result = job?.result;
   if (!result || !job) return <div className="tt-chat-card" data-testid="table-chat-answer"><p className="tt-chat-card__text">No answer was received.</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>{dismissButton}</div>;
   const references = result.kind === 'explanation' ? result.references : [];
-  // Open visibility (F015): members also see other members' chats; only the asker can act on them.
+  // Open visibility (F034): members also see other members' chats; only the asker can act on them.
+  // Revisions are per reader, so another member's proposal always looks stale here; check foreign first.
   const foreign = Boolean(job.askedBy && job.askedBy !== view.actor.actorId);
   const askerName = foreign ? view.members.find((member) => member.actorId === job.askedBy)?.name ?? 'Another member' : null;
   const askerLine = askerName ? <p className="tt-chat-card__asker">Asked by {askerName}</p> : null;
@@ -774,8 +775,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     {confirmed ? <p className="tt-chat-card__done"><Check size={14} />Confirmed. See Table history for the result.</p>
       : terminal ? <p className="tt-chat-card__error" role="status">{job.message ?? (status === 'stale' ? 'The table changed after this proposal. It cannot be confirmed.' : 'The current rules or turn did not allow this proposal.')}</p>
         : status === 'processing' || card.confirmationPending ? <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Checking the saved action status…</p>
-          : stale ? <p className="tt-chat-card__error" role="status">The table changed after this proposal. Ask again for a fresh proposal.</p>
-            : foreign ? <p className="tt-chat-card__pending" role="status">Only {askerName} can confirm this proposal.</p>
+          : foreign ? <p className="tt-chat-card__pending" role="status">Only {askerName} can confirm this proposal.</p>
+            : stale ? <p className="tt-chat-card__error" role="status">The table changed after this proposal. Ask again for a fresh proposal.</p>
             : !roleAllowed ? <p className="tt-chat-card__error" role="status">This seat cannot confirm the proposed action.</p>
               : !turnAllowed ? <p className="tt-chat-card__error" role="status">This action is only available on the required turn.</p>
                 : <div className="tt-chat-card__action-buttons"><button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy || card.confirming || status !== 'available'} onClick={onConfirm}>{card.confirming ? <LoaderCircle size={14} className="tt-spin" /> : <Check size={14} />}Confirm action</button><button type="button" className="tt-button tt-button--quiet" disabled={busy || card.confirmationPending} onClick={onDismiss}>Skip this proposal</button></div>}

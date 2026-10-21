@@ -28,17 +28,30 @@ function context(role: Role, actorId: string, seat?: Seat, now = 1_800_000_000_0
   };
 }
 
-it('does not expose another learner view, answer count or difficulty through projection metadata', () => {
+it('private policy: does not expose another learner view, answer count or difficulty through projection metadata', () => {
   const teacher = context('teacher', 'teacher');
   const own = context('learner', 'own', 'learner-1');
   const other = context('learner', 'other', 'learner-2');
   let state = createDomain('teaching', teacher) as TeachingState;
-  const before = projectDomain(state, own);
+  const before = projectDomain(state, own, 'private');
   state = decideDomain(state, { type: 'teaching.setRepresentation', payload: { actorId: other.actorId, representation: 'graph', difficulty: 'advanced' } }, teacher).state as TeachingState;
   state = decideDomain(state, { type: 'teaching.answer', payload: { questionId: state.questionId, lessonRevision: state.ruleRevision, value: 10 } }, other).state as TeachingState;
-  expect(projectDomain(state, own)).toEqual(before);
-  const visible = projectDomain(state, other) as TeachingState;
+  expect(projectDomain(state, own, 'private')).toEqual(before);
+  const visible = projectDomain(state, other, 'private') as TeachingState;
   expect(visible.answers).toHaveLength(1);
+  expect(visible.representations).toEqual({ other: 'graph' });
+});
+
+it('open policy (F015): another learner answer, view and difficulty are visible to every learner', () => {
+  const teacher = context('teacher', 'teacher');
+  const own = context('learner', 'own', 'learner-1');
+  const other = context('learner', 'other', 'learner-2');
+  let state = createDomain('teaching', teacher) as TeachingState;
+  state = decideDomain(state, { type: 'teaching.setRepresentation', payload: { actorId: other.actorId, representation: 'graph', difficulty: 'advanced' } }, teacher).state as TeachingState;
+  state = decideDomain(state, { type: 'teaching.answer', payload: { questionId: state.questionId, lessonRevision: state.ruleRevision, value: 10 } }, other).state as TeachingState;
+  const visible = projectDomain(state, own, 'open') as TeachingState;
+  expect(visible).toEqual(state);
+  expect(visible.answers.map((answer) => answer.actorId)).toEqual(['other']);
   expect(visible.representations).toEqual({ other: 'graph' });
 });
 
@@ -222,7 +235,7 @@ describe('R1 domain engines', () => {
     state = teachingState(step(state, 'teaching.saveNote', { text: 'private teacher note' }, teacher));
     state = teachingState(step(state, 'teaching.setRepresentation', { actorId: 'learner-2-actor', representation: 'graph', difficulty: 'advanced' }, teacher));
     expect(state.representations['learner-2-actor']).toBe('graph');
-    const learnerView = projectDomain(state, learner1);
+    const learnerView = projectDomain(state, learner1, 'private');
     expect(learnerView.kind).toBe('teaching');
     if (learnerView.kind === 'teaching') {
       expect(learnerView.answers.map((answer) => answer.actorId)).toEqual(['learner-1-actor']);
@@ -230,6 +243,9 @@ describe('R1 domain engines', () => {
       expect('teacherNote' in learnerView).toBe(false);
       expect(learnerView.candidate).toBeNull();
     }
+    expect(() => projectDomain(state, context('owner', 'not-a-teacher'), 'private')).toThrowError(DomainError);
+    // Open visibility (F015, default): the learner sees every answer, the teacher note and representations.
+    expect(projectDomain(state, learner1)).toEqual(state);
     expect(() => projectDomain(state, context('owner', 'not-a-teacher'))).toThrowError(DomainError);
   });
 
@@ -289,7 +305,12 @@ describe('R1 domain engines', () => {
     state = encounterState(step(state, 'encounter.declareHit', { target: 'pip' }, actor(14)));
     state = encounterState(step(state, 'encounter.saveNote', { text: 'secret dm phrase' }, actor(15)));
     const actualRoll = state.pendingHit?.roll;
-    const playerView = projectDomain(state, mira);
+    const playerView = projectDomain(state, mira, 'private');
+    // Open visibility (F015, default): the seated player sees the DM note, goblin, seed and the pending roll.
+    const openPlayerView = projectDomain(state, mira);
+    expect(openPlayerView).toEqual(state);
+    expect(JSON.stringify(openPlayerView)).toContain('secret dm phrase');
+    if (openPlayerView.kind === 'encounter') expect(openPlayerView.pendingHit?.roll).toBe(actualRoll);
     expect(JSON.stringify(playerView)).not.toContain('secret dm phrase');
     expect(JSON.stringify(playerView)).not.toContain('"id":"goblin"');
     expect(JSON.stringify(playerView)).not.toContain(String(state.seed));

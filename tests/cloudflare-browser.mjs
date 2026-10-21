@@ -352,10 +352,14 @@ try {
   await dm.getByRole('button', { name: 'Hit Pip', exact: true }).click();
   expect((await action).status()).toBe(200);
   await expect.poll(async () => (await api(pip, `/api/workspaces/${room.id}`)).body.domain.phase).toBe('reaction.open');
+  // F015 open visibility: the player now reads the pending roll/damage and the DM note (was: hidden);
+  // acting is still DM-only (Resolve hit stays hidden and a player resolve is rejected below).
   const pipProjection = (await api(pip, `/api/workspaces/${room.id}`)).body;
-  expect(pipProjection.domain.pendingHit.roll).toBeNull();
-  expect(pipProjection.domain.pendingHit.damage).toBeNull();
-  expect(JSON.stringify(pipProjection)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
+  const dmProjection = (await api(dm, `/api/workspaces/${room.id}`)).body;
+  expect(typeof pipProjection.domain.pendingHit.roll).toBe('number');
+  expect(pipProjection.domain.pendingHit.roll).toBe(dmProjection.domain.pendingHit.roll);
+  expect(pipProjection.domain.pendingHit.damage).toBe(dmProjection.domain.pendingHit.damage);
+  expect(JSON.stringify(pipProjection)).toContain('PRIVATE_DM_CF_BROWSER_MARKER');
   await openCanvasObject(pip, 'encounter.actions');
   await expect(pip.getByTestId('canvas-object-editor').getByRole('button', { name:'Resolve hit', exact:true })).toHaveCount(0);
   expect((await command(pip, 'encounter.resolve')).status).toBe(403);
@@ -373,7 +377,7 @@ try {
   await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
   await pip.reload();
   await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
-  mark('Live multiplayer respects DM/player privacy; pause/resume and committed HP survive browser reload');
+  mark('Live multiplayer shares DM hit values and note with players (F015 open visibility; was: DM/player privacy) while only the DM resolves; pause/resume and committed HP survive browser reload');
 
   const outsider = await newPage(actors[3]);
   expect((await api(outsider, `/api/workspaces/${room.id}`)).status).toBe(403);

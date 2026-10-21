@@ -16,10 +16,15 @@ function assertCanRead(state: DomainState, ctx: ActorContext): void {
   }
 }
 
-/** What one member receives. Under the 'open' policy (F015) members see the whole state. */
+/** What one member receives. Under the 'open' policy (F034) members see the whole state. */
 export function projectDomain(state: DomainState, ctx: ActorContext, policy: VisibilityPolicy = VISIBILITY_POLICY): DomainState {
   assertCanRead(state, ctx);
-  if (policy === 'open') return clone(state);
+  if (policy === 'open') {
+    const full = clone(state);
+    // Retired view positions are dropped for everyone, as before.
+    if (full.kind === 'table' && state.kind === 'table' && state.canvasLayout) full.canvasLayout = projectCanvasLayout(state);
+    return full;
+  }
   return projectPrivate(state, ctx);
 }
 

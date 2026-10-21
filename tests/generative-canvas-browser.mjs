@@ -709,24 +709,28 @@ try {
     return (await api(owner, `/api/workspaces/${tableId}`)).body;
   }
 
-  async function inviteByUi(owner, seat) {
+  // F003-T5: invite through the table's reusable link; joins take the next free seat in order.
+  async function inviteByUi(owner) {
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-    const number = seat === 'member-1' ? '1' : '2';
-    await dialog.getByRole('button', { name: new RegExp(`Member ${number}`) }).click();
-    const responsePromise = responseAfter(owner, (response) => response.url().endsWith('/invites') && response.request().method() === 'POST');
-    const response = await responsePromise(() => dialog.getByRole('button', { name: `Create invitation for Member ${number}`, exact: true }).click());
-    expect(response.status()).toBe(201);
-    const ticket = (await response.json()).ticket;
+    const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
+    const turnOn = panel.getByRole('button', { name: 'Turn on invite link', exact: true });
+    await expect(turnOn.or(panel.getByLabel('Invite link'))).toBeVisible();
+    if (await turnOn.isVisible()) {
+      const responsePromise = responseAfter(owner, (response) => response.url().endsWith('/invite-link') && response.request().method() === 'POST');
+      expect((await responsePromise(() => turnOn.click())).status()).toBe(201);
+    }
+    const url = await panel.getByLabel('Invite link').inputValue();
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-    return `${origin}/#invite=${ticket}`;
+    return url;
   }
 
   async function addMember(owner, actor, seat, tableId) {
-    const invite = await inviteByUi(owner, seat);
+    const invite = await inviteByUi(owner);
     const member = await newPage(actor, invite);
     await expect(member.locator('.tt-canvas-panel')).toBeVisible();
     await expect.poll(async () => (await api(member, `/api/workspaces/${tableId}`)).status).toBe(200);
+    expect((await api(member, `/api/workspaces/${tableId}`)).body.actor.seat).toBe(seat);
     return member;
   }
 
@@ -1001,8 +1005,9 @@ try {
     const memberTwo = await addMember(owner, memberTwoActor, 'member-2', tableId);
     const members = [memberOne, memberTwo];
     const ownerReady = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    // F015 open visibility: members receive the owner's whole table, including evidence quotations,
+    // draft and draft history (was: evidence stripped and draft hidden for members).
     const visibleProgram = structuredClone(ownerReady.domain.program);
-    if (scenario.file) visibleProgram.evidence = [];
     for (const member of members) {
       const projection = await api(member, `/api/workspaces/${tableId}`);
       expect(projection.status).toBe(200);
@@ -1010,7 +1015,8 @@ try {
       expect(projection.body.domain.records).toEqual(ownerReady.domain.records);
       expect(projection.body.domain.canvasLayout).toEqual(ownerReady.domain.canvasLayout);
       expect(projection.body.domain.sources).toEqual(ownerReady.domain.sources);
-      expect(projection.body.domain.candidate).toBeNull();
+      expect(projection.body.domain.candidate).toEqual(ownerReady.domain.candidate);
+      expect(projection.body.domain.revisions).toEqual(ownerReady.domain.revisions);
     }
     await assertMemberCannotUsePrivateTools(memberOne, tableId, ownerReady.revision, ownerReady.epoch, source);
 
