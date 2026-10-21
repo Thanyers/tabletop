@@ -337,3 +337,9 @@
 .tt-app .tt-table-computed input, .tt-app .tt-table-computed select { min-height: var(--tt-button-height); padding-inline: var(--tt-space-2); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-small); background: var(--tt-card-surface); color: var(--tt-ink); font: inherit; }
 .tt-app .tt-table-computed input:focus-visible, .tt-app .tt-table-computed select:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
 .tt-app .tt-table-computed__actions { display: flex; flex-wrap: wrap; gap: var(--tt-space-2); }
+
+/* F019: the rules card explains what the table can and cannot do. */
+.tt-app .tt-table-capabilities { display: grid; gap: var(--tt-space-2); margin-block: var(--tt-space-3); padding: var(--tt-space-3); border: 1px dashed var(--tt-line); border-radius: var(--tt-radius-medium); background: var(--tt-paper); }
+.tt-app .tt-table-capabilities > summary { cursor: pointer; font-weight: 600; }
+.tt-app .tt-table-capability-list { display: grid; gap: var(--tt-space-1); margin: 0; padding-inline-start: var(--tt-space-4); font-size: var(--tt-type-small); }
+.tt-app .tt-table-capability-gaps > summary { cursor: pointer; color: var(--tt-muted); }
