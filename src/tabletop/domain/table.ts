@@ -102,7 +102,12 @@ function checkProgram(program: TableProgram) {
   unique(program.collections.map(c => c.id), 'Collection identifiers'); unique(program.actions.map(a => a.id), 'Action identifiers'); unique(program.turnOrder, 'Turn seats'); unique(program.invariants.map(i => i.id), 'Invariant identifiers');
   for (const c of program.collections) {
     unique(c.fields.map(f => f.id), 'Field identifiers');
-    for (const f of c.fields) assert((f.min === undefined && f.max === undefined || f.type === 'number') && (f.min === undefined || f.max === undefined || f.min <= f.max) && (!f.choices || f.type === 'text'), 'TABLE_SCHEMA', 'Field bounds do not match its type.');
+    // F020: one message per problem, naming the field, so an AI repair (and the owner) can fix it.
+    for (const f of c.fields) {
+      assert(f.min === undefined && f.max === undefined || f.type === 'number', 'TABLE_SCHEMA', `${c.title}: ${f.label} is a ${f.type} field; only number fields can have min or max.`);
+      assert(f.min === undefined || f.max === undefined || f.min <= f.max, 'TABLE_SCHEMA', `${c.title}: ${f.label} has min greater than max.`);
+      assert(!f.choices || f.type === 'text', 'TABLE_SCHEMA', `${c.title}: ${f.label} is a ${f.type} field; only text fields can have choices.`);
+    }
     for (const f of c.fields) if (f.default !== undefined) assert(validValue(f, f.default), 'TABLE_VALUE', `${c.title}: ${f.label} has an invalid default.`);
   }
   for (const action of program.actions) {
