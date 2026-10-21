@@ -102,7 +102,7 @@ function checkProgram(program: TableProgram) {
   unique(program.collections.map(c => c.id), 'Collection identifiers'); unique(program.actions.map(a => a.id), 'Action identifiers'); unique(program.turnOrder, 'Turn seats'); unique(program.invariants.map(i => i.id), 'Invariant identifiers');
   for (const c of program.collections) {
     unique(c.fields.map(f => f.id), 'Field identifiers');
-    // F018: one message per problem, naming the field, so an AI repair (and the owner) can fix it.
+    // F020: one message per problem, naming the field, so an AI repair (and the owner) can fix it.
     for (const f of c.fields) {
       assert(f.min === undefined && f.max === undefined || f.type === 'number', 'TABLE_SCHEMA', `${c.title}: ${f.label} is a ${f.type} field; only number fields can have min or max.`);
       assert(f.min === undefined || f.max === undefined || f.min <= f.max, 'TABLE_SCHEMA', `${c.title}: ${f.label} has min greater than max.`);

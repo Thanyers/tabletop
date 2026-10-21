@@ -174,7 +174,7 @@ describe('file-driven generic table authority', () => {
     expect(state.revisions.at(-1)?.revision).toBe(22);
     expect(state.records.equipment).toHaveLength(2);
   });
-  it('names the field and the problem when bounds or choices do not fit its type (F018)', () => {
+  it('names the field and the problem when bounds or choices do not fit its type (F020)', () => {
     const initial = source('equipment');
     const withField = (patch: Record<string, unknown>) => {
       const change = equipmentChange(initial.sources[0].id);
