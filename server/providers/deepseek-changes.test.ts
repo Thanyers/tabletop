@@ -249,7 +249,7 @@ describe('DeepSeekChangeProvider', () => {
     expect(calls).toBe(0);
   });
 
-  it('returns bounded nested schema diagnostics and metered usage for a rejected scene expression wrapper', async () => {
+  it('salvages a malformed scene expression wrapper and keeps metered usage', async () => {
     const tableChange = equipmentChange('source_equipment');
     const invalidOutput: unknown = {
       ...tableChange,
@@ -277,29 +277,19 @@ describe('DeepSeekChangeProvider', () => {
     };
     const content = JSON.stringify(invalidOutput);
     const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(content) });
-    let rejection: unknown;
-    try {
-      await provider.propose({
-        kind: 'table',
-        prompt: 'Show a computed rectangle width.',
-        sources: [{ id: 'source_equipment', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
-        program: null,
-        turn: null,
-      }, new AbortController().signal);
-    } catch (error: unknown) {
-      rejection = error;
-    }
+    // F023: a malformed scene is dropped; the rest of the draft is returned and still metered.
+    const result = await provider.propose({
+      kind: 'table',
+      prompt: 'Show a computed rectangle width.',
+      sources: [{ id: 'source_equipment', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
+      program: null,
+      turn: null,
+    }, new AbortController().signal);
 
-    expect(rejection).toBeInstanceOf(RejectedChangeReply);
-    if (!(rejection instanceof RejectedChangeReply)) throw new Error('Expected a metered rejected reply.');
-    expect(rejection.usage).toEqual({ promptTokens: 40, completionTokens: 30, cacheHitTokens: 10, cacheMissTokens: 30, reasoningTokens: 0 });
-    expect(rejection.issues).toHaveLength(1);
-    expect(rejection.issues[0]).toContain('program.canvas.views[0].elements[0].width');
-    expect(rejection.issues[0]).toContain('expected number, received object');
-    expect(rejection.issues[0]).toContain('pass the AST directly');
-    expect(rejection.issues.length).toBeLessThanOrEqual(4);
-    expect(rejection.issues.every(issue => issue.length <= 1_000)).toBe(true);
-    expect(rejection.previousOutput).toBe(content.slice(0, 18_000));
+    if ('clarification' in result) throw new Error('Expected a salvaged change.');
+    if (result.change.kind !== 'table') throw new Error('Expected a table change.');
+    expect(result.usage).toEqual({ promptTokens: 40, completionTokens: 30, cacheHitTokens: 10, cacheMissTokens: 30, reasoningTokens: 0 });
+    expect(result.change.program.canvas?.views.some((view) => view.id === 'repair_scene') ?? false).toBe(false);
   });
 
   it('rejects malformed envelopes, bad usage, provider errors, and oversized bodies without leaking details', async () => {
