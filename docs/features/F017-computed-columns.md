@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` (จองงานแล้ว, ยังไม่เขียนโค้ด) |
+| สถานะ | `doing` — เลือก encoding แล้ว, ยังไม่เขียนโค้ด |
 | เจ้าของฟีเจอร์ | ทีม Tabletop |
-| เวอร์ชันที่คาด | **MAJOR (ต้องเคาะก่อน)** — เพิ่ม key ใน `TableField`; writer รุ่นก่อน (≤3.0.0) ใช้ `strictObject` จึงอ่าน program ที่มี `computed` ไม่ได้ → rollback หลังบันทึกจะไม่ได้ |
+| เวอร์ชันที่คาด | **MINOR** — เก็บนิยามใน `TableState.computedColumns` (ไม่แตะ program schema) |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F017-T*` |
 
 ## ทำไม
@@ -13,42 +13,52 @@
 
 ## สิ่งที่ผู้ใช้จะเห็น
 
-1. ตารางมีคอลัมน์ที่คำนวณอัตโนมัติ เช่น `total = qty × price` (แสดงพร้อม badge ว่าเป็นค่าคำนวณ)
-2. แก้แถว/เพิ่มแถว → ค่าคำนวณอัปเดตทันที ไม่เรียก AI
-3. แก้สูตรได้ผ่าน Rules (ภายหลัง) โดยไม่ต้องให้ AI ร่างใหม่ทั้งตาราง
+1. ตารางมีคอลัมน์คำนวณอัตโนมัติ เช่น `total = qty × price` (badge ว่าเป็นค่าคำนวณ)
+2. แก้แถว/เพิ่มแถว/import → ค่าคำนวณอัปเดตทันที ไม่เรียก AI
+3. owner กำหนด/แก้สูตรได้ (ผ่านคำสั่งของโต๊ะ) โดยไม่ต้องให้ AI ร่างใหม่ทั้งตาราง
+
+## ผลการ timebox: หา encoding ที่ไม่ทำ contract พัง
+
+| ทางเลือก | ผล | สรุป |
+| --- | --- | --- |
+| เพิ่ม `TableField.computed` | `fieldSchema` เป็น `z.strictObject` → writer ≤3.0.0 อ่าน program ไม่ได้ | **ตัดทิ้ง** (MAJOR) |
+| เพิ่ม descriptor kind/property | `GenerativeViewDescriptor` เป็น union ปิด + strict | **ตัดทิ้ง** (MAJOR) |
+| เก็บใน `program.assumptions` แบบ prefix | เก่าไม่พัง แต่ปนกับข้อสมมติของ AI และโผล่ใน UI | **ไม่แนะนำ** |
+| **เก็บใน `TableState.computedColumns`** | state ไม่ถูก zod ตรวจตอนโหลด; `applyTableChange` คืน `{ ...structuredClone(state), ... }` จึงเก็บ key นี้ไว้; writer เก่าเมิน key แปลกและไม่ crash | **เลือกทางนี้** |
+
+**เหตุผลด้าน rollback:** rollback ไป 3.0.0 แล้วข้อมูลไม่เสีย — คอลัมน์คำนวณแค่ไม่แสดง (feature hidden) ไม่มี schema/migration และไม่ทำให้ห้องอ่านไม่ได้
 
 ## ขอบเขต
 
-**รวม:** `TableField.computed?: GenerativeExpression` (เฉพาะ field ชนิด `number`, ผลเป็น number), validation: type/cycle/bounds/fuel, ประเมินตอน projection ต่อแถวด้วย AST เดิม, UI แสดง read-only, action/effects/creates ห้ามเขียนทับ field คำนวณ, unit tests
+**รวม:** `TableState.computedColumns?: ComputedColumn[]` (`{ id, collection, label, expression: GenerativeExpression }`), คำสั่ง owner-only `table.setComputedColumns` (validate: collection มีจริง, field ที่อ้างมีจริง, ผลเป็น number, ไม่มี cycle, bounds/fuel), ประเมินตอน projection ต่อแถว, UI read-only + badge, ปฏิเสธการเขียนทับจาก effects/creates, unit tests
 
-**ไม่รวม:** aggregate/rollup ข้าม collection, การแก้สูตรผ่าน UI เต็มรูปแบบ (ทำใน T4 ถ้าทัน), การเก็บค่าลง records, การเปลี่ยนชนิด field เดิม
+**ไม่รวม:** aggregate/rollup ข้าม collection, การเก็บค่าลง records, การแก้สูตรผ่าน Rules UI เต็มรูปแบบ (T4), การเปลี่ยนชนิด field เดิม
 
 ## ข้อเท็จจริงจากโค้ด
 
-- `src/tabletop/domain/table.ts` — `fieldSchema` เป็น `z.strictObject`; `value` ตรวจชนิด; `checkProgram` ตรวจ program
-- `src/tabletop/runtime/generative/*` — มี AST + evaluator + fuel/bounds อยู่แล้ว (ใช้ใน canvas/operand)
-- projection/UI: `src/tabletop/ui/TableCanvasObjects.tsx` แสดง `record.values` ตรง ๆ
-- POC reference: `poc/src/formula.ts` (AST, หารด้วยศูนย์ → 0), `poc/src/engine.ts` (ลำดับ apply → rollup → formula)
+- `src/tabletop/domain/table.ts` — `fieldSchema` strict (ห้ามแตะ); `applyTableChange` spread state (เก็บ key แปลก); `checkProgram` ตรวจ program
+- `src/tabletop/runtime/generative/*` — AST + evaluator + fuel/bounds พร้อมใช้ (op `field`, `literal`, `if`, arithmetic)
+- projection/UI: `src/tabletop/ui/TableCanvasObjects.tsx` แสดง `record.values` ตรง ๆ → ต้องเพิ่มค่าคำนวณตอน render
+- POC reference: `poc/src/formula.ts`, `poc/src/engine.ts`
 
 ## งาน
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
-| T1 | contract + schema + validation (cycle/type/bounds) + unit tests | program ที่ผิดถูกปฏิเสธ; program เก่ายังผ่าน |
-| T2 | evaluate per-row ที่ projection (ไม่เขียนลง records) + tests | ค่าคำนวณถูกต้องและไม่เปลี่ยน `dataRevision` |
-| T3 | UI: คอลัมน์ read-only + badge, ปฏิเสธการเขียนทับ | browser check ผ่าน |
+| T1 | `TableState.computedColumns` + คำสั่ง `table.setComputedColumns` + validation + unit tests | program เก่า/ใหม่ทำงานเหมือนเดิม; คำสั่งผิดถูกปฏิเสธ |
+| T2 | ประเมินต่อแถวตอน projection (ไม่เขียน records, ไม่ bump dataRevision) | ค่าถูกต้องตาม AST; ไม่มี eval |
+| T3 | UI: คอลัมน์ read-only + badge, import/action ไม่เขียนทับ | browser check ผ่าน |
 | T4 | (ถ้าทัน) แก้สูตรผ่าน Rules; เอกสาร/คู่มือ | ผ่าน CI + คู่มือ |
 
 ## คำถามเปิด
 
-- **เวอร์ชัน:** จะยอมรับ MAJOR ในรอบถัดไป หรือรอรวมกับการเปลี่ยน contract อื่น (เช่น preserve views) เพื่อออกรุ่นเดียว?
-- ผู้ใช้ควรแก้สูตรเองได้ในรอบแรก หรือให้ AI ร่างสูตรให้ก่อน (ลด surface ของ UI)?
+- ผู้ใช้ควรแก้สูตรเองในรอบแรก หรือให้ AI ร่างสูตรให้ก่อน (ลด surface ของ UI)?
 - ค่าคำนวณควรใช้ในเงื่อนไข/ผลของ action ได้หรือไม่ (อ่านได้ แต่เขียนไม่ได้)?
 
 ## การตัดสินใจ
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
-| 2026-10-21 | คำนวณตอน projection ไม่เก็บลง records | รักษา revision/CAS และไม่ต้อง migration; POC ทำแบบนี้ |
-| 2026-10-21 | reuse AST เดิม ไม่สร้าง grammar ที่สอง | ลดsurface และได้ bounds/fuel ที่มีอยู่แล้ว |
-| 2026-10-21 | ยังไม่เริ่มโค้ดจนเจ้าของเคาะระดับรุ่น | การเพิ่ม key ทำให้ writer เก่าอ่านไม่ได้ (rollback rule) |
+| 2026-10-21 | เก็บนิยามใน `TableState.computedColumns` ไม่ใช่ program | ไม่ทำ program schema พัง, rollback ได้, ไม่ต้อง migration; ยอมรับว่านิยามไม่อยู่ใน candidate/approval flow (มีผลแค่การแสดงผล) |
+| 2026-10-21 | คำนวณตอน projection ไม่เก็บลง records | รักษา revision/CAS และไม่ต้อง migration |
+| 2026-10-21 | reuse AST เดิม ไม่สร้าง grammar ที่สอง | ได้ bounds/fuel ที่มีอยู่แล้ว |
