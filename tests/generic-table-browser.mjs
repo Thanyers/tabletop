@@ -468,7 +468,8 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
       message: jobStatus.body?.message,
       candidateId: jobStatus.body?.candidateId,
     };
-    throw new Error(`${stepLabel}\n${error instanceof Error ? error.message : String(error)}\nAccepted model job: ${JSON.stringify(jobDetails)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
+    const refreshDiagnostics = { failDraftRefresh, modelAccepted, failedDraftRefresh, workspaceRefreshRequests };
+    throw new Error(`${stepLabel}\n${error instanceof Error ? error.message : String(error)}\nAccepted model job: ${JSON.stringify(jobDetails)}\nRefresh arm: ${JSON.stringify(refreshDiagnostics)}\nVisible answer cards: ${JSON.stringify(answerDiagnostics)}`, { cause: error });
   }
   if (failDraftRefresh) {
     const retryRefresh = draftCard.getByRole('button', { name: 'Retry table refresh', exact: true });

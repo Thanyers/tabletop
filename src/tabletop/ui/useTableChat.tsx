@@ -312,11 +312,13 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const pollModelOnce = useCallback(async (targetScope: string, cardId: string, workspaceId: string, jobId: string) => {
     const next = await optionsRef.current.pollDraft(workspaceId, jobId);
     if (targetScope !== scopeRef.current) return next;
+    const settled = next.status === 'completed' || next.status === 'complete';
     patchCard(targetScope, cardId, {
       modelJob: next,
       phase: modelPhase(next),
       error: next.status === 'failed' ? next.message ?? 'The draft could not be prepared.' : undefined,
-      pollError: undefined,
+      // A settled poll must not wipe the follow-up refresh failure; only an in-flight poll resets it.
+      ...(settled ? {} : { pollError: undefined }),
       pollTimedOut: false,
     });
     // Questions leave the table unchanged, so there is nothing to refresh.
