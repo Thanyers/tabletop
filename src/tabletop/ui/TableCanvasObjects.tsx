@@ -3,6 +3,7 @@ import { AlertCircle, Database, FilePlus2, Pencil, Play, Trash2, Users } from 'l
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
 import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
 import { computeRecordRow } from '../shared/computed-columns';
+import { TABLE_CAPABILITIES, TABLE_CAPABILITY_LIMITS } from '../shared/table-capabilities';
 import type { ActorContext, WorkspaceView } from '../shared/contracts';
 import type { PlanNode } from '../runtime';
 import { applyTableChange, handleTableCommand } from '../domain/table';
@@ -160,6 +161,11 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
         ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /></details>
         : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} />
         : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
+      <details className="tt-table-capabilities"><summary>What this table can do</summary>
+        <p className="tt-table-inline-hint">{TABLE_CAPABILITIES.supported.length} capabilities · {TABLE_CAPABILITIES.gaps.length} known gaps · limits: {TABLE_CAPABILITY_LIMITS.collections} collections, {TABLE_CAPABILITY_LIMITS.fieldsPerCollection} fields, {TABLE_CAPABILITY_LIMITS.rowsPerCollection} rows per collection, {TABLE_CAPABILITY_LIMITS.canvasViews} views, {TABLE_CAPABILITY_LIMITS.computedColumns} computed columns</p>
+        <ul className="tt-table-capability-list">{TABLE_CAPABILITIES.supported.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul>
+        <details className="tt-table-capability-gaps"><summary>Known gaps ({TABLE_CAPABILITIES.gaps.length})</summary><ul className="tt-table-capability-list">{TABLE_CAPABILITIES.gaps.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul></details>
+      </details>
       {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} />
         {isOwner && <div className="tt-table-proposal__apply">
           <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
@@ -323,6 +329,8 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
 
   return <div className="tt-canvas-inline tt-table-collection">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">SHARED RECORDS</span><strong>{collection?.title ?? node.title}</strong><small>{rows.length} {rows.length === 1 ? 'record' : 'records'} · data r{state.dataRevision}</small></div>
+    {expanded && collection && view.actor.role === 'owner' && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
+    {expanded && collection && view.actor.role === 'owner' && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
     {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">No records are available in this collection.</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => <td key={column.id}>{formatComputed(computeRecordRow(computed, collectionId, row)[column.id])}</td>)}</tr>)}</tbody></table></div>}
     {expanded && selectedRecord && <section className="tt-table-record-actions" aria-label={`Actions for ${recordLabel(selectedRecord, collection, view.members)}`}>
       <div><strong>{recordLabel(selectedRecord, collection, view.members)}</strong></div>
@@ -334,8 +342,6 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
       </>}
       {actionController.message && <p className="tt-table-error" role="alert">{actionController.message}</p>}
     </section>}
-    {expanded && collection && view.actor.role === 'owner' && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
-    {expanded && collection && view.actor.role === 'owner' && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
     <p className="tt-table-turn-indicator">{view.actor.role === 'owner' ? 'Owner' : view.actor.name} · shared active data</p>
   </div>;
 }
@@ -354,6 +360,9 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
   const [drafts, setDrafts] = useState<ComputedDraft[]>([]);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
+  const sectionRef = useRef<HTMLElement>(null);
+  // The editor sits near the bottom of a long card; bring it into view when it opens.
+  useEffect(() => { if (open) sectionRef.current?.scrollIntoView({ block: 'nearest' }); }, [open]);
   const start = () => {
     setDrafts(existing.map((column) => draftFromColumn(column, numberFields)));
     setMessage(''); setOpen(true);
@@ -373,7 +382,7 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
     } finally { setPending(false); }
   };
   if (numberFields.length === 0) return null;
-  return <section className="tt-table-computed" aria-label={`Computed columns for ${collection.title}`}>
+  return <section ref={sectionRef} className="tt-table-computed" aria-label={`Computed columns for ${collection.title}`}>
     {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={start}>{existing.length ? `Computed columns (${existing.length})` : 'Add computed column'}</button> : <>
       <div className="tt-table-computed__head"><strong>Computed columns</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => setOpen(false)}>Close</button></div>
       {drafts.length === 0 && <p className="tt-table-inline-hint">No computed columns yet.</p>}
