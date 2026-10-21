@@ -8,6 +8,7 @@ import type { ModelInput } from '../server/model.js';
 import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
+import { ReasonedDomainError } from './model-failure.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
@@ -538,7 +539,7 @@ async function proposeGeneratedTable(
       if (!issues.length) return { change, jobId: initialBinding.id, usage: total };
       previousOutput = JSON.stringify(change).slice(0, 18_000);
     }
-    if (attempt === 3 || !issues.length) fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation. Nothing was activated.');
+    if (attempt === 3 || !issues.length) throw new ReasonedDomainError('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation. Nothing was activated.', issues);
     if (Date.now() >= deadline) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
     input = { ...initialInput, repair: { attempt: attempt + 1, issues, ...(previousOutput === undefined ? {} : { previousOutput }) } };
     let maxInputTokens: number;

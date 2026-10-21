@@ -384,8 +384,10 @@ describe('Cloudflare AI proposal helper', () => {
     const invalid = equipmentChange('source_fixture');
     invalid.program.actions[0].effects[0].field = 'missing_field';
     let calls = 0;
-    await expect(proposeChange(testEnv, input, providerFetch(invalid, () => { calls++; })))
-      .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+    const rejection = await proposeChange(testEnv, input, providerFetch(invalid, () => { calls++; })).catch((error: unknown) => error);
+    expect(rejection).toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+    // F016: the last validation issues travel with the error so the requester sees the real cause.
+    expect((rejection as { reasons?: string[] }).reasons?.length).toBeGreaterThan(0);
     expect(calls).toBe(3);
     expect(input.workspace.domain.candidate).toBeNull();
   });

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- ร่างกฎที่ไม่ผ่านการตรวจแสดงสาเหตุจริงไม่เกิน 3 ข้อ (เช่น ต้องเก็บ field เดิม, เกินจำนวนแถว) แทนข้อความกลาง ([F016](docs/features/F016-validation-reasons.md)) ไม่เปลี่ยน API หรือข้อมูลที่เก็บ
+
 ## 3.0.0 — 2026-10-21
 
 MAJOR: กฎของโต๊ะข้อมูลเก็บ field ใหม่ (`action.creates` สร้างแถวใหม่, `field.default`) ที่ 2.2.0 อ่านไม่ได้ · ไม่มี SQL migration, secret หรือ config ใหม่ deploy เหมือนเดิม · **หลังมีโต๊ะที่ใช้กฎแบบใหม่แล้ว ห้าม rollback ไป 2.2.0 หรือต่ำกว่า** (การแก้กฎด้วย AI จะขึ้น "The current table state is invalid" และ action ที่สร้างแถวจะไม่สร้าง) · ถ้าต้องถอย ให้ออก hotfix บน 3.x หรือเปิด `TABLE_READ_ONLY`
