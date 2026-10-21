@@ -1,3 +1,4 @@
+import { managesTable } from './shared/visibility';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
@@ -167,7 +168,7 @@ export default function TabletopApp() {
     if (next) projectionSequenceRef.current += 1;
     setView(next);
     if (changedTable) {
-      const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && next.actor.role === 'owner' && next.domain.candidate && next.domain.candidate.status !== 'active';
+      const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && managesTable(next) && next.domain.candidate && next.domain.candidate.status !== 'active';
       // Chat-first tables open nothing until there is something to review (F006).
       const startObject = pendingRules ? 'table.rules' : null;
       setSelectedNodeId(startObject);
@@ -593,7 +594,7 @@ export default function TabletopApp() {
   const requestAI = useCallback((targetView: WorkspaceView, prompt: string, sourceId: string | undefined, commandId: string): Promise<ModelJob> => {
     if (targetView.kind === 'table' && capabilities.tableReadOnly) return Promise.reject(new ApiFailure('AI proposals for shared tables are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('AI proposals are not enabled for this workspace.', 403));
-    const roleAllowed = targetView.kind === 'invoice' || targetView.kind === 'table' ? targetView.actor.role === 'owner' : targetView.kind === 'teaching' ? targetView.actor.role === 'teacher' : targetView.actor.role === 'dm';
+    const roleAllowed = targetView.kind === 'table' ? managesTable(targetView) : targetView.kind === 'invoice' ? targetView.actor.role === 'owner' : targetView.kind === 'teaching' ? targetView.actor.role === 'teacher' : targetView.actor.role === 'dm';
     if (!roleAllowed) return Promise.reject(new ApiFailure('This seat cannot request an AI draft.', 403));
     return tabletopClient.requestModel(targetView, prompt, sourceId, commandId);
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
@@ -818,7 +819,7 @@ export default function TabletopApp() {
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
-  const canInvite = view.kind === 'table' ? view.actor.role === 'owner' && !tableReadOnly : view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
+  const canInvite = view.kind === 'table' ? managesTable(view) && !tableReadOnly : view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
   const canReset = ['owner', 'teacher', 'dm'].includes(view.actor.role) && !tableReadOnly;
   const canRename = canReset;
   const submitRename = () => {
@@ -832,7 +833,7 @@ export default function TabletopApp() {
     if (title === workspaceLabel(view)) return;
     void runCommand('workspace.rename', { title }).then((renamed) => { if (renamed) showNotice(`Table renamed to ${title}.`, 'success'); });
   };
-  const canAskAI = ((view.kind === 'invoice' || view.kind === 'table') && view.actor.role === 'owner') || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
+  const canAskAI = (view.kind === 'invoice' && view.actor.role === 'owner') || managesTable(view) || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
   const connectedSeats = new Set(view.members.map((member) => member.seat).filter(Boolean));
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : view.kind === 'table' ? ['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
@@ -912,7 +913,7 @@ export default function TabletopApp() {
         focusRequestKey={focusRequestKey}
         openedObjectId={openedObjectId}
         onOpenObject={setOpenedObjectId}
-        onEditRules={view.kind === 'table' && view.actor.role === 'owner' && capabilities.model.enabled && !tableReadOnly ? tableChat.editRules : undefined}
+        onEditRules={managesTable(view) && capabilities.model.enabled && !tableReadOnly ? tableChat.editRules : undefined}
         inspectorContent={<>
           {selectedNode && compiled.plan && <ObjectInspector node={selectedNode} plan={compiled.plan} onClose={() => setSelectedNodeId(null)} />}
         </>}
@@ -968,7 +969,8 @@ function ObjectInspector({ node, plan, onClose }: { node: ExecutablePlan['nodes'
 
 function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousInvitesRevoked, copied, onSelectSeat, selectedSeat, onCreate, onCopy, onClose, onRemoveMember, onInviteLinkNotice }: { view: WorkspaceView; availableSeats: Seat[]; canInvite: boolean; busy: boolean; invite: InviteState; previousInvitesRevoked: boolean; copied: boolean; onSelectSeat: (seat: Seat | null) => void; selectedSeat: Seat | null; onCreate: (seat: Seat, replaceOutstanding?: boolean) => void; onCopy: () => void; onClose: () => void; onRemoveMember?: (actorId: string) => void; onInviteLinkNotice?: (text: string, tone: 'success' | 'error' | 'info') => void }) {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const removable = onRemoveMember ? view.members.filter((member) => member.actorId !== view.actor.actorId) : [];
+  // The owner can never be removed; under equal permissions (F015) members may remove other members.
+  const removable = onRemoveMember ? view.members.filter((member) => member.actorId !== view.actor.actorId && member.role !== 'owner') : [];
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);

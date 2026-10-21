@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
+import { tableManagerRoles } from '../src/tabletop/shared/visibility.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
@@ -142,6 +143,12 @@ function parseName(value: unknown): string {
   const name = (parsed.data.name ?? 'Guest').replace(/\p{Cc}/gu, '').trim();
   const bounded = Array.from(name).slice(0, MAX_DISPLAY_NAME_CHARS).join('');
   return bounded || 'Guest';
+}
+
+/** Owner, or any table member under equal permissions (F015). Reset and removing the owner stay with the owner. */
+function managesWorkspace(workspace: StoredWorkspace, member: StoredMember): boolean {
+  if (workspace.ownerActorId === member.actorId && member.role === primaryRole(workspace.kind)) return true;
+  return workspace.kind === 'table' && (tableManagerRoles() as Role[]).includes(member.role);
 }
 
 function primaryRole(kind: CaseKind): Role {
@@ -412,7 +419,7 @@ export class CommandAuthority {
       const member = await transaction.getMember(session.record.actorId);
       if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
       if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-      if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+      if (!managesWorkspace(workspace, member)) {
         throw new AuthorityError('ROLE_FORBIDDEN');
       }
       if (workspace.kind !== 'table') throw new AuthorityError('MEMBER_NOT_REMOVABLE', 'Only members of a shared data table can be removed.');
@@ -440,7 +447,7 @@ export class CommandAuthority {
       const member = await transaction.getMember(session.record.actorId);
       if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
       if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-      if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+      if (!managesWorkspace(workspace, member)) {
         throw new AuthorityError('ROLE_FORBIDDEN');
       }
       const roleSeat = inviteForSeat(workspace.kind, seat);
@@ -690,7 +697,8 @@ export class CommandAuthority {
           if (existing.payloadHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           return { ...existing.response, duplicate: true };
         }
-        if (workspace.ownerActorId !== session.record.actorId && (envelope.type === 'workspace.reset' || envelope.type === 'workspace.rename')) {
+        if ((envelope.type === 'workspace.reset' && workspace.ownerActorId !== session.record.actorId)
+            || (envelope.type === 'workspace.rename' && !managesWorkspace(workspace, member))) {
           throw new AuthorityError('ROLE_FORBIDDEN');
         }
         if (envelope.expectedEpoch !== workspace.epoch) throw new AuthorityError('STALE_EPOCH');
@@ -789,8 +797,7 @@ export class CommandAuthority {
     }
     const approvingMember = await transaction.getMember(approval.actorId);
     if (!approvingMember || approvingMember.revokedAt !== null
-        || approvingMember.role !== primaryRole(workspace.kind)
-        || workspace.ownerActorId !== approvingMember.actorId) {
+        || !managesWorkspace(workspace, approvingMember)) {
       throw new AuthorityError('APPROVER_NOT_AUTHORIZED');
     }
   }
@@ -871,7 +878,7 @@ export class CommandAuthority {
     title: string,
     now: number,
   ): Promise<CommandAck> {
-    if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+    if (!managesWorkspace(workspace, member)) {
       throw new AuthorityError('ROLE_FORBIDDEN');
     }
     // Only the name changes; table data, rules and the epoch stay as they are.

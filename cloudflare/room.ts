@@ -1,4 +1,4 @@
-import { VISIBILITY_POLICY } from '../src/tabletop/shared/visibility.js';
+import { VISIBILITY_POLICY, tableManagerRoles } from '../src/tabletop/shared/visibility.js';
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
 import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
@@ -78,6 +78,9 @@ interface PublicModelJob {
   candidateId?: string;
   /** A question with answer choices when the model asked instead of drafting (F012). */
   clarification?: { question: string; options: string[] };
+  askedBy?: string;
+  createdAt?: number;
+  prompt?: string;
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -312,7 +315,17 @@ function tableAssistantJobViewFor(job: RoomModelJob): TableAssistantJob {
   };
 }
 
+/** Adds who asked, when, and what, so open visibility (F015) can show rule requests to the table. */
 function modelJobView(job: RoomModelJob): PublicModelJob {
+  return {
+    ...modelJobStatusView(job),
+    askedBy: job.actorId,
+    createdAt: job.createdAt,
+    ...(typeof job.data.prompt === 'string' ? { prompt: job.data.prompt } : {}),
+  };
+}
+
+function modelJobStatusView(job: RoomModelJob): PublicModelJob {
   if (job.status === 'revoked') return { id: job.id, status: 'failed', message: 'This proposal was cancelled.' };
   if (job.status === 'failed') return { id: job.id, status: 'failed', message: modelFailureMessage(job.data.failure, Array.isArray(job.data.reasons) ? job.data.reasons : []) };
   if (job.status === 'running' || job.status === 'committing') return { id: job.id, status: 'running' };
@@ -496,7 +509,8 @@ export class Room extends DurableObject<Env> {
       if (suffix === 'invite-link' && (request.method === 'GET' || request.method === 'POST')) {
         const authorized = await this.authorize(request, workspaceId);
         // F003-T3: only the owner of a data table manages its reusable link.
-        if (authorized.workspace.kind !== 'table' || authorized.workspace.actor.role !== 'owner') throw new AuthorityError('ROLE_FORBIDDEN');
+        if (authorized.workspace.kind !== 'table'
+            || !(tableManagerRoles() as string[]).includes(authorized.workspace.actor.role)) throw new AuthorityError('ROLE_FORBIDDEN');
         if (request.method === 'GET') return json(200, this.repository.inviteLinkStatus(workspaceId, Date.now()), { 'x-request-id': requestId });
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
@@ -551,7 +565,10 @@ export class Room extends DurableObject<Env> {
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
         const requiredModelRole = authorized.workspace.kind === 'invoice' || authorized.workspace.kind === 'table' ? 'owner'
           : authorized.workspace.kind === 'teaching' ? 'teacher' : 'dm';
-        if (authorized.member.role !== requiredModelRole) throw new AuthorityError('ROLE_FORBIDDEN');
+        // Equal permissions (F015): any table member may ask the AI for a rule draft.
+        const mayDraft = authorized.member.role === requiredModelRole
+          || (authorized.workspace.kind === 'table' && (tableManagerRoles() as string[]).includes(authorized.member.role));
+        if (!mayDraft) throw new AuthorityError('ROLE_FORBIDDEN');
         const input = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({
@@ -588,6 +605,7 @@ export class Room extends DurableObject<Env> {
           expectedRevision: input.expectedRevision,
           requestHash,
           now: Date.now(),
+          prompt: input.prompt,
         });
         if (!reservation.created) {
           if (reservation.job.data.kind !== undefined) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
@@ -608,8 +626,9 @@ export class Room extends DurableObject<Env> {
           prompt: input.prompt,
           consent: true,
           ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
-        }));
+        }).finally(() => this.notifyAssistantActivity()));
         await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
+        this.notifyAssistantActivity();
         return json(202, modelJobView(reservation.job), { 'x-request-id': requestId });
       }
       if (request.method === 'GET' && suffix.startsWith('model/')) {

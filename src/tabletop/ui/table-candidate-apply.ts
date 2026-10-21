@@ -1,3 +1,4 @@
+import { managesTable } from '../shared/visibility';
 import type { Candidate, WorkspaceView } from '../shared/contracts';
 import type { TableChange, TableState } from '../shared/table-contracts';
 import type { Command } from './types';
@@ -46,7 +47,7 @@ export function matchesExpectedTableCandidateView(current: WorkspaceView | null 
     && current.revision === expected.revision
     && current.domain.dataRevision === expected.domain.dataRevision
     && current.domain.ruleRevision === expected.domain.ruleRevision
-    && expected.actor.role === 'owner'
+    && managesTable(expected)
     && expected.domain.candidate?.status !== 'active';
 }
 
@@ -88,7 +89,7 @@ export async function applyTableCandidate(
   if (!tableCandidateView(initialView) || initialView.domain.candidate?.status === 'active') {
     return { ok: false, reason: 'There is no pending table proposal to apply.' };
   }
-  if (initialView.actor.role !== 'owner') return { ok: false, reason: 'Only the table owner can apply this proposal.' };
+  if (!managesTable(initialView)) return { ok: false, reason: 'Only a table manager can apply this proposal.' };
 
   const pinned = initialView.domain.candidate;
   let current = initialView;

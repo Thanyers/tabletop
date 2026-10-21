@@ -1,3 +1,4 @@
+import { tableManagerRoles } from '../shared/visibility';
 import { z } from 'zod';
 import { DomainError, type ActorContext, type Seat } from '../shared/contracts';
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue } from '../shared/table-contracts';
@@ -373,7 +374,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     return { state: { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate }, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
   }
   if (type === 'table.removeSource') {
-    hasRole(ctx, ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
+    hasRole(ctx, tableManagerRoles()); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
     assert(state.sources.some(s => s.id === input.sourceId), 'TABLE_FILE', 'Source not found.');
     assert(!state.program?.evidence.some(e => e.sourceId === input.sourceId)
       && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
@@ -381,7 +382,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     return { state: { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null }, label: 'Unused source removed.' };
   }
   if (type === 'table.setComputedColumns') {
-    hasRole(ctx, ['owner']);
+    hasRole(ctx, tableManagerRoles());
     const input = parsePayload(z.strictObject({ columns: z.array(computedColumnSchema).max(MAX_COMPUTED_COLUMNS) }), payload);
     const program = state.program;
     assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
@@ -395,7 +396,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   }
   if (type === 'table.importRows') {
     // Direct row import changes shared data, so it stays with the owner; members add files (F008).
-    hasRole(ctx, ['owner']);
+    hasRole(ctx, tableManagerRoles());
     const input = parsePayload(z.strictObject({
       collection: id,
       rows: z.array(z.record(z.string().min(1).max(100), value)).min(1).max(100),

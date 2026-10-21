@@ -15,6 +15,7 @@ import { applyInvoiceOperations, invoiceChangeSchema, invoiceSourceHash, reconci
 import { encounterRuleSchema } from './encounter';
 import { calculatePhysics, physicsParamsSchema } from './physics';
 import { assert, canonicalJson, hash, hasRole, parsePayload } from './helpers';
+import { tableManagerRoles } from '../shared/visibility';
 import { makeTeachingQuestionId } from './teaching';
 import { applyTableChange, tableChangeIssues, tableChangeSchema } from './table';
 import { jsonWithinBudget } from '../shared/json-budget';
@@ -80,7 +81,8 @@ function hashCandidate(ctx: ActorContext, candidate: Pick<Candidate, 'change' | 
 }
 
 function requireCaseRole(state: DomainState, ctx: ActorContext): void {
-  const role = state.kind === 'invoice' || state.kind === 'table' ? 'owner' : state.kind === 'teaching' ? 'teacher' : 'dm';
+  if (state.kind === 'table') { hasRole(ctx, tableManagerRoles()); return; }
+  const role = state.kind === 'invoice' ? 'owner' : state.kind === 'teaching' ? 'teacher' : 'dm';
   hasRole(ctx, [role]);
 }
 

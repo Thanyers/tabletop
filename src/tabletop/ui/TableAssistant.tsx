@@ -1,3 +1,4 @@
+import { managesTable } from '../shared/visibility';
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, BookOpen, Check, LoaderCircle, MessageCircle, Send, Sparkles } from 'lucide-react';
 import { ApiFailure, type ModelJob, type TabletopCapabilities } from '../client';
@@ -587,7 +588,7 @@ export function TableAssistant({
   onOpenSources, onOpenRules, onOpenActions, onReviewDraft,
   onChatRequest, onChatPoll, onChatHistory, onChatConfirm, onChatRefresh, onOpenObject, rulePrefill,
 }: TableAssistantProps) {
-  const initiallyReviewingRules = view.actor.role === 'owner' && !readOnly && view.domain.kind === 'table'
+  const initiallyReviewingRules = managesTable(view) && !readOnly && view.domain.kind === 'table'
     && (!view.domain.program || Boolean(view.domain.candidate && view.domain.candidate.status !== 'active'));
   const [mode, setMode] = useState<AssistantMode>(initiallyReviewingRules ? 'rules' : 'chat');
   const hadActiveProgram = useRef(Boolean(view.domain.kind === 'table' && view.domain.program));
@@ -595,14 +596,14 @@ export function TableAssistant({
   useEffect(() => {
     if (view.domain.kind !== 'table') return;
     const active = Boolean(view.domain.program);
-    if (!hadActiveProgram.current && active && view.actor.role === 'owner' && mode === 'rules') setMode('chat');
+    if (!hadActiveProgram.current && active && managesTable(view) && mode === 'rules') setMode('chat');
     hadActiveProgram.current = active;
   }, [view.domain, view.actor.role, mode]);
 
   if (view.kind !== 'table' || view.domain.kind !== 'table') return null;
 
   const pendingDraft = Boolean(view.domain.candidate && view.domain.candidate.status !== 'active');
-  const isOwner = view.actor.role === 'owner';
+  const isOwner = managesTable(view);
   const turnLabel = hasTurnOrder(view) ? currentTurnLabel(view, view.domain.turn) : null;
   const rulesModeLabel = view.domain.program ? 'Rules' : 'Set up';
 
