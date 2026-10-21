@@ -1,6 +1,9 @@
-# Changelog
+﻿# Changelog
 
 ## Unreleased
+
+- corpus วัดผลได้หลายรอบ (`TABLE_CORPUS_ROUNDS`) พร้อมค่าความเสถียรต่อเคส — 3 รอบล่าสุด matched 29/30, reject 0, join ได้ draft 100% (F030)
+
 
 ## 3.3.2 — 2026-10-21
 
