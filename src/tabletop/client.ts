@@ -297,6 +297,11 @@ export class TabletopClient {
     return this.postJson<WorkspaceInvite>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites`, { seat, ...(replaceOutstanding ? { replaceOutstanding: true } : {}) });
   }
 
+  /** F003-T1: the table owner removes a member; returns the owner's refreshed view. */
+  async removeMember(workspaceId: string, actorId: string): Promise<WorkspaceView> {
+    return this.postJson<WorkspaceView>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/remove`, { actorId });
+  }
+
   async redeem(ticket: string): Promise<WorkspaceView> {
     const view = await this.postJson<WorkspaceView>('/api/invites/redeem', { ticket });
     await this.openSession();

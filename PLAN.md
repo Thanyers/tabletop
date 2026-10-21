@@ -59,7 +59,7 @@
 | F002-T2 | Room/Node เก็บชื่อ + My tables แสดงชื่อใหม่ | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/index.ts`, `server/repository.ts` | F002-T1 | |
 | F002-T3 | UI แก้ชื่อที่แถบด้านบน | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `TabletopApp.tsx`, CSS | F002-T2 | สมาชิกเห็นชื่อร่วมกัน |
 | F002-T4 | คู่มือ + CHANGELOG | `done` | Claude Code · Codex รวมทดสอบ | `feat/F002-rename-table` · #29 merged | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F002-T3 | |
-| F003-T1 | เอาสมาชิกออก (เจ้าของ) | `todo` | — | — | `server/authority.ts`, `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `TabletopApp.tsx` | — | ต้องเสร็จก่อนเปิดลิงก์ใช้ซ้ำ · ชนกับ F002-T2 |
+| F003-T1 | เอาสมาชิกออก (เจ้าของ) | `review` | Claude Code | `feat/F003-T1-remove-member` | `server/authority.ts`, `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `TabletopApp.tsx` | — | ต้องเสร็จก่อนเปิดลิงก์ใช้ซ้ำ · ชนกับ F002-T2 |
 | F003-T2 | ออกแบบ + security review ลิงก์ใช้ซ้ำ ให้คนอนุมัติ | `todo` | — | — | `docs/features/F003-reusable-invite-link.md` | — | ไม่ใช่โค้ด |
 | F003-T3 | Room: สถานะลิงก์ + เปิด/ปิด/สร้างใหม่ + redeem แบบใช้ซ้ำ | `todo` | — | — | `cloudflare/room.ts`, `cloudflare/room-repository.ts`, `cloudflare/*.test.ts` | F003-T1, F003-T2 | |
 | F003-T4 | Worker route + rate limit + Node เทียบเท่า | `todo` | — | — | `cloudflare/index.ts`, `server/app.ts`, `server/authority.ts` | F003-T3 | hotspot `cloudflare/index.ts` |

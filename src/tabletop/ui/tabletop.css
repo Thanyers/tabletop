@@ -1341,3 +1341,9 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
   .tt-table-chat__thread { max-height: 240px; }
   .tt-table-chat__links > button { min-height: 38px; font-size: 11px; }
 }
+
+/* F003-T1: owner removes members from the People dialog. */
+.tt-member-manage { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.tt-member-manage li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 8px; }
+.tt-member-manage li > span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.tt-member-manage small { color: var(--tt-muted, #66756f); }

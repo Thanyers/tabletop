@@ -140,6 +140,8 @@ export interface WorkspaceTransaction {
   countMembers(epoch?: number): Promise<number>;
   hasActiveInvitation(seat: Seat, now: number, epoch?: number): Promise<boolean>;
   revokeOutstandingInvitations(seat: Seat, now: number): Promise<void>;
+  /** F003: end one member's access in the current epoch (owner removal). */
+  revokeMember(actorId: string, now: number): Promise<void>;
   getApproval(
     approvalId: string,
     epoch: number,
@@ -828,6 +830,13 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
             [workspaceId, epoch, seat, now],
           );
           return result.rows.length > 0;
+        },
+        async revokeMember(actorId, now): Promise<void> {
+          await transaction.query(
+            `UPDATE memberships SET revoked_at = $4
+             WHERE workspace_id = $1 AND epoch = $2 AND actor_id = $3 AND revoked_at IS NULL`,
+            [workspaceId, workspace.epoch, actorId, now],
+          );
         },
         async revokeOutstandingInvitations(seat, now): Promise<void> {
           await transaction.query(

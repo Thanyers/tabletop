@@ -9,10 +9,11 @@ export class AuthorityError extends Error {
 
 export function statusForCode(code: string): number {
   if (code === 'SESSION_REQUIRED' || code === 'SESSION_EXPIRED') return 401;
-  if (code === 'WORKSPACE_NOT_FOUND') return 404;
+  if (code === 'WORKSPACE_NOT_FOUND' || code === 'MEMBER_NOT_FOUND') return 404;
   if (code === 'TOO_MANY_REQUESTS' || code === 'ROOM_LIMIT_REACHED' || code === 'MEMBER_LIMIT_REACHED') return 429;
   if (code === 'STALE_REVISION' || code === 'STALE_EPOCH' || code === 'IDEMPOTENCY_MISMATCH'
-      || code === 'INVITE_ALREADY_USED' || code === 'SEAT_UNAVAILABLE' || code === 'SESSION_ALREADY_BOUND') return 409;
+      || code === 'INVITE_ALREADY_USED' || code === 'SEAT_UNAVAILABLE' || code === 'SESSION_ALREADY_BOUND'
+      || code === 'MEMBER_NOT_REMOVABLE') return 409;
   if (code === 'INVALID_JSON' || code === 'INVALID_REQUEST' || code === 'CONTENT_TYPE_REQUIRED'
       || code === 'BODY_TOO_LARGE' || code === 'COMMAND_NOT_ALLOWED' || code === 'TRUSTED_OPERATION_REQUIRED') return 400;
   if (code === 'INTERNAL_ERROR' || code === 'DATABASE_SCHEMA_UNAVAILABLE' || code === 'DATABASE_UNAVAILABLE') return 503;
@@ -43,6 +44,7 @@ function codeFromError(error: unknown): string {
     'INVITE_NOT_ALLOWED', 'INVITE_SEAT_OCCUPIED', 'SESSION_ROTATION_INVALID', 'DATABASE_SCHEMA_UNAVAILABLE',
     'DATABASE_UNAVAILABLE', 'RATE_LIMITED', 'INVALID_COMMAND_PAYLOAD', 'COMMAND_PAYLOAD_TOO_LARGE',
     'COMMAND_IDENTITY_SPOOF', 'WORKSPACE_EXPIRED', 'SCHEMA_VERSION_UNSUPPORTED', 'IDEMPOTENCY_MISMATCH',
+    'MEMBER_NOT_FOUND', 'MEMBER_NOT_REMOVABLE',
   ]);
   return known.has(message) ? message : 'INTERNAL_ERROR';
 }
