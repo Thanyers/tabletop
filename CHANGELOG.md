@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- CI: PR และ push เข้า `dev` รันเฉพาะเช็คเร็ว (lint, unit, typecheck, build, Worker tests) · browser suites ทั้งสามรันเฉพาะ release PR เข้า `main`, push เข้า `main` และ Run workflow เอง (CI005)
+
 ## 3.4.0 — 2026-10-21
 
 MINOR: AI table generation ใช้ thinking + 32K output + compact schema guide + deadline 180s (F031), corpus หลายรอบ/stability (F029/F030) และ reliability ก่อนหน้า · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v3.3.2 ได้ทันที
