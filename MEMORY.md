@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-21 — arm failure ครั้งเดียวใน browser test ไม่พอ เพราะแอป refresh ได้หลายครั้ง
+- **What happened:** หลังแก้ CD003 (dedupe + sticky error) CI ยังล้ม `Community equipment` ด้วย `workspaceRefreshRequests=2` — GET ครั้งแรกถูก synthetic failure แต่ครั้งที่สองสำเร็จและล้าง error
+- **Root cause:** route interception แบบ fail ครั้งเดียวพึ่งจำนวน refresh ที่แน่นอน; แอปมี refresh จาก POST response, poll และ retry
+- **Correct behavior:** fail ทุก refresh จนกว่าเทสต์จะเห็น error UI แล้วค่อย `failRefresh = false` ก่อนกด Retry; assert แบบ `>=` ไม่ผูกจำนวนครั้ง
+
 ### 2026-10-21 — ข้อความ "refresh failed" หายเพราะ poll ที่จบแล้วล้าง pollError
 - **What happened:** browser test `Community equipment` ล้มไม่คงที่; การ์ดขึ้น "A rule draft is ready" แทน "The rule draft is ready, but the table could not refresh."
 - **Root cause:** `pollModelOnce` patch `pollError: undefined` ทุกครั้ง รวมถึง poll ที่ job settled แล้ว ทำให้ poll ที่มาถึงช้ากว่าการ refresh failure ล้าง error ที่เพิ่งตั้ง
