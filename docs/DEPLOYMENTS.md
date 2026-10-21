@@ -1,6 +1,6 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 08:28 (Asia/Bangkok)** ทั้งสอง environment รายงาน **2.2.0 / f29e799** จาก annotated tag [v2.2.0](https://github.com/Thanyers/tabletop/tree/v2.2.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 09:27 (Asia/Bangkok)** ทั้งสอง environment รายงาน **2.2.0 / f29e799** จาก annotated tag [v2.2.0](https://github.com/Thanyers/tabletop/tree/v2.2.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
@@ -23,6 +23,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 - Staging: Worker version `1f739525-09bf-4df0-8c22-8fbbcca0c717`, smoke PASS
 - Production: Worker version `95d45422-f2f8-460c-9696-7a01744f93d1`, smoke PASS (`/healthz`, `/readyz`, `/api/capabilities`, `/version` ตรงกับ tag, `/`, `/new`)
 - `/version` หลัง deploy ทั้งสอง environment = `2.2.0 / f29e799`
+- **deploy ซ้ำโดยไม่จำเป็น 09:24–09:25 (Asia/Bangkok):** [run 39532864723](https://github.com/Thanyers/tabletop/actions/runs/39532864723) ถูกสั่งรันด้วย SHA เดิมหลังจากรอบ 01:27Z สำเร็จไปแล้ว (ผู้สั่งไม่เห็นรอบก่อนหน้า) และสั่งยกเลิกไม่ทันก่อนจบ ผลคือ code เดิม `2.2.0 / f29e799` ที่ build ใหม่ (`built_at` 2026-10-21T02:25:24Z) · D1 ไม่มี migration ค้าง · smoke ผ่านทุกจุดทั้งสอง environment · Worker version ปัจจุบัน: staging `d38a193d-9bcb-4962-9758-f0a1bc2dfee9`, production `b55d3f12-5d89-4718-9f75-04df5ead15a1` · ก่อนสั่ง Release deploy ด้วยมือ ให้ดู Actions ว่ามีรอบของ SHA นั้นสำเร็จแล้วหรือยัง
 - รุ่นนี้รวมงาน 2.1.0 (F008/F009/F001) และ 2.2.0 (F013 consent ครั้งเดียว + CD001) — ยังไม่อัปเกรดแผน ยังใช้ Workers Free
 - รอบนี้ตรวจเฉพาะ build/version/smoke ตาม pipeline; ไม่ได้เล่นสองบัญชีหรือทดสอบ F013 บน hosted ใหม่ (หลักฐานสองบัญชีล่าสุดยังเป็นรุ่น 2.0.0)
 
