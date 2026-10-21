@@ -117,7 +117,9 @@ function proposal(kind: CaseKind): ChangeSet {
   return { kind, rule: { allyTarget: true, apCost: 1, oncePerTurn: true } };
 }
 
-function providerFetch(change: ChangeSet, inspect?: (userContent: string, body: Record<string, unknown>) => void): typeof fetch {
+type ClarifyReply = { kind: 'clarify'; question: string; options: string[] };
+
+function providerFetch(change: ChangeSet | ClarifyReply, inspect?: (userContent: string, body: Record<string, unknown>) => void): typeof fetch {
   return async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     if (url !== 'https://api.deepseek.com/chat/completions') throw new Error('Unexpected provider URL');
@@ -303,6 +305,78 @@ describe('Cloudflare AI proposal helper', () => {
       .exec<{ status: string }>('SELECT status FROM billing_jobs WHERE workspace_id = ?', input.workspace.id).toArray());
     expect(rows).toHaveLength(2);
     expect(rows.every(row => row.status === 'settled')).toBe(true);
+  });
+
+  it('returns a table clarification after one settled attempt without validating rules (F012)', async () => {
+    const input = request('table');
+    const clarification = { question: 'Which records should the table track?', options: ['Equipment', 'Shifts', 'I will attach a file'] };
+    let calls = 0;
+    const result = await proposeChange(testEnv, input, providerFetch({ kind: 'clarify', ...clarification }, () => { calls += 1; }));
+    expect(calls).toBe(1);
+    expect('change' in result).toBe(false);
+    if (!('clarification' in result)) throw new Error('Expected a clarification.');
+    expect(result.clarification).toEqual(clarification);
+    expect(result.jobId).toMatch(/^[a-f0-9]{64}$/u);
+    expect(result.usage).toEqual({ promptTokens: 20, completionTokens: 12, cacheHitTokens: 5, cacheMissTokens: 15 });
+    expect(input.workspace.domain.candidate).toBeNull();
+    const stub = testEnv.BILLING.get(testEnv.BILLING.idFromName('global'));
+    const rows = await runInDurableObject(stub, (_instance, state) => state.storage.sql
+      .exec<{ id: string; status: string; completion_tokens: number }>(
+        'SELECT id, status, completion_tokens FROM billing_jobs WHERE workspace_id = ?', input.workspace.id,
+      ).toArray());
+    expect(rows).toEqual([{ id: result.jobId, status: 'settled', completion_tokens: 12 }]);
+  });
+
+  it('returns a clarification asked on a repair attempt with the usage of both attempts and stops repairing (F012)', async () => {
+    const input = request('table');
+    const bad = equipmentChange('source_fixture');
+    bad.program.actions[0].effects[0].field = 'missing_field';
+    const clarification = { question: 'Which field records who borrowed the item?', options: ['Borrower', 'Owner', 'Nobody'] };
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      calls += 1;
+      if (calls === 2) {
+        const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+        expect((JSON.parse(data.messages[1].content) as { repair: { attempt: number } }).repair.attempt).toBe(2);
+      }
+      return providerFetch(calls === 1 ? bad : { kind: 'clarify', ...clarification })(url, init);
+    };
+    const result = await proposeChange(testEnv, input, fetchImpl);
+    expect(calls).toBe(2);
+    if (!('clarification' in result)) throw new Error('Expected a clarification.');
+    expect(result.clarification).toEqual(clarification);
+    expect(result.usage).toEqual({ promptTokens: 40, completionTokens: 24, cacheHitTokens: 10, cacheMissTokens: 30 });
+    const stub = testEnv.BILLING.get(testEnv.BILLING.idFromName('global'));
+    const rows = await runInDurableObject(stub, (_instance, state) => state.storage.sql
+      .exec<{ status: string }>('SELECT status FROM billing_jobs WHERE workspace_id = ?', input.workspace.id).toArray());
+    expect(rows).toHaveLength(2);
+    expect(rows.every(row => row.status === 'settled')).toBe(true);
+  });
+
+  it('repairs a malformed clarify reply like any other rejected table reply (F012)', async () => {
+    const input = request('table');
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      calls += 1;
+      if (calls === 2) {
+        const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+        const sent = JSON.parse(data.messages[1].content) as { repair: { attempt: number; issues: string[] } };
+        expect(sent.repair.attempt).toBe(2);
+        expect(sent.repair.issues.length).toBeGreaterThan(0);
+      }
+      return providerFetch(calls === 1 ? { kind: 'clarify', question: 'Which records?', options: ['Only two', 'answers'] } : proposal('table'))(url, init);
+    };
+    const result = await proposeChange(testEnv, input, fetchImpl);
+    expect(calls).toBe(2);
+    if (!('change' in result)) throw new Error('Expected a repaired table draft.');
+    expect(result.change).toEqual(proposal('table'));
+  });
+
+  it('treats a clarify reply for teaching or encounter as rejected output (F012)', async () => {
+    for (const kind of ['teaching', 'encounter'] as const) {
+      await expect(proposeChange(testEnv, request(kind), providerFetch({ kind: 'clarify', question: 'What should change?', options: ['A', 'B', 'C'] })))
+        .rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_REJECTED' });
+    }
   });
 
   it('caps generated repairs at three without accepting a broken artifact', async () => {

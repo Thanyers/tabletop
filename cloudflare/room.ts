@@ -72,6 +72,8 @@ interface PublicModelJob {
   status: 'running' | 'completed' | 'failed';
   message?: string;
   candidateId?: string;
+  /** A question with answer choices when the model asked instead of drafting (F012). */
+  clarification?: { question: string; options: string[] };
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -309,7 +311,15 @@ function modelJobView(job: RoomModelJob): PublicModelJob {
     id: job.id,
     status: 'completed',
     ...(typeof job.data.candidateId === 'string' ? { candidateId: job.data.candidateId } : {}),
+    ...(publicClarification(job.data.clarification) ?? {}),
   };
+}
+
+function publicClarification(value: unknown): { clarification: { question: string; options: string[] } } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { question, options } = value as { question?: unknown; options?: unknown };
+  if (typeof question !== 'string' || !Array.isArray(options) || !options.every((item) => typeof item === 'string')) return null;
+  return { clarification: { question, options: options as string[] } };
 }
 
 function modelFailureMessage(failure: unknown): string {
@@ -1221,6 +1231,13 @@ export class Room extends DurableObject<Env> {
       job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
       if (!job || job.status !== 'running') return;
       requireWorkspaceWritable(this.env, authorized.workspace.kind);
+
+      if ('clarification' in proposal) {
+        // Nothing to commit: the owner answers in the chat and asks again.
+        await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
+          input.actorId, 'completed', { ...initialData, clarification: proposal.clarification });
+        return;
+      }
 
       const envelope = {
         commandId: input.commandId,

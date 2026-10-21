@@ -5,7 +5,7 @@ import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpe
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
+import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 
@@ -115,11 +115,10 @@ export interface AIProposalRequest {
   sourceId?: string;
 }
 
-export interface AIProposalResult {
-  change: ChangeSet;
-  jobId: string;
-  usage: DeepSeekUsage;
-}
+/** Table requests may return a question for the owner instead of a draft (F012). */
+export type AIProposalResult =
+  | { change: ChangeSet; jobId: string; usage: DeepSeekUsage }
+  | { clarification: TableClarification; jobId: string; usage: DeepSeekUsage };
 
 type BillingBinding = BillingRequestBinding;
 export type AIBillingBinding = BillingBinding;
@@ -471,7 +470,7 @@ export async function proposeChange(
     } else {
       const provider = new DeepSeekChangeProvider({ apiKey: env.DEEPSEEK_KEY!, fetch: fetchImpl, timeoutMs: 30_000 });
       const result = await provider.propose(prepared.providerInput, new AbortController().signal);
-      change = validateChange(workspace.kind, result.change);
+      change = validateChange(workspace.kind, 'change' in result ? result.change : null);
       if (workspace.domain.kind === 'table' && change.kind === 'table'
           && tableChangeIssues(workspace.domain, change).length > 0) {
         fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The model returned table rules that do not fit the current sources and active records.');
@@ -505,6 +504,7 @@ async function proposeGeneratedTable(
   const total: DeepSeekUsage = { promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 };
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     let change: ChangeSet | undefined;
+    let clarification: TableClarification | undefined;
     let usage: DeepSeekUsage;
     let issues: string[] = [];
     let previousOutput: string | undefined;
@@ -513,7 +513,8 @@ async function proposeGeneratedTable(
       if (remaining < 1) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
       const provider = new DeepSeekChangeProvider({ apiKey: env.DEEPSEEK_KEY!, fetch: fetchImpl, timeoutMs: remaining });
       const result = await provider.propose(input, new AbortController().signal);
-      change = result.change;
+      if ('clarification' in result) clarification = result.clarification;
+      else change = result.change;
       usage = result.usage;
     } catch (error) {
       if (error instanceof RejectedChangeReply) {
@@ -531,6 +532,7 @@ async function proposeGeneratedTable(
     total.cacheHitTokens += usage.cacheHitTokens;
     total.cacheMissTokens += usage.cacheMissTokens;
     if (usage.reasoningTokens !== undefined) total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens;
+    if (clarification) return { clarification, jobId: initialBinding.id, usage: total };
     if (change?.kind === 'table' && request.workspace.domain.kind === 'table') {
       issues = tableChangeIssues(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
       if (!issues.length) return { change, jobId: initialBinding.id, usage: total };
