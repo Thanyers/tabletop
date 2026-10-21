@@ -1,18 +1,29 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 11:30 (Asia/Bangkok)** ทั้งสอง environment รายงาน **3.0.0 / df1e5f5** จาก annotated tag [v3.0.0](https://github.com/Thanyers/tabletop/tree/v3.0.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 14:10 (Asia/Bangkok)** ทั้งสอง environment รายงาน **3.1.0 / f8a6b43** จาก annotated tag [v3.1.0](https://github.com/Thanyers/tabletop/tree/v3.1.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [df1e5f5](https://github.com/Thanyers/tabletop/commit/df1e5f516e642bd5dafb788c9d68e0847e3dbf1f) — PR #59 | commit และ build เดียวกัน |
-| Release | v3.0.0 / 3.0.0 | v3.0.0 / 3.0.0 |
+| Source | [f8a6b43](https://github.com/Thanyers/tabletop/commit/f8a6b43acaf9ba0a39b2a2a0a4534d2dbcac9463) — PR #68 | commit และ build เดียวกัน |
+| Release | v3.1.0 / 3.1.0 | v3.1.0 / 3.1.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 3.1.0 (21 ตุลาคม 2569)
+
+Release 3.1.0 (MINOR) ผ่าน pipeline CD001 — [PR #68](https://github.com/Thanyers/tabletop/pull/68) จาก `dev` @ `dc38dcc` · รวม F015 (import rows), F016 (validation reasons) และ F017 (computed columns)
+
+- Tag `v3.1.0` (annotated) → `f8a6b43`; build ครั้งเดียว `3.1.0 / f8a6b43` (`built_at` 2026-10-21T07:10:14Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production — ไม่มี schema change
+- Staging: Worker version `d20c9263-c367-4008-b9a3-f90d95ce9ac0`, smoke PASS
+- Production: Worker version `444f9abf-1d03-482e-a864-f35b52a2f402`, smoke PASS (`/healthz`, `/readyz`, `/api/capabilities`, `/version`, `/`, `/new`)
+- `/version` หลัง deploy ทั้งสอง environment = `3.1.0 / f8a6b43`
+- รอบนี้ตรวจเฉพาะ build/version/smoke ตาม pipeline; ยังไม่ได้เล่นสองบัญชีหรือทดสอบฟีเจอร์ใหม่บน hosted
 
 ## ผลตรวจ deploy 3.0.0 (21 ตุลาคม 2569)
 
@@ -70,6 +81,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 
 | Release | สิ่งที่ส่ง | หลักฐาน |
 | --- | --- | --- |
+| 21 ต.ค. `v3.1.0` / `f8a6b43` | F015 import rows, F016 validation reasons, F017 computed columns | [PR #68](https://github.com/Thanyers/tabletop/pull/68), [run 39560013409](https://github.com/Thanyers/tabletop/actions/runs/39560013409), [PR #69](https://github.com/Thanyers/tabletop/pull/69) |
 | 21 ต.ค. `v3.0.0` / `df1e5f5` | F010/F011/F012/F014 + CD002/CD003 จาก 2.2.0; MAJOR เพราะ contract ใหม่ของกฎ/Canvas | [PR #59](https://github.com/Thanyers/tabletop/pull/59), [run 39544308701](https://github.com/Thanyers/tabletop/actions/runs/39544308701), [PR #61](https://github.com/Thanyers/tabletop/pull/61) |
 | 21 ต.ค. `v2.2.0` / `f29e799` | Consent ส่ง AI ครั้งเดียวต่อโต๊ะ (F013) รวมงาน 2.1.0 ที่ยังไม่เคยขึ้น hosted และ pipeline CD001 ที่ใช้งานจริงบน Workers Free | [PR #48](https://github.com/Thanyers/tabletop/pull/48), [run 39527338589](https://github.com/Thanyers/tabletop/actions/runs/39527338589), [issue #49](https://github.com/Thanyers/tabletop/issues/49) |
 | 20 ต.ค. `v1.0.0` / `ce2c50e` | Build จาก release tag; UI และ runtime เดิม เปลี่ยนเฉพาะข้อมูล version | [PR #15](https://github.com/Thanyers/tabletop/pull/15), [CI main](https://github.com/Thanyers/tabletop/actions/runs/39376131015) |
