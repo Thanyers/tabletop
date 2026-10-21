@@ -1,19 +1,16 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
 
+## 3.3.2 — 2026-10-21
+
+PATCH: ความน่าเชื่อถือของร่างกฎจาก AI — refresh race (F025), บังคับภาษาคำถาม clarify (F026), hint เมื่อ reject เพราะอ้างข้ามการ์ด (F027), fallback ตารางขั้นต่ำ (F028), golden corpus วัดผล (F029) · ไม่มี migration/secret/binding ใหม่ · rollback กลับ v3.3.1 ได้ทันที
+
 - มี **golden corpus 10 โจทย์** วัดอัตรา draft/clarify/reject ได้จริง (baseline 9/10) ใช้เทียบก่อน/หลังแก้ทุกครั้ง (F029)
-
-
 - ถ้าซ่อมร่างกฎ 3 รอบไม่ผ่าน ระบบจะลองครั้งสุดท้ายด้วย **ตารางขั้นต่ำ** (1 collection, ไม่มี canvas/join) ก่อน reject — เคส join ข้ามการ์ดที่เคยล้มผ่านที่ attempt 2 (F028)
-
-
 - การ์ดร่างกฎไม่ขึ้น error หลอก ๆ "The table could not refresh: The table changed" อีก: ถ้า refresh แพ้ race กับ projection อื่น ระบบจะรอสั้น ๆ แล้วใช้ projection ล่าสุดให้เอง (F025)
-
-
 - คำถาม clarify ถูกบังคับให้เป็น**ภาษาของคำขอ** (ไทย→ไทย, อังกฤษ→อังกฤษ): ถ้าโมเดลตอบภาษาปน ระบบจะซ่อมหนึ่งรอบแล้วจึงแสดง (F026)
 - ข้อความ reject ที่เกิดจากการอ้างข้ามการ์ด/ข้าม collection จะบอกข้อจำกัดและทางเลือกให้ทันที (F027)
-
 
 ## 3.3.1 — 2026-10-21
 
