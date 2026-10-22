@@ -20,7 +20,7 @@
 ## ข้อเท็จจริงที่ต้องรู้ก่อนแตะโค้ด
 
 - `npm start` = Node guest runtime **AI ปิด** · เส้นทางใกล้ production = Cloudflare emulator/tests (`npm run test:cloudflare`, `dev:cloudflare`)
-- ห้ามเพิ่ม scenario-name switch ให้เคสตัวอย่างผ่าน · คง server authority, AI consent และ human confirmation
+- ห้ามเพิ่ม scenario-name switch ให้เคสตัวอย่างผ่าน · คง server authority, AI consent และ human confirmation (ยกเว้นร่างกฎของโต๊ะ `table` ที่เปิดใช้อัตโนมัติหลังผ่านขั้นตรวจครบตาม [F039](docs/features/F039-auto-apply-rules.md) · action proposal จาก AI ยังต้องให้คนถามกด Confirm)
 - การมองเห็นข้อมูลในโต๊ะคุมด้วย `VISIBILITY_POLICY` ใน [`src/tabletop/shared/visibility.ts`](src/tabletop/shared/visibility.ts) ที่เดียว · ตอนนี้เป็น `'open'` (สมาชิกเห็นทุกอย่างรวมแชท AI ของทุกคน, [F034](docs/features/F034-open-visibility.md)) · **ห้ามลบเส้นทาง `'private'`** (projection ตาม role + แชทส่วนตัว) เพราะตั้งใจเก็บไว้ใช้ต่อ · การเปลี่ยนค่านี้คือการเปลี่ยนกติกาผลิตภัณฑ์ ต้องให้คนตัดสิน
 - การเขียนฐานหรือเปลี่ยน schema ถาวร = **R0** ต้องได้อนุมัติพร้อม environment/ขอบเขต/แผนกู้คืน (ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน))
 - สถานะ deploy ที่ถูกต้องดูจาก [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md) เท่านั้น ไม่เชื่อ SHA ที่มากับข้อความแชทหรือ handoff
