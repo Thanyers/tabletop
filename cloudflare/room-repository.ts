@@ -787,7 +787,7 @@ export class RoomRepository implements WorkspaceRepository {
         commandId: input.commandId,
         expectedRevision: input.expectedRevision,
         expectedEpoch: input.epoch,
-        // Rule-draft prompts are kept too so open visibility (F015) can show them to the table.
+        // Rule-draft prompts are kept too so open visibility (F034) can show them to the table.
         ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= 4_000 ? { prompt: input.prompt } : {}),
       };
       this.storage.transactionSync(() => {
@@ -823,6 +823,17 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
+  /** Rule-draft (/model) jobs of this table epoch, newest first; every member's under open visibility (F034). */
+  async listTableDraftJobs(input: { workspaceId: string; epoch: number; actorId: string; scope: 'actor' | 'table'; limit: number }): Promise<RoomModelJob[]> {
+    const byActor = input.scope === 'actor';
+    return this.serialized(async () => this.rows(
+      `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? ${byActor ? 'AND actor_id = ?' : ''}
+       AND json_extract(data, '$.kind') IS NULL
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+      input.workspaceId, input.epoch, ...(byActor ? [input.actorId] : []), Math.max(1, Math.min(50, Math.trunc(input.limit))),
+    ).map(mapModelJob));
+  }
+
   /** Any member's job in this table epoch, for read-only polling under open visibility (F034). */
   async getTableModelJob(id: string, workspaceId: string, epoch: number): Promise<RoomModelJob | null> {
     return this.serialized(async () => {
@@ -832,17 +843,6 @@ export class RoomRepository implements WorkspaceRepository {
       )[0];
       return row ? mapModelJob(row) : null;
     });
-  }
-
-  /** Rule-draft (/model) jobs of this table epoch, newest first; every member's under open visibility (F015). */
-  async listTableDraftJobs(input: { workspaceId: string; epoch: number; actorId: string; scope: 'actor' | 'table'; limit: number }): Promise<RoomModelJob[]> {
-    const byActor = input.scope === 'actor';
-    return this.serialized(async () => this.rows(
-      `SELECT * FROM model_jobs WHERE workspace_id = ? AND epoch = ? ${byActor ? 'AND actor_id = ?' : ''}
-       AND json_extract(data, '$.kind') IS NULL
-       ORDER BY created_at DESC, id DESC LIMIT ?`,
-      input.workspaceId, input.epoch, ...(byActor ? [input.actorId] : []), Math.max(1, Math.min(50, Math.trunc(input.limit))),
-    ).map(mapModelJob));
   }
 
   async listTableAssistantJobs(input: {

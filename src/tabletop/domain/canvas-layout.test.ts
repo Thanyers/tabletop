@@ -5,6 +5,7 @@ import { applyTableChange, createTableState, handleTableCommand } from './table'
 import { equipmentChange, tableScenarioSources } from '../testing/table-scenarios';
 import type { ActorContext } from '../shared/contracts';
 import { handleCanvasLayout } from './canvas-layout';
+import { MAX_SHARED_CHAT_POSITIONS } from '../shared/canvas-layout-ids';
 
 const owner: ActorContext = { actorId: 'test-owner', name: 'Fixture', role: 'owner', workspaceId: 'fixture', epoch: 1, now: 1, hash: value => createHash('sha256').update(JSON.stringify(value)).digest('hex') };
 const participant: ActorContext = { ...owner, actorId: 'test-member', role: 'participant', seat: 'member-1' };
@@ -46,13 +47,37 @@ describe('shared arrangement authority', () => {
     expect(draft.program).toBeNull();
     expect(draft.candidate).not.toBeNull();
     for (const actor of [owner, participant]) {
-      expect(() => handleCanvasLayout(draft, { expectedLayoutRevision: 0, positions: { 'table.rules': { x: 40, y: 40 } } }, actor)).toThrow('Only active shared objects');
+      expect(() => handleCanvasLayout(draft, { expectedLayoutRevision: 0, positions: { 'table.rules': { x: 40, y: 40 } } }, actor, 'private')).toThrow('Only active shared objects');
     }
     draft.canvasLayout = { revision: 1, positions: { 'table.rules': { x: 40, y: 40 } } };
     const projected = projectDomain(draft, participant, 'private');
     if (projected.kind !== 'table') throw Error('Expected table');
     expect(projected.candidate).toBeNull();
     expect(projected.canvasLayout?.positions).toEqual({});
+  });
+  it('open policy: shares draft-only Rules and chat card geometry with every member (F034)', () => {
+    const imported = handleTableCommand(createTableState(), 'table.import', tableScenarioSources.equipment, owner)!.state;
+    const draft = decideDomain(imported, { type: 'evolve.propose', payload: { change: equipmentChange(imported.sources[0].id) } }, owner).state;
+    if (draft.kind !== 'table') throw Error('Expected table');
+    const chatId = `table.chat.${'a'.repeat(64)}`;
+    const moved = handleCanvasLayout(draft, { expectedLayoutRevision: 0, positions: { 'table.rules': { x: 40, y: 40 }, [chatId]: { x: 900, y: 80 } } }, participant, 'open').state;
+    const seen = projectDomain(moved, owner, 'open');
+    if (seen.kind !== 'table') throw Error('Expected table');
+    expect(seen.canvasLayout?.positions).toEqual({ 'table.rules': { x: 40, y: 40 }, [chatId]: { x: 900, y: 80 } });
+    expect(() => handleCanvasLayout(draft, { expectedLayoutRevision: 0, positions: { [chatId]: { x: 1, y: 1 } } }, participant, 'private')).toThrow('Only active shared objects');
+    const privateView = projectDomain(moved, participant, 'private');
+    if (privateView.kind !== 'table') throw Error('Expected table');
+    expect(privateView.canvasLayout?.positions).toEqual({});
+  });
+  it('open policy: keeps only the newest chat card positions', () => {
+    let state = createTableState();
+    for (let index = 0; index < MAX_SHARED_CHAT_POSITIONS + 5; index += 1) {
+      const id = `table.chat.${index.toString(16).padStart(64, '0')}`;
+      state = handleCanvasLayout(state, { expectedLayoutRevision: state.canvasLayout?.revision ?? 0, positions: { [id]: { x: index, y: 0 } } }, participant, 'open').state;
+    }
+    const ids = Object.keys(state.canvasLayout?.positions ?? {});
+    expect(ids).toHaveLength(MAX_SHARED_CHAT_POSITIONS);
+    expect(ids[0]).toBe(`table.chat.${(5).toString(16).padStart(64, '0')}`);
   });
   it('rejects unavailable, private and arbitrary geometry without mutating existing positions', () => {
     const state = active();

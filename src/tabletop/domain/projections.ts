@@ -22,7 +22,7 @@ export function projectDomain(state: DomainState, ctx: ActorContext, policy: Vis
   if (policy === 'open') {
     const full = clone(state);
     // Retired view positions are dropped for everyone, as before.
-    if (full.kind === 'table' && state.kind === 'table' && state.canvasLayout) full.canvasLayout = projectCanvasLayout(state);
+    if (full.kind === 'table' && state.kind === 'table' && state.canvasLayout) full.canvasLayout = projectCanvasLayout(state, 'open');
     return full;
   }
   return projectPrivate(state, ctx);
@@ -33,7 +33,7 @@ function projectPrivate(state: DomainState, ctx: ActorContext): DomainState {
   if (state.kind === 'table') {
     if (ctx.role !== 'owner' && ctx.role !== 'participant') throw new DomainError('FORBIDDEN', 'Only room members may read this table.');
     const projected = clone(state);
-    if (state.canvasLayout) projected.canvasLayout = projectCanvasLayout(state);
+    if (state.canvasLayout) projected.canvasLayout = projectCanvasLayout(state, 'private');
     if (ctx.role === 'participant') {
       // F008: table files are visible to every member; drafts and draft history stay with the owner.
       projected.candidate = null; projected.revisions = [];

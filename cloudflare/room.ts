@@ -78,6 +78,7 @@ interface PublicModelJob {
   candidateId?: string;
   /** A question with answer choices when the model asked instead of drafting (F012). */
   clarification?: { question: string; options: string[] };
+  /** Who asked, when and what, so open visibility (F034) can show rule requests to the table. */
   askedBy?: string;
   createdAt?: number;
   prompt?: string;
@@ -622,18 +623,33 @@ export class Room extends DurableObject<Env> {
           prompt: input.prompt,
           consent: true,
           ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
-        }).finally(() => this.notifyAssistantActivity()));
+        }).finally(() => this.notifyAssistantActivity(authorized.session.record.actorId)));
         await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
-        this.notifyAssistantActivity();
+        this.notifyAssistantActivity(authorized.session.record.actorId);
         return json(202, modelJobView(reservation.job), { 'x-request-id': requestId });
+      }
+      if (request.method === 'GET' && suffix === 'model') {
+        // Open visibility (F034): every member's rule requests on this table epoch, newest first.
+        const authorized = await this.authorize(request, workspaceId);
+        if (authorized.workspace.kind !== 'table') throw new AuthorityError('COMMAND_NOT_ALLOWED');
+        const jobs = await this.repository.listTableDraftJobs({
+          workspaceId,
+          epoch: authorized.workspace.epoch,
+          actorId: authorized.session.record.actorId,
+          scope: VISIBILITY_POLICY === 'open' ? 'table' : 'actor',
+          limit: 20,
+        });
+        const items = await Promise.all(jobs.map(async (job) => modelJobView(await this.reconcileModelJob(job))));
+        return json(200, { items }, { 'x-request-id': requestId });
       }
       if (request.method === 'GET' && suffix.startsWith('model/')) {
         const authorized = await this.authorize(request, workspaceId);
         const jobId = suffix.slice('model/'.length);
         if (!MODEL_JOB_ID_PATTERN.test(jobId)) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
-        const job = await this.repository.getModelJob(
-          jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch,
-        );
+        // Open visibility (F034): any member may follow another member's rule request.
+        const job = VISIBILITY_POLICY === 'open'
+          ? await this.repository.getTableModelJob(jobId, workspaceId, authorized.workspace.epoch)
+          : await this.repository.getModelJob(jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch);
         if (!job || job.data.kind !== undefined) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
         const reconciled = await this.reconcileModelJob(job);
         return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
