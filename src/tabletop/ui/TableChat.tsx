@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowUp, LoaderCircle, Paperclip, X } from 'lucide-react';
+import { runCanvasObjectCommand } from './canvas-object-finder';
 import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import './table-chat.css';
@@ -51,6 +52,8 @@ export function TableChat({
   const [attaching, setAttaching] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
   const [sendError, setSendError] = useState('');
+  // Result of a card command typed in the chat (open, find or hide a card); nothing goes to the AI.
+  const [objectNotice, setObjectNotice] = useState('');
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef(message);
@@ -120,6 +123,16 @@ export function TableChat({
   };
 
   const submit = () => {
+    if (trimmed.length > 0 && !controlsBusy) {
+      const command = runCanvasObjectCommand(trimmed);
+      if (command.handled) {
+        setObjectNotice(command.message);
+        setSendError('');
+        setMessage('');
+        return;
+      }
+    }
+    setObjectNotice('');
     if (!canSend) return;
     // Another control (e.g. a clarifying-answer card) may have stored consent since mount.
     const granted = grantedKey ?? storedConsent(scope);
@@ -148,6 +161,7 @@ export function TableChat({
     {historyStatus === 'error' && mode === 'ask' && <p className="tt-table-chat-bar__status is-error" role="alert">{VISIBILITY_POLICY === 'open' ? 'Table conversation history could not be loaded.' : 'Private conversation history could not be loaded.'} <button type="button" className="tt-table-chat-bar__retry" onClick={onRetryHistory}>Retry</button></p>}
     {attachmentError && <p className="tt-table-chat-bar__status is-error" role="alert">{attachmentError}</p>}
     {sendError && <p className="tt-table-chat-bar__status is-error" role="alert">{sendError}</p>}
+    {objectNotice && <p className="tt-table-chat-bar__status" role="status">{objectNotice}</p>}
     {asking && <div className="tt-table-chat-bar__consent" role="alertdialog" aria-label="Send to AI">
       <div className="tt-table-chat-bar__consent-copy">
         <span>{consentQuestion(mode)}</span>
