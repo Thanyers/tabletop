@@ -58,6 +58,19 @@ describe('Cloudflare Billing Durable Object', () => {
     expect(result.value.reservedMicroUsd).toBe(priceMicroUsd(56_000, 16_384));
   });
 
+  it('grants reservations above the configured money cap and still records real spend (F036)', async () => {
+    const stub = stubFor('uncapped');
+    const first = binding('a1');
+    const granted = await call(stub, '/reserve', reserveBody(first, 56_000, 32_768));
+    expect(granted.response.status).toBe(200);
+    expect(granted.value).toMatchObject({ status: 'reserved', reservedMicroUsd: priceMicroUsd(56_000, 16_384) });
+    await call(stub, '/dispatch', first);
+    const settled = await call(stub, '/settle', { ...first, outcome: 'settled', usage: usage() });
+    expect(settled.value).toMatchObject({ status: 'settled', actualMicroUsd: 37 });
+    const again = await call(stub, '/reserve', reserveBody(binding('a2'), 56_000, 32_768));
+    expect(again.response.status).toBe(200);
+  });
+
   it('reserves once per immutable binding, rejects changed hashes, dispatches once, and settles idempotently', async () => {
     const stub = stubFor('idempotency');
     const item = binding('1');

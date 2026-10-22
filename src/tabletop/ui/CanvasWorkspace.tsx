@@ -525,6 +525,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     const scope = layoutScopeRef.current;
     if (scope.key !== workspaceKey) return;
     rememberPosition(id, position);
+    // F037: notes carry their own coordinates, so dragging one is a note move, not a shared layout change.
+    if (id.startsWith('table.note.')) {
+      void onCommand('table.moveNote', { noteId: id.slice('table.note.'.length), x: Math.round(position.x), y: Math.round(position.y) });
+      return;
+    }
     if (!remoteLayoutEnabled || !isSharedCanvasNodeForView(id, view)) return;
     const sequence = ++layoutMoveSequenceRef.current;
     const isCurrentScope = () => layoutScopeRef.current === scope;

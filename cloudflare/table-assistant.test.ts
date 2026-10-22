@@ -156,7 +156,8 @@ describe('Cloudflare table assistant', () => {
       const user = JSON.parse(content) as { kind: string; prompt: string; context: Record<string, unknown> };
       expect(user.kind).toBe('table-assistant');
       expect(user.prompt).toBe(input.prompt);
-      expect(Object.keys(user.context).sort()).toEqual(['conversation', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(Object.keys(user.context).sort()).toEqual(['conversation', 'notes', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(user.context.notes).toEqual([]);
       expect(user.context.role).toBe('owner');
       expect(user.context.seat).toBe('host');
       expect(user.context.conversation).toEqual([]);

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - POC: `AI_DAILY_BUDGET_MICRO_USD` / `AI_MONTHLY_BUDGET_MICRO_USD` = 0 หรือไม่ตั้ง = **ไม่จำกัดงบ** (ยังวัด usage) เพื่อไม่ให้เทสติด "budget reached" (F033)
+- **ปลดเพดานเงินของ AI ทั้งหมด (F036):** ไม่มีการปฏิเสธงานเพราะงบอีกต่อไป — ทุกงานยังจอง/บันทึก/settle การใช้จริงลง ledger เพื่อวัดค่าจริงและ optimize · env งบยังอยู่ใน config แต่ไม่มีผลแล้ว · ไม่มี schema/binding/secret ใหม่ · ยังคงเพดานจำนวนงาน (50/ห้อง/วัน, 200/คน/วัน, 8 พร้อมกัน) และขอบเขต token
 
 - หน้าต่าง People ของโต๊ะข้อมูลเหลือแค่รายชื่อ ตัวนับ `N/7 members` ลิงก์เชิญใช้ซ้ำ และปุ่ม Remove · เอาส่วน AVAILABLE SEATS และคำเชิญครั้งเดียวต่อที่นั่งออก (โต๊ะสอนและโต๊ะเกม รวมถึง Node guest runtime ยังเชิญทีละที่นั่ง) · `/api/capabilities` บอก `inviteLinks` · คู่มือเชิญเพื่อนเขียนใหม่ ([F003](docs/features/F003-reusable-invite-link.md) T5–T6)
 - CI: PR และ push เข้า `dev` รันเฉพาะเช็คเร็ว (lint, unit, typecheck, build, Worker tests) · browser suites ทั้งสามรันเฉพาะ release PR เข้า `main`, push เข้า `main` และ Run workflow เอง (CI005)
@@ -152,3 +153,5 @@ release แรกที่ติด tag ตามรูปแบบ `vMAJOR.MINO
 ## 2026-10-18 — initial Cloudflare alpha
 
 - เปิด Google login, saved rooms, invitations, DeepSeek draft jobs และ durable budget ledger สำหรับสาม workflow เดิม ดู [บันทึกรุ่นแรก](docs/CLOUDFLARE_RELEASE.md)
+
+- **F037 (ยังไม่ครบ — UI ยังไม่ทำ):** note card แบบ post-it เก็บใน `TableState.notes` แยกจาก program · คำสั่ง `table.addNote/updateNote/moveNote/removeNote` (ทุกสมาชิก) · จำกัด 20 โน้ต 500 ตัวอักษร 6 สี · ไม่ bump rule/data revision

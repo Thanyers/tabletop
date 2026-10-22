@@ -39,6 +39,8 @@ export interface UseTableChatOptions {
   confirm: (view: TableView, job: TableAssistantJob, commandId: CommandId) => Promise<void>;
   attach: (view: WorkspaceView, file: File) => Promise<WorkspaceView>;
   focusObject: (id: string) => void;
+  /** F037: extra composer control (add a note) rendered beside Send. */
+  composerAction?: ReactNode;
   notify: (text: string, tone: 'info' | 'error' | 'success') => void;
   prefill?: { text: string; key: number };
 }
@@ -673,6 +675,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onAttach={async (file) => { await optionsRef.current.attach(table, file); }}
     onSend={send}
     onMessageChange={setComposerMessage}
+    composerAction={options.composerAction}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }

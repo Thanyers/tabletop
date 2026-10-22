@@ -13,6 +13,7 @@ import { CandidateLifecycle } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
 import { applyTableCandidate } from './table-candidate-apply';
+import { NoteCard } from './NoteCard';
 import { autoMapping, buildImportRows, parseCsv } from './table-row-import';
 import './record-actions.css';
 
@@ -36,6 +37,12 @@ export function TableCanvasObject(props: TableCanvasObjectProps) {
   if (props.node.id === 'table.rules') return <TableRules {...props} state={props.view.domain} />;
   if (props.node.id.startsWith('table.collection.')) return <TableCollectionView {...props} state={props.view.domain} />;
   if (props.node.id === 'table.actions') return <TableActions {...props} state={props.view.domain} />;
+  if (props.node.id.startsWith('table.note.')) {
+    const note = props.view.domain.notes?.find((item) => `table.note.${item.id}` === props.node.id);
+    return note
+      ? <NoteCard view={props.view} note={note} busy={props.busy} onCommand={props.onCommand} expanded={props.expanded} />
+      : <p className="tt-canvas-inline__note">This note was removed.</p>;
+  }
   if (props.node.id.startsWith('table.view.')) {
     const descriptor = props.outputs.descriptor as GenerativeViewDescriptor | undefined;
     return descriptor ? <GeneratedCanvasObject view={props.view} state={props.view.domain} descriptor={descriptor} busy={props.busy} onCommand={props.onCommand} expanded={props.expanded} /> : <p className="tt-canvas-inline__note">This generated view is not available.</p>;
