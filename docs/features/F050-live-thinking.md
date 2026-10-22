@@ -95,8 +95,8 @@ Node **22.23.2** (รุ่นเดียวกับ CI) · branch `feat/F050-
 | คำสั่ง | ผล |
 | --- | --- |
 | `npx vitest run server/providers/deepseek-changes.test.ts src/tabletop/ui/table-chat-state.test.ts` | **45/45** — provider 22 (เพิ่มเคส tail ≤600 ใน progress) + chat-state 23 (เพิ่ม `liveThinkingLine` 4 เคส) |
-| `npm test` | **568 passed / 1 skipped** (83 ไฟล์; ก่อนหน้า 563) |
-| `npm run test:cloudflare` | **126/126** (9 ไฟล์; เพิ่มเคส `F050` ที่ยืนยัน tail ถูก redact/จำกัด 600 บน job ที่กำลังรัน) |
+| `npm test` | **615 passed / 1 skipped** (87 ไฟล์; ก่อนหน้า 568 บน `dev` @ `9ff8dd4`) |
+| `npm run test:cloudflare` | **128/128** (9 ไฟล์; เพิ่มเคส `F050` ที่ยืนยัน tail ถูก redact/จำกัด 600 บน job ที่กำลังรัน) |
 | `npm run typecheck` (ใน `npm run build`) | 0 |
 | `npm run lint` | 0 error / 103 warning (เท่าเดิม ไม่มีใหม่) |
 | `node scripts/check-public-files.mjs` | 0 finding |
@@ -105,7 +105,7 @@ Node **22.23.2** (รุ่นเดียวกับ CI) · branch `feat/F050-
 
 อาร์ติแฟกต์: `test-results/f050-browser-run{3,4,5,6}.log` · ภาพการ์ดระหว่างสตรีม `test-results/f050-live-thinking.png` (สร้างเมื่อรันด้วย `F050_SHOT=1` เท่านั้น ไม่ผูกกับ CI)
 
-**หลัง merge `origin/dev` @ `711b548`:** unit **597 ผ่าน/1 skip**, `test:cloudflare` **127/127**, typecheck + `build` + `build:cloudflare` ผ่าน — แต่ browser suite แดงที่ `requestClarifyingQuestion` (`questionArticle` ยังอยู่ ไม่ถูกแทนหลังตอบคำถาม clarify) **ก่อนถึง check ของ F050** · ยืนยันว่าไม่ใช่ของ F050 ด้วย baseline บน worktree สะอาดของ `origin/dev` @ `711b548`: แดงที่ check เดียวกัน (`test-results/baseline.log` ใน `.worktrees/f050-baseline`) ⇒ เป็น regression ที่ `dev` อยู่แล้ว (น่าจะมาจาก #160 F047 `classifyChatIntent`/`tableChatMode` หรือ #171) ต้องแก้ที่ `dev` ก่อน release ครั้งถัดไป — check ของ F050 เองผ่านครบทั้ง 2 รอบบน tree ก่อน merge
+**หลัง merge `origin/dev` @ `7c0b61f`:** unit **615 ผ่าน/1 skip**, `test:cloudflare` **128/128**, typecheck + `build` + `build:cloudflare` ผ่าน — แต่ browser suite แดงที่ `requestClarifyingQuestion` (`questionArticle` ยังอยู่ ไม่ถูกแทนหลังตอบคำถาม clarify) **ก่อนถึง check ของ F050** · ยืนยันว่าไม่ใช่ของ F050 ด้วย baseline บน worktree สะอาดของ `origin/dev` @ `711b548`: แดงที่ check เดียวกัน (`test-results/baseline.log` ใน `.worktrees/f050-baseline`) ⇒ เป็น regression ที่ `dev` อยู่แล้ว (น่าจะมาจาก #160 F047 `classifyChatIntent`/`tableChatMode` หรือ #171) ต้องแก้ที่ `dev` ก่อน release ครั้งถัดไป — check ของ F050 เองผ่านครบทั้ง 2 รอบบน tree ก่อน merge
 
 ภาพที่เห็น: การ์ดร่างกฎระหว่างรอมี `2s / 240s server limit · thinking 957 chars` แล้วบรรทัด `…15. Checking source columns and drafting rule 16. Checking source columns…` พร้อม `More of the latest thinking` — ข้อความขยับทุกครั้งที่ poll ได้ progress ใหม่
 

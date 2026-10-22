@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { DomainError, type ActorContext, type Seat } from '../shared/contracts';
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue } from '../shared/table-contracts';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
+import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
 import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
+import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
 import { expressionWithinBounds, getGenerativeExpressionType, validateGenerativeProgram } from '../runtime/generative/validation';
@@ -59,7 +61,28 @@ const TABLE_RECORD_ID_PREFIX = 'record_';
 const TABLE_RECORD_ID_HASH_LENGTH = 12;
 const TABLE_RECORD_ORDINAL_WIDTH = String(MAX_TABLE_ACTION_CREATES - 1).length;
 const fieldSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'list']), required: z.boolean(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(TABLE_LIMITS.fieldChoices).optional(), default: value.optional() });
-const parameterSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'record']), collection: id.optional(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(TABLE_LIMITS.fieldChoices).optional() });
+/** F048: one to four groups of identical dice plus an optional whole-number modifier. */
+const rollGroupSchema: z.ZodType<RollGroup> = z.strictObject({
+  count: z.number().int().min(1).max(ROLL_LIMITS.dicePerGroup),
+  faces: z.number().int().min(ROLL_LIMITS.facesMin).max(ROLL_LIMITS.facesMax),
+});
+const rollSpecSchema: z.ZodType<RollSpec> = z.strictObject({
+  groups: z.array(rollGroupSchema).min(1).max(ROLL_LIMITS.groups),
+  modifier: z.number().int().min(-ROLL_LIMITS.modifier).max(ROLL_LIMITS.modifier).optional(),
+}).superRefine((spec, refinement) => {
+  for (const problem of rollSpecProblems(spec)) refinement.addIssue({ code: 'custom', message: problem });
+});
+const parameterSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'record', 'roll']), collection: id.optional(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(TABLE_LIMITS.fieldChoices).optional(), roll: rollSpecSchema.optional() })
+  .superRefine((parameter, refinement) => {
+    if (parameter.type === 'roll') {
+      if (!parameter.roll) refinement.addIssue({ code: 'custom', path: ['roll'], message: 'A roll parameter needs a roll spec.' });
+      if (parameter.collection !== undefined || parameter.min !== undefined || parameter.max !== undefined || parameter.choices !== undefined) {
+        refinement.addIssue({ code: 'custom', message: 'A roll parameter takes only a roll spec.' });
+      }
+    } else if (parameter.roll !== undefined) {
+      refinement.addIssue({ code: 'custom', path: ['roll'], message: 'Only a roll parameter takes a roll spec.' });
+    }
+  });
 const operand: z.ZodType<TableOperand> = z.union([z.strictObject({ literal: value }), z.strictObject({ input: id }), z.strictObject({ record: id, field: id }), z.strictObject({ system: z.enum(['actor', 'seat', 'turn']) }), z.strictObject({ expression: generativeExpressionSchema })]);
 const computedExpressionSchema: z.ZodType<ComputedExpression> = z.lazy(() => z.union([
   z.strictObject({ op: z.literal('field'), field: id }),
@@ -240,6 +263,8 @@ export function parseBoundedTableChange(value: unknown): TableChange {
 }
 const sourceInput = z.strictObject({ filename: z.string().min(1).max(120).regex(/^[^/\\\p{Cc}]+\.(csv|json|txt|md)$/iu), text: z.string().min(1).max(TABLE_FILE_BYTES) });
 const runInput = z.strictObject({ actionId: id, inputs: z.record(id, value) });
+/** F048: the client names the roll it wants; the server supplies every die. */
+const rollInput = z.strictObject({ actionId: id, parameterId: id });
 
 export function createTableState(): TableState {
   return { kind: 'table', sources: [], program: null, records: {}, turn: null, actionRevision: 0, activity: [], dataRevision: 0, ruleRevision: 0, candidate: null, revisions: [] };
@@ -276,7 +301,7 @@ function checkRows(program: TableProgram, records: Record<string, TableRecord[]>
     }
   }
 }
-function checkProgram(program: TableProgram) {
+export function checkProgram(program: TableProgram) {
   unique(program.collections.map(c => c.id), 'Collection identifiers'); unique(program.actions.map(a => a.id), 'Action identifiers'); unique(program.turnOrder, 'Turn seats'); unique(program.invariants.map(i => i.id), 'Invariant identifiers');
   for (const c of program.collections) {
     unique(c.fields.map(f => f.id), 'Field identifiers');
@@ -291,6 +316,7 @@ function checkProgram(program: TableProgram) {
   for (const action of program.actions) {
     unique(action.parameters.map(p => p.id), 'Action parameter identifiers');
     unique(action.effects.map(e => `${e.record}.${e.field}`), 'Action effect targets');
+    assert(action.parameters.filter(p => p.type === 'roll').length <= 1, 'TABLE_SCHEMA', 'An action can use at most one server roll parameter.');
     assert(action.effects.length > 0 || (action.creates?.length ?? 0) > 0 || action.advanceTurn, 'TABLE_SCHEMA', 'An action must change a field, create a record, or advance the turn.');
     assert(!(action.requireTurn || action.advanceTurn) || program.turnOrder.length > 0, 'TABLE_SCHEMA', 'Turn actions need a turn order.');
     const resolveField = (parameter: string, field: string) => {
@@ -302,13 +328,18 @@ function checkProgram(program: TableProgram) {
       assert((p.type === 'record') === (p.collection !== undefined), 'TABLE_SCHEMA', 'Record parameters need a collection.');
       if (p.collection) assert(program.collections.some(c => c.id === p.collection), 'TABLE_SCHEMA', 'Unknown parameter collection.');
       assert((p.min === undefined && p.max === undefined || p.type === 'number') && (p.min === undefined || p.max === undefined || p.min <= p.max) && (!p.choices || p.type === 'text'), 'TABLE_SCHEMA', 'Parameter bounds do not match its type.');
+      assert((p.type === 'roll') === (p.roll !== undefined), 'TABLE_SCHEMA', 'Only a roll parameter takes a roll spec, and a roll parameter needs one.');
+      if (p.roll) {
+        const problems = rollSpecProblems(p.roll);
+        assert(problems.length === 0, 'TABLE_SCHEMA', problems[0] ?? 'The roll bounds are invalid.');
+      }
     }
     const operandType = (o: TableOperand): string => {
       if ('literal' in o) return o.literal === null ? 'null' : Array.isArray(o.literal) ? 'list' : typeof o.literal === 'string' ? 'text' : typeof o.literal;
       if ('expression' in o) return getGenerativeExpressionType(o.expression, program, action);
       if ('system' in o) return 'text';
       if ('record' in o) return resolveField(o.record, o.field).type;
-      const p = action.parameters.find(p => p.id === o.input); assert(p, 'TABLE_SCHEMA', 'Unknown input reference.'); return p.type === 'record' ? 'text' : p.type;
+      const p = action.parameters.find(p => p.id === o.input); assert(p, 'TABLE_SCHEMA', 'Unknown input reference.'); return p.type === 'record' ? 'text' : p.type === 'roll' ? 'number' : p.type;
     };
     for (const c of action.conditions) {
       const l = operandType(c.left), r = operandType(c.right);
@@ -597,7 +628,15 @@ function handleNoteCommand(state: TableState, type: string, payload: unknown, ct
   return { state: { ...structuredClone(state), notes: notes.filter(note => note.id !== input.noteId) }, label: 'Note removed.' };
 }
 
-export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } | null {
+export interface TableCommandDecision {
+  state: TableState;
+  label: string;
+  /** F048: the roll this command issued (`table.roll`) or consumed (`table.act`). */
+  roll?: RollResult;
+  rollParameterId?: string;
+}
+
+export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): TableCommandDecision | null {
   if (type === 'table.import') {
     // F008: any member may add a file; removal stays with the owner.
     requirePermission(ctx, 'files.add', ['owner', 'participant']);
@@ -686,6 +725,36 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     hasRole(ctx, ['owner', 'participant']);
     return handleNoteCommand(state, type, payload, ctx);
   }
+  if (type === 'table.roll') {
+    // F048: only a member who may use the action may roll for it. Tables have no paused/defeated
+    // state; the same role, permission, and turn gates as `table.act` apply.
+    requirePermission(ctx, 'table.act', ['owner', 'participant']);
+    const input = parsePayload(rollInput, payload);
+    const program = state.program;
+    assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
+    const action = program.actions.find(a => a.id === input.actionId);
+    assert(action && action.roles.some(role => role === ctx.role), 'FORBIDDEN', 'Your role cannot perform this action.');
+    const parameter = action.parameters.find(p => p.id === input.parameterId);
+    assert(parameter && parameter.type === 'roll' && parameter.roll, 'TABLE_INPUT', 'Choose a roll parameter of this action.');
+    assert(!action.requireTurn || state.turn === (ctx.seat ?? 'host'), 'TABLE_TURN', 'Wait for your turn.');
+    assert(Number.isSafeInteger(ctx.now) && ctx.now >= 0 && Number.isSafeInteger(ctx.now + ROLL_LIMITS.pendingTtlMs), 'INVALID_CLOCK', 'The server clock is outside the supported range.');
+    const roll = createRoll(parameter.roll);
+    const pending: TablePendingRoll = {
+      actorId: ctx.actorId, actionId: action.id, parameterId: parameter.id,
+      groups: roll.groups, values: roll.values, total: roll.total,
+      modifier: parameter.roll.modifier ?? 0, dataRevision: state.dataRevision,
+      createdAt: ctx.now, expiresAt: ctx.now + ROLL_LIMITS.pendingTtlMs,
+    };
+    // A re-roll replaces the actor's earlier pending roll for the same parameter without using a slot.
+    const retained = retainPendingRolls(state.pendingRolls, ctx.now, pending);
+    assert(retained.length < ROLL_LIMITS.pendingPerTable, 'TABLE_LIMIT', 'Too many unused rolls are waiting on this table; finish or wait out an earlier one.');
+    const next = structuredClone(state);
+    next.pendingRolls = [...retained, pending];
+    const dice = roll.groups.map(group => `${group.count}d${group.faces}`).join(' + ');
+    const modifier = parameter.roll.modifier;
+    const modifierText = modifier === undefined || modifier === 0 ? '' : modifier > 0 ? ` + ${modifier}` : ` - ${Math.abs(modifier)}`;
+    return { state: next, label: `Rolled ${dice}${modifierText} = ${roll.total}.`, roll, rollParameterId: parameter.id };
+  }
   if (type !== 'table.act') return null;
   requirePermission(ctx, 'table.act', ['owner', 'participant']);
   const input = parsePayload(runInput, payload);
@@ -693,25 +762,51 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
   const action = program.actions.find(a => a.id === input.actionId);
   assert(action && action.roles.some(role => role === ctx.role), 'FORBIDDEN', 'Your role cannot perform this action.');
-  assert(Object.keys(input.inputs).length === action.parameters.length && Object.keys(input.inputs).every(key => action.parameters.some(p => p.id === key)), 'TABLE_INPUT', 'Provide exactly the required action inputs.');
+  const rollParameters = action.parameters.filter(p => p.type === 'roll');
+  // F048: the rolled value is server-issued. Naming it in the submission is a spoof attempt.
+  for (const p of rollParameters) {
+    assert(!Object.hasOwn(input.inputs, p.id), 'TABLE_ROLL_CLIENT_VALUE', 'A roll parameter is filled by the server; do not send a value for it.');
+  }
+  assert(Object.keys(input.inputs).length === action.parameters.length - rollParameters.length && Object.keys(input.inputs).every(key => action.parameters.some(p => p.id === key)), 'TABLE_INPUT', 'Provide exactly the required action inputs.');
   for (const p of action.parameters) {
+    if (p.type === 'roll') continue;
     const v = input.inputs[p.id];
     if (p.type === 'record') assert(typeof v === 'string' && state.records[p.collection!]?.some(row => row.id === v), 'TABLE_INPUT', 'Choose an existing record.');
     else assert(validValue({ ...p, type: p.type, required: true }, v), 'TABLE_INPUT', `${p.label} is invalid.`);
   }
   assert(!action.requireTurn || state.turn === (ctx.seat ?? 'host'), 'TABLE_TURN', 'Wait for your turn.');
+  // F048: consume the pending roll atomically — single use, same data revision, not expired.
+  const resolvedInputs: Record<string, TableValue> = { ...input.inputs };
+  let consumedRoll: RollResult | undefined;
+  let consumedRollParameterId: string | undefined;
+  for (const p of rollParameters) {
+    assert(p.roll, 'TABLE_SCHEMA', 'A roll parameter needs a roll spec.');
+    const pending = (state.pendingRolls ?? []).find(item => item.actorId === ctx.actorId && item.actionId === action.id && item.parameterId === p.id);
+    assert(pending, 'TABLE_ROLL_REQUIRED', 'Roll this action parameter on the server before sending the action.');
+    assert(pending.dataRevision === state.dataRevision, 'TABLE_ROLL_STALE', 'The table changed after that roll; roll again.');
+    assert(pending.expiresAt > ctx.now, 'TABLE_ROLL_EXPIRED', 'That roll expired; roll again.');
+    assertPendingRoll(pending, p.roll);
+    resolvedInputs[p.id] = pending.total;
+    consumedRoll = { groups: pending.groups.map(group => ({ count: group.count, faces: group.faces })), values: [...pending.values], total: pending.total };
+    consumedRollParameterId = p.id;
+  }
   const nextActionRevision = (state.actionRevision ?? 0) + 1;
   assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
-  const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: input.inputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn });
-  for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, input.inputs, c.left, ctx, evaluateExpression), resolve(action, state, input.inputs, c.right, ctx, evaluateExpression)), 'TABLE_CONDITION', c.message);
+  const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: resolvedInputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn });
+  for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, resolvedInputs, c.left, ctx, evaluateExpression), resolve(action, state, resolvedInputs, c.right, ctx, evaluateExpression)), 'TABLE_CONDITION', c.message);
   const next = structuredClone(state), touched = new Set<string>();
+  if (consumedRoll && consumedRollParameterId) {
+    const remaining = consumePendingRolls(next.pendingRolls, { actorId: ctx.actorId, actionId: action.id, parameterId: consumedRollParameterId });
+    if (remaining) next.pendingRolls = remaining;
+    else delete next.pendingRolls;
+  }
   // Resolve all effects against the same before-state. A swap is one atomic action.
   for (const effect of action.effects) {
     const p = action.parameters.find(p => p.id === effect.record)!;
     const row = next.records[p.collection!].find(row => row.id === input.inputs[p.id])!;
     const key = `${p.collection}.${row.id}.${effect.field}`;
     assert(!touched.has(key), 'TABLE_INPUT', 'Two parameters point at the same effect target.'); touched.add(key);
-    const resolved = resolve(action, state, input.inputs, effect.value, ctx, evaluateExpression);
+    const resolved = resolve(action, state, resolvedInputs, effect.value, ctx, evaluateExpression);
     if (effect.op === 'add') { const old = row.values[effect.field]; assert(typeof old === 'number' && typeof resolved === 'number', 'TABLE_VALUE', 'Only numeric values can be added.'); row.values[effect.field] = old + resolved; }
     else row.values[effect.field] = structuredClone(resolved);
   }
@@ -721,7 +816,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const values: Record<string, TableValue> = {};
     for (const field of collection.fields) {
       const createValue = create.values[field.id];
-      if (createValue !== undefined) values[field.id] = structuredClone(resolve(action, state, input.inputs, createValue, ctx, evaluateExpression));
+      if (createValue !== undefined) values[field.id] = structuredClone(resolve(action, state, resolvedInputs, createValue, ctx, evaluateExpression));
       else if (field.default !== undefined) values[field.id] = structuredClone(field.default);
     }
     const digest = ctx.hash(canonicalJson([action.id, index])).toLowerCase();
@@ -740,5 +835,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
   next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
   next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-100);
-  return { state: next, label: action.title };
+  return {
+    state: next,
+    label: action.title,
+    ...(consumedRoll ? { roll: consumedRoll } : {}),
+    ...(consumedRollParameterId ? { rollParameterId: consumedRollParameterId } : {}),
+  };
 }
