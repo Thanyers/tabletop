@@ -107,6 +107,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | ก่อนหน้า | ไม่ rollback Worker ไปรุ่นที่ไม่รู้จักห้อง `table` ใช้ `TABLE_READ_ONLY=true` แทน | ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน) |
 | 2026-10-20 | CD001: merge release เข้า `main` = deploy staging → production อัตโนมัติ รวม D1 migration | ผู้ใช้เลือกเอง; กันด้วยการรอ CI บน merge commit, ตรวจ config, Time Travel bookmark ก่อน migrate, smoke ทุก environment, หยุดและเปิด issue เมื่อล้ม ไม่ rollback เอง |
 | 2026-10-22 | F038 ผู้ใช้เลือก: คำถามขนานกันได้ คำขอร่างกฎเข้าคิว (client) · server เก็บคำตอบธรรมดาแม้โต๊ะเปลี่ยนระหว่างสร้าง | ร่างกฎใช้ candidate ช่องเดียวและผูก revision จึงขนานจริงไม่ได้ · คำตอบอธิบายโต๊ะตอนที่ถาม ส่วน proposal ยังต้องตรง revision ([F038](docs/features/F038-parallel-requests.md)) |
+| 2026-10-22 | AI ออก release เองได้ทั้งหมด: ตั้งเลขเวอร์ชัน + merge `release/*`/`hotfix/*` เข้า `main` + ติดตาม deploy · ยกเว้น release ที่มี migration ย้อนไม่ได้ต้องถามในแชท · ชุดเต็มรันใน CI บน release PR แทนการรันในเครื่อง | ผู้ใช้สั่ง: โปรเจกต์ต้องการความเร็ว ขอแค่ track เวอร์ชัน (tag + CHANGELOG) ไว้ย้อนกลับ · ข้อมูลที่ migration ทำลายไปแล้วย้อนด้วยเวอร์ชันไม่ได้ จึงคงข้อยกเว้นนี้ ([AGENTS.md §8](AGENTS.md#8-ขอบเขตของ-ai)) |
 
 ## งานที่กำลังทำ
 

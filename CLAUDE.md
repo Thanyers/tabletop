@@ -14,7 +14,7 @@
 | TASK TRACKING (phak board, `post_task_log`) | ติดตามงานใน [`PLAN.md`](PLAN.md) (ใครทำอะไร) + [`spec.md`](spec.md) (สถานะ) + PR บน GitHub ตาม [AGENTS.md §1](AGENTS.md#1-ทำงานแบบ-spec-driven) · ห้ามเรียก phak MCP หรือ `phak-updater` |
 | DOCS → phak KB | เอกสารที่ผูกกับโค้ด (`docs/`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `AGENTS.md`) ส่งผ่าน PR · รายงานหรือหลักฐานที่มี room ID, account, invite link หรือข้อมูลผู้ใช้ เก็บใน `test-results/` (ignored) เท่านั้น |
 | DEPLOY FAILURE LOG (phak project) | บันทึกลง [`MEMORY.md`](MEMORY.md) หัวข้อ Deploy failures |
-| NEVER MERGE | **AI merge PR เข้า `dev` เองได้** ตามเงื่อนไขใน [AGENTS.md §8](AGENTS.md#8-ขอบเขตของ-ai) (ผู้ใช้เปลี่ยนกฎนี้เมื่อ 2026-10-22) · merge เข้า `main` (release/hotfix) ยังต้องให้คนกดเท่านั้น · ห้าม push ตรงเข้า `dev`/`main` และห้าม `--admin` เหมือนเดิม |
+| NEVER MERGE | **AI merge เองได้ทั้ง PR เข้า `dev` และ release/hotfix เข้า `main`** ตามเงื่อนไขใน [AGENTS.md §8](AGENTS.md#8-ขอบเขตของ-ai) (ผู้ใช้เปลี่ยนกฎเมื่อ 2026-10-22: โปรเจกต์ต้องการความเร็ว ขอแค่ track เวอร์ชันไว้ย้อนกลับ) · ยกเว้น release ที่มี migration ย้อนไม่ได้ ต้องถามในแชทก่อน · ห้าม push ตรงเข้า `dev`/`main` และห้าม `--admin` เหมือนเดิม |
 | GIT FLOW (`develop`) | ใช้ชื่อ **`dev`** เป็น branch รวมงาน และ `main` สำหรับ release ตาม [AGENTS.md §2](AGENTS.md#2-branch) · ไม่มี Docker image `sha-*` เพราะ production คือ Cloudflare Worker ใช้ check `local-validation` บน merge commit แทนการเช็ค artifact |
 
 ## ข้อเท็จจริงที่ต้องรู้ก่อนแตะโค้ด

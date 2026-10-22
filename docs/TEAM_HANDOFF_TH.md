@@ -111,7 +111,7 @@ D1 และ Room DO ไม่ได้อยู่ใน transaction เดี�
    สำหรับ candidate Generative นี้ ไม่มี SQL migration/runtime dependency/secret/binding ใหม่ แต่ JSON ที่มี expression/canvas ใหม่ต้องใช้ build ที่อ่านสัญญาใหม่นี้ได้ โค้ด `v1.1.0` หรือต่ำกว่าไม่ใช่ compatible writer สำหรับห้องเหล่านั้น
 5. หลัง release ตรวจ `GET /version` ว่า `sha` ตรงกับ commit ที่ส่ง (config deploy ต้องมี `/version` ใน `assets.run_worker_first`) แล้วตรวจ asset parity และ resume ตาม scope ที่อนุมัติ แล้วอัปเดต [Deployment](DEPLOYMENTS.md) ด้วย source, version และหลักฐานที่ไม่มี credential หรือข้อมูลผู้ใช้
 
-deploy ทำโดย pipeline หลังคน merge release เท่านั้น (ดูหัวข้อถัดไป) อย่าใส่ secret, account/session evidence หรือ operator receipts ใน Git; หลักฐานที่ระบุตัวตนและ runtime config อยู่ใน ignored local `test-results/` และต้องส่งต่อโดยเจ้าของระบบ
+deploy ทำโดย pipeline หลัง merge release เท่านั้น (AI merge เองได้ตาม [AGENTS.md §8](../AGENTS.md#8-ขอบเขตของ-ai)) (ดูหัวข้อถัดไป) อย่าใส่ secret, account/session evidence หรือ operator receipts ใน Git; หลักฐานที่ระบุตัวตนและ runtime config อยู่ใน ignored local `test-results/` และต้องส่งต่อโดยเจ้าของระบบ
 
 ## Deploy อัตโนมัติ (CD001)
 
