@@ -14,11 +14,10 @@
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
 
-## ผลตรวจ deploy 5.0.0 และ 4.4.0 (22 ตุลาคม 2569)
+## ผลตรวจ deploy 5.0.0 (22 ตุลาคม 2569)
 
-ออกสองรุ่นติดกัน AI merge release เองตามกฎใหม่ ([AGENTS.md §8](../AGENTS.md#8-ขอบเขตของ-ai))
+AI merge release เองตามกฎใหม่ ([AGENTS.md §8](../AGENTS.md#8-ขอบเขตของ-ai))
 
-- **4.4.0 (MINOR, F038)** — [PR #138](https://github.com/Thanyers/tabletop/pull/138) → `d04da37`, [run 39761035504](https://github.com/Thanyers/tabletop/actions/runs/39761035504) success · `/version` ทั้งสองที่ = `4.4.0 / d04da37`
 - **5.0.0 (MAJOR: F040 `motion`, F041, F042, #136)** — [PR #141](https://github.com/Thanyers/tabletop/pull/141) → `e8c2d73`, [run 39762394546](https://github.com/Thanyers/tabletop/actions/runs/39762394546) success · build เดียว `built_at` 2026-10-22T10:21:33Z
   - D1: `no pending D1 migrations` ทั้งสองที่
   - Staging Worker version `77a1c73d-ab15-4b20-9986-9f8362345442` · Production `104713e6-aeb0-4965-8d00-6f907f843e1a` · smoke 6/6 PASS ทั้งสองที่
@@ -26,6 +25,20 @@
   - MAJOR เพราะ rollback กลับ 4.4.0 ทำให้โต๊ะที่ใช้ `motion` ไม่แสดง canvas และ AI ล้ม (ดู CHANGELOG) · ถ้ามีปัญหาให้แก้ไปข้างหน้าเป็น 5.0.x
 - ยังไม่ได้ตรวจด้วยมือแบบล็อกอิน/ใช้ AI — smoke ไม่ครอบ
 - `dev` รับ release คืนผ่าน PR `chore/sync-main-5.0.0`
+
+## ผลตรวจ deploy 4.4.0 (22 ตุลาคม 2569)
+
+Release 4.4.0 (MINOR) ผ่าน pipeline CD001 ([run 39761035504](https://github.com/Thanyers/tabletop/actions/runs/39761035504)) — [PR #138](https://github.com/Thanyers/tabletop/pull/138) จาก `dev` @ `1063062` + `main` (4.3.1) · รวม F038 (#131, #135) และ #128 · ไม่รวม #134/#136/#137 ที่ merge เข้า dev หลังตัด branch
+
+- ก่อนเปิด PR รัน validate.yml เต็มชุดในเครื่อง (Node 26, Chrome) ผ่านทุกขั้น: unit 512, Cloudflare 112, demo, browser r1 7 / cloudflare 26 / generative 8
+- Validate บน merge commit `main` ผ่าน แล้ว Release deploy เริ่มเอง (10:10–10:11 UTC)
+- Tag `v4.4.0` (annotated) → `d04da37`; build ครั้งเดียว `4.4.0 / d04da37` (`built_at` 2026-10-22T10:10:59Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production — ไม่มี schema change
+- Staging: Worker version `8c69d101-d41e-478c-8a19-605ae2bbeace`, smoke PASS
+- Production: Worker version `66313fbe-3507-4c6f-9753-60bb250a2ea7`, smoke PASS
+- `/version` ทั้งสอง environment = `4.4.0 / d04da37` (ตรวจซ้ำด้วยมือ 17:15 น.)
+- ยังไม่ได้ตรวจด้วยมือแบบล็อกอินหลายบัญชี (คิวร่างกฎ/คำถามขนาน) บน staging — browser suite ครอบคลุมด้วย synthetic AI
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-4.4.0` · 5.0.0 (#141) merge เข้า `main` แล้วแต่ยังไม่ได้บันทึกที่นี่
 
 ## ผลตรวจ deploy 4.3.0 (22 ตุลาคม 2569)
 
