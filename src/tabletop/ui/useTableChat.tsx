@@ -8,7 +8,7 @@ import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
-import { chatReferencePrompt, onChatCardReference, type ChatCardReference } from './canvas-object-finder';
+import { chatReferencePrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
@@ -742,7 +742,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       }
       if (!watchedCardsRef.current.has(card.id) || notifiedCardsRef.current.has(card.id)) continue;
       notifiedCardsRef.current.add(card.id);
-      const request = card.prompt.split('\n')[0].slice(0, 80);
+      const request = splitReferencedPrompt(card.prompt).message.slice(0, 80);
       if (card.kind === 'draft') {
         optionsRef.current.notify(`New rules added: “${request}”`, 'success', { label: 'View rules', run: () => optionsRef.current.focusObject('table.rules') });
       } else {
@@ -829,7 +829,10 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 }
 
 function chatCardTitle(card: ChatCard): string {
-  return card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt;
+  // A referenced card shows as "@card · message", never the wrapping sent to the AI.
+  const { reference, message } = splitReferencedPrompt(card.prompt);
+  const title = reference ? `@${reference} · ${message}` : message;
+  return title.length > 48 ? `${title.slice(0, 47)}…` : title;
 }
 
 /** The asker's name when the card belongs to another member, otherwise null. */
