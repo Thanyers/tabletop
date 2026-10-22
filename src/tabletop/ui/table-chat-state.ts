@@ -1,5 +1,6 @@
 import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, tailWithin, type ModelFailureDetails, type ModelTimeoutSource } from '../shared/model-job-progress';
 import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
@@ -192,4 +193,80 @@ export function nextQueuedDraft(cards: readonly ChatCard[]): ChatCard | undefine
     if (card?.kind === 'draft' && card.phase === 'queued') return card;
   }
   return undefined;
+}
+
+/** F045: the configured whole-job stop used when the server view does not carry one. */
+export const DRAFT_LIMIT_MS_DEFAULT = 240_000;
+/** F045: the client polls this long past the server limit, so the final status always reaches the card. */
+export const DRAFT_POLL_GRACE_MS = 70_000;
+
+/** Milliseconds a rule draft may run: the server's configured limit, else the 240s default. */
+export function draftLimitMs(job?: Pick<ModelJob, 'limitMs'>): number {
+  const value = job?.limitMs;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : DRAFT_LIMIT_MS_DEFAULT;
+}
+
+/** That same limit in whole seconds, for the "12s / 240s server limit" label. */
+export function draftLimitSeconds(job?: Pick<ModelJob, 'limitMs'>): number {
+  return Math.max(1, Math.round(draftLimitMs(job) / 1000));
+}
+
+/** How long a draft is polled: the server's own limit plus the grace period for its final status. */
+export function draftPollLimitMs(job?: Pick<ModelJob, 'limitMs'>): number {
+  return draftLimitMs(job) + DRAFT_POLL_GRACE_MS;
+}
+
+export interface DraftFailureSummary {
+  /** `server`: our own deadline stopped the draft. `provider`: the provider closed the stream. */
+  timedOutBy: ModelTimeoutSource;
+  /** The configured whole-job stop behind `limitLabel`, so the card can expose it to browser tests. */
+  limitMs: number;
+  /** The same limit the server names in its message, e.g. "240s". */
+  limitLabel: string;
+  /** Characters of the partial answer kept for display; never more than MAX_JOB_PARTIAL_CONTENT_CHARS. */
+  partialChars: number;
+  /** Characters of the thinking tail kept for display; never more than MAX_JOB_THINKING_TAIL_CHARS. */
+  thinkingChars: number;
+  /** The bounded partial answer, absent when no draft text had arrived. */
+  partialText?: string;
+  /** The bounded thinking tail, absent when the job kept none. */
+  thinkingText?: string;
+}
+
+/**
+ * F045: a readable summary of a failed draft, or null when the job carries no failure details.
+ * Text is re-bounded here too, so an oversized or older payload can never grow the card.
+ */
+export function draftFailureSummary(details: ModelFailureDetails | undefined): DraftFailureSummary | null {
+  if (!details) return null;
+  const partialText = headWithin(details.partialContent ?? '', MAX_JOB_PARTIAL_CONTENT_CHARS);
+  const thinkingText = tailWithin(details.thinkingTail ?? '', MAX_JOB_THINKING_TAIL_CHARS);
+  return {
+    timedOutBy: details.timedOutBy,
+    limitMs: details.limitMs,
+    limitLabel: `${Math.max(1, Math.round(details.limitMs / 1000))}s`,
+    partialChars: partialText.length,
+    thinkingChars: thinkingText.length,
+    ...(partialText ? { partialText } : {}),
+    ...(thinkingText ? { thinkingText } : {}),
+  };
+}
+
+/** The one line that keeps our own deadline apart from the provider closing the connection. */
+export function draftStopReason(summary: DraftFailureSummary): string {
+  return summary.timedOutBy === 'server'
+    ? `Why it stopped: our own ${summary.limitLabel} server limit, not the AI provider.`
+    : `Why it stopped: the AI provider closed the connection before our ${summary.limitLabel} server limit.`;
+}
+
+/** Label for the collapsed partial answer; it names the bound so a short block never looks complete. */
+export function draftPartialLabel(summary: DraftFailureSummary): string {
+  return summary.partialChars > 0
+    ? `Show the ${summary.partialChars.toLocaleString()} characters of the draft that arrived before it stopped`
+    : 'No draft text had arrived before it stopped';
+}
+
+/** Label for the collapsed thinking tail; the count keeps the bound visible. */
+export function draftThinkingLabel(summary: DraftFailureSummary): string {
+  return `Show the last ${summary.thinkingChars.toLocaleString()} characters of the model's thinking`;
 }

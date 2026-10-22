@@ -8,7 +8,7 @@ import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
 import { viewerCan } from '../shared/permissions';
-import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder } from './canvas-object-finder';
+import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder, registerCanvasPointFocus } from './canvas-object-finder';
 import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
 import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
@@ -1209,6 +1209,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     setHiddenIds(new Set());
     writeHiddenObjects(workspaceKey, new Set());
   }, [workspaceKey]);
+  // Header people: centre the view on another member's live cursor, keeping the zoom.
+  useEffect(() => registerCanvasPointFocus((x, y) => {
+    cancelPendingOpenObjectFocus();
+    void flow.setCenter(x, y, { zoom: Math.max(flow.getViewport().zoom, 0.8), duration: canvasMotionDuration(260) });
+  }), [cancelPendingOpenObjectFocus, flow]);
   // Chat commands ("เปิดการ์ด …", "open rules", "ซ่อนการ์ด …") find a card by name.
   const finderStateRef = useRef({ objectTitles: [] as { id: string; title: string; hidden: boolean }[], navigateToObject: (_id: string) => {}, hideObject: (_id: string) => {} });
   useEffect(() => registerCanvasObjectFinder((verb, query) => {
