@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { canApplyWorkspaceRefresh, draftInFlight, draftRefreshBackoffMs, draftRefreshPatch, historyCard, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
   id: 'a'.repeat(64),
@@ -117,5 +117,28 @@ describe('private table chat recovery state', () => {
 describe('draft refresh backoff (F025)', () => {
   it('grows with each attempt so a racing projection can settle', () => {
     expect([0, 1, 2].map(draftRefreshBackoffMs)).toEqual([150, 300, 450]);
+  });
+});
+
+describe('parallel questions and queued rule requests (F038)', () => {
+  const card = (id: string, kind: ChatCard['kind'], phase: ChatCard['phase'], patch: Partial<ChatCard> = {}): ChatCard =>
+    ({ id, kind, phase, prompt: id, createdAt: 0, ...patch });
+
+  it('treats a sending, generating or still-refreshing rule draft as running, but not questions', () => {
+    expect(draftInFlight([card('a', 'answer', 'waiting'), card('b', 'answer', 'sending')])).toBe(false);
+    expect(draftInFlight([card('d', 'draft', 'sending')])).toBe(true);
+    expect(draftInFlight([card('d', 'draft', 'waiting')])).toBe(true);
+    expect(draftInFlight([card('d', 'draft', 'complete', { checking: true })])).toBe(true);
+    expect(draftInFlight([card('d', 'draft', 'complete'), card('e', 'draft', 'failed'), card('q', 'draft', 'queued')])).toBe(false);
+  });
+
+  it('starts the oldest queued rule request only once nothing else is drafting', () => {
+    // Cards are kept newest first.
+    const queued = [card('newer', 'draft', 'queued'), card('older', 'draft', 'queued'), card('running', 'draft', 'waiting')];
+    expect(nextQueuedDraft(queued)).toBeUndefined();
+    const finished = queued.map((item) => item.id === 'running' ? { ...item, phase: 'complete' as const } : item);
+    expect(nextQueuedDraft(finished)?.id).toBe('older');
+    expect(nextQueuedDraft([card('a', 'answer', 'waiting'), card('q', 'draft', 'queued')])?.id).toBe('q');
+    expect(nextQueuedDraft([card('a', 'answer', 'waiting')])).toBeUndefined();
   });
 });

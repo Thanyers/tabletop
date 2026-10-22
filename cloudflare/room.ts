@@ -82,6 +82,8 @@ interface PublicModelJob {
   askedBy?: string;
   createdAt?: number;
   prompt?: string;
+  /** F038: the machine-readable failure, so a rule-draft card can quote it like an answer card. */
+  failureCode?: string;
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -339,7 +341,7 @@ function modelJobView(job: RoomModelJob): PublicModelJob {
 
 function modelJobStatusView(job: RoomModelJob): PublicModelJob {
   if (job.status === 'revoked') return { id: job.id, status: 'failed', message: 'This proposal was cancelled.' };
-  if (job.status === 'failed') return { id: job.id, status: 'failed', message: modelFailureMessage(job.data.failure, Array.isArray(job.data.reasons) ? job.data.reasons : []) };
+  if (job.status === 'failed') return { id: job.id, status: 'failed', message: modelFailureMessage(job.data.failure, Array.isArray(job.data.reasons) ? job.data.reasons : []), failureCode: safeAssistantFailureCode(job.data.failure) };
   if (job.status === 'running' || job.status === 'committing') return { id: job.id, status: 'running' };
   return {
     id: job.id,
@@ -1163,8 +1165,9 @@ export class Room extends DurableObject<Env> {
           || (authorized.member.role !== 'owner' && authorized.member.role !== 'participant')) {
         throw new AuthorityError('COMMAND_NOT_ALLOWED');
       }
-      if (authorized.workspace.epoch !== input.expectedEpoch
-          || authorized.workspace.revision !== input.expectedRevision) {
+      // F038: an answer describes the table as it was asked, so a rule draft or edit that lands
+      // while it generates does not discard it. Only a proposal must match the current revision.
+      if (authorized.workspace.epoch !== input.expectedEpoch) {
         await this.repository.finishTableAssistantJob(
           input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'failed',
           { ...initialData, failure: 'STALE_WORKSPACE' },
@@ -1174,7 +1177,8 @@ export class Room extends DurableObject<Env> {
       requireWorkspaceWritable(this.env, authorized.workspace.kind);
 
       if (result.data.kind === 'action-proposal') {
-        if (result.data.expectedRevision !== authorized.workspace.revision
+        if (input.expectedRevision !== authorized.workspace.revision
+            || result.data.expectedRevision !== authorized.workspace.revision
             || result.data.expectedRuleRevision !== authorized.workspace.domain.ruleRevision
             || result.data.expectedActionRevision !== authorized.workspace.domain.actionRevision) {
           await this.repository.finishTableAssistantJob(

@@ -44,6 +44,8 @@ export interface ModelJob {
   askedBy?: string;
   createdAt?: number;
   prompt?: string;
+  /** F038: machine-readable failure code of a failed rule request. */
+  failureCode?: string;
 }
 
 export interface TabletopCapabilities {
