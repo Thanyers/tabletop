@@ -12,6 +12,14 @@ import type { ComputedColumn, ComputedExpression } from '../shared/table-contrac
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
+/** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
+export const MAX_TABLE_NOTES = 20;
+export const MAX_NOTE_TEXT = 500;
+const NOTE_COLORS = ['yellow', 'rose', 'sky', 'mint', 'lavender', 'sand'] as const;
+const NOTE_COORD = z.number().finite().min(-90_000).max(90_000);
+const noteColor = z.enum(NOTE_COLORS);
+const noteText = z.string().max(MAX_NOTE_TEXT).refine(t => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/u.test(t), 'Use printable text only.');
+const noteId = z.string().regex(/^note_[a-z0-9_-]{6,40}$/u);
 const forbiddenIdentifiers = new Set<string>(GENERATIVE_FORBIDDEN_IDENTIFIERS);
 const id = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/).refine(x => !forbiddenIdentifiers.has(x));
 const text = z.string().min(1).max(500);
@@ -357,6 +365,47 @@ function conditionPass(op: string, l: TableValue, r: TableValue): boolean {
   if (typeof l !== 'number' || typeof r !== 'number') return false;
   return op === 'lt' ? l < r : op === 'lte' ? l <= r : op === 'gt' ? l > r : op === 'gte' && l >= r;
 }
+/** F037: shared canvas notes. They live beside the program, never inside it, so rule edits keep them. */
+function handleNoteCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } {
+  const notes = state.notes ?? [];
+  if (type === 'table.addNote') {
+    const input = parsePayload(z.strictObject({ text: noteText.optional(), color: noteColor.optional(), x: NOTE_COORD, y: NOTE_COORD }), payload);
+    assert(notes.length < MAX_TABLE_NOTES, 'TABLE_LIMIT', `A table can hold at most ${MAX_TABLE_NOTES} notes.`);
+    const id = `note_${ctx.hash(canonicalJson([ctx.actorId, ctx.now, input.text ?? '', input.x, input.y])).slice(0, 16)}`;
+    assert(!notes.some(note => note.id === id), 'TABLE_DUPLICATE_NOTE', 'That note already exists.');
+    const note = { id, text: input.text ?? '', color: input.color ?? 'yellow' as const, x: input.x, y: input.y, createdBy: ctx.actorId, createdAt: ctx.now, updatedAt: ctx.now };
+    return { state: { ...structuredClone(state), notes: [...notes, note] }, label: 'Note added.' };
+  }
+  if (type === 'table.updateNote') {
+    const input = parsePayload(z.strictObject({ noteId, text: noteText.optional(), color: noteColor.optional() }), payload);
+    assert(input.text !== undefined || input.color !== undefined, 'TABLE_INPUT', 'Change the note text or colour.');
+    assert(notes.some(note => note.id === input.noteId), 'TABLE_NOTE', 'Note not found.');
+    return {
+      state: {
+        ...structuredClone(state),
+        notes: notes.map(note => note.id === input.noteId ? {
+          ...note,
+          ...(input.text === undefined ? {} : { text: input.text }),
+          ...(input.color === undefined ? {} : { color: input.color }),
+          updatedAt: ctx.now,
+        } : note),
+      },
+      label: 'Note updated.',
+    };
+  }
+  if (type === 'table.moveNote') {
+    const input = parsePayload(z.strictObject({ noteId, x: NOTE_COORD, y: NOTE_COORD }), payload);
+    assert(notes.some(note => note.id === input.noteId), 'TABLE_NOTE', 'Note not found.');
+    return {
+      state: { ...structuredClone(state), notes: notes.map(note => note.id === input.noteId ? { ...note, x: input.x, y: input.y } : note) },
+      label: 'Note moved.',
+    };
+  }
+  const input = parsePayload(z.strictObject({ noteId }), payload);
+  assert(notes.some(note => note.id === input.noteId), 'TABLE_NOTE', 'Note not found.');
+  return { state: { ...structuredClone(state), notes: notes.filter(note => note.id !== input.noteId) }, label: 'Note removed.' };
+}
+
 export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } | null {
   if (type === 'table.import') {
     // F008: any member may add a file; removal stays with the owner.
@@ -440,6 +489,11 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
     next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-100);
     return { state: next, label: `Imported ${created.length} rows into ${collection.title}.` };
+  }
+  if (type === 'table.addNote' || type === 'table.updateNote' || type === 'table.moveNote' || type === 'table.removeNote') {
+    // F037: any member may keep shared notes on the canvas.
+    hasRole(ctx, ['owner', 'participant']);
+    return handleNoteCommand(state, type, payload, ctx);
   }
   if (type !== 'table.act') return null;
   hasRole(ctx, ['owner', 'participant']);

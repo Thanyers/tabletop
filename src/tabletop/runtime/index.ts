@@ -172,6 +172,10 @@ export function manifestForWorkspace(view: WorkspaceView): Manifest {
       nodes.push(node('table.actions', 'table.actions', 'Actions', 580 + Math.ceil(state.program.collections.length / 2) * 540, 40, { actions: state.program.actions }));
       bindings.push(binding('table.rules', 'revision', 'table.actions', 'revision', 'RuleRevisionV1'));
     }
+    // F037: shared notes render at their own stored position, so they never consume canvasLayout slots.
+    for (const note of state.notes ?? []) {
+      nodes.push(node(`table.note.${note.id}`, 'table.note', note.text.trim().slice(0, 60) || 'Note', note.x, note.y, { note }, 'shared'));
+    }
 
     const canvas = state.program?.canvas;
     if (canvas && nodes.length < 24) {

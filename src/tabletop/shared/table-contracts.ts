@@ -29,12 +29,17 @@ export type ComputedExpression =
   | { op: 'literal'; value: number }
   | { op: 'add' | 'subtract' | 'multiply' | 'divide'; left: ComputedExpression; right: ComputedExpression };
 export interface ComputedColumn { id: string; collection: string; label: string; expression: ComputedExpression }
+/** F037: a shared canvas note. Kept out of the program so it survives rule edits and stays a plain note. */
+export type NoteColor = 'yellow' | 'rose' | 'sky' | 'mint' | 'lavender' | 'sand';
+export interface TableNote { id: string; text: string; color: NoteColor; x: number; y: number; createdBy: string; createdAt: number; updatedAt: number }
 export interface TableState extends DomainBase {
   kind: 'table'; sources: TableSource[]; program: TableProgram | null;
   records: Record<string, TableRecord[]>; turn: string | null;
   canvasLayout?: { revision: number; positions: Record<string, { x: number; y: number; pinned?: boolean }> };
   /** Display-only computed columns; definitions live in state, not in the program (F017). */
   computedColumns?: ComputedColumn[];
+  /** Shared sticky notes (F037). Omitted by rooms created before this field existed. */
+  notes?: TableNote[];
   actionRevision: number;
   activity: { actorId: string; action: string; at: number }[];
 }
