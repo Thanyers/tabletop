@@ -7,7 +7,33 @@
  * that motivated this: the validator rejected a canvas the guide said nothing about.
  */
 import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
-import { GENERATIVE_LIMITS } from '../../src/tabletop/shared/generative-contracts.js';
+import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
+
+/**
+ * F049: the exact dice control example embedded in the guide below.
+ * The drafter may author `kind:"dice"`: the client rolls it (visual-only, no server roll)
+ * and fills one numeric action parameter that another card can submit.
+ */
+export const TABLE_DICE_EXAMPLE: ControlsViewDescriptor = {
+  id: 'damage-die',
+  kind: 'controls',
+  title: 'Damage die',
+  controls: [{
+    id: 'damage-dice',
+    kind: 'dice',
+    label: 'Damage die',
+    actionId: 'apply_damage',
+    parameter: 'damage',
+    faces: 6,
+    count: 2,
+    modifier: 1,
+    inputs: {
+      hero: { kind: 'record', collection: 'heroes', recordId: 'hero-1' },
+      damage: { kind: 'control' },
+    },
+  }],
+};
+const TABLE_DICE_EXAMPLE_JSON = JSON.stringify(TABLE_DICE_EXAMPLE);
 
 const LIMITS = [
   `collections<=${TABLE_LIMITS.collections}`,
@@ -103,5 +129,11 @@ DRAG{actionId,xParameter,yParameter?,inputs:BINDINGS}
 CONTROL (each: id,label,actionId,inputs:BINDINGS) =
   button{kind:"button"} | form{kind:"form"} | slider{kind:"slider",parameter,min,max,step?,value?:EXPR}
   | toggle{kind:"toggle",parameter,value?:EXPR} | select{kind:"select",parameter,options:[{label,value:string|number|boolean} 1..32],value?:EXPR}
+  | dice{kind:"dice",parameter,faces:2..100,count:1..10,modifier?:integer -1000..1000}
 BINDINGS: {PARAM_ID: {kind:"control"} | {kind:"literal",value:VALUE} | {kind:"expression",value:EXPR} | {kind:"record",collection:COLLECTION_ID,recordId:ID}}
-  Every action parameter must be covered; the parameter a slider/toggle/select edits binds {kind:"control"}.`;
+  Every action parameter must be covered; the parameter a slider/toggle/select/dice edits binds {kind:"control"}.
+DICE: dice must bind one number PARAM (faces/count are whole numbers in range; modifier is an optional whole number).
+  The client rolls count d faces + modifier on the device (visual-only; the server does not roll) and fills the parameter
+  for the other cards that bind the same action, so a form on another controls view can submit the rolled value.
+  EXAMPLE (one controls view; the same action also has a form on another view covering every input):
+  ${TABLE_DICE_EXAMPLE_JSON}`;

@@ -21,6 +21,31 @@ let tableAIReply = null;
 let tableAssistantReply = null;
 const modelStatuses = [];
 await mkdir(output, { recursive: true });
+
+/** F050: a synthetic SSE reply whose reasoning streams first, then holds on the gate and sends the JSON. */
+function streamingChangeResponse(reasoning, change, gate) {
+  const encoder = new TextEncoder();
+  const line = payload => encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
+  return new Response(new ReadableStream({
+    async start(controller) {
+      for (const step of reasoning) {
+        controller.enqueue(line({ model: 'deepseek-flash', choices: [{ index: 0, delta: { reasoning_content: step }, finish_reason: null }] }));
+        await new Promise(resolveStep => setTimeout(resolveStep, 90));
+      }
+      if (gate) await gate;
+      controller.enqueue(line({ model: 'deepseek-flash', choices: [{ index: 0, delta: { content: JSON.stringify(change) }, finish_reason: null }] }));
+      controller.enqueue(line({ model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }));
+      controller.enqueue(line({
+        model: 'deepseek-flash',
+        choices: [],
+        usage: { prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 30, completion_tokens_details: { reasoning_tokens: 0 } },
+      }));
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
 const mf = new Miniflare(convertV4MiniflareOptions({
   host: '127.0.0.1', port,
   log: new Log(LogLevel.ERROR),
@@ -75,7 +100,11 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       expect(typeof input.prompt).toBe('string');
       change = tableAIReply.change;
       const gate = tableAIReply.gate;
+      const streamReasoning = tableAIReply.streamReasoning;
       tableAIReply = null;
+      // F050: stream synthetic reasoning before the JSON, so the waiting card can be observed
+      // showing what the model is doing instead of only counting characters.
+      if (streamReasoning) return streamingChangeResponse(streamReasoning, change, gate);
       // An armed gate holds the reply so the browser can observe the waiting card.
       if (gate) await gate;
     } else {
