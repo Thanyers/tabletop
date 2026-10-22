@@ -4,11 +4,14 @@ import { ApiFailure, type ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantReference } from '../shared/table-assistant-contracts';
 import type { TableState } from '../shared/table-contracts';
+import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
+import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
-import { draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { viewerCan } from '../shared/permissions';
+import { draftHistoryCard, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -18,6 +21,7 @@ const DRAFT_POLL_LIMIT_MS = 60_000;
 const ANSWER_POLL_MS = 1_000;
 const ANSWER_POLL_LIMIT_MS = 150_000;
 const HISTORY_CARDS = 6;
+const DRAFT_HISTORY_CARDS = 5;
 const LOCAL_CARD_IDS = 80;
 const ACCEPT_FILES = '.csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown';
 
@@ -33,6 +37,8 @@ export interface UseTableChatOptions {
   ask: (view: TableView, prompt: string, commandId: CommandId, sameCommandRetry?: boolean) => Promise<TableAssistantJob>;
   pollAsk: (view: TableView, jobId: string) => Promise<TableAssistantJob>;
   loadHistory: (view: TableView) => Promise<TableAssistantHistoryPage>;
+  /** Every member's rule requests (open visibility, F034); omitted where not supported. */
+  loadDraftHistory?: (view: TableView) => Promise<ModelJob[]>;
   /** Changes when the table's AI chat changed elsewhere; reloads history quietly. */
   historyRefreshKey?: number;
   confirm: (view: TableView, job: TableAssistantJob, commandId: CommandId) => Promise<void>;
@@ -93,6 +99,13 @@ function scopeFor(view: TableView | null): string {
 
 function chatNodeId(scope: string, id: string): string {
   return `chat.${encodeURIComponent(scope)}.${id}`;
+}
+
+/** Under open visibility a card with a server job uses the job's shared id, so everyone moves the same card (F034). */
+function chatCardNodeId(scope: string, card: ChatCard): string {
+  const jobId = card.job?.id ?? card.modelJob?.id;
+  const shared = VISIBILITY_POLICY === 'open' && jobId ? sharedChatCanvasId(jobId) : null;
+  return shared ?? chatNodeId(scope, card.id);
 }
 
 function storageKey(scope: string): string {
@@ -233,14 +246,21 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     // A quiet refresh keeps the composer usable and does not flash a loading state.
     if (!quiet) setHistoryState({ scope: targetScope, status: 'loading' });
     try {
-      const page = await optionsRef.current.loadHistory(current);
+      const [page, drafts] = await Promise.all([
+        optionsRef.current.loadHistory(current),
+        optionsRef.current.loadDraftHistory ? optionsRef.current.loadDraftHistory(current).catch(() => [] as ModelJob[]) : Promise.resolve([] as ModelJob[]),
+      ]);
       if (targetScope !== scopeRef.current || generation !== historyGeneration.current) return;
       const local = readPrivateChatState(targetScope);
       const dismissed = new Set(local.dismissed);
       const jobs = [...page.items].sort((left, right) => right.createdAt - left.createdAt).slice(0, HISTORY_CARDS);
-      const incoming = jobs
-        .filter((job) => !dismissed.has(job.id))
-        .map((job) => historyCard(job, local.cardIdsByJob[job.id] ?? `answer-${job.id}`));
+      // Requests stored before prompts were kept (pre-F034) have nothing to show; keep the newest few.
+      const draftJobs = drafts.filter((job) => typeof job.prompt === 'string' && job.prompt.length > 0)
+        .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0)).slice(0, DRAFT_HISTORY_CARDS);
+      const incoming = [
+        ...jobs.filter((job) => !dismissed.has(job.id)).map((job) => historyCard(job, local.cardIdsByJob[job.id] ?? `answer-${job.id}`)),
+        ...draftJobs.filter((job) => !dismissed.has(job.id)).map((job) => draftHistoryCard(job, local.cardIdsByJob[job.id] ?? `draft-${job.id}`)),
+      ];
       let merged: ChatCard[] = [];
       updateCards(targetScope, (cards) => {
         merged = mergeChatHistory(cards, incoming);
@@ -249,6 +269,10 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       const cardIdsByJob = { ...local.cardIdsByJob };
       for (const job of jobs) {
         const card = merged.find((item) => item.job?.id === job.id);
+        if (card) cardIdsByJob[job.id] = card.id;
+      }
+      for (const job of draftJobs) {
+        const card = merged.find((item) => item.modelJob?.id === job.id);
         if (card) cardIdsByJob[job.id] = card.id;
       }
       writePrivateChatState(targetScope, { ...local, cardIdsByJob });
@@ -286,7 +310,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [historyRefreshKey, scope, assistantAvailable, loadHistory]);
 
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
-  const mode = table ? tableChatMode(table.actor.role === 'owner' ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
+  const mode = table ? tableChatMode(viewerCan(table, 'rules.draft') ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
     prompt: composerMessage,
     hasCreateAction: table.domain.program?.actions.some(action => Boolean(action.creates?.length)) ?? false,
   }) : 'ask';
@@ -301,7 +325,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   isBlockedRef.current = sendBlocked;
 
   useEffect(() => {
-    if (!table || explicitDraftScope !== scope || table.actor.role !== 'owner') return;
+    if (!table || explicitDraftScope !== scope || !viewerCan(table, 'rules.draft')) return;
     const entry = explicitDraftEntryRef.current;
     const candidate = table.domain.candidate;
     if (entry?.scope === scope && candidate?.status === 'active' && (table.domain.ruleRevision > entry.ruleRevision || candidate.id !== entry.candidateId)) {
@@ -450,6 +474,14 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }
   }, [scope, patchCard, pollModelOnce, pollAnswerOnce]);
 
+  // Under open visibility the card's canvas id changes to the shared job id once the server accepts it,
+  // so move the focus to the new node instead of leaving the viewport on the one that just went away.
+  const focusAcceptedCard = useCallback((targetScope: string, card: ChatCard, jobId: string) => {
+    if (targetScope !== scopeRef.current || card.job || card.modelJob) return;
+    const shared = VISIBILITY_POLICY === 'open' ? sharedChatCanvasId(jobId) : null;
+    if (shared) optionsRef.current.focusObject(shared);
+  }, []);
+
   const acceptDraft = useCallback((targetScope: string, card: ChatCard, job: ModelJob, current: TableView) => {
     patchCard(targetScope, card.id, {
       modelJob: job,
@@ -460,13 +492,14 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       error: job.status === 'failed' ? job.message ?? 'The draft could not be prepared.' : undefined,
       pollTimedOut: false,
     });
+    focusAcceptedCard(targetScope, card, job.id);
     if (job.status === 'completed' || job.status === 'complete') refreshAfterDraft(targetScope, card.id, current.id, job.id);
     if (current.domain.program && explicitDraftScopeRef.current === targetScope) {
       explicitDraftScopeRef.current = null;
       explicitDraftEntryRef.current = null;
       setExplicitDraftScope(null);
     }
-  }, [patchCard, refreshAfterDraft]);
+  }, [patchCard, refreshAfterDraft, focusAcceptedCard]);
 
   const acceptAnswer = useCallback((targetScope: string, card: ChatCard, job: TableAssistantJob) => {
     rememberJobCard(targetScope, job.id, card.id);
@@ -480,14 +513,15 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       confirmationPending: job.confirmationStatus === 'processing',
       pollTimedOut: false,
     });
-  }, [patchCard]);
+    focusAcceptedCard(targetScope, card, job.id);
+  }, [patchCard, focusAcceptedCard]);
 
   const send = useCallback(async (prompt: string, forcedMode?: 'draft'): Promise<boolean> => {
     const current = viewRef.current;
     const targetScope = scopeRef.current;
     const selectedMode = forcedMode ?? modeRef.current;
     if (!current || !targetScope || requestLock.current || isBlockedRef.current || !optionsRef.current.aiEnabled || (selectedMode === 'ask' && optionsRef.current.assistantAvailable === false) || prompt.trim().length < 3) return false;
-    if (selectedMode === 'draft' && (current.actor.role !== 'owner' || optionsRef.current.readOnly)) return false;
+    if (selectedMode === 'draft' && (!viewerCan(current, 'rules.draft') || optionsRef.current.readOnly)) return false;
     requestLock.current = true;
     const commandId = crypto.randomUUID();
     const requestView = structuredClone(current);
@@ -605,7 +639,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const editRules = useCallback(() => {
     const current = viewRef.current;
-    if (!current || current.actor.role !== 'owner' || optionsRef.current.readOnly || !current.domain.program) return;
+    if (!current || !viewerCan(current, 'rules.draft') || optionsRef.current.readOnly || !current.domain.program) return;
     explicitDraftScopeRef.current = scopeRef.current;
     setExplicitDraftScope(scopeRef.current);
     explicitDraftEntryRef.current = {
@@ -627,7 +661,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const prepareFromCard = useCallback((card: ChatCard) => {
     const current = viewRef.current;
-    if (!current || current.actor.role !== 'owner' || optionsRef.current.readOnly || requestLock.current) return;
+    if (!current || !viewerCan(current, 'rules.draft') || optionsRef.current.readOnly || requestLock.current) return;
     editRules();
     setRetryPrefill({ text: card.prompt, key: Date.now() });
   }, [editRules]);
@@ -638,8 +672,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
     return displayCards.map((card, index) => ({
-      id: chatNodeId(scope, card.id),
-      title: card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt,
+      id: chatCardNodeId(scope, card),
+      title: chatCardTitle(card, table),
       eyebrow: card.kind === 'draft' ? 'Rule draft' : 'AI answer',
       glyph: <Sparkles size={16} />,
       busy: card.phase === 'sending' || card.phase === 'waiting',
@@ -664,7 +698,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard]);
 
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
-  const owner = table.actor.role === 'owner';
+  const owner = viewerCan(table, 'rules.draft');
   const modeCanAsk = mode === 'draft' || assistantAvailable;
   const placeholder = !aiEnabled || (mode === 'ask' && !assistantAvailable) ? 'AI is off for this table'
     : mode === 'draft' ? table.domain.program ? 'Describe what you want to add or change' : 'Describe the table you want'
@@ -698,6 +732,20 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
 
+/** Another member's card is titled with their name first (open visibility, F034). */
+function chatCardTitle(card: ChatCard, view: TableView): string {
+  const prompt = card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt;
+  const asker = askerOf(card, view);
+  return asker ? `${asker}: ${prompt}` : prompt;
+}
+
+/** The asker's name when the card belongs to another member, otherwise null. */
+function askerOf(card: ChatCard, view: TableView): string | null {
+  const askedBy = card.job?.askedBy ?? card.modelJob?.askedBy;
+  if (!askedBy || askedBy === view.actor.actorId) return null;
+  return view.members.find((member) => member.actorId === askedBy)?.name ?? 'Another member';
+}
+
 function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild }: {
   card: ChatCard;
   view: TableView;
@@ -715,6 +763,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   onBuild: () => void;
 }) {
   const dismissalBlocked = isUncertainRequest(card) || card.confirming === true || card.confirmationPending === true;
+  // Another member's rule request (F034): readable here, answered and retried only by them.
+  const draftAsker = card.kind === 'draft' ? askerOf(card, view) : null;
   const dismissButton = <button type="button" className="tt-chat-card__dismiss" aria-label="Close this card" disabled={dismissalBlocked} onClick={onDismiss}><X size={13} /></button>;
   const checkButton = card.pollTimedOut && (card.phase === 'waiting' || card.confirmationPending)
     ? <button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={onCheck}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Check status</button>
@@ -745,7 +795,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
         {failureCode ? `Code ${failureCode}` : 'Code UNKNOWN'}{durationMs !== undefined ? ` · ${(durationMs / 1000).toFixed(1)}s` : ''} · Request {requestId ? `${requestId.slice(0, 16)}…` : 'not assigned'} — quote this when reporting the failure.
       </p>}
       {card.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy || retryDisabled} onClick={onRetry}><RotateCcw size={13} />Retry same request</button>}
-      {!card.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>}
+      {!card.requestUncertain && !draftAsker && <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>}
       {dismissButton}
     </div>;
   }
@@ -754,8 +804,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     return <div className="tt-chat-card tt-chat-card--questions" data-testid="table-chat-answer">
       <p className="tt-chat-card__intro"><MessageCircleQuestion size={14} /> A few details would help build this table. Nothing on the table changed.</p>
       <p className="tt-chat-card__question">{clarification.question}</p>
-      <ClarificationAnswers options={clarification.options} disabled={readOnly || busy} onAnswer={onAnswerQuestion} />
-      <p className="tt-chat-card__hint">Pick one or more answers, or write your own, then send. Your request stays the same.</p>
+      <ClarificationAnswers options={clarification.options} disabled={readOnly || busy || draftAsker !== null} onAnswer={onAnswerQuestion} />
+      <p className="tt-chat-card__hint">{draftAsker ? `Only ${draftAsker} can answer this question.` : 'Pick one or more answers, or write your own, then send. Your request stays the same.'}</p>
       {dismissButton}
     </div>;
   }
@@ -763,7 +813,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   if (card.kind === 'draft' && !card.pollError && !card.checking && !card.modelJob?.candidateId && view.domain.candidate === null) {
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       <p className="tt-chat-card__text">No rule draft was created. Try rephrasing your request.</p>
-      <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>
+      {!draftAsker && <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>}
       {dismissButton}
     </div>;
   }
@@ -788,7 +838,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       {askerLine}
       <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
-      {result.kind === 'build-request' && view.actor.role === 'owner' && !foreign && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
+      {result.kind === 'build-request' && viewerCan(view, 'rules.draft') && !foreign && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
       {references.length > 0 && <div className="tt-chat-card__references">{references.map((reference, index) => <button type="button" key={`${reference.kind}-${index}`} onClick={() => onOpenObject(objectForReference(reference))}>{reference.label}</button>)}</div>}
       {dismissButton}
     </div>;

@@ -1,3 +1,4 @@
+import { viewerCan } from '../shared/permissions';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { AlertCircle, Database, FilePlus2, Pencil, Play, Trash2, Users } from 'lucide-react';
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
@@ -108,7 +109,7 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
       </div> : <p className="tt-table-limit-note">{state.sources.length >= MAX_SOURCE_FILES ? 'All four source file slots are in use.' : totalBytes >= MAX_SOURCE_BYTES ? 'The 64 KiB source limit has been reached.' : 'Files cannot be added here.'}</p>}
     </>}
     {error && <p className="tt-table-error" role="alert"><AlertCircle size={14} />{error}</p>}
-    {state.sources.length === 0 ? !expanded && <p className="tt-canvas-inline__empty">{readOnly ? 'No files yet.' : 'Add a file or describe the table you want.'}</p> : <ul className="tt-table-source-list" aria-label="Table source files">{state.sources.map((source) => <SourceCard key={source.id} source={source} expanded={expanded} canRemove={view.actor.role === 'owner' && !readOnly && !referencedSourceIds.has(source.id)} readOnly={readOnly} referenced={referencedSourceIds.has(source.id)} busy={busy !== null} onRemove={() => void onCommand('table.removeSource', { sourceId: source.id })} />)}</ul>}
+    {state.sources.length === 0 ? !expanded && <p className="tt-canvas-inline__empty">{readOnly ? 'No files yet.' : 'Add a file or describe the table you want.'}</p> : <ul className="tt-table-source-list" aria-label="Table source files">{state.sources.map((source) => <SourceCard key={source.id} source={source} expanded={expanded} canRemove={viewerCan(view, 'files.remove') && !readOnly && !referencedSourceIds.has(source.id)} readOnly={readOnly} referenced={referencedSourceIds.has(source.id)} busy={busy !== null} onRemove={() => void onCommand('table.removeSource', { sourceId: source.id })} />)}</ul>}
   </div>;
 }
 
@@ -125,7 +126,8 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
   const [manualError, setManualError] = useState('');
   const [applying, setApplying] = useState(false);
   const [applyFeedback, setApplyFeedback] = useState('');
-  const isOwner = view.actor.role === 'owner';
+  // Equal permissions (F015): every member manages rules like the owner.
+  const isOwner = viewerCan(view, 'rules.approve');
   const readOnly = busy === 'table.readOnly';
   const program = state.program;
   const candidateChange = state.candidate?.change.kind === 'table' ? state.candidate.change : null;
@@ -336,8 +338,8 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
 
   return <div className="tt-canvas-inline tt-table-collection">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">SHARED RECORDS</span><strong>{collection?.title ?? node.title}</strong><small>{rows.length} {rows.length === 1 ? 'record' : 'records'} · data r{state.dataRevision}</small></div>
-    {expanded && collection && view.actor.role === 'owner' && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
-    {expanded && collection && view.actor.role === 'owner' && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
+    {expanded && collection && viewerCan(view, 'data.columns') && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
+    {expanded && collection && viewerCan(view, 'data.import') && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
     {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">No records are available in this collection.</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => <td key={column.id}>{formatComputed(computeRecordRow(computed, collectionId, row)[column.id])}</td>)}</tr>)}</tbody></table></div>}
     {expanded && selectedRecord && <section className="tt-table-record-actions" aria-label={`Actions for ${recordLabel(selectedRecord, collection, view.members)}`}>
       <div><strong>{recordLabel(selectedRecord, collection, view.members)}</strong></div>

@@ -365,6 +365,14 @@ async function issueCommand(
   return { ...result, envelope };
 }
 
+/** F035: the owner (or another manager) gives a member a role through the public command. */
+async function assignRole(stub: DurableObjectStub<Room>, roomId: string, manager: TestActor, actorId: string, roleId: string): Promise<WorkspaceView> {
+  const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, manager);
+  const result = await issueCommand(stub, current.body, manager, 'access.assign', { actorId, roleId });
+  expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+  return (result.body as CommandAck).workspace;
+}
+
 async function inspectRoom<T>(stub: DurableObjectStub<Room>, query: string): Promise<T[]> {
   return runInDurableObject(stub, (instance) => instance.repository.storage.sql.exec<T & Record<string, SqlStorageValue>>(query).toArray());
 }
@@ -1198,8 +1206,10 @@ describe('Cloudflare room Durable Object', () => {
     expect(JSON.stringify(participantStart.body)).toContain('PRIVATE_TABLE_SOURCE_SENTINEL');
     if (participantStart.body.domain.kind !== 'table') throw new Error('Expected participant table projection.');
     expect(participantStart.body.domain.sources.map(source => source.id)).toEqual([sourceId]);
-    // F008: members may add files (covered in server/authority.test.ts) but only the owner removes them.
-    const ownerOnlyRemove = await issueCommand(stub, participantStart.body, firstMember, 'table.removeSource', { sourceId });
+    // F008/F035: members may add files; removing needs files.remove, which a Contributor lacks.
+    await assignRole(stub, roomId, owner, firstMember.id, 'contributor');
+    const contributorView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
+    const ownerOnlyRemove = await issueCommand(stub, contributorView.body, firstMember, 'table.removeSource', { sourceId });
     expect(ownerOnlyRemove.response.status).toBe(403);
 
     const eventRows = await inspectRoom<{ event_data: SqlStorageValue }>(stub,
@@ -1431,7 +1441,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(doubleJoin.body.errorCode).toBe('INVITE_ALREADY_USED');
   });
 
-  it('rejects member removal by non-owners, of the owner, of unknown actors, with malformed bodies, and outside tables (F003-T1)', async () => {
+  it('rejects member removal without members.remove, of the owner, of unknown actors, with malformed bodies, and outside tables (F003-T1, F035)', async () => {
     const owner = newActor('Guard owner');
     const firstMember = newActor('Guard first member');
     const secondMember = newActor('Guard second member');
@@ -1452,6 +1462,7 @@ describe('Cloudflare room Durable Object', () => {
         method: 'POST', body, mutation: true,
       });
 
+    await assignRole(stub, roomId, owner, firstMember.id, 'editor');
     const byMember = await remove(firstMember, { actorId: secondMember.id });
     expect(byMember.response.status).toBe(403);
     expect(byMember.body.errorCode).toBe('ROLE_FORBIDDEN');
@@ -1661,13 +1672,18 @@ describe('Cloudflare room Durable Object', () => {
       expect(redeemed.body.actor).toMatchObject({ actorId: invited.id, seat: 'member-1' });
     });
 
-    it('limits link management to the table owner, validates bodies, and rejects unknown, expired, and non-table links (F003-T3)', async () => {
+    it('limits link management to members.invite, validates bodies, and rejects unknown, expired, and non-table links (F003-T3, F035)', async () => {
       const table = await linkTable('Auth link owner');
       const link = await table.createLink(1);
       const participant = await table.joiner('Auth link participant');
       expect((await table.join(participant, link.link)).response.status).toBe(200);
       const outsider = await table.joiner('Auth link outsider');
       const path = `/api/workspaces/${table.roomId}/invite-link`;
+      // F035: an unassigned member holds members.invite and reads the link; a Viewer does not.
+      const byDefaultMember = await call<LinkStatus>(table.stub, path, participant);
+      expect(byDefaultMember.response.status).toBe(200);
+      expect(byDefaultMember.body.enabled).toBe(true);
+      await assignRole(table.stub, table.roomId, table.owner, participant.id, 'viewer');
 
       expectError(await call<PublicError>(table.stub, path, participant), 403, 'ROLE_FORBIDDEN');
       expectError(await call<PublicError>(table.stub, path, participant, {
@@ -1878,8 +1894,12 @@ describe('Cloudflare room Durable Object', () => {
     });
     expect(stolenReplay.response.status).toBe(409);
 
-    const learnerDenied = await issueCommand(stub, redeemed.body, learner, 'teaching.setParameters', { force: 20, mass: 2, time: 2 });
+    // F035: the Learner preset has no lesson.parameters (an unassigned learner would).
+    await assignRole(stub, roomId, owner, learner.id, 'learner');
+    const learnerPreset = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, learner);
+    const learnerDenied = await issueCommand(stub, learnerPreset.body, learner, 'teaching.setParameters', { force: 20, mass: 2, time: 2 });
     expect(learnerDenied.response.status).toBe(403);
+    expect((learnerDenied.body as PublicError).errorCode).toBe('FORBIDDEN');
     const ownerBeforeNote = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
     const privateNote = await issueCommand(stub, ownerBeforeNote.body, owner,
       'teaching.saveNote', { text: 'private teacher key' });
@@ -2194,13 +2214,14 @@ describe('Cloudflare room Durable Object', () => {
 
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
     expect(poll.response.status).toBe(200);
-    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification });
+    // Shared rule-draft history (F015/F034): the job view names the requester and its time.
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number) });
 
     const retry = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
       method: 'POST', body: input, mutation: true,
     });
     expect(retry.response.status).toBe(200);
-    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification });
+    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number) });
     expect(vi.mocked(proposeChange)).toHaveBeenCalledTimes(1);
 
     const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
@@ -2229,7 +2250,7 @@ describe('Cloudflare room Durable Object', () => {
     const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
     expect(job.status).toBe('completed');
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
-    expect(poll.body).toEqual({ id: jobId, status: 'completed' });
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', askedBy: owner.id, createdAt: expect.any(Number) });
   });
 
   it('maps failed model jobs to actionable safe messages without exposing provider details', async () => {
@@ -2567,7 +2588,7 @@ describe('Cloudflare room Durable Object', () => {
     expect(orphan.body).toMatchObject({ id: orphanId, status: 'failed' });
   });
 
-  it('requires an eligible model role, explicit consent, and the current opaque revision before reserving work', async () => {
+  it('requires rules.draft, explicit consent, and the current opaque revision before reserving work (F035)', async () => {
     const owner = newActor('Model teacher');
     const learner = newActor('Model learner');
     await Promise.all([saveActor(owner), saveActor(learner)]);
@@ -2579,16 +2600,20 @@ describe('Cloudflare room Durable Object', () => {
       method: 'POST', body: { ticket: invite.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
     });
     expect(joined.response.status).toBe(200);
+    await assignRole(stub, roomId, owner, learner.id, 'learner');
+    const learnerPreset = (await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, learner)).body;
+    const ownerNow = (await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner)).body;
 
     const learnerRequest = await call<PublicError>(stub, `/api/workspaces/${roomId}/model`, learner, {
       method: 'POST', mutation: true,
-      body: { commandId: randomUUID(), expectedRevision: joined.body.revision, expectedEpoch: joined.body.epoch,
+      body: { commandId: randomUUID(), expectedRevision: learnerPreset.revision, expectedEpoch: learnerPreset.epoch,
         prompt: 'Suggest a small change', consent: true },
     });
     expect(learnerRequest.response.status).toBe(403);
+    expect(learnerRequest.body.errorCode).toBe('ROLE_FORBIDDEN');
     const noConsent = await call<PublicError>(stub, `/api/workspaces/${roomId}/model`, owner, {
       method: 'POST', mutation: true,
-      body: { commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      body: { commandId: randomUUID(), expectedRevision: ownerNow.revision, expectedEpoch: ownerNow.epoch,
         prompt: 'Suggest a small change', consent: false },
     });
     expect(noConsent.response.status).toBe(400);
@@ -2600,6 +2625,59 @@ describe('Cloudflare room Durable Object', () => {
     expect(stale.response.status).toBe(409);
     expect((stale.body as PublicError).errorCode).toBe('STALE_REVISION');
     expect(await inspectRoom(stub, 'SELECT * FROM model_jobs')).toHaveLength(0);
+  });
+
+  it('lets an unassigned table member draft with AI, ask the table AI and read the invite link, and refuses a Viewer each (F035)', async () => {
+    const owner = newActor('Permission owner');
+    const member = newActor('Permission member');
+    await Promise.all([saveActor(owner), saveActor(member)]);
+    const { roomId, stub } = await createActiveEquipmentTable(owner);
+    const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-1' }, mutation: true,
+    });
+    const joined = await call<WorkspaceView>(stub, '/internal/redeem', member, {
+      method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(joined.response.status).toBe(200);
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => modelResult(request));
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) =>
+      assistantResponse(input, { kind: 'explanation', text: 'Available equipment can be borrowed.', references: [] }));
+    const inviteLinkPath = `/api/workspaces/${roomId}/invite-link`;
+    const request = (view: WorkspaceView, prompt: string) => ({
+      commandId: randomUUID(), expectedRevision: view.revision, expectedEpoch: view.epoch, prompt, consent: true,
+    });
+
+    let view = (await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, member)).body;
+    const draftInput = request(view, 'Add a due date column.');
+    const draft = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, member, { method: 'POST', body: draftInput, mutation: true });
+    expect(draft.response.status, JSON.stringify(draft.body)).toBe(202);
+    const draftJob = await waitForModelJob(stub, modelJobId(roomId, view.epoch, member.id, draftInput.commandId), member.id, roomId, view.epoch);
+    expect(draftJob.status).toBe('completed');
+    expect(vi.mocked(proposeChange)).toHaveBeenCalledTimes(1);
+
+    view = (await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, member)).body;
+    const askInput = request(view, 'What does this table allow?');
+    const asked = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, member, { method: 'POST', body: askInput, mutation: true });
+    expect(asked.response.status, JSON.stringify(asked.body)).toBe(202);
+    const askJob = await waitForTableAssistantJob(stub, roomId, member, tableAssistantJobId(roomId, view.epoch, member.id, askInput.commandId));
+    expect(askJob).toMatchObject({ status: 'completed', result: { kind: 'explanation' } });
+    expect((await call<{ enabled: boolean }>(stub, inviteLinkPath, member)).response.status).toBe(200);
+
+    await assignRole(stub, roomId, owner, member.id, 'viewer');
+    view = (await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, member)).body;
+    expect(view.domain.access?.assignments).toEqual({ [member.id]: 'viewer' });
+    const deniedDraft = await call<PublicError>(stub, `/api/workspaces/${roomId}/model`, member, {
+      method: 'POST', body: request(view, 'Add a due date column.'), mutation: true,
+    });
+    expect([deniedDraft.response.status, deniedDraft.body.errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    const deniedAsk = await call<PublicError>(stub, `/api/workspaces/${roomId}/assistant`, member, {
+      method: 'POST', body: request(view, 'What does this table allow?'), mutation: true,
+    });
+    expect([deniedAsk.response.status, deniedAsk.body.errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    const deniedLink = await call<PublicError>(stub, inviteLinkPath, member);
+    expect([deniedLink.response.status, deniedLink.body.errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    expect(vi.mocked(proposeChange)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(respondToTablePrompt)).toHaveBeenCalledTimes(1);
   });
 
   it('pushes membership revisions to connected actors with their own projection (F015 open visibility: the teacher note and draft reach learners)', async () => {

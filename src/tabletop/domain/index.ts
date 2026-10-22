@@ -1,3 +1,4 @@
+import { handleAccessCommand } from './access';
 import { DomainError, type ActorContext, type CaseKind, type DomainCommand, type DomainDecision, type DomainState } from '../shared/contracts';
 import { createInvoiceState, handleInvoiceCommand } from './invoice';
 import { createTeachingState, handleTeachingCommand } from './teaching';
@@ -24,6 +25,8 @@ export function decideDomain(state: DomainState, command: DomainCommand, ctx: Ac
   }
   let decision: { state: DomainState; label: string } | null = null;
   if (state.kind === 'table' && command.type === 'canvas.layout') return handleCanvasLayout(state, command.payload, ctx);
+  const access = handleAccessCommand(state, command.type, command.payload, ctx);
+  if (access) return access;
   if (state.kind === 'table') decision = handleTableCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'invoice') decision = handleInvoiceCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'teaching') decision = handleTeachingCommand(state, command.type, command.payload, ctx);

@@ -972,15 +972,31 @@ try {
     };
   }
 
-  async function assertMemberCannotUsePrivateTools(member, tableId, revision, epoch, source) {
+  async function assignRole(owner, tableId, actorId, roleId) {
+    const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const assigned = await api(owner, `/api/workspaces/${tableId}/commands`, {
+      commandId: randomUUID(), expectedRevision: current.revision, expectedEpoch: current.epoch,
+      type: 'access.assign', payload: { actorId, roleId },
+    });
+    expect(assigned.status).toBe(200);
+  }
+
+  // F035: drafting with AI needs rules.draft. An unassigned member holds it, so the check uses a Viewer and
+  // then returns the member to the default role for the rest of the case.
+  async function assertMemberCannotUsePrivateTools(owner, member, tableId, source) {
     if (source) expect([403, 404]).toContain((await api(member, `/api/workspaces/${tableId}/sources/${source.id}`)).status);
+    const memberView = (await api(member, `/api/workspaces/${tableId}`)).body;
+    await assignRole(owner, tableId, memberView.actor.actorId, 'viewer');
+    const viewerView = (await api(member, `/api/workspaces/${tableId}`)).body;
     const beforeCalls = providerCalls;
     const denied = await api(member, `/api/workspaces/${tableId}/model`, {
-      commandId: randomUUID(), expectedRevision: revision, expectedEpoch: epoch,
-      prompt: 'A participant must not request a private table draft.', consent: true,
+      commandId: randomUUID(), expectedRevision: viewerView.revision, expectedEpoch: viewerView.epoch,
+      prompt: 'A Viewer must not request a table draft.', consent: true,
     });
     expect(denied.status).toBe(403);
+    expect(denied.body.errorCode).toBe('ROLE_FORBIDDEN');
     expect(providerCalls).toBe(beforeCalls);
+    await assignRole(owner, tableId, memberView.actor.actorId, 'default');
   }
 
   async function runCase(scenario, index) {
@@ -1004,7 +1020,7 @@ try {
     const memberOne = await addMember(owner, memberOneActor, 'member-1', tableId);
     const memberTwo = await addMember(owner, memberTwoActor, 'member-2', tableId);
     const members = [memberOne, memberTwo];
-    const ownerReady = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    let ownerReady = (await api(owner, `/api/workspaces/${tableId}`)).body;
     // F015 open visibility: members receive the owner's whole table, including evidence quotations,
     // draft and draft history (was: evidence stripped and draft hidden for members).
     const visibleProgram = structuredClone(ownerReady.domain.program);
@@ -1018,7 +1034,8 @@ try {
       expect(projection.body.domain.candidate).toEqual(ownerReady.domain.candidate);
       expect(projection.body.domain.revisions).toEqual(ownerReady.domain.revisions);
     }
-    await assertMemberCannotUsePrivateTools(memberOne, tableId, ownerReady.revision, ownerReady.epoch, source);
+    await assertMemberCannotUsePrivateTools(owner, memberOne, tableId, source);
+    ownerReady = (await api(owner, `/api/workspaces/${tableId}`)).body;
 
     const activeAfterAction = await exerciseAction(scenario, owner, members, tableId, ownerReady);
     for (const member of members) {
@@ -1077,7 +1094,7 @@ try {
       await assertSharedPosition(member, `table.view.${pinnedView.id}`, pin.point);
       await assertSharedPosition(member, newViewId, newViewPoint);
     }
-    if (source) await assertMemberCannotUsePrivateTools(memberOne, tableId, afterEdit.revision, afterEdit.epoch, source);
+    if (source) await assertMemberCannotUsePrivateTools(owner, memberOne, tableId, source);
     const screenshotViewId = {
       cafe: 'table.view.cafe-floor',
       shadow: 'table.view.light-shadow-scene',

@@ -627,7 +627,7 @@ function publicResult(
 ): TableAssistantResult {
   const text = safeText(raw.text, replacements, 8000);
   if (raw.kind === 'build-request') {
-    if (context.role !== 'owner') return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'Only the table owner can prepare setup changes.');
+    // F035: any member may be offered setup changes; preparing them (POST /model) checks rules.draft.
     return tableAssistantResultSchema.parse({ kind: 'build-request', text });
   }
   if (raw.kind === 'explanation') {

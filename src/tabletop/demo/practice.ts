@@ -11,6 +11,7 @@ import {
   type WorkspaceView,
 } from '../shared/contracts';
 import { createDomain, decideDomain, projectDomain } from '../domain';
+import { memberPermissions } from '../shared/permissions';
 import { canonicalJson } from '../domain/helpers';
 import { PRACTICE_SCENARIOS, type PracticeImportedSampleContext, type PracticeScenario, type PracticeScenarioStepDefinition } from './scenarios';
 import { MAX_PRACTICE_FILE_EXCERPT, parsePracticeFile, PracticeFileError, type ParsedPracticeFile } from './sample-parser';
@@ -165,8 +166,22 @@ function roleSeat(member: Member): { role: Role; seat?: Seat } {
   return member.seat === undefined ? { role: member.role } : { role: member.role, seat: member.seat };
 }
 
+/**
+ * F035: the demo seats keep their game roles, so learners and players start on the Learner and Player
+ * presets instead of the default (everything except reset). The UI and domain then agree on what each
+ * synthetic member may do.
+ */
+function practiceAccess(kind: CaseKind): DomainState['access'] {
+  const preset = kind === 'teaching' ? 'learner' : kind === 'encounter' ? 'player' : null;
+  if (!preset) return undefined;
+  const assignments = Object.fromEntries(SYNTHETIC_MEMBERS[kind as PracticeCaseKind].filter((member) => member.seat !== undefined).map((member) => [member.actorId, preset]));
+  return { roles: [], assignments };
+}
+
 function createPracticeDomain(kind: CaseKind, context: ActorContext): DomainState {
   const state = createDomain(kind, context);
+  const access = practiceAccess(kind);
+  if (access) state.access = access;
   if (state.kind !== 'invoice') return state;
   const change = { kind: 'invoice' as const, operations: [] };
   const revision = state.revisions[0];
@@ -474,7 +489,12 @@ export class PracticeRuntime {
 
   private contextFor(member: Member, now: number): ActorContext {
     const seat = roleSeat(member);
+    const kind = this.scenario.kind;
+    // The domain state does not exist yet while the first context creates it; the creator holds everything.
+    const access = (this.domainState as DomainState | undefined)?.access;
+    const creator = member.seat === undefined;
     return {
+      permissions: memberPermissions(kind, access, member.actorId, creator),
       actorId: member.actorId,
       name: member.name,
       role: seat.role,

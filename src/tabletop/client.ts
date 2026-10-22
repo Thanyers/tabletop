@@ -40,6 +40,10 @@ export interface ModelJob {
   candidateId?: string;
   /** Present when the AI asked the owner one question instead of drafting rules (F012). */
   clarification?: { question: string; options: string[] };
+  /** Who asked, when and what (open visibility, F034). */
+  askedBy?: string;
+  createdAt?: number;
+  prompt?: string;
 }
 
 export interface TabletopCapabilities {
@@ -359,6 +363,14 @@ export class TabletopClient {
       throw new ApiFailure('The AI proposal status could not be read.', 502);
     }
     return job;
+  }
+
+  /** Every member's rule requests on this table (open visibility, F034), newest first. */
+  async modelHistory(workspaceId: string): Promise<ModelJob[]> {
+    const page = await this.getJson<{ items?: unknown }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/model`);
+    if (!Array.isArray(page.items)) throw new ApiFailure('The rule request history could not be read.', 502);
+    return page.items.filter((job): job is ModelJob => typeof job === 'object' && job !== null
+      && typeof (job as ModelJob).id === 'string' && ['queued', 'running', 'completed', 'complete', 'failed'].includes((job as ModelJob).status));
   }
 
   async requestTableAssistant(view: WorkspaceView, prompt: string, commandId = crypto.randomUUID()): Promise<TableAssistantJob> {

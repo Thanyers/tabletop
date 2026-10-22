@@ -1,3 +1,5 @@
+import { RoleSettings } from './ui/RoleSettings';
+import { viewerCan } from './shared/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
@@ -168,7 +170,7 @@ export default function TabletopApp() {
     if (next) projectionSequenceRef.current += 1;
     setView(next);
     if (changedTable) {
-      const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && next.actor.role === 'owner' && next.domain.candidate && next.domain.candidate.status !== 'active';
+      const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && viewerCan(next, 'rules.approve') && next.domain.candidate && next.domain.candidate.status !== 'active';
       // Chat-first tables open nothing until there is something to review (F006).
       const startObject = pendingRules ? 'table.rules' : null;
       setSelectedNodeId(startObject);
@@ -594,7 +596,7 @@ export default function TabletopApp() {
   const requestAI = useCallback((targetView: WorkspaceView, prompt: string, sourceId: string | undefined, commandId: string): Promise<ModelJob> => {
     if (targetView.kind === 'table' && capabilities.tableReadOnly) return Promise.reject(new ApiFailure('AI proposals for shared tables are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('AI proposals are not enabled for this workspace.', 403));
-    const roleAllowed = targetView.kind === 'invoice' || targetView.kind === 'table' ? targetView.actor.role === 'owner' : targetView.kind === 'teaching' ? targetView.actor.role === 'teacher' : targetView.actor.role === 'dm';
+    const roleAllowed = viewerCan(targetView, 'rules.draft');
     if (!roleAllowed) return Promise.reject(new ApiFailure('This seat cannot request an AI draft.', 403));
     return tabletopClient.requestModel(targetView, prompt, sourceId, commandId);
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
@@ -792,6 +794,7 @@ export default function TabletopApp() {
     ask: requestTableAssistant,
     pollAsk: pollTableAssistant,
     loadHistory: (target) => loadTableAssistantHistory(target),
+    loadDraftHistory: (target) => tabletopClient.modelHistory(target.id),
     historyRefreshKey: assistantActivity,
     confirm: confirmTableAssistantAction,
     attach: importTableFile,
@@ -822,7 +825,7 @@ export default function TabletopApp() {
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
-  const canInvite = view.kind === 'table' ? view.actor.role === 'owner' && !tableReadOnly : view.kind !== 'invoice' && ['teacher', 'dm'].includes(view.actor.role);
+  const canInvite = view.kind !== 'invoice' && viewerCan(view, 'members.invite') && !(view.kind === 'table' && tableReadOnly);
   const canReset = ['owner', 'teacher', 'dm'].includes(view.actor.role) && !tableReadOnly;
   const canRename = canReset;
   const submitRename = () => {
@@ -836,7 +839,7 @@ export default function TabletopApp() {
     if (title === workspaceLabel(view)) return;
     void runCommand('workspace.rename', { title }).then((renamed) => { if (renamed) showNotice(`Table renamed to ${title}.`, 'success'); });
   };
-  const canAskAI = ((view.kind === 'invoice' || view.kind === 'table') && view.actor.role === 'owner') || (view.kind === 'teaching' && view.actor.role === 'teacher') || (view.kind === 'encounter' && view.actor.role === 'dm');
+  const canAskAI = viewerCan(view, 'rules.draft');
   const connectedSeats = new Set(view.members.map((member) => member.seat).filter(Boolean));
   const inviteSeats: Seat[] = view.kind === 'teaching' ? ['learner-1', 'learner-2'] : view.kind === 'encounter' ? ['mira', 'pip'] : view.kind === 'table' ? ['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] : [];
   const inviteIsHeld = inviteState !== null && !inviteState.revoked && inviteState.invite.expiresAt > Date.now() && !connectedSeats.has(inviteState.seat);
@@ -916,13 +919,13 @@ export default function TabletopApp() {
         focusRequestKey={focusRequestKey}
         openedObjectId={openedObjectId}
         onOpenObject={setOpenedObjectId}
-        onEditRules={view.kind === 'table' && view.actor.role === 'owner' && capabilities.model.enabled && !tableReadOnly ? tableChat.editRules : undefined}
+        onEditRules={viewerCan(view, 'rules.draft') && capabilities.model.enabled && !tableReadOnly ? tableChat.editRules : undefined}
         inspectorContent={<>
           {selectedNode && compiled.plan && <ObjectInspector node={selectedNode} plan={compiled.plan} onClose={() => setSelectedNodeId(null)} />}
         </>}
       />
 
-      {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} onRemoveMember={view.kind === 'table' && canInvite ? (actorId) => void removeMember(actorId) : undefined} onInviteLinkNotice={view.kind === 'table' && canInvite && capabilities.inviteLinks ? showNotice : undefined} linkInvites={view.kind === 'table' && capabilities.inviteLinks === true} />}
+      {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} onRemoveMember={view.kind === 'table' && viewerCan(view, 'members.remove') && !tableReadOnly ? (actorId) => void removeMember(actorId) : undefined} onInviteLinkNotice={view.kind === 'table' && canInvite && capabilities.inviteLinks ? showNotice : undefined} linkInvites={view.kind === 'table' && capabilities.inviteLinks === true} onAccessCommand={(type, payload) => runCommand(type, payload)} />}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
     </UploadCapabilityProvider>
@@ -970,9 +973,10 @@ function ObjectInspector({ node, plan, onClose }: { node: ExecutablePlan['nodes'
   return <section className="tt-object-inspector" aria-labelledby="tt-selected-object-title"><header><span className="tt-object-inspector__glyph"><Activity size={15} /></span><div><span className="tt-kicker">SELECTED OBJECT</span><h2 id="tt-selected-object-title">{node.title}</h2></div><button type="button" aria-label="Close object details" onClick={onClose}><X size={14} /></button></header><p className="tt-object-capability">{node.capability} · version {node.version}</p><div className="tt-object-facts">{inputs.length > 0 ? inputs.map(([key, value]) => <div key={key}><span>Input · {key}</span><strong title={summarize(value)}>{summarize(value)}</strong></div>) : <div><span>Inputs</span><strong>No literal values; data comes through a connected object.</strong></div>}{outputs.map(([key, value]) => <div key={`out-${key}`}><span>Output · {key}</span><strong title={summarize(value)}>{summarize(value)}</strong></div>)}</div>{links.length > 0 && <ul className="tt-object-links">{links.slice(0, 4).map((link) => <li key={link.id}><span>{link.from.node === node.id ? 'Sends' : 'Receives'}</span><strong>{link.valueType}</strong><small>{link.from.node === node.id ? `${link.to.node} · ${link.to.port}` : `${link.from.node} · ${link.from.port}`}</small></li>)}</ul>}</section>;
 }
 
-function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousInvitesRevoked, copied, onSelectSeat, selectedSeat, onCreate, onCopy, onClose, onRemoveMember, onInviteLinkNotice, linkInvites = false }: { view: WorkspaceView; availableSeats: Seat[]; canInvite: boolean; busy: boolean; invite: InviteState; previousInvitesRevoked: boolean; copied: boolean; onSelectSeat: (seat: Seat | null) => void; selectedSeat: Seat | null; onCreate: (seat: Seat, replaceOutstanding?: boolean) => void; onCopy: () => void; onClose: () => void; onRemoveMember?: (actorId: string) => void; onInviteLinkNotice?: (text: string, tone: 'success' | 'error' | 'info') => void; linkInvites?: boolean }) {
+function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousInvitesRevoked, copied, onSelectSeat, selectedSeat, onCreate, onCopy, onClose, onRemoveMember, onInviteLinkNotice, linkInvites = false, onAccessCommand }: { view: WorkspaceView; availableSeats: Seat[]; canInvite: boolean; busy: boolean; invite: InviteState; previousInvitesRevoked: boolean; copied: boolean; onSelectSeat: (seat: Seat | null) => void; selectedSeat: Seat | null; onCreate: (seat: Seat, replaceOutstanding?: boolean) => void; onCopy: () => void; onClose: () => void; onRemoveMember?: (actorId: string) => void; onInviteLinkNotice?: (text: string, tone: 'success' | 'error' | 'info') => void; linkInvites?: boolean; onAccessCommand?: (type: 'access.saveRole' | 'access.deleteRole' | 'access.assign', payload: unknown) => Promise<unknown> }) {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const removable = onRemoveMember ? view.members.filter((member) => member.actorId !== view.actor.actorId) : [];
+  // The owner can never be removed; under equal permissions (F015) members may remove other members.
+  const removable = onRemoveMember ? view.members.filter((member) => member.actorId !== view.actor.actorId && member.role !== 'owner') : [];
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
@@ -1013,6 +1017,7 @@ function InviteDialog({ view, availableSeats, canInvite, busy, invite, previousI
             <button type="button" className="tt-button tt-button--quiet" disabled={busy} aria-label={`Remove ${member.name}`} onClick={() => setConfirmRemove(member.actorId)}>Remove</button></>}
       </li>)}
     </ul>}
+    {onAccessCommand && <RoleSettings view={view} busy={busy} onCommand={onAccessCommand} />}
     {previousInvitesRevoked && <div className="tt-invite-status tt-invite-status--revoked"><ShieldCheck size={15} /><span><strong>Previous invitation links revoked</strong><small>The table reset invalidated links and removed the previous members.</small></span></div>}
     {!linkInvites && (invite && !invite.revoked && activeMember ? <div className="tt-invite-status tt-invite-status--joined"><Check size={15} /><span><strong>{activeMember.name} joined as {seatLabel(invite.seat)}</strong><small>This one-use invitation has been accepted.</small></span></div> : invite && !invite.revoked && expired ? <div className="tt-invite-status tt-invite-status--expired"><CircleAlert size={15} /><span><strong>Invitation expired</strong><small>Create a new one for this seat.</small></span></div> : invite && !invite.revoked ? <div className="tt-invite-created"><div className="tt-invite-status"><Activity size={15} /><span><strong>Waiting for {seatLabel(invite.seat)}</strong><small>Expires {new Date(invite.invite.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span></div><label htmlFor="tt-invite-link">One-use invitation link</label><div className="tt-invite-link-row"><input id="tt-invite-link" value={invite.url} readOnly onFocus={(event) => event.currentTarget.select()} /><button type="button" className="tt-button tt-button--primary" onClick={onCopy}><Clipboard size={14} /> {copied ? 'Copied' : 'Copy link'}</button></div><small>The link is held only in this open panel. Send it to the person taking this seat.</small></div> : null)}
     {!linkInvites && (canInvite ? <div className="tt-invite-choose"><span className="tt-kicker">AVAILABLE SEATS</span>{seatChoices.length === 0 ? <p>All supported seats are filled. Reset a table to revoke access or choose another table.</p> : seatChoices.map((seat) => <button type="button" className={selectedSeat === seat ? 'is-selected' : ''} key={seat} onClick={() => onSelectSeat(seat)}><span><strong>{seatLabel(seat)}</strong><small>{view.kind === 'teaching' ? 'Learner view and private answer' : view.kind === 'encounter' ? 'Player view and character actions' : 'Shared active records and table actions'}</small></span>{selectedSeat === seat ? <Check size={14} /> : <ArrowRight size={14} />}</button>)}</div> : <div className="tt-invite-status"><Users size={15} /><span><strong>Table members</strong><small>{view.kind === 'table' ? 'Only the table owner can send invitations.' : 'Only the teacher or Dungeon Master can send invitations.'}</small></span></div>)}

@@ -1,5 +1,6 @@
 import type { WorkspaceView } from '../shared/contracts';
-import { isSharedCanvasId } from '../shared/canvas-layout-ids';
+import { isSharedCanvasId, isSharedChatCanvasId } from '../shared/canvas-layout-ids';
+import { VISIBILITY_POLICY, type VisibilityPolicy } from '../shared/visibility';
 import { isCanvasNoteId } from './canvas-flow';
 
 export interface CanvasLayoutNodeIdentity {
@@ -11,11 +12,15 @@ export function canvasLayoutScopeKey(view: Pick<WorkspaceView, 'id' | 'kind' | '
   return JSON.stringify([view.id, view.kind, view.epoch, view.actor.actorId, view.actor.role, view.actor.seat ?? null]);
 }
 
-/** Rules stay owner-private while they contain only an unactivated candidate. */
-export function isSharedCanvasNodeForView(id: string, view: WorkspaceView): boolean {
+/**
+ * Under 'private', Rules stay owner-private while they contain only an unactivated candidate and chat cards
+ * stay per person. Under 'open' (F034) everyone sees both, so they share one position.
+ */
+export function isSharedCanvasNodeForView(id: string, view: WorkspaceView, policy: VisibilityPolicy = VISIBILITY_POLICY): boolean {
   if (view.kind !== 'table' || view.domain.kind !== 'table' || !isSharedCanvasId(id)) return false;
+  if (isSharedChatCanvasId(id)) return policy === 'open';
   if (id === 'table.sources') return view.domain.sources.length > 0;
-  return id !== 'table.rules' || view.domain.program !== null;
+  return id !== 'table.rules' || view.domain.program !== null || (policy === 'open' && view.domain.candidate !== null);
 }
 
 /** Return only currently unplaced, eligible nodes; a later node can be seeded independently. */

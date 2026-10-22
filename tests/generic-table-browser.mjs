@@ -1255,7 +1255,8 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     expectedPromptContains: ownerPrompt, forbiddenTexts: [...forbidden, firstPrompt, firstText, followup],
   };
   const ownerCalls = getProviderCalls();
-  const memberCardForOwner = owner.getByRole('article', { name: firstPrompt, exact: true });
+  // F034-T3: another member's card is titled "<asker>: <prompt>".
+  const memberCardForOwner = owner.getByRole('article', { name: `${profile.actor.name}: ${firstPrompt}`, exact: true });
   await expect(memberCardForOwner).toBeVisible();
   await expect(memberCardForOwner.getByTestId('table-chat-answer')).toContainText(firstText);
   await expect(memberCardForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${profile.actor.name}`);
@@ -1269,7 +1270,7 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   });
   // The member sees the owner's card too, labelled with the owner as the asker.
   await member.reload();
-  const ownerCardForMember = member.getByRole('article', { name: ownerPrompt, exact: true });
+  const ownerCardForMember = member.getByRole('article', { name: `${ownerProfile.actor.name}: ${ownerPrompt}`, exact: true });
   await expect(ownerCardForMember.getByTestId('table-chat-answer')).toContainText(ownerReply.result.text);
   await expect(ownerCardForMember.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${ownerProfile.actor.name}`);
   await expect(member.getByRole('article', { name: firstPrompt, exact: true }).locator('.tt-chat-card__asker')).toHaveCount(0);
@@ -1494,7 +1495,41 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   expect(current.domain.records.people.find((row) => row.id === 'cy').values.slot).toBe('night');
   const memberRoster = await openCanvasObject(member, 'table.collection.people');
   await expect(memberRoster).toContainText('Shift roster');
+  await verifyRoleAssignment(owner, member, room.id, api);
   mark('Generic table: AI clarifying question with three answers sends the picked answer under table consent, empty completed job offers the message again, table unchanged (F012), JSON source, atomic multi-record action, availability check, unique records, and one-import drag/drop');
+}
+
+// F035: the owner gives a member a role in People; the member's rule controls follow the live projection.
+async function verifyRoleAssignment(owner, member, tableId, api) {
+  const memberView = (await api(member, `/api/workspaces/${tableId}`)).body;
+  const memberName = memberView.actor.name;
+  expect(memberView.domain.access?.assignments?.[memberView.actor.actorId]).toBeUndefined();
+  const memberRules = await openCanvasObject(member, 'table.rules');
+  await expect(memberRules.getByRole('button', { name: 'Edit rules', exact: true })).toBeVisible();
+
+  await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+  const dialog = owner.getByRole('dialog', { name: 'People at this table' });
+  const roles = dialog.getByRole('region', { name: 'Roles and permissions' });
+  const select = roles.getByRole('combobox', { name: `Role for ${memberName}`, exact: true });
+  await expect(select.locator('option:checked')).toHaveText('Default (all except delete table)');
+  const assigned = owner.waitForResponse((response) => isCommandResponse(response, 'access.assign'));
+  await select.selectOption({ label: 'Viewer' });
+  expect((await assigned).status()).toBe(200);
+  await expect(select.locator('option:checked')).toHaveText('Viewer');
+  await expect.poll(async () => (await api(member, `/api/workspaces/${tableId}`)).body.domain.access?.assignments?.[memberView.actor.actorId]).toBe('viewer');
+  // The member's screen drops the rule controls once the new projection arrives, without a reload.
+  await expect(memberRules.getByRole('button', { name: 'Edit rules', exact: true })).toHaveCount(0);
+
+  await roles.locator('summary').filter({ hasText: 'Manage roles' }).click();
+  await roles.getByRole('button', { name: 'New role', exact: true }).click();
+  await roles.getByLabel('Role name').fill('Shift lead');
+  await roles.getByRole('checkbox', { name: 'Use table actions', exact: true }).check();
+  const saved = owner.waitForResponse((response) => isCommandResponse(response, 'access.saveRole'));
+  await roles.getByRole('button', { name: 'Create role', exact: true }).click();
+  expect((await saved).status()).toBe(200);
+  await expect(roles.getByRole('list', { name: 'Roles created at this table' })).toContainText('Shift lead');
+  await expect(select.locator('option', { hasText: 'Shift lead' })).toHaveCount(1);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 }
 
 async function gameScenario({ owner, member, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
@@ -1612,7 +1647,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   // asker can confirm it (no Confirm button on the owner's screen).
   await owner.reload();
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
-  const memberProposalForOwner = owner.getByRole('article', { name: memberPrompt, exact: true });
+  const memberProposalForOwner = owner.getByRole('article', { name: `${memberName}: ${memberPrompt}`, exact: true });
   await expect(memberProposalForOwner.getByTestId('table-chat-answer')).toContainText(memberProposal.result.text);
   await expect(memberProposalForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${memberName}`);
   await expect(memberProposalForOwner).toContainText(`Only ${memberName} can confirm this proposal.`);

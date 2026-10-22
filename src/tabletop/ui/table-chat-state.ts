@@ -88,15 +88,43 @@ export function historyCard(job: TableAssistantJob, id: string): ChatCard {
   };
 }
 
+/** A rule request from history (F034): the asker's own or another member's, newest status from the server. */
+export function draftHistoryCard(job: ModelJob, id: string): ChatCard {
+  const phase: ChatCard['phase'] = job.status === 'failed' ? 'failed' : job.status === 'completed' || job.status === 'complete' ? 'complete' : 'waiting';
+  return {
+    id,
+    kind: 'draft',
+    prompt: job.prompt ?? 'Rule request',
+    createdAt: job.createdAt ?? 0,
+    phase,
+    modelJob: job,
+    error: job.status === 'failed' ? job.message ?? 'The draft could not be prepared.' : undefined,
+  };
+}
+
+const historyKey = (card: ChatCard) => card.job?.id ?? card.modelJob?.id ?? card.id;
+
 /** Merge only by an exact server job ID; the history contract does not expose command IDs. */
 export function mergeChatHistory(current: readonly ChatCard[], incoming: readonly ChatCard[]): ChatCard[] {
   const merged = new Map<string, ChatCard>();
-  for (const card of current) merged.set(card.job?.id ?? card.id, card);
+  for (const card of current) merged.set(historyKey(card), card);
   for (const card of incoming) {
-    const key = card.job?.id ?? card.id;
+    const key = historyKey(card);
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, card);
+      continue;
+    }
+    if (card.kind === 'draft' && card.modelJob) {
+      // Rule requests: keep the local card (and its id) but take the server's latest status.
+      merged.set(key, {
+        ...existing,
+        prompt: existing.prompt || card.prompt,
+        createdAt: card.createdAt || existing.createdAt,
+        modelJob: card.modelJob,
+        phase: existing.phase === 'sending' ? existing.phase : card.phase,
+        error: card.error ?? (card.phase === 'failed' ? existing.error : undefined),
+      });
       continue;
     }
     const job = card.job ?? existing.job;

@@ -35,8 +35,12 @@ describe('shared Canvas layout scope', () => {
     const active = workspace(applyTableChange(createTableState(), structuredClone(cafeQueueChange)));
 
     expect(isSharedCanvasNodeForView('table.rules', empty)).toBe(false);
-    expect(isSharedCanvasNodeForView('table.rules', candidate)).toBe(false);
+    expect(isSharedCanvasNodeForView('table.rules', candidate, 'private')).toBe(false);
     expect(isSharedCanvasNodeForView('table.rules', active)).toBe(true);
+    // Open visibility (F034): everyone sees the draft, so it shares one position; chat cards too.
+    expect(isSharedCanvasNodeForView('table.rules', candidate, 'open')).toBe(true);
+    expect(isSharedCanvasNodeForView(`table.chat.${'b'.repeat(64)}`, candidate, 'open')).toBe(true);
+    expect(isSharedCanvasNodeForView(`table.chat.${'b'.repeat(64)}`, candidate, 'private')).toBe(false);
   });
 
   it('leaves private-only empty projections unmarked and discovers later eligible shared nodes', () => {

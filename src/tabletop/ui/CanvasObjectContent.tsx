@@ -11,6 +11,7 @@ import { formatMoney } from './types';
 import { usePracticeClock } from './PracticeClock';
 import { TableCanvasObject } from './TableCanvasObjects';
 import { InvoiceResultSummary } from './InvoiceResultSummary';
+import { viewerCan } from '../shared/permissions';
 
 interface CanvasObjectContentProps {
   view: WorkspaceView;
@@ -180,6 +181,9 @@ function InvoiceRules({ view, onCommand, busy, expanded = false }: CanvasObjectC
 function LessonSource({ view, busy, onCommand, localPhysics, onLocalPhysicsChange, onResetLocalPhysics, expanded = false }: CanvasObjectContentProps) {
   const state = view.domain as TeachingState;
   const isLearner = view.actor.role === 'learner';
+  // F035: changing the shared lesson follows lesson.parameters; proposing it follows rules.draft.
+  const canSetShared = viewerCan(view, 'lesson.parameters');
+  const canPropose = viewerCan(view, 'rules.draft');
   const [draft, setDraft] = useState<PhysicsParams>(state.parameters);
   useEffect(() => { setDraft(state.parameters); }, [state.parameters.force, state.parameters.mass, state.parameters.time]);
   const value = isLearner ? localPhysics : draft;
@@ -193,9 +197,10 @@ function LessonSource({ view, busy, onCommand, localPhysics, onLocalPhysicsChang
       <p className="tt-canvas-inline__note">{isLearner ? 'Your private experiment.' : 'Adjust the shared lesson.'}</p>
     </> : <>
       <ParameterFields value={value} onChange={change} />
-      {isLearner ? <><p className="tt-canvas-inline__note">These values stay on this device. Your teacher’s lesson is unchanged.</p><button className="tt-text-button" type="button" onClick={onResetLocalPhysics}><RotateCcw size={13} /> Reset to teacher values</button></> : <div className="tt-inline-action-row">
-        <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || sameParams(draft, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('teaching.setParameters', draft)}><Save size={13} /> Update lesson</button>
-        <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || sameParams(draft, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('evolve.propose', { change: { kind: 'teaching', parameters: draft } })}><Sigma size={13} /> Propose review</button>
+      {isLearner && <><p className="tt-canvas-inline__note">These values stay on this device. Your teacher’s lesson is unchanged.</p><button className="tt-text-button" type="button" onClick={onResetLocalPhysics}><RotateCcw size={13} /> Reset to teacher values</button></>}
+      {(canSetShared || canPropose) && <div className="tt-inline-action-row">
+        {canSetShared && <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || sameParams(value, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('teaching.setParameters', value)}><Save size={13} /> {isLearner ? 'Use for the shared lesson' : 'Update lesson'}</button>}
+        {canPropose && <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || sameParams(value, state.parameters) || (!!state.candidate && state.candidate.status !== 'active')} onClick={() => void onCommand('evolve.propose', { change: { kind: 'teaching', parameters: value } })}><Sigma size={13} /> Propose review</button>}
       </div>}
     </>}
   </div>;
@@ -266,6 +271,9 @@ function LessonQuestion({ view, busy, onCommand, expanded = false }: CanvasObjec
   const state = view.domain as TeachingState;
   const isTeacher = view.actor.role === 'teacher';
   const isLearner = view.actor.role === 'learner';
+  // F035: learner views and teacher notes follow their permissions; answering stays with the learner seat.
+  const canViews = viewerCan(view, 'lesson.representation');
+  const canNote = viewerCan(view, 'lesson.note');
   const [answer, setAnswer] = useState('');
   const [note, setNote] = useState(state.teacherNote ?? '');
   useEffect(() => { setNote(state.teacherNote ?? ''); }, [state.teacherNote]);
@@ -278,14 +286,16 @@ function LessonQuestion({ view, busy, onCommand, expanded = false }: CanvasObjec
     event.preventDefault();
     void onCommand('teaching.saveNote', { text: note });
   };
-  const visibleAnswers = state.answers.filter((item) => isTeacher || item.actorId === view.actor.actorId);
+  const visibleAnswers = state.answers.filter((item) => isTeacher || canViews || item.actorId === view.actor.actorId);
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow={isTeacher ? 'TEACHER PANEL' : 'PRIVATE QUESTION'} title={isLearner ? 'Check your understanding' : 'Learner views and responses'} status={'Revision ' + state.ruleRevision} />
     {!expanded ? <div className="tt-canvas-inline__empty">{isLearner ? 'Answer privately and see feedback.' : `${view.members.filter((member) => member.role === 'learner').length} learners · ${visibleAnswers.length} private response${visibleAnswers.length === 1 ? '' : 's'}. Views and private teacher notes.`}</div> : <>
     {isLearner && <section className="tt-inline-question"><p>Where will the cart be after {number(state.parameters.time)} seconds? Use the teacher’s shared values.</p><form className="tt-answer-form" onSubmit={submit}><label htmlFor="tt-canvas-answer">Position in meters</label><div><input id="tt-canvas-answer" type="number" step="any" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="For example, 10" required /><button className="tt-button tt-button--primary" type="submit" disabled={busy !== null || !answer}><Send size={13} /> Check answer</button></div><small>Your response is private to you and your teacher.</small></form>{visibleAnswers.slice(-1).map((item) => <AnswerCard key={item.questionId + '-' + item.submittedAt} item={item} name="Your response" />)}</section>}
-    {isTeacher && <>
+    {canViews && <>
       <div className="tt-inline-learners">{view.members.filter((member) => member.role === 'learner').map((member) => <LearnerViewRow key={member.actorId} member={member} representation={state.representations[member.actorId] ?? 'scene'} difficulty={state.difficulties[member.actorId] ?? 'beginner'} disabled={busy !== null} onSave={(representation, difficulty) => void onCommand('teaching.setRepresentation', { actorId: member.actorId, representation, difficulty })} />)}</div>
       <div className="tt-inline-answers"><strong>{visibleAnswers.length} learner response{visibleAnswers.length === 1 ? '' : 's'}</strong>{visibleAnswers.length === 0 ? <span>Responses appear here after learners submit.</span> : (expanded ? visibleAnswers : visibleAnswers.slice(-3)).map((item) => <AnswerCard key={item.actorId + '-' + item.questionId + '-' + item.submittedAt} item={item} name={view.members.find((member) => member.actorId === item.actorId)?.name ?? 'Learner'} />)}</div>
+    </>}
+    {canNote && <>
       <form className="tt-note-form tt-inline-note-form" onSubmit={saveNote}><label htmlFor="tt-canvas-teacher-note">Private teacher note</label><textarea id="tt-canvas-teacher-note" maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="A note only you can see…" /><div><small>Teacher only · {note.length}/2000</small><button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || note === (state.teacherNote ?? '')}><Save size={13} /> Save note</button></div></form>
     </>}
     {!isTeacher && !isLearner && <div className="tt-canvas-inline__empty"><BookOpenCheck size={15} /> This table view does not have question controls.</div>}
@@ -370,7 +380,9 @@ function EncounterActions({ view, node, onCommand, busy, expanded = false }: Can
     && (!rule.oncePerTurn || actor.shieldUsedGeneration !== actor.turnGeneration)
     && !pending.shields.some((intent) => intent.actor === actorId || intent.target === pending.target)
     && !pauseState;
-  const canEnd = (view.actor.role === 'dm' || ownTurn) && (phase === 'turn.start' || phase === 'action.resolved') && !pending && !pauseState;
+  // F035: running the encounter follows the game.direct permission, not the DM seat.
+  const directs = viewerCan(view, 'game.direct');
+  const canEnd = (directs || ownTurn) && (phase === 'turn.start' || phase === 'action.resolved') && !pending && !pauseState;
   const nameFor = (id: string) => chars.find((character) => character.id === id)?.name ?? 'Character';
   const reactReason = pauseState ? 'The Dungeon Master paused all encounter actions.' : !actor ? 'This seat does not control a character.' : actor.ap < rule.apCost ? 'You need ' + rule.apCost + ' AP to shield; you have ' + actor.ap + '.' : rule.oncePerTurn && actor.shieldUsedGeneration === actor.turnGeneration ? 'You already used a shield this turn.' : pending?.target !== actorId && !rule.allyTarget ? 'The current rule allows self protection only.' : pending?.shields.some((intent) => intent.target === pending.target) ? 'This character is already covered by a shield.' : 'Your character has already submitted a reaction.';
   return <div className="tt-canvas-inline">
@@ -378,11 +390,11 @@ function EncounterActions({ view, node, onCommand, busy, expanded = false }: Can
     {!expanded ? <div className="tt-inline-action-summary"><Activity size={14} /><span><strong>{pauseState ? 'Paused by the Dungeon Master' : phase === 'reaction.open' ? `${nameFor(pending?.attacker ?? active)} has opened a reaction` : phase === 'action.resolved' ? 'The action is resolved' : `${nameFor(active)} is ready to act`}</strong><small>Actions and turn history.</small></span></div> : <>
     {pauseState && <p className="tt-encounter-paused" role="status"><ShieldCheck size={14} /> The Dungeon Master paused this encounter. Actions and timers are on hold.</p>}
     {pending && phase === 'reaction.open' && pauseState ? <div className="tt-inline-reaction tt-reaction-window--paused"><span className="tt-reaction-window__icon"><Shield size={17} /></span><div><strong>Reaction window paused</strong><small>{nameFor(pending.attacker)} targeted {nameFor(pending.target)}. Remaining time is held until the Dungeon Master resumes.</small></div><span className="tt-countdown" aria-label={`${Math.ceil(deadline / 1000)} seconds held`}><Clock3 size={13} /><strong>{Math.ceil(deadline / 1000)}s</strong></span></div> : pending && phase === 'reaction.open' ? <div className="tt-inline-reaction"><span className="tt-reaction-window__icon"><Shield size={17} /></span><div><strong>{nameFor(pending.attacker)} declared a hit against {nameFor(pending.target)}</strong><small>{pending.damage === null ? 'Damage stays with the DM until resolution; you may react now.' : `${pending.damage} damage is pending; eligible players may react before it is resolved.`}</small></div><span className={'tt-countdown' + (deadline <= 5000 ? ' is-ending' : '')} aria-live="polite"><Clock3 size={13} /><strong>{Math.ceil(deadline / 1000)}s</strong></span></div> : <div className="tt-inline-action-summary"><Activity size={14} /><span>{phase === 'action.resolved' ? 'The action is resolved. End the current turn when ready.' : nameFor(active) + ' is ready to act.'}</span></div>}
-    {view.actor.role === 'dm' && <button type="button" className={pauseState ? 'tt-button tt-button--primary' : 'tt-button tt-button--quiet'} disabled={busy !== null} onClick={() => void onCommand(pauseState ? 'encounter.resume' : 'encounter.pause', {})}><ShieldCheck size={13} /> {pauseState ? 'Resume encounter' : 'Pause encounter'}</button>}
-    {view.actor.role === 'dm' && phase === 'turn.start' && active === 'goblin' && <div className="tt-inline-action-block"><span><Target size={13} /> Choose a target</span><div><button type="button" className="tt-button tt-button--primary" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'mira' })}>Hit Mira</button><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'pip' })}>Hit Pip</button></div></div>}
+    {directs && <button type="button" className={pauseState ? 'tt-button tt-button--primary' : 'tt-button tt-button--quiet'} disabled={busy !== null} onClick={() => void onCommand(pauseState ? 'encounter.resume' : 'encounter.pause', {})}><ShieldCheck size={13} /> {pauseState ? 'Resume encounter' : 'Pause encounter'}</button>}
+    {directs && phase === 'turn.start' && active === 'goblin' && <div className="tt-inline-action-block"><span><Target size={13} /> Choose a target</span><div><button type="button" className="tt-button tt-button--primary" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'mira' })}>Hit Mira</button><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.declareHit', { target: 'pip' })}>Hit Pip</button></div></div>}
     {view.actor.role === 'player' && phase === 'reaction.open' && pending && <div className="tt-inline-action-block"><span><ShieldCheck size={13} /> Shield reaction</span>{canReact ? <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || deadline === 0} onClick={() => void onCommand('encounter.shield', { target: pending.target })}>{pending.target === actorId ? 'Shield ' + nameFor(actorId!) : 'Shield ' + nameFor(pending.target) + ' as ally'}</button> : <p className="tt-canvas-inline__note">{reactReason}</p>}</div>}
-    {view.actor.role === 'dm' && pending && phase === 'reaction.open' && <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.resolve', {})}><Check size={13} /> Resolve hit</button>}
-    {(view.actor.role === 'dm' || ownTurn) && <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || !canEnd} onClick={() => void onCommand('encounter.endTurn', {})}><RotateCcw size={13} /> End {nameFor(active)}’s turn</button>}
+    {directs && pending && phase === 'reaction.open' && <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || Boolean(pauseState)} onClick={() => void onCommand('encounter.resolve', {})}><Check size={13} /> Resolve hit</button>}
+    {(directs || ownTurn) && <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || !canEnd} onClick={() => void onCommand('encounter.endTurn', {})}><RotateCcw size={13} /> End {nameFor(active)}’s turn</button>}
     {view.actor.role === 'player' && !ownTurn && phase !== 'reaction.open' && <p className="tt-canvas-inline__note">You can act when your character’s turn begins.</p>}
     {pauseState && <p className="tt-canvas-inline__note" role="status">Actions are disabled for everyone until the Dungeon Master resumes.</p>}
     {!pauseState && pending && <p className="tt-canvas-inline__note">{practiceMode ? 'The practice clock holds while you read. The DM can resolve the reaction window at any time.' : 'The deadline is server-set. The DM can resolve the reaction window at any time.'}</p>}
@@ -393,7 +405,12 @@ function EncounterActions({ view, node, onCommand, busy, expanded = false }: Can
 
 function EncounterSource({ view, onCommand, busy, expanded = false }: CanvasObjectContentProps) {
   const state = view.domain as EncounterState;
+  // F035: rule drafts, review and the DM note follow permissions; the heading still names the seat.
   const isDm = view.actor.role === 'dm';
+  const canDraft = viewerCan(view, 'rules.draft');
+  const canApprove = viewerCan(view, 'rules.approve');
+  const canNote = viewerCan(view, 'game.note');
+  const manages = canDraft || canApprove || canNote;
   const [rule, setRule] = useState<EncounterRule>(state.rule);
   const [note, setNote] = useState(state.dmNote ?? '');
   useEffect(() => setRule(state.rule), [state.rule]);
@@ -403,16 +420,16 @@ function EncounterSource({ view, onCommand, busy, expanded = false }: CanvasObje
   return <div className="tt-canvas-inline">
     <InlineHeading eyebrow={isDm ? 'DM ONLY · PRIVATE NOTE' : 'TABLE RULES'} title="Shield rules and table notes" status={'Active r' + state.ruleRevision} />
     <div className="tt-rule-summary"><span>SHIELD RULE</span><strong>{state.rule.allyTarget ? 'Self or ally' : 'Self only'} · {state.rule.apCost} AP{state.rule.oncePerTurn ? ' · once per turn' : ''}</strong></div>
-    {!expanded ? <p className="tt-canvas-inline__note">{isDm ? 'Shield rules and private DM notes.' : 'The DM manages rules. Use the action card to play.'}</p> : isDm ? <>
-      <div className="tt-encounter-rule-editor">
+    {!expanded ? <p className="tt-canvas-inline__note">{manages ? 'Shield rules and DM notes.' : 'The DM manages rules. Use the action card to play.'}</p> : manages ? <>
+      {canDraft && <><div className="tt-encounter-rule-editor">
         <label className="tt-toggle-row"><span><strong>Allow shielding an ally</strong><small>When off, only self protection is allowed.</small></span><input type="checkbox" checked={rule.allyTarget} onChange={(event) => setRule((current) => ({ ...current, allyTarget: event.target.checked }))} /></label>
         <label className="tt-toggle-row"><span><strong>Shield cost</strong><small>Spent by the reacting character.</small></span><select value={rule.apCost} onChange={(event) => setRule((current) => ({ ...current, apCost: Number(event.target.value) as 0 | 1 }))}><option value={0}>No AP</option><option value={1}>1 AP</option></select></label>
         <label className="tt-toggle-row"><span><strong>Once per character turn</strong><small>Refreshes when that character’s turn begins.</small></span><input type="checkbox" checked={rule.oncePerTurn} onChange={(event) => setRule((current) => ({ ...current, oncePerTurn: event.target.checked }))} /></label>
         <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || sameRule(rule, state.rule)} onClick={propose}><ShieldCheck size={13} /> Propose rule</button>
       </div>
-      <p className="tt-canvas-inline__note">The current shield rule stays active until the proposal is reviewed and activated.</p>
-      <form className="tt-note-form tt-inline-note-form" onSubmit={saveNote}><label htmlFor="tt-canvas-dm-note">Private DM note</label><textarea id="tt-canvas-dm-note" maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Only the DM can see this note…" /><div><small>Hidden from players · {note.length}/2000</small><button type="submit" className="tt-button tt-button--quiet" disabled={busy !== null || note === (state.dmNote ?? '')}><Save size={13} /> Save note</button></div></form>
-      <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />
+      <p className="tt-canvas-inline__note">The current shield rule stays active until the proposal is reviewed and activated.</p></>}
+      {canNote && <form className="tt-note-form tt-inline-note-form" onSubmit={saveNote}><label htmlFor="tt-canvas-dm-note">Private DM note</label><textarea id="tt-canvas-dm-note" maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Only the DM can see this note…" /><div><small>Hidden from players · {note.length}/2000</small><button type="submit" className="tt-button tt-button--quiet" disabled={busy !== null || note === (state.dmNote ?? '')}><Save size={13} /> Save note</button></div></form>}
+      {canApprove && <CandidateLifecycle view={view} onCommand={onCommand} busy={busy} />}
     </> : <p className="tt-canvas-inline__note">The Dungeon Master controls rule changes and private notes. Your character actions are available at the encounter object.</p>}
   </div>;
 }

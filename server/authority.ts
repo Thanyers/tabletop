@@ -1,6 +1,8 @@
 import type { IncomingMessage } from 'node:http';
 import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
+import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
+import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
@@ -54,20 +56,24 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
   invoice: new Set([
     'invoice.reviewSource', 'invoice.sample', 'invoice.saveRun',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
   teaching: new Set([
     'teaching.setParameters', 'teaching.setRepresentation', 'teaching.answer', 'teaching.saveNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
   encounter: new Set([
     'encounter.declareHit', 'encounter.shield', 'encounter.resolve', 'encounter.endTurn', 'encounter.saveNote',
     'encounter.pause', 'encounter.resume',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
   table: new Set([
     'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.setComputedColumns', 'canvas.layout',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    ...ACCESS_COMMANDS,
   ]),
 };
 
@@ -145,6 +151,15 @@ function parseName(value: unknown): string {
   return bounded || 'Guest';
 }
 
+/** F035: what this member may do here, from the table's access settings. The owner holds everything. */
+function permissionsOf(workspace: StoredWorkspace, member: StoredMember): Set<Permission> {
+  return memberPermissions(workspace.kind, workspace.domainState.access, member.actorId, workspace.ownerActorId === member.actorId);
+}
+
+function may(workspace: StoredWorkspace, member: StoredMember, permission: Permission): boolean {
+  return permissionsOf(workspace, member).has(permission);
+}
+
 function primaryRole(kind: CaseKind): Role {
   if (kind === 'invoice' || kind === 'table') return 'owner';
   if (kind === 'teaching') return 'teacher';
@@ -164,6 +179,7 @@ function actorContext(workspace: StoredWorkspace, member: StoredMember, now: num
     name: member.name,
     role: member.role,
     ...(member.seat ? { seat: member.seat } : {}),
+    permissions: permissionsOf(workspace, member),
     workspaceId: workspace.id,
     epoch: workspace.epoch,
     now,
@@ -413,7 +429,7 @@ export class CommandAuthority {
       const member = await transaction.getMember(session.record.actorId);
       if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
       if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-      if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+      if (!may(workspace, member, 'members.remove')) {
         throw new AuthorityError('ROLE_FORBIDDEN');
       }
       if (workspace.kind !== 'table') throw new AuthorityError('MEMBER_NOT_REMOVABLE', 'Only members of a shared data table can be removed.');
@@ -441,7 +457,7 @@ export class CommandAuthority {
       const member = await transaction.getMember(session.record.actorId);
       if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
       if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-      if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+      if (!may(workspace, member, 'members.invite')) {
         throw new AuthorityError('ROLE_FORBIDDEN');
       }
       const roleSeat = inviteForSeat(workspace.kind, seat);
@@ -691,7 +707,15 @@ export class CommandAuthority {
           if (existing.payloadHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           return { ...existing.response, duplicate: true };
         }
-        if (workspace.ownerActorId !== session.record.actorId && (envelope.type === 'workspace.reset' || envelope.type === 'workspace.rename')) {
+        if (envelope.type === 'access.assign') {
+          // F035: roles go to current members only, and the owner's access never changes.
+          const target = (envelope.payload as { actorId?: unknown } | null)?.actorId;
+          if (typeof target !== 'string' || target === workspace.ownerActorId) throw new AuthorityError('ROLE_FORBIDDEN');
+          const targetMember = await transaction.getMember(target);
+          if (!targetMember || targetMember.revokedAt !== null) throw new AuthorityError('MEMBER_NOT_FOUND', 'This person is not at the table.');
+        }
+        if ((envelope.type === 'workspace.reset' && workspace.ownerActorId !== session.record.actorId)
+            || (envelope.type === 'workspace.rename' && !may(workspace, member, 'table.rename'))) {
           throw new AuthorityError('ROLE_FORBIDDEN');
         }
         if (envelope.expectedEpoch !== workspace.epoch) throw new AuthorityError('STALE_EPOCH');
@@ -717,11 +741,10 @@ export class CommandAuthority {
           if (title === null) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
           return this.renameWorkspace(transaction, workspace, member, session, envelope, requestHash, title, now);
         }
-        if (envelope.type !== 'teaching.setRepresentation') assertIdentityFieldsAbsent(envelope.payload);
+        // access.assign names its target member; the block above already checked it is a current non-owner member.
+        if (envelope.type !== 'teaching.setRepresentation' && envelope.type !== 'access.assign') assertIdentityFieldsAbsent(envelope.payload);
         if (envelope.type === 'teaching.answer' && member.role !== 'learner') throw new AuthorityError('ROLE_FORBIDDEN');
-        if (envelope.type.startsWith('teaching.') && envelope.type !== 'teaching.answer' && member.role !== 'teacher') {
-          throw new AuthorityError('ROLE_FORBIDDEN');
-        }
+        // F035: other lesson commands are decided by the member's permissions in the domain (requirePermission).
 
         const context = currentContext;
         if (envelope.type === 'evolve.activate') await this.verifyActivationApproval(transaction, workspace, context);
@@ -790,8 +813,7 @@ export class CommandAuthority {
     }
     const approvingMember = await transaction.getMember(approval.actorId);
     if (!approvingMember || approvingMember.revokedAt !== null
-        || approvingMember.role !== primaryRole(workspace.kind)
-        || workspace.ownerActorId !== approvingMember.actorId) {
+        || !may(workspace, approvingMember, 'rules.approve')) {
       throw new AuthorityError('APPROVER_NOT_AUTHORIZED');
     }
   }
@@ -872,7 +894,7 @@ export class CommandAuthority {
     title: string,
     now: number,
   ): Promise<CommandAck> {
-    if (workspace.ownerActorId !== session.record.actorId || member.role !== primaryRole(workspace.kind)) {
+    if (!may(workspace, member, 'table.rename')) {
       throw new AuthorityError('ROLE_FORBIDDEN');
     }
     // Only the name changes; table data, rules and the epoch stay as they are.

@@ -1,3 +1,5 @@
+import { VISIBILITY_POLICY } from '../shared/visibility';
+import { viewerCan } from '../shared/permissions';
 import type { DomainState, EncounterState, InvoiceState, PhysicsParams, TeachingState, WorkspaceView } from '../shared/contracts';
 import type { TableState } from '../shared/table-contracts';
 import { GENERATIVE_LIMITS, type GenerativeCanvas, type GenerativeViewDescriptor } from '../shared/generative-contracts';
@@ -161,7 +163,7 @@ export function manifestForWorkspace(view: WorkspaceView): Manifest {
   if (state.kind === 'table') {
     const nodes: PlanNode[] = [];
     if (state.sources.length > 0) nodes.push(node('table.sources', 'table.sources', 'Files', 40, 40, { state }));
-    if (state.program !== null || (view.actor.role === 'owner' && state.candidate !== null)) nodes.push(node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private'));
+    if (state.program !== null || (state.candidate !== null && (viewerCan(view, 'rules.approve') || VISIBILITY_POLICY === 'open'))) nodes.push(node('table.rules', 'table.rules', 'Rules', 40, 480, { state }, 'private'));
     const bindings: Binding[] = [];
     const collectionNodeIds = new Map<string, string>();
     for (const [index, collection] of (state.program?.collections ?? []).entries()) {
