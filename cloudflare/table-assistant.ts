@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { tableProgramSchema, handleTableCommand } from '../src/tabletop/domain/table.js';
-import { DomainError, type ActorContext, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { DomainError, TABLE_TURN_SEATS, isTableTurnSeat, type ActorContext, type TableTurnSeat, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import {
   tableAssistantConversationEntrySchema,
   tableAssistantRequestSchema,
@@ -43,7 +44,7 @@ const rawReferenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('action'), id: ID_SCHEMA }),
   z.strictObject({ kind: z.literal('record'), collectionId: ID_SCHEMA, id: ID_SCHEMA }),
   z.strictObject({ kind: z.literal('field'), collectionId: ID_SCHEMA, id: ID_SCHEMA }),
-  z.strictObject({ kind: z.literal('turn'), seat: z.enum(['host', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7']) }),
+  z.strictObject({ kind: z.literal('turn'), seat: z.enum(TABLE_TURN_SEATS) }),
 ]);
 const rawSuggestionsSchema = z.array(z.string().min(1).max(120)).max(4).optional();
 const rawResultSchema = z.discriminatedUnion('kind', [
@@ -68,7 +69,7 @@ const providerUsageSchema = z.object({
   completion_tokens_details: z.object({ reasoning_tokens: z.number().int().safe().nonnegative().optional() }).optional(),
 });
 
-type Seat = 'host' | 'member-1' | 'member-2' | 'member-3' | 'member-4' | 'member-5' | 'member-6' | 'member-7';
+type Seat = TableTurnSeat;
 type RawReference = z.infer<typeof rawReferenceSchema>;
 type RawAssistantResult = z.infer<typeof rawResultSchema>;
 /** One identity token replaced before any model text reaches a member (F045 reuses this for drafts). */
@@ -115,7 +116,7 @@ function encodeJson(value: unknown): string {
 }
 
 function isSeat(value: unknown): value is Seat {
-  return typeof value === 'string' && /^(host|member-[1-7])$/u.test(value);
+  return isTableTurnSeat(value);
 }
 
 function memberSeat(workspace: WorkspaceView, member: WorkspaceView['actor']): Seat {
@@ -195,7 +196,7 @@ function buildContext(input: TableAssistantInput): {
   if (workspace.kind !== 'table' || workspace.domain.kind !== 'table') {
     return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The current workspace is not a table.');
   }
-  if (workspace.members.length < 1 || workspace.members.length > 8
+  if (workspace.members.length < 1 || workspace.members.length > MAX_MEMBERS_PER_WORKSPACE
     || new Set(workspace.members.map((member) => member.actorId)).size !== workspace.members.length) {
     return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The table membership is invalid.');
   }

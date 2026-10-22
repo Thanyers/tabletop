@@ -1,13 +1,14 @@
 import { defaultWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
-import type {
-  ActorContext,
-  CaseKind,
-  CommandAck,
-  DomainState,
-  Member,
-  Role,
-  Seat,
-  WorkspaceView,
+import {
+  NODE_TABLE_MEMBER_SEATS,
+  type ActorContext,
+  type CaseKind,
+  type CommandAck,
+  type DomainState,
+  type Member,
+  type Role,
+  type Seat,
+  type WorkspaceView,
 } from '../src/tabletop/shared/contracts.js';
 import { createDomain } from '../src/tabletop/domain/index.js';
 import type { SqlDatabase, SqlExecutor } from './database.js';
@@ -16,10 +17,11 @@ import { AuthorityError } from './errors.js';
 import {
   MAX_ACTIVE_WORKSPACES,
   MAX_EXPIRY_SWEEP_BATCH,
-  MAX_MEMBERS_PER_WORKSPACE,
   DATABASE_SCHEMA_VERSION,
   SCHEMA_VERSION,
   SESSION_IDLE_TTL_MS,
+  memberLimitMessage,
+  workspaceMemberCapacity,
 } from './limits.js';
 
 export interface SessionRecord {
@@ -270,6 +272,7 @@ function mapRole(value: unknown): Role {
   throw new Error('DATABASE_FIELD_INVALID:role');
 }
 
+// The Node/Postgres runtime keeps seven member seats to match server/schema.sql (NODE_TABLE_MEMBER_SEATS).
 function mapSeat(value: unknown): Seat | undefined {
   if (value === null || value === undefined) return undefined;
   if (value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip'
@@ -720,7 +723,8 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
          WHERE workspace_id = $1 AND epoch = $2 AND revoked_at IS NULL`,
         [workspace.id, workspace.epoch],
       );
-      if ((count.rows[0]?.member_count ?? 0) >= MAX_MEMBERS_PER_WORKSPACE) throw new Error('MEMBER_LIMIT_REACHED');
+      const capacity = workspaceMemberCapacity(workspace.domainState, NODE_TABLE_MEMBER_SEATS);
+      if ((count.rows[0]?.member_count ?? 0) >= capacity) throw new AuthorityError('MEMBER_LIMIT_REACHED', memberLimitMessage(capacity));
 
       await transaction.query(
         `UPDATE sessions SET revoked_at = $2, rotated_to_token_hash = $3, rotation_ticket_hash = $4
