@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **ตั้งค่าหน้าจอของโต๊ะ:** เมนู … มีหัวข้อ Display ตั้งเส้นโยง Automatic / Show / Hide ให้ทุกคนในโต๊ะ (คำสั่ง `display.set`, สิทธิ์ `table.rename`) · ปุ่ม Connections ในเมนู Objects ใช้ค่าเดียวกัน
 - คนที่เปิดหน้าค้างไว้จะเห็นแถบ "มีเวอร์ชันใหม่ (vX.Y.Z) รีเฟรชหน้าเพื่อใช้รุ่นล่าสุด" ภายใน ~5 นาทีหลัง deploy หรือทันทีที่กลับมาที่แท็บ ทั้ง staging และ production · กดรีเฟรชหรือไว้ทีหลังได้ ไม่รีเฟรชเอง ([F042](docs/features/F042-update-notice.md))
 
 - **รถ/วัตถุวิ่งวนอัตโนมัติใน scene (F040, MINOR):** primitive `rect`/`circle`/`text` รับ `motion {axis,from,to,speed,loop?}` ได้ — host เลื่อนตำแหน่งจาก `from` ถึง `to` ด้วยความเร็ว `speed` หน่วยต่อวินาที แล้ววนกลับมาเริ่มใหม่ (หรือหยุดที่ `to` เมื่อ `loop:false`) · `speed` เป็น expression ได้ เช่นอ่าน `speed_mps` จาก record ที่สไลเดอร์เขียน ทำให้ "ปรับความเร็วตาม parameter" ทำงานจริง · มีปุ่ม Pause/Play ใต้ scene และถ้าเครื่องตั้ง reduced motion จะไม่เล่นอนิเมชัน · การเคลื่อนไหวเป็นฝั่ง client ไม่เขียน state/ไม่มี migration · โมเดลได้รับ MOTION ใน prompt guide พร้อมตัวอย่างรถ 10 เมตร ([F040](docs/features/F040-scene-motion.md))

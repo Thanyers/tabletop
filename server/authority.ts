@@ -3,6 +3,7 @@ import { DomainError, type ActorContext, type Artifact, type CaseKind, type Comm
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
 import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
+import { DISPLAY_COMMANDS } from '../src/tabletop/domain/display.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
@@ -56,24 +57,24 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
   invoice: new Set([
     'invoice.reviewSource', 'invoice.sample', 'invoice.saveRun',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
-    ...ACCESS_COMMANDS,
+    ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
   ]),
   teaching: new Set([
     'teaching.setParameters', 'teaching.setRepresentation', 'teaching.answer', 'teaching.saveNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
-    ...ACCESS_COMMANDS,
+    ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
   ]),
   encounter: new Set([
     'encounter.declareHit', 'encounter.shield', 'encounter.resolve', 'encounter.endTurn', 'encounter.saveNote',
     'encounter.pause', 'encounter.resume',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
-    ...ACCESS_COMMANDS,
+    ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
   ]),
   table: new Set([
     'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.setComputedColumns', 'canvas.layout',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
-    ...ACCESS_COMMANDS,
+    ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
   ]),
 };
 
