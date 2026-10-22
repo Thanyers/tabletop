@@ -54,3 +54,25 @@ export function runCanvasObjectCommand(text: string): CanvasObjectCommandResult 
   if (!command || !finder) return { handled: false };
   return finder(command.verb, command.query);
 }
+
+/** A card the person pointed the chat at ("about this card: make it harder"). */
+export interface ChatCardReference { id: string; title: string; detail: string }
+
+let referenceListener: ((reference: ChatCardReference) => void) | null = null;
+
+export function onChatCardReference(listener: (reference: ChatCardReference) => void): () => void {
+  referenceListener = listener;
+  return () => { if (referenceListener === listener) referenceListener = null; };
+}
+
+/** Points the table chat at a card; false when no chat is listening (e.g. a lesson or encounter). */
+export function referenceCardInChat(reference: ChatCardReference): boolean {
+  if (!referenceListener) return false;
+  referenceListener(reference);
+  return true;
+}
+
+/** The text sent ahead of the person's message, so the AI knows which card they mean. */
+export function chatReferencePrompt(reference: ChatCardReference, message: string): string {
+  return `[การ์ด “${reference.title}”] ${message}\n(Card in question: ${reference.detail})`;
+}
