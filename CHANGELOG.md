@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 4.3.1 — 2026-10-22
+
+PATCH: แก้บริบทโน้ตของ assistant ที่ทำให้ทุกโต๊ะที่มีโน้ตตอบ `MODEL_PROVIDER_OUTPUT_REJECTED` ทันทีโดยไม่เรียกผู้ให้บริการ · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v4.3.0 ได้
+
+- **Assistant notes context (PATCH):** ตัวตรวจ notes ใช้ `strictObject` กับ note record ทั้งก้อน (มี `id`, `x`, `y`, `createdBy` ฯลฯ) ทำให้โต๊ะที่มีโน้ตอย่างน้อยหนึ่งใบถูกปฏิเสธก่อนเรียกผู้ให้บริการ — ตอนนี้ส่งเฉพาะ `text`/`color` พร้อม regression test ที่ใช้ record จริง
 
 ## 4.3.0 — 2026-10-22
 
