@@ -61,7 +61,7 @@ export interface DomainDecision {
 }
 export interface CommandEnvelope extends DomainCommand { commandId: string; expectedRevision: string; expectedEpoch: number }
 export interface WorkspaceView { id: string; title: string; kind: CaseKind; epoch: number; revision: string; actor: Member; members: Member[]; domain: DomainState; createdAt: number; expiresAt: number }
-export interface SessionView { csrfToken: string; actorId: string; name: string; expiresAt: number; workspaces: { id: string; title: string; kind: CaseKind; role: Role }[] }
+export interface SessionView { csrfToken: string; actorId: string; name: string; expiresAt: number; workspaces: { id: string; title: string; kind: CaseKind; role: Role; /** F053: last change, ms since epoch; absent on the Node runtime. */ updatedAt?: number }[] }
 export interface CommandAck { ok: true; commandId: string; duplicate: boolean; workspace: WorkspaceView; /** F048: returned only to the caller that issued or consumed the roll. */ roll?: RollResult }
 export interface ApiError { ok: false; errorCode: string; message: string; requestId?: string }
 export class DomainError extends Error { constructor(public readonly code: string, message: string) { super(message); this.name = 'DomainError' } }

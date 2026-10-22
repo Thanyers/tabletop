@@ -1,12 +1,13 @@
 import { RoleSettings } from './ui/RoleSettings';
 import { viewerCan } from './shared/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Search, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
 import type { CaseKind, Seat, SessionView, WorkspaceView } from './shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
 import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
+import { matchesSearch, relativeTime } from './ui/relative-time';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, isInviteLink, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
@@ -995,13 +996,24 @@ function NoticeBanner({ notice, onDismiss }: { notice: { text: string; tone: 'in
 
 function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onStart, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onHome: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onStart: () => void; onOpen: (id: string) => void }) {
   const lastId = readLastWorkspace();
-  const orderedWorkspaces = [...session.workspaces].sort((a, b) => Number(b.id === lastId) - Number(a.id === lastId));
+  const [query, setQuery] = useState('');
+  const now = Date.now();
+  // Last opened first, then the most recently changed (F053); tables without a time keep the server order.
+  const orderedWorkspaces = [...session.workspaces].sort((a, b) => Number(b.id === lastId) - Number(a.id === lastId) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  const visibleWorkspaces = orderedWorkspaces.filter((workspace) => matchesSearch(query, [workspace.title, caseInfo[workspace.kind].title, workspace.role]));
   return <main className="tt-chooser"><ChooserHeader session={session} account={account} busy={busy} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} onHome={onHome} />
     <NoticeBanner notice={notice} onDismiss={onDismissNotice} />
     <section className="tt-chooser__content"><h1>What are you here to do?</h1><p>Start with what you're working on. Your table will take shape around it.</p>
       <button className="tt-start-own-table" type="button" disabled={busy !== null} onClick={onStart}><Plus size={18} />Start a new table</button>
       {tableReadOnly && <p role="status">New shared tables are temporarily paused. You can still open a prepared table or an existing one.</p>}
-      {session.workspaces.length > 0 && <div className="tt-existing-tables"><h2>Pick up where you left off</h2>{orderedWorkspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
+      {session.workspaces.length > 0 && <div className="tt-existing-tables">
+        <div className="tt-existing-tables__head">
+          <h2>Pick up where you left off</h2>
+          {session.workspaces.length > 1 && <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>}
+        </div>
+        {visibleWorkspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span>{workspace.updatedAt !== undefined && <time className="tt-existing-tables__updated" dateTime={new Date(workspace.updatedAt).toISOString()} title={new Date(workspace.updatedAt).toLocaleString()}>Updated {relativeTime(workspace.updatedAt, now)}</time>}<ArrowRight size={16} /></button>)}
+        {visibleWorkspaces.length === 0 && <p className="tt-existing-tables__empty" role="status">No tables match “{query.trim()}”.</p>}
+      </div>}
     </section>
   </main>;
 }

@@ -5,7 +5,7 @@ import { BUILD_INFO_FILE, parseBuildInfo } from '../server/build-info.js';
 import { isPagePath, servePage } from './pages.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { accountForSession, authenticateRequest, authStatus, finishGoogle, limit, logout, primary, publicOrigin, requireMutation, requireOrigin, startGoogle } from './auth.js';
-import { GOOGLE_CALLBACK_PATH, type DirectoryReference, type Env } from './contracts.js';
+import { GOOGLE_CALLBACK_PATH, UPDATED_AT_HEADER, type DirectoryReference, type Env } from './contracts.js';
 import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
 import { displayWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { tableCapabilitySummary } from '../src/tabletop/shared/table-capabilities.js';
@@ -64,11 +64,14 @@ async function sessionView(request: Request, env: Env): Promise<Response> {
       const response = await room(env, room_id).fetch(internalRequest(request, '/internal/view'));
       if (response.status === 403 || response.status === 404) return null;
       if (!response.ok) throw new AuthorityError(response.status === 401 ? 'SESSION_EXPIRED' : 'DATABASE_UNAVAILABLE');
-      return response.json<WorkspaceView>();
+      const updatedAt = Number(response.headers.get(UPDATED_AT_HEADER));
+      return { view: await response.json<WorkspaceView>(), updatedAt };
     }));
-    for (const view of views) if (view) {
+    for (const entry of views) if (entry) {
+      const { view } = entry;
       const programTitle = view.kind === 'table' && view.domain.kind === 'table' ? view.domain.program?.title : undefined;
-      workspaces.push({ id: view.id, title: displayWorkspaceTitle(view.kind, view.title, programTitle), kind: view.kind, role: view.actor.role });
+      const updatedAt = Number.isSafeInteger(entry.updatedAt) && entry.updatedAt > 0 ? entry.updatedAt : view.createdAt;
+      workspaces.push({ id: view.id, title: displayWorkspaceTitle(view.kind, view.title, programTitle), kind: view.kind, role: view.actor.role, updatedAt });
     }
   }
   return Response.json({ csrfToken: session.csrfToken, actorId: session.record.actorId, name: session.record.name,

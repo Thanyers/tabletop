@@ -531,6 +531,15 @@ export class RoomRepository implements WorkspaceRepository {
     return this.workspaceSync(workspaceId);
   }
 
+  /** Time of the latest committed command in the current epoch, or null before the first one (F053). */
+  lastActivityAt(workspaceId: string, epoch: number): number | null {
+    const row = this.rows<{ last_at: SqlStorageValue }>(
+      'SELECT MAX(created_at) AS last_at FROM room_events WHERE workspace_id = ? AND epoch = ?',
+      workspaceId, epoch,
+    )[0];
+    return row?.last_at === null || row?.last_at === undefined ? null : readNumber(row.last_at, 'last_at');
+  }
+
   async getMember(workspaceId: string, actorId: string): Promise<StoredMember | null> {
     const workspace = this.workspaceSync(workspaceId);
     if (!workspace) return null;

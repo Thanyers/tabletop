@@ -432,3 +432,17 @@
   .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__more { opacity: 0; }
   .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__star[aria-pressed='false'] { opacity: .35; }
 }
+
+/* F053: table list search and last-updated time. */
+.tt-chooser .tt-existing-tables__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.tt-chooser .tt-existing-tables__head h2 { margin: 0; }
+.tt-chooser .tt-table-search { display: flex; flex: 0 1 240px; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid var(--tt-line); border-radius: 9px; color: var(--tt-muted); background: var(--tt-paper); }
+.tt-chooser .tt-table-search:focus-within { border-color: var(--tt-moss, #356e5d); }
+.tt-chooser .tt-table-search input { flex: 1; min-width: 0; border: 0; outline: 0; color: var(--tt-ink); background: transparent; font: inherit; font-size: 13px; }
+.tt-chooser .tt-existing-tables__updated { flex: none; color: var(--tt-muted); font-size: 12px; white-space: nowrap; }
+.tt-chooser .tt-existing-tables__empty { margin: 4px 0 0; color: var(--tt-muted); font-size: 13px; }
+@media (max-width: 520px) {
+  .tt-chooser .tt-table-search { flex-basis: 100%; }
+  .tt-chooser .tt-existing-tables > button { flex-wrap: wrap; }
+  .tt-chooser .tt-existing-tables__updated { order: 3; width: 100%; padding-left: 43px; }
+}
