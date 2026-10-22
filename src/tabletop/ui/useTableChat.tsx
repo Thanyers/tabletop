@@ -16,7 +16,7 @@ type CommandId = ReturnType<typeof crypto.randomUUID>;
 const DRAFT_POLL_MS = 1_200;
 const DRAFT_POLL_LIMIT_MS = 60_000;
 const ANSWER_POLL_MS = 1_000;
-const ANSWER_POLL_LIMIT_MS = 60_000;
+const ANSWER_POLL_LIMIT_MS = 150_000;
 const HISTORY_CARDS = 6;
 const LOCAL_CARD_IDS = 80;
 const ACCEPT_FILES = '.csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown';
@@ -61,11 +61,29 @@ function errorText(error: unknown): string {
     if (error.code === 'TABLE_READ_ONLY') return 'This table is temporarily read-only.';
     if (error.status === 0) return 'The connection was lost before the request could be confirmed. Retry the same request to check its status.';
   }
-  return error instanceof Error && error.message ? error.message : 'The request could not be completed. Try again.';
+  if (error instanceof Error && error.message) {
+    return error instanceof ApiFailure && error.code ? `${error.message} (server code ${error.code})` : error.message;
+  }
+  return 'The request could not be completed. Try again.';
 }
 
 function isUncertain(error: unknown): boolean {
   return error instanceof ApiFailure && error.status === 0;
+}
+
+/** The card keeps counting while the answer is in flight, so a slow request never looks frozen. */
+function ElapsedSince({ startedAt, kind }: { startedAt: number; kind: ChatCard['kind'] }) {
+  const [seconds, setSeconds] = useState(() => Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
+  useEffect(() => {
+    const timer = window.setInterval(() => setSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000))), 1000);
+    return () => window.clearInterval(timer);
+  }, [startedAt]);
+  const limit = kind === 'draft' ? 180 : 120;
+  return <p className="tt-chat-card__elapsed" aria-live="off">
+    <span className="tt-chat-card__elapsed-time">{seconds}s</span>
+    <span>of the {limit}s limit · the table stays usable while it works.</span>
+    {seconds >= limit && <strong> Waiting for the final status…</strong>}
+  </p>;
 }
 
 function scopeFor(view: TableView | null): string {
@@ -701,16 +719,31 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     ? <button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={onCheck}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Check status</button>
     : null;
   if (card.phase === 'sending' || card.phase === 'waiting') {
-    return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer">
+    return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
       <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span></p>
+      <ElapsedSince startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} />
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
   }
   if (card.phase === 'failed') {
     const message = card.requestError ?? card.error ?? card.modelJob?.message ?? card.job?.message ?? 'The request could not be completed.';
-    return <div className="tt-chat-card" data-testid="table-chat-answer">
+    const requestId = card.job?.id ?? card.modelJob?.id;
+    const failureCode = card.job?.failureCode;
+    const failureReasons = card.job?.failureReasons;
+    const durationMs = card.job?.durationMs;
+    return <div
+      className="tt-chat-card"
+      data-testid="table-chat-answer"
+      data-request-id={requestId}
+      data-failure-code={failureCode}
+      data-failure-reasons={failureReasons?.length ? failureReasons.join(' | ') : undefined}
+      data-duration-ms={durationMs}
+    >
       <p className="tt-chat-card__error" role="alert"><CircleAlert size={14} />{message}</p>
+      {(requestId || failureCode) && <p className="tt-chat-card__trace">
+        {failureCode ? `Code ${failureCode}` : 'Code UNKNOWN'}{durationMs !== undefined ? ` · ${(durationMs / 1000).toFixed(1)}s` : ''} · Request {requestId ? `${requestId.slice(0, 16)}…` : 'not assigned'} — quote this when reporting the failure.
+      </p>}
       {card.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy || retryDisabled} onClick={onRetry}><RotateCcw size={13} />Retry same request</button>}
       {!card.requestUncertain && <button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>}
       {dismissButton}

@@ -114,7 +114,7 @@ function providerFetch(result: unknown, inspect?: (content: string, body: Record
     const parsed: unknown = JSON.parse(text);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Expected provider object.');
     const body = parsed as Record<string, unknown>;
-    if (body.model !== 'deepseek-flash' || body.max_tokens !== 1024 || body.tool_choice !== 'none'
+    if (body.model !== 'deepseek-flash' || body.max_tokens !== 8192 || body.tool_choice !== 'none'
       || body.thinking === undefined || !Array.isArray(body.messages)) throw new Error('Unexpected provider limits.');
     const user = body.messages.find((message) => typeof message === 'object' && message !== null
       && (message as { role?: unknown }).role === 'user') as { content?: unknown } | undefined;
@@ -151,7 +151,7 @@ describe('Cloudflare table assistant', () => {
     };
     const stateBefore = JSON.stringify(input.workspace.domain);
     const response = await respondToTablePrompt(testEnv, input, providerFetch(raw, (content, body) => {
-      expect(body.max_tokens).toBe(1024);
+      expect(body.max_tokens).toBe(8192);
       expect(new TextEncoder().encode(JSON.stringify(body)).byteLength).toBeLessThanOrEqual(48 * 1024);
       const user = JSON.parse(content) as { kind: string; prompt: string; context: Record<string, unknown> };
       expect(user.kind).toBe('table-assistant');
@@ -181,7 +181,7 @@ describe('Cloudflare table assistant', () => {
     expect(response.usage).toMatchObject({ promptTokens: 45, completionTokens: 80, cacheMissTokens: 35 });
     expect(JSON.stringify(input.workspace.domain)).toBe(stateBefore);
     const bill = await billingRow(input.jobId);
-    expect(bill).toMatchObject({ status: 'settled', max_output_tokens: 1024 });
+    expect(bill).toMatchObject({ status: 'settled', max_output_tokens: 8192 });
     expect(bill?.max_input_tokens).toBeGreaterThan(0);
   });
 

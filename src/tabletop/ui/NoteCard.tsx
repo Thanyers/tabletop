@@ -105,6 +105,7 @@ export function NoteCard({ view, note, busy, onCommand }: NoteCardProps) {
     role="group"
     aria-label={`Note by ${author}`}
   >
+    <span className="tt-note__drag" aria-hidden="true" />
     <div className="tt-note__tools nodrag">
       {NOTE_COLORS.map((color) => <button
         key={color}

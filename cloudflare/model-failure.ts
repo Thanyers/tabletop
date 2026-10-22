@@ -47,8 +47,7 @@ export function cleanReasons(values: unknown): string[] {
 const STRUCTURAL_REASON = /unknown record field|unknown field|cross-collection|join|lookup/iu;
 export const STRUCTURAL_HINT = 'This table cannot join rows across collections yet; keep the data in one collection or attach a CSV file.';
 
-export function modelFailureMessage(failure: unknown, reasons: readonly string[] = []): string {
-  if (failure === 'SOURCE_REQUIRED') return 'Import a source file before asking for a proposal.';
+export function modelFailureMessage(failure: unknown, reasons: readonly string[] = []): string {  if (failure === 'SOURCE_REQUIRED') return 'Import a source file before asking for a proposal.';
   if (failure === 'TABLE_READ_ONLY') return 'This table workspace is currently read-only. The proposal was not applied.';
   if (failure === 'MODEL_PROVIDER_INPUT_TOO_LARGE') return 'The files and request are too large. Shorten them or remove a file, then try again.';
   if (failure === 'MODEL_PROVIDER_OUTPUT_REJECTED' || (typeof failure === 'string' && failure.startsWith('TABLE_'))) {
@@ -79,7 +78,7 @@ export function safeModelFailureCode(error: unknown): string {
     const code = error.code;
     if (code === 'SOURCE_REQUIRED' || code === 'MODEL_PROVIDER_INPUT_TOO_LARGE'
         || code === 'TABLE_READ_ONLY'
-        || code === 'MODEL_PROVIDER_OUTPUT_REJECTED' || code === 'MODEL_PROVIDER_TIMEOUT'
+        || code === 'MODEL_PROVIDER_OUTPUT_REJECTED' || code === 'MODEL_PROVIDER_OUTPUT_TRUNCATED' || code === 'MODEL_PROVIDER_TIMEOUT'
         || code === 'MODEL_PROVIDER_INPUT_INVALID' || code === 'MODEL_PROVIDER_RESPONSE_INVALID'
         || code === 'MODEL_PROVIDER_RESPONSE_TOO_LARGE' || code === 'MODEL_PROVIDER_HTTP_ERROR'
         || code === 'MODEL_PROVIDER_REQUEST_FAILED' || code === 'MODEL_PROVIDER_ABORTED'
@@ -99,4 +98,45 @@ export function safeModelFailureReasons(error: unknown): string[] {
   // A TABLE_* rule violation raised while applying the draft is its own reason.
   if (error instanceof DomainError && error.code.startsWith('TABLE_')) return cleanReasons([error.message]);
   return [];
+}
+
+/** A failure code safe to show and to assert on; anything unexpected becomes UNKNOWN. */
+export function safeAssistantFailureCode(failure: unknown): string {
+  return typeof failure === 'string' && /^[A-Z][A-Z0-9_]{2,63}$/u.test(failure) ? failure : 'UNKNOWN';
+}
+
+/**
+ * The table assistant always says which failure it hit and keeps the code visible, so a screenshot
+ * is enough to tell a user mistake from a provider, billing or interruption fault.
+ */
+export function tableAssistantFailureMessage(failure: unknown, reasons: readonly string[] = []): string {
+  const code = safeAssistantFailureCode(failure);
+  const said = (message: string) => `${message} (code ${code})`;
+  if (failure === 'STALE_WORKSPACE' || failure === 'STALE_REVISION') return said('The table changed while the assistant was working; nothing was applied. Ask again.');
+  if (failure === 'TABLE_READ_ONLY') return said('This table is read-only right now; nothing was applied.');
+  if (failure === 'ACTION_REJECTED') return said('The suggested action is not valid for the current table state.');
+  if (failure === 'IDEMPOTENCY_MISMATCH') return said('A repeated confirmation conflicted with the first one; no action was applied. Ask for a fresh suggestion.');
+  if (failure === 'CONFIRMATION_INTERRUPTED') return said('The confirmation expired before the action could be applied. Ask for a fresh suggestion.');
+  if (failure === 'ASSISTANT_INTERRUPTED') return said('The assistant stopped before it finished; nothing was changed. Ask again.');
+  if (failure === 'ROOM_RESET') return said('The room was reloaded while the assistant was working; nothing was changed.');
+  if (failure === 'MODEL_PROVIDER_TIMEOUT') return said('The AI took too long to answer and was stopped. Ask again.');
+  if (failure === 'MODEL_PROVIDER_OUTPUT_TRUNCATED') return said('The AI ran out of output space before it finished. Ask again or split the request into smaller steps.');
+  if (failure === 'MODEL_PROVIDER_INPUT_TOO_LARGE') return said('This request is too large for the AI. Remove a file or shorten the question.');
+  if (failure === 'MODEL_PROVIDER_INPUT_INVALID') return said('The request sent to the AI was rejected as invalid.');
+  if (failure === 'MODEL_PROVIDER_NOT_CONFIGURED' || failure === 'MODEL_NOT_CONFIGURED') return said('AI is not configured for this table.');
+  if (failure === 'BILLING_BUDGET') return said('The configured AI budget has been reached.');
+  if (failure === 'BILLING_QUOTA') return said('The AI request limit has been reached. Try again later.');
+  if (failure === 'AI_BILLING_UNCERTAIN' || failure === 'AI_BILLING_UNAVAILABLE') return said('Billing could not confirm this request, so it was not completed.');
+  if (failure === 'MODEL_PROVIDER_HTTP_ERROR') return said('The AI provider returned an error. Try again in a moment.');
+  if (failure === 'MODEL_PROVIDER_RESPONSE_INVALID' || failure === 'MODEL_PROVIDER_RESPONSE_TOO_LARGE') return said('The AI returned a response this table cannot use.');
+  if (failure === 'MODEL_PROVIDER_REQUEST_FAILED' || failure === 'MODEL_PROVIDER_ABORTED') return said('The connection to the AI failed before an answer arrived.');
+  if (failure === 'MODEL_PROVIDER_OUTPUT_REJECTED'
+      || (typeof failure === 'string' && (failure.startsWith('TABLE_') || failure.startsWith('MODEL_ASSISTANT_')))) {
+    const shown = cleanReasons(reasons);
+    return said(shown.length
+      ? `The assistant's answer did not pass table validation: ${shown.join(' · ')}`
+      : "The assistant's answer did not pass table validation.");
+  }
+  if (failure === 'MODEL_PROPOSAL_FAILED' || failure === 'MODEL_JOB_INTERRUPTED') return said('The assistant could not finish this request; nothing was changed.');
+  return said('The assistant failed before it could answer; nothing was changed.');
 }

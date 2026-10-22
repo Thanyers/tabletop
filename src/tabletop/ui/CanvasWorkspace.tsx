@@ -7,7 +7,8 @@ import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
 import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
-import { dedupeVisibleCanvasConnections } from './canvas-flow';
+import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
+import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
 import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNodeIds } from './canvas-layout-scope';
 import './canvas-visual-flow.css';
@@ -283,6 +284,25 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
 }
 
 function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
+  if (data.kind === 'plan' && isCanvasNoteId(data.id)) {
+    const note = data.view.domain.kind === 'table'
+      ? data.view.domain.notes?.find((item) => `table.note.${item.id}` === data.id)
+      : undefined;
+    if (!note) return null;
+    // F037: a note is the paper itself, not a card that contains paper.
+    return (
+      <div
+        className={'tt-note-node' + (selected ? ' is-selected' : '')}
+        data-canvas-object={data.id}
+        data-canvas-editor
+        data-canvas-role="note"
+        aria-label={`Note by ${data.view.members.find((member) => member.actorId === note.createdBy)?.name ?? 'Member'}`}
+      >
+        <NoteCard view={data.view} note={note} busy={data.busy} onCommand={data.onCommand} />
+      </div>
+    );
+  }
+
   if (data.kind === 'auxiliary') {
     return (
       <article
@@ -348,6 +368,14 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
 }
 
 const nodeTypes: NodeTypes = { tabletopObject: CanvasObjectNode };
+
+function connectionsStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 interface CanvasWorkspaceProps {
   view: WorkspaceView;
@@ -488,7 +516,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const [objectsMenuOpen, setObjectsMenuOpen] = useState(false);
   const [previousView, setPreviousView] = useState<{ x: number; y: number; zoom: number } | null>(null);
   useEffect(() => { setPreviousView(null); }, [view.id, view.epoch]);
-  const [showConnections, setShowConnections] = useState(false);
+  const [connectionsPreference, setConnectionsPreference] = useState<boolean | null>(() => readConnectionsPreference(connectionsStorage()));
   const objectsMenuRef = useRef<HTMLDivElement>(null);
   const objectsButtonRef = useRef<HTMLButtonElement>(null);
   const lastFocusRequestRef = useRef<string | null>(null);
@@ -791,7 +819,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         id: spec.id,
         type: 'tabletopObject',
         ariaLabel: spec.title,
-        dragHandle: '.tt-canvas-node__head',
+        dragHandle: isCanvasNoteId(spec.id) ? undefined : '.tt-canvas-node__head',
         position: (() => {
           const isShared = remoteLayoutEnabled && isSharedCanvasNodeForView(spec.id, view);
           const remotePosition = isShared ? sharedLayout?.positions[spec.id] : undefined;
@@ -1012,7 +1040,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       width: node.measured?.width ?? node.width ?? 360,
       height: node.measured?.height ?? node.height ?? 260,
       position: node.position,
-      pinned: pinnedNodeIdsRef.current.has(node.id),
+      pinned: pinnedNodeIdsRef.current.has(node.id) || isCanvasNoteId(node.id),
     }));
     const layoutEdges = edges.map((edge) => ({ source: edge.source, target: edge.target }));
     const ids = new Set(layoutNodes.map((node) => node.id));
@@ -1037,7 +1065,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
 
     if (initial) {
       for (const node of layoutNodes) {
-        if (pinnedNodeIdsRef.current.has(node.id) || explicitAuxiliaryPositions.has(node.id)) fixedIds.add(node.id);
+        if (pinnedNodeIdsRef.current.has(node.id) || explicitAuxiliaryPositions.has(node.id) || isCanvasNoteId(node.id)) fixedIds.add(node.id);
       }
     } else {
       for (const node of layoutNodes) {
@@ -1222,7 +1250,13 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     ...visiblePlanNodes.map((spec) => ({ id: spec.id, title: spec.title })),
     ...visibleAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title })),
   ], [visiblePlanNodes, visibleAuxiliaryObjects]);
+  const showConnections = resolveConnectionsVisible(connectionsPreference, edges.length);
   const visibleEdges = showConnections ? edges : [];
+  const toggleConnections = () => {
+    const next = !showConnections;
+    writeConnectionsPreference(connectionsStorage(), next);
+    setConnectionsPreference(next);
+  };
   const hasVisibleObjects = objectTitles.length > 0;
 
   return (
@@ -1290,7 +1324,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           </button>
           <nav id="tt-canvas-objects-list" className="tt-canvas-objects__panel" aria-label="Canvas objects" data-testid="canvas-object-dock" hidden={!objectsMenuOpen}>
             {previousView && <button type="button" onClick={() => { cancelPendingOpenObjectFocus(); void flow.setViewport(previousView, { duration: canvasMotionDuration(180) }); setPreviousView(null); setObjectsMenuOpen(false); objectsButtonRef.current?.focus(); }}><ArrowLeft size={16} aria-hidden="true" />Previous view</button>}
-            <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} onClick={(event) => { event.stopPropagation(); setShowConnections((shown) => !shown); }}>
+            <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} onClick={(event) => { event.stopPropagation(); toggleConnections(); }}>
               <Workflow size={16} aria-hidden="true" /><span>Connections</span><small>{edges.length}</small><i aria-hidden="true">{showConnections ? 'On' : 'Off'}</i>
             </button>
             <ul className="tt-canvas-objects__list">

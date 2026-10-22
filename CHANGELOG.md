@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Canvas (PATCH):** เส้นเชื่อมแสดงอัตโนมัติเมื่อโต๊ะมีเส้น และจำค่าที่ผู้ใช้เลือก (`localStorage`, ไม่เก็บใน workspace) — แก้อาการ "จุดต่ออยู่ครบแต่เส้นหาย" หลัง reload · โน้ต F037 วาดเป็นกระดาษโพสต์อิทเอง ไม่ถูกครอบด้วยการ์ดหัวข้อ/ปุ่ม Open/พื้นที่ขาวอีก · โน้ตถูก pin ตำแหน่งจากตัวโน้ต ไม่ถูก auto-layout ย้าย
+- **Table assistant (PATCH):** ข้อความล้มเหลวระบุสาเหตุจริงและลงท้ายด้วย `(code …)` ทุกครั้ง (timeout, provider error, billing, interrupted, validation พร้อมเหตุผลสั้น ๆ) · **Worker เก็บรหัสจริงแล้ว** — เดิม catch รวมทุก error เป็น `ASSISTANT_FAILED` ทำให้สาเหตุหายถาวร · job ที่ล้มเหลวมี `failureCode`, `failureReasons`, `durationMs` ให้เทสอ่าน และการ์ดมี `data-request-id` / `data-failure-code` / `data-failure-reasons` / `data-duration-ms` · ไม่มี schema/migration/secret ใหม่
+- **เพดานงาน assistant (PATCH):** timeout ของผู้ให้บริการ 30s → **120s**, output 1,024 → **8,192 tokens**, response body 24 → 64 KiB และ client poll 60s → 150s · แยก `finish_reason=length` เป็น `MODEL_PROVIDER_OUTPUT_TRUNCATED` (เดิมถูกกลืนเป็น invalid response) · การ์ดระหว่างรอแสดงเวลาที่ใช้เทียบเพดานทุกวินาที ไม่ดูเหมือนค้าง · ไม่มี schema/migration
+
 ## 4.2.0 — 2026-10-22
 
 MINOR: note card แบบ post-it บน canvas — สร้างจากปุ่มข้างช่องแชท ลากย้าย แก้ข้อความ เปลี่ยน 6 สี ขยาย/หด และลบได้ ทุกคนในโต๊ะเห็นร่วมกัน · โน้ตถูกส่งเป็นบริบทให้ AI ตอนถาม/ร่างกฎ · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v4.0.0 ได้
