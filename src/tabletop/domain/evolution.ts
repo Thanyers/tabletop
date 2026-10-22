@@ -415,7 +415,8 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
 function autoApplyCandidate(state: DomainState, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } {
   requireCaseRole(state, ctx, 'rules.draft');
   parsePayload(noPayloadSchema, payload);
-  assert(state.kind === 'table', 'AUTO_APPLY_UNSUPPORTED', 'Only table rules are applied automatically.');
+  // An encounter keeps its pause rule: rules cannot go live while the DM has paused it.
+  assert(!(state.kind === 'encounter' && state.paused !== undefined), 'ENCOUNTER_PAUSED', 'Resume the encounter before new rules can be applied.');
   assert(state.candidate, 'CANDIDATE_NOT_FOUND', 'There is no rule draft to apply.');
   assert(state.candidate.createdBy === ctx.actorId, 'FORBIDDEN', 'Only the person who asked for this draft can apply it automatically.');
   assert(state.candidate.status === 'draft', 'CANDIDATE_NOT_DRAFT', 'This draft is already being reviewed.');

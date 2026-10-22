@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { decideDomain } from './index';
+import { createDomain, decideDomain } from './index';
 import { createTableState, handleTableCommand } from './table';
 import { equipmentChange, shiftsChange, tableScenarioSources } from '../testing/table-scenarios';
 import type { ActorContext, DomainState } from '../shared/contracts';
@@ -74,5 +74,25 @@ describe('F039 evolve.removeItem', () => {
     });
     expect(outcomes).toContain('removed');
     expect(() => decideDomain(state, { type: 'evolve.removeItem', payload: { kind: 'action', id: 'missing' } }, owner)).toThrow(/no longer on this table/u);
+  });
+});
+
+describe('F039 evolve.autoApply on every case kind', () => {
+  it('applies a teacher\'s lesson change and a DM\'s encounter rule, and waits while an encounter is paused', () => {
+    const teacher: ActorContext = { ...owner, actorId: 'test-teacher', role: 'teacher' };
+    const lesson = createDomain('teaching', teacher);
+    if (lesson.kind !== 'teaching') throw Error('Expected teaching');
+    const proposed = decideDomain(lesson, { type: 'evolve.propose', payload: { change: { kind: 'teaching', parameters: { ...lesson.parameters, mass: lesson.parameters.mass + 1 } } } }, teacher).state;
+    const applied = decideDomain(proposed, { type: 'evolve.autoApply', payload: {} }, teacher).state;
+    expect(applied.ruleRevision).toBe(lesson.ruleRevision + 1);
+    expect(applied.candidate?.status).toBe('active');
+
+    const dm: ActorContext = { ...owner, actorId: 'test-dm', role: 'dm' };
+    const encounter = createDomain('encounter', dm);
+    if (encounter.kind !== 'encounter') throw Error('Expected encounter');
+    const ruleDraft = decideDomain(encounter, { type: 'evolve.propose', payload: { change: { kind: 'encounter', rule: { ...encounter.rule, apCost: encounter.rule.apCost === 1 ? 2 : 1 } } } }, dm).state;
+    expect(decideDomain(ruleDraft, { type: 'evolve.autoApply', payload: {} }, dm).state.candidate?.status).toBe('active');
+    const paused = decideDomain(decideDomain(encounter, { type: 'encounter.pause', payload: {} }, dm).state, { type: 'evolve.propose', payload: { change: { kind: 'encounter', rule: { ...encounter.rule, apCost: encounter.rule.apCost === 1 ? 2 : 1 } } } }, dm).state;
+    expect(() => decideDomain(paused, { type: 'evolve.autoApply', payload: {} }, dm)).toThrow(/Resume the encounter/u);
   });
 });

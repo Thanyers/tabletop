@@ -56,17 +56,20 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
   invoice: new Set([
     'invoice.reviewSource', 'invoice.sample', 'invoice.saveRun',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    'evolve.autoApply',
     ...ACCESS_COMMANDS,
   ]),
   teaching: new Set([
     'teaching.setParameters', 'teaching.setRepresentation', 'teaching.answer', 'teaching.saveNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    'evolve.autoApply',
     ...ACCESS_COMMANDS,
   ]),
   encounter: new Set([
     'encounter.declareHit', 'encounter.shield', 'encounter.resolve', 'encounter.endTurn', 'encounter.saveNote',
     'encounter.pause', 'encounter.resume',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
+    'evolve.autoApply',
     ...ACCESS_COMMANDS,
   ]),
   table: new Set([

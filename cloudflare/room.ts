@@ -1406,7 +1406,6 @@ export class Room extends DurableObject<Env> {
     proposed: CommandAck,
     workspaceId: string,
   ): Promise<{ autoApply: 'applied' | 'needs-review'; autoApplyReasons?: string[] }> {
-    if (proposed.workspace.kind !== 'table') return { autoApply: 'needs-review' };
     try {
       const applied = await this.authority.execute(session, {
         commandId: crypto.randomUUID(),

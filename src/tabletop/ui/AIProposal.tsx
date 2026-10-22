@@ -81,11 +81,12 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
 
   useEffect(() => { setConsent(false); }, [sourceScope, sourceId]);
 
-  const refreshDraft = async (token: number) => {
+  const refreshDraft = async (token: number, finished?: ModelJob) => {
     setRefreshing(true);
     try {
       await onRefresh(view.id);
-      if (generation.current === token) setMessage('Draft ready. Open Rules to review it.');
+      // F039: a draft that passed every check is already in use; one that did not waits for a manual review.
+      if (generation.current === token) setMessage(finished?.autoApply === 'applied' ? 'The new rules are in use.' : finished?.autoApply === 'needs-review' ? `Draft ready, but it needs a manual review${finished.autoApplyReasons?.length ? `: ${finished.autoApplyReasons.join(' ')}` : '.'}` : 'Draft ready. Open Rules to review it.');
     } catch (reason) {
       if (generation.current === token) setError(reason instanceof Error ? reason.message : 'The table could not be refreshed.');
     } finally {
@@ -97,7 +98,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
     if (generation.current !== token) return;
     setJob(next);
     if (next.status === 'failed') setError(next.message || 'The AI proposal could not be completed. You can revise the request or continue with a manual edit.');
-    else if (completed(next)) await refreshDraft(token);
+    else if (completed(next)) await refreshDraft(token, next);
     else setMessage('The proposal is still being prepared. You can check again in a moment.');
   };
 
@@ -115,7 +116,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
           return;
         }
         if (completed(next)) {
-          await refreshDraft(token);
+          await refreshDraft(token, next);
           return;
         }
       } catch (reason) {
@@ -144,7 +145,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
       if (accepted.status === 'failed') {
         setError(accepted.message || 'The AI proposal could not be completed.');
         setMessage('');
-      } else if (completed(accepted)) await refreshDraft(token);
+      } else if (completed(accepted)) await refreshDraft(token, accepted);
       else {
         setMessage('Request accepted. Checking for a draft…');
         void pollInBackground(accepted.id, token);
