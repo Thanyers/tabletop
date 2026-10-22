@@ -153,3 +153,5 @@ release แรกที่ติด tag ตามรูปแบบ `vMAJOR.MINO
 ## 2026-10-18 — initial Cloudflare alpha
 
 - เปิด Google login, saved rooms, invitations, DeepSeek draft jobs และ durable budget ledger สำหรับสาม workflow เดิม ดู [บันทึกรุ่นแรก](docs/CLOUDFLARE_RELEASE.md)
+
+- **F037 (ยังไม่ครบ — UI ยังไม่ทำ):** note card แบบ post-it เก็บใน `TableState.notes` แยกจาก program · คำสั่ง `table.addNote/updateNote/moveNote/removeNote` (ทุกสมาชิก) · จำกัด 20 โน้ต 500 ตัวอักษร 6 สี · ไม่ bump rule/data revision

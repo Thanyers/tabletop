@@ -90,6 +90,8 @@ const tableDomainSchema = z.object({
   program: tableProgramSchema.nullable(),
   records: tableRecordsSchema,
   turn: z.string().max(40).nullable(),
+  // F037: notes travel with the table state so the draft can use them as knowledge.
+  notes: z.array(z.object({ text: z.string().max(500), color: z.string().max(20) })).max(20).optional(),
 });
 const billingUsageSchema = z.strictObject({
   promptTokens: z.number().int().safe().nonnegative(),
@@ -231,6 +233,7 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
       program: structuredClone(parsed.data.program),
       records: structuredClone(parsed.data.records),
       turn: parsed.data.turn,
+      ...(parsed.data.notes?.length ? { notes: parsed.data.notes.map(({ text, color }) => ({ text, color })) } : {}),
     };
     return {
       kind: 'table',

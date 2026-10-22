@@ -12,6 +12,7 @@ import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
+import { NewNoteButton } from './ui/NoteCard';
 import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
@@ -797,6 +798,9 @@ export default function TabletopApp() {
     focusObject: requestCanvasFocus,
     notify: showNotice,
     prefill: aiPrefill,
+    composerAction: view && isTableWorkspaceView(view)
+      ? <NewNoteButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand} />
+      : undefined,
   });
 
   if (starting) return <LoadingScreen />;

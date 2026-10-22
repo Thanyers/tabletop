@@ -28,7 +28,8 @@ export function missingSharedCanvasNodeIds(
   limit = 24,
 ): string[] {
   return nodes
-    .filter((node) => isSharedCanvasNodeForView(node.id, view)
+    .filter((node) => !node.id.startsWith('table.note.') // F037: notes keep their own coordinates
+      && isSharedCanvasNodeForView(node.id, view)
       && knownPositions[node.id] === undefined
       && !pendingIds.has(node.id)
       && !draggingIds.has(node.id)
