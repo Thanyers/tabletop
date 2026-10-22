@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **เห็นความคืบหน้าระหว่างรอร่างกฎ (F045, MINOR):** เส้นทางร่างกฎอ่านสตรีมของผู้ให้บริการแล้ว (`stream:true`) การ์ดจึงโชว์ `42s / 240s server limit · thinking 8,200 chars · answer 1,300 chars` แบบสดได้ · ถ้าถูกตัด การ์ดบอกว่า **"หยุดที่เพดาน 240s ของเซิร์ฟเวอร์"** หรือ **"ผู้ให้บริการปิดการเชื่อมต่อ"** พร้อมจำนวนตัวอักษร และปุ่มดูข้อความบางส่วน (≤4,000 ตัวอักษร) กับ thinking tail (≤600 ตัวอักษร) ที่ redact ชื่อ/บัญชีแล้ว · เพดานปรับได้ด้วย `AI_TABLE_DEADLINE_MS` (เริ่มต้น 240,000 ms, สูงสุด 300,000) และ job recovery = เพดาน + 120s, client poll = เพดาน + 70s · สัญญา JSON ที่สำเร็จ, การ validate/commit และ fallback ที่ผู้ให้บริการไม่ส่ง SSE ยังเหมือนเดิม · ไม่มี migration/secret/binding ใหม่ (ไม่ต้องตั้ง var ใหม่ = 240s) · rollback กลับรุ่นก่อนได้ (ฝั่งเก่าไม่รู้จักฟิลด์ optional ที่เพิ่มมา) · ผลตรวจ Node 22.23.2: provider 21/21, unit 563 ผ่าน/1 skip, Cloudflare 125/125, typecheck 0, lint 0 error, build + build:cloudflare ผ่าน, browser suite 27/27 สองรอบติด (รันซ้ำหลัง merge `dev`), live dragon 76.6s และ big-source 10,000 ตัวอักษร 71.0s ที่เพดาน 240s ([F045](docs/features/F045-transparent-streaming-timeout.md))
+
 - **แก้คลิกขวา → Arrange objects กดไม่ได้:** เมนูอยู่ในชั้นเครื่องมือที่ปล่อยให้คลิกทะลุ (`pointer-events: none`) เมาส์จริงจึงไปโดน canvas ข้างใต้ · ตอนนี้กดได้ และเมนูไม่ล้นขอบจอเมื่อคลิกขวาใกล้ขอบ
 
 - **การ์ดผลลัพธ์ค้างเฉพาะเมื่อยังมีอะไรให้ทำ:** ข้อเสนอ action ที่กด Confirm แล้ว เปลี่ยนเป็นแถบ "Done: …" พร้อมปุ่ม Table history แทนการ์ด · การ์ดที่ยังต้องตอบคำถาม ตรวจเอง ยืนยัน ลองใหม่ หรือมี error ยังอยู่บน canvas
