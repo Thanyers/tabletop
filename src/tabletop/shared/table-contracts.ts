@@ -1,5 +1,6 @@
 import type { DomainBase } from './contracts';
 import type { GenerativeCanvas, GenerativeExpression } from './generative-contracts';
+import type { RollSpec, TablePendingRoll } from './roll';
 
 /** Data-only program with a bounded arithmetic AST and optional closed canvas descriptors. */
 export type TableValue = string | number | boolean | null | string[];
@@ -7,7 +8,8 @@ export interface TableField { id: string; label: string; type: 'text' | 'number'
 export interface TableCollection { id: string; title: string; fields: TableField[] }
 export interface TableRecord { id: string; values: Record<string, TableValue> }
 export interface TableSource { id: string; filename: string; text: string; sha256: string; createdAt: number }
-export interface TableParameter { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'record'; collection?: string; min?: number; max?: number; choices?: string[] }
+/** F048: a `roll` parameter is filled by the authority, never by the client. It behaves as a number. */
+export interface TableParameter { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'record' | 'roll'; collection?: string; min?: number; max?: number; choices?: string[]; roll?: RollSpec }
 export type TableOperand = { literal: TableValue } | { input: string } | { record: string; field: string } | { system: 'actor' | 'seat' | 'turn' } | { expression: GenerativeExpression };
 export interface TableCondition { left: TableOperand; op: 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains'; right: TableOperand; message: string }
 export interface TableEffect { record: string; field: string; op: 'set' | 'add'; value: TableOperand }
@@ -40,6 +42,11 @@ export interface TableState extends DomainBase {
   computedColumns?: ComputedColumn[];
   /** Shared sticky notes (F037). Omitted by rooms created before this field existed. */
   notes?: TableNote[];
+  /**
+   * F048: rolls issued but not yet consumed by their action. Private to the roller, so projections
+   * drop them; the action commit deletes the one it consumed.
+   */
+  pendingRolls?: TablePendingRoll[];
   actionRevision: number;
   activity: { actorId: string; action: string; at: number }[];
 }
