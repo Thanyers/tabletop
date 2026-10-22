@@ -59,6 +59,8 @@ const inputSchema = z.discriminatedUnion('kind', [
       id: z.string().min(1).max(100), filename: z.string().min(1).max(120),
       text: z.string().min(1).max(TABLE_FILE_BYTES),
     })).max(4),
+    /** Files the active program already cites; their text stays on the server and is left out of the request. */
+    importedSources: z.array(z.strictObject({ id: z.string().min(1).max(100), filename: z.string().min(1).max(120), note: z.string().max(300) })).max(4).optional(),
     program: tableProgramSchema.nullable(),
     turn: z.string().max(40).nullable(),
     records: tableRecordsSchema.optional(),
@@ -71,7 +73,7 @@ const inputSchema = z.discriminatedUnion('kind', [
 export type DeepSeekChangeInput =
   | { kind: 'teaching'; prompt: string; parameters: { force: number; mass: number; time: number } }
   | { kind: 'encounter'; prompt: string; rule: { allyTarget: boolean; apCost: 0 | 1; oncePerTurn: boolean } }
-  | { kind: 'table'; prompt: string; sources: { id: string; filename: string; text: string }[]; program: TableProgram | null; turn: string | null; records?: Record<string, TableRecord[]>; notes?: { text: string; color: string }[]; repair?: { attempt: number; issues: string[]; previousOutput?: string } };
+  | { kind: 'table'; prompt: string; sources: { id: string; filename: string; text: string }[]; importedSources?: { id: string; filename: string; note: string }[]; program: TableProgram | null; turn: string | null; records?: Record<string, TableRecord[]>; notes?: { text: string; color: string }[]; repair?: { attempt: number; issues: string[]; previousOutput?: string } };
 
 export interface DeepSeekChangeUsage {
   promptTokens: number;
