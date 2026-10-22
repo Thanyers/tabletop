@@ -11,8 +11,8 @@ import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tablet
 
 /**
  * F049: the exact dice control example embedded in the guide below.
- * The drafter may author `kind:"dice"`: the client rolls it (visual-only, no server roll)
- * and fills one numeric action parameter that another card can submit.
+ * The drafter may author `kind:"dice"` on a numeric parameter (client rolls it, visual-only)
+ * or on a `roll` parameter (F051: the server rolls the program's roll spec and the card shows it).
  */
 export const TABLE_DICE_EXAMPLE: ControlsViewDescriptor = {
   id: 'damage-die',
@@ -132,8 +132,9 @@ CONTROL (each: id,label,actionId,inputs:BINDINGS) =
   | dice{kind:"dice",parameter,faces:2..100,count:1..10,modifier?:integer -1000..1000}
 BINDINGS: {PARAM_ID: {kind:"control"} | {kind:"literal",value:VALUE} | {kind:"expression",value:EXPR} | {kind:"record",collection:COLLECTION_ID,recordId:ID}}
   Every action parameter must be covered; the parameter a slider/toggle/select/dice edits binds {kind:"control"}.
-DICE: dice must bind one number PARAM (faces/count are whole numbers in range; modifier is an optional whole number).
-  The client rolls count d faces + modifier on the device (visual-only; the server does not roll) and fills the parameter
-  for the other cards that bind the same action, so a form on another controls view can submit the rolled value.
+DICE: dice must bind one number PARAM or one roll PARAM (faces/count whole numbers in range; modifier optional whole number).
+  Number PARAM: the client rolls count d faces + modifier (visual-only) and fills it for other cards.
+  Roll PARAM: faces/count are only validated display defaults; the SERVER rolls the parameter's roll spec, the card
+  shows those faces and total, and the action sends no value.
   EXAMPLE (one controls view; the same action also has a form on another view covering every input):
   ${TABLE_DICE_EXAMPLE_JSON}`;

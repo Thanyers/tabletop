@@ -40,7 +40,7 @@ function expectSecurityHeaders(response: Response): void {
 describe('F051 page classification', () => {
   it('lists only the landing page and the demo as public', () => {
     for (const path of ['/', '/demo', '/demo/', '/demo/replay', '/demo/replay/']) expect(pageKind(path)).toBe('public');
-    for (const path of ['/new', '/new/', '/join', `/t/${tableId}`, `/t/${tableId}/`]) expect(pageKind(path)).toBe('app');
+    for (const path of ['/tables', '/tables/', '/new', '/new/', '/join', `/t/${tableId}`, `/t/${tableId}/`]) expect(pageKind(path)).toBe('app');
     for (const path of ['/asdf', '/t/not-a-uuid', `/t/${tableId}/extra`, '/demo/other', '/favicon.ico', '/index.htm']) expect(pageKind(path)).toBe('missing');
   });
 
@@ -61,7 +61,7 @@ describe('F051 HTML routes through the Worker', () => {
     expectSecurityHeaders(response);
   });
 
-  it.each(['/new', '/join', `/t/${tableId}`, `/t/${tableId}/`])('serves app page %s with 200 and noindex', async (path) => {
+  it.each(['/tables', '/new', '/join', `/t/${tableId}`, `/t/${tableId}/`])('serves app page %s with 200 and noindex', async (path) => {
     const { response } = await fetchPage(path);
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/html');
@@ -79,7 +79,7 @@ describe('F051 HTML routes through the Worker', () => {
     expect(deepLink.response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
   });
 
-  it.each(['/asdf', '/t/not-a-uuid', `/t/${tableId}/extra`, '/demo/other'])('answers unknown page %s with 404, the app shell and noindex', async (path) => {
+  it.each(['/asdf', '/t/not-a-uuid', `/t/${tableId}/extra`, `/t/${tableId}/history`, '/demo/other'])('answers unknown page %s with 404, the app shell and noindex', async (path) => {
     const { response } = await fetchPage(path);
     expect(response.status).toBe(404);
     expect(response.headers.get('Content-Type')).toContain('text/html');

@@ -45,6 +45,7 @@
 | F049 | ลูกเต๋าบนการ์ด controls: stepper จำนวน/หน้า + ปุ่ม ทอย + หน้าลูกเต๋า/ผลรวม และค่าที่ทอยได้ส่งต่อให้การ์ดอื่นที่ bind parameter เดียวกัน (v1 สุ่มฝั่ง client, visual-only; server roll = F048) · prompt guide ให้ drafter เขียน dice ได้ | `review` | [F049](docs/features/F049-dice-visual.md) |
 | F052 | Landing ภาษาอังกฤษ + รูปแชร์ใหม่ (การ์ดแบรนด์) | `doing` | [F052](docs/features/F052-english-landing.md) |
 | F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `review` | [F050](docs/features/F050-live-thinking.md) |
+| F051 | การ์ด dice ที่ผูก `roll` parameter ใช้ `table.roll` ของ server: แสดงหน้าเต๋า/ผลรวมจาก roll-store, ไม่เขียน shared draft และไม่ใช้ client RNG · dice ที่ผูก `number` ยัง client-side/visual-only · ไม่เปลี่ยน wire contract | `review` | [F051](docs/features/F051-server-dice.md) |
 
 ## งาน
 

@@ -657,9 +657,6 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-failure h1 { margin: 8px 0 3px; font-size: 22px; }
 .tt-failure > p:not(.tt-kicker) { max-width: 440px; color: #71807d; font-size: 11px; }
 .tt-failure > .tt-button { margin-top: 10px; }
-.tt-loading { display: flex; min-height: 100dvh; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #526761; background: #f2f4f5; font-family: Manrope, 'Noto Sans Thai', sans-serif; }
-.tt-loading > strong { font-size: 15px; }
-.tt-loading > span:last-child { display: inline-flex; align-items: center; gap: 6px; color: #84928d; font-size: 9px; }
 .tt-spin { animation: tt-spin 1s linear infinite; }
 @keyframes tt-spin { to { transform: rotate(360deg); } }
 
