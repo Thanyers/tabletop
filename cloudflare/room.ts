@@ -84,6 +84,9 @@ interface PublicModelJob {
   prompt?: string;
   /** F038: the machine-readable failure, so a rule-draft card can quote it like an answer card. */
   failureCode?: string;
+  /** F039: whether the draft went into use on its own, or needs a manual review (and why). */
+  autoApply?: 'applied' | 'needs-review';
+  autoApplyReasons?: string[];
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -348,6 +351,8 @@ function modelJobStatusView(job: RoomModelJob): PublicModelJob {
     status: 'completed',
     ...(typeof job.data.candidateId === 'string' ? { candidateId: job.data.candidateId } : {}),
     ...(publicClarification(job.data.clarification) ?? {}),
+    ...(job.data.autoApply === 'applied' || job.data.autoApply === 'needs-review' ? { autoApply: job.data.autoApply } : {}),
+    ...(Array.isArray(job.data.autoApplyReasons) ? { autoApplyReasons: job.data.autoApplyReasons.filter((item): item is string => typeof item === 'string').slice(0, 6) } : {}),
   };
 }
 
@@ -1366,8 +1371,9 @@ export class Room extends DurableObject<Env> {
         session, envelope, input.workspaceId, input.jobId,
       );
       const candidateId = acknowledgement.workspace.domain.candidate?.id;
+      const autoApply = candidateId ? await this.autoApplyDraft(session, acknowledgement, input.workspaceId) : null;
       await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
-        input.actorId, 'completed', { ...committingData, ...(candidateId ? { candidateId } : {}) });
+        input.actorId, 'completed', { ...committingData, ...(candidateId ? { candidateId } : {}), ...(autoApply ?? {}) });
     } catch (error) {
       try {
         const job = await this.repository.getModelJob(
@@ -1387,6 +1393,36 @@ export class Room extends DurableObject<Env> {
       } catch {
         try { await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS); } catch { /* retry on the next room alarm */ }
       }
+    }
+  }
+
+  /**
+   * F039: put a table draft into use right after it is proposed. The domain runs every review check; a draft
+   * that fails one, or a table that moved on meanwhile, stays a candidate for manual review. This never
+   * fails the rule request itself.
+   */
+  private async autoApplyDraft(
+    session: AuthenticatedSession,
+    proposed: CommandAck,
+    workspaceId: string,
+  ): Promise<{ autoApply: 'applied' | 'needs-review'; autoApplyReasons?: string[] }> {
+    try {
+      const applied = await this.authority.execute(session, {
+        commandId: crypto.randomUUID(),
+        expectedRevision: proposed.workspace.revision,
+        expectedEpoch: proposed.workspace.epoch,
+        type: 'evolve.autoApply',
+        payload: {},
+      }, workspaceId);
+      const candidate = applied.workspace.domain.candidate;
+      if (candidate?.status === 'active') return { autoApply: 'applied' };
+      const reasons = (candidate?.simulation?.checks ?? []).filter((check) => !check.passed).map((check) => check.message).slice(0, 6);
+      return { autoApply: 'needs-review', ...(reasons.length ? { autoApplyReasons: reasons } : {}) };
+    } catch (error) {
+      // A draft that existing records break (a new unique rule, a stricter field) fails while it is
+      // previewed, before any check result is stored, so the reason comes from the domain error.
+      const reasons = error instanceof AuthorityError && (error.status === 409 || error.status === 422) ? cleanReasons([error.message]) : [];
+      return { autoApply: 'needs-review', ...(reasons.length ? { autoApplyReasons: reasons } : {}) };
     }
   }
 

@@ -81,11 +81,12 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
 
   useEffect(() => { setConsent(false); }, [sourceScope, sourceId]);
 
-  const refreshDraft = async (token: number) => {
+  const refreshDraft = async (token: number, finished?: ModelJob) => {
     setRefreshing(true);
     try {
       await onRefresh(view.id);
-      if (generation.current === token) setMessage('Draft ready. Open Rules to review it.');
+      // F039: a draft that passed every check is already in use; one that did not waits for a manual review.
+      if (generation.current === token) setMessage(finished?.autoApply === 'applied' ? 'The new rules are in use.' : finished?.autoApply === 'needs-review' ? `Draft ready, but it needs a manual review${finished.autoApplyReasons?.length ? `: ${finished.autoApplyReasons.join(' ')}` : '.'}` : 'Draft ready. Open Rules to review it.');
     } catch (reason) {
       if (generation.current === token) setError(reason instanceof Error ? reason.message : 'The table could not be refreshed.');
     } finally {
@@ -97,7 +98,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
     if (generation.current !== token) return;
     setJob(next);
     if (next.status === 'failed') setError(next.message || 'The AI proposal could not be completed. You can revise the request or continue with a manual edit.');
-    else if (completed(next)) await refreshDraft(token);
+    else if (completed(next)) await refreshDraft(token, next);
     else setMessage('The proposal is still being prepared. You can check again in a moment.');
   };
 
@@ -115,7 +116,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
           return;
         }
         if (completed(next)) {
-          await refreshDraft(token);
+          await refreshDraft(token, next);
           return;
         }
       } catch (reason) {
@@ -144,7 +145,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
       if (accepted.status === 'failed') {
         setError(accepted.message || 'The AI proposal could not be completed.');
         setMessage('');
-      } else if (completed(accepted)) await refreshDraft(token);
+      } else if (completed(accepted)) await refreshDraft(token, accepted);
       else {
         setMessage('Request accepted. Checking for a draft…');
         void pollInBackground(accepted.id, token);
@@ -236,7 +237,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
         {lastPrompt && <details><summary>Request details</summary><p>{lastPrompt}</p></details>}
         {(job?.message || message) && <p>{job?.message || message}</p>}
         {waitingNow && <button type="button" className="tt-button tt-button--quiet" onClick={() => void checkStatus()} disabled={checking}>{checking ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />}Check status</button>}
-        {job && completed(job) && <button type="button" className="tt-button tt-button--quiet" onClick={() => void refreshDraft(generation.current)} disabled={refreshing}>{refreshing ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />}Refresh table</button>}
+        {job && completed(job) && <button type="button" className="tt-button tt-button--quiet" onClick={() => void refreshDraft(generation.current, job ?? undefined)} disabled={refreshing}>{refreshing ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />}Refresh table</button>}
         {tableDraftPending && <button type="button" className="tt-button tt-button--quiet" onClick={onReviewDraft}>Review draft</button>}
       </div>}
       {error && <p className="tt-ai-proposal__error" role="alert"><AlertCircle size={14} />{error}</p>}
@@ -261,10 +262,10 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
         <label className="tt-ai-proposal__consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>Send this request and current {view.kind === 'invoice' ? 'rules with the selected evidence' : 'rules or parameters'} to AI.</span></label>
         <button type="submit" className="tt-button tt-button--primary" disabled={!canSubmit}>{requesting ? <LoaderCircle size={14} className="tt-spin" /> : <Sparkles size={14} />}Prepare draft</button>
       </form>
-      {(requesting || job) && <div className="tt-ai-proposal__job" role="status" aria-live="polite"><span className={`tt-ai-proposal__job-mark${job && completed(job) ? ' is-done' : ''}`}>{job && completed(job) ? <Check size={14} /> : <LoaderCircle size={14} className="tt-spin" />}</span><span><strong>{job?.status === 'failed' ? 'Request stopped' : completed(job ?? { id: '', status: 'queued' }) ? 'Draft ready for review' : 'Preparing draft'}</strong><small>{job?.message || message || (waitingNow ? 'This can take a little while.' : '')}</small></span>{waitingNow && <button type="button" className="tt-button tt-button--quiet" onClick={() => void checkStatus()} disabled={checking}>{checking ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />} Check status</button>}{job && completed(job) && <button type="button" className="tt-button tt-button--quiet" onClick={() => void refreshDraft(generation.current)} disabled={refreshing}>{refreshing ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />} Refresh table</button>}</div>}
+      {(requesting || job) && <div className="tt-ai-proposal__job" role="status" aria-live="polite"><span className={`tt-ai-proposal__job-mark${job && completed(job) ? ' is-done' : ''}`}>{job && completed(job) ? <Check size={14} /> : <LoaderCircle size={14} className="tt-spin" />}</span><span><strong>{job?.status === 'failed' ? 'Request stopped' : completed(job ?? { id: '', status: 'queued' }) ? (job?.autoApply === 'applied' ? 'Rules in use' : 'Draft ready for review') : 'Preparing draft'}</strong><small>{job?.message || message || (waitingNow ? 'This can take a little while.' : '')}</small></span>{waitingNow && <button type="button" className="tt-button tt-button--quiet" onClick={() => void checkStatus()} disabled={checking}>{checking ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />} Check status</button>}{job && completed(job) && <button type="button" className="tt-button tt-button--quiet" onClick={() => void refreshDraft(generation.current, job ?? undefined)} disabled={refreshing}>{refreshing ? <LoaderCircle size={13} className="tt-spin" /> : <RefreshCw size={13} />} Refresh table</button>}</div>}
       {message && !requesting && !job && <p className="tt-ai-proposal__message" role="status">{message}</p>}
       {error && <p className="tt-ai-proposal__error" role="alert"><AlertCircle size={14} />{error}</p>}
-      {job && completed(job) && <p className="tt-ai-proposal__footer">Review the draft on Canvas before using it.</p>}
+      {job && completed(job) && <p className="tt-ai-proposal__footer">{job.autoApply === 'applied' ? 'The new rules passed every check and are in use. Open Rules to see them.' : 'Review the draft on Canvas before using it.'}</p>}
     </>}
   </section>;
 }

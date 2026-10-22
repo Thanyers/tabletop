@@ -441,7 +441,8 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const draftCard = draftNode.getByTestId('table-chat-answer');
   const expectedDraftText = failDraftRefresh
     ? 'The rule draft is ready, but the table could not refresh.'
-    : 'A rule draft is ready. Review it before anyone uses it.';
+    // F039: the Room runs every review check and puts the asker's draft into use on its own.
+    : 'The new rules were added to the table. Remove any rule you do not want from the Rules card.';
   try {
     await expect(draftCard).toBeVisible({ timeout: 20_000 });
     if (observePending) {
@@ -488,34 +489,48 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     failRefresh = false;
     const refreshResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
     void refreshResponse.catch(() => {});
+    // F039: the draft is already in use, so the live projection adds the new table cards and the canvas
+    // focuses them, which can pan the draft card out of view. Wait for that, then go back to the card.
+    await expect(owner.locator(`.tt-canvas-node[data-canvas-object="table.collection.${change.program.collections[0].id}"]`)).toHaveCount(1, { timeout: 20_000 });
+    const draftObjectId = await draftCard.evaluate(element => element.closest('[data-canvas-object]')?.getAttribute('data-canvas-object'));
+    expect(draftObjectId).toBeTruthy();
+    const objects = await openObjectsMenu(owner);
+    await objects.getByTestId(`open-canvas-${draftObjectId}`).click();
+    await expect(retryRefresh).toBeInViewport();
     await retryRefresh.click();
     expect((await refreshResponse).status()).toBe(200);
     await expect(retryRefresh).toHaveCount(0);
-    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
-    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
+    await expect(draftCard).toContainText('The new rules were added to the table. Remove any rule you do not want from the Rules card.');
+    await expect(draftCard.getByRole('button', { name: 'View rules', exact: true })).toBeEnabled();
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
     expect(workspaceRefreshRequests).toBeGreaterThan(requestsBeforeRetry);
     expect(modelRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
     await owner.unroute(workspaceUrl, workspaceRoute);
     await owner.unroute(modelUrl, modelRoute);
   } else {
-    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
+    await expect(draftCard).toContainText('The new rules were added to the table. Remove any rule you do not want from the Rules card.');
     await expect(draftCard.getByRole('button', { name: 'Retry table refresh', exact: true })).toHaveCount(0);
-    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
+    await expect(draftCard.getByRole('button', { name: 'View rules', exact: true })).toBeEnabled();
+    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
   }
-  await draftCard.getByRole('button', { name: 'Review rules', exact: true }).click();
+  await draftCard.getByRole('button', { name: 'View rules', exact: true }).click();
   await expect(owner.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', 'table.rules');
   owner.off('request', countModelRequests);
   expect(modelRequests).toBe(1);
   await owner.reload();
   const refreshedRules = await openCanvasObject(owner, 'table.rules');
-  await expect(refreshedRules.getByRole('region', { name: 'Proposed rules', exact: true })).toBeVisible();
-  const editor = owner.getByTestId('canvas-object-editor');
-  await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
+  await expect(refreshedRules.getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
+  await expect(refreshedRules.getByRole('region', { name: 'Proposed rules', exact: true })).toHaveCount(0);
+  await expect(refreshedRules.getByRole('button', { name: 'Apply to table', exact: true })).toHaveCount(0);
   const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  expect(current.domain.candidate?.status).toBe('draft');
-  expect(current.domain.program).toEqual(before.domain.program);
-  expect(current.domain.records).toEqual(before.domain.records);
+  expect(current.domain.candidate?.status).toBe('active');
+  expect(current.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
+  expect(current.domain.program?.title).toBe(change.program.title);
+  expect(current.domain.program?.actions.map(action => action.id)).toEqual(change.program.actions.map(action => action.id));
+  // A rule edit keeps the records on the table; a first draft starts from its proposed rows.
+  if (before.domain.program) expect(current.domain.records).toEqual(before.domain.records);
+  else expect(current.domain.records).toEqual(change.initialRecords);
   return current;
 }
 
@@ -611,18 +626,19 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await prompt.fill('');
 }
 
-async function progressThroughLifecycle(owner, tableId, api, rules) {
+// F039: the draft is already in use; the Rules card shows the applied rules with their conditions.
+async function inspectAppliedRules(owner, tableId, api, rules) {
   const editor = await openCanvasObject(owner, 'table.rules');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
-  const advanced = editor.locator('details.tt-table-advanced-checks');
-  if (await advanced.getAttribute('open') === null) await advanced.locator('summary').first().click();
-  const proposedRules = editor.getByRole('region', { name: 'Proposed rules', exact: true });
-  const actionDetails = proposedRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
-  await actionDetails.locator('summary').click();
-  await expect(proposedRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
+  const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
+  await expect(activeRules).toBeVisible();
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
+  await expect(activeRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
   for (const rule of rules) {
-    const action = proposedRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
+    const action = activeRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
     await expect(action).toHaveCount(1);
+    await expect(action.getByRole('button', { name: `Remove ${rule.action}`, exact: true })).toBeVisible();
     const conditionRows = action.locator('.tt-table-rule-list li');
     await expect(conditionRows).toHaveCount(rule.rows.length);
     for (let index = 0; index < rule.rows.length; index += 1) {
@@ -631,29 +647,40 @@ async function progressThroughLifecycle(owner, tableId, api, rules) {
       await expect(row.locator('span')).toHaveText(rule.rows[index].message);
     }
   }
-  const proposedRows = editor.locator('.tt-table-proposed-records').first();
-  await expect(proposedRows).toBeVisible();
-  await proposedRows.locator('summary').click();
-  const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate;
-  const firstCollection = candidate.change.program.collections[0];
-  const firstRow = candidate.change.initialRecords[firstCollection.id]?.[0];
-  if (firstRow) await expect(proposedRows).toContainText(String(Object.values(firstRow.values)[0]));
-  else await expect(proposedRows).toContainText('No new rows in this proposal. Existing records stay unchanged.');
-  for (const [label, type, nextStatus] of [
-    [/Preview change/, 'evolve.simulate', 'simulated'],
-    [/Check rules/, 'evolve.validate', 'validated'],
-    [/Approve rules/, 'evolve.approve', 'approved'],
-    [/Use these rules/, 'evolve.activate', 'active'],
-  ]) {
-    const responsePromise = owner.waitForResponse((response) => isCommandResponse(response, type));
-    await editor.getByRole('button', { name: label }).click();
-    expect((await responsePromise).status()).toBe(200);
-    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe(nextStatus);
-  }
   const active = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  expect(active.domain.candidate?.status).toBe('active');
   expect(active.domain.program).toBeTruthy();
   await expect(owner.getByTestId('table-chat-bar')).toBeVisible();
   return active;
+}
+
+// F039: the owner takes one action out from the Rules card; a collection asks before its rows go too.
+async function removeActionFromRules(owner, tableId, api, { actionTitle, actionId, collectionTitle }) {
+  const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const editor = await openCanvasObject(owner, 'table.rules');
+  const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
+  const removed = owner.waitForResponse(response => isCommandResponse(response, 'evolve.removeItem'));
+  await activeRules.getByRole('button', { name: `Remove ${actionTitle}`, exact: true }).click();
+  expect((await removed).status()).toBe(200);
+  await expect(activeRules.locator('.tt-table-program__group').filter({ hasText: actionTitle })).toHaveCount(0);
+  await expect(activeRules.getByRole('button', { name: `Remove ${actionTitle}`, exact: true })).toHaveCount(0);
+  const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  expect(after.domain.program.actions.map(action => action.id)).not.toContain(actionId);
+  expect(after.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
+  expect(after.domain.records).toEqual(before.domain.records);
+  // Removing a table asks first; Cancel keeps it and its rows.
+  const dataFields = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Data fields · / }) });
+  if (await dataFields.getAttribute('open') === null) await dataFields.locator('summary').click();
+  await activeRules.getByRole('button', { name: `Remove ${collectionTitle}`, exact: true }).click();
+  const confirm = editor.getByRole('alertdialog', { name: `Remove ${collectionTitle}`, exact: true });
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByRole('button', { name: 'Remove table and rows', exact: true })).toBeVisible();
+  await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  expect((await api(owner, `/api/workspaces/${tableId}`)).body.domain.ruleRevision).toBe(after.domain.ruleRevision);
+  return after;
 }
 
 // F003-T5: data tables on the Worker invite through the reusable link only; the seat picker is gone.
@@ -791,12 +818,13 @@ async function verifySharedCardLayout(owner, member, tableId, api) {
     .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
   const beforeMove = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const historyEditor = await openCanvasObject(owner, 'workspace.history');
-  await historyEditor.getByRole('button', { name: 'Move Table history without dragging', exact: true }).click();
+  // Clicking the card header selects it; an arrow key then moves it one grid step and saves it like a drag.
+  await historyEditor.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
   const moveResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
   void moveResponse.catch(() => {});
-  await historyEditor.getByRole('group', { name: 'Move Table history without dragging', exact: true })
-    .getByRole('button', { name: 'Move Table history down', exact: true }).click();
+  await owner.keyboard.press('ArrowDown');
   expect((await moveResponse).status()).toBe(200);
+  await expect(owner.locator('.tt-canvas-visually-hidden[role="status"]')).toHaveText('Table history moved down.');
   const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
   expect(after.domain.canvasLayout.positions['workspace.history']).toMatchObject({
     x: beforeMove.domain.canvasLayout.positions['workspace.history'].x,
@@ -865,7 +893,7 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   owner.on('request', countPrivatePosts);
   await openCanvasObject(owner, 'table.actions');
   const actionNode = owner.getByTestId('canvas-object-editor');
-  await actionNode.getByRole('button', { name: 'Move Actions without dragging', exact: true }).click();
+  await actionNode.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
 
   let releaseAck;
   const ackGate = new Promise(resolve => { releaseAck = resolve; });
@@ -888,8 +916,7 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   const layoutResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
   void layoutResponse.catch(() => {});
   try {
-    await actionNode.getByRole('group', { name: 'Move Actions without dragging', exact: true })
-      .getByRole('button', { name: 'Move Actions right', exact: true }).click();
+    await owner.keyboard.press('ArrowRight');
     expect(await Promise.race([serverAccepted, layoutResponse.then(response => response.status())])).toBe(200);
     const accepted = (await api(owner, `/api/workspaces/${tableId}`)).body;
     const acceptedPoint = accepted.domain.canvasLayout.positions['table.actions'];
@@ -1318,7 +1345,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
     onCapabilitiesReady: ready => { capabilities = ready; },
   });
   await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api, { failDraftRefresh: true, getProviderCalls });
-  let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
+  let active = await inspectAppliedRules(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
   // F015: the owner imports rows straight into the active collection, with no model call or consent.
@@ -1477,7 +1504,7 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   await requestClarifyingQuestion(owner, room.id, setTableReply, api);
   // F013: the owner consented on this table epoch during the clarifying exchange.
   await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true });
-  await progressThroughLifecycle(owner, room.id, api, expectedRules.shifts);
+  await inspectAppliedRules(owner, room.id, api, expectedRules.shifts);
   const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
   const ownerRecordActions = ownerRoster.getByRole('region', { name: 'Actions for Ada · ada', exact: true });
@@ -1539,7 +1566,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   const room = await openNewTable(owner, api);
   const source = await addSource(owner, room.id, fixtures.game, api);
   await requestProposal(owner, room.id, source, buildChange('game', source.id), setTableReply, api);
-  let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
+  let active = await inspectAppliedRules(owner, room.id, api, expectedRules.game);
   expect(active.domain.turn).toBe('host');
 
   // F017: the owner defines a computed column; the table shows it without a model call.
@@ -1676,7 +1703,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   const revisedChange = { kind: 'table', program: revisedProgram, initialRecords: {} };
   // Same owner, table and epoch as the first draft: the rule edit sends without asking again.
   await requestProposal(owner, room.id, source, revisedChange, setTableReply, api, { expectConsent: false });
-  active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
+  active = await inspectAppliedRules(owner, room.id, api, expectedRules.game);
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);
   expect(active.domain.turn).toBe('host');
@@ -1700,6 +1727,9 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   mark('Generic table: generated program rename survives AI rule edit and both reloads; role, turn and live scores persist');
 
   await verifyParallelRequests({ owner, member, tableId: room.id, api, setTableReply, setAssistantReply, getProviderCalls, mark });
+
+  await removeActionFromRules(owner, room.id, api, { actionTitle: 'Advance boat', actionId: 'advance', collectionTitle: 'Boats and scores' });
+  mark('Generic table: an AI draft goes into use on its own, and the owner removes one action from the Rules card as a new rule revision (F039)');
 }
 
 // Evidence screenshot of the page with one canvas card opened in view.
@@ -1801,11 +1831,17 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
     releaseFirst();
     await expect(firstCard).not.toHaveAttribute('data-phase', /^(sending|waiting)$/u, { timeout: 20_000 });
     await expect(memberCard(firstPrompt).getByTestId('table-chat-answer')).not.toContainText('is preparing a rule draft', { timeout: 20_000 });
-    await expect(secondCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
+    // F039: each draft goes into use on its own, the queued one on top of the first.
+    await expect(firstCard).toContainText('The new rules were added to the table.', { timeout: 30_000 });
+    await expect(secondCard).toContainText('The new rules were added to the table.', { timeout: 30_000 });
     await expect(secondCard).not.toHaveAttribute('data-phase', 'queued');
     expect(modelPosts.map(body => body.prompt)).toEqual([firstPrompt, secondPrompt]);
     await expect.poll(async () => JSON.stringify((await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate ?? null), { timeout: 20_000 })
       .toContain('F038 second queued-draft check.');
+    const afterQueue = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    expect(afterQueue.domain.candidate?.status).toBe('active');
+    expect(afterQueue.domain.program.description).toBe('F038 second queued-draft check.');
+    expect(afterQueue.domain.ruleRevision).toBe(before.domain.ruleRevision + 2);
     await expect(memberCard(secondPrompt).getByTestId('table-chat-answer')).not.toContainText('is preparing a rule draft', { timeout: 20_000 });
     await snapshotCard(member, memberCard(firstPrompt), 'test-results/f038-member-card-finished.png');
   } finally {
