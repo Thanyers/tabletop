@@ -27,6 +27,7 @@ import type {
 import { hashValue, isRecord, parseJsonValue, readNumber, readString } from '../server/codec.js';
 import { AuthorityError } from '../server/errors.js';
 import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
+import type { ModelFailureDetails, ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
 
 type SqlRow = Record<string, SqlStorageValue>;
 type SqlBinding = SqlStorageValue;
@@ -941,18 +942,20 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
-  /** Best-effort live progress for a running assistant job; never changes the job status. */
-  async updateTableAssistantProgress(
+  /**
+   * Best-effort live progress for a running model job (rule draft or assistant); never changes the
+   * job status, so a stale write can only lose counters, not a finish (F045).
+   */
+  async updateModelJobProgress(
     id: string,
     workspaceId: string,
     epoch: number,
     actorId: string,
-    progress: { receivedChars: number; reasoningChars: number; updatedAt: number },
+    progress: ModelJobProgress,
   ): Promise<void> {
     this.storage.sql.exec(
       `UPDATE model_jobs SET data = json_set(data, '$.progress', json(?))
-       WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ? AND status = 'running'
-       AND json_extract(data, '$.kind') = 'table-assistant'`,
+       WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ? AND status = 'running'`,
       JSON.stringify(progress), id, workspaceId, epoch, actorId,
     );
   }
@@ -1122,13 +1125,14 @@ export class RoomRepository implements WorkspaceRepository {
     }));
   }
 
-  async failModelJobAfterReceiptCheck(
+   async failModelJobAfterReceiptCheck(
     id: string,
     workspaceId: string,
     epoch: number,
     actorId: string,
     failure: string,
     reasons: readonly string[] = [],
+    details?: ModelFailureDetails,
   ): Promise<'completed' | 'failed' | 'inactive'> {
     return this.serialized(async () => this.storage.transactionSync(() => {
       const jobRow = this.rows(
@@ -1166,7 +1170,15 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec(
         `UPDATE model_jobs SET status = 'failed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
          AND actor_id = ? AND status IN ('running', 'committing') AND revoked_at IS NULL`,
-        JSON.stringify({ ...job.data, failure, failedAt: Date.now(), ...(reasons.length ? { reasons } : {}) }), id, workspaceId, epoch, actorId,
+        JSON.stringify({
+          ...job.data,
+          failure,
+          failedAt: Date.now(),
+          ...(reasons.length ? { reasons } : {}),
+          // F045: only a job that really failed keeps the bounded stop evidence; a receipt-proven
+          // completion above must never be rewritten as a failure.
+          ...(details ? { failureDetails: details } : {}),
+        }), id, workspaceId, epoch, actorId,
       );
       return 'failed';
     }));
