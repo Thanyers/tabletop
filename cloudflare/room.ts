@@ -1280,6 +1280,9 @@ export class Room extends DurableObject<Env> {
       commandId: input.commandId,
       expectedRevision: input.expectedRevision,
       expectedEpoch: input.expectedEpoch,
+      // Keep the prompt that reserveModelJob stored: the committing and finished rows replace
+      // `data`, and without it other members' history (F034) drops the finished request.
+      ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= 4_000 ? { prompt: input.prompt } : {}),
     };
     let commandMayHaveCommitted = false;
     try {

@@ -338,7 +338,7 @@ try {
   async function assertZoomSurvivesPendingObjectFocus(page, tableId, nodeId) {
     const editor = page.getByTestId('canvas-object-editor');
     const closeCurrentEditor = async () => {
-      const closeObject = page.getByRole('button', { name: 'Close object', exact: true });
+      const closeObject = page.getByRole('button', { name: /^Minimize /u });
       if (await closeObject.count() > 0) {
         await closeObject.first().click();
         await expect(editor).toHaveCount(0);
@@ -761,9 +761,12 @@ try {
       actionRevision: before.domain.actionRevision,
     };
     const editor = await openCanvasObject(owner, viewId);
-    await editor.getByRole('button', { name: `Move ${viewTitle} without dragging`, exact: true }).click();
+    // 5.1.0: follows #144 (the "Move … without dragging" popup is gone). Clicking the card header
+    // selects it; an arrow key then moves it one grid step and saves it like a drag.
+    await editor.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
     const responsePromise = responseAfter(owner, (response) => isCommandResponse(response, 'canvas.layout'));
-    expect((await responsePromise(() => owner.getByRole('group', { name: `Move ${viewTitle} without dragging` }).getByRole('button', { name: `Move ${viewTitle} right`, exact: true }).click())).status()).toBe(200);
+    expect((await responsePromise(() => owner.keyboard.press('ArrowRight'))).status()).toBe(200);
+    await expect(owner.locator('.tt-canvas-visually-hidden[role="status"]')).toHaveText(`${viewTitle} moved right.`);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.canvasLayout?.positions?.[viewId]?.pinned).toBe(true);
     const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
     const point = after.domain.canvasLayout.positions[viewId];

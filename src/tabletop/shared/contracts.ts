@@ -36,7 +36,9 @@ export interface Candidate {
   approval: { id: string; actorId: string; candidateHash: string; proofHash: string; epoch: number; expiresAt: number; revoked: boolean } | null;
 }
 export interface RevisionRecord { revision: number; change: ChangeSet; activatedAt: number; actorId: string; candidateHash: string; snapshot: { kind: 'invoice'; rules: RateRule[] } | { kind: 'teaching'; parameters: PhysicsParams } | { kind: 'encounter'; rule: EncounterRule } | { kind: 'table'; program: TableProgram } }
-export interface DomainBase { dataRevision: number; ruleRevision: number; candidate: Candidate | null; revisions: RevisionRecord[]; access?: AccessConfig }
+/** Table-wide display settings; a missing field follows the default. */
+export interface DisplaySettings { connections?: boolean }
+export interface DomainBase { dataRevision: number; ruleRevision: number; candidate: Candidate | null; revisions: RevisionRecord[]; access?: AccessConfig; display?: DisplaySettings }
 export interface InvoiceRun { id: string; createdAt: number; dataRevision: number; ruleRevision: number; result: InvoiceResult; sourceIds: string[] }
 export interface InvoiceState extends DomainBase { kind: 'invoice'; shipments: Shipment[]; invoiceLines: InvoiceLine[]; sources: Artifact[]; rules: RateRule[]; runs: InvoiceRun[] }
 export type Representation = 'text' | 'scene' | 'graph';
