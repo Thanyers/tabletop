@@ -92,6 +92,109 @@ export const tableRecordsSchema = z.record(id, z.array(tableRowSchema).max(100))
   if (bytes(JSON.stringify(records)) > 128 * 1024) ctx.addIssue({ code: 'custom', message: 'The records exceed the 128 KiB table limit.' });
 });
 export const tableChangeSchema = z.strictObject({ kind: z.literal('table'), program: tableProgramSchema, initialRecords: tableRecordsSchema });
+/** F046: the program without its canvas, validated like the rest of the program. */
+function withoutCanvas(program: TableProgram): TableProgram {
+  const next = { ...program } as TableProgram & { canvas?: TableProgram['canvas'] };
+  delete next.canvas;
+  return next as TableProgram;
+}
+
+/** F046: records keyed by every collection, so a program can be validated without a table state. */
+function emptyRecords(program: TableProgram): Record<string, TableRecord[]> {
+  return Object.fromEntries(program.collections.map(collection => [collection.id, []]));
+}
+
+/** F046: drop links to a removed view or collection; links are hints, so they never block a removal. */
+function dropRuleItemLinks(program: TableProgram, kind: 'view' | 'collection', removedId: string): void {
+  for (const descriptor of program.canvas?.views ?? []) {
+    const related = descriptor.relatedTo;
+    if (!related) continue;
+    if (kind === 'view' && related.views) {
+      related.views = related.views.filter(item => item !== removedId);
+      if (!related.views.length) delete related.views;
+    }
+    if (kind === 'collection' && related.collections) {
+      related.collections = related.collections.filter(item => item !== removedId);
+      if (!related.collections.length) delete related.collections;
+    }
+    if (!related.views && !related.collections) delete descriptor.relatedTo;
+  }
+}
+
+/** F046: one view removed, and every link that pointed at it cleaned up. */
+function withoutView(program: TableProgram, viewId: string): TableProgram {
+  const views = (program.canvas?.views ?? [])
+    .filter(view => view.id !== viewId)
+    .map(view => structuredClone(view));
+  const next = { ...program } as TableProgram & { canvas?: TableProgram['canvas'] };
+  if (views.length) next.canvas = { version: 1, views };
+  else delete next.canvas;
+  if (next.canvas) dropRuleItemLinks(next, 'view', viewId);
+  return next as TableProgram;
+}
+
+/** F046: view issues that do not already exist in the program without a canvas. */
+function viewIssues(program: TableProgram, coreIssues: ReadonlySet<string>): string[] {
+  if (!program.canvas || program.canvas.views.length === 0) return [];
+  return validateGenerativeProgram(program, emptyRecords(program))
+    .filter(issue => !coreIssues.has(issue));
+}
+
+/** F046: the runtime check (probe contexts) for views the static program check accepted. */
+function viewOutputIssues(program: TableProgram): string[] {
+  if (!program.canvas) return [];
+  try {
+    validateGenerativeOutput(program, emptyRecords(program));
+    return [];
+  } catch (error) {
+    return [error instanceof Error ? error.message : 'Generated table views are invalid.'];
+  }
+}
+
+/**
+ * F046: drop views until the people left in the canvas validate, trying one removal at a time first
+ * and dropping the last view only when no single removal helps (a plateau of independent bad views).
+ * Views are judged as a set because `relatedTo` links them, and a link to a dropped view is removed,
+ * so one bad view cannot take its neighbours with it.
+ */
+function salvageViewSet(program: TableProgram, check: (candidate: TableProgram) => string[]): TableProgram {
+  if (check(program).length === 0) return program;
+  let current = program;
+  const limit = program.canvas?.views.length ?? 0;
+  for (let guard = 0; guard < limit; guard += 1) {
+    const views = current.canvas?.views ?? [];
+    if (views.length === 0) return current;
+    for (const view of views) {
+      const candidate = withoutView(current, view.id);
+      if (check(candidate).length === 0) return candidate;
+    }
+    current = withoutView(current, views[views.length - 1]!.id);
+  }
+  return current;
+}
+
+/**
+ * F046: keep the table and drop only the canvas views that fail semantic validation.
+ *
+ * F023 salvaged schema errors only, so a view that parsed but was semantically wrong ("scene text
+ * must be text", a metric that is not a scalar, a control bound to an unknown action) still rejected
+ * the whole draft. A program whose own core is invalid is left untouched here: dropping views could
+ * not fix it, and the caller must report the real issue.
+ */
+function salvageInvalidViews(change: TableChange): TableChange {
+  const program = change.program;
+  if (!program.canvas || program.canvas.views.length === 0) return change;
+  const records = emptyRecords(program);
+  const coreIssues = new Set(validateGenerativeProgram(withoutCanvas(program), records));
+  if (coreIssues.size > 0) return change;
+  const staticIssues = viewIssues(program, coreIssues);
+  if (staticIssues.length === 0 && viewOutputIssues(program).length === 0) return change;
+
+  const trimmed = salvageViewSet(program, candidate => viewIssues(candidate, coreIssues));
+  const evaluated = salvageViewSet(trimmed, viewOutputIssues);
+  return { ...change, program: evaluated } as TableChange;
+}
+
 /** F023: drop only canvas views that fail the schema so one broken view cannot sink the whole draft. */
 function canvasSalvagedChange(value: unknown): TableChange | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -113,13 +216,15 @@ function canvasSalvagedChange(value: unknown): TableChange | null {
       kept.push(view);
     } catch { /* an unrepresentable view is skipped, not fatal */ }
   }
-  return { ...base, program: { ...core, ...(kept.length ? { canvas: { version: 1, views: kept } } : {}) } as TableProgram };
+  const change = { ...base, program: { ...core, ...(kept.length ? { canvas: { version: 1, views: kept } } : {}) } as TableProgram };
+  // F046: the surviving views still have to mean something.
+  return salvageInvalidViews(change);
 }
 
-/** F023: provider-side parse that tolerates malformed canvas views. */
+/** F023/F046: provider-side parse that tolerates malformed or semantically invalid canvas views. */
 export function parseTableChangeSalvagingCanvas(value: unknown): TableChange | null {
   const direct = tableChangeSchema.safeParse(value);
-  return direct.success ? direct.data : canvasSalvagedChange(value);
+  return direct.success ? salvageInvalidViews(direct.data) : canvasSalvagedChange(value);
 }
 
 export function parseBoundedTableChange(value: unknown): TableChange {
@@ -309,16 +414,8 @@ export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: s
     if (program.canvas.views.length === 0) delete program.canvas;
   }
   assert(found, 'RULE_ITEM_NOT_FOUND', 'That rule is no longer on this table.');
-  // Links between views are only hints, so drop links to what was removed instead of blocking.
-  for (const descriptor of program.canvas?.views ?? []) {
-    const related = descriptor.relatedTo;
-    if (!related) continue;
-    if (kind === 'view' && related.views) related.views = related.views.filter(item => item !== id);
-    if (kind === 'collection' && related.collections) related.collections = related.collections.filter(item => item !== id);
-    if (related.views?.length === 0) delete related.views;
-    if (related.collections?.length === 0) delete related.collections;
-    if (!related.views && !related.collections) delete descriptor.relatedTo;
-  }
+  // F046: links between views are only hints, so drop links to what was removed instead of blocking.
+  if (kind === 'view' || kind === 'collection') dropRuleItemLinks(program, kind, id);
   const users = ruleItemUsers(program, kind, id);
   if (users.length > 0) throw new DomainError('RULE_ITEM_IN_USE', `Remove ${users.join(', ')} first; it still uses this.`);
   try {

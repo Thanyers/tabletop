@@ -791,7 +791,8 @@ try {
       actionRevision: before.domain.actionRevision,
     };
     const editor = await openCanvasObject(owner, viewId);
-    // Clicking the card header selects it; an arrow key then moves it one grid step and saves it like a drag.
+    // 5.1.0: follows #144 (the "Move … without dragging" popup is gone). Clicking the card header
+    // selects it; an arrow key then moves it one grid step and saves it like a drag.
     await editor.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
     const responsePromise = responseAfter(owner, (response) => isCommandResponse(response, 'canvas.layout'));
     expect((await responsePromise(() => owner.keyboard.press('ArrowRight'))).status()).toBe(200);

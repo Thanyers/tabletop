@@ -1218,7 +1218,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const finderStateRef = useRef({ objectTitles: [] as { id: string; title: string; hidden: boolean }[], navigateToObject: (_id: string) => {}, hideObject: (_id: string) => {} });
   useEffect(() => registerCanvasObjectFinder((verb, query) => {
     const { objectTitles: objects, navigateToObject: open, hideObject: hide } = finderStateRef.current;
-    const matches = matchCanvasObjects(objects, query);
+    // Chat cards are named after past questions, so they would match the question itself; search the table's own cards.
+    const matches = matchCanvasObjects(objects.filter((object) => !object.id.startsWith('table.chat.') && !object.id.startsWith('chat.')), query);
     if (matches.length === 0) return { handled: false };
     const [first, ...others] = matches;
     if (verb === 'hide') {

@@ -821,7 +821,8 @@ async function verifySharedCardLayout(owner, member, tableId, api) {
     .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
   const beforeMove = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const historyEditor = await openCanvasObject(owner, 'workspace.history');
-  // Clicking the card header selects it; an arrow key then moves it one grid step and saves it like a drag.
+  // 5.1.0: follows #144 (the "Move … without dragging" popup is gone). Clicking the card header
+  // selects it; an arrow key then moves it one grid step and saves it like a drag.
   await historyEditor.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
   const moveResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
   void moveResponse.catch(() => {});
@@ -896,6 +897,7 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   owner.on('request', countPrivatePosts);
   await openCanvasObject(owner, 'table.actions');
   const actionNode = owner.getByTestId('canvas-object-editor');
+  // 5.1.0: follows #144; select the card by its header, then move it with an arrow key below.
   await actionNode.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
 
   let releaseAck;
@@ -1318,7 +1320,12 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(newestHistoryNode.getByTestId('table-chat-answer')).toContainText(archived[20].answer);
   await expect(member.getByRole('article', { name: archived[0].prompt, exact: true })).toHaveCount(0);
   const callsBeforeHistoryRead = getProviderCalls();
-  await expect(restored).toHaveCount(6);
+  // Six answer cards, plus the table's newest rule requests (F034-T3 keeps up to five after a reload).
+  // dev #157: a rule request that went into use leaves the canvas as a notice, so only the ones that
+  // still ask for something remain cards here (the 5.1.0 count assumed every requested card stayed).
+  const ruleRequests = (await api(member, `/api/workspaces/${tableId}/model`)).body.items
+    .filter(job => typeof job.prompt === 'string' && job.prompt.length > 0 && job.autoApply !== 'applied');
+  await expect(restored).toHaveCount(6 + Math.min(ruleRequests.length, 5));
   expect(getProviderCalls()).toBe(callsBeforeHistoryRead);
 }
 
