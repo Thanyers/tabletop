@@ -1,5 +1,6 @@
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, GENERATIVE_LIMITS, type ControlInputBinding, type GenerativeExpression } from '../../shared/generative-contracts';
 import type { TableAction, TableField, TableProgram, TableRecord, TableValue } from '../../shared/table-contracts';
+import { validateDiceSpec } from '../../shared/dice';
 
 export type GenerativeStaticType = 'number' | 'text' | 'boolean' | 'list' | 'null' | 'rows' | 'unknown';
 type ScopeBinding = { kind: 'row'; collection: string } | { kind: 'value'; type: GenerativeStaticType };
@@ -362,6 +363,15 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
             assert(parameter && parameter.type !== 'record' && parameter.type !== 'roll', 'Select must bind a scalar action parameter.');
             assert(control.options.every(option => actionInputType(action, control.parameter) === valueType(option.value) && (!parameter.choices || parameter.choices.includes(String(option.value)))), 'Select options do not match the action parameter.');
             interactiveType = actionInputType(action, control.parameter);
+          } else if (control.kind === 'dice') {
+            // F060: dice may bind a number parameter (client-side, visual-only) or a roll parameter
+            // (the server rolls the program's roll spec). The card's own faces/count stay valid but
+            // are not authoritative for a roll parameter.
+            const parameter = action.parameters.find(item => item.id === control.parameter);
+            assert(parameter && (parameter.type === 'number' || parameter.type === 'roll'), 'Dice must bind a number or roll action parameter.');
+            const diceIssues = validateDiceSpec(control);
+            assert(diceIssues.length === 0, diceIssues[0] ?? 'Dice control limits are invalid.');
+            interactiveType = 'number';
           }
           const interactiveParameters: Record<string, GenerativeStaticType> = control.kind === 'form'
             ? Object.fromEntries(Object.entries(control.inputs).filter(([, binding]) => binding.kind === 'control').map(([parameter]) => [parameter, actionInputType(action, parameter)]))

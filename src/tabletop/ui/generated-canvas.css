@@ -237,6 +237,203 @@
   align-items: center;
 }
 
+/* F049/F050: visual dice card. A number parameter rolls client-side into a shared draft; a roll parameter shows the server roll. */
+.tt-dice {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tt-dice__settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tt-dice__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--tt-line);
+  border-radius: 7px;
+  background: var(--tt-paper);
+}
+
+.tt-dice__step {
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--tt-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tt-dice__step:hover:not(:disabled) {
+  background: var(--tt-cream-0);
+}
+
+.tt-dice__step:focus-visible {
+  outline: 2px solid var(--tt-blue);
+  outline-offset: 1px;
+}
+
+.tt-dice__step:disabled {
+  color: var(--tt-muted);
+  cursor: not-allowed;
+}
+
+.tt-dice__step-value {
+  display: grid;
+  justify-items: center;
+  min-width: 58px;
+  padding: 0 4px;
+  color: var(--tt-ink);
+}
+
+.tt-dice__step-value output {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.tt-dice__step-value small {
+  color: var(--tt-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tt-dice__formula {
+  margin: 0;
+  color: var(--tt-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-dice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tt-dice__actions small {
+  color: var(--tt-muted);
+  font-size: 11px;
+}
+
+.tt-dice__result {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-small);
+  background: var(--tt-cream-0);
+}
+
+.tt-dice__faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tt-dice__hint {
+  margin: 0;
+  color: var(--tt-muted);
+  font-size: 12px;
+}
+
+.tt-dice__face {
+  display: grid;
+}
+
+.tt-die {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--tt-line);
+  border-radius: 9px;
+  color: var(--tt-ink);
+  background: var(--tt-paper);
+  box-shadow: 0 1px 0 var(--tt-line);
+}
+
+.tt-die__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  padding: 7px;
+}
+
+.tt-die__pip {
+  border-radius: 50%;
+  background: transparent;
+}
+
+.tt-die__pip.is-on {
+  background: currentColor;
+}
+
+.tt-die__value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.tt-dice__total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  color: var(--tt-muted);
+  font-size: 12px;
+}
+
+.tt-dice__total strong {
+  color: var(--tt-ink);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.tt-dice__total small {
+  color: var(--tt-muted);
+  font-size: 11px;
+}
+
+@keyframes tt-dice-tumble {
+  0% { transform: translateY(-6px) rotate(-18deg) scale(0.92); opacity: 0.5; }
+  40% { transform: translateY(2px) rotate(12deg) scale(1.04); opacity: 1; }
+  70% { transform: translateY(-2px) rotate(-6deg) scale(1); }
+  100% { transform: none; opacity: 1; }
+}
+
+.tt-die.is-tumbling {
+  animation: tt-dice-tumble 420ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-die.is-tumbling {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+
 .tt-generated-preview {
   display: grid;
   gap: 8px;

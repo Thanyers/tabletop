@@ -166,3 +166,26 @@ describe('soft delete (trash) in the shared arrangement', () => {
     expect(deleted.canvasLayout?.positions['table.collection.equipment']?.x).toBe(520);
   });
 });
+
+describe('card names in the shared arrangement', () => {
+  const chat = `table.chat.${'b'.repeat(64)}`;
+  it('anyone renames a chat card; a blank name brings back the original; whitespace is tidied', () => {
+    const state = active();
+    const named = handleCanvasLayout(state, { expectedLayoutRevision: 0, titles: { [chat]: '  Clock   ideas ' } }, participant, 'open');
+    expect(named.label).toBe('Renamed a card');
+    expect(named.state.canvasLayout?.titles).toEqual({ [chat]: 'Clock ideas' });
+    expect(named.state.dataRevision).toBe(state.dataRevision);
+    const projected = projectDomain(named.state, owner);
+    if (projected.kind !== 'table') throw Error('Expected table');
+    expect(projected.canvasLayout?.titles).toEqual({ [chat]: 'Clock ideas' });
+    const cleared = handleCanvasLayout(named.state, { expectedLayoutRevision: 1, titles: { [chat]: '   ' } }, owner, 'open');
+    expect(cleared.state.canvasLayout?.titles).toBeUndefined();
+  });
+  it('only the owner renames the table\'s own cards, and only cards that exist', () => {
+    const state = active();
+    expect(() => handleCanvasLayout(state, { expectedLayoutRevision: 0, titles: { 'table.collection.equipment': 'Gear' } }, participant, 'open')).toThrow();
+    expect(handleCanvasLayout(state, { expectedLayoutRevision: 0, titles: { 'table.rules': 'House rules' } }, owner, 'open').state.canvasLayout?.titles).toEqual({ 'table.rules': 'House rules' });
+    expect(() => handleCanvasLayout(state, { expectedLayoutRevision: 0, titles: { 'table.view.missing': 'X' } }, owner, 'open')).toThrow('Only active shared objects');
+    expect(() => handleCanvasLayout(state, { expectedLayoutRevision: 0, titles: { [chat]: 'x'.repeat(121) } }, owner, 'open')).toThrow();
+  });
+});

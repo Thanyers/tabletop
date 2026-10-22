@@ -651,7 +651,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const sha256 = ctx.hash(input.text), sourceId = `source_${sha256.slice(0, 32)}`;
     assert(!state.sources.some(s => s.id === sourceId), 'TABLE_DUPLICATE_SOURCE', 'This source is already on the table.');
     const next: TableState = { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate };
-    // F052: a file added by a person stamps the Files card; the simulator never writes timestamps.
+    // F054: a file added by a person stamps the Files card; the simulator never writes timestamps.
     next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
     return { state: next, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
   }
@@ -662,7 +662,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
       && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
       'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it with the room.');
     const next: TableState = { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null };
-    // F052: removing a file moves the Files card's update time, but never invents a creation time.
+    // F054: removing a file moves the Files card's update time, but never invents a creation time.
     if (state.cardMeta) next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
     return { state: next, label: 'Unused source removed.' };
   }

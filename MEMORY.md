@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-22 — browser test ที่หาการ์ดด้วย "ชื่อการ์ด" แดงทั้งที่แอปถูก
+- **What happened:** หลัง merge `dev` (1f21aeb "tidy titles of referenced chat cards") browser suite แดงที่ `requestClarifyingQuestion`: `expect(questionArticle).toHaveCount(0)` ได้ 1 · ดูเหมือน "การ์ดคำถามไม่ถูกแทนหลังตอบ" แต่ตรวจ DOM + localStorage พบว่าการ์ดเก่าถูก dismiss จริง (`dismissed: [<job เดิม>]`) เหลือการ์ดใบเดียวคือ job ใหม่
+- **Root cause:** `chatCardTitle` ตัดชื่อการ์ดเหลือ **บรรทัดแรก** ของ prompt หลัง 1f21aeb · การ์ดคำถาม ("Make a shift table.") กับการ์ดคำตอบ (prompt เดิม + คำถาม clarify + คำตอบ) จึงมีชื่อเดียวกัน ⇒ locator `getByRole('article', { name: 'Make a shift table.' })` ไปจับการ์ดใบใหม่ ไม่ใช่ใบเก่า
+- **Correct behavior:** หาการ์ดแชทด้วย id ไม่ใช่ชื่อ — เอา job id จาก response ของ `POST /model` แล้วใช้ `article[data-canvas-object="table.chat.<jobId>"]` (ตรงกับ `sharedChatCanvasId`) · ถ้าต้องตรวจชื่อการ์ด ให้ assert `aria-label` แยกเป็นข้อของมันเอง · ก่อนสรุปว่าเป็น regression ของแอป ให้ dump DOM/localStorage/`GET /model` ก่อน 1 รอบ (ตามที่ทำในงานนี้) แล้วเทียบ baseline
+
+### 2026-10-22 — การ์ดที่ auto-apply แล้ว "หายเงียบ" แม้เทสต์ผ่านหมด
+- **What happened:** ผู้ใช้รายงานว่าหลังร่างกฎผ่านทุกขั้นและถูกเปิดใช้ การ์ดหายไปเฉย ๆ ทั้งที่ `npm test`/`test:cloudflare`/browser suite เขียวหมด · สาเหตุคือ #156/#157 ตั้งใจเอาการ์ดออก (`isFinishedResult` → `displayCards`) แล้วแทนด้วยแถบ "New rules added" 15 วินาที แต่แถบนั้นถูกยิงจาก effect ที่ต้อง "เห็นการ์ดตอน phase sending/waiting" ก่อน — ถ้าการ์ดจบเร็วจนไม่เคยRender สถานะรอ หรือหน้านั้นเพิ่งเปิด/เป็นสมาชิกคนอื่น การ์ดจะถูกกรองออกโดยไม่มีแถบแทน
+- **Root cause:** การลบ element ออกจาก UI (filter) ผูกกับสัญญาณทดแทน (notify) คนละเงื่อนไข: filter ใช้ `isFinishedResult(card)` ส่วน notify ต้องมี `watchedCardsRef.has(card.id)` · เทสต์ยืนยันแค่ "การ์ดหาย" + "แถบโผล่" ในเส้นทางที่ดูสถานะรอทัน จึงไม่จับเส้นทางที่การ์ดจบก่อนถูกRender
+- **Correct behavior:** เวลาจะซ่อน/ลบการ์ดด้วย filter ให้ผูกสัญญาณทดแทนด้วยเงื่อนไขที่กว้างกว่าเสมอ เช่น `createdAt >= mountedAt` (การ์ดที่เกิดหลังเปิดหน้า = ต้องแจ้ง) ไม่ใช่เฉพาะใบที่เคยเห็นสถานะรอ · และเขียนเทสต์ของเส้นทาง "จบเร็ว/เปิดหน้าทีหลัง" แยกอีกใบ · ตรวจด้วย `BROWSER_CHANNEL=msedge npm run test:cloudflare:browser`
+
 ### 2026-10-22 — release 5.1.0: ปัญหาที่ dev ไม่เห็นเพราะ browser suite รันแค่ตอน release
 - **What happened:** release PR #152 ล้ม 2 เรื่องที่ merge เข้า dev ไปแล้วโดยไม่มีใครเห็น (1) #144 เอาป๊อปอัป "Move … without dragging" ออกแต่ browser suite ยังกด (2) เคส F038 ล้มบน CI เพราะการ์ดคำขอร่างกฎของสมาชิกหาย — เป็นบั๊ก server จาก F034-T3: `runModelJob` สร้าง `initialData` ไม่มี `prompt` แล้ว commit/finish เขียนทับ `data` ทั้งก้อน ร่างที่เสร็จจึงไม่มี prompt และ client ทิ้งการ์ดหลัง reload
 - **Root cause:** CI005 รัน browser suite แค่ PR เข้า `main` · บั๊ก (2) ซ่อนอยู่เพราะในเครื่องและใน CI ของ 4.4.0 สมาชิก reload ทันตอนงานยัง running (แข่งเวลา) · งานที่เขียนทับ `data` ด้วย object ใหม่ทิ้ง field ที่ `reserve*` เคยเก็บ

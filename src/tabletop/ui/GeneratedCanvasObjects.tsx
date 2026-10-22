@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Pause, Play } from 'lucide-react';
 import type { ActorContext } from '../shared/contracts';
-import type { GenerativeCanvas, GenerativeScalar, GenerativeViewDescriptor } from '../shared/generative-contracts';
+import type { ControlDescriptor, GenerativeCanvas, GenerativeScalar, GenerativeViewDescriptor } from '../shared/generative-contracts';
 import type { TableAction, TableParameter, TableRecord, TableState, TableValue } from '../shared/table-contracts';
+import { DICE_LIMITS, diceTotalFitsParameter, diePips, rollDice, type DiceRoll } from '../shared/dice';
+import { rollNotation } from '../shared/roll';
 import { handleTableCommand } from '../domain/table';
 import { evaluateGenerativeCanvas, type EvaluatedControl, type EvaluatedGenerativeView, type EvaluatedScenePrimitive } from '../runtime/generative/evaluator';
 import type { WorkspaceView } from '../shared/contracts';
 import type { Command } from './types';
 import { applySceneMotion, MOTION_FRAME_MS, sceneHasMotion } from './scene-motion';
+import { controlDraftsRevision, readControlDraft, readControlDraftValue, subscribeControlDrafts, writeControlDraft, type ControlDraftTarget } from './control-drafts';
 import { RollParameterControl } from './RollParameterControl';
-import { serverRollFor, useServerRollsTick } from './roll-store';
+import { serverRollFor, useServerRoll, useServerRollsTick } from './roll-store';
 import './generated-canvas.css';
 
 interface LocalActionPreview {
@@ -468,6 +471,38 @@ interface DragSession {
   moved: boolean;
 }
 
+const CONTROL_DRAFTS_SERVER_REVISION = (): number => 0;
+
+/** F049: subscribe one canvas card to the shared draft store so a dice value reaches another card. */
+function useControlDraftsVersion(): number {
+  return useSyncExternalStore(subscribeControlDrafts, controlDraftsRevision, CONTROL_DRAFTS_SERVER_REVISION);
+}
+
+function draftTarget(workspaceId: string, actionId: string, parameterId: string): ControlDraftTarget {
+  return { workspaceId, actionId, parameterId };
+}
+
+function draftSlotKey(actionId: string, parameterId: string): string {
+  return `${actionId}\u0000${parameterId}`;
+}
+
+/**
+ * Reads the shared drafts for one controls view. `revision` comes from `useSyncExternalStore`
+ * and only exists so a store change re-renders every card that binds the same parameter.
+ */
+function collectSharedControlValues(workspaceId: string, controls: EvaluatedControl[], revision: number): Map<string, TableValue> {
+  void revision;
+  const values = new Map<string, TableValue>();
+  for (const control of controls) {
+    for (const [parameterId, binding] of Object.entries(control.descriptor.inputs)) {
+      if (binding.kind !== 'control') continue;
+      const entry = readControlDraft(draftTarget(workspaceId, control.descriptor.actionId, parameterId));
+      if (entry) values.set(draftSlotKey(control.descriptor.actionId, parameterId), entry.value);
+    }
+  }
+  return values;
+}
+
 export interface ControlSubmissionGate {
   inFlight: Set<string>;
   submitted: Map<string, string>;
@@ -548,22 +583,47 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
   if (!submissionGate.current) submissionGate.current = createControlSubmissionGate();
   const committedRanges = useRef(new Set<string>());
   draftRef.current = drafts;
+  // F049: the dice card writes into this store; every card that binds the same action parameter reads it.
+  const draftsVersion = useControlDraftsVersion();
+  const sharedValues = collectSharedControlValues(workspaceView.id, projected.controls, draftsVersion);
+  const sharedControlValues = (control: EvaluatedControl, action: TableAction): Record<string, TableValue> => {
+    const values: Record<string, TableValue> = {};
+    for (const parameter of action.parameters) {
+      if (control.descriptor.inputs[parameter.id]?.kind !== 'control') continue;
+      const shared = sharedValues.get(draftSlotKey(control.descriptor.actionId, parameter.id));
+      if (shared !== undefined) values[parameter.id] = shared;
+    }
+    return values;
+  };
+  const controlValuesFor = (control: EvaluatedControl, action: TableAction | undefined): Record<string, TableValue> => ({
+    ...initialControlValues(control, action),
+    ...(draftRef.current[control.descriptor.id] ?? {}),
+    ...(action ? sharedControlValues(control, action) : {}),
+  });
   // F048: re-render the completeness check when a server roll lands or the table data moves on.
   useServerRollsTick();
-  const disabledReason = (action: TableAction | undefined, control: EvaluatedControl) => previewOnly && !sandboxEnabled ? 'Preview only.'
-    : busy ? 'A table action is in progress.'
-      : !action ? 'The action is unavailable.'
-        : action.parameters.some(parameter => parameter.type === 'roll') && control.descriptor.kind !== 'form'
-          ? 'Roll actions need a form control.'
-          : actionUnavailableReason(action, state, workspaceView, null);
+  const disabledReason = (action: TableAction | undefined, control: EvaluatedControl) => {
+    const descriptor = control.descriptor;
+    // F060: a dice card bound to a roll parameter is that action's visual server-roll control.
+    const serverDice = descriptor.kind === 'dice' && action?.parameters.some(parameter => parameter.id === descriptor.parameter && parameter.type === 'roll');
+    return previewOnly && !sandboxEnabled ? 'Preview only.'
+      : busy ? 'A table action is in progress.'
+        : !action ? 'The action is unavailable.'
+          : action.parameters.some(parameter => parameter.type === 'roll') && descriptor.kind !== 'form' && !serverDice
+            ? 'Roll actions need a form control.'
+            : actionUnavailableReason(action, state, workspaceView, null);
+  };
 
   const updateDraft = (control: EvaluatedControl, action: TableAction, parameterId: string, value: TableValue) => {
     const ownerId = `control:${control.descriptor.id}`;
     committedRanges.current.delete(control.descriptor.id);
-    // Start from the shown defaults, so fields the person did not touch still count.
-    const next = { ...initialControlValues(control, action), ...(draftRef.current[control.descriptor.id] ?? {}), [parameterId]: value };
+    // Start from the shown defaults and shared values, so fields the person did not touch still count.
+    const next = { ...controlValuesFor(control, action), [parameterId]: value };
     draftRef.current = { ...draftRef.current, [control.descriptor.id]: next };
     setDrafts(draftRef.current);
+    // Editing a parameter that another card already published keeps both cards on the same value.
+    const target = draftTarget(workspaceView.id, action.id, parameterId);
+    if (readControlDraft(target)) writeControlDraft(target, value, ownerId);
     const inputs = resolvedActionInputs(control, next, action);
     if (inputsAreComplete(action, inputs, workspaceView, state)) onSimulate(action, inputs, ownerId);
     else clearPreview(previewStoreKey, ownerId);
@@ -589,7 +649,7 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
 
   const submit = (event: FormEvent<HTMLFormElement>, control: EvaluatedControl, action: TableAction) => {
     event.preventDefault();
-    const values = { ...initialControlValues(control, action), ...(draftRef.current[control.descriptor.id] ?? {}) };
+    const values = controlValuesFor(control, action);
     const inputs = resolvedActionInputs(control, values, action);
     if (!inputsAreComplete(action, inputs, workspaceView, state)) {
       setIncomplete(control.descriptor.id);
@@ -605,13 +665,13 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
       const descriptor = control.descriptor;
       const action = state.program?.actions.find(item => item.id === descriptor.actionId);
       const reason = disabledReason(action, control);
-      const controlValues = draftRef.current[descriptor.id] ?? initialControlValues(control, action);
+      const controlValues = controlValuesFor(control, action);
       const enabled = !reason && !!action;
       const missingRoll = action?.parameters.some(parameter => parameter.type === 'roll' && !serverRollFor(workspaceView, action.id, parameter.id)) ?? false;
       const id = controlId(workspaceView, descriptor.id);
       const commitRange = () => {
         if (!action || !Object.hasOwn(draftRef.current[descriptor.id] ?? {}, descriptor.kind === 'slider' ? descriptor.parameter : '') || !beginRangeCommit(committedRanges.current, descriptor.id)) return;
-        const inputs = resolvedActionInputs(control, draftRef.current[descriptor.id] ?? controlValues, action);
+        const inputs = resolvedActionInputs(control, controlValuesFor(control, action), action);
         void commitControl(control, action, inputs);
       };
       return <div className="tt-generated-control" key={descriptor.id}>
@@ -622,9 +682,196 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
         {descriptor.kind === 'slider' && action && <div className="tt-generated-control__range"><label htmlFor={id}>{descriptor.label}<output>{formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))}</output></label><input id={id} type="range" min={descriptor.min} max={descriptor.max} step={descriptor.step ?? 'any'} value={Number(controlValues[descriptor.parameter] ?? descriptor.min)} disabled={!enabled} onChange={event => updateDraft(control, action, descriptor.parameter, Number(event.currentTarget.value))} onPointerDown={() => committedRanges.current.delete(descriptor.id)} onKeyDown={event => { if (isRangeCommitKey(event.key)) committedRanges.current.delete(descriptor.id); }} onPointerUp={commitRange} onKeyUp={event => { if (isRangeCommitKey(event.key)) commitRange(); }} onBlur={commitRange} aria-valuetext={formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))} />{reason && <small role="status">{reason}</small>}</div>}
         {descriptor.kind === 'toggle' && action && <label className="tt-generated-control__toggle"><span>{descriptor.label}</span><input type="checkbox" checked={Boolean(controlValues[descriptor.parameter])} disabled={!enabled} onChange={event => { const value = event.currentTarget.checked; updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }} />{reason && <small role="status">{reason}</small>}</label>}
         {descriptor.kind === 'select' && action && <label className="tt-generated-control__select" htmlFor={id}>{descriptor.label}<select id={id} value={encodeValue(controlScalar(controlValues[descriptor.parameter], descriptor.options[0]?.value ?? ''))} disabled={!enabled} onChange={event => { const value = decodeValue(event.currentTarget.value); updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }}>{descriptor.options.map((option, index) => <option value={encodeValue(option.value)} key={`${descriptor.id}-${index}`}>{option.label}</option>)}</select>{reason && <small role="status">{reason}</small>}</label>}
+        {descriptor.kind === 'dice' && action && <DiceControl descriptor={descriptor} action={action} view={workspaceView} enabled={enabled} reason={reason} sharedValue={readControlDraftValue(draftTarget(workspaceView.id, descriptor.actionId, descriptor.parameter))} onDraft={value => writeControlDraft(draftTarget(workspaceView.id, descriptor.actionId, descriptor.parameter), value, `control:${descriptor.id}`)} onRoll={onRoll} />}
       </div>;
     })}
   </div>;
+}
+
+type DiceDescriptor = Extract<ControlDescriptor, { kind: 'dice' }>;
+
+interface DiceControlProps {
+  descriptor: DiceDescriptor;
+  action: TableAction;
+  view: WorkspaceView;
+  enabled: boolean;
+  reason: string | null;
+  sharedValue: TableValue | undefined;
+  onDraft: (value: number) => void;
+  onRoll: (actionId: string, parameterId: string) => Promise<boolean>;
+}
+
+/**
+ * F060: dice bound to a `roll` parameter always use the server roll. Number parameters keep the
+ * F049 client-side, visual-only roll, so the two sources never mix on one card.
+ */
+export function diceRollMode(action: TableAction, descriptor: DiceDescriptor): 'server' | 'client' {
+  return action.parameters.find(parameter => parameter.id === descriptor.parameter)?.type === 'roll' ? 'server' : 'client';
+}
+
+/** F049/F060: a visual dice card; the bound parameter decides where the roll comes from. */
+function DiceControl(props: DiceControlProps) {
+  const parameter = props.action.parameters.find(item => item.id === props.descriptor.parameter);
+  if (!parameter) return <p className="tt-table-error" role="alert">This dice card refers to an unknown action parameter.</p>;
+  return diceRollMode(props.action, props.descriptor) === 'server'
+    ? <ServerDiceControl {...props} parameter={parameter} />
+    : <ClientDiceControl {...props} />;
+}
+
+/**
+ * F060: the dice card for a `roll` parameter. It asks the same `table.roll` command (and roll store)
+ * as `RollParameterControl`, shows the server's faces and total, and never writes a client draft.
+ */
+function ServerDiceControl({ descriptor, action, parameter, view, enabled, reason, onRoll }: DiceControlProps & { parameter: TableParameter }) {
+  const reducedMotion = useReducedMotion();
+  const roll = useServerRoll(view, action.id, parameter.id);
+  const [tumbling, setTumbling] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [rollId, setRollId] = useState(0);
+  const [error, setError] = useState('');
+  const spec = parameter.roll;
+  const notation = spec ? rollNotation(spec) : '—';
+  const modifier = spec?.modifier ?? 0;
+  const faceCounts = roll?.groups.flatMap(group => Array.from({ length: group.count }, () => group.faces)) ?? [];
+
+  useEffect(() => {
+    if (!tumbling) return;
+    const timer = setTimeout(() => setTumbling(false), DICE_LIMITS.tumbleMs);
+    return () => clearTimeout(timer);
+  }, [tumbling, rollId]);
+
+  if (!spec) return <p className="tt-table-error" role="alert">This roll parameter has no roll spec.</p>;
+
+  const request = () => {
+    if (!enabled || requesting) return;
+    setRequesting(true);
+    setError('');
+    setTumbling(false);
+    void onRoll(action.id, parameter.id).then((rolled) => {
+      if (!rolled) { setError('The server roll could not be made.'); return; }
+      setRollId(value => value + 1);
+      if (!reducedMotion) setTumbling(true);
+    }).finally(() => setRequesting(false));
+  };
+
+  return <div className="tt-dice tt-dice--server" role="group" aria-label={`${descriptor.label} dice`}>
+    <p className="tt-dice__formula">{descriptor.label} · {notation} · server roll</p>
+    <div className="tt-dice__actions">
+      <button type="button" className="tt-button tt-button--primary tt-dice__roll" disabled={!enabled || requesting} title={reason || undefined} onClick={request}>{roll ? 'ทอยอีกครั้ง' : 'ทอย'}</button>
+      {reason && <small role="status">{reason}</small>}
+    </div>
+    {error && <p className="tt-table-error" role="alert">{error}</p>}
+    <div className="tt-dice__result" role="status" aria-live="polite">
+      {roll ? <>
+        <ul className="tt-dice__faces" aria-label="Dice results">
+          {roll.values.map((face, index) => <li key={`${rollId}-${index}`} className="tt-dice__face">
+            <span role="img" aria-label={`Die ${index + 1}: ${face}`} className={'tt-die' + (tumbling ? ' is-tumbling' : '')} data-face={face}>
+              {faceCounts[index] === 6
+                ? <span className="tt-die__grid" aria-hidden="true">{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={diePips(face).includes(cell) ? 'tt-die__pip is-on' : 'tt-die__pip'} />)}</span>
+                : <span className="tt-die__value" aria-hidden="true">{face}</span>}
+            </span>
+          </li>)}
+        </ul>
+        <p className="tt-dice__total">Total <strong>{formatNumber(roll.total)}</strong>{modifier !== 0 && <small>{formatNumber(roll.total - modifier)} {modifier > 0 ? '+' : '−'} {formatNumber(Math.abs(modifier))}</small>}</p>
+      </> : <p className="tt-dice__hint">No server roll yet. Press ทอย for {notation}.</p>}
+    </div>
+    <p className="tt-canvas-inline__note">{roll
+      ? 'ผลนี้มาจาก server · ค่าถูกล็อกไว้จนกว่าจะกด “ทอยอีกครั้ง” และจะถูกใช้เมื่อแอ็กชันถูกส่ง'
+      : 'Server roll · the server rolls the program’s spec. This card’s own faces and count are only kept valid; they never decide the roll.'}</p>
+  </div>;
+}
+
+/** F049: a visual dice card for a number parameter. It rolls on this device and publishes the total to the shared draft store. */
+function ClientDiceControl({ descriptor, action, enabled, reason, sharedValue, onDraft }: DiceControlProps) {
+  const reducedMotion = useReducedMotion();
+  const [faces, setFaces] = useState(descriptor.faces);
+  const [count, setCount] = useState(descriptor.count);
+  const [result, setResult] = useState<DiceRoll | null>(null);
+  const [rollId, setRollId] = useState(0);
+  const [tumbling, setTumbling] = useState(false);
+  const [error, setError] = useState('');
+  const modifier = descriptor.modifier ?? 0;
+  const parameter = action.parameters.find(item => item.id === descriptor.parameter);
+  const sharedTotal = typeof sharedValue === 'number' ? sharedValue : null;
+  const shownTotal = result?.total ?? sharedTotal;
+  const rangeWarning = parameter && shownTotal !== null && !diceTotalFitsParameter(shownTotal, parameter)
+    ? `Total ${formatNumber(shownTotal)} is outside “${parameter.label}”${parameterRangeLabel(parameter)}. Adjust the dice, or edit the value on the card that submits this action.`
+    : '';
+
+  useEffect(() => {
+    if (!tumbling) return;
+    const timer = setTimeout(() => setTumbling(false), DICE_LIMITS.tumbleMs);
+    return () => clearTimeout(timer);
+  }, [tumbling, rollId]);
+
+  const changeCount = (delta: number) => {
+    if (!enabled) return;
+    setCount(value => Math.min(DICE_LIMITS.maxCount, Math.max(DICE_LIMITS.minCount, value + delta)));
+    setResult(null);
+    setTumbling(false);
+  };
+  const changeFaces = (delta: number) => {
+    if (!enabled) return;
+    setFaces(value => Math.min(DICE_LIMITS.maxFaces, Math.max(DICE_LIMITS.minFaces, value + delta)));
+    setResult(null);
+    setTumbling(false);
+  };
+  const roll = () => {
+    if (!enabled) return;
+    try {
+      const next = rollDice({ faces, count, modifier });
+      setError('');
+      setResult(next);
+      setRollId(value => value + 1);
+      setTumbling(!reducedMotion);
+      onDraft(next.total);
+    } catch (rollError) {
+      setError(rollError instanceof Error ? rollError.message : 'The dice could not be rolled.');
+    }
+  };
+
+  return <div className="tt-dice" role="group" aria-label={`${descriptor.label} dice`}>
+    <div className="tt-dice__settings">
+      <div className="tt-dice__stepper" role="group" aria-label="Number of dice">
+        <button type="button" className="tt-dice__step" aria-label="Fewer dice" disabled={!enabled || count <= DICE_LIMITS.minCount} onClick={() => changeCount(-1)}>−</button>
+        <span className="tt-dice__step-value"><output aria-live="off">{count}</output><small>dice</small></span>
+        <button type="button" className="tt-dice__step" aria-label="More dice" disabled={!enabled || count >= DICE_LIMITS.maxCount} onClick={() => changeCount(1)}>+</button>
+      </div>
+      <div className="tt-dice__stepper" role="group" aria-label="Faces per die">
+        <button type="button" className="tt-dice__step" aria-label="Fewer faces" disabled={!enabled || faces <= DICE_LIMITS.minFaces} onClick={() => changeFaces(-1)}>−</button>
+        <span className="tt-dice__step-value"><output aria-live="off">{faces}</output><small>faces</small></span>
+        <button type="button" className="tt-dice__step" aria-label="More faces" disabled={!enabled || faces >= DICE_LIMITS.maxFaces} onClick={() => changeFaces(1)}>+</button>
+      </div>
+    </div>
+    <p className="tt-dice__formula">{descriptor.label} · {count}d{faces}{modifier > 0 ? ` + ${modifier}` : modifier < 0 ? ` − ${Math.abs(modifier)}` : ''}</p>
+    <div className="tt-dice__actions">
+      <button type="button" className="tt-button tt-button--primary tt-dice__roll" disabled={!enabled} title={reason || undefined} onClick={roll}>ทอย</button>
+      {reason && <small role="status">{reason}</small>}
+    </div>
+    {error && <p className="tt-table-error" role="alert">{error}</p>}
+    <div className="tt-dice__result" role="status" aria-live="polite">
+      {result ? <>
+        <ul className="tt-dice__faces" aria-label="Dice results">
+          {result.faces.map((face, index) => <li key={`${rollId}-${index}`} className="tt-dice__face">
+            <span role="img" aria-label={`Die ${index + 1}: ${face}`} className={'tt-die' + (tumbling ? ' is-tumbling' : '')} data-face={face}>
+              {face <= 6
+                ? <span className="tt-die__grid" aria-hidden="true">{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={diePips(face).includes(cell) ? 'tt-die__pip is-on' : 'tt-die__pip'} />)}</span>
+                : <span className="tt-die__value" aria-hidden="true">{face}</span>}
+            </span>
+          </li>)}
+        </ul>
+        <p className="tt-dice__total">Total <strong>{formatNumber(result.total)}</strong>{modifier !== 0 && <small>{formatNumber(result.total - modifier)} {modifier > 0 ? '+' : '−'} {formatNumber(Math.abs(modifier))}</small>}</p>
+      </> : <p className="tt-dice__hint">No roll yet. Press ทอย for {count}d{faces}.</p>}
+    </div>
+    {!result && sharedTotal !== null && <p className="tt-canvas-inline__note">Current value in this table: <strong>{formatNumber(sharedTotal)}</strong>. A card that binds “{parameter?.label ?? descriptor.parameter}” reads it.</p>}
+    {rangeWarning && <p className="tt-canvas-inline__note" role="status">{rangeWarning}</p>}
+    <p className="tt-canvas-inline__note">Visual-only roll on this device using the browser CSPRNG. Nothing reaches the table until a card submits this action.</p>
+  </div>;
+}
+
+function parameterRangeLabel(parameter: TableParameter): string {
+  if (parameter.min === undefined && parameter.max === undefined) return '';
+  return ` (${parameter.min ?? '−∞'}…${parameter.max ?? '∞'})`;
 }
 
 function ControlParameter({ id, parameter, state, value, disabled, onChange }: { id: string; parameter: TableParameter; state: TableState; value: TableValue; disabled: boolean; onChange: (value: TableValue) => void }) {

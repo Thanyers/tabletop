@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { CanvasCardMeta } from '../shared/table-contracts';
 
-// F052: how a canvas card says when it was created, when it last changed, and who did it.
+// F054: how a canvas card says when it was created, when it last changed, and who did it.
 // This module is presentation only: it formats already-resolved meta and never invents a time.
 // Relative lines share one minute clock, so a table of cards re-renders the meta lines only.
 

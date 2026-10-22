@@ -332,7 +332,7 @@ async function verifyPendingChatMotion(owner, draftNode, draftCard) {
   expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false } = {}) {
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false, streamThinking = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
@@ -385,7 +385,11 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   }
   let releaseProvider = () => {};
   const gate = observePending ? new Promise(resolve => { releaseProvider = resolve; }) : undefined;
-  setTableReply({ change, gate, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  // F050: reasoning deltas that arrive before the JSON, so the card has something to stream.
+  const streamReasoning = streamThinking
+    ? Array.from({ length: 24 }, (_, index) => `Checking source columns and drafting rule ${index + 1}. `)
+    : undefined;
+  setTableReply({ change, gate, streamReasoning, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -447,6 +451,24 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     if (observePending) {
       try {
         await verifyPendingChatMotion(owner, draftNode, draftCard);
+        // F050: the card shows what the model is doing, and the line moves forward while it streams.
+        if (streamThinking) {
+          const live = draftCard.getByTestId('draft-live-thinking');
+          await expect(live).toBeVisible({ timeout: 20_000 });
+          const line = live.locator('.tt-chat-card__thinking-line');
+          const first = (await line.innerText()).trim();
+          expect(first.length).toBeGreaterThan(20);
+          expect(first).toContain('Checking source columns');
+          await expect.poll(async () => (await line.innerText()).trim(), {
+            timeout: 20_000,
+            message: 'the live thinking line should move forward while reasoning streams',
+          }).not.toBe(first);
+          const latest = (await line.innerText()).trim();
+          expect(latest).not.toContain('undefined');
+          expect(latest.length).toBeLessThanOrEqual(281);
+          // Evidence capture for the feature doc; only when asked, so normal runs stay fast.
+          if (process.env.F050_SHOT) await draftNode.screenshot({ path: 'test-results/f050-live-thinking.png' });
+        }
       } finally {
         releaseProvider();
       }
@@ -566,8 +588,13 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await chat.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(consent).toBeVisible();
   await consent.getByRole('button', { name: 'Send', exact: true }).click();
-  expect((await firstPost).status()).toBe(202);
-  const questionArticle = owner.getByRole('article', { name: clarifyPrompt, exact: true });
+  const firstAccepted = await firstPost;
+  expect(firstAccepted.status()).toBe(202);
+  const firstJobId = (await firstAccepted.json()).id;
+  // A chat card's accessible name is its title, and since 1f21aeb that is only the request's first
+  // line — the answered request keeps the same first line, so cards must be found by their shared
+  // canvas object id instead of by title.
+  const questionArticle = owner.locator(`article[data-canvas-object="table.chat.${firstJobId}"]`);
   const card = questionArticle.getByTestId('table-chat-answer');
   await expect(card).toHaveClass(/tt-chat-card--questions/u, { timeout: 20_000 });
   await expect(card).toContainText('A few details would help build this table. Nothing on the table changed.');
@@ -610,13 +637,18 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   expect(modelPosts).toHaveLength(1);
   await sendAnswer.click();
   await expect(consent).toHaveCount(0);
-  expect((await answerPost).status()).toBe(202);
+  const answerAccepted = await answerPost;
+  expect(answerAccepted.status()).toBe(202);
+  const answeredJobId = (await answerAccepted.json()).id;
   expect(modelPosts).toHaveLength(2);
   expect(modelPosts[1]).toMatchObject({ prompt: answeredPrompt, consent: true });
+  // The answered request is a new job on a new card, so the question card must be gone.
   await expect(questionArticle).toHaveCount(0);
-  // Long prompts are shortened with an ellipsis in the card's accessible name.
-  const answeredCard = owner.getByRole('article', { name: /^Make a shift table\. Who must agree/u }).getByTestId('table-chat-answer');
-  await expect(answeredCard).toBeVisible();
+  const answeredNode = owner.locator(`article[data-canvas-object="table.chat.${answeredJobId}"]`);
+  await expect(answeredNode).toBeVisible();
+  // The title is still the request's first line; the full text stays in the job, not in the title.
+  await expect(answeredNode).toHaveAttribute('aria-label', clarifyPrompt);
+  const answeredCard = answeredNode.getByTestId('table-chat-answer');
   await expect(answeredCard).toContainText('No rule draft was created. Try rephrasing your request.', { timeout: 20_000 });
   await expect(answeredCard.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
   await expect(answeredCard.getByRole('list', { name: 'Answer choices', exact: true })).toHaveCount(0);
@@ -1513,7 +1545,8 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
   await requestClarifyingQuestion(owner, room.id, setTableReply, api);
   // F013: the owner consented on this table epoch during the clarifying exchange.
-  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true });
+  // F050: this pending draft also streams synthetic reasoning, so the card's live thinking line is checked.
+  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true, streamThinking: true });
   await inspectAppliedRules(owner, room.id, api, expectedRules.shifts);
   const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
@@ -1870,7 +1903,7 @@ export async function verifyGenericTableBrowser({ actors, newPage, api, setTable
   const scenarios = [equipmentScenario, shiftScenario, gameScenario];
   for (let index = 0; index < scenarios.length; index += 1) {
     const owner = await newPage(owners[index]);
-    await expect(owner.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: /^Welcome back/ })).toBeVisible();
     await scenarios[index]({ owner, member: actors.members[0], secondMember, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark });
     await owner.screenshot({ path: `test-results/cloudflare-browser/generic-table-${['equipment', 'shifts', 'game'][index]}.png`, fullPage: true });
   }

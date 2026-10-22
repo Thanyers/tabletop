@@ -8,11 +8,11 @@ import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
-import { chatReferencePrompt, followUpPrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
+import { MAX_CHAT_CARD_REFERENCES, chatReferencePrompt, followUpPrompt, parseReferencedPrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -235,13 +235,16 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const [acknowledgedRetry, setAcknowledgedRetry] = useState<{ prompt: string; key: string }>();
   const [retryPrefill, setRetryPrefill] = useState<{ text: string; key: number }>();
   const [composerMessage, setComposerMessage] = useState('');
-  // A card the person pointed the chat at; the next message is about that card.
-  const [cardReference, setCardReference] = useState<ChatCardReference | null>(null);
-  const cardReferenceRef = useRef(cardReference);
-  cardReferenceRef.current = cardReference;
+  // Cards the person pointed the chat at; the next message is about all of them (more context for the AI).
+  const [cardReferences, setCardReferences] = useState<ChatCardReference[]>([]);
+  const cardReferencesRef = useRef(cardReferences);
+  cardReferencesRef.current = cardReferences;
   const [referenceFocusKey, setReferenceFocusKey] = useState(0);
   useEffect(() => onChatCardReference((reference) => {
-    setCardReference(reference);
+    // Pointing at another card adds it; pointing at one already listed keeps the list as it is.
+    setCardReferences((current) => current.some((item) => item.id === reference.id)
+      ? current
+      : [...current, reference].slice(-MAX_CHAT_CARD_REFERENCES));
     setReferenceFocusKey((key) => key + 1);
   }), []);
 
@@ -309,7 +312,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setAcknowledgedRetry(undefined);
     setRetryPrefill(undefined);
     setComposerMessage('');
-    setCardReference(null);
+    setCardReferences([]);
   }, [scope, updateCards]);
 
   useEffect(() => {
@@ -332,7 +335,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
   const mode = table ? tableChatMode(viewerCan(table, 'rules.draft') ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
     prompt: composerMessage,
-    referencedCard: cardReference !== null,
+    referencedCard: cardReferences.length > 0,
     hasCreateAction: table.domain.program?.actions.some(action => Boolean(action.creates?.length)) ?? false,
   }) : 'ask';
   const modeRef = useRef(mode);
@@ -685,7 +688,12 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     updateCards(scope, (items) => items.filter((item) => item.id !== card.id));
   }, [scope, updateCards]);
 
-  const prefillCard = useCallback((card: ChatCard) => setRetryPrefill({ text: card.prompt, key: Date.now() }), []);
+  // A message about cards comes back as its chips plus the person's own words, so it is sent the same way again.
+  const prefillCard = useCallback((card: ChatCard) => {
+    const { references, message } = parseReferencedPrompt(card.prompt);
+    setCardReferences(references.slice(0, MAX_CHAT_CARD_REFERENCES));
+    setRetryPrefill({ text: message, key: Date.now() });
+  }, []);
   // Rule requests carry no chat history, so the answer travels with the original request.
   // Picking an answer sends a new rule request at once. Rule requests carry no chat history,
   // so the original request, the question and the answer travel together.
@@ -731,7 +739,11 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setRetryPrefill({ text: card.prompt, key: Date.now() });
   }, [editRules]);
 
-  // Notify once when a result this page watched in progress finishes with nothing left to do.
+  // Notify once when a result finishes with nothing left to do.
+  // A card can finish before this page ever renders its waiting phase (a fast draft, a reload during the
+  // last poll), so a card created after the page opened counts as seen too. Otherwise the card is removed
+  // by `isFinishedResult` below and no notice replaces it: it would vanish silently.
+  const mountedAtRef = useRef(Date.now());
   const watchedCardsRef = useRef(new Set<string>());
   const notifiedCardsRef = useRef(new Set<string>());
   useEffect(() => {
@@ -740,7 +752,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         if (card.phase === 'sending' || card.phase === 'waiting' || card.confirming || card.confirmationPending) watchedCardsRef.current.add(card.id);
         continue;
       }
-      if (!watchedCardsRef.current.has(card.id) || notifiedCardsRef.current.has(card.id)) continue;
+      const createdWhileOpen = (card.job?.createdAt ?? card.createdAt) >= mountedAtRef.current;
+      if ((!watchedCardsRef.current.has(card.id) && !createdWhileOpen) || notifiedCardsRef.current.has(card.id)) continue;
       notifiedCardsRef.current.add(card.id);
       const request = splitReferencedPrompt(card.prompt).message.slice(0, 80);
       if (card.kind === 'draft') {
@@ -765,7 +778,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : 'AI answer',
       glyph: <Sparkles size={16} />,
       busy: card.phase === 'sending' || card.phase === 'waiting',
-      // F052: a chat answer is dated by this browser's clock (no command stamps it) and names the asker.
+      // F054: a chat answer is dated by this browser's clock (no command stamps it) and names the asker.
       at: card.createdAt,
       actorId: card.job?.askedBy ?? card.modelJob?.askedBy,
       position: { x: 760, y: 40 + index * 300 },
@@ -798,9 +811,9 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const sourceFiles = table.domain.sources.map((source) => ({ id: source.id, filename: source.filename }));
   const prefill = retryPrefill ?? options.prefill;
   const sendFromBar = async (message: string): Promise<boolean> => {
-    const reference = cardReferenceRef.current;
-    const accepted = await send(reference ? chatReferencePrompt(reference, message) : message);
-    if (accepted && reference) setCardReference(null);
+    const references = cardReferencesRef.current;
+    const accepted = await send(references.length > 0 ? chatReferencePrompt(references, message) : message);
+    if (accepted && references.length > 0) setCardReferences([]);
     return accepted;
   };
   const bar = <TableChat
@@ -825,8 +838,9 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onAttach={async (file) => { await optionsRef.current.attach(table, file); }}
     onSend={sendFromBar}
     onMessageChange={setComposerMessage}
-    cardReference={cardReference}
-    onClearCardReference={() => setCardReference(null)}
+    cardReferences={cardReferences}
+    onRemoveCardReference={(id) => setCardReferences((current) => current.filter((item) => item.id !== id))}
+    onClearCardReferences={() => setCardReferences([])}
     composerAction={options.composerAction}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
@@ -887,8 +901,19 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       : card.kind === 'draft'
         ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…'
         : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…';
+    // F050: a running draft shows what the model is doing, not only how many characters arrived.
+    // The thinking tail exists only on the rule-draft job, never on an answer job.
+    const liveThinkingTail = card.kind === 'draft' ? card.modelJob?.progress?.thinkingTail : undefined;
+    const liveThinking = liveThinkingTail ? liveThinkingLine(liveThinkingTail) : null;
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
       <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingText}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} limitMs={card.kind === 'draft' ? card.modelJob?.limitMs : undefined} chars={progress?.receivedChars} reasoningChars={progress?.reasoningChars} /></p>
+      {liveThinking && <div className="tt-chat-card__thinking" data-testid="draft-live-thinking" data-thinking-chars={progress?.reasoningChars}>
+        <p className="tt-chat-card__thinking-line" aria-live="off">{liveThinking}</p>
+        {liveThinkingTail && liveThinkingTail.length > liveThinking.length && <details className="tt-chat-card__thinking-full">
+          <summary>More of the latest thinking</summary>
+          <pre>{liveThinkingTail}</pre>
+        </details>}
+      </div>}
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;

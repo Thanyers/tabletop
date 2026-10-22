@@ -34,10 +34,10 @@ export interface ComputedColumn { id: string; collection: string; label: string;
 /** F037: a shared canvas note. Kept out of the program so it survives rule edits and stays a plain note. */
 export type NoteColor = 'yellow' | 'rose' | 'sky' | 'mint' | 'lavender' | 'sand';
 export interface TableNote { id: string; text: string; color: NoteColor; x: number; y: number; width: number; height: number; createdBy: string; createdAt: number; updatedAt: number }
-/** F052: who a canvas card came from. `ai` means an AI-drafted program applied by a person, not "the AI wrote this alone". */
+/** F054: who a canvas card came from. `ai` means an AI-drafted program applied by a person, not "the AI wrote this alone". */
 export type CanvasCardOrigin = 'ai' | 'human' | 'system' | 'demo';
 /**
- * F052: when a canvas card was created and last changed, and who did it.
+ * F054: when a canvas card was created and last changed, and who did it.
  * Kept outside `TableProgram` so it never enters the candidate hash or the 64 KiB program budget.
  * `actorId` is stored, never a display name, so the UI resolves names from the current members.
  */
@@ -55,13 +55,15 @@ export interface TableState extends DomainBase {
     positions: Record<string, { x: number; y: number; pinned?: boolean }>;
     /** Soft-deleted cards: gone from everyone's canvas, listed under Deleted in Objects until restored. Oldest first. */
     trashed?: Record<string, { by: string; at: number }>;
+    /** Card names set at this table; they replace the card's own title on every member's canvas. */
+    titles?: Record<string, string>;
   };
   /** Display-only computed columns; definitions live in state, not in the program (F017). */
   computedColumns?: ComputedColumn[];
   /** Shared sticky notes (F037). Omitted by rooms created before this field existed. */
   notes?: TableNote[];
   /**
-   * F052: per-card timestamps and provenance, keyed by canvas node id (not by title, which can change).
+   * F054: per-card timestamps and provenance, keyed by canvas node id (not by title, which can change).
    * Written only by server-ordered commands, never by the simulator; bounded to 48 entries / 12 KiB.
    * Omitted by rooms created before this field existed, so readers fall back to inference.
    */

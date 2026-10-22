@@ -2,7 +2,7 @@ import type { CanvasCardMeta, CanvasCardOrigin, TableProgram, TableState } from 
 import type { WorkspaceView } from '../shared/contracts';
 import { canonicalJson } from './helpers';
 
-// F052: per-card timestamps for the canvas. The AI replaces the whole program on every change
+// F054: per-card timestamps for the canvas. The AI replaces the whole program on every change
 // (`domain/table.ts` -> `applyTableChange`), so without a per-card diff every card would look
 // "updated" at once. This module is pure: it never reads the clock and never writes state.
 // Only server-ordered commands stamp time; `applyTableChange` stays the deterministic simulator.
@@ -57,7 +57,7 @@ export function liveCanvasCardIds(state: TableState): string[] {
 }
 
 /**
- * F052: what the card shows, as canonical JSON, so property order can never fake a change.
+ * F054: what the card shows, as canonical JSON, so property order can never fake a change.
  * Returns null when the program no longer holds that card.
  *
  * - `table.rules` describes the rules, not the views, so editing one view never bumps it.
@@ -87,7 +87,7 @@ export function canvasCardSignature(cardId: string, program: TableProgram | null
 }
 
 /**
- * F052: the next `cardMeta` after an activation. Non-program cards (notes, files, auxiliary cards)
+ * F054: the next `cardMeta` after an activation. Non-program cards (notes, files, auxiliary cards)
  * are carried through untouched; new program cards get a recorded creation, changed ones move
  * `updatedAt`, unchanged ones keep their entry exactly, and removed cards are dropped.
  */
@@ -123,7 +123,7 @@ export function diffCardMeta(previous: TableState, nextProgram: TableProgram | n
 }
 
 /**
- * F052: stamp one human-owned card (files today). Creation is only set when nothing is known yet;
+ * F054: stamp one human-owned card (files today). Creation is only set when nothing is known yet;
  * the update always moves, so "added" and "removed a file" both read as a change to the Files card.
  * `revision` is passed only when the touch happens as part of a rule revision (removeItem).
  */
@@ -137,7 +137,7 @@ export function touchCardMeta(meta: Record<string, CanvasCardMeta> | undefined, 
 }
 
 /**
- * F052: keep only meta for cards the table still shows, then enforce the 48-entry / 12 KiB caps by
+ * F054: keep only meta for cards the table still shows, then enforce the 48-entry / 12 KiB caps by
  * dropping the oldest `updatedAt` first (ties broken by id, so the result is deterministic).
  */
 export function pruneCardMeta(meta: Record<string, CanvasCardMeta> | undefined, liveIds: readonly string[]): Record<string, CanvasCardMeta> {
@@ -153,7 +153,7 @@ export function pruneCardMeta(meta: Record<string, CanvasCardMeta> | undefined, 
 interface ProgramTimelineEntry { at: number; actorId: string; revision: number; program: TableProgram }
 
 /**
- * F052: the program's history, oldest first, for rooms that never stored `cardMeta`.
+ * F054: the program's history, oldest first, for rooms that never stored `cardMeta`.
  * Each activation stores the program it activated, so the current program is normally the last snapshot.
  */
 function programTimeline(state: TableState): ProgramTimelineEntry[] {
@@ -172,7 +172,7 @@ function programTimeline(state: TableState): ProgramTimelineEntry[] {
   return entries;
 }
 
-/** F052: program cards inferred from retained revisions. No retained revision that holds the card means no honest time. */
+/** F054: program cards inferred from retained revisions. No retained revision that holds the card means no honest time. */
 function resolveProgramCardMeta(state: TableState, cardId: string): CanvasCardMeta | undefined {
   const entries = programTimeline(state);
   if (entries.length === 0) return undefined;
@@ -204,7 +204,7 @@ function resolveProgramCardMeta(state: TableState, cardId: string): CanvasCardMe
 }
 
 /**
- * F052: read-only fallback for rooms without stored `cardMeta`. Order: stored meta, note, files card,
+ * F054: read-only fallback for rooms without stored `cardMeta`. Order: stored meta, note, files card,
  * program card from revisions, then the table's own system cards. Returns undefined when nothing is
  * knowable, so the UI can say "not recorded" instead of guessing. Never writes to `state`.
  */

@@ -8,12 +8,12 @@ import type { ActorContext, DomainState, WorkspaceView } from '../shared/contrac
 import type { GenerativeViewDescriptor, MetricViewDescriptor } from '../shared/generative-contracts';
 import type { CanvasCardMeta, TableAction, TableChange, TableProgram, TableRecord, TableState } from '../shared/table-contracts';
 
-// F052: per-card timestamps and provenance. Every time here is a fixed `ctx.now`, so the tests are
+// F054: per-card timestamps and provenance. Every time here is a fixed `ctx.now`, so the tests are
 // deterministic: the activation, removal and file commands are the only writes, never a simulation.
 
 function actor(now: number, overrides: Partial<ActorContext> = {}): ActorContext {
   return {
-    actorId: 'account-owner', name: 'Owner', role: 'owner', workspaceId: 'workspace-f052', epoch: 1, now,
+    actorId: 'account-owner', name: 'Owner', role: 'owner', workspaceId: 'workspace-f054', epoch: 1, now,
     hash: (value) => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex'),
     ...overrides,
   };
@@ -22,7 +22,7 @@ const member: ActorContext = actor(6000, { actorId: 'account-member', name: 'Mem
 
 function workspaceView(state: TableState, createdAt = 100): WorkspaceView {
   return {
-    id: 'workspace-f052', title: 'Table', kind: 'table', epoch: 1, revision: 'opaque',
+    id: 'workspace-f054', title: 'Table', kind: 'table', epoch: 1, revision: 'opaque',
     actor: { actorId: 'account-owner', name: 'Owner', role: 'owner' }, members: [],
     domain: state, createdAt, expiresAt: 1_000_000,
   };
@@ -69,7 +69,7 @@ function command(state: TableState, type: string, payload: unknown, ctx: ActorCo
   return decision.state;
 }
 
-describe('canvas card meta (F052)', () => {
+describe('canvas card meta (F054)', () => {
   it('records the first activation for rules, actions, collections and views', () => {
     const active = activate(createTableState(), inventoryChange({ views: [metric('total_items', 'Total items')] }), actor(5000));
     expect(active.ruleRevision).toBe(1);

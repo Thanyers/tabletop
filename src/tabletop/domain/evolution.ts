@@ -279,7 +279,7 @@ function nextStateWithChange(state: DomainState, candidate: Candidate, ctx: Acto
     next.revisions = next.revisions.slice(-20);
     while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
   }
-  // F052: activation is the one place program cards are diffed. It runs after the revision is stored,
+  // F054: activation is the one place program cards are diffed. It runs after the revision is stored,
   // and it never runs inside applyTableChange, so a simulation stays free of timestamps.
   if (state.kind === 'table' && next.kind === 'table' && candidate.change.kind === 'table') {
     next.cardMeta = pruneCardMeta(diffCardMeta(state, next.program, ctx.now, ctx.actorId, revision), liveCanvasCardIds(next));
@@ -465,7 +465,7 @@ function removeRuleItem(state: DomainState, payload: unknown, ctx: ActorContext)
   });
   next.revisions = next.revisions.slice(-20);
   while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
-  // F052: the removed card loses its meta; the Rules card (and the Actions card for an action) records the change.
+  // F054: the removed card loses its meta; the Rules card (and the Actions card for an action) records the change.
   let cardMeta = next.cardMeta ?? {};
   const removedCardId = ruleItemCardId(input.kind, input.id);
   if (removedCardId) {

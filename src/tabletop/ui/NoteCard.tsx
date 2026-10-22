@@ -99,7 +99,7 @@ export function NoteCard({ view, note, busy, onCommand }: NoteCardProps) {
   };
 
   const author = authorName(view, note.createdBy);
-  // F052: the note's time lives in the footer line that already exists; no extra row, no extra icon.
+  // F054: the note's time lives in the footer line that already exists; no extra row, no extra icon.
   const now = useCardNow();
   const noteMeta: CanvasCardMeta = { createdAt: note.createdAt, updatedAt: note.updatedAt, createdBy: note.createdBy, origin: 'human', source: 'recorded' };
   return <div
