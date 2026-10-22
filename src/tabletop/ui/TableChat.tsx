@@ -38,8 +38,10 @@ export interface TableChatProps {
   composerAction?: ReactNode;
   onMessageChange?: (message: string) => void;
   /** A card the next message is about, shown as a chip above the box. */
-  cardReference?: ChatCardReference | null;
-  onClearCardReference?: () => void;
+  /** Cards the next message is about; each chip can be removed on its own. */
+  cardReferences?: readonly ChatCardReference[];
+  onRemoveCardReference?: (id: string) => void;
+  onClearCardReferences?: () => void;
 }
 
 /** One-line chat box fixed to the bottom centre of a shared table (F006). */
@@ -47,7 +49,7 @@ export function TableChat({
   workspaceId, epoch, actorId, mode, sourceFiles, placeholder, aiEnabled, canAttach, busy,
   acceptFiles, historyStatus = 'ready', onRetryHistory, prefill, acknowledged, focusKey = 0,
   explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction,
-  cardReference = null, onClearCardReference,
+  cardReferences = [], onRemoveCardReference, onClearCardReferences,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
   const [grantedKey, setGrantedKey] = useState<string | null>(() => storedConsent({ workspaceId, epoch, actorId }));
@@ -179,10 +181,17 @@ export function TableChat({
         <button type="button" className="tt-table-chat-bar__consent-no" onClick={() => { setAsking(false); fieldRef.current?.focus(); }}>Cancel</button>
       </div>
     </div>}
-    {cardReference && <div className="tt-table-chat-bar__reference" data-testid="chat-card-reference">
-      <span className="tt-table-chat-bar__reference-chip" title={cardReference.detail}><AtSign size={13} aria-hidden="true" />{cardReference.title}</span>
-      <small>{mode === 'draft' ? 'Your message changes this card’s rules.' : 'Your message is about this card.'}</small>
-      <button type="button" aria-label={`Stop referencing ${cardReference.title}`} onClick={() => { onClearCardReference?.(); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>
+    {cardReferences.length > 0 && <div className="tt-table-chat-bar__reference" data-testid="chat-card-reference">
+      <ul className="tt-table-chat-bar__reference-chips" aria-label="Cards this message is about">
+        {cardReferences.map((reference) => <li key={reference.id} className="tt-table-chat-bar__reference-chip" title={reference.detail}>
+          <AtSign size={13} aria-hidden="true" /><span>{reference.title}</span>
+          <button type="button" aria-label={`Stop referencing ${reference.title}`} onClick={() => { onRemoveCardReference?.(reference.id); fieldRef.current?.focus(); }}><X size={12} aria-hidden="true" /></button>
+        </li>)}
+      </ul>
+      <small>{cardReferences.length > 1
+        ? mode === 'draft' ? 'Your message changes these cards’ rules.' : `Your message is about these ${cardReferences.length} cards. Add more with the chat icon on a card.`
+        : mode === 'draft' ? 'Your message changes this card’s rules.' : 'Your message is about this card. Add more with the chat icon on another card.'}</small>
+      {cardReferences.length > 1 && <button type="button" className="tt-table-chat-bar__reference-clear" aria-label="Stop referencing all cards" onClick={() => { onClearCardReferences?.(); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>}
     </div>}
     <form className="tt-table-chat-bar__box" onSubmit={(event) => { event.preventDefault(); submit(); }}>
       {canAttach && <>

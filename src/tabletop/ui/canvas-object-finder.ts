@@ -100,17 +100,51 @@ export function referenceCardInChat(reference: ChatCardReference): boolean {
   return true;
 }
 
-/** The text sent ahead of the person's message, so the AI knows which card they mean. */
-export function chatReferencePrompt(reference: ChatCardReference, message: string): string {
-  return `[การ์ด “${reference.title}”] ${message}\n(Card in question: ${reference.detail})`;
+/** A message can point at this many cards at once. */
+export const MAX_CHAT_CARD_REFERENCES = 5;
+
+/** The assistant accepts prompts up to this length; card details are shortened to fit, never the message. */
+const MAX_CHAT_PROMPT_LENGTH = 4_000;
+
+/**
+ * The text sent ahead of the person's message, so the AI knows which cards they mean.
+ * One card keeps the original shape; several list each card on its own line.
+ */
+export function chatReferencePrompt(references: ChatCardReference | readonly ChatCardReference[], message: string): string {
+  const list = (Array.isArray(references) ? references : [references] as readonly ChatCardReference[]).slice(0, MAX_CHAT_CARD_REFERENCES);
+  if (list.length === 0) return message;
+  const head = `[การ์ด ${list.map((reference) => `“${reference.title}”`).join(' + ')}] ${message}`;
+  const overhead = head.length + (list.length === 1 ? '\n(Card in question: )'.length : '\n(Cards in question:)'.length + list.length * 6);
+  const budget = Math.max(40, Math.floor((MAX_CHAT_PROMPT_LENGTH - overhead) / list.length));
+  const detail = (reference: ChatCardReference) => reference.detail.length > budget ? `${reference.detail.slice(0, budget - 1)}…` : reference.detail;
+  if (list.length === 1) return `${head}\n(Card in question: ${detail(list[0])})`;
+  return `${head}\n(Cards in question:\n${list.map((reference, index) => `${index + 1}. ${detail(reference)}`).join('\n')})`;
 }
 
-/** A follow-up picked from an answer keeps the card the original question was about. */
+/**
+ * Undoes chatReferencePrompt for "Use this message again": the card chips come back and only the person's
+ * own words go into the box. Prompts without a card reference come back unchanged.
+ */
+export function parseReferencedPrompt(prompt: string): { references: ChatCardReference[]; message: string } {
+  const [firstLine, ...rest] = prompt.split('\n');
+  const match = /^\[การ์ด ((?:“[^”]*”(?: \+ )?)+)\] /u.exec(firstLine);
+  if (!match) return { references: [], message: prompt };
+  const titles = [...match[1].matchAll(/“([^”]*)”/gu)].map((item) => item[1]);
+  const block = rest.join('\n');
+  const single = /^\(Card in question: ([^]*)\)$/u.exec(block);
+  const listed = /^\(Cards in question:\n([^]*)\)$/u.exec(block);
+  const details = single ? [single[1]] : listed ? listed[1].split('\n').map((line) => line.replace(/^\d+\. /u, '')) : [];
+  const references = titles.map((title, index) => ({ id: `prompt-reference-${index}-${title}`, title, detail: details[index] ?? `card “${title}”` }));
+  return { references, message: firstLine.slice(match[0].length) };
+}
+
+/** A follow-up picked from an answer keeps the cards the original question was about. */
 export function followUpPrompt(original: string, message: string): string {
   const { reference } = splitReferencedPrompt(original);
   if (!reference) return message;
-  const detail = /\n\(Card in question: ([^]*)\)$/u.exec(original)?.[1] ?? reference;
-  return chatReferencePrompt({ id: '', title: reference, detail }, message);
+  const [firstLine, ...rest] = original.split('\n');
+  const end = firstLine.lastIndexOf('”] ');
+  return [`${firstLine.slice(0, end + 3)}${message}`, ...rest].join('\n');
 }
 
 /** Centre the canvas on a point in canvas coordinates (e.g. another member's live cursor). */
@@ -139,6 +173,6 @@ export function splitReferencedPrompt(prompt: string): { reference: string | nul
   if (end < prefix.length) return { reference: null, message: firstLine };
   const inner = splitReferencedPrompt(firstLine.slice(prefix.length, end));
   // Older referenced titles were cut short and may still carry a "[การ์ด “" start or a "(Card in question" tail.
-  const reference = (inner.reference ?? inner.message).replace(/^(?:\[การ์ด “)+/u, '').replace(/\s*\(Card in qu.*$/u, '').replace(/”\]\s*/u, ' · ').trim();
+  const reference = (inner.reference ?? inner.message).replace(/^(?:\[การ์ด “)+/u, '').replace(/\s*\(Cards? in qu.*$/u, '').replace(/”\]\s*/u, ' · ').replace(/”\s*\+\s*“/gu, ', ').trim();
   return { reference, message: firstLine.slice(end + 3) };
 }
