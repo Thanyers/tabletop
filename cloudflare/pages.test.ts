@@ -147,6 +147,8 @@ describe('F051 built assets', () => {
   it('ships share-preview tags in the raw index.html', async () => {
     const html = await (await bindings.ASSETS.fetch(new Request(`${origin}/`))).text();
     const production = 'https://tabletop.ptchrr.workers.dev';
+    expect(html).toContain('<html lang="en">');
+    expect(html).not.toMatch(/[\u0E00-\u0E7F]/u);
     for (const tag of [
       '<meta property="og:type" content="website"/>',
       `<meta property="og:url" content="${production}/"/>`,
