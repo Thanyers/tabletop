@@ -101,9 +101,11 @@ Node **22.23.2** (รุ่นเดียวกับ CI) · branch `feat/F050-
 | `npm run lint` | 0 error / 103 warning (เท่าเดิม ไม่มีใหม่) |
 | `node scripts/check-public-files.mjs` | 0 finding |
 | `npm run build` + `npm run build:cloudflare` | ผ่าน |
-| `BROWSER_CHANNEL=msedge npm run test:cloudflare:browser` | **27 PASS ติดกัน 2 รอบ** หลัง build สุดท้าย (exit 0, ไม่มี FAIL) — fixture stream reasoning จริง 24 delta × 90 ms ผ่าน SSE แล้ว assert ว่าบรรทัด live thinking โผล่และขยับ |
+| `BROWSER_CHANNEL=msedge npm run test:cloudflare:browser` | **27 PASS ติดกัน 2 รอบ** หลัง build สุดท้ายบน `dev` @ `9ff8dd4` (exit 0, ไม่มี FAIL) — fixture stream reasoning จริง 24 delta × 90 ms ผ่าน SSE แล้ว assert ว่าบรรทัด live thinking โผล่และขยับ |
 
 อาร์ติแฟกต์: `test-results/f050-browser-run{3,4,5,6}.log` · ภาพการ์ดระหว่างสตรีม `test-results/f050-live-thinking.png` (สร้างเมื่อรันด้วย `F050_SHOT=1` เท่านั้น ไม่ผูกกับ CI)
+
+**หลัง merge `origin/dev` @ `711b548`:** unit **597 ผ่าน/1 skip**, `test:cloudflare` **127/127**, typecheck + `build` + `build:cloudflare` ผ่าน — แต่ browser suite แดงที่ `requestClarifyingQuestion` (`questionArticle` ยังอยู่ ไม่ถูกแทนหลังตอบคำถาม clarify) **ก่อนถึง check ของ F050** · ยืนยันว่าไม่ใช่ของ F050 ด้วย baseline บน worktree สะอาดของ `origin/dev` @ `711b548`: แดงที่ check เดียวกัน (`test-results/baseline.log` ใน `.worktrees/f050-baseline`) ⇒ เป็น regression ที่ `dev` อยู่แล้ว (น่าจะมาจาก #160 F047 `classifyChatIntent`/`tableChatMode` หรือ #171) ต้องแก้ที่ `dev` ก่อน release ครั้งถัดไป — check ของ F050 เองผ่านครบทั้ง 2 รอบบน tree ก่อน merge
 
 ภาพที่เห็น: การ์ดร่างกฎระหว่างรอมี `2s / 240s server limit · thinking 957 chars` แล้วบรรทัด `…15. Checking source columns and drafting rule 16. Checking source columns…` พร้อม `More of the latest thinking` — ข้อความขยับทุกครั้งที่ poll ได้ progress ใหม่
 
