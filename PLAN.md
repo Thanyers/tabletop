@@ -33,6 +33,7 @@
 | F036 | ปลดเพดานเงินของ AI: ไม่จำกัดงบ แต่ยังบันทึกและ settle การใช้จริงทุกงาน (POC) | `review` | lead (AI) | `fix/F036-uncapped-budget` | `cloudflare/{billing,ai,index}.ts`, `vitest.cloudflare.config.ts`, tests | — | ไม่มี schema/binding/secret · CF 102, unit 476 |
 | F037 | Comment card แบบ post-it บน canvas: สร้างจากปุ่มข้างแชท/แชท ลากย้าย แก้ข้อความ เปลี่ยนสี ลบ และเห็นร่วมกัน | `doing` | lead (AI) | `feat/F037-note-cards` | `shared/table-contracts.ts`, `domain/table.ts`, `runtime/index.ts`, `ui/*`, tests | — | เก็บนอก program (ไม่มี migration) · backend + unit 6 ผ่าน · UI ยังไม่ทำ |
 | F038 | ถามขนานกันได้ระหว่างที่การ์ดอื่นทำงาน + คำขอร่างกฎเข้าคิวต่อจากร่างที่กำลังทำ | `review` | [F038](docs/features/F038-parallel-requests.md) |
+| F039 | กฎจาก AI เปิดใช้อัตโนมัติ (รันขั้นตรวจให้เอง) + เอากฎออกทีละรายการบนการ์ด Rules | `doing` | [F039](docs/features/F039-auto-apply-rules.md) |
 
 ## งาน
 
@@ -87,3 +88,8 @@
 | F035-T4 | UI: หน้าต่าง People เลือก role รายคน + หน้าจัดการ role (เลือกจาก role ตั้งต้น หรือสร้างเองด้วยการติ๊กสิทธิ์) + ซ่อนปุ่มตามสิทธิ์จริง | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `TabletopApp.tsx` (`InviteDialog`), `ui/RoleSettings.tsx` (ใหม่), `ui/*` ที่เช็ค owner | F035-T3 | hotspot `TabletopApp.tsx` |
 | F035-T5 | role ตั้งต้นของ case อื่น: บทเรียน (ครู/ผู้เรียน), เกม encounter (DM/ผู้เล่น), invoice · การกระทำในเกมที่ผูกที่นั่ง (ตอบคำถาม, shield) คงผูกที่นั่งเดิม | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `shared/permissions.ts`, `domain/{teaching,encounter,invoice}.ts` | F035-T2 | |
 | F035-T6 | เทสต์ (subagent) + คู่มือ + CHANGELOG | `review` | JitrudeeDongdee (Claude) + subagent | `feat/F035-role-permissions` | tests, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F035-T4 | ทุกสิทธิ์ต้องมีเทสต์ด้านถูกปฏิเสธ |
+| F039-T1 | domain + authority: `evolve.autoApply` (simulate → validate → approve + activate ในคำสั่งเดียว, สิทธิ์ `rules.draft`, เฉพาะ candidate ของคนสั่ง) | `doing` | JitrudeeDongdee (Claude) | `feat/F039-auto-apply-rules` | `domain/evolution.ts`, `server/authority.ts`, `shared/contracts.ts` | — | |
+| F039-T2 | Room: งาน `/model` สั่ง `evolve.autoApply` หลังสร้าง candidate · ผลงานบอก applied / needs-review | `todo` | JitrudeeDongdee (Claude) | `feat/F039-auto-apply-rules` | `cloudflare/room.ts`, `client.ts` | F038 (#131) | แตะ `room.ts` เหมือน #131 |
+| F039-T3 | domain: `table.removeRuleItem` (action / invariant / view / collection) เปิดใช้เป็น revision ใหม่ · ปฏิเสธถ้ามีตัวอ้างถึง | `todo` | JitrudeeDongdee (Claude) | `feat/F039-auto-apply-rules` | `domain/table.ts` หรือ `domain/evolution.ts`, `server/authority.ts` | — | |
+| F039-T4 | UI: การ์ดร่างบอก เพิ่มกฎแล้ว / ต้องตรวจเอง · การ์ด Rules มีปุ่มเอากฎออก + ยืนยันตอนลบตาราง | `todo` | JitrudeeDongdee (Claude) | `feat/F039-auto-apply-rules` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, การ์ด Rules | F038 (#131) | แตะ `useTableChat.tsx` เหมือน #131 |
+| F039-T5 | เทสต์ (subagent) + คู่มือ + CHANGELOG + CLAUDE.md (human confirmation ของร่างกฎ) | `todo` | JitrudeeDongdee (Claude) + subagent | `feat/F039-auto-apply-rules` | tests, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md`, `CLAUDE.md` | T1–T4 | |
