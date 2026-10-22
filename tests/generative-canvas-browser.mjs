@@ -604,6 +604,13 @@ try {
   }
 
   async function panCanvasUntilVisible(page, locator) {
+    // The Objects panel is now tall enough to cover the old fixed drag point (150, 700) on a long list.
+    // Close it first so the drag lands on the canvas, not the panel.
+    const objectsTrigger = page.getByTestId('canvas-object-menu-trigger');
+    if (await objectsTrigger.getAttribute('aria-expanded') === 'true') {
+      await objectsTrigger.click();
+      await expect(page.getByTestId('canvas-object-dock')).toBeHidden();
+    }
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const box = await locator.boundingBox();
       const viewport = page.viewportSize();
