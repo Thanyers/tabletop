@@ -74,6 +74,7 @@ PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใ�
 ## 5. ออก release
 
 1. แตก `release/X.Y.Z` จาก `origin/dev` แก้ได้แค่บั๊กและย้ายหัวข้อ `Unreleased` ใน `CHANGELOG.md` เป็น `X.Y.Z` · ถ้า `main` มี commit ที่ `dev` ไม่มี ให้ merge `origin/main` เข้า release branch ด้วย
+   - **หัวข้อ `## X.Y.Z` ที่ตัดแล้วห้ามแทรกบรรทัดเพิ่ม** (ผู้ใช้ตัดสิน 2026-10-22) — ของที่มาหลังตัดหัวข้อ เช่น บั๊กที่เจอระหว่างรอ CI ของ release ให้ขึ้นหัวข้อใหม่ใต้ `Unreleased` แล้วไปกับรุ่นถัดไป (หรือ hotfix PATCH) · หัวข้อที่ติด tag แล้วแก้ไม่ได้เด็ดขาด
    - ชุดเต็มของ [`validate.yml`](.github/workflows/validate.yml) (รวม browser suites ทั้งสาม) **รันใน CI บน release PR เอง** ไม่ต้องรันในเครื่องก่อน · ถ้าล้ม แก้บน release branch แล้ว push ใหม่
 2. **AI ตั้งเลขเวอร์ชันเอง** ไม่ต้องรอคนเคาะ · เขียนเหตุผลไว้ในบรรทัดแรกใต้หัวข้อ `## X.Y.Z` ของ `CHANGELOG.md` (bump อะไร + rollback ไปรุ่นไหนได้) · ตัดสินด้วยคำถาม "deploy แล้ว rollback ทันทีได้ไหม"
    - **PATCH** แก้บั๊ก/ข้อความ/CSS · **MINOR** ฟีเจอร์ใหม่ หรือ migration ที่เข้ากันได้ย้อนหลัง
