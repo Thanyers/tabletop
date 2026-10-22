@@ -204,8 +204,8 @@ export async function runGenerativeLiveAcceptance({ origin, actors, output, real
       const result = { scenario: scenario.id, result: 'RUNNING' };
       report.cases.push(result);
       try {
-        if (await owner.getByRole('link', { name: 'All tables', exact: true }).isVisible().catch(() => false)) {
-          await owner.getByRole('link', { name: 'All tables', exact: true }).click();
+        if (await owner.getByRole('link', { name: 'Tabletop home', exact: true }).isVisible().catch(() => false)) {
+          await owner.getByRole('link', { name: 'Tabletop home', exact: true }).click();
         }
         const created = owner.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
         await owner.getByRole('button', { name: 'Start a new table', exact: true }).click();
