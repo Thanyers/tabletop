@@ -1,4 +1,8 @@
 /* F037: shared sticky notes. Square corners, light from the top-left, paper that lifts off the table. */
+.tt-note-node { width: fit-content; height: fit-content; }
+.tt-note-node.is-selected .tt-note { outline: 2px solid #303d3a66; outline-offset: 4px; }
+.tt-note__drag { position: absolute; top: 0; left: 0; right: 0; height: 14px; cursor: grab; }
+.tt-note-node .tt-note__meta { cursor: grab; }
 .tt-note {
   --note-a: #ffe9a8;
   --note-b: #f0cf7d;

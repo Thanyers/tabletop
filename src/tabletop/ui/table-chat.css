@@ -41,6 +41,9 @@
 .tt-app .tt-chat-card__text { white-space: pre-wrap; }
 .tt-app .tt-chat-card__pending, .tt-app .tt-chat-card__done { color: var(--tt-muted); }
 .tt-app .tt-chat-card__error { color: var(--tt-red); }
+.tt-app .tt-chat-card__trace { font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; color: var(--tt-muted); }
+.tt-app .tt-chat-card__elapsed { font-size: 12px; color: var(--tt-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tt-app .tt-chat-card__elapsed-time { color: var(--tt-ink); }
 .tt-app .tt-chat-card__references { display: flex; flex-wrap: wrap; gap: 6px; }
 .tt-app .tt-chat-card__references button { padding: 4px 10px; border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-paper); font: inherit; font-size: 12px; cursor: pointer; }
 .tt-app .tt-chat-card__inputs { display: grid; gap: 4px; margin: 0; font-size: 13px; }

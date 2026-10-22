@@ -955,7 +955,7 @@ export class RoomRepository implements WorkspaceRepository {
           `UPDATE model_jobs SET status = ?, data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
            AND actor_id = ? AND status = 'running' AND revoked_at IS NULL
            AND json_extract(data, '$.kind') = 'table-assistant'`,
-          status, JSON.stringify(data), id, workspaceId, epoch, actorId,
+          status, JSON.stringify(status === 'failed' ? { ...data, failedAt: Date.now() } : data), id, workspaceId, epoch, actorId,
         );
       });
       const row = this.rows(
@@ -1150,7 +1150,7 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec(
         `UPDATE model_jobs SET status = 'failed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
          AND actor_id = ? AND status IN ('running', 'committing') AND revoked_at IS NULL`,
-        JSON.stringify({ ...job.data, failure, ...(reasons.length ? { reasons } : {}) }), id, workspaceId, epoch, actorId,
+        JSON.stringify({ ...job.data, failure, failedAt: Date.now(), ...(reasons.length ? { reasons } : {}) }), id, workspaceId, epoch, actorId,
       );
       return 'failed';
     }));

@@ -1,6 +1,7 @@
 import type { WorkspaceView } from '../shared/contracts';
 import { isSharedCanvasId, isSharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY, type VisibilityPolicy } from '../shared/visibility';
+import { isCanvasNoteId } from './canvas-flow';
 
 export interface CanvasLayoutNodeIdentity {
   id: string;
@@ -33,7 +34,7 @@ export function missingSharedCanvasNodeIds(
   limit = 24,
 ): string[] {
   return nodes
-    .filter((node) => !node.id.startsWith('table.note.') // F037: notes keep their own coordinates
+    .filter((node) => !isCanvasNoteId(node.id) // F037: notes keep their own coordinates
       && isSharedCanvasNodeForView(node.id, view)
       && knownPositions[node.id] === undefined
       && !pendingIds.has(node.id)

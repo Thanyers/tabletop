@@ -20,9 +20,9 @@ const MODEL = 'deepseek-flash';
 const MAX_API_KEY_CHARS = 4096;
 const MAX_PROMPT_CHARS = 4000;
 const MAX_REQUEST_BODY_BYTES = 48 * 1024;
-const MAX_RESPONSE_BYTES = 24 * 1024;
-const MAX_OUTPUT_TOKENS = 1024;
-const MAX_TIMEOUT_MS = 30_000;
+const MAX_RESPONSE_BYTES = 64 * 1024;
+const MAX_OUTPUT_TOKENS = 8192;
+const MAX_TIMEOUT_MS = 120_000;
 const MAX_ACTIVE_STATE_BYTES = 192 * 1024;
 const MAX_CONVERSATION_ENTRIES = 6;
 const MAX_CONVERSATION_BYTES = 16_384;
@@ -421,8 +421,15 @@ async function callProvider(apiKey: string, body: string, fetchImpl: typeof fetc
       return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
     }
     const choice = raw.choices[0];
-    if (!isObject(choice) || choice.finish_reason !== 'stop' || !isObject(choice.message)
+    if (!isObject(choice) || !isObject(choice.message)
       || choice.message.role !== 'assistant' || typeof choice.message.content !== 'string' || choice.message.tool_calls !== undefined) {
+      return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+    }
+    // Thinking models spend completion tokens before the JSON starts; a cut-off answer must stay distinguishable.
+    if (choice.finish_reason === 'length') {
+      return fail('MODEL_PROVIDER_OUTPUT_TRUNCATED', 'The model ran out of output tokens before finishing.');
+    }
+    if (choice.finish_reason !== 'stop') {
       return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
     }
     const usage = parseUsage(raw.usage);

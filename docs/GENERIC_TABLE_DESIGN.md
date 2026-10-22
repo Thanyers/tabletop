@@ -32,6 +32,8 @@ An explanation changes no table data. An action response is a typed proposal for
 
 Assistant requests reuse the existing Room model-job storage and shared billing ledger. Their purpose is distinct from owner draft jobs so completion and recovery cannot accidentally activate or propose a rule. No persistent schema is added for chat. Recovery mode stops new requests and confirmations while preserving room reads and resume.
 
+A failed assistant job keeps the specific cause instead of one generic sentence: the stored job carries `failure` (for example `MODEL_PROVIDER_TIMEOUT` or `MODEL_PROVIDER_OUTPUT_TRUNCATED`), sanitized validation reasons, and the time it ran, and the job view exposes them as `failureCode`, `failureReasons` and `durationMs` for both people and browser tests. The answer card repeats the code, a short request id and the elapsed time, so a screenshot is enough to tell a user mistake from a provider, billing or interruption fault. The provider allowance for this job is 120 seconds and 8,192 output tokens; a response cut off by the token ceiling is reported as `MODEL_PROVIDER_OUTPUT_TRUNCATED` rather than as an invalid response.
+
 ## Project continuity and context limits
 
 The durable unit is the room, not an AI request or a browser login session. Hosted rooms retain their active rules, shared records, membership and authoritative events when a browser closes or a login expires. Signing in again resumes the same room. A new message creates an assistant request within that room; it does not create a replacement room or reset play. Explicit reset/revocation continues to invalidate the old room epoch and its private assistant access.
