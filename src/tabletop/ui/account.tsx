@@ -64,15 +64,18 @@ export function SignedInWelcome({ user, busy, onOpenTables, onStart, onSignOut, 
   const openTables = (event: MouseEvent<HTMLAnchorElement>) => { event.preventDefault(); onOpenTables(); };
   const headerAction = <>
     <TablesLink className="tt-public-welcome__signin tt-public-welcome__tables-link" size={14} onClick={openTables} />
-    {user && <ProfileMenu user={user} busy={busy} onOpenTables={onOpenTables} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} />}
+    {user && <AccountMenu user={user} busy={busy} onOpenTables={onOpenTables} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} />}
   </>;
   return <PublicWelcome headerAction={headerAction} closingAction={<TablesLink className="tt-account-gate__google" size={16} onClick={openTables} />}>
     <WelcomePanel name={user?.name ?? null} onOpenTables={openTables} onStart={onStart} />
   </PublicWelcome>;
 }
 
-/** A round initials button in the landing header; opens the account menu (tables, language, admin, sign out). */
-function ProfileMenu({ user, busy, onOpenTables, onSignOut, onLoadAdminWorkspaces }: { user: GoogleAuthUser; busy: boolean; onOpenTables: () => void; onSignOut: () => void; onLoadAdminWorkspaces?: (after?: string) => Promise<AdminWorkspacePage> }) {
+/**
+ * A round initials button that opens the account menu: tables, the landing language (only inside the
+ * landing page), admin metadata and sign out. Outside the landing it reads the English copy.
+ */
+export function AccountMenu({ user, busy, onOpenTables, onSignOut, onLoadAdminWorkspaces }: { user: GoogleAuthUser; busy: boolean; onOpenTables?: () => void; onSignOut: () => void; onLoadAdminWorkspaces?: (after?: string) => Promise<AdminWorkspacePage> }) {
   const copy = useLandingCopy();
   const switchLanguage = useContext(LandingLanguageSwitchContext);
   const [open, setOpen] = useState(false);
@@ -99,10 +102,10 @@ function ProfileMenu({ user, busy, onOpenTables, onSignOut, onLoadAdminWorkspace
         <span className="tt-profile__avatar" style={{ ['--tt-avatar-color' as string]: cursorColor(user.id) }} aria-hidden="true">{initials(user.name)}</span>
         <span><strong>{user.name}</strong>{user.email && <small>{user.email}</small>}</span>
       </div>
-      <button role="menuitem" type="button" onClick={choose(onOpenTables)}><LayoutGrid size={15} aria-hidden="true" />{copy.profile.yourTables}</button>
-      <button role="menuitem" type="button" onClick={choose(switchLanguage)}><Languages size={15} aria-hidden="true" />{copy.profile.language}</button>
+      {onOpenTables && <button role="menuitem" type="button" onClick={choose(onOpenTables)}><LayoutGrid size={15} aria-hidden="true" />{copy.profile.yourTables}</button>}
+      {switchLanguage && <button role="menuitem" type="button" onClick={choose(switchLanguage)}><Languages size={15} aria-hidden="true" />{copy.profile.language}</button>}
       {user.isAdmin && onLoadAdminWorkspaces && <button role="menuitem" type="button" onClick={choose(() => setAdminOpen(true))}><ShieldCheck size={15} aria-hidden="true" />{copy.profile.admin}</button>}
-      <hr />
+      {(onOpenTables || switchLanguage || (user.isAdmin && onLoadAdminWorkspaces)) && <hr />}
       <button role="menuitem" type="button" className="tt-profile__signout" disabled={busy} onClick={choose(onSignOut)}><LogOut size={15} aria-hidden="true" />{busy ? copy.profile.signingOut : copy.profile.signOut}</button>
     </div>}
     {adminOpen && onLoadAdminWorkspaces && <AdminMetadataDialog onLoad={onLoadAdminWorkspaces} onClose={() => setAdminOpen(false)} />}

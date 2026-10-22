@@ -670,6 +670,13 @@ try {
   await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
   await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
   mark('Signed-in `/` survives reload as the landing page; /tables lists the last-opened table first and neither page auto-opens a table, even after reload');
+  // The /tables header shows only the avatar; sign out lives inside its menu.
+  const chooserHeader = dm.locator('.tt-chooser__top');
+  await expect(chooserHeader.getByRole('button', { name: /Sign out/ })).toHaveCount(0);
+  await chooserHeader.getByRole('button', { name: 'Account menu: DM', exact: true }).click();
+  await expect(dm.getByRole('menu', { name: 'Account menu', exact: true }).getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible();
+  await dm.keyboard.press('Escape');
+  mark('The /tables header shows a profile avatar instead of a sign-out button; Sign out is inside its menu');
   await tableList.getByRole('button', { name: /Dragon bridge/ }).click();
   await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();

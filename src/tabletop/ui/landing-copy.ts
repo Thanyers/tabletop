@@ -175,7 +175,7 @@ export const landingCopy: Record<LandingLanguage, LandingCopy> = { th, en };
 
 export const LandingLanguageContext = createContext<LandingLanguage>('en');
 /** Switches the landing language; provided by `PublicWelcome` so menus inside it can offer the same toggle. */
-export const LandingLanguageSwitchContext = createContext<() => void>(() => undefined);
+export const LandingLanguageSwitchContext = createContext<(() => void) | null>(null);
 
 export function useLandingCopy(): LandingCopy {
   return landingCopy[useContext(LandingLanguageContext)];
