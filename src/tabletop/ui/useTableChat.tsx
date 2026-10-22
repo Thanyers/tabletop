@@ -765,6 +765,9 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : 'AI answer',
       glyph: <Sparkles size={16} />,
       busy: card.phase === 'sending' || card.phase === 'waiting',
+      // F052: a chat answer is dated by this browser's clock (no command stamps it) and names the asker.
+      at: card.createdAt,
+      actorId: card.job?.askedBy ?? card.modelJob?.askedBy,
       position: { x: 760, y: 40 + index * 300 },
       content: <ChatCardContent
         card={card}

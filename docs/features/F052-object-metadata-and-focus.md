@@ -2,11 +2,12 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` (เริ่ม v1: ข้อมูล + UI + tests) |
+| สถานะ | `review` — v1 ครบ (ข้อมูล + UI + unit/browser evidence) เหลือ browser suite ของ repo |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | **MINOR** — เพิ่ม field เสริมแบบ optional ใน state, ไม่มี migration; rollback แล้วเวลาใหม่หายแต่โต๊ะยังทำงาน (ตัดสินด้วย "deploy แล้ว rollback ทันทีได้ไหม") |
 | งานในกระดาน | `F052-T1`…`T8` (เพิ่มแถวใน [PLAN.md](../../PLAN.md) แล้ว) |
 | ภาพดีไซน์ | [F052-objects-panel.html](../previews/F052-objects-panel.html) · [desktop, Created · newest](../previews/F052-objects-panel-desktop.jpg) / [Canvas order](../previews/F052-objects-panel-canvas-order.jpg) / [mobile](../previews/F052-objects-panel-mobile.jpg) |
+| ภาพจากแอปจริง | [panel 3 actions](../previews/F052-panel-3actions.jpg) · [desktop focus](../previews/F052-desktop-focus.jpg) · [mobile focus](../previews/F052-mobile-focus.jpg) · [280px](../previews/F052-panel-280.jpg) |
 
 ## ทำไม
 
@@ -241,20 +242,45 @@ resolver ต้อง deterministic และไม่เขียน state ร�
 
 **ไฟล์ hotspot:** `src/tabletop/ui/CanvasWorkspace.tsx` (ใหญ่สุด), `src/tabletop/domain/table.ts`, `src/tabletop/domain/evolution.ts`, `src/tabletop/domain/projections.ts`, `src/tabletop/shared/table-contracts.ts`, CSS 2 ไฟล์, `tests/*-browser.mjs`
 
+## สถานะงานและหลักฐาน (22 ต.ค. 2026)
+
+| งาน | สถานะ | หลักฐาน |
+| --- | --- | --- |
+| T1 | review | `src/tabletop/domain/table-card-meta.ts` + `TableState.cardMeta`; stamp ที่ activation/removeItem/source เท่านั้น; 21 unit tests |
+| T2 | review | resolver จาก revisions/source/note/chat; legacy backfill test; private participant ยังเห็น meta |
+| T3 | review | panel row สองบรรทัด + sort 4 แบบ + localStorage; unit sort/label 20 tests |
+| T4 | review | ปุ่ม `go-to-canvas-*`: desktop panel เปิดค้าง + safe-area fit; mobile ปิด panel + fit การ์ดเป้าหมาย + คืน focus |
+| T5 | review | meta บนหัวการ์ด plan/aux, เวลาในโน้ต, เวลาแชทจาก `card.createdAt`; clock 60s ตัวเดียว |
+| T6 | todo | ยังไม่ได้รัน browser suite ของ repo (`tests/*-browser.mjs`); ใช้ UI Lab/Chrome ตรวจแทน |
+| T7 | doing | เอกสาร + PLAN + spec + CHANGELOG; commit/push pending |
+
+**Commits:** `b4fb4df` (plan + previews) · `1d9893e` (backend data layer) · UI commit ตามหลังเอกสารนี้
+
+**ผลตรวจจริง (Node v22.23.2):**
+- `npm run typecheck` → exit 0
+- `npm test` → **88 passed | 1 skipped (89)**, **651 passed | 1 skipped (652)**, 58.31s
+- `npx vitest run src/tabletop/domain/table-card-meta.test.ts` → 21/21
+- `npx vitest run src/tabletop/ui/canvas-card-meta.test.ts` → 20/20
+- backend agent: `npm run test:cloudflare` → 127/127 (ก่อน UI)
+- UI Lab/Chrome: 1280×900, 390×844, sweep 280/320/414; desktop panel เปิดค้าง การ์ดอยู่ขวา panel (free area 344→1268), ไม่ expand, focus ที่ปุ่ม Go to; mobile panel ปิด + fit การ์ด + focus `Objects`; การ์ดซ่อน unhide+fit; sort จำค่า; title click เดิม; ไม่มี horizontal overflow ที่ 280/320/414
+
+**ยังไม่ได้ตรวจ:** browser suites ของ repo, reduced-motion emulation, chat card meta กับ AI จริง (AI ปิดในเครื่อง), Deleted section กับ server รุ่นใหม่ — ระบุใน PR
+
 ## Tests / verification
 
-- `npm test` (unit: store/domain; เพิ่ม `table-card-meta.test.ts`)
-- `npm run typecheck`, `npm run build`
-- `npm run test:cloudflare` (state hash/command paths)
-- browser: `tests/generative-canvas-browser.mjs`, `tests/generic-table-browser.mjs`, `tests/cloudflare-browser.mjs`, `tests/canvas-evolution-browser.mjs` + suite ใหม่ของ panel
-- preview: `node .../ui-gate/gate.mjs docs/previews/F052-objects-panel.html --full` → **14/16 measured, 4 skipped**; 2 ที่ fail เป็น deliberate: hardcoded values ใน mock (production ใช้ token) และ one-sided accent border ซึ่งเป็น design system เดิมของ Tabletop (`canvas-visual-flow.css:2-15`) ไม่ใช่ของใหม่จากฟีเจอร์นี้
+- [x] `npm run typecheck` → exit 0
+- [x] `npm test` → 651 passed / 1 skipped (652), 88 files passed / 1 skipped
+- [x] targeted: `table-card-meta.test.ts` 21/21 · `canvas-card-meta.test.ts` 20/20
+- [x] `npm run test:cloudflare` → 127/127 (backend layer, before UI)
+- [x] `npm run build` และ `npm run build:cloudflare` (dry-run) → ผ่าน (มี chunk-size warning เดิม)
+- [ ] repo browser suites (`tests/*-browser.mjs`) — T6; ใช้ UI Lab/Chrome ตรวจ flow แทนแล้ว
+- [x] preview gate: `ui-gate --full docs/previews/F052-objects-panel.html` → **14/16 measured, 4 skipped**; 2 fail เป็น deliberate: hardcoded values ใน mock (production ใช้ token) และ one-sided accent border ซึ่งเป็น design system เดิม (`canvas-visual-flow.css:2-15`)
 
 ## คำถามเปิด
 
-1. การเปลี่ยนข้อมูลใน collection (row) ควรนับเป็น "updated" ของการ์ดหรือไม่ (แผนนี้เลือกไม่นับ)
-2. จำ sort ต่อโต๊ะ (แผนนี้) หรือ global ต่อคน
-3. T8 AI-origin (auto vs reviewed vs pasted) จะทำต่อหลัง v1 หรือไม่ — ตอนนี้ตัดสินว่า **v1 ก่อน**
-4. อนาคตจะเปลี่ยน panel เป็น dock ถาวรหรือไม่ (นอก scope ของ F052)
+1. การเปลี่ยนข้อมูลใน collection (row) ควรนับเป็น "updated" ของการ์ดหรือไม่ (v1 เลือกไม่นับ)
+2. อนาคตจะเปลี่ยน panel เป็น dock ถาวรหรือไม่ (นอก scope ของ F052)
+3. T8 AI-origin (auto vs reviewed vs pasted) จะทำต่อเมื่อมีคำถามจริงจากผู้ใช้
 
 ## การตัดสินใจ
 

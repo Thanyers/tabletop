@@ -142,6 +142,31 @@
 .tt-flow-wrap .tt-canvas-objects__list button:hover { border-color: #d9e5df; background: #f3f8f4; }
 .tt-flow-wrap .tt-canvas-objects__list button[aria-current='location'] { border-color: #b9d0c3; color: #205e52; background: #edf6f1; }
 
+/* F052: an Objects row is two lines — card name, then origin and time — with three 32px actions beside it. */
+.tt-flow-wrap .tt-canvas-objects__sort { display: flex; align-items: center; gap: 8px; padding: 1px 2px 2px; }
+.tt-flow-wrap .tt-canvas-objects__sort > span { flex: 0 0 auto; color: var(--tt-muted, #667268); font: 600 9px var(--tt-mono); letter-spacing: .06em; text-transform: uppercase; }
+.tt-flow-wrap .tt-canvas-objects__sort select { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid #d9e3de; border-radius: 6px; color: #334e48; background: #fff; font: 600 11px Manrope, 'Noto Sans Thai', sans-serif; cursor: pointer; }
+.tt-flow-wrap .tt-canvas-objects__sort select:hover { border-color: #a9c7ba; }
+.tt-flow-wrap .tt-canvas-objects__sort select:focus-visible { outline: 2px solid var(--tt-blue); outline-offset: 2px; }
+.tt-flow-wrap .tt-canvas-objects__row.is-current { background: #edf6f1; box-shadow: inset 0 0 0 1px #b9d0c3; }
+.tt-flow-wrap .tt-canvas-objects__row[data-hidden] { opacity: .62; }
+.tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__main { display: flex; width: 100%; min-width: 0; min-height: 34px; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; color: #334e48; background: transparent; font: 650 12px/1.35 Manrope, 'Noto Sans Thai', sans-serif; text-align: left; cursor: pointer; }
+.tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__main:hover { border-color: #d9e5df; background: #f3f8f4; }
+.tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__row.is-current .tt-canvas-objects__main,
+.tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__row.is-current .tt-canvas-objects__main:hover { border-color: transparent; color: #205e52; background: transparent; }
+.tt-flow-wrap .tt-canvas-objects__glyph { display: grid; flex: 0 0 auto; place-items: center; width: 24px; height: 24px; border: 1px solid #d5e2dc; border-radius: 5px; color: var(--tt-moss); background: #f2f7f4; }
+.tt-flow-wrap .tt-canvas-objects__glyph[data-role='source'],
+.tt-flow-wrap .tt-canvas-objects__glyph[data-role='compute'] { border-color: #d7e2ea; color: var(--tt-blue); background: #f2f6f9; }
+.tt-flow-wrap .tt-canvas-objects__glyph[data-role='rules'] { border-color: #eadfc7; color: var(--tt-amber); background: #faf5ea; }
+.tt-flow-wrap .tt-canvas-objects__glyph[data-role='auxiliary'] { border-color: #e2e7e4; color: #7a8b84; background: #f6f8f6; }
+.tt-flow-wrap .tt-canvas-objects__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-flow-wrap .tt-canvas-objects__actions { display: inline-flex; align-items: center; gap: 1px; }
+.tt-flow-wrap .tt-canvas-objects__meta { grid-column: 1 / -1; overflow: hidden; padding: 0 8px 5px; color: var(--tt-muted, #667268); font: 400 10.5px/1.35 var(--tt-mono); text-overflow: ellipsis; white-space: nowrap; }
+.tt-flow-wrap .tt-canvas-objects__row.is-current .tt-canvas-objects__meta { color: #4f6c62; }
+
+/* F052: the card header keeps a single muted line under the title; the tooltip carries the full time. */
+.tt-flow-wrap .tt-canvas-node__meta { overflow: hidden; color: var(--tt-muted, #667268); font: 400 10.5px/1.3 var(--tt-mono); text-overflow: ellipsis; white-space: nowrap; }
+
 .tt-flow-wrap .tt-canvas-revision-change {
   position: relative;
   z-index: 1;
@@ -248,6 +273,8 @@
   .tt-flow-wrap .tt-canvas-node__capability { font-size: 7px; }
   .tt-flow-wrap .tt-canvas-tools { top: 7px; right: 7px; left: 7px; gap: 6px; }
   .tt-flow-wrap .tt-canvas-objects__trigger { min-height: 40px; padding-inline: 10px; }
+  .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__main { min-height: 38px; }
+  .tt-flow-wrap .tt-canvas-objects__meta { font-size: 10px; }
   .tt-flow-wrap .tt-canvas-revision-change { max-width: min(250px, calc(100% - 125px)); min-height: 40px; gap: 5px; padding: 5px 7px; }
   .tt-flow-wrap .tt-canvas-revision-change > b { font-size: 9px; }
 }

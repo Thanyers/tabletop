@@ -42,7 +42,7 @@
 | F046 | เก็บตารางที่ยังใช้ได้เมื่อการ์ด canvas ผิดเชิงความหมาย (semantic view salvage) | `review` | [F046](docs/features/F046-semantic-view-salvage.md) |
 | F047 | ลดการปฏิเสธร่างที่เกิดจากชื่อ/เพดานที่ไม่ได้บอก: normalize id, guide จากค่าคงที่เดียว, classifier 4 intent | `review` | [F047](docs/features/F047-generation-reliability.md) |
 | F048 | ลูกเต๋าที่ server ทอยให้เป็น parameter ของ action: `table.roll` + pending roll อายุ 10 นาทีผูก `dataRevision` + ใช้ครั้งเดียว + เก็บหน้าเต๋า/ผลลง event | `review` | [F048](docs/features/F048-roll-parameter.md) |
-| F052 | เวลา+ที่มาของการ์ดบน Objects panel + sort by created/updated + ปุ่มพาไปหาการ์ด โดยคง panel เดิม | `doing` | [F052](docs/features/F052-object-metadata-and-focus.md) |
+| F052 | เวลา+ที่มาของการ์ดบน Objects panel + sort by created/updated + ปุ่มพาไปหาการ์ด โดยคง panel เดิม | `review` | [F052](docs/features/F052-object-metadata-and-focus.md) |
 
 ## งาน
 
@@ -50,11 +50,11 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F052-T1 | `cardMeta` model + schema + stamp ตอน activation/command + prune/cap | `review` | lead (AI) | `feat/F052-object-metadata-and-focus` | `shared/table-contracts.ts`, `domain/table-card-meta.ts` (ใหม่), `domain/table.ts`, `domain/evolution.ts`, tests | — | unit 21 ผ่าน + typecheck |
 | F052-T2 | backfill resolver + projection tests | `review` | lead (AI) | 〃 | `domain/table-card-meta.ts`, `domain/projections.ts`, tests | T1 | legacy backfill + private projection ผ่าน |
-| F052-T3 | panel meta rows + sort + persistence | `doing` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS, tests | T1, T2 | คง panel เดิม 320px |
-| F052-T4 | ปุ่มไปที่การ์ด + safe-area fit + reduced motion | `todo` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS | T3 | ไม่ขยายการ์ด |
-| F052-T5 | meta line บนการ์ด plan/aux/note/chat + clock + a11y | `todo` | lead (AI) | 〃 | `CanvasWorkspace.tsx`, `NoteCard.tsx`, `useTableChat.tsx`, CSS | T1 | relative time 60s |
-| F052-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | testids เดิมต้องไม่พัง |
-| F052-T7 | spec/PLAN/verification docs | `todo` | lead (AI) | 〃 | `spec.md`, docs | T1–T6 | บันทึกคำสั่ง+ผลจริง |
+| F052-T3 | panel meta rows + sort + persistence | `review` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS, tests | T1, T2 | unit 20/20, UI Lab 320/280 |
+| F052-T4 | ปุ่มไปที่การ์ด + safe-area fit + reduced motion | `review` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS | T3 | desktop/mobile UI Lab ผ่าน |
+| F052-T5 | meta line บนการ์ด plan/aux/note/chat + clock + a11y | `review` | lead (AI) | 〃 | `CanvasWorkspace.tsx`, `NoteCard.tsx`, `useTableChat.tsx`, CSS | T1 | relative time 60s |
+| F052-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | ยังไม่รัน suite ของ repo |
+| F052-T7 | spec/PLAN/verification docs | `doing` | lead (AI) | 〃 | `spec.md`, docs | T1–T6 | อัปเดตแล้ว เหลือ PR |
 | F052-T8 | AI origin provenance (auto/reviewed/pasted/rollback) | `todo` | — | — | `shared/contracts.ts`, `domain/evolution.ts`, `cloudflare/room.ts` | v1 | เลื่อนหลัง v1 |
 | F046-T1 | semantic view salvage + link cleanup ใน domain (ไม่แตะ provider ที่ F045 ถือ) | `review` | lead (AI) | `feat/F046-view-salvage` | `src/tabletop/domain/table.ts`, `table-canvas-salvage.test.ts`, เอกสาร | — | ไม่เปลี่ยนสัญญา JSON/จำนวนครั้งที่เรียกโมเดล |
 | F047-T1 | normalize id ที่โมเดลตั้ง + เขียน reference ใหม่ทั้ง program/records/views | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/id-normalization.ts` (ใหม่), `server/providers/deepseek-changes.ts` | — | ชื่อชนกัน = ยกเลิกทั้งก้อน |
