@@ -1,0 +1,11 @@
+/* Loaded with the entry chunk so the Suspense fallback and the app's own loader look the same. */
+body:has(.tt-loading) { margin: 0; }
+.tt-loading { display: flex; min-height: 100dvh; align-items: center; justify-content: center; background: #f2f4f5; }
+.tt-loading__mark { display: grid; grid-template-columns: repeat(2, 22px); gap: 9px; animation: tt-loading-tilt 2.4s cubic-bezier(.65, 0, .35, 1) var(--tt-loading-offset, 0ms) infinite; }
+.tt-loading__mark i { width: 22px; height: 22px; border-radius: 6px; background: #243548; animation: tt-loading-tile 1.2s cubic-bezier(.45, 0, .55, 1) var(--tt-loading-offset, 0ms) infinite; }
+.tt-loading__mark i:nth-child(2) { background: #24796b; animation-delay: calc(var(--tt-loading-offset, 0ms) + .15s); }
+.tt-loading__mark i:nth-child(4) { border-radius: 50%; background: #d49a47; animation-delay: calc(var(--tt-loading-offset, 0ms) + .3s); }
+.tt-loading__mark i:nth-child(3) { background: #6f8190; animation-delay: calc(var(--tt-loading-offset, 0ms) + .45s); }
+@keyframes tt-loading-tile { 0%, 100% { transform: scale(1); opacity: 1; } 40% { transform: scale(.62); opacity: .45; } }
+@keyframes tt-loading-tilt { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(85deg); } }
+@media (prefers-reduced-motion: reduce) { .tt-loading__mark { transform: rotate(-5deg); } .tt-loading__mark, .tt-loading__mark i { animation: none; } }
