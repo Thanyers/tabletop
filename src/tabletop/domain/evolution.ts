@@ -15,8 +15,10 @@ import { applyInvoiceOperations, invoiceChangeSchema, invoiceSourceHash, reconci
 import { encounterRuleSchema } from './encounter';
 import { calculatePhysics, physicsParamsSchema } from './physics';
 import { assert, canonicalJson, hash, parsePayload, requirePermission } from './helpers';
+import type { Permission } from '../shared/permissions';
 import { makeTeachingQuestionId } from './teaching';
-import { applyTableChange, tableChangeIssues, tableChangeSchema } from './table';
+import { applyTableChange, removeTableRuleItem, tableChangeIssues, tableChangeSchema } from './table';
+import { diffCardMeta, liveCanvasCardIds, pruneCardMeta, ruleItemCardId, touchCardMeta } from './table-card-meta';
 import { jsonWithinBudget } from '../shared/json-budget';
 import { expressionWithinBounds } from '../runtime/generative';
 
@@ -277,6 +279,11 @@ function nextStateWithChange(state: DomainState, candidate: Candidate, ctx: Acto
     next.revisions = next.revisions.slice(-20);
     while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
   }
+  // F054: activation is the one place program cards are diffed. It runs after the revision is stored,
+  // and it never runs inside applyTableChange, so a simulation stays free of timestamps.
+  if (state.kind === 'table' && next.kind === 'table' && candidate.change.kind === 'table') {
+    next.cardMeta = pruneCardMeta(diffCardMeta(state, next.program, ctx.now, ctx.actorId, revision), liveCanvasCardIds(next));
+  }
   if (next.candidate) next.candidate.status = 'active';
   return next;
 }
@@ -327,6 +334,8 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     const change = restoreRevision(state, input.revision);
     return { state: proposeCandidate(state, change, ctx), label: `Rollback candidate prepared from revision ${input.revision}; approval and activation are still required.` };
   }
+  if (type === 'evolve.autoApply') return autoApplyCandidate(state, payload, ctx);
+  if (type === 'evolve.removeItem') return removeRuleItem(state, payload, ctx);
   if (type === 'evolve.simulate') {
     requireCaseRole(state, ctx, 'rules.approve');
     parsePayload(noPayloadSchema, payload);
@@ -401,4 +410,70 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     return { state: next, label: `Candidate activated as rule revision ${next.ruleRevision}.` };
   }
   return null;
+}
+
+/**
+ * F039: apply the asker's own table draft in one command. It runs the same simulate → validate → approve →
+ * activate steps as the manual review, so every check still applies; only the permission differs, because
+ * anyone who may draft rules may put their own draft into use. A draft that fails a check stays a candidate
+ * with its check results, for manual review.
+ */
+function autoApplyCandidate(state: DomainState, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } {
+  requireCaseRole(state, ctx, 'rules.draft');
+  parsePayload(noPayloadSchema, payload);
+  // An encounter keeps its pause rule: rules cannot go live while the DM has paused it.
+  assert(!(state.kind === 'encounter' && state.paused !== undefined), 'ENCOUNTER_PAUSED', 'Resume the encounter before new rules can be applied.');
+  assert(state.candidate, 'CANDIDATE_NOT_FOUND', 'There is no rule draft to apply.');
+  assert(state.candidate.createdBy === ctx.actorId, 'FORBIDDEN', 'Only the person who asked for this draft can apply it automatically.');
+  assert(state.candidate.status === 'draft', 'CANDIDATE_NOT_DRAFT', 'This draft is already being reviewed.');
+  const reviewer: ActorContext = { ...ctx, permissions: new Set<Permission>([...(ctx.permissions ?? []), 'rules.approve']) };
+  const step = (current: DomainState, command: string) => {
+    const result = handleEvolutionCommand(current, command, {}, reviewer);
+    if (!result) throw new DomainError('INVALID_COMMAND', 'The review step is not available.');
+    return result;
+  };
+  const simulated = step(state, 'evolve.simulate').state;
+  const validated = step(simulated, 'evolve.validate');
+  const failed = validated.state.candidate?.simulation?.checks.filter((check) => !check.passed) ?? [];
+  if (validated.state.candidate?.status !== 'validated' || failed.length > 0) {
+    return { state: validated.state, label: `Rules need a manual review: ${failed.map((check) => check.message).join(' ') || 'a check did not pass.'}` };
+  }
+  const approved = step(validated.state, 'evolve.approve').state;
+  const active = step(approved, 'evolve.activate').state;
+  return { state: active, label: `Rules applied automatically as rule revision ${active.ruleRevision}.` };
+}
+
+const removeItemSchema = z.strictObject({ kind: z.enum(['action', 'invariant', 'view', 'collection']), id: z.string().min(1).max(80) });
+
+/** F039: take one rule out of the active table program as a new rule revision, so history can restore it. */
+function removeRuleItem(state: DomainState, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } {
+  requireCaseRole(state, ctx, 'rules.draft');
+  assert(state.kind === 'table', 'RULE_ITEM_UNSUPPORTED', 'Only table rules can be removed one by one.');
+  const input = parsePayload(removeItemSchema, payload);
+  const next = removeTableRuleItem(state, input.kind, input.id);
+  if (input.kind === 'collection') next.dataRevision += 1;
+  const revision = next.ruleRevision + 1;
+  next.ruleRevision = revision;
+  const program = structuredClone(next.program!);
+  next.revisions.push({
+    revision,
+    change: { kind: 'table', program: structuredClone(program), initialRecords: {} },
+    activatedAt: ctx.now,
+    actorId: ctx.actorId,
+    candidateHash: hash(ctx, { workspaceId: ctx.workspaceId, removed: input, revision, now: ctx.now }),
+    snapshot: { kind: 'table', program },
+  });
+  next.revisions = next.revisions.slice(-20);
+  while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
+  // F054: the removed card loses its meta; the Rules card (and the Actions card for an action) records the change.
+  let cardMeta = next.cardMeta ?? {};
+  const removedCardId = ruleItemCardId(input.kind, input.id);
+  if (removedCardId) {
+    cardMeta = { ...cardMeta };
+    delete cardMeta[removedCardId];
+  }
+  cardMeta = touchCardMeta(cardMeta, 'table.rules', ctx.now, ctx.actorId, 'ai', revision);
+  if (input.kind === 'action') cardMeta = touchCardMeta(cardMeta, 'table.actions', ctx.now, ctx.actorId, 'ai', revision);
+  next.cardMeta = pruneCardMeta(cardMeta, liveCanvasCardIds(next));
+  return { state: next, label: `Removed a ${input.kind} from the rules as rule revision ${revision}.` };
 }

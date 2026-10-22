@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Background, BackgroundVariant, Controls, Handle, MarkerType, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
+import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, Focus, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2, Star, Pencil, Search } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
+import type { CanvasCardMeta } from '../shared/table-contracts';
 import type { WorkbenchProps } from './types';
+import { resolveCardMeta } from '../domain/table-card-meta';
+import { CARD_SORT_OPTIONS, cardMetaDescription, cardMetaLabel, parseCardSortMode, sortCardRows, useCardNow, type CardSortMode } from './canvas-card-meta';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
 import { viewerCan } from '../shared/permissions';
+import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder, registerCanvasPointFocus } from './canvas-object-finder';
+import { isSharedCanvasId } from '../shared/canvas-layout-ids';
 import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
 import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
@@ -25,11 +30,25 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   capability: string;
   selected: boolean;
   opened: boolean;
+  /** F054: when this card was created and last changed, resolved from the table, absent when nothing is known. */
+  meta?: CanvasCardMeta;
+  createdByName?: string;
+  updatedByName?: string;
+  /** True when the viewer is the person the meta line names, so its tooltip can say "(you)". */
+  metaSelf?: boolean;
   onToggleOpen: (id: string) => void;
   /** Take the card off this viewer's canvas; the Objects panel brings it back. */
   onHide: (id: string) => void;
+  /** Point the table chat at this card; absent where there is no table chat. */
+  onReference?: (id: string, title: string) => void;
+  /** Rename this card for everyone; absent when this viewer cannot. A blank title brings back the original. */
+  onRename?: (id: string, title: string) => void;
   onSelectNode: (id: string) => void;
+  /** Save the size (and moved corner) after this viewer drags a card edge. */
+  onResize: (id: string, box: CanvasBox) => void;
 }
+
+interface CanvasBox { x: number; y: number; width: number; height: number }
 
 interface PlanCanvasNodeData extends CanvasNodeBaseData {
   kind: 'plan';
@@ -65,6 +84,10 @@ export interface CanvasAuxiliaryObject {
   eyebrow?: string;
   /** A small, muted line under the title, e.g. who asked for an AI chat card. */
   subtitle?: string;
+  /** F054: when this card was created, for cards the table state does not date (chat answers). */
+  at?: number;
+  /** F054: who created it, so the meta line can name the asker. Resolved to a name at render time. */
+  actorId?: string;
   position?: { x: number; y: number };
   content?: ReactNode;
   renderContent?: (expanded: boolean) => ReactNode;
@@ -96,6 +119,103 @@ interface OpenObjectFocusRequest {
   timer?: number;
 }
 
+/** F054: the go-to button waits for React Flow to measure the card before it moves the camera. */
+interface LocateObjectFocusRequest {
+  id: string;
+  attempts: number;
+  /** A narrow screen fits the one card to the whole canvas; a wide one keeps the panel open. */
+  narrow: boolean;
+  frame?: number;
+  timer?: number;
+}
+
+/** ~5.8s of frames at 32ms, the same patience the open-and-focus request has. */
+const LOCATE_FOCUS_MAX_ATTEMPTS = 180;
+const NARROW_CANVAS_QUERY = '(max-width: 760px)';
+
+/** One row of the Objects panel: a card, its time line, and whether this viewer closed it. */
+interface CanvasCardRow {
+  id: string;
+  title: string;
+  hidden: boolean;
+  capability: string;
+  kind: CanvasNodeData['kind'];
+  meta?: CanvasCardMeta;
+  createdByName?: string;
+  updatedByName?: string;
+  metaSelf?: boolean;
+}
+
+/** F054: names are never stored in state; they are resolved from the current members, like NoteCard does. */
+function memberName(view: WorkspaceView, actorId: string | undefined): string | undefined {
+  if (!actorId) return undefined;
+  if (actorId === view.actor.actorId) return view.actor.name;
+  return view.members.find((member) => member.actorId === actorId)?.name;
+}
+
+/** The display names and the "(you)" flag for one card's meta line. */
+function cardMetaIdentity(view: WorkspaceView, meta: CanvasCardMeta | undefined): Pick<CanvasCardRow, 'createdByName' | 'updatedByName' | 'metaSelf'> {
+  if (!meta) return {};
+  const createdByName = memberName(view, meta.createdBy);
+  const updatedByName = memberName(view, meta.updatedBy);
+  const lastActor = meta.updatedAt > meta.createdAt ? meta.updatedBy : meta.createdBy;
+  return {
+    ...(createdByName === undefined ? {} : { createdByName }),
+    ...(updatedByName === undefined ? {} : { updatedByName }),
+    metaSelf: lastActor !== undefined && lastActor === view.actor.actorId,
+  };
+}
+
+/** The person a meta line names: whoever touched the card last. */
+function lastActorName(meta: CanvasCardMeta | undefined, createdByName?: string, updatedByName?: string): string | undefined {
+  return meta && meta.updatedAt > meta.createdAt ? updatedByName : createdByName;
+}
+
+/** Cards deleted for everyone at this table (soft delete in the shared layout), oldest first. */
+function trashedForView(view: WorkspaceView): string[] {
+  if (view.domain.kind !== 'table') return [];
+  const trashed = (view.domain as unknown as { canvasLayout?: { trashed?: unknown } }).canvasLayout?.trashed;
+  return trashed && typeof trashed === 'object' && !Array.isArray(trashed) ? Object.keys(trashed) : [];
+}
+
+/** Card names set at this table (shared layout); they replace the card's own title for everyone. */
+function titlesForView(view: WorkspaceView): Readonly<Record<string, string>> {
+  if (view.domain.kind !== 'table') return {};
+  const titles = (view.domain as unknown as { canvasLayout?: { titles?: unknown } }).canvasLayout?.titles;
+  if (!titles || typeof titles !== 'object' || Array.isArray(titles)) return {};
+  return Object.fromEntries(Object.entries(titles).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0));
+}
+
+/** Mirrors the server rule: anyone renames chat cards; the table's own shared cards are named by the owner. */
+function canRename(view: WorkspaceView, id: string): boolean {
+  if (view.domain.kind !== 'table' || !isSharedCanvasId(id)) return false;
+  if (/^table\.chat\./u.test(id)) return view.actor.role === 'owner' || view.actor.role === 'participant';
+  return view.actor.role === 'owner';
+}
+
+const starStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-starred:${workspaceKey}`;
+
+/** Cards this viewer starred to find quickly; kept per table in this browser and listed first in Objects. */
+function readStarred(workspaceKey: string): ReadonlySet<string> {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(starStorageKey(workspaceKey)) ?? '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string' && id.length <= 240).slice(0, 200) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeStarred(workspaceKey: string, ids: ReadonlySet<string>): void {
+  try { window.localStorage.setItem(starStorageKey(workspaceKey), JSON.stringify([...ids].slice(-200))); } catch { /* best effort */ }
+}
+
+/** Mirrors the server rule: anyone tidies chat cards; views, data tables and files are the owner's. */
+function canTrash(view: WorkspaceView, id: string): boolean {
+  if (view.domain.kind !== 'table') return false;
+  if (/^table\.chat\.[a-f0-9]{64}$/u.test(id)) return view.actor.role === 'owner' || view.actor.role === 'participant';
+  return (/^table\.(view|collection)\./u.test(id) || id === 'table.sources') && view.actor.role === 'owner';
+}
+
 function sharedLayoutForView(view: WorkspaceView): SharedCanvasLayout | null {
   if (view.domain.kind !== 'table') return null;
   const raw = (view.domain as unknown as { canvasLayout?: unknown }).canvasLayout;
@@ -120,6 +240,54 @@ function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean }
 
 const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
 const hiddenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-hidden:${workspaceKey}`;
+const seenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-seen:${workspaceKey}`;
+const sizeStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-size:${workspaceKey}`;
+type CardSizes = Readonly<Record<string, { width: number; height: number }>>;
+
+/** Card sizes this viewer set by dragging an edge. Kept per table in this browser, like closed cards. */
+function readCardSizes(workspaceKey: string): CardSizes {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(sizeStorageKey(workspaceKey)) ?? '{}');
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+    const sizes: Record<string, { width: number; height: number }> = {};
+    for (const [id, value] of Object.entries(stored as Record<string, unknown>).slice(0, 200)) {
+      const size = value as { width?: unknown; height?: unknown } | null;
+      const width = Number(size?.width);
+      const height = Number(size?.height);
+      if (id.length <= 240 && width >= 200 && width <= 4000 && height >= 100 && height <= 4000) sizes[id] = { width, height };
+    }
+    return sizes;
+  } catch {
+    return {};
+  }
+}
+
+function writeCardSizes(workspaceKey: string, sizes: CardSizes): void {
+  try { window.localStorage.setItem(sizeStorageKey(workspaceKey), JSON.stringify(sizes)); } catch { /* best effort */ }
+}
+
+/**
+ * Cards that start closed on a table that has its own views: the raw rules, actions, data tables, people and
+ * history. The generated views, chat and notes stay open. Each card is decided once, when this browser first
+ * sees it, so a card the person opened again stays open.
+ */
+function startsClosed(id: string, ids: readonly string[]): boolean {
+  if (!ids.some((other) => other.startsWith('table.view.'))) return false;
+  return id === 'table.rules' || id === 'table.actions' || id.startsWith('table.collection.') || id === 'workspace.people' || id === 'workspace.history';
+}
+
+function readSeenObjects(workspaceKey: string): Set<string> {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(seenStorageKey(workspaceKey)) ?? '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string').slice(0, 400) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeenObjects(workspaceKey: string, ids: ReadonlySet<string>): void {
+  try { window.localStorage.setItem(seenStorageKey(workspaceKey), JSON.stringify([...ids].slice(-400))); } catch { /* best effort */ }
+}
 
 function readHiddenObjects(workspaceKey: string): ReadonlySet<string> {
   try {
@@ -135,6 +303,21 @@ function writeHiddenObjects(workspaceKey: string, ids: ReadonlySet<string>): voi
     if (ids.size === 0) window.localStorage.removeItem(hiddenStorageKey(workspaceKey));
     else window.localStorage.setItem(hiddenStorageKey(workspaceKey), JSON.stringify([...ids].slice(0, 200)));
   } catch { /* private mode: closing still works until reload */ }
+}
+
+/** F054: the Objects order this viewer picked for this table; an unreadable value falls back to the default. */
+const sortStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-sort:${workspaceKey}`;
+
+function readCardSortMode(workspaceKey: string): CardSortMode {
+  try {
+    return parseCardSortMode(window.localStorage.getItem(sortStorageKey(workspaceKey)));
+  } catch {
+    return parseCardSortMode(null);
+  }
+}
+
+function writeCardSortMode(workspaceKey: string, mode: CardSortMode): void {
+  try { window.localStorage.setItem(sortStorageKey(workspaceKey), mode); } catch { /* best effort */ }
 }
 
 function readCanvasLayout(workspaceKey: string): SavedCanvasLayout {
@@ -270,12 +453,51 @@ function CanvasNodeBody({ children }: { children: ReactNode }) {
   return <div ref={ref} className={`tt-canvas-node__body nodrag nopan nokey${scrollable ? ' nowheel' : ''}`}>{children}</div>;
 }
 
+/** F054: one muted line under a card title. Only this line follows the shared minute clock. */
+function CardMetaLine({ meta, createdByName, updatedByName, self }: { meta?: CanvasCardMeta; createdByName?: string; updatedByName?: string; self?: boolean }) {
+  const now = useCardNow();
+  if (!meta) return null;
+  const options = { now, actorName: lastActorName(meta, createdByName, updatedByName), self };
+  return <span className="tt-canvas-node__meta" title={cardMetaDescription(meta, options)}>{cardMetaLabel(meta, options)}</span>;
+}
+
+/** F054: the second line of an Objects row, which follows the same clock without re-rendering the panel. */
+function CardRowMeta({ row }: { row: CanvasCardRow }) {
+  const now = useCardNow();
+  const options = { now, actorName: lastActorName(row.meta, row.createdByName, row.updatedByName), self: row.metaSelf };
+  return <span className="tt-canvas-objects__meta" data-testid={`canvas-object-meta-${row.id}`} title={cardMetaDescription(row.meta, options)}>{cardMetaLabel(row.meta, options)}</span>;
+}
+
 function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const startEditing = () => { if (data.onRename) setDraft(data.title); };
+  const finish = (save: boolean) => {
+    if (draft === null) return;
+    const title = draft.replace(/\s+/gu, ' ').trim().slice(0, 120);
+    setDraft(null);
+    if (save && title !== data.title) data.onRename?.(data.id, title);
+  };
   return <header className="tt-canvas-node__head">
     <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
     <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
-    <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
+    <span className="tt-canvas-node__identity">
+      {draft !== null
+        ? <input className="tt-canvas-node__title-input nodrag nopan nokey" data-testid={`card-title-input-${data.id}`} aria-label={`New name for ${data.title}`} maxLength={120} autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => finish(true)} onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+          if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+        }} />
+        : <span className="tt-canvas-node__title" title={data.onRename ? `${data.title} (double-click to rename)` : data.title} onDoubleClick={(event) => { if (!data.onRename) return; event.stopPropagation(); startEditing(); }}>{data.title}</span>}
+      {data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}
+      {data.meta && <CardMetaLine meta={data.meta} createdByName={data.createdByName} updatedByName={data.updatedByName} self={data.metaSelf} />}
+    </span>
     <span className="tt-canvas-node__controls">
+      {data.onRename && draft === null && <button className="tt-canvas-node__open tt-canvas-node__icon tt-canvas-node__rename nodrag nopan nokey" type="button" data-testid={`rename-card-${data.id}`} aria-label={`Rename ${data.title}`} title="Rename for everyone (leave blank for the original name)" onClick={(event) => { event.stopPropagation(); startEditing(); }}>
+        <Pencil size={14} aria-hidden="true" />
+      </button>}
+      {data.onReference && <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-label={`Ask about ${data.title} in chat`} title="Ask about or change this card in the chat" onClick={(event) => { event.stopPropagation(); data.onReference?.(data.id, data.title); }}>
+        <MessageSquareText size={15} aria-hidden="true" />
+      </button>}
       <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? `Minimize ${data.title}` : `Open ${data.title}`} title={data.opened ? 'Minimize' : 'Expand'} onKeyDown={(event) => {
         if (event.key === 'Escape' && data.opened) {
           event.preventDefault();
@@ -292,7 +514,36 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
   </header>;
 }
 
+/** A card with a size from dragging its edge; without one it keeps its role width and grows with content. */
+function sizedNode(size: { width: number; height: number } | undefined): Partial<CanvasNode> {
+  return size ? { width: size.width, height: size.height, className: 'is-sized' } : { width: undefined, height: undefined, className: undefined };
+}
+
+/** Edges and corners appear once the card is selected; drag them to resize. */
+function CanvasCardResizer({ data, selected }: { data: CanvasNodeData; selected: boolean }) {
+  const start = useRef<CanvasBox | null>(null);
+  return <NodeResizer
+    isVisible={selected}
+    minWidth={260}
+    minHeight={140}
+    lineClassName="tt-canvas-resize-line"
+    handleClassName="tt-canvas-resize-handle"
+    onResizeStart={(_event, box) => { start.current = box; }}
+    onResizeEnd={(_event, box) => {
+      // A click on an edge without dragging keeps the card's natural size.
+      const from = start.current;
+      start.current = null;
+      if (from && Math.abs(from.width - box.width) < 2 && Math.abs(from.height - box.height) < 2) return;
+      data.onResize(data.id, box);
+    }}
+  />;
+}
+
+/** Cards picked with Shift+click, so right-click can hide (or ask about, or delete) them together. */
+const MultiSelectionContext = createContext<ReadonlySet<string>>(new Set());
+
 function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
+  const multiSelected = useContext(MultiSelectionContext).has(data.id);
   if (data.kind === 'plan' && isCanvasNoteId(data.id)) {
     const note = data.view.domain.kind === 'table'
       ? data.view.domain.notes?.find((item) => `table.note.${item.id}` === data.id)
@@ -313,9 +564,9 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
   }
 
   if (data.kind === 'auxiliary') {
-    return (
+    return (<>
       <article
-        className={'tt-canvas-node tt-canvas-node--auxiliary tt-canvas-node--role-auxiliary' + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+        className={'tt-canvas-node tt-canvas-node--auxiliary tt-canvas-node--role-auxiliary' + (selected ? ' is-selected' : '') + (multiSelected ? ' is-multi-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
         data-canvas-editor
         data-testid={data.opened ? 'canvas-object-editor' : undefined}
@@ -338,16 +589,17 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         <CanvasObjectHeader data={data} />
         <CanvasNodeBody>{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</CanvasNodeBody>
       </article>
-    );
+      <CanvasCardResizer data={data} selected={selected} />
+    </>);
   }
 
   const inputPorts = Object.keys(data.spec.inputs);
   const outputPorts = Object.keys(data.outputs);
   const role = canvasRole(data.capability, data.kind);
 
-  return (
+  return (<>
     <article
-      className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + ' tt-canvas-node--role-' + role + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+      className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + ' tt-canvas-node--role-' + role + (selected ? ' is-selected' : '') + (multiSelected ? ' is-multi-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
         data-canvas-editor
         data-testid={data.opened ? 'canvas-object-editor' : undefined}
@@ -373,7 +625,9 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} onEditRules={data.onEditRules} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
       </CanvasNodeBody>
     </article>
-  );
+    {/* After the card so the edges sit on top of it. */}
+    <CanvasCardResizer data={data} selected={selected} />
+  </>);
 }
 
 const nodeTypes: NodeTypes = { tabletopObject: CanvasObjectNode };
@@ -484,14 +738,26 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       seedAttemptCounts.clear();
     };
   }, [workspaceKey]);
+  // F054: a "go to card" camera move that is still waiting for the card to be measured.
+  const pendingLocateFocusRef = useRef<LocateObjectFocusRequest | null>(null);
+  const cancelPendingLocateFocus = useCallback(() => {
+    const request = pendingLocateFocusRef.current;
+    if (!request) return;
+    if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
+    if (request.timer !== undefined) window.clearTimeout(request.timer);
+    pendingLocateFocusRef.current = null;
+  }, []);
+  useEffect(() => () => cancelPendingLocateFocus(), [cancelPendingLocateFocus]);
   const cancelPendingOpenObjectFocus = useCallback(() => {
+    // Any pointer or key interaction that cancels the open-and-focus request cancels the camera move too.
+    cancelPendingLocateFocus();
     const request = pendingOpenObjectFocusRef.current;
     if (!request) return;
     if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
     if (request.timer !== undefined) window.clearTimeout(request.timer);
     pendingOpenObjectFocusRef.current = null;
     canvasInteractionRevisionRef.current += 1;
-  }, []);
+  }, [cancelPendingLocateFocus]);
   const requestOpenObjectFocus = useCallback((id: string, requireOpened: boolean, returnFocusToObjects: boolean) => {
     cancelPendingOpenObjectFocus();
     const sequence = ++openObjectFocusSequenceRef.current;
@@ -515,17 +781,96 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const allowedNodeIds = useMemo(() => visibleNodeIds ? new Set(visibleNodeIds) : null, [visibleNodeIds]);
   // Cards this viewer closed. Kept per table in this browser; the Objects panel lists them to bring them back.
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => readHiddenObjects(workspaceKey));
+  const [cardSizes, setCardSizes] = useState<CardSizes>(() => readCardSizes(workspaceKey));
+  // F054: the Objects order, remembered per table in this browser like closed cards and sizes.
+  const [cardSort, setCardSort] = useState<CardSortMode>(() => readCardSortMode(workspaceKey));
   const hiddenScopeRef = useRef(workspaceKey);
   if (hiddenScopeRef.current !== workspaceKey) {
     hiddenScopeRef.current = workspaceKey;
     setHiddenIds(readHiddenObjects(workspaceKey));
+    setCardSizes(readCardSizes(workspaceKey));
+    setCardSort(readCardSortMode(workspaceKey));
   }
-  const listedPlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds]);
+  const trashedList = useMemo(() => trashedForView(view), [view]);
+  const trashedIds = useMemo(() => new Set(trashedList), [trashedList]);
+  const customTitles = useMemo(() => titlesForView(view), [view]);
+  const listedPlanNodes = useMemo(() => plan.nodes
+    .filter((spec) => spec.visible !== false && !trashedIds.has(spec.id) && (!allowedNodeIds || allowedNodeIds.has(spec.id)))
+    .map((spec) => customTitles[spec.id] ? { ...spec, title: customTitles[spec.id] } : spec), [plan.nodes, allowedNodeIds, trashedIds, customTitles]);
   const visiblePlanNodes = useMemo(() => listedPlanNodes.filter((spec) => !hiddenIds.has(spec.id)), [listedPlanNodes, hiddenIds]);
   const planIds = useMemo(() => new Set(plan.nodes.map((spec) => spec.id)), [plan.nodes]);
   const planNodesById = useMemo(() => new Map(plan.nodes.map((spec) => [spec.id, spec])), [plan.nodes]);
-  const listedAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds]);
+  const listedAuxiliaryObjects = useMemo(() => auxiliaryObjects
+    .filter((object) => !planIds.has(object.id) && !trashedIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id)))
+    .map((object) => customTitles[object.id] ? { ...object, title: customTitles[object.id] } : object), [auxiliaryObjects, planIds, allowedNodeIds, trashedIds, customTitles]);
+  // Deleted cards that still exist, newest first, for the Deleted section of Objects.
+  const deletedObjects = useMemo(() => {
+    const titles = new Map<string, string>([
+      ...plan.nodes.map((spec) => [spec.id, spec.title] as [string, string]),
+      ...auxiliaryObjects.map((object) => [object.id, object.title] as [string, string]),
+    ]);
+    return [...trashedList].reverse().filter((id) => titles.has(id)).map((id) => ({ id, title: customTitles[id] ?? titles.get(id) ?? id }));
+  }, [trashedList, plan.nodes, auxiliaryObjects, customTitles]);
   const visibleAuxiliaryObjects = useMemo(() => listedAuxiliaryObjects.filter((object) => !hiddenIds.has(object.id)), [listedAuxiliaryObjects, hiddenIds]);
+  // F054: read-only per-card time. Table cards resolve from stored meta or retained revisions; chat cards
+  // carry their own creation time because no command ever stamps them. Hidden cards keep their meta.
+  const cardMetaById = useMemo(() => {
+    const table = view.domain.kind === 'table' ? view.domain : null;
+    const resolved = new Map<string, CanvasCardMeta>();
+    const record = (id: string, meta: CanvasCardMeta | undefined) => { if (meta) resolved.set(id, meta); };
+    for (const spec of listedPlanNodes) record(spec.id, table ? resolveCardMeta(table, view, spec.id) : undefined);
+    for (const object of listedAuxiliaryObjects) {
+      if (object.at !== undefined) {
+        record(object.id, {
+          createdAt: object.at,
+          updatedAt: object.at,
+          ...(object.actorId ? { createdBy: object.actorId, updatedBy: object.actorId } : {}),
+          origin: 'ai',
+          source: 'recorded',
+        });
+        continue;
+      }
+      record(object.id, table ? resolveCardMeta(table, view, object.id) : undefined);
+    }
+    return resolved;
+  }, [listedAuxiliaryObjects, listedPlanNodes, view]);
+  /** Every card the panel lists, hidden ones included, in canvas order; the panel sorts a copy. */
+  const cardRows = useMemo<CanvasCardRow[]>(() => [
+    ...listedPlanNodes.map((spec) => {
+      const meta = cardMetaById.get(spec.id);
+      return {
+        id: spec.id, title: spec.title, hidden: hiddenIds.has(spec.id), capability: spec.capability, kind: 'plan' as const,
+        ...(meta ? { meta } : {}), ...cardMetaIdentity(view, meta),
+      };
+    }),
+    ...listedAuxiliaryObjects.map((object) => {
+      const meta = cardMetaById.get(object.id);
+      return {
+        id: object.id, title: object.title, hidden: hiddenIds.has(object.id), capability: object.eyebrow ?? 'table tool', kind: 'auxiliary' as const,
+        ...(meta ? { meta } : {}), ...cardMetaIdentity(view, meta),
+      };
+    }),
+  ], [cardMetaById, hiddenIds, listedAuxiliaryObjects, listedPlanNodes, view]);
+  // First sight of a card decides whether it starts closed (see startsClosed).
+  useEffect(() => {
+    if (view.kind !== 'table') return;
+    const ids = [...listedPlanNodes.map((spec) => spec.id), ...listedAuxiliaryObjects.map((object) => object.id)];
+    // Until the table has its own views nothing starts closed, so decide nothing yet.
+    if (!ids.some((id) => id.startsWith('table.view.'))) return;
+    const seen = readSeenObjects(workspaceKey);
+    const fresh = ids.filter((id) => !seen.has(id));
+    if (fresh.length === 0) return;
+    const closing = fresh.filter((id) => startsClosed(id, ids));
+    for (const id of fresh) seen.add(id);
+    writeSeenObjects(workspaceKey, seen);
+    if (closing.length === 0) return;
+    setHiddenIds((current) => {
+      const next = new Set(current);
+      for (const id of closing) next.add(id);
+      writeHiddenObjects(workspaceKey, next);
+      return next;
+    });
+  }, [listedAuxiliaryObjects, listedPlanNodes, view.kind, workspaceKey]);
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
   const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
@@ -658,6 +1003,19 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   // Arrow keys: move the selected card, or pan the view when no card is selected (Shift = bigger steps).
   // Captured on window so React Flow's own node arrow handling (which would not save the position) never runs.
   const [moveAnnouncement, setMoveAnnouncement] = useState('');
+  const announcementTimerRef = useRef<number | undefined>(undefined);
+  /** F054: one live region for camera moves and sorts, cleared so the next message is announced again. */
+  const announce = useCallback((message: string) => {
+    setMoveAnnouncement(message);
+    if (announcementTimerRef.current !== undefined) window.clearTimeout(announcementTimerRef.current);
+    announcementTimerRef.current = window.setTimeout(() => {
+      announcementTimerRef.current = undefined;
+      setMoveAnnouncement('');
+    }, 2000);
+  }, []);
+  useEffect(() => () => {
+    if (announcementTimerRef.current !== undefined) window.clearTimeout(announcementTimerRef.current);
+  }, []);
   useEffect(() => {
     const directions: Record<string, [number, number, string]> = { ArrowUp: [0, -1, 'up'], ArrowDown: [0, 1, 'down'], ArrowLeft: [-1, 0, 'left'], ArrowRight: [1, 0, 'right'] };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -719,6 +1077,40 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     onOpenObject?.(nextId);
     onSelectNode(id);
   }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode]);
+  // The eye in the Objects panel: show a closed card again without moving the view to it.
+  const showObject = useCallback((id: string) => {
+    setHiddenIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      writeHiddenObjects(workspaceKey, next);
+      return next;
+    });
+  }, [workspaceKey]);
+  // Header button: the table chat's next message is about this card (e.g. "make it harder").
+  const referenceInChat = useMemo(() => view.kind !== 'table' || view.domain.kind !== 'table' ? undefined : (id: string, title: string) => {
+    referenceCardInChat({ id, title, detail: describeCardForChat(id, title, view) });
+  }, [view]);
+  const [trashError, setTrashError] = useState<string | null>(null);
+  /** Saves a card's name for everyone (shared layout); a blank name brings back the card's own title. */
+  const renameCanvasObject = useCallback(async (id: string, title: string): Promise<boolean> => {
+    setTrashError(null);
+    const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, titles: { [id]: title || null } });
+    if (!updated) setTrashError('Could not rename this card. Try again.');
+    return Boolean(updated);
+  }, [onCommand]);
+  const renameFromHeader = useCallback((id: string, title: string) => { void renameCanvasObject(id, title); }, [renameCanvasObject]);
+  const resizeObject = useCallback((id: string, box: CanvasBox) => {
+    const width = Math.round(box.width);
+    const height = Math.round(box.height);
+    setCardSizes((current) => {
+      const next = { ...current, [id]: { width, height } };
+      writeCardSizes(workspaceKey, next);
+      return next;
+    });
+    // Dragging the left or top edge also moves the card.
+    commitUserPosition(id, { x: box.x, y: box.y });
+  }, [workspaceKey, commitUserPosition]);
+
   const hideObject = useCallback((id: string) => {
     setHiddenIds((current) => {
       const next = new Set(current);
@@ -759,6 +1151,72 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       objectsButtonRef.current?.focus();
     }));
   }, [cancelPendingOpenObjectFocus, flow, focusNodeId, focusRequestKey, hiddenIds, nodes, onOpenObject, openedObjectId, onSelectNode, requestOpenObjectFocus, view.kind, workspaceKey]);
+
+  /**
+   * F054: "go to card" only moves the camera. The card is selected, never opened or expanded, and on a
+   * wide screen the panel stays open so the next card is one press away. On a narrow screen the panel
+   * would cover the card, so it closes and focus returns to the Objects button, as opening a card does.
+   */
+  const focusCanvasObject = useCallback((id: string) => {
+    const title = cardRows.find((row) => row.id === id)?.title ?? id;
+    if (hiddenIds.has(id)) showObject(id);
+    cancelPendingOpenObjectFocus();
+    setPreviousView(flow.getViewport());
+    onSelectNode(id);
+    announce(`Moved to ${title}.`);
+    const narrow = window.matchMedia(NARROW_CANVAS_QUERY).matches;
+    if (narrow) {
+      // The panel would cover the card, so it closes and focus goes back to the Objects button.
+      setObjectsMenuOpen(false);
+      window.requestAnimationFrame(() => objectsButtonRef.current?.focus());
+    }
+    // A card that was just revealed, or that has not measured yet, has no size to fit. Wait for React Flow
+    // to report one, then on a wide screen place it in the free area the open panel leaves, and on a narrow
+    // screen fit the one card to the whole canvas so the panel never hides it.
+    const request: LocateObjectFocusRequest = { id, attempts: 0, narrow };
+    pendingLocateFocusRef.current = request;
+    const settle = () => {
+      if (pendingLocateFocusRef.current !== request) return;
+      const node = flow.getNode(id);
+      const width = node?.measured?.width;
+      const height = node?.measured?.height;
+      const wrap = flowWrapRef.current?.getBoundingClientRect();
+      if (node && typeof width === 'number' && width > 0 && typeof height === 'number' && height > 0 && wrap && wrap.width > 0 && wrap.height > 0) {
+        pendingLocateFocusRef.current = null;
+        if (request.narrow) {
+          void flow.fitView({ nodes: [{ id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: canvasMotionDuration(220) });
+          return;
+        }
+        const panel = objectsMenuRef.current?.querySelector<HTMLElement>('.tt-canvas-objects__panel')?.getBoundingClientRect();
+        const safeLeft = panel ? Math.max(12, panel.right - wrap.left + 12) : 12;
+        const freeWidth = Math.max(0, wrap.width - safeLeft - 12);
+        const freeHeight = Math.max(0, wrap.height - 64 - 12);
+        const zoom = Math.min(1.15, Math.max(0.3, Math.min(1.15, freeWidth / (width + 24), freeHeight / (height + 24))));
+        void flow.setViewport({
+          x: safeLeft + (freeWidth - width * zoom) / 2 - node.position.x * zoom,
+          y: 64 + (freeHeight - height * zoom) / 2 - node.position.y * zoom,
+          zoom,
+        }, { duration: canvasMotionDuration(220) });
+        return;
+      }
+      request.attempts += 1;
+      if (request.attempts >= LOCATE_FOCUS_MAX_ATTEMPTS) {
+        pendingLocateFocusRef.current = null;
+        announce('Card is not ready yet.');
+        return;
+      }
+      request.timer = window.setTimeout(() => {
+        request.frame = window.requestAnimationFrame(settle);
+      }, 32);
+    };
+    request.frame = window.requestAnimationFrame(settle);
+  }, [announce, cancelPendingOpenObjectFocus, cardRows, flow, hiddenIds, onSelectNode, showObject]);
+
+  const changeCardSort = useCallback((mode: CardSortMode) => {
+    writeCardSortMode(workspaceKey, mode);
+    setCardSort(mode);
+    announce(CARD_SORT_OPTIONS.find((option) => option.mode === mode)?.announcement ?? '');
+  }, [announce, workspaceKey]);
 
   useEffect(() => {
     const request = pendingOpenObjectFocusRef.current;
@@ -904,16 +1362,22 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             ?? defaultCanvasPosition(view.kind, spec);
         })(),
         selected: spec.id === selectedNodeId,
+        ...sizedNode(cardSizes[spec.id]),
         zIndex: activeOpenedId === spec.id ? 20 : spec.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'plan',
           id: spec.id,
           title: spec.title,
           capability: spec.capability,
+          meta: cardMetaById.get(spec.id),
+          ...cardMetaIdentity(view, cardMetaById.get(spec.id)),
           opened: activeOpenedId === spec.id,
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
+          onReference: referenceInChat,
+          onRename: canRename(view, spec.id) && busy !== 'table.readOnly' ? renameFromHeader : undefined,
           onSelectNode,
+          onResize: resizeObject,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
           selected: spec.id === selectedNodeId,
@@ -950,23 +1414,29 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 };
         })(),
         selected: object.id === selectedNodeId,
+        ...sizedNode(cardSizes[object.id]),
         zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'auxiliary',
           id: object.id,
           title: object.title,
           capability: object.eyebrow ?? 'table tool',
+          meta: cardMetaById.get(object.id),
+          ...cardMetaIdentity(view, cardMetaById.get(object.id)),
           opened: activeOpenedId === object.id,
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
+          onReference: referenceInChat,
+          onRename: canRename(view, object.id) && busy !== 'table.readOnly' ? renameFromHeader : undefined,
           onSelectNode,
+          onResize: resizeObject,
           selected: object.id === selectedNodeId,
           auxiliary: object,
         },
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules]);
+  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules, cardSizes, resizeObject, cardMetaById, renameFromHeader]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
@@ -1028,6 +1498,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const handleCanvasMoveStart = useCallback((event: MouseEvent | TouchEvent | null) => {
     if (event) cancelPendingOpenObjectFocus();
   }, [cancelPendingOpenObjectFocus]);
+
+  // A card asked for from elsewhere (e.g. View rules) is shown again if this viewer had closed it.
+  useEffect(() => {
+    if (focusNodeId && hiddenIds.has(focusNodeId)) showObject(focusNodeId);
+  }, [focusNodeId, focusRequestKey, hiddenIds, showObject]);
 
   useEffect(() => {
     if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId)) return;
@@ -1100,7 +1575,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [plan.bindings, planNodesById, revisionNotice, visibleIds]);
 
   // Right-click on the empty canvas: arrange every card again from scratch, as on first load.
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  // targets: the cards a right-click on a card acts on; absent for a right-click on the empty canvas.
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targets?: string[] } | null>(null);
+  const [multiIds, setMultiIds] = useState<ReadonlySet<string>>(new Set());
   const arrangeObjects = useCallback(async () => {
     setContextMenu(null);
     cancelPendingOpenObjectFocus();
@@ -1139,6 +1616,32 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     setHiddenIds(new Set());
     writeHiddenObjects(workspaceKey, new Set());
   }, [workspaceKey]);
+  // Header people: centre the view on another member's live cursor, keeping the zoom.
+  useEffect(() => registerCanvasPointFocus((x, y) => {
+    cancelPendingOpenObjectFocus();
+    void flow.setCenter(x, y, { zoom: Math.max(flow.getViewport().zoom, 0.8), duration: canvasMotionDuration(260) });
+  }), [cancelPendingOpenObjectFocus, flow]);
+  // Chat commands ("เปิดการ์ด …", "open rules", "ซ่อนการ์ด …") find a card by name.
+  const finderStateRef = useRef({ objectTitles: [] as { id: string; title: string; hidden: boolean }[], navigateToObject: (_id: string) => {}, hideObject: (_id: string) => {} });
+  useEffect(() => registerCanvasObjectFinder((verb, query) => {
+    const { objectTitles: objects, navigateToObject: open, hideObject: hide } = finderStateRef.current;
+    // Chat cards are named after past questions, so they would match the question itself; search the table's own cards.
+    const matches = matchCanvasObjects(objects.filter((object) => !object.id.startsWith('table.chat.') && !object.id.startsWith('chat.')), query);
+    if (matches.length === 0) return { handled: false };
+    const [first, ...others] = matches;
+    if (verb === 'hide') {
+      hide(first.id);
+      return { handled: true, message: `Closed “${first.title}”. Open it again from Objects or by typing “open ${first.title}”.` };
+    }
+    open(first.id);
+    return { handled: true, message: `Opened “${first.title}”.${others.length ? ` Also matching: ${others.slice(0, 3).map((item) => item.title).join(', ')}.` : ''}` };
+  }), []);
+  useEffect(() => {
+    if (multiIds.size === 0) return;
+    const clearGroup = (event: KeyboardEvent) => { if (event.key === 'Escape') setMultiIds(new Set()); };
+    document.addEventListener('keydown', clearGroup);
+    return () => document.removeEventListener('keydown', clearGroup);
+  }, [multiIds]);
   useEffect(() => {
     if (!contextMenu) return;
     const close = (event: Event) => {
@@ -1250,7 +1753,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       for (let attempt = 0; attempt < 60; attempt += 1) {
         await pause();
         if (!isCurrentScope()) return null;
-        const eligibleIds = ids.filter((id) => activeOpenedIdRef.current !== id && !draggingNodeIdsRef.current.has(id));
+        // A card that left the canvas while this batch settled (hidden, or a chat card that became a
+        // notice) can never measure; waiting for it would drop the whole batch and nothing re-seeds it.
+        const eligibleIds = ids.filter((id) => activeOpenedIdRef.current !== id && !draggingNodeIdsRef.current.has(id) && flow.getNode(id) !== undefined);
         if (eligibleIds.length === 0) return new Map();
         const measured = eligibleIds.map((id) => flow.getNode(id));
         if (measured.some((node) => !node || !Number.isFinite(node.measured?.width) || !Number.isFinite(node.measured?.height))) {
@@ -1356,9 +1861,30 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     // A content control may have navigated to another object. Do not select its
     // old container again while that same click bubbles through React Flow.
     if (event.target instanceof Element && event.target.closest('.tt-canvas-node__body')) return;
+    if (event.shiftKey) {
+      // Shift+click adds or removes a card from the group; the card selected before joins the group too.
+      setMultiIds((current) => {
+        const next = new Set(current);
+        if (next.size === 0 && selectedNodeId && selectedNodeId !== node.id) next.add(selectedNodeId);
+        if (next.has(node.id)) next.delete(node.id);
+        else next.add(node.id);
+        return next;
+      });
+      return;
+    }
+    setMultiIds(new Set());
     onSelectNode(node.id);
-  }, [onSelectNode]);
-  const clear = useCallback(() => onSelectNode(null), [onSelectNode]);
+  }, [onSelectNode, selectedNodeId]);
+  const clear = useCallback(() => { setMultiIds(new Set()); onSelectNode(null); }, [onSelectNode]);
+  const openCardMenu = useCallback((event: React.MouseEvent, node: CanvasNode) => {
+    // Keep the browser's own menu for typing and for copying selected text.
+    if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if ((window.getSelection()?.toString() ?? '').trim()) return;
+    event.preventDefault();
+    // A right-click on a card in the Shift group acts on the whole group; otherwise on that card alone.
+    const targets = multiIds.has(node.id) ? [...multiIds] : [node.id];
+    setContextMenu({ ...contextMenuPosition(event.clientX, event.clientY), targets });
+  }, [multiIds]);
 
   useEffect(() => {
     setNodes((current) => current.map((node) => ({
@@ -1368,10 +1894,58 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     })));
   }, [selectedNodeId, setNodes]);
 
-  const objectTitles = useMemo(() => [
-    ...listedPlanNodes.map((spec) => ({ id: spec.id, title: spec.title, hidden: hiddenIds.has(spec.id) })),
-    ...listedAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title, hidden: hiddenIds.has(object.id) })),
-  ], [listedPlanNodes, listedAuxiliaryObjects, hiddenIds]);
+  // Chat commands ("open rules") still match on the canvas order of every listed card, hidden ones included.
+  const objectTitles = useMemo(() => cardRows, [cardRows]);
+  finderStateRef.current = { objectTitles, navigateToObject, hideObject };
+  const [starredIds, setStarredIds] = useState<ReadonlySet<string>>(() => readStarred(workspaceKey));
+  const starScopeRef = useRef(workspaceKey);
+  if (starScopeRef.current !== workspaceKey) {
+    starScopeRef.current = workspaceKey;
+    setStarredIds(readStarred(workspaceKey));
+  }
+  const toggleStar = (id: string) => setStarredIds((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    writeStarred(workspaceKey, next);
+    return next;
+  });
+  const [objectQuery, setObjectQuery] = useState('');
+  const listedObjects = useMemo(() => {
+    const query = objectQuery.trim();
+    const matched = query ? new Set(matchCanvasObjects(objectTitles, query).map((object) => object.id)) : null;
+    const shown = matched ? objectTitles.filter((object) => matched.has(object.id)) : objectTitles;
+    // An explicit time sort wins over starred-first; Canvas order keeps the familiar starred grouping.
+    if (cardSort !== 'canvas') return sortCardRows(shown, cardSort);
+    return [...shown.filter((object) => starredIds.has(object.id)), ...shown.filter((object) => !starredIds.has(object.id))];
+  }, [cardSort, objectTitles, objectQuery, starredIds]);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const startRename = (id: string, title: string) => { setRenamingId(id); setRenameDraft(title); };
+  /** Saves the name for everyone; a blank name brings back the card's own title. */
+  const commitRename = async () => {
+    const id = renamingId;
+    if (!id) return;
+    setRenamingId(null);
+    const title = renameDraft.replace(/\s+/gu, ' ').trim().slice(0, 120);
+    const current = objectTitles.find((object) => object.id === id)?.title ?? '';
+    if (title === current) return;
+    await renameCanvasObject(id, title);
+  };
+  const [deletedOpen, setDeletedOpen] = useState(false);
+  const tableReadOnly = busy === 'table.readOnly';
+  /** Soft delete for everyone (or restore): the card stays stored and comes back from Deleted. */
+  /** Soft delete several cards in one shared-layout change (the server takes up to 24 at a time). */
+  const trashObjects = async (ids: readonly string[]) => {
+    setTrashError(null);
+    const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, trash: Object.fromEntries(ids.slice(0, 24).map((id) => [id, true])) });
+    if (!updated) setTrashError('Could not delete these cards. Try again.');
+  };
+  const trashObject = async (id: string, toTrash: boolean) => {
+    setTrashError(null);
+    const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, trash: { [id]: toTrash } });
+    if (!updated) setTrashError(toTrash ? 'Could not delete this card. Try again.' : 'Could not restore this card. Try again.');
+  };
   // A table-wide display setting wins; without one, the viewer's own choice, then the default.
   const tableConnections = view.domain.display?.connections;
   const canSetDisplay = viewerCan(view, 'table.rename') && busy !== 'table.readOnly';
@@ -1406,7 +1980,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           {emptyContent ?? <><strong>This table is ready for its first object</strong><p>Add a source or start the sample workflow from the table panel.</p></>}
         </div>
       ) : (
-        <ReactFlow<CanvasNode, CanvasEdge>
+        <MultiSelectionContext.Provider value={multiIds}><ReactFlow<CanvasNode, CanvasEdge>
           nodes={nodes}
           edges={visibleEdges}
           nodeTypes={nodeTypes}
@@ -1416,7 +1990,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onNodeDragStop={persistPosition}
           onNodeClick={choose}
           onPaneClick={clear}
-          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }); }}
+          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu(contextMenuPosition(event.clientX, event.clientY)); }}
+          onNodeContextMenu={openCardMenu}
           onMoveEnd={persistViewport}
           nodesDraggable
           nodesConnectable={false}
@@ -1439,11 +2014,27 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             onZoomIn={cancelPendingOpenObjectFocus}
             onZoomOut={cancelPendingOpenObjectFocus}
           />
-        </ReactFlow>
+        </ReactFlow></MultiSelectionContext.Provider>
       )}
       <div className="tt-canvas-tools">
         <span className="tt-canvas-visually-hidden" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</span>
-        {contextMenu && <div className="tt-canvas-context-menu" role="menu" aria-label="Canvas" style={{ left: contextMenu.x, top: contextMenu.y }}>
+        {contextMenu?.targets && (() => {
+          const targets = contextMenu.targets.filter((id) => nodes.some((node) => node.id === id));
+          const single = targets.length === 1 ? nodes.find((node) => node.id === targets[0]) : undefined;
+          const label = single ? 'card' : `${targets.length} cards`;
+          const deletable = targets.length > 0 && targets.every((id) => canTrash(view, id));
+          const close = () => setContextMenu(null);
+          return <div className="tt-canvas-context-menu" role="menu" aria-label={single ? single.data.title : `${targets.length} cards`} style={{ left: contextMenu.x, top: contextMenu.y }}>
+            {targets.length > 1 && <p className="tt-canvas-context-menu__note">{targets.length} cards selected (Shift+click)</p>}
+            <button type="button" role="menuitem" data-testid="card-menu-hide" autoFocus onClick={() => { for (const id of targets) hideObject(id); setMultiIds(new Set()); close(); }}><EyeOff size={15} aria-hidden="true" />Hide {label}</button>
+            {referenceInChat && <button type="button" role="menuitem" data-testid="card-menu-ask" onClick={() => {
+              for (const id of targets.slice(0, 5)) referenceInChat(id, nodes.find((node) => node.id === id)?.data.title ?? id);
+              close();
+            }}><MessageSquareText size={15} aria-hidden="true" />Ask about {targets.length > 1 ? `these ${Math.min(targets.length, 5)} cards` : 'this card'} in chat</button>}
+            {deletable && <button type="button" role="menuitem" data-testid="card-menu-delete" disabled={busy === 'table.readOnly'} onClick={() => { void trashObjects(targets); setMultiIds(new Set()); close(); }}><Trash2 size={15} aria-hidden="true" />Delete {label} for everyone</button>}
+          </div>;
+        })()}
+        {contextMenu && !contextMenu.targets && <div className="tt-canvas-context-menu" role="menu" aria-label="Canvas" style={{ left: contextMenu.x, top: contextMenu.y }}>
           <button type="button" role="menuitem" autoFocus onClick={() => void arrangeObjects()}><LayoutGrid size={15} aria-hidden="true" />Arrange objects</button>
           {hiddenIds.size > 0 && <button type="button" role="menuitem" onClick={revealAllObjects}><Eye size={15} aria-hidden="true" />Show closed cards ({hiddenIds.size})</button>}
         </div>}
@@ -1463,11 +2054,61 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} disabled={connectionsLocked} title={connectionsLocked ? 'Set for everyone at this table' : canSetDisplay ? 'Changes this table for everyone' : undefined} onClick={(event) => { event.stopPropagation(); toggleConnections(); }}>
               <Workflow size={16} aria-hidden="true" /><span>Connections</span><small>{edges.length}</small><i aria-hidden="true">{showConnections ? 'On' : 'Off'}</i>
             </button>
+            <label className="tt-canvas-objects__sort">
+              <span>Sort</span>
+              <select data-testid="canvas-object-sort" aria-label="Sort objects" value={cardSort} onChange={(event) => changeCardSort(parseCardSortMode(event.currentTarget.value))}>
+                {CARD_SORT_OPTIONS.map((option) => <option key={option.mode} value={option.mode}>{option.label}</option>)}
+              </select>
+            </label>
+            {objectTitles.length > 5 && <label className="tt-canvas-objects__search">
+              <Search size={15} aria-hidden="true" />
+              <input type="search" data-testid="canvas-object-search" placeholder="Search cards" aria-label="Search cards" value={objectQuery} onChange={(event) => setObjectQuery(event.target.value)} onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Escape' && objectQuery) { event.preventDefault(); setObjectQuery(''); } if (event.key === 'Enter' && listedObjects[0]) navigateToObject(listedObjects[0].id); }} />
+            </label>}
+            {objectQuery.trim() && listedObjects.length === 0 && <p className="tt-canvas-objects__empty" role="status">No card matches “{objectQuery.trim()}”.</p>}
             <ul className="tt-canvas-objects__list">
-              {objectTitles.map((object) => <li key={object.id}>
-                <button type="button" data-testid={`open-canvas-${object.id}`} data-hidden={object.hidden || undefined} aria-label={object.hidden ? `Reopen ${object.title}` : `Open ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>{object.title}</button>
+              {listedObjects.map((object) => <li key={object.id} className={'tt-canvas-objects__row' + (selectedNodeId === object.id ? ' is-current' : '')} data-starred={starredIds.has(object.id) || undefined} data-hidden={object.hidden || undefined}>
+                {renamingId === object.id ? <input className="tt-canvas-objects__rename" data-testid={`rename-input-${object.id}`} aria-label={`New name for ${object.title}`} maxLength={120} autoFocus value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} onBlur={() => void commitRename()} onKeyDown={(event) => {
+                  event.stopPropagation();
+                  if (event.key === 'Enter') { event.preventDefault(); void commitRename(); }
+                  if (event.key === 'Escape') { event.preventDefault(); setRenamingId(null); }
+                }} /> : <button type="button" className="tt-canvas-objects__main" data-testid={`open-canvas-${object.id}`} data-hidden={object.hidden || undefined} aria-label={object.hidden ? `Reopen ${object.title}` : `Open ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>
+                  <span className="tt-canvas-objects__glyph" data-role={canvasRole(object.capability, object.kind)} aria-hidden="true">{capabilityGlyph(object.capability, object.kind)}</span>
+                  <span className="tt-canvas-objects__title" title={object.title}>{object.title}</span>
+                </button>}
+                <span className="tt-canvas-objects__actions">
+                  <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__star" data-testid={`star-canvas-${object.id}`} aria-pressed={starredIds.has(object.id)} aria-label={starredIds.has(object.id) ? `Unstar ${object.title}` : `Star ${object.title}`} title={starredIds.has(object.id) ? 'Starred: listed first' : 'Star to list it first'} onClick={(event) => { event.stopPropagation(); toggleStar(object.id); }}>
+                    <Star size={15} aria-hidden="true" fill={starredIds.has(object.id) ? 'currentColor' : 'none'} />
+                  </button>
+                  {canRename(view, object.id) && renamingId !== object.id && <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__more" data-testid={`rename-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Rename ${object.title}`} title="Rename for everyone (leave blank for the original name)" onClick={(event) => { event.stopPropagation(); startRename(object.id, object.title); }}>
+                    <Pencil size={14} aria-hidden="true" />
+                  </button>}
+                  <button type="button" className="tt-canvas-objects__focus" data-testid={`go-to-canvas-${object.id}`} aria-label={`Go to ${object.title}`} title="Go to card" onClick={(event) => { event.stopPropagation(); focusCanvasObject(object.id); }}>
+                    <Focus size={15} aria-hidden="true" />
+                  </button>
+                  <button type="button" className="tt-canvas-objects__eye" data-testid={`toggle-canvas-${object.id}`} aria-pressed={!object.hidden} aria-label={object.hidden ? `Show ${object.title}` : `Hide ${object.title}`} title={object.hidden ? 'Show on canvas' : 'Hide from canvas'} onClick={(event) => { event.stopPropagation(); if (object.hidden) showObject(object.id); else hideObject(object.id); }}>
+                    {object.hidden ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+                  </button>
+                  {canTrash(view, object.id) && <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__delete tt-canvas-objects__more" data-testid={`delete-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Delete ${object.title}`} title="Delete for everyone (restore from Deleted)" onClick={(event) => { event.stopPropagation(); void trashObject(object.id, true); }}>
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>}
+                </span>
+                <CardRowMeta row={object} />
               </li>)}
             </ul>
+            {trashError && <p className="tt-canvas-objects__error" role="alert">{trashError}</p>}
+            {deletedObjects.length > 0 && <div className="tt-canvas-objects__deleted">
+              <button type="button" className="tt-canvas-objects__deleted-toggle" data-testid="canvas-deleted-toggle" aria-expanded={deletedOpen} onClick={(event) => { event.stopPropagation(); setDeletedOpen((open) => !open); }}>
+                <Trash2 size={15} aria-hidden="true" /><span>Deleted</span><small>{deletedObjects.length}</small>
+              </button>
+              {deletedOpen && <ul className="tt-canvas-objects__list">
+                {deletedObjects.map((object) => <li key={object.id}>
+                  <span className="tt-canvas-objects__deleted-title" title={object.title}>{object.title}</span>
+                  {canTrash(view, object.id) && <button type="button" className="tt-canvas-objects__eye" data-testid={`restore-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Restore ${object.title}`} title="Restore for everyone" onClick={(event) => { event.stopPropagation(); void trashObject(object.id, false); }}>
+                    <Undo2 size={15} aria-hidden="true" />
+                  </button>}
+                </li>)}
+              </ul>}
+            </div>}
           </nav>
         </div>
         {revisionNotice && <div key={revisionNotice.key} className="tt-canvas-revision-change" role="status" aria-live="polite" aria-atomic="true">
@@ -1480,4 +2121,31 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
 
 export function CanvasWorkspace(props: CanvasWorkspaceProps) {
   return <ReactFlowProvider><CanvasInner {...props} /></ReactFlowProvider>;
+}
+
+/** What the AI should understand a referenced card to be: its kind, and for data its fields. */
+function describeCardForChat(id: string, title: string, view: WorkspaceView): string {
+  const program = view.domain.kind === 'table' ? view.domain.program : null;
+  if (id.startsWith('table.collection.')) {
+    const collection = program?.collections.find((item) => `table.collection.${item.id}` === id);
+    return collection ? `data table “${collection.title}” (id ${collection.id}) with fields ${collection.fields.map((field) => `${field.label} [${field.id}, ${field.type}]`).join(', ')}` : `data table “${title}”`;
+  }
+  if (id.startsWith('table.view.')) {
+    const descriptor = program?.canvas?.views.find((item) => `table.view.${item.id}` === id);
+    return descriptor ? `${descriptor.kind} view “${descriptor.title}” (id ${descriptor.id})` : `view “${title}”`;
+  }
+  if (id === 'table.rules') return 'the table rules (collections, actions and checks)';
+  if (id === 'table.actions') return `the table actions${program ? `: ${program.actions.map((action) => action.title).join(', ')}` : ''}`;
+  if (id.startsWith('table.chat.')) return `an earlier chat answer titled “${title}”`;
+  return `card “${title}”`;
+}
+
+/** Keep the right-click menu on screen when opened near the right or bottom edge. */
+function contextMenuPosition(x: number, y: number): { x: number; y: number } {
+  const width = 220;
+  const height = 110;
+  return {
+    x: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
+    y: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
+  };
 }

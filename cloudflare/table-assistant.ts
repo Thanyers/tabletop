@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { tableProgramSchema, handleTableCommand } from '../src/tabletop/domain/table.js';
-import { DomainError, type ActorContext, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { DomainError, TABLE_TURN_SEATS, isTableTurnSeat, type ActorContext, type TableTurnSeat, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import {
   tableAssistantConversationEntrySchema,
   tableAssistantRequestSchema,
@@ -43,18 +44,19 @@ const rawReferenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('action'), id: ID_SCHEMA }),
   z.strictObject({ kind: z.literal('record'), collectionId: ID_SCHEMA, id: ID_SCHEMA }),
   z.strictObject({ kind: z.literal('field'), collectionId: ID_SCHEMA, id: ID_SCHEMA }),
-  z.strictObject({ kind: z.literal('turn'), seat: z.enum(['host', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7']) }),
+  z.strictObject({ kind: z.literal('turn'), seat: z.enum(TABLE_TURN_SEATS) }),
 ]);
+const rawSuggestionsSchema = z.array(z.string().min(1).max(120)).max(4).optional();
 const rawResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('build-request'), text: z.string().min(1).max(4000) }),
-  z.strictObject({ kind: z.literal('explanation'), text: z.string().min(1).max(4000), references: z.array(rawReferenceSchema).max(40) }),
+  z.strictObject({ kind: z.literal('explanation'), text: z.string().min(1).max(4000), references: z.array(rawReferenceSchema).max(40), suggestions: rawSuggestionsSchema }),
   z.strictObject({
     kind: z.literal('action-proposal'),
     text: z.string().min(1).max(4000),
     actionId: ID_SCHEMA,
     inputs: z.record(ID_SCHEMA, tableValueSchema).refine((value) => Object.keys(value).length <= 20),
   }),
-  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(4000) }),
+  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(4000), suggestions: rawSuggestionsSchema }),
   z.strictObject({ kind: z.literal('refusal'), text: z.string().min(1).max(4000) }),
 ]);
 const recordsSchema = z.record(ID_SCHEMA, z.array(z.strictObject({ id: ID_SCHEMA, values: z.record(ID_SCHEMA, tableValueSchema) })).max(100));
@@ -67,10 +69,11 @@ const providerUsageSchema = z.object({
   completion_tokens_details: z.object({ reasoning_tokens: z.number().int().safe().nonnegative().optional() }).optional(),
 });
 
-type Seat = 'host' | 'member-1' | 'member-2' | 'member-3' | 'member-4' | 'member-5' | 'member-6' | 'member-7';
+type Seat = TableTurnSeat;
 type RawReference = z.infer<typeof rawReferenceSchema>;
 type RawAssistantResult = z.infer<typeof rawResultSchema>;
-type IdentityReplacement = { token: string; replacement: string; wordBoundary: boolean };
+/** One identity token replaced before any model text reaches a member (F045 reuses this for drafts). */
+export type IdentityReplacement = { token: string; replacement: string; wordBoundary: boolean };
 type AssistantContext = {
   conversation: TableAssistantConversationEntry[];
   role: 'owner' | 'participant';
@@ -113,7 +116,7 @@ function encodeJson(value: unknown): string {
 }
 
 function isSeat(value: unknown): value is Seat {
-  return typeof value === 'string' && /^(host|member-[1-7])$/u.test(value);
+  return isTableTurnSeat(value);
 }
 
 function memberSeat(workspace: WorkspaceView, member: WorkspaceView['actor']): Seat {
@@ -122,7 +125,7 @@ function memberSeat(workspace: WorkspaceView, member: WorkspaceView['actor']): S
   return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'A table member has no supported seat.');
 }
 
-function createIdentityReplacements(workspace: WorkspaceView): IdentityReplacement[] {
+export function createIdentityReplacements(workspace: WorkspaceView): IdentityReplacement[] {
   const actorIds = new Map<string, { token: string; replacement: string }>();
   const names = new Map<string, { token: string; replacement: string }>();
   const seats = new Set<Seat>();
@@ -150,7 +153,7 @@ function createIdentityReplacements(workspace: WorkspaceView): IdentityReplaceme
   return replacements.sort((left, right) => right.token.length - left.token.length || Number(left.wordBoundary) - Number(right.wordBoundary));
 }
 
-function redactString(value: string, replacements: IdentityReplacement[]): string {
+export function redactString(value: string, replacements: IdentityReplacement[]): string {
   let result = value;
   for (const { token, replacement, wordBoundary } of replacements) {
     const escaped = token.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
@@ -193,7 +196,7 @@ function buildContext(input: TableAssistantInput): {
   if (workspace.kind !== 'table' || workspace.domain.kind !== 'table') {
     return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The current workspace is not a table.');
   }
-  if (workspace.members.length < 1 || workspace.members.length > 8
+  if (workspace.members.length < 1 || workspace.members.length > MAX_MEMBERS_PER_WORKSPACE
     || new Set(workspace.members.map((member) => member.actorId)).size !== workspace.members.length) {
     return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The table membership is invalid.');
   }
@@ -271,6 +274,7 @@ function systemPrompt(): string {
     'Return an action-proposal only when the current prompt explicitly requests one exact supported action and identifies every required input. A proposal is not execution and always requires separate user confirmation. Use only an action and inputs present in the current context; do not invent an action, row, or input.',
     'Owners can extend their existing table with new collections, fields, data-entry forms, buttons, charts and scenes through the builder. If the current prompt asks to add or change these capabilities, or asks to create records but no create action exists, return build-request with a brief description of what can be prepared. This offers the builder; it does not change anything. Never tell an owner to edit program JSON or implement the feature manually. Existing supported actions still use action-proposal. Participants cannot change the table setup; explain that the owner can prepare it.',
     'If the request is ambiguous, ask one concise clarification. Refuse requests outside the application or unsafe requests, rather than refusing useful table changes the builder can prepare. Do not make up rules or claim that an action occurred.',
+    'When an explanation or clarification ends by inviting the user to choose, decide, or ask something next, put up to 4 short follow-up messages in suggestions, each written as the user would send it, in the language of the current prompt (for example "ใส่นาฬิกาข้างชื่อขั้นตอน"). The user picks one instead of typing. Leave suggestions out when nothing needs choosing; never suggest that the assistant play, choose a move, or take a turn for someone.',
     'For explanations, cite only current invariant IDs, action IDs, collection/field IDs, existing record IDs, or the current turn seat from the context. References must use the exact IDs and discriminants in the JSON schema.',
     'Return exactly one JSON object matching this schema, without markdown or extra keys:',
     JSON.stringify(z.toJSONSchema(rawResultSchema)),
@@ -646,7 +650,7 @@ function publicResult(
   if (raw.kind === 'explanation') {
     if (safeProgram === null) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'An explanation cannot cite rules before they are active.');
     const references = raw.references.map((reference) => enrichReference(reference, safeProgram, safeRecords, context.turn, replacements));
-    const parsed = tableAssistantResultSchema.safeParse({ kind: 'explanation', text, references });
+    const parsed = tableAssistantResultSchema.safeParse({ kind: 'explanation', text, references, ...publicSuggestions(raw.suggestions, replacements) });
     if (!parsed.success) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The assistant response did not match the supported format.');
     return parsed.data;
   }
@@ -696,9 +700,16 @@ function publicResult(
     if (!parsed.success) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The assistant proposal did not match the supported format.');
     return parsed.data;
   }
-  const parsed = tableAssistantResultSchema.safeParse({ kind: raw.kind, text });
+  const suggestions = raw.kind === 'clarification' ? publicSuggestions(raw.suggestions, replacements) : {};
+  const parsed = tableAssistantResultSchema.safeParse({ kind: raw.kind, text, ...suggestions });
   if (!parsed.success) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The assistant response did not match the supported format.');
   return parsed.data;
+}
+
+/** Follow-up messages offered as choices; redacted like the answer, duplicates and blanks dropped. */
+function publicSuggestions(raw: string[] | undefined, replacements: IdentityReplacement[]): { suggestions?: string[] } {
+  const suggestions = [...new Set((raw ?? []).map((item) => redactString(item, replacements).trim().slice(0, 120)).filter((item) => item.length >= 3))];
+  return suggestions.length ? { suggestions } : {};
 }
 
 function validateInput(input: TableAssistantInput): void {

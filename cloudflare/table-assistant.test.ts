@@ -356,6 +356,19 @@ describe('Cloudflare table assistant', () => {
     expect(seen[0]).toEqual([{ text: 'Borrow only after training.', color: 'yellow' }]);
   });
 
+  it('passes follow-up suggestions through as choices, redacted and without duplicates', async () => {
+    const input = await assistantInput();
+    const response = await respondToTablePrompt(testEnv, input, providerFetch({
+      kind: 'explanation', text: 'Pick where the clock goes.', references: [],
+      suggestions: ['Put a clock next to each step', 'Put a clock next to each step', `Ask ${participantName}`, ' '],
+    }));
+    expect(response.result.kind).toBe('explanation');
+    const suggestions = response.result.kind === 'explanation' ? response.result.suggestions ?? [] : [];
+    expect(suggestions[0]).toBe('Put a clock next to each step');
+    expect(suggestions).toHaveLength(2);
+    expect(JSON.stringify(suggestions)).not.toContain(participantName);
+  });
+
   it('accepts a small answer whose SSE envelope exceeds the old 64 KiB response cap (F041)', async () => {
     const input = await assistantInput();
     const payload = { kind: 'build-request', text: 'Prepare a form.' };

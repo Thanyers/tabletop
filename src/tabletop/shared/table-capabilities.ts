@@ -31,7 +31,7 @@ export const TABLE_CAPABILITIES: { supported: CapabilityItem[]; gaps: Capability
   ],
   gaps: [
     { id: 'joins', title: 'Joins and rollups across collections', detail: 'Views can aggregate inside a collection; there is no stored relation or cross-collection join yet.' },
-    { id: 'schema', title: 'Destructive schema edits', detail: 'Rules cannot remove collections, fields or invariants that hold data.' },
+    { id: 'schema', title: 'Destructive schema edits', detail: 'AI rule edits cannot remove collections, fields or invariants that hold data. Remove a collection or check by hand from the Rules card; fields cannot be removed.' },
     { id: 'media', title: 'Image, audio or 3D generation', detail: 'The provider returns data and canvas descriptors only.' },
     { id: 'simulation', title: 'Shared simulation clock', detail: 'Scene expressions update with state; there is no continuous real-time simulation.' },
     { id: 'capability-builder', title: 'Capabilities beyond the DSL', detail: 'Tables compose the supported primitives; they cannot invent new runtime behaviour.' },

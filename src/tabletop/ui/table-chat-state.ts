@@ -1,24 +1,29 @@
 import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, tailWithin, type ModelFailureDetails, type ModelTimeoutSource } from '../shared/model-job-progress';
+import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
-export interface TableChatRequestContext { prompt: string; hasCreateAction: boolean }
+export interface TableChatRequestContext { prompt: string; hasCreateAction: boolean; /** A card the message is about (chat reference). */ referencedCard?: boolean }
+
+const CARD_CHANGE = /\b(?:harder|easier|more|less|remove|rename|add|make|change|edit|extend)\b|ยาก|ง่าย|ลด|ลบ|เปลี่ยน|เอาออก|เพิ่ม|ปรับ|แก้/iu;
+const QUESTION_LEAD = /^(?:(?:how many|how much|what|which|why|when|who|where|explain|summari[sz]e)\b|อธิบาย|สรุป|ทำไม|มี.{0,32}กี่|กี่)/iu;
 
 export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: boolean, explicitDraft: boolean, request?: TableChatRequestContext): 'draft' | 'ask' {
   if (role !== 'owner') return 'ask';
   if (!hasActiveProgram || explicitDraft) return 'draft';
-  const prompt = request?.prompt.trim() ?? '';
-  // Only an obvious construction request takes this fast path. Ambiguous intent
-  // stays conversational; the assistant can offer the same builder explicitly.
-  if (!prompt || /^(?:(?:how many|what|which|why|explain|summari[sz]e)\b|อธิบาย|สรุป|ทำไม|มี.{0,32}กี่)/iu.test(prompt)) return 'ask';
-  const asksForChange = /\b(?:add|creat\w*|build|make|design|extend|chang\w*|edit|new|simplify)\b|เพิ่ม|สร้าง|ปรับ|แก้|ทำ|ขอ|อยาก/iu.test(prompt);
-  const asksForUi = asksForChange && /\b(?:forms?|buttons?|cards?|charts?|graphs?|diagrams?|views?|ui)\b|ฟอร์ม|ปุ่ม|การ์ด|กราฟ|แผนภูมิ|หน้าจอ/iu.test(prompt);
-  // "Change status in this table" is a data action. Require a direct
-  // structural request before treating table/field words as builder intent.
-  const asksForStructure = /\b(?:add|creat\w*|build|make|design|extend)\s+(?:(?:a|an|the|this|new|another|extra)\s+)*(?:tables?|collections?|columns?|fields?)\b|\b(?:new|another|extra)\s+(?:tables?|collections?|columns?|fields?)\b|(?:เพิ่ม|สร้าง)\s*(?:ตาราง|คอลัมน์|ฟิลด์)/iu.test(prompt);
-  const newRows = /\b(?:add|creat\w*|generat\w*|seed|mock\w*|sample)\b|เพิ่ม|สร้าง|จำลอง|ตัวอย่าง/iu.test(prompt)
-    && /\b(?:records?|rows?|data|mock\w*|samples?)\b|รายการ|แถว|ข้อมูล|จำลอง|ตัวอย่าง/iu.test(prompt);
-  return asksForUi || asksForStructure || (newRows && !request?.hasCreateAction) ? 'draft' : 'ask';
+  if (!request) return 'ask';
+  const prompt = request.prompt.trim();
+  // A message about one specific card is a rule change for that card, unless it is a question.
+  if (request.referencedCard && CARD_CHANGE.test(prompt) && !QUESTION_LEAD.test(prompt)) return 'draft';
+  // F047: one classifier shared by every entry point; build/edit become a rule draft, ask/act stay
+  // conversational because an action still needs the person's explicit confirmation.
+  const intent = classifyChatIntent({
+    prompt,
+    hasActiveProgram,
+    hasCreateAction: request.hasCreateAction,
+  });
+  return intent === 'build' || intent === 'edit' ? 'draft' : 'ask';
 }
 
 export interface ChatRequestScope {
@@ -188,4 +193,101 @@ export function nextQueuedDraft(cards: readonly ChatCard[]): ChatCard | undefine
     if (card?.kind === 'draft' && card.phase === 'queued') return card;
   }
   return undefined;
+}
+
+/** F045: the configured whole-job stop used when the server view does not carry one. */
+export const DRAFT_LIMIT_MS_DEFAULT = 240_000;
+/** F045: the client polls this long past the server limit, so the final status always reaches the card. */
+export const DRAFT_POLL_GRACE_MS = 70_000;
+
+/** Milliseconds a rule draft may run: the server's configured limit, else the 240s default. */
+export function draftLimitMs(job?: Pick<ModelJob, 'limitMs'>): number {
+  const value = job?.limitMs;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : DRAFT_LIMIT_MS_DEFAULT;
+}
+
+/** That same limit in whole seconds, for the "12s / 240s server limit" label. */
+export function draftLimitSeconds(job?: Pick<ModelJob, 'limitMs'>): number {
+  return Math.max(1, Math.round(draftLimitMs(job) / 1000));
+}
+
+/** How long a draft is polled: the server's own limit plus the grace period for its final status. */
+export function draftPollLimitMs(job?: Pick<ModelJob, 'limitMs'>): number {
+  return draftLimitMs(job) + DRAFT_POLL_GRACE_MS;
+}
+
+export interface DraftFailureSummary {
+  /** `server`: our own deadline stopped the draft. `provider`: the provider closed the stream. */
+  timedOutBy: ModelTimeoutSource;
+  /** The configured whole-job stop behind `limitLabel`, so the card can expose it to browser tests. */
+  limitMs: number;
+  /** The same limit the server names in its message, e.g. "240s". */
+  limitLabel: string;
+  /** Characters of the partial answer kept for display; never more than MAX_JOB_PARTIAL_CONTENT_CHARS. */
+  partialChars: number;
+  /** Characters of the thinking tail kept for display; never more than MAX_JOB_THINKING_TAIL_CHARS. */
+  thinkingChars: number;
+  /** The bounded partial answer, absent when no draft text had arrived. */
+  partialText?: string;
+  /** The bounded thinking tail, absent when the job kept none. */
+  thinkingText?: string;
+}
+
+/**
+ * F045: a readable summary of a failed draft, or null when the job carries no failure details.
+ * Text is re-bounded here too, so an oversized or older payload can never grow the card.
+ */
+export function draftFailureSummary(details: ModelFailureDetails | undefined): DraftFailureSummary | null {
+  if (!details) return null;
+  const partialText = headWithin(details.partialContent ?? '', MAX_JOB_PARTIAL_CONTENT_CHARS);
+  const thinkingText = tailWithin(details.thinkingTail ?? '', MAX_JOB_THINKING_TAIL_CHARS);
+  return {
+    timedOutBy: details.timedOutBy,
+    limitMs: details.limitMs,
+    limitLabel: `${Math.max(1, Math.round(details.limitMs / 1000))}s`,
+    partialChars: partialText.length,
+    thinkingChars: thinkingText.length,
+    ...(partialText ? { partialText } : {}),
+    ...(thinkingText ? { thinkingText } : {}),
+  };
+}
+
+/** The one line that keeps our own deadline apart from the provider closing the connection. */
+export function draftStopReason(summary: DraftFailureSummary): string {
+  return summary.timedOutBy === 'server'
+    ? `Why it stopped: our own ${summary.limitLabel} server limit, not the AI provider.`
+    : `Why it stopped: the AI provider closed the connection before our ${summary.limitLabel} server limit.`;
+}
+
+/** Label for the collapsed partial answer; it names the bound so a short block never looks complete. */
+export function draftPartialLabel(summary: DraftFailureSummary): string {
+  return summary.partialChars > 0
+    ? `Show the ${summary.partialChars.toLocaleString()} characters of the draft that arrived before it stopped`
+    : 'No draft text had arrived before it stopped';
+}
+
+/** Label for the collapsed thinking tail; the count keeps the bound visible. */
+export function draftThinkingLabel(summary: DraftFailureSummary): string {
+  return `Show the last ${summary.thinkingChars.toLocaleString()} characters of the model's thinking`;
+}
+
+/** F050: how much of the live thinking the waiting card shows as one readable line. */
+export const LIVE_THINKING_LINE_CHARS = 280;
+
+/**
+ * F050: one line saying what the model is doing right now, from the bounded live tail.
+ * Whitespace is collapsed and the line keeps the newest text, so the card streams forward
+ * instead of growing a wall of chain-of-thought. Returns null when the job kept no text.
+ */
+export function liveThinkingLine(tail: string | undefined, maxChars = LIVE_THINKING_LINE_CHARS): string | null {
+  if (!tail) return null;
+  const collapsed = tail.replace(/\s+/gu, ' ').trim();
+  if (!collapsed) return null;
+  if (collapsed.length <= maxChars) return collapsed;
+  // Keep the tail: the newest words are what "what is it doing" means.
+  const window = tailWithin(collapsed, maxChars);
+  // Start on a word boundary so a cut never leaves half a word at the front.
+  const space = window.indexOf(' ');
+  const kept = space > 0 && space < 60 ? window.slice(space + 1) : window;
+  return `…${kept.trimStart()}`;
 }

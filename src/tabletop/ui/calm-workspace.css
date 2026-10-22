@@ -110,10 +110,10 @@
   overflow-y: auto;
 }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node.is-expanded .tt-canvas-node__body {
-  max-height: min(70dvh, 680px);
+  /* Expand shows the whole card: no inner scroll. Wide tables still scroll sideways. */
+  max-height: none;
   overflow-x: auto;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow-y: visible;
 }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__head { min-height: 64px; gap: var(--tt-space-2); padding: var(--tt-space-3); border-color: color-mix(in srgb, var(--tt-card-edge), transparent 30%); border-radius: calc(var(--tt-card-radius) - 1px) calc(var(--tt-card-radius) - 1px) 0 0; background: var(--tt-card-surface); }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__identity { min-width: 0; }
@@ -355,9 +355,94 @@
 .tt-app .tt-flow-wrap .tt-canvas-node__icon { display: inline-grid; place-items: center; width: 32px; min-width: 32px; padding: 0; }
 
 /* Right-click menu on the empty canvas. */
-.tt-app .tt-canvas-context-menu { position: fixed; z-index: 60; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--tt-line); border-radius: 12px; background: var(--tt-paper); box-shadow: 0 12px 36px #303d3a24; }
+.tt-app .tt-canvas-context-menu { position: fixed; z-index: 60; pointer-events: auto; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--tt-line); border-radius: 12px; background: var(--tt-paper); box-shadow: 0 12px 36px #303d3a24; }
 .tt-app .tt-canvas-context-menu button { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .tt-app .tt-canvas-context-menu button:hover, .tt-app .tt-canvas-context-menu button:focus-visible { background: var(--tt-canvas); }
 
 /* Closed cards stay listed in the Objects panel, muted, so they can be reopened. */
 .tt-app .tt-canvas-objects__list button[data-hidden] { color: var(--tt-muted); font-style: italic; }
+
+/* A card's main call to action stays pinned to the bottom edge of the scrolling card body,
+   so Apply / Confirm / Review rules never ends up below the fold. */
+.tt-app .tt-card-cta { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-2); margin-top: var(--tt-space-2); padding: var(--tt-space-2) 0; border-top: 1px solid var(--tt-line); background: var(--tt-card-surface); box-shadow: 0 -10px 12px -10px rgb(0 0 0 / 0.18); }
+.tt-app .tt-card-cta > p { flex-basis: 100%; margin: 0; }
+
+/* Objects panel: an eye beside each card shows or hides it on the canvas. */
+.tt-app .tt-canvas-objects__list li { display: flex; align-items: center; gap: 2px; }
+.tt-app .tt-canvas-objects__list li > button:first-child { flex: 1 1 auto; min-width: 0; }
+/* F054: a listed card is a two-line grid — name, then its meta line — so three actions still fit at 280px. */
+.tt-app .tt-canvas-objects__list li.tt-canvas-objects__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 2px; border-radius: 6px; }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 32px; padding: 0; color: var(--tt-muted); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 36px; padding: 0; color: var(--tt-muted); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus:hover:not(:disabled) { border-color: #d9e6df; color: var(--tt-moss); background: #eaf3ee; }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye[aria-pressed='true'] { color: var(--tt-moss); }
+
+/* A notification's action button (e.g. View rules after new rules went into use). */
+.tt-app .tt-notice > button.tt-notice__action { width: auto; height: 28px; padding: 0 12px; border: 1px solid currentColor; border-radius: 999px; font: inherit; font-weight: 650; white-space: nowrap; cursor: pointer; }
+
+/* Header people: avatars, and a list that jumps to someone's live cursor. */
+.tt-app .tt-header-people { position: relative; }
+.tt-app .tt-header-people__button { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; }
+.tt-app .tt-header-avatars { display: inline-flex; }
+.tt-app .tt-header-avatars > span { position: relative; margin-inline-start: -6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--tt-paper); }
+.tt-app .tt-header-avatars > span:first-child { margin-inline-start: 0; }
+.tt-app .tt-header-avatars > span.is-live::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; border: 2px solid var(--tt-paper); border-radius: 50%; background: #2f9e6a; }
+.tt-app .tt-header-avatar { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--tt-avatar-color); color: #fff; font-size: 11px; font-weight: 750; letter-spacing: 0.02em; }
+.tt-app .tt-header-people__more { color: var(--tt-muted); font-size: 12px; font-weight: 650; }
+.tt-app .tt-header-people__menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: grid; gap: 2px; width: 260px; padding: 6px; border: 1px solid var(--tt-line); border-radius: 12px; background: var(--tt-paper); box-shadow: 0 12px 36px #303d3a24; }
+.tt-app .tt-header-people__menu > button, .tt-app .tt-header-people__self { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-ink); font: inherit; text-align: left; }
+.tt-app .tt-header-people__menu > button { cursor: pointer; }
+.tt-app .tt-header-people__menu > button:hover, .tt-app .tt-header-people__menu > button:focus-visible { background: var(--tt-canvas); }
+.tt-app .tt-header-people__menu span:not(.tt-header-avatar) { display: grid; flex: 1 1 auto; min-width: 0; }
+.tt-app .tt-header-people__menu strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-header-people__menu small { color: var(--tt-muted); font-size: 12px; }
+.tt-app .tt-header-people__menu i { width: 8px; height: 8px; border-radius: 50%; background: var(--tt-line); }
+.tt-app .tt-header-people__menu i.is-live { background: #2f9e6a; }
+.tt-app .tt-header-people__self { opacity: 0.75; }
+.tt-app .tt-header-people__menu > .tt-header-people__all { justify-content: center; min-height: 36px; border-top: 1px solid var(--tt-line); border-radius: 0 0 8px 8px; color: var(--tt-moss); font-weight: 650; }
+.tt-app .tt-header-people__note { margin: 0; padding: 6px 8px; color: var(--tt-muted); font-size: 12px; }
+
+/* Long titles: two lines on a closed card, all of it when expanded (hover shows it too). */
+.tt-app .tt-flow-wrap .tt-canvas-node:not(.is-expanded) .tt-canvas-node__title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+/* Resize: select a card, then drag an edge or corner. A sized card fills the box and scrolls inside it. */
+.tt-flow-wrap .react-flow__node.is-sized > .tt-canvas-node { width: 100% !important; max-width: none !important; height: 100%; display: flex; flex-direction: column; }
+.tt-flow-wrap .react-flow__node.is-sized > .tt-canvas-node > .tt-canvas-node__body { flex: 1 1 auto; min-height: 0 !important; max-height: none !important; overflow: auto !important; }
+.tt-flow-wrap .tt-canvas-resize-line { border-color: transparent !important; }
+.tt-flow-wrap .tt-canvas-resize-line.left, .tt-flow-wrap .tt-canvas-resize-line.right { width: 10px !important; }
+.tt-flow-wrap .tt-canvas-resize-line.top, .tt-flow-wrap .tt-canvas-resize-line.bottom { height: 10px !important; }
+.tt-flow-wrap .tt-canvas-resize-line:hover { border-color: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 40%) !important; }
+.tt-flow-wrap .tt-canvas-resize-handle { width: 10px !important; height: 10px !important; border: 2px solid var(--tt-moss, #2f6f5e) !important; border-radius: 3px !important; background: var(--tt-paper, #fff) !important; }
+
+/* Objects: delete for everyone (soft) and the Deleted list to restore from. */
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__delete:hover:not(:disabled) { color: var(--tt-clay-1, #a4513a); }
+.tt-app .tt-canvas-objects__deleted { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--tt-line); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__deleted-toggle { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--tt-muted); }
+.tt-app .tt-canvas-objects__deleted-toggle small { margin-left: auto; }
+.tt-app .tt-canvas-objects__deleted-title { flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 6px 8px; color: var(--tt-muted); text-decoration: line-through; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-canvas-objects__error { margin: 6px 8px 0; color: var(--tt-clay-1, #a4513a); font-size: 13px; }
+
+/* Objects: search, stars (listed first) and rename. */
+.tt-app .tt-flow-wrap .tt-canvas-objects__panel { width: min(360px, calc(100vw - 24px)); }
+.tt-app .tt-canvas-objects__search { display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--tt-line); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-muted); }
+.tt-app .tt-canvas-objects__search input { flex: 1 1 auto; min-width: 0; height: 34px; border: 0; outline: 0; background: transparent; color: var(--tt-ink); font: inherit; font-size: 14px; }
+.tt-app .tt-canvas-objects__search:focus-within { border-color: var(--tt-moss, #2f6f5e); }
+.tt-app .tt-canvas-objects__empty { margin: 4px 8px; color: var(--tt-muted); font-size: 13px; }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__star { color: color-mix(in srgb, var(--tt-muted), transparent 40%); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__star[aria-pressed='true'] { color: #c9922b; }
+.tt-app .tt-canvas-objects__rename { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--tt-moss, #2f6f5e); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: 14px; }
+/* Rename and delete show on hover or keyboard focus so the list stays calm; always on touch screens. */
+@media (hover: hover) {
+  .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__more { opacity: 0; }
+  .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__star[aria-pressed='false'] { opacity: .35; }
+}
+
+/* Shift+click group: a dashed ring on each picked card; right-click acts on all of them. */
+.tt-app .tt-flow-wrap .tt-canvas-node.is-multi-selected { outline: 2px dashed var(--tt-moss, #2f6f5e); outline-offset: 3px; }
+.tt-app .tt-canvas-context-menu__note { margin: 2px 10px 6px; color: var(--tt-muted); font-size: 12px; }
+
+/* Rename on the card itself: the pencil shows on hover or focus; double-clicking the title works too. */
+.tt-app .tt-flow-wrap .tt-canvas-node__title-input { width: 100%; min-width: 0; padding: 4px 8px; border: 1px solid var(--tt-moss, #2f6f5e); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: var(--tt-type-title); font-weight: 650; }
+@media (hover: hover) {
+  .tt-app .tt-flow-wrap .tt-canvas-node:not(:hover):not(:focus-within) .tt-canvas-node__rename { opacity: 0; }
+}

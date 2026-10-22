@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { StickyNote, Trash2 } from 'lucide-react';
-import type { NoteColor, TableNote } from '../shared/table-contracts';
+import type { CanvasCardMeta, NoteColor, TableNote } from '../shared/table-contracts';
 import type { WorkspaceView } from '../shared/contracts';
 import type { Command } from './types';
 import { MAX_NOTE_TEXT } from '../domain/table';
+import { cardMetaDescription, formatRelative, useCardNow } from './canvas-card-meta';
 import './note-card.css';
 
 const NOTE_COLORS: NoteColor[] = ['yellow', 'rose', 'sky', 'mint', 'lavender', 'sand'];
@@ -98,6 +99,9 @@ export function NoteCard({ view, note, busy, onCommand }: NoteCardProps) {
   };
 
   const author = authorName(view, note.createdBy);
+  // F054: the note's time lives in the footer line that already exists; no extra row, no extra icon.
+  const now = useCardNow();
+  const noteMeta: CanvasCardMeta = { createdAt: note.createdAt, updatedAt: note.updatedAt, createdBy: note.createdBy, origin: 'human', source: 'recorded' };
   return <div
     className={`tt-note tt-note--${note.color}${editing ? ' is-editing' : ''}`}
     style={{ width: size.width, height: size.height }}
@@ -140,6 +144,8 @@ export function NoteCard({ view, note, busy, onCommand }: NoteCardProps) {
       <span className="tt-note__author" title={`Created by ${author}`}>
         <i aria-hidden="true">{author.slice(0, 1).toUpperCase()}</i>{author}
       </span>
+      <span className="tt-note__meta-sep" aria-hidden="true">·</span>
+      <span className="tt-note__meta-time" title={cardMetaDescription(noteMeta, { now, actorName: author })}>{formatRelative(Math.max(note.createdAt, note.updatedAt), now)}</span>
     </div>
     <span className="tt-note__grip nodrag" role="separator" aria-label="Resize note" onPointerDown={startResize} />
   </div>;

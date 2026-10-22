@@ -536,9 +536,10 @@ try {
     return `scenario:${scenario.id}; phase:${phase}. Create a bounded, understandable Canvas for this synthetic fixture.`;
   }
 
-  function draftCardForPrompt(page, prompt) {
-    const draftNode = page.locator('.tt-canvas-node--auxiliary').filter({ hasText: prompt.slice(0, 36) }).first();
-    return draftNode.getByTestId('table-chat-answer');
+  // F039/F050: an auto-applied draft card leaves the canvas and becomes a 15s success notice with
+  // a "View rules" action. Check the notice, not the removed chat card.
+  function appliedNotice(page) {
+    return page.locator('.tt-notice').filter({ hasText: 'New rules added' }).first();
   }
 
   async function askForDraft(owner, tableId, scenario, phase, file, { cancelFirst = false, expectConsent = true } = {}) {
@@ -551,49 +552,90 @@ try {
     const prompt = draftPrompt(scenario, phase);
     const response = await sendTableMessage(owner, prompt, { sourceNames, cancelFirst, expectConsent, workspaceId: tableId });
     expect(response?.status()).toBe(202);
-    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('draft');
-    const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body;
-    expect(candidate.domain.program).toEqual(before.domain.program);
-    expect(candidate.domain.records).toEqual(before.domain.records);
-    expect(candidate.domain.candidate?.change.kind).toBe('table');
-    const draftCard = draftCardForPrompt(owner, prompt);
-    await expect(draftCard).toBeVisible({ timeout: 30_000 });
-    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
-    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
-    return candidate;
+    // F039: the Room runs every review check and puts the asker's draft into use as a new rule revision.
+    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status, { timeout: 30_000 }).toBe('active');
+    const applied = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    expect(applied.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
+    expect(applied.domain.candidate?.change.kind).toBe('table');
+    expect(applied.domain.candidate?.approval?.actorId).toBe(applied.actor.actorId);
+    if (before.domain.program) expect(applied.domain.records).toEqual(before.domain.records);
+    else expect(applied.domain.records).toEqual(applied.domain.candidate.change.initialRecords);
+    const draftNotice = appliedNotice(owner);
+    await expect(draftNotice).toBeVisible({ timeout: 15_000 });
+    await expect(draftNotice).toContainText('New rules added');
+    await expect(draftNotice.getByRole('button', { name: 'View rules', exact: true })).toBeEnabled();
+    return applied;
   }
 
-  async function assertPrivateCandidatePreview(owner, tableId, candidate, expectedControl, prompt) {
-    const draftCard = draftCardForPrompt(owner, prompt);
-    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
-    await clickVisible(draftCard.getByRole('button', { name: 'Review rules', exact: true }));
+  async function openAppliedRules(owner, prompt) {
+    await clickVisible(appliedNotice(owner).getByRole('button', { name: 'View rules', exact: true }));
     const editor = owner.getByTestId('canvas-object-editor');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
-    await expect(editor).toBeVisible();
-    await waitForStableBoundingBox(editor);
-    await openReviewSection(editor, 'tt-table-private-preview');
-    const preview = editor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true });
+    await expect(editor.getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
+    await expect(editor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true })).toHaveCount(0);
+    return editor;
+  }
+
+  // A restored revision is a draft again, so it still goes through the private preview and the manual review.
+  async function restorePreviousRulesWithPrivatePreview(owner, tableId, revision, expectedControl) {
+    const editor = await openCanvasObject(owner, 'table.rules');
+    await openReviewSection(editor, 'tt-table-history');
+    await openReviewSection(editor, 'tt-rollback');
+    await editor.locator('#tt-rollback-revision').selectOption(String(revision));
+    const restore = responseAfter(owner, (response) => isCommandResponse(response, 'evolve.rollback'));
+    expect((await restore(() => clickVisible(editor.getByRole('button', { name: 'Restore', exact: true })))).status()).toBe(200);
+    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('draft');
+    const rollback = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    const reviewEditor = await openCanvasObject(owner, 'table.rules');
+    await expect(reviewEditor.getByRole('button', { name: 'Apply to table', exact: true })).toBeVisible();
+    await openReviewSection(reviewEditor, 'tt-table-private-preview');
+    const preview = reviewEditor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true });
     await expect(preview).toBeVisible();
     await expect(preview).toContainText('Trial changes stay in this private copy; the active table is unchanged.');
-    await exercisePrivateTrial(owner, tableId, candidate, preview, expectedControl);
-    const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-    await openReviewSection(editor, 'tt-table-advanced-checks');
-    const previewStep = editor.getByRole('button', { name: 'Preview change', exact: true });
-    await previewStep.scrollIntoViewIfNeeded();
-    await expect(previewStep).toBeInViewport();
-    const responsePromise = responseAfter(owner, (response) => isCommandResponse(response, 'evolve.simulate'));
-    expect((await responsePromise(() => previewStep.click())).status()).toBe(200);
+    await exercisePrivateTrial(owner, tableId, rollback, preview, expectedControl);
+    await openReviewSection(reviewEditor, 'tt-table-advanced-checks');
+    const simulate = responseAfter(owner, (response) => isCommandResponse(response, 'evolve.simulate'));
+    expect((await simulate(() => clickVisible(reviewEditor.getByRole('button', { name: 'Preview change', exact: true })))).status()).toBe(200);
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('simulated');
-    const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
-    expect(after.domain.program).toEqual(before.domain.program);
-    expect(after.domain.records).toEqual(before.domain.records);
-    expect(after.domain.dataRevision).toBe(before.domain.dataRevision);
-    expect(candidate.domain.candidate?.change.program.canvas?.views.length).toBeGreaterThan(0);
-    return editor;
+    const restored = await advanceLifecycle(owner, tableId, await openCanvasObject(owner, 'table.rules'));
+    expect(restored.domain.ruleRevision).toBe(rollback.domain.ruleRevision + 1);
+    expect(restored.domain.records).toEqual(rollback.domain.records);
+    return restored;
+  }
+
+  async function panCanvasUntilVisible(page, locator) {
+    // The Objects panel is now tall enough to cover the old fixed drag point (150, 700) on a long list.
+    // Close it first so the drag lands on the canvas, not the panel.
+    const objectsTrigger = page.getByTestId('canvas-object-menu-trigger');
+    if (await objectsTrigger.getAttribute('aria-expanded') === 'true') {
+      await objectsTrigger.click();
+      await expect(page.getByTestId('canvas-object-dock')).toBeHidden();
+    }
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const box = await locator.boundingBox();
+      const viewport = page.viewportSize();
+      const chatTop = (await page.getByTestId('table-chat-bar').boundingBox())?.y ?? viewport.height;
+      if (box && box.y >= 0 && box.y + box.height <= chatTop - 8) return;
+      // Positive delta pans the canvas up (target below the window); negative pans it down
+      // (target scrolled just above the top edge — panning up there pushed it further away).
+      const delta = box && box.y < 0
+        ? -Math.min(400, Math.max(80, 120 - box.y))
+        : box ? Math.min(400, Math.max(80, box.y + box.height - chatTop + 120)) : 300;
+      // Empty canvas on the left, below the Objects button.
+      const startY = delta > 0 ? 700 : 300;
+      await page.mouse.move(150, startY);
+      await page.mouse.down();
+      await page.mouse.move(150, startY - delta, { steps: 8 });
+      await page.mouse.up();
+    }
+    await expect(locator).toBeInViewport();
   }
 
   async function clickVisible(locator) {
     await locator.scrollIntoViewIfNeeded();
+    // A tall open card can keep its pinned action bar below the window; pan the canvas to reach it.
+    const inView = await expect(locator).toBeInViewport({ timeout: 1_000 }).then(() => true, () => false);
+    if (!inView) await panCanvasUntilVisible(locator.page(), locator);
     await expect(locator).toBeInViewport();
     await locator.click();
   }
@@ -639,10 +681,12 @@ try {
     } else if (expectedControl === 'scene') {
       const scene = preview.locator('svg.tt-generated-scene');
       await scene.scrollIntoViewIfNeeded();
-      await expect(scene).toBeInViewport();
       await expect(scene).toBeVisible();
       const light = scene.locator('.tt-generated-scene__shape[aria-label="Move light-source"]');
       await expect(light).toHaveAttribute('data-drag-enabled', 'true');
+      // The open card sits on a transformed canvas, so scrolling alone may leave the handle off-screen.
+      if (!await expect(light).toBeInViewport({ timeout: 1_000 }).then(() => true, () => false)) await panCanvasUntilVisible(owner, light);
+      await expect(scene).toBeInViewport();
       const beforeValues = trialRecords.lights.find((record) => record.id === 'light-1').values;
       const target = { x: Math.min(100, beforeValues.light_x + 20), y: Math.min(100, beforeValues.light_y + 10) };
       expect(target.x).toBeGreaterThan(beforeValues.light_x);
@@ -1007,7 +1051,7 @@ try {
     const memberOneActor = actors[index * 3 + 1];
     const memberTwoActor = actors[index * 3 + 2];
     const owner = await newPage(ownerActor);
-    await expect(owner.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: /^Welcome back/ })).toBeVisible();
     const created = await createFreshTable(owner);
     const tableId = created.id;
     const source = scenario.file ? await attachSource(owner, tableId, scenario.file) : null;
@@ -1015,8 +1059,8 @@ try {
     const expectedControl = scenario.action === 'button'
       ? scenario.id === 'cafe' ? 'Advance 5 minutes' : 'Recalculate payment'
       : scenario.action === 'slider' ? 'slider' : 'scene';
-    const simulatedEditor = await assertPrivateCandidatePreview(owner, tableId, draft, expectedControl, draftPrompt(scenario, 'initial-draft'));
-    const activated = await advanceLifecycle(owner, tableId, simulatedEditor);
+    await openAppliedRules(owner, draftPrompt(scenario, 'initial-draft'));
+    const activated = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(activated.domain.program.canvas.views.length).toBeGreaterThan(0);
     expect(activated.domain.records).toEqual(draft.domain.candidate.change.initialRecords);
     if (scenario.id === 'cafe') await assertZoomSurvivesPendingObjectFocus(owner, tableId, 'table.view.cafe-floor');
@@ -1053,20 +1097,7 @@ try {
     const editDraft = await askForDraft(owner, tableId, scenario, 'incremental-edit', source, { expectConsent: false });
     expect(editDraft.domain.candidate.change.initialRecords).toEqual({});
     expect(editDraft.domain.records).toEqual(recordSnapshot);
-    const editEditor = await openCanvasObject(owner, 'table.rules');
-    await openReviewSection(editEditor, 'tt-table-private-preview');
-    const editPreview = editEditor.getByRole('region', { name: 'Proposed generated canvas preview', exact: true });
-    await expect(editPreview).toBeVisible();
-    await exercisePrivateTrial(owner, tableId, editDraft, editPreview, expectedControl);
-    await openReviewSection(editEditor, 'tt-table-advanced-checks');
-    const simulateEdit = responseAfter(owner, (response) => isCommandResponse(response, 'evolve.simulate'));
-    expect((await simulateEdit(() => editEditor.getByRole('button', { name: 'Preview change', exact: true }).click())).status()).toBe(200);
-    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe('simulated');
-    const currentEditor = await openCanvasObject(owner, 'table.rules');
-    const afterSimulation = (await api(owner, `/api/workspaces/${tableId}`)).body;
-    expect(afterSimulation.domain.records).toEqual(recordSnapshot);
-    expect(afterSimulation.domain.program).toEqual(beforeEdit.domain.program);
-    await advanceLifecycle(owner, tableId, currentEditor);
+    await openAppliedRules(owner, draftPrompt(scenario, 'incremental-edit'));
     const newViewId = 'table.view.incremental-result';
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.canvasLayout?.positions?.[newViewId], { timeout: 15_000 }).toBeTruthy();
     const afterEdit = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -1098,6 +1129,8 @@ try {
       await assertSharedPosition(member, newViewId, newViewPoint);
     }
     if (source) await assertMemberCannotUsePrivateTools(owner, memberOne, tableId, source);
+    const restored = await restorePreviousRulesWithPrivatePreview(owner, tableId, beforeEdit.domain.ruleRevision, expectedControl);
+    expect(restored.domain.records).toEqual(recordSnapshot);
     const screenshotViewId = {
       cafe: 'table.view.cafe-floor',
       shadow: 'table.view.light-shadow-scene',
@@ -1112,7 +1145,7 @@ try {
     else await expect(renderedMetric).toBeVisible();
     await owner.screenshot({ path: join(output, `${scenario.id}-canvas.png`), fullPage: true });
     const realAction = scenario.id === 'water' ? 'slider + turn-advancing generated form' : scenario.action;
-    mark(`${scenario.id}: synthetic ${source ? 'file' : 'prompt'} draft, private preview, activation, real ${realAction}, shared rows/layout, reload and incremental edit`);
+    mark(`${scenario.id}: synthetic ${source ? 'file' : 'prompt'} draft applied on its own, real ${realAction}, shared rows/layout, reload, incremental edit applied on its own, and a restored revision through private preview and manual review`);
   }
 
   for (let index = 0; index < cases.length; index += 1) await runCase(cases[index], index);

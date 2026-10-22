@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- F052: source of public/og-image.png (1200×630 share card). Render with `node scripts/render-og-image.mjs`. -->
+<html lang="en"><head><meta charset="UTF-8"/><title>Tabletop share card</title>
+<style>
+@font-face { font-family: Manrope; font-weight: 500; src: url(../../node_modules/@fontsource/manrope/files/manrope-latin-500-normal.woff2) format('woff2'); }
+@font-face { font-family: Manrope; font-weight: 800; src: url(../../node_modules/@fontsource/manrope/files/manrope-latin-800-normal.woff2) format('woff2'); }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1200px; height: 630px; overflow: hidden; }
+body { position: relative; display: flex; flex-direction: column; justify-content: space-between; padding: 72px 88px 68px;
+  background: #254d43; color: #faf8f0; font-family: Manrope, sans-serif;
+  background-image: radial-gradient(rgba(210, 244, 183, .13) 1.5px, transparent 1.5px); background-size: 28px 28px; }
+.brand { display: flex; align-items: center; gap: 18px; font-size: 38px; font-weight: 800; letter-spacing: -1.5px; }
+.brand span { color: #d2f4b7; }
+.mark { display: grid; grid-template-columns: repeat(2, 18px); gap: 9px; padding: 13px; border-radius: 16px; background: #d2f4b7; transform: rotate(-4deg); }
+.mark i { width: 18px; height: 18px; border-radius: 4px; background: #254d43; }
+.mark i:last-child { border-radius: 50%; }
+h1 { max-width: 960px; font-size: 76px; font-weight: 800; line-height: 1.08; letter-spacing: -3px; }
+p { font-size: 32px; font-weight: 500; color: #d2f4b7; letter-spacing: -.4px; }
+</style></head>
+<body>
+  <div class="brand"><div class="mark"><i></i><i></i><i></i><i></i></div><div>tabletop<span>.</span></div></div>
+  <h1>The best tool is the one you don't have to think about.</h1>
+  <p>A shared table for work, learning, and play.</p>
+</body></html>

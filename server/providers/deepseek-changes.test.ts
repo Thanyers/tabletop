@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { DomainError } from '../../src/tabletop/shared/contracts.js';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS } from '../../src/tabletop/shared/model-job-progress.js';
 import { tableScenarioSources, equipmentChange } from '../../src/tabletop/testing/table-scenarios.js';
-import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeRequest, type DeepSeekChangeInput } from './deepseek-changes.js';
+import {
+  DeepSeekChangeProvider,
+  ModelProviderClosed,
+  ModelRequestTimeout,
+  RejectedChangeReply,
+  measureDeepSeekChangeRequest,
+  type DeepSeekChangeInput,
+  type DeepSeekChangeProgress,
+} from './deepseek-changes.js';
 
 const API_KEY = 'test-only-deepseek-key';
 
@@ -43,7 +52,9 @@ describe('DeepSeekChangeProvider', () => {
     expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${API_KEY}`);
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body.model).toBe('deepseek-flash');
-    expect(body.stream).toBe(false);
+    expect(body.stream).toBe(true);
+    expect(body.stream_options).toEqual({ include_usage: true });
+    expect(new Headers(init?.headers).get('accept')).toContain('text/event-stream');
     expect(body.max_tokens).toBe(512);
     expect(body.response_format).toEqual({ type: 'json_object' });
     expect(body.thinking).toEqual({ type: 'enabled' });
@@ -327,9 +338,9 @@ describe('DeepSeekChangeProvider', () => {
     expect(calls).toBe(1);
   });
 
-  it('accepts a 180s timeout and rejects longer ones (F031)', () => {
-    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 180_000 })).not.toThrow();
-    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 180_001 })).toThrow(DomainError);
+  it('accepts the 300s ceiling timeout and rejects longer ones (F045)', () => {
+    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 300_000 })).not.toThrow();
+    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 300_001 })).toThrow(DomainError);
   });
 
   it('treats a length-truncated reply as a repairable issue (F031)', async () => {
@@ -367,7 +378,7 @@ describe('DeepSeekChangeProvider', () => {
   });
   it('uses fixed safe configuration errors', () => {
     expect(() => new DeepSeekChangeProvider({ apiKey: ` ${API_KEY} ` })).toThrow(DomainError);
-    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 180_001 })).toThrow(DomainError);
+    expect(() => new DeepSeekChangeProvider({ apiKey: API_KEY, timeoutMs: 300_001 })).toThrow(DomainError);
   });
 });
 
@@ -402,6 +413,164 @@ describe('clarify language enforcement (F026)', () => {
     const thaiInput: DeepSeekChangeInput = { kind: 'table', prompt: 'สร้างตารางให้หน่อย', sources: [], program: null, turn: null };
     const result = await provider.propose(thaiInput, new AbortController().signal);
     expect('clarification' in result).toBe(true);
+  });
+});
+
+// F045: the rule-draft path now reads the provider's SSE stream, so it can show progress,
+// keep a bounded partial answer and say whether our deadline or the provider stopped it.
+const STREAM_USAGE = {
+  prompt_tokens: 40,
+  completion_tokens: 30,
+  prompt_cache_hit_tokens: 10,
+  prompt_cache_miss_tokens: 30,
+};
+const TEACHING_CHANGE = JSON.stringify({ kind: 'teaching', parameters: { force: 8, mass: 2, time: 2 } });
+
+function sseDelta(content?: string, reasoningContent?: string): string {
+  const delta: Record<string, unknown> = {};
+  if (content !== undefined) delta.content = content;
+  if (reasoningContent !== undefined) delta.reasoning_content = reasoningContent;
+  return `data: ${JSON.stringify({ model: 'deepseek-flash', choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`;
+}
+
+function sseFinish(finishReason: 'stop' | 'length'): string {
+  const finish = { model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: finishReason }] };
+  const usage = { model: 'deepseek-flash', choices: [], usage: STREAM_USAGE };
+  return `data: ${JSON.stringify(finish)}\n\ndata: ${JSON.stringify(usage)}\n\ndata: [DONE]\n\n`;
+}
+
+/** Split the stream text into fixed-size byte chunks, so a line or a character can straddle two reads. */
+function streamResponse(text: string, splitAt?: number): Response {
+  const encoder = new TextEncoder();
+  const parts: Uint8Array[] = [];
+  if (splitAt === undefined) parts.push(encoder.encode(text));
+  else for (let index = 0; index < text.length; index += splitAt) parts.push(encoder.encode(text.slice(index, index + splitAt)));
+  return new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const part of parts) controller.enqueue(part);
+      controller.close();
+    },
+  }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
+function streamBody(content: string, size = 9, reasoning = ''): string {
+  const events: string[] = [reasoning ? sseDelta(undefined, reasoning) : ''];
+  for (let index = 0; index < content.length; index += size) events.push(sseDelta(content.slice(index, index + size)));
+  return events.join('');
+}
+
+async function rejectionOf(operation: Promise<unknown>): Promise<unknown> {
+  try { await operation; } catch (error) { return error; }
+  throw new Error('Expected the provider attempt to fail.');
+}
+
+describe('DeepSeekChangeProvider streaming (F045)', () => {
+  it('streams the draft reply, reports increasing counters and still validates the final JSON', async () => {
+    const progress: DeepSeekChangeProgress[] = [];
+    let sentBody: Record<string, unknown> | undefined;
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async (_url, init) => {
+        sentBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return streamResponse(`${sseDelta(undefined, 'considering the lesson')}${streamBody(TEACHING_CHANGE)}${sseFinish('stop')}`);
+      },
+    });
+    const result = await provider.propose(input(), new AbortController().signal, (sample) => progress.push({ ...sample }));
+    expect(sentBody?.stream).toBe(true);
+    expect(sentBody?.stream_options).toEqual({ include_usage: true });
+    expect(result).toMatchObject({
+      change: { kind: 'teaching', parameters: { force: 8, mass: 2, time: 2 } },
+      usage: { promptTokens: 40, completionTokens: 30, cacheHitTokens: 10, cacheMissTokens: 30 },
+    });
+    expect(progress.length).toBeGreaterThan(1);
+    for (let index = 1; index < progress.length; index += 1) {
+      expect(progress[index]!.receivedChars).toBeGreaterThanOrEqual(progress[index - 1]!.receivedChars);
+    }
+    expect(progress.at(-1)).toMatchObject({ receivedChars: TEACHING_CHANGE.length, reasoningChars: 'considering the lesson'.length });
+  });
+
+  it('carries the bounded thinking tail in live progress, so a waiting card can show it (F050)', async () => {
+    const reasoning = `${'step '.repeat(200)}final check`;
+    const progress: DeepSeekChangeProgress[] = [];
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async () => streamResponse(`${sseDelta(undefined, reasoning)}${streamBody(TEACHING_CHANGE)}${sseFinish('stop')}`),
+    });
+    await provider.propose(input(), new AbortController().signal, (sample) => progress.push({ ...sample }));
+    const last = progress.at(-1);
+    expect(last?.reasoningChars).toBe(reasoning.length);
+    expect(last?.thinkingTail).toBe(reasoning.slice(-MAX_JOB_THINKING_TAIL_CHARS));
+    expect(last?.thinkingTail?.length).toBe(MAX_JOB_THINKING_TAIL_CHARS);
+  });
+
+  it('parses a stream split at arbitrary chunk boundaries', async () => {
+    const text = `${sseDelta(undefined, 'plan the table')}${streamBody(TEACHING_CHANGE, 4)}${sseFinish('stop')}`;
+    for (const splitAt of [1, 3, 11]) {
+      const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => streamResponse(text, splitAt) });
+      await expect(provider.propose(input(), new AbortController().signal))
+        .resolves.toMatchObject({ change: { kind: 'teaching', parameters: { force: 8, mass: 2, time: 2 } } });
+    }
+  });
+
+  it('treats a streamed finish_reason=length as a repairable rejection, not a timeout', async () => {
+    const truncated = '{"kind":"teaching","parameters":{';
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async () => streamResponse(`${streamBody(truncated, 6)}${sseFinish('length')}`),
+    });
+    const rejection = await rejectionOf(provider.propose(input(), new AbortController().signal));
+    expect(rejection).toBeInstanceOf(RejectedChangeReply);
+    if (!(rejection instanceof RejectedChangeReply)) throw new Error('Expected a repairable truncation.');
+    expect(rejection.issues[0]).toContain('truncated at the max_tokens limit');
+    expect(rejection.previousOutput).toBe(truncated);
+  });
+
+  it('reports our own deadline after N characters with the bounded partial answer', async () => {
+    const partial = TEACHING_CHANGE.slice(0, 40);
+    const encoder = new TextEncoder();
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      timeoutMs: 80,
+      fetch: async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          // Hand over one well-formed burst, then stall: the model is "still thinking".
+          controller.enqueue(encoder.encode(`${sseDelta(undefined, 'plan the table')}${streamBody(partial, 8)}`));
+        },
+        pull() { return new Promise<void>(() => undefined); },
+      }), { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    });
+    const rejection = await rejectionOf(provider.propose(input(), new AbortController().signal));
+    expect(rejection).toBeInstanceOf(ModelRequestTimeout);
+    if (!(rejection instanceof ModelRequestTimeout)) throw new Error('Expected our own deadline.');
+    expect(rejection.code).toBe('MODEL_PROVIDER_TIMEOUT');
+    expect(rejection.details).toMatchObject({ timedOutBy: 'server', limitMs: 80, receivedChars: partial.length, partialContent: partial });
+    expect(rejection.details.elapsedMs).toBeGreaterThanOrEqual(70);
+    expect(rejection.details.reasoningChars).toBe('plan the table'.length);
+    expect(rejection.details.thinkingTail).toBe('plan the table');
+  });
+
+  it('reports a provider close separately and bounds the kept thinking tail and partial answer', async () => {
+    const reasoning = 'r'.repeat(MAX_JOB_THINKING_TAIL_CHARS + 300);
+    const content = 'a'.repeat(MAX_JOB_PARTIAL_CONTENT_CHARS + 1_000);
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      // No finish_reason and no usage: the provider dropped the connection mid-reply.
+      fetch: async () => streamResponse(`${sseDelta(undefined, reasoning)}${streamBody(content, 500)}`),
+    });
+    const rejection = await rejectionOf(provider.propose(input(), new AbortController().signal));
+    expect(rejection).toBeInstanceOf(ModelProviderClosed);
+    if (!(rejection instanceof ModelProviderClosed)) throw new Error('Expected a provider close.');
+    expect(rejection.code).toBe('MODEL_PROVIDER_REQUEST_FAILED');
+    expect(rejection.details).toMatchObject({ timedOutBy: 'provider', receivedChars: content.length, reasoningChars: reasoning.length });
+    expect(rejection.details.partialContent).toHaveLength(MAX_JOB_PARTIAL_CONTENT_CHARS);
+    expect(rejection.details.thinkingTail).toHaveLength(MAX_JOB_THINKING_TAIL_CHARS);
+    expect(rejection.details.thinkingTail).toBe(reasoning.slice(-MAX_JOB_THINKING_TAIL_CHARS));
+  });
+
+  it('still accepts a plain JSON reply from a provider that ignores stream:true', async () => {
+    const provider = new DeepSeekChangeProvider({ apiKey: API_KEY, fetch: async () => response(TEACHING_CHANGE) });
+    await expect(provider.propose(input(), new AbortController().signal, () => undefined))
+      .resolves.toMatchObject({ change: { kind: 'teaching', parameters: { force: 8, mass: 2, time: 2 } } });
   });
 });
 

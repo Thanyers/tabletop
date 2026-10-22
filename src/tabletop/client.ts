@@ -1,4 +1,5 @@
-import type { CommandAck, CommandEnvelope, SessionView, WorkspaceView } from './shared/contracts';
+import { MAX_TABLE_MEMBER_SEATS, type CommandAck, type CommandEnvelope, type SessionView, type WorkspaceView } from './shared/contracts';
+import type { ModelFailureDetails, ModelJobProgress } from './shared/model-job-progress';
 import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
 import { parseCursorRelay, type CursorRelay } from './shared/cursor-protocol';
 
@@ -46,6 +47,15 @@ export interface ModelJob {
   prompt?: string;
   /** F038: machine-readable failure code of a failed rule request. */
   failureCode?: string;
+  /** F039: the draft went into use on its own, or needs a manual review (with the failed checks). */
+  autoApply?: 'applied' | 'needs-review';
+  autoApplyReasons?: string[];
+  /** F045: live counters while the draft runs (answer and thinking characters received so far). */
+  progress?: ModelJobProgress;
+  /** F045: the configured whole-job stop for this draft (default 240s, at most 300s). */
+  limitMs?: number;
+  /** F045: why a failed draft stopped early and how much of the reply it had received. */
+  failureDetails?: ModelFailureDetails;
 }
 
 export interface TabletopCapabilities {
@@ -53,6 +63,8 @@ export interface TabletopCapabilities {
   tableReadOnly?: boolean;
   /** F003: the server supports reusable table invite links (Worker); the Node guest runtime does not. */
   inviteLinks?: boolean;
+  /** Member seats a table can hand out besides its owner; missing = the Node runtime's seven. */
+  memberSeats?: number;
   tableAssistant?: { available: boolean; reason?: string };
   model: { enabled: boolean; reason: string };
 }
@@ -178,7 +190,7 @@ export class TabletopClient {
       tableAssistant: { available: false, reason: unavailableAssistantReason },
       model: { enabled: false, reason: 'AI proposals are not configured on this local server.' },
     };
-    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; tableAssistant?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
     const tableAssistant = body.tableAssistant;
     const validTableAssistant = tableAssistant === undefined || (
       typeof tableAssistant === 'object'
@@ -195,6 +207,8 @@ export class TabletopClient {
       uploads: body.uploads,
       ...(typeof body.tableReadOnly === 'boolean' ? { tableReadOnly: body.tableReadOnly } : {}),
       ...(body.inviteLinks === true ? { inviteLinks: true } : {}),
+      ...(typeof body.memberSeats === 'number' && Number.isInteger(body.memberSeats) && body.memberSeats >= 1
+        ? { memberSeats: Math.min(body.memberSeats, MAX_TABLE_MEMBER_SEATS) } : {}),
       tableAssistant: assistantCapability
         ? { available: assistantCapability.available, ...(assistantCapability.reason ? { reason: assistantCapability.reason } : {}) }
         : { available: false, reason: unavailableAssistantReason },

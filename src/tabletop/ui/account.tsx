@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowRight, ChevronDown, LogOut, RefreshCw, ShieldCheck, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { AdminWorkspace, AdminWorkspacePage, AuthStatus, GoogleAuthUser } from '../client';
 import './account.css';
@@ -36,6 +36,24 @@ export function AccountSignIn({ status, notice, hasPendingInvite, checking, onRe
         <summary>How table invitations work</summary>
         <p>Invitation links are single-use and expire. They grant a designated seat to whoever opens the link while it is valid; it is not tied to a preselected email. Table access is checked after sign-in.</p>
       </details>
+      <a className="tt-account-gate__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><span>Auto demo</span><small>opens in a new tab</small><ArrowRight size={14} /></a>
+    </section>
+  </PublicWelcome>;
+}
+
+/** The public landing for someone already signed in: same story, with a way back to their tables instead of sign-in. */
+export function SignedInWelcome({ user, onOpenTables, onStart }: { user: GoogleAuthUser | null; onOpenTables: () => void; onStart: () => void }) {
+  const openTables = (event: MouseEvent<HTMLAnchorElement>) => { event.preventDefault(); onOpenTables(); };
+  return <PublicWelcome headerAction={<a className="tt-public-welcome__signin" href="/tables" onClick={openTables}>Your tables <ArrowRight size={14} aria-hidden="true" /></a>}>
+    <section id="sign-in" className="tt-public-welcome__auth" aria-labelledby="tt-public-welcome-auth-title">
+      <span className="tt-account-gate__eyebrow"><ShieldCheck size={14} /> SIGNED IN</span>
+      <h2 id="tt-public-welcome-auth-title">{user ? `Welcome back, ${user.name}` : 'Welcome back'}</h2>
+      <p className="tt-public-welcome__auth-copy">Return to a table you share, or start a new one.</p>
+      <a className="tt-account-gate__google" href="/tables" onClick={openTables}>
+        <span>Your tables</span>
+        <ArrowRight size={16} />
+      </a>
+      <button className="tt-account-gate__retry" type="button" onClick={onStart}>Start a new table</button>
       <a className="tt-account-gate__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><span>Auto demo</span><small>opens in a new tab</small><ArrowRight size={14} /></a>
     </section>
   </PublicWelcome>;

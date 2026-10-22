@@ -6,8 +6,9 @@ import type { Room } from './room.js';
 import type { Env } from './contracts.js';
 import { csrfForToken } from './auth.js';
 import { canonicalJson, hashValue, sha256 } from '../server/codec.js';
-import { DomainError, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
-import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { DomainError, MAX_TABLE_MEMBER_SEATS, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { equipmentChange, rollCombatChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { rollTotal } from '../src/tabletop/domain/roll.js';
 import type { PendingDirectoryChange } from './room-repository.js';
 import { proposeChange } from './ai.js';
 import type { AIProposalRequest, AIProposalResult } from './ai.js';
@@ -16,6 +17,7 @@ import type { TableAssistantInput, TableAssistantResult } from '../src/tabletop/
 import type { TableAssistantResponse } from './table-assistant.js';
 import { CURSOR_MIN_INTERVAL_MS } from '../src/tabletop/shared/cursor-protocol.js';
 import { ReasonedDomainError } from './model-failure.js';
+import { ModelProviderClosed, ModelRequestTimeout } from '../server/providers/deepseek-changes.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
@@ -30,7 +32,8 @@ vi.mock('./table-assistant.js', async (importOriginal) => {
 const runtime = env as Env;
 const migrationEnv = env as Env & { TEST_MIGRATION: string };
 const ORIGIN = 'https://tabletop.test';
-const MODEL_RECOVERY_DELAY_MS = 240_000;
+// F045: default whole-job deadline 240s plus the 120s recovery grace.
+const MODEL_RECOVERY_DELAY_MS = 360_000;
 const MODEL_TEST_DELAY_MS = 100;
 const MODEL_RACE_DELAY_MS = MODEL_TEST_DELAY_MS * 4;
 const MODEL_WAIT_ATTEMPTS = 50;
@@ -57,6 +60,23 @@ interface TestModelJob {
   message?: string;
   candidateId?: string;
   clarification?: { question: string; options: string[] };
+  autoApply?: 'applied' | 'needs-review';
+  autoApplyReasons?: string[];
+  failureCode?: string;
+  /** F045: live counters while the draft runs; F050 adds the bounded thinking tail. */
+  progress?: { receivedChars: number; reasoningChars: number; thinkingTail?: string; updatedAt: number };
+  /** F045: the configured whole-job deadline the draft runs under. */
+  limitMs?: number;
+  /** F045: bounded, redacted stop evidence for a failed draft. */
+  failureDetails?: {
+    timedOutBy: 'server' | 'provider';
+    limitMs: number;
+    elapsedMs: number;
+    receivedChars: number;
+    reasoningChars: number;
+    partialContent?: string;
+    thinkingTail?: string;
+  };
 }
 
 interface TestTableAssistantJob {
@@ -1278,19 +1298,16 @@ describe('Cloudflare room Durable Object', () => {
     expect(proposalJob.status).toBe('completed');
     expect(JSON.stringify(proposalJob.data)).not.toContain(privateText);
 
-    let ownerView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
-    expect(ownerView.body.domain.candidate).toMatchObject({ status: 'draft' });
+    // F039: the Room runs every review check and puts the asker's draft into use on its own.
+    expect(proposalJob.data).toMatchObject({ autoApply: 'applied' });
+    const ownerView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(ownerView.body.domain.candidate).toMatchObject({ status: 'active', createdBy: owner.id, approval: { actorId: owner.id } });
+    expect(ownerView.body.domain.kind === 'table' && ownerView.body.domain.ruleRevision).toBe(1);
     // Was: the participant projection hid the owner's draft. Under open visibility (F015) members
     // read the draft; the job record itself still never stores the source text (asserted above).
     const participantDraft = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
-    expect(participantDraft.body.domain.candidate).toMatchObject({ status: 'draft' });
+    expect(participantDraft.body.domain.candidate).toMatchObject({ status: 'active' });
     expect(participantDraft.body.domain.candidate).toEqual(ownerView.body.domain.candidate);
-    for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) {
-      const step = await issueCommand(stub, ownerView.body, owner, type, {});
-      expect(step.response.status).toBe(200);
-      if (!('ok' in step.body) || !step.body.ok) throw new Error(`Expected ${type} acknowledgement.`);
-      ownerView = { response: ownerView.response, body: step.body.workspace };
-    }
 
     const firstView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstMember);
     const secondView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, secondMember);
@@ -1390,6 +1407,56 @@ describe('Cloudflare room Durable Object', () => {
       force: 12, mass: 2, time: 2,
     });
     expect(teachingUpdate.response.status).toBe(200);
+  });
+
+  it('issues and consumes one server roll on the room path and records the dice in room_events (F048)', async () => {
+    const owner = newActor('Roll owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    let current = workspace;
+    const change = rollCombatChange();
+    for (const [type, payload] of [
+      ['evolve.propose', { change }], ['evolve.simulate', {}], ['evolve.validate', {}], ['evolve.approve', {}], ['evolve.activate', {}],
+    ] as const) {
+      const result = await issueCommand(stub, current, owner, type, payload);
+      expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+      current = (result.body as CommandAck).workspace;
+    }
+
+    const roll = await issueCommand(stub, current, owner, 'table.roll', { actionId: 'attack', parameterId: 'damage' });
+    expect(roll.response.status, JSON.stringify(roll.body)).toBe(200);
+    const rollAck = roll.body as CommandAck;
+    expect(rollAck.roll?.groups).toEqual([{ count: 2, faces: 6 }]);
+    expect(rollAck.roll?.values).toHaveLength(2);
+    if (rollAck.workspace.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(rollAck.workspace.domain.pendingRolls).toBeUndefined();
+
+    const spoof = await issueCommand(stub, rollAck.workspace, owner, 'table.act', { actionId: 'attack', inputs: { target: 'hero', damage: 2 } });
+    expect(spoof.response.status).toBe(422);
+    expect((spoof.body as PublicError).errorCode).toBe('TABLE_ROLL_CLIENT_VALUE');
+
+    const acted = await issueCommand(stub, rollAck.workspace, owner, 'table.act', { actionId: 'attack', inputs: { target: 'hero' } });
+    expect(acted.response.status, JSON.stringify(acted.body)).toBe(200);
+    const actAck = acted.body as CommandAck;
+    if (actAck.workspace.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(actAck.workspace.domain.records.hits?.at(-1)?.values).toEqual({ target: 'hero', damage: rollAck.roll?.total });
+    expect(actAck.workspace.domain.records.fighters?.[0]?.values.damage_taken).toBe(rollAck.roll?.total);
+
+    const reuse = await issueCommand(stub, actAck.workspace, owner, 'table.act', { actionId: 'attack', inputs: { target: 'hero' } });
+    expect(reuse.response.status).toBe(409);
+    expect((reuse.body as PublicError).errorCode).toBe('TABLE_ROLL_REQUIRED');
+
+    const events = await inspectRoom<{ event_type: string; event_data: string }>(stub,
+      `SELECT event_type, event_data FROM room_events WHERE workspace_id = '${roomId}' AND event_type IN ('table.roll', 'table.act') ORDER BY workspace_sequence`);
+    const payloads = events.map((event) => (JSON.parse(event.event_data) as { payload?: Record<string, unknown> }));
+    const rollEvent = payloads.find((item) => typeof item.payload?.parameterId === 'string');
+    const actEvent = payloads.find((item) => item.payload !== undefined && 'inputs' in item.payload);
+    const recordedRoll = rollEvent?.payload?.roll as { parameterId?: string; values?: number[]; total?: number } | undefined;
+    const recordedActRoll = actEvent?.payload?.roll as { parameterId?: string; values?: number[]; total?: number } | undefined;
+    expect(recordedRoll).toMatchObject({ parameterId: 'damage', values: rollAck.roll?.values, total: rollAck.roll?.total });
+    expect(recordedActRoll).toMatchObject({ parameterId: 'damage', values: rollAck.roll?.values, total: rollAck.roll?.total });
+    expect(rollTotal(recordedActRoll?.values ?? [], 3)).toBe(recordedActRoll?.total);
+    expect(actEvent?.payload?.inputs).toEqual({ target: 'hero' });
   });
 
   it('lets the table owner remove a member, closes their socket, hides the room in D1, and lets them rejoin by a new invite (F003-T1)', async () => {
@@ -1679,19 +1746,63 @@ describe('Cloudflare room Durable Object', () => {
       expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: 'member-1' });
     });
 
-    it('fills all seven member seats through the link and rejects the eighth joiner (F003-T3)', async () => {
+    it('fills all twelve member seats through the link and rejects the next joiner (F003-T3)', async () => {
       const table = await linkTable('Capacity link owner');
       const link = await table.createLink(1);
-      for (let index = 1; index <= 7; index += 1) {
+      for (let index = 1; index <= MAX_TABLE_MEMBER_SEATS; index += 1) {
         const actor = await table.joiner(`Capacity joiner ${index}`);
         const joined = await table.join(actor, link.link);
         expect(joined.response.status).toBe(200);
         expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: `member-${index}` });
       }
-      const eighth = await table.joiner('Capacity joiner 8');
-      expectError(await table.join(eighth, link.link), 429, 'MEMBER_LIMIT_REACHED');
-      expect(await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships WHERE revoked_at IS NULL')).toHaveLength(8);
-      expect(await inspectRoom(table.stub, `SELECT actor_id FROM room_memberships WHERE actor_id = '${eighth.id}'`)).toHaveLength(0);
+      const extra = await table.joiner('Capacity joiner extra');
+      expectError(await table.join(extra, link.link), 429, 'MEMBER_LIMIT_REACHED');
+      expect(await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships WHERE revoked_at IS NULL')).toHaveLength(1 + MAX_TABLE_MEMBER_SEATS);
+      expect(await inspectRoom(table.stub, `SELECT actor_id FROM room_memberships WHERE actor_id = '${extra.id}'`)).toHaveLength(0);
+    });
+
+    it('follows the table member limit for link joins and invitations, and lowering it removes no one', async () => {
+      const table = await linkTable('Member limit owner');
+      const setLimit = async (maxMembers: number | null) => {
+        const current = await call<WorkspaceView>(table.stub, `/api/workspaces/${table.roomId}`, table.owner);
+        const result = await issueCommand(table.stub, current.body, table.owner, 'display.set', { maxMembers });
+        expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+        return (result.body as CommandAck).workspace;
+      };
+      expect((await setLimit(2)).domain.display).toEqual({ maxMembers: 2 });
+      const link = await table.createLink(1);
+      const joined = [];
+      for (let index = 1; index <= 2; index += 1) {
+        const actor = await table.joiner(`Limited joiner ${index}`);
+        const result = await table.join(actor, link.link);
+        expect(result.response.status).toBe(200);
+        joined.push(actor);
+      }
+      const third = await table.joiner('Limited joiner 3');
+      const refused = await table.join(third, link.link);
+      expectError(refused, 429, 'MEMBER_LIMIT_REACHED');
+      expect((refused.body as PublicError).message).toContain('allows 2 members besides the owner');
+      // A single-use invitation is refused too while the table is full.
+      const invite = await call<PublicError>(table.stub, `/api/workspaces/${table.roomId}/invites`, table.owner, {
+        method: 'POST', body: { seat: 'member-12' }, mutation: true,
+      });
+      expectError(invite, 429, 'MEMBER_LIMIT_REACHED');
+
+      // Lowering below the current count keeps everyone; it only blocks new joins.
+      await setLimit(1);
+      expect(await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships WHERE revoked_at IS NULL')).toHaveLength(3);
+      for (const actor of joined) expect((await table.join(actor, link.link)).response.status).toBe(200);
+      expectError(await table.join(third, link.link), 429, 'MEMBER_LIMIT_REACHED');
+
+      // Back to the maximum, the next person joins and the twelfth seat can be invited.
+      await setLimit(null);
+      const rejoined = await table.join(third, link.link);
+      expect(rejoined.response.status).toBe(200);
+      expect((rejoined.body as WorkspaceView).actor).toMatchObject({ seat: 'member-3' });
+      const twelfth = await call<{ ticket: string }>(table.stub, `/api/workspaces/${table.roomId}/invites`, table.owner, {
+        method: 'POST', body: { seat: 'member-12' }, mutation: true,
+      });
+      expect(twelfth.response.status).toBe(201);
     });
 
     it('skips a seat that has a pending single-use invite and leaves that invite redeemable (F003-T3)', async () => {
@@ -2177,6 +2288,46 @@ describe('Cloudflare room Durable Object', () => {
     expect(stored[0]).toMatchObject({ status: 'revoked', data: '{}' });
   });
 
+  it('applies an encounter AI draft on its own, but keeps it for review while the encounter is paused (F039)', async () => {
+    const dm = newActor('Auto apply DM');
+    await saveActor(dm);
+    const nextRule = { allyTarget: true, apCost: 1, oncePerTurn: true };
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
+      jobId: modelJobId(request.workspace.id, request.workspace.epoch, request.actorId, request.commandId),
+      change: { kind: 'encounter', rule: nextRule },
+      usage: { promptTokens: 100, completionTokens: 20, cacheHitTokens: 0, cacheMissTokens: 100 },
+    }));
+    const runJob = async (stub: DurableObjectStub<Room>, roomId: string, view: WorkspaceView) => {
+      const input = { commandId: randomUUID(), expectedRevision: view.revision, expectedEpoch: view.epoch, prompt: 'Allow an ally shield.', consent: true };
+      const jobId = modelJobId(roomId, view.epoch, dm.id, input.commandId);
+      const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, dm, { method: 'POST', body: input, mutation: true });
+      expect(accepted.response.status).toBe(202);
+      expect((await waitForModelJob(stub, jobId, dm.id, roomId, view.epoch)).status).toBe('completed');
+      return (await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, dm)).body;
+    };
+
+    const live = await createRoom(dm, 'encounter');
+    expect(await runJob(live.stub, live.roomId, live.workspace)).toMatchObject({ status: 'completed', autoApply: 'applied' });
+    const applied = await call<WorkspaceView>(live.stub, `/api/workspaces/${live.roomId}`, dm);
+    if (applied.body.domain.kind !== 'encounter') throw new Error('Expected an encounter.');
+    expect(applied.body.domain.candidate).toMatchObject({ status: 'active', createdBy: dm.id });
+    expect(applied.body.domain.rule).toEqual(nextRule);
+    expect(applied.body.domain.ruleRevision).toBe(live.workspace.domain.ruleRevision + 1);
+
+    const pausedRoom = await createRoom(dm, 'encounter');
+    const paused = await issueCommand(pausedRoom.stub, pausedRoom.workspace, dm, 'encounter.pause', {});
+    expect(paused.response.status).toBe(200);
+    const pausedView = (paused.body as CommandAck).workspace;
+    expect(await runJob(pausedRoom.stub, pausedRoom.roomId, pausedView)).toMatchObject({
+      status: 'completed', autoApply: 'needs-review', autoApplyReasons: ['Resume the encounter before new rules can be applied.'],
+    });
+    const waiting = await call<WorkspaceView>(pausedRoom.stub, `/api/workspaces/${pausedRoom.roomId}`, dm);
+    if (waiting.body.domain.kind !== 'encounter' || pausedView.domain.kind !== 'encounter') throw new Error('Expected an encounter.');
+    expect(waiting.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: dm.id, approval: null });
+    expect(waiting.body.domain.rule).toEqual(pausedView.domain.rule);
+    expect(waiting.body.domain.ruleRevision).toBe(pausedView.domain.ruleRevision);
+  });
+
   it('creates one authorized proposal draft and returns the same candidate receipt on retry', async () => {
     const owner = newActor('AI teacher');
     await saveActor(owner);
@@ -2201,15 +2352,18 @@ describe('Cloudflare room Durable Object', () => {
     // F034-T3: the finished job keeps its prompt so the table's draft history can still show it.
     expect(job.data.prompt).toBe(input.prompt);
     expect(JSON.stringify(job.data)).not.toContain('change');
+    // F039: a lesson draft goes into use on its own too.
+    expect(job.data).toMatchObject({ autoApply: 'applied' });
     const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
-    expect(current.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.id });
+    expect(current.body.domain.candidate).toMatchObject({ status: 'active', createdBy: owner.id });
+    expect(current.body.domain.ruleRevision).toBe(workspace.domain.ruleRevision + 1);
     const candidateId = current.body.domain.candidate?.id;
 
     const retry = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
       method: 'POST', body: input, mutation: true,
     });
     expect(retry.response.status).toBe(200);
-    expect(retry.body).toMatchObject({ id: expectedId, status: 'completed', candidateId });
+    expect(retry.body).toMatchObject({ id: expectedId, status: 'completed', candidateId, autoApply: 'applied' });
     const mismatch = await call<PublicError>(stub, `/api/workspaces/${roomId}/model`, owner, {
       method: 'POST', body: { ...input, prompt: 'A changed request must not reuse this receipt.' }, mutation: true,
     });
@@ -2279,6 +2433,84 @@ describe('Cloudflare room Durable Object', () => {
     expect(eventsAfter.map((row) => row.event_type)).not.toContain('evolve.propose');
   });
 
+  it('puts a table rule draft into use on its own after the model job commits it (F039)', async () => {
+    const owner = newActor('Auto apply owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: created } = await createRoom(owner, 'table');
+    const imported = await issueCommand(stub, created, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    const ready = (imported.body as CommandAck).workspace;
+    if (ready.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(ready.domain.ruleRevision).toBe(0);
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => modelResult(request));
+    const input = {
+      commandId: randomUUID(), expectedRevision: ready.revision, expectedEpoch: ready.epoch,
+      prompt: 'Set up equipment lending.', consent: true,
+    };
+    const jobId = modelJobId(roomId, ready.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, { method: 'POST', body: input, mutation: true });
+    expect(accepted.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, ready.epoch);
+    expect(job.status).toBe('completed');
+    expect(job.data).toMatchObject({ autoApply: 'applied' });
+    expect(job.data.autoApplyReasons).toBeUndefined();
+
+    const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    if (current.body.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(current.body.domain.ruleRevision).toBe(1);
+    expect(current.body.domain.candidate).toMatchObject({ status: 'active', createdBy: owner.id, approval: { actorId: owner.id } });
+    expect(current.body.domain.program?.actions.map((action) => action.id)).toEqual(['borrow', 'return']);
+    // The approval is stored like a manual approval, so the audit trail matches the review flow.
+    const approvals = await inspectRoom<{ approving_actor_id: SqlStorageValue }>(stub, 'SELECT approving_actor_id FROM room_approvals');
+    expect(approvals.map((row) => row.approving_actor_id)).toEqual([owner.id]);
+    const events = await inspectRoom<{ event_type: SqlStorageValue }>(stub, 'SELECT event_type FROM room_events ORDER BY rowid');
+    expect(events.map((row) => row.event_type).slice(-2)).toEqual(['evolve.propose', 'evolve.autoApply']);
+
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(poll.response.status).toBe(200);
+    expect(poll.body).toMatchObject({ id: jobId, status: 'completed', candidateId: current.body.domain.candidate?.id, autoApply: 'applied' });
+    expect(poll.body.autoApplyReasons).toBeUndefined();
+  });
+
+  it('leaves a table draft that existing records break for manual review, with the reason (F039)', async () => {
+    const owner = newActor('Needs review owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: active } = await createActiveEquipmentTable(owner);
+    if (active.domain.kind !== 'table' || !active.domain.program) throw new Error('Expected an active table.');
+    const stricter = structuredClone(active.domain.program);
+    // Both items are available, so this new unique rule is broken by the records already on the table.
+    stricter.invariants = [{ id: 'one_available', collection: 'equipment', fields: ['available'], message: 'Only one item may be available.' }];
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
+      jobId: modelJobId(request.workspace.id, request.workspace.epoch, request.actorId, request.commandId),
+      change: { kind: 'table', program: stricter, initialRecords: {} },
+      usage: { promptTokens: 100, completionTokens: 20, cacheHitTokens: 0, cacheMissTokens: 100 },
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: active.revision, expectedEpoch: active.epoch,
+      prompt: 'Only one item may be available at a time.', consent: true,
+    };
+    const jobId = modelJobId(roomId, active.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, { method: 'POST', body: input, mutation: true });
+    expect(accepted.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, active.epoch);
+    expect(job.status).toBe('completed');
+
+    const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    if (current.body.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(current.body.domain.ruleRevision).toBe(active.domain.ruleRevision);
+    expect(current.body.domain.program).toEqual(active.domain.program);
+    expect(current.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.id, approval: null });
+
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(poll.response.status).toBe(200);
+    expect(poll.body).toMatchObject({
+      id: jobId, status: 'completed', candidateId: current.body.domain.candidate?.id,
+      autoApply: 'needs-review', autoApplyReasons: ['Only one item may be available.'],
+    });
+  });
+
   it('omits a malformed stored clarification from the public model job view (F012)', async () => {
     const owner = newActor('Malformed clarification owner');
     await saveActor(owner);
@@ -2322,6 +2554,157 @@ describe('Cloudflare room Durable Object', () => {
     expect(visible.response.status).toBe(200);
     expect(visible.body.message).toMatch(/shorten them or remove a file/iu);
     expect(JSON.stringify(visible.body)).not.toContain('PRIVATE_PROVIDER_TEXT_SENTINEL');
+  });
+
+  it('exposes the configured draft limit and stored progress on a running model job (F045)', async () => {
+    const owner = newActor('Progress owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const jobId = 'e'.repeat(64);
+    await runInDurableObject(stub, async (instance) => {
+      await instance.repository.reserveModelJob({
+        id: jobId,
+        workspaceId: roomId,
+        epoch: workspace.epoch,
+        actorId: owner.id,
+        commandId: randomUUID(),
+        expectedRevision: workspace.revision,
+        requestHash: 'f'.repeat(64),
+        now: Date.now(),
+      });
+      await instance.repository.updateModelJobProgress(jobId, roomId, workspace.epoch, owner.id,
+        { receivedChars: 1_250, reasoningChars: 4_800, updatedAt: Date.now() });
+    });
+
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(poll.response.status).toBe(202);
+    expect(poll.body).toMatchObject({
+      id: jobId,
+      status: 'running',
+      limitMs: 240_000,
+      progress: { receivedChars: 1_250, reasoningChars: 4_800 },
+    });
+    expect(poll.body.progress?.updatedAt).toEqual(expect.any(Number));
+  });
+
+  it('streams a bounded, identity-redacted thinking tail on a running draft (F050)', async () => {
+    const owner = newActor('Live thinking owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const thinkingTail = `checking ${owner.name} (${owner.id}) ${'z'.repeat(1_200)}`;
+    let providerStarted = false;
+    let releaseProvider = () => {};
+    const providerWait = new Promise<void>((resolve) => { releaseProvider = resolve; });
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request, _fetchImpl, onProgress) => {
+      providerStarted = true;
+      onProgress?.({ receivedChars: 0, reasoningChars: thinkingTail.length, thinkingTail });
+      await providerWait;
+      return modelResult(request);
+    });
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    await waitForCondition(() => providerStarted);
+    let liveProgress: TestModelJob['progress'];
+    for (let attempt = 0; attempt < 40 && !liveProgress?.thinkingTail; attempt += 1) {
+      liveProgress = (await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner)).body.progress;
+      if (!liveProgress?.thinkingTail) await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    releaseProvider();
+    expect(liveProgress?.thinkingTail).toBeDefined();
+    expect(liveProgress?.thinkingTail?.length).toBeLessThanOrEqual(600);
+    // The live tail is redacted on the way into the row, exactly like the failure details.
+    expect(liveProgress?.thinkingTail).not.toContain(owner.name);
+    expect(liveProgress?.thinkingTail).not.toContain(owner.id);
+    await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+  });
+
+  it('keeps bounded, identity-redacted failure details when our own deadline stops a draft (F045)', async () => {
+    const owner = newActor('Draft partial owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const partialContent = `{"kind":"table","description":"${owner.name} (${owner.id}) ${'x'.repeat(5_000)}`;
+    const thinkingTail = `considering ${owner.name}: ${'y'.repeat(2_000)}`;
+    vi.mocked(proposeChange).mockRejectedValue(new ModelRequestTimeout({
+      timedOutBy: 'server',
+      limitMs: 240_000,
+      elapsedMs: 240_100,
+      receivedChars: partialContent.length,
+      reasoningChars: thinkingTail.length,
+      partialContent,
+      thinkingTail,
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const queued = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(queued.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('failed');
+    expect(job.data).toMatchObject({
+      failure: 'MODEL_PROVIDER_TIMEOUT',
+      failureDetails: { timedOutBy: 'server', limitMs: 240_000, elapsedMs: 240_100 },
+    });
+    // Nothing raw about a member survives in the stored job.
+    expect(JSON.stringify(job.data)).not.toContain(owner.name);
+    expect(JSON.stringify(job.data)).not.toContain(owner.id);
+
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    expect(visible.body.failureCode).toBe('MODEL_PROVIDER_TIMEOUT');
+    expect(visible.body.message).toContain('Stopped at our 240s limit');
+    expect(visible.body.message).toContain('The partial text is kept below.');
+    const details = visible.body.failureDetails;
+    if (!details) throw new Error('Expected bounded failure details.');
+    expect(details.timedOutBy).toBe('server');
+    expect(details.receivedChars).toBe(partialContent.length);
+    expect(details.partialContent).toBeDefined();
+    expect(details.partialContent?.length).toBeLessThanOrEqual(4_000);
+    expect(details.thinkingTail?.length).toBeLessThanOrEqual(600);
+    expect(details.partialContent).not.toContain(owner.name);
+    expect(details.partialContent).not.toContain(owner.id);
+    expect(details.thinkingTail).not.toContain(owner.name);
+    expect(details.partialContent).toContain('host');
+  });
+
+  it('blames the provider when the stream closed before our deadline (F045)', async () => {
+    const owner = newActor('Provider close owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    vi.mocked(proposeChange).mockRejectedValue(new ModelProviderClosed({
+      timedOutBy: 'provider',
+      limitMs: 240_000,
+      elapsedMs: 12_000,
+      receivedChars: 1_200,
+      reasoningChars: 300,
+      partialContent: '{"kind":"table"',
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('failed');
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    expect(visible.body.failureCode).toBe('MODEL_PROVIDER_REQUEST_FAILED');
+    expect(visible.body.message).toContain('The provider closed the connection after 1,200 characters');
+    expect(visible.body.message).toContain('not our 240s limit');
+    expect(visible.body.failureDetails).toMatchObject({ timedOutBy: 'provider', receivedChars: 1_200 });
   });
 
   it('shows the real validation reasons of a rejected table draft to its requester (F016)', async () => {
@@ -2486,7 +2869,9 @@ describe('Cloudflare room Durable Object', () => {
     expect(job.status).toBe('completed');
     expect(completionAttempts).toBe(2);
     const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
-    expect(current.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.id });
+    // F039: the draft was applied before the completion write failed; reconciling keeps it in use, once.
+    expect(current.body.domain.candidate).toMatchObject({ status: 'active', createdBy: owner.id });
+    expect(current.body.domain.ruleRevision).toBe(workspace.domain.ruleRevision + 1);
   });
 
   it('serializes timeout failure against proposal commit so a failed job cannot later create a draft', async () => {
@@ -2570,8 +2955,14 @@ describe('Cloudflare room Durable Object', () => {
     expect(timedOut).toBe('completed');
     const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
     expect(job.status).toBe('completed');
-    const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
-    expect(current.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.id });
+    // F039: the delayed run still applies its committed draft once it resumes; wait for that to settle.
+    let current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    for (let attempt = 0; attempt < MODEL_WAIT_ATTEMPTS && current.body.domain.candidate?.status !== 'active'; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, MODEL_WAIT_INTERVAL_MS));
+      current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    }
+    expect(current.body.domain.candidate).toMatchObject({ status: 'active', createdBy: owner.id });
+    expect(current.body.domain.ruleRevision).toBe(workspace.domain.ruleRevision + 1);
   });
 
   it('marks an in-flight model request stale before it can create a draft', async () => {
@@ -2790,7 +3181,7 @@ describe('Cloudflare room Durable Object', () => {
       const ownerAfterAction = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
       const learnerAfterAction = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, firstLearner);
       expect(ownerAfterAction.body.domain).toHaveProperty('teacherNote', 'private teacher context');
-      expect(ownerAfterAction.body.domain.candidate).toMatchObject({ status: 'draft', createdBy: owner.id });
+      expect(ownerAfterAction.body.domain.candidate).toMatchObject({ status: 'active', createdBy: owner.id });
       expect(learnerAfterAction.body.domain).toHaveProperty('teacherNote', 'private teacher context');
       expect(learnerAfterAction.body.domain.candidate).toEqual(ownerAfterAction.body.domain.candidate);
     } finally {

@@ -66,7 +66,9 @@
   animation: tt-glyph-orbit 1.2s linear infinite;
 }
 .tt-app .tt-object-glyph.is-busy svg { animation: tt-glyph-breathe 1.8s ease-in-out infinite; transform-origin: center; }
-.tt-app .tt-chat-card p.tt-chat-card__pending--working { align-items: center; justify-content: center; text-align: center; }
+.tt-app .tt-chat-card p.tt-chat-card__pending--working { flex-wrap: wrap; align-items: center; justify-content: center; text-align: center; }
+/* The long elapsed line drops below instead of squeezing "Preparing an answer…" into a sliver. */
+.tt-app .tt-chat-card__shimmer { white-space: nowrap; }
 /* The waiting card centres its status in the whole card body. */
 .tt-app .tt-canvas-node__body:has(> .tt-chat-card--working) { display: grid; }
 .tt-app .tt-chat-card--working { align-content: center; justify-items: center; min-height: 100%; }
@@ -121,3 +123,54 @@
 .tt-app .tt-chat-card__own-answer:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
 .tt-app .tt-chat-card__send-answer { justify-self: start; display: inline-flex; align-items: center; gap: var(--tt-space-2); }
 .tt-app .tt-chat-card__asker { color: var(--tt-muted); font-size: var(--tt-type-small); font-weight: 600; line-height: 16px; }
+
+/* F045: a rule draft that stopped early shows its partial answer and thinking tail, both bounded,
+   wrapped and scrollable so a 4,000-character answer never widens the card at 320px. */
+.tt-app .tt-chat-card__stop { display: grid; gap: var(--tt-space-2); min-width: 0; }
+.tt-app .tt-chat-card .tt-chat-card__stop-reason { color: var(--tt-ink); font-size: var(--tt-type-small); line-height: 16px; }
+.tt-app .tt-chat-card__partial { min-width: 0; border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px); background: var(--tt-paper); overflow: hidden; }
+.tt-app .tt-chat-card__partial > summary { padding: 6px 10px; color: var(--tt-ink); font-size: var(--tt-type-small, 12px); line-height: 16px; cursor: pointer; overflow-wrap: anywhere; }
+.tt-app .tt-chat-card__partial > summary:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: -2px; }
+.tt-app .tt-chat-card__partial > pre {
+  margin: 0; padding: 8px 10px; max-height: 220px; overflow: auto; overscroll-behavior: contain;
+  border-top: 1px solid var(--tt-line); background: var(--tt-card-surface); color: var(--tt-ink);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 12px; line-height: 18px;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; tab-size: 2;
+}
+.tt-app .tt-chat-card__partial--thinking > pre { max-height: 160px; color: var(--tt-muted); font-size: 11px; line-height: 16px; }
+
+/* F050: the live thinking line while a rule draft runs. One ellipsised line at any width, so a long
+   reasoning tail can never push the card's buttons off-screen at 320px; the full bound stays in the details. */
+.tt-app .tt-chat-card__thinking { display: grid; gap: 4px; min-width: 0; margin-top: var(--tt-space-2); }
+.tt-app .tt-chat-card .tt-chat-card__thinking-line {
+  display: block; min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
+  border-radius: 0 var(--tt-radius-medium, 10px) var(--tt-radius-medium, 10px) 0;
+  background: var(--tt-paper); color: var(--tt-muted);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tt-app .tt-chat-card__thinking-full > summary { color: var(--tt-muted); font-size: 12px; line-height: 16px; cursor: pointer; }
+.tt-app .tt-chat-card__thinking-full > summary:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 2px; }
+.tt-app .tt-chat-card__thinking-full > pre {
+  margin: 4px 0 0; padding: 8px 10px; max-height: 160px; overflow: auto; overscroll-behavior: contain;
+  border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px);
+  background: var(--tt-card-surface); color: var(--tt-muted);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 16px;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+}
+
+/* A card the next chat message is about. */
+.tt-app .tt-table-chat-bar__reference { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-1) var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
+.tt-app .tt-table-chat-bar__reference-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 0; padding: 0; list-style: none; }
+.tt-app .tt-table-chat-bar__reference-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 240px; padding: 2px 4px 2px 10px; border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-card-surface); color: var(--tt-moss); font-size: 13px; font-weight: 650; }
+.tt-app .tt-table-chat-bar__reference-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-table-chat-bar__reference .tt-table-chat-bar__reference-chip button { width: 20px; height: 20px; flex: none; }
+.tt-app .tt-table-chat-bar__reference small { flex: 1 1 auto; min-width: 0; color: var(--tt-muted); font-size: 12px; }
+.tt-app .tt-table-chat-bar__reference button { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tt-muted); cursor: pointer; }
+.tt-app .tt-table-chat-bar__reference button:hover { background: var(--tt-canvas); }
+/* Follow-ups the AI offers: pick one instead of typing. */
+.tt-app .tt-chat-card__suggestions { display: grid; gap: 6px; }
+.tt-app .tt-chat-card__suggestions button { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 55%); border-radius: var(--tt-radius-medium, 10px); background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 92%); color: var(--tt-ink); font: inherit; font-size: 14px; line-height: 1.4; text-align: left; cursor: pointer; }
+.tt-app .tt-chat-card__suggestions button svg { flex: none; margin-top: 3px; color: var(--tt-moss, #2f6f5e); }
+.tt-app .tt-chat-card__suggestions button:hover:not(:disabled) { background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 84%); }
+.tt-app .tt-chat-card__suggestions button:disabled { opacity: .55; cursor: default; }

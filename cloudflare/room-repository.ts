@@ -1,11 +1,13 @@
-import type {
-  ActorContext,
-  CaseKind,
-  CommandAck,
-  DomainState,
-  Role,
-  Seat,
-  WorkspaceView,
+import {
+  TABLE_MEMBER_SEATS,
+  isSeat,
+  type ActorContext,
+  type CaseKind,
+  type CommandAck,
+  type DomainState,
+  type Role,
+  type Seat,
+  type WorkspaceView,
 } from '../src/tabletop/shared/contracts.js';
 import type {
   CommandCommit,
@@ -26,7 +28,8 @@ import type {
 } from '../server/repository.js';
 import { hashValue, isRecord, parseJsonValue, readNumber, readString } from '../server/codec.js';
 import { AuthorityError } from '../server/errors.js';
-import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
+import { memberLimitMessage, workspaceMemberCapacity } from '../server/limits.js';
+import type { ModelFailureDetails, ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
 
 type SqlRow = Record<string, SqlStorageValue>;
 type SqlBinding = SqlStorageValue;
@@ -163,12 +166,6 @@ function isKind(value: unknown): value is CaseKind {
 function isRole(value: unknown): value is Role {
   return value === 'owner' || value === 'teacher' || value === 'learner'
     || value === 'dm' || value === 'player' || value === 'participant';
-}
-
-function isSeat(value: unknown): value is Seat {
-  return value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip'
-    || value === 'member-1' || value === 'member-2' || value === 'member-3' || value === 'member-4'
-    || value === 'member-5' || value === 'member-6' || value === 'member-7';
 }
 
 function nullableNumber(value: unknown, field: string): number | null {
@@ -621,7 +618,8 @@ export class RoomRepository implements WorkspaceRepository {
         `SELECT seat FROM room_memberships WHERE workspace_id = ? AND epoch = ? AND revoked_at IS NULL`,
         workspace.id, workspace.epoch,
       );
-      if (active.length >= MAX_MEMBERS_PER_WORKSPACE) throw new AuthorityError('MEMBER_LIMIT_REACHED');
+      const capacity = workspaceMemberCapacity(workspace.domainState);
+      if (active.length >= capacity) throw new AuthorityError('MEMBER_LIMIT_REACHED', memberLimitMessage(capacity));
       const taken = new Set(active.map((row) => row.seat));
       const reserved = new Set(this.rows(
         `SELECT seat FROM room_invitations WHERE workspace_id = ? AND epoch = ? AND redeemed_at IS NULL
@@ -629,9 +627,9 @@ export class RoomRepository implements WorkspaceRepository {
         workspace.id, workspace.epoch, now,
       ).map((row) => row.seat));
       // Prefer a seat no single-use invitation is waiting for; fall back to any free seat.
-      const seats = (['member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] as const).filter((seat) => !taken.has(seat));
+      const seats = TABLE_MEMBER_SEATS.filter((seat) => !taken.has(seat));
       const seat = seats.find((candidate) => !reserved.has(candidate)) ?? seats[0];
-      if (!seat) throw new AuthorityError('MEMBER_LIMIT_REACHED');
+      if (!seat) throw new AuthorityError('MEMBER_LIMIT_REACHED', memberLimitMessage(capacity));
       const member: StoredMember = {
         actorId,
         name: Array.from(name.replace(/\p{Cc}/gu, '').trim()).slice(0, 64).join('') || 'Guest',
@@ -695,8 +693,9 @@ export class RoomRepository implements WorkspaceRepository {
          WHERE workspace_id = ? AND epoch = ? AND revoked_at IS NULL`,
         workspace.id, workspace.epoch,
       )[0];
-      if (readNumber(countRow?.member_count ?? 0, 'member_count') >= MAX_MEMBERS_PER_WORKSPACE) {
-        throw new AuthorityError('MEMBER_LIMIT_REACHED');
+      const capacity = workspaceMemberCapacity(workspace.domainState);
+      if (readNumber(countRow?.member_count ?? 0, 'member_count') >= capacity) {
+        throw new AuthorityError('MEMBER_LIMIT_REACHED', memberLimitMessage(capacity));
       }
       const seatRow = this.rows(
         `SELECT actor_id FROM room_memberships WHERE workspace_id = ? AND epoch = ? AND seat = ? AND revoked_at IS NULL`,
@@ -941,18 +940,20 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
-  /** Best-effort live progress for a running assistant job; never changes the job status. */
-  async updateTableAssistantProgress(
+  /**
+   * Best-effort live progress for a running model job (rule draft or assistant); never changes the
+   * job status, so a stale write can only lose counters, not a finish (F045).
+   */
+  async updateModelJobProgress(
     id: string,
     workspaceId: string,
     epoch: number,
     actorId: string,
-    progress: { receivedChars: number; reasoningChars: number; updatedAt: number },
+    progress: ModelJobProgress,
   ): Promise<void> {
     this.storage.sql.exec(
       `UPDATE model_jobs SET data = json_set(data, '$.progress', json(?))
-       WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ? AND status = 'running'
-       AND json_extract(data, '$.kind') = 'table-assistant'`,
+       WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ? AND status = 'running'`,
       JSON.stringify(progress), id, workspaceId, epoch, actorId,
     );
   }
@@ -1122,13 +1123,14 @@ export class RoomRepository implements WorkspaceRepository {
     }));
   }
 
-  async failModelJobAfterReceiptCheck(
+   async failModelJobAfterReceiptCheck(
     id: string,
     workspaceId: string,
     epoch: number,
     actorId: string,
     failure: string,
     reasons: readonly string[] = [],
+    details?: ModelFailureDetails,
   ): Promise<'completed' | 'failed' | 'inactive'> {
     return this.serialized(async () => this.storage.transactionSync(() => {
       const jobRow = this.rows(
@@ -1166,7 +1168,15 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec(
         `UPDATE model_jobs SET status = 'failed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
          AND actor_id = ? AND status IN ('running', 'committing') AND revoked_at IS NULL`,
-        JSON.stringify({ ...job.data, failure, failedAt: Date.now(), ...(reasons.length ? { reasons } : {}) }), id, workspaceId, epoch, actorId,
+        JSON.stringify({
+          ...job.data,
+          failure,
+          failedAt: Date.now(),
+          ...(reasons.length ? { reasons } : {}),
+          // F045: only a job that really failed keeps the bounded stop evidence; a receipt-proven
+          // completion above must never be rewritten as a failure.
+          ...(details ? { failureDetails: details } : {}),
+        }), id, workspaceId, epoch, actorId,
       );
       return 'failed';
     }));

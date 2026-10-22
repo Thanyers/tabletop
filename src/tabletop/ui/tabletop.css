@@ -657,9 +657,6 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-failure h1 { margin: 8px 0 3px; font-size: 22px; }
 .tt-failure > p:not(.tt-kicker) { max-width: 440px; color: #71807d; font-size: 11px; }
 .tt-failure > .tt-button { margin-top: 10px; }
-.tt-loading { display: flex; min-height: 100dvh; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #526761; background: #f2f4f5; font-family: Manrope, 'Noto Sans Thai', sans-serif; }
-.tt-loading > strong { font-size: 15px; }
-.tt-loading > span:last-child { display: inline-flex; align-items: center; gap: 6px; color: #84928d; font-size: 9px; }
 .tt-spin { animation: tt-spin 1s linear infinite; }
 @keyframes tt-spin { to { transform: rotate(360deg); } }
 
@@ -1121,7 +1118,7 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-canvas-node__open:focus-visible,
 .tt-canvas-object-dock button:focus-visible { outline: 3px solid #315eb0; outline-offset: 2px; }
 .tt-canvas-node.is-expanded { width: min(760px, calc(100vw - 48px)); max-width: min(94vw, 760px); border-color: #72a89a; box-shadow: 0 0 0 3px #24796b20, 0 16px 38px #263f3b20; }
-.tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: min(52dvh, 380px); overflow: auto; overscroll-behavior: contain; }
+.tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: none; overflow: visible; }
 .tt-canvas-node--auxiliary { width: 440px; }
 .tt-canvas-node--auxiliary:not(.is-expanded) .tt-canvas-node__body { max-height: 280px; overflow: auto; overscroll-behavior: contain; }
 .tt-canvas-object-dock {
@@ -1189,7 +1186,7 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 
 @media (max-width: 760px) {
   .tt-canvas-node.is-expanded { width: calc(100vw - 24px); max-width: calc(100vw - 24px); }
-  .tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: min(52dvh, 380px); }
+  .tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: none; }
   .tt-canvas-object-dock { right: 8px; bottom: 8px; left: 8px; max-width: none; }
   .tt-canvas-object-dock__label { font-size: 10px; }
   .tt-canvas-object-dock button { min-height: 40px; max-width: 190px; font-size: 12px; }
@@ -1356,3 +1353,13 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-invite-link__row input { flex: 1 1 220px; min-width: 0; padding: 6px 8px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 8px; font: inherit; font-size: 13px; }
 .tt-invite-link__note { color: var(--tt-muted, #66756f); font-size: 13px; }
 .tt-member-count { margin: 6px 0 0; color: var(--tt-muted, #66756f); font-size: 13px; font-weight: 600; }
+.tt-member-limit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
+.tt-member-limit .tt-member-count { margin: 0; }
+.tt-member-limit__control { display: flex; align-items: center; gap: 6px; color: var(--tt-muted, #66756f); font-size: 13px; }
+.tt-member-limit select { min-height: 28px; padding: 0 6px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 6px; background: #fff; color: inherit; font: inherit; }
+.tt-member-limit small { flex-basis: 100%; color: var(--tt-muted, #66756f); font-size: 12px; }
+/* A table can offer up to twelve member seats: lay them out as a compact grid of short buttons. */
+.tt-invite-choose--compact { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.tt-invite-choose--compact > .tt-kicker, .tt-invite-choose--compact > p { grid-column: 1 / -1; }
+.tt-invite-choose--compact > button { min-height: 34px; padding: 5px 8px; }
+.tt-invite-choose--compact > button small { display: none; }

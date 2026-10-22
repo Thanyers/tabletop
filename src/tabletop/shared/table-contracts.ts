@@ -1,5 +1,6 @@
 import type { DomainBase } from './contracts';
 import type { GenerativeCanvas, GenerativeExpression } from './generative-contracts';
+import type { RollSpec, TablePendingRoll } from './roll';
 
 /** Data-only program with a bounded arithmetic AST and optional closed canvas descriptors. */
 export type TableValue = string | number | boolean | null | string[];
@@ -7,7 +8,8 @@ export interface TableField { id: string; label: string; type: 'text' | 'number'
 export interface TableCollection { id: string; title: string; fields: TableField[] }
 export interface TableRecord { id: string; values: Record<string, TableValue> }
 export interface TableSource { id: string; filename: string; text: string; sha256: string; createdAt: number }
-export interface TableParameter { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'record'; collection?: string; min?: number; max?: number; choices?: string[] }
+/** F048: a `roll` parameter is filled by the authority, never by the client. It behaves as a number. */
+export interface TableParameter { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'record' | 'roll'; collection?: string; min?: number; max?: number; choices?: string[]; roll?: RollSpec }
 export type TableOperand = { literal: TableValue } | { input: string } | { record: string; field: string } | { system: 'actor' | 'seat' | 'turn' } | { expression: GenerativeExpression };
 export interface TableCondition { left: TableOperand; op: 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains'; right: TableOperand; message: string }
 export interface TableEffect { record: string; field: string; op: 'set' | 'add'; value: TableOperand }
@@ -32,14 +34,45 @@ export interface ComputedColumn { id: string; collection: string; label: string;
 /** F037: a shared canvas note. Kept out of the program so it survives rule edits and stays a plain note. */
 export type NoteColor = 'yellow' | 'rose' | 'sky' | 'mint' | 'lavender' | 'sand';
 export interface TableNote { id: string; text: string; color: NoteColor; x: number; y: number; width: number; height: number; createdBy: string; createdAt: number; updatedAt: number }
+/** F054: who a canvas card came from. `ai` means an AI-drafted program applied by a person, not "the AI wrote this alone". */
+export type CanvasCardOrigin = 'ai' | 'human' | 'system' | 'demo';
+/**
+ * F054: when a canvas card was created and last changed, and who did it.
+ * Kept outside `TableProgram` so it never enters the candidate hash or the 64 KiB program budget.
+ * `actorId` is stored, never a display name, so the UI resolves names from the current members.
+ */
+export interface CanvasCardMeta {
+  createdAt: number; updatedAt: number;
+  createdBy?: string; updatedBy?: string;
+  origin: CanvasCardOrigin; revision?: number;
+  source: 'recorded' | 'inferred';
+}
 export interface TableState extends DomainBase {
   kind: 'table'; sources: TableSource[]; program: TableProgram | null;
   records: Record<string, TableRecord[]>; turn: string | null;
-  canvasLayout?: { revision: number; positions: Record<string, { x: number; y: number; pinned?: boolean }> };
+  canvasLayout?: {
+    revision: number;
+    positions: Record<string, { x: number; y: number; pinned?: boolean }>;
+    /** Soft-deleted cards: gone from everyone's canvas, listed under Deleted in Objects until restored. Oldest first. */
+    trashed?: Record<string, { by: string; at: number }>;
+    /** Card names set at this table; they replace the card's own title on every member's canvas. */
+    titles?: Record<string, string>;
+  };
   /** Display-only computed columns; definitions live in state, not in the program (F017). */
   computedColumns?: ComputedColumn[];
   /** Shared sticky notes (F037). Omitted by rooms created before this field existed. */
   notes?: TableNote[];
+  /**
+   * F054: per-card timestamps and provenance, keyed by canvas node id (not by title, which can change).
+   * Written only by server-ordered commands, never by the simulator; bounded to 48 entries / 12 KiB.
+   * Omitted by rooms created before this field existed, so readers fall back to inference.
+   */
+  cardMeta?: Record<string, CanvasCardMeta>;
+  /**
+   * F048: rolls issued but not yet consumed by their action. Private to the roller, so projections
+   * drop them; the action commit deletes the one it consumed.
+   */
+  pendingRolls?: TablePendingRoll[];
   actionRevision: number;
   activity: { actorId: string; action: string; at: number }[];
 }

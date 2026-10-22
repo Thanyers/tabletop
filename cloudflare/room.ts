@@ -1,7 +1,7 @@
 import { VISIBILITY_POLICY } from '../src/tabletop/shared/visibility.js';
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
-import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { isSeat, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
@@ -10,9 +10,12 @@ import { projectionCursor } from '../server/projection-cursor.js';
 import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import { authenticateHash, authenticateRequest, isAdminSession, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
-import { respondToTablePrompt } from './table-assistant.js';
+import { createIdentityReplacements, redactString, respondToTablePrompt, type IdentityReplacement } from './table-assistant.js';
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
 import type { Env } from './contracts.js';
+import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
+import { headWithin, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
 import {
@@ -40,7 +43,6 @@ const TABLE_ASSISTANT_HISTORY_DEFAULT_PAGE_SIZE = 20;
 const TABLE_ASSISTANT_HISTORY_MAX_PAGE_SIZE = 50;
 const DIRECTORY_BATCH_SIZE = 100;
 const RETRY_DELAY_MS = 5_000;
-const MODEL_JOB_RECOVERY_MS = 240_000;
 const MAX_EXPORT_BYTES = 10 * 1024 * 1024;
 const ROOM_EXPIRES_AT = 253_402_300_799_000;
 const ROOM_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -84,6 +86,15 @@ interface PublicModelJob {
   prompt?: string;
   /** F038: the machine-readable failure, so a rule-draft card can quote it like an answer card. */
   failureCode?: string;
+  /** F039: whether the draft went into use on its own, or needs a manual review (and why). */
+  autoApply?: 'applied' | 'needs-review';
+  autoApplyReasons?: string[];
+  /** F045: live counters while the draft is still running. */
+  progress?: ModelJobProgress;
+  /** F045: the configured whole-job deadline this draft runs under. */
+  limitMs?: number;
+  /** F045: bounded, redacted evidence of how far a failed draft got. */
+  failureDetails?: ModelFailureDetails;
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -182,11 +193,6 @@ function parseCreateInput(value: unknown): CreateInput {
   return { id: value.id, kind: value.kind, ...(typeof value.title === 'string' ? { title: value.title } : {}) };
 }
 
-function isInviteSeat(value: unknown): value is Seat {
-  return value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip'
-    || value === 'member-1' || value === 'member-2' || value === 'member-3' || value === 'member-4'
-    || value === 'member-5' || value === 'member-6' || value === 'member-7';
-}
 
 function parseRedeemInput(value: unknown): RedeemInput {
   if (!isRecord(value) || typeof value.ticket !== 'string' || !INVITE_TOKEN_PATTERN.test(value.ticket)
@@ -330,24 +336,74 @@ function tableAssistantJobViewFor(job: RoomModelJob): TableAssistantJob {
 }
 
 /** Adds who asked, when, and what, so open visibility (F015) can show rule requests to the table. */
-function modelJobView(job: RoomModelJob): PublicModelJob {
+function modelJobView(job: RoomModelJob, limitMs: number): PublicModelJob {
   return {
-    ...modelJobStatusView(job),
+    ...modelJobStatusView(job, limitMs),
     askedBy: job.actorId,
     createdAt: job.createdAt,
     ...(typeof job.data.prompt === 'string' ? { prompt: job.data.prompt } : {}),
   };
 }
 
-function modelJobStatusView(job: RoomModelJob): PublicModelJob {
+function modelJobStatusView(job: RoomModelJob, limitMs: number): PublicModelJob {
   if (job.status === 'revoked') return { id: job.id, status: 'failed', message: 'This proposal was cancelled.' };
-  if (job.status === 'failed') return { id: job.id, status: 'failed', message: modelFailureMessage(job.data.failure, Array.isArray(job.data.reasons) ? job.data.reasons : []), failureCode: safeAssistantFailureCode(job.data.failure) };
-  if (job.status === 'running' || job.status === 'committing') return { id: job.id, status: 'running' };
+  if (job.status === 'failed') {
+    const reasons = Array.isArray(job.data.reasons) ? job.data.reasons : [];
+    const details = parseModelFailureDetails(job.data.failureDetails);
+    return {
+      id: job.id,
+      status: 'failed',
+      message: modelFailureMessage(job.data.failure, reasons, details),
+      failureCode: safeAssistantFailureCode(job.data.failure),
+      ...(details ? { failureDetails: details } : {}),
+    };
+  }
+  if (job.status === 'running' || job.status === 'committing') {
+    const progress = parseModelJobProgress(job.data.progress);
+    // F045: the card needs the same limit the job runs under, not a client-side guess.
+    return { id: job.id, status: 'running', limitMs, ...(progress ? { progress } : {}) };
+  }
   return {
     id: job.id,
     status: 'completed',
     ...(typeof job.data.candidateId === 'string' ? { candidateId: job.data.candidateId } : {}),
     ...(publicClarification(job.data.clarification) ?? {}),
+    ...(job.data.autoApply === 'applied' || job.data.autoApply === 'needs-review' ? { autoApply: job.data.autoApply } : {}),
+    ...(Array.isArray(job.data.autoApplyReasons) ? { autoApplyReasons: job.data.autoApplyReasons.filter((item): item is string => typeof item === 'string').slice(0, 6) } : {}),
+  };
+}
+
+/**
+ * F045: identity tokens are replaced before any member reads a partial draft.
+ * `null` means the identity set could not be built, so the text is dropped instead of stored raw.
+ */
+function draftIdentityReplacements(workspace: WorkspaceView): IdentityReplacement[] | null {
+  if (workspace.domain.kind !== 'table') return [];
+  try {
+    return createIdentityReplacements(workspace);
+  } catch {
+    return null;
+  }
+}
+
+/** F045: redact first, then clamp, so a replacement can never push kept text past its bound. */
+function boundedFailureDetails(details: ModelFailureDetails, replacements: IdentityReplacement[] | null): ModelFailureDetails {
+  const base: ModelFailureDetails = {
+    timedOutBy: details.timedOutBy,
+    limitMs: details.limitMs,
+    elapsedMs: details.elapsedMs,
+    receivedChars: details.receivedChars,
+    reasoningChars: details.reasoningChars,
+  };
+  if (replacements === null) return base;
+  const partialContent = details.partialContent
+    ? headWithin(redactString(details.partialContent, replacements), MAX_JOB_PARTIAL_CONTENT_CHARS) : '';
+  const thinkingTail = details.thinkingTail
+    ? tailWithin(redactString(details.thinkingTail, replacements), MAX_JOB_THINKING_TAIL_CHARS) : '';
+  return {
+    ...base,
+    ...(partialContent ? { partialContent } : {}),
+    ...(thinkingTail ? { thinkingTail } : {}),
   };
 }
 
@@ -563,7 +619,7 @@ export class Room extends DurableObject<Env> {
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
         const body = await readJson(request);
-        if (!isRecord(body) || !isInviteSeat(body.seat)
+        if (!isRecord(body) || !isSeat(body.seat)
             || (body.replaceOutstanding !== undefined && typeof body.replaceOutstanding !== 'boolean')
             || Object.keys(body).some((key) => key !== 'seat' && key !== 'replaceOutstanding')) {
           throw new AuthorityError('INVALID_REQUEST');
@@ -595,6 +651,8 @@ export class Room extends DurableObject<Env> {
           epoch: input.expectedEpoch,
           commandId: input.commandId,
         })}`);
+        // F045: every response for this request carries the same configured limit.
+        const limitMs = aiTableDeadlineMs(this.env);
         const existing = await this.repository.getModelJob(
           jobId, authorized.session.record.actorId, workspaceId, input.expectedEpoch,
         );
@@ -603,7 +661,7 @@ export class Room extends DurableObject<Env> {
           if (existing.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           const reconciled = await this.reconcileModelJob(existing);
           return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
-            modelJobView(reconciled), { 'x-request-id': requestId });
+            modelJobView(reconciled, limitMs), { 'x-request-id': requestId });
         }
         if (input.expectedRevision !== authorized.workspace.revision) throw new AuthorityError('STALE_REVISION');
         const reservation = await this.repository.reserveModelJob({
@@ -622,7 +680,7 @@ export class Room extends DurableObject<Env> {
           if (reservation.job.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           const reconciled = await this.reconcileModelJob(reservation.job);
           return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
-            modelJobView(reconciled), { 'x-request-id': requestId });
+            modelJobView(reconciled, limitMs), { 'x-request-id': requestId });
         }
         this.ctx.waitUntil(this.runModelJob({
           jobId,
@@ -637,14 +695,15 @@ export class Room extends DurableObject<Env> {
           consent: true,
           ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
         }).finally(() => this.notifyAssistantActivity(authorized.session.record.actorId)));
-        await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
+        await this.scheduleAlarmAt(Date.now() + this.modelRecoveryMs());
         this.notifyAssistantActivity(authorized.session.record.actorId);
-        return json(202, modelJobView(reservation.job), { 'x-request-id': requestId });
+        return json(202, modelJobView(reservation.job, limitMs), { 'x-request-id': requestId });
       }
       if (request.method === 'GET' && suffix === 'model') {
         // Open visibility (F034): every member's rule requests on this table epoch, newest first.
         const authorized = await this.authorize(request, workspaceId);
         if (authorized.workspace.kind !== 'table') throw new AuthorityError('COMMAND_NOT_ALLOWED');
+        const limitMs = aiTableDeadlineMs(this.env);
         const jobs = await this.repository.listTableDraftJobs({
           workspaceId,
           epoch: authorized.workspace.epoch,
@@ -652,13 +711,14 @@ export class Room extends DurableObject<Env> {
           scope: VISIBILITY_POLICY === 'open' ? 'table' : 'actor',
           limit: 20,
         });
-        const items = await Promise.all(jobs.map(async (job) => modelJobView(await this.reconcileModelJob(job))));
+        const items = await Promise.all(jobs.map(async (job) => modelJobView(await this.reconcileModelJob(job), limitMs)));
         return json(200, { items }, { 'x-request-id': requestId });
       }
       if (request.method === 'GET' && suffix.startsWith('model/')) {
         const authorized = await this.authorize(request, workspaceId);
         const jobId = suffix.slice('model/'.length);
         if (!MODEL_JOB_ID_PATTERN.test(jobId)) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+        const limitMs = aiTableDeadlineMs(this.env);
         // Open visibility (F034): any member may follow another member's rule request.
         const job = VISIBILITY_POLICY === 'open'
           ? await this.repository.getTableModelJob(jobId, workspaceId, authorized.workspace.epoch)
@@ -666,7 +726,7 @@ export class Room extends DurableObject<Env> {
         if (!job || job.data.kind !== undefined) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
         const reconciled = await this.reconcileModelJob(job);
         return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
-          modelJobView(reconciled), { 'x-request-id': requestId });
+          modelJobView(reconciled, limitMs), { 'x-request-id': requestId });
       }
       if (request.method === 'GET' && suffix === 'assistant') {
         const authorized = await this.authorize(request, workspaceId);
@@ -765,7 +825,7 @@ export class Room extends DurableObject<Env> {
           conversation: context.conversation,
           conversationOmittedCount: context.omittedCount,
         }).finally(() => this.notifyAssistantActivity(authorized.session.record.actorId)));
-        await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
+        await this.scheduleAlarmAt(Date.now() + this.modelRecoveryMs());
         this.notifyAssistantActivity(authorized.session.record.actorId);
         return json(202, tableAssistantJobView(reservation.job), { 'x-request-id': requestId });
       }
@@ -862,7 +922,7 @@ export class Room extends DurableObject<Env> {
         }
 
         try {
-          await this.scheduleAlarmAt(Date.now() + MODEL_JOB_RECOVERY_MS);
+          await this.scheduleAlarmAt(Date.now() + this.modelRecoveryMs());
           const acknowledgement = await this.authority.executeTableAssistantAction(
             authorized.session, envelope, workspaceId, jobId,
           );
@@ -977,7 +1037,7 @@ export class Room extends DurableObject<Env> {
       await this.scheduleAlarm();
       return;
     }
-    const modelRecoveryAt = this.repository.nextModelJobRecoveryAt(MODEL_JOB_RECOVERY_MS);
+    const modelRecoveryAt = this.repository.nextModelJobRecoveryAt(this.modelRecoveryMs());
     if (modelRecoveryAt !== null) await this.scheduleAlarmAt(modelRecoveryAt);
     if (this.repository.hasPendingDirectoryChanges() || this.repository.pendingOutboxCount() > 0) {
       await this.scheduleAlarm();
@@ -1138,7 +1198,7 @@ export class Room extends DurableObject<Env> {
         const now = Date.now();
         if (now - lastProgressWrite < 900) return;
         lastProgressWrite = now;
-        void this.repository.updateTableAssistantProgress(
+        void this.repository.updateModelJobProgress(
           input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
           { ...progress, updatedAt: now },
         ).catch(() => undefined);
@@ -1241,7 +1301,7 @@ export class Room extends DurableObject<Env> {
         const startedAt = typeof job.data.confirmationStartedAt === 'number'
           && Number.isSafeInteger(job.data.confirmationStartedAt)
           ? job.data.confirmationStartedAt : job.createdAt;
-        if (receipt || Date.now() - startedAt >= MODEL_JOB_RECOVERY_MS) {
+        if (receipt || Date.now() - startedAt >= this.modelRecoveryMs()) {
           await this.repository.settleTableAssistantConfirmationFailure({
             id: job.id,
             workspaceId: job.workspaceId,
@@ -1256,13 +1316,18 @@ export class Room extends DurableObject<Env> {
       }
       return (await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch)) ?? job;
     }
-    if (Date.now() - job.createdAt >= MODEL_JOB_RECOVERY_MS) {
+    if (Date.now() - job.createdAt >= this.modelRecoveryMs()) {
       await this.repository.finishTableAssistantJob(
         job.id, job.workspaceId, job.epoch, job.actorId, 'failed',
         { ...job.data, failure: 'ASSISTANT_INTERRUPTED' },
       );
     }
     return (await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch)) ?? job;
+  }
+
+  /** F045: a running job is interrupted only after the configured whole-job deadline plus its grace. */
+  private modelRecoveryMs(): number {
+    return modelJobRecoveryMs(aiTableDeadlineMs(this.env));
   }
 
   private async scheduleAlarm(): Promise<void> {
@@ -1285,6 +1350,9 @@ export class Room extends DurableObject<Env> {
       ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= 4_000 ? { prompt: input.prompt } : {}),
     };
     let commandMayHaveCommitted = false;
+    // F045: identity tokens are captured from the authorized view before the provider runs, so the
+    // catch can redact the partial draft even if the session is gone by then.
+    let progressReplacements: IdentityReplacement[] | null = null;
     try {
       let session = await authenticateHash(input.sessionHash, this.env);
       if (session.record.actorId !== input.actorId) throw new AuthorityError('SESSION_EXPIRED');
@@ -1299,6 +1367,29 @@ export class Room extends DurableObject<Env> {
       let job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
       if (!job || job.status !== 'running') return;
       requireWorkspaceWritable(this.env, authorized.workspace.kind);
+      progressReplacements = draftIdentityReplacements(authorized.workspace);
+
+      // Store live counters at most once per interval; the final status always wins afterwards.
+      // F050: the bounded thinking tail rides along so the waiting card can show the live text.
+      let lastProgressWrite = 0;
+      const onProgress = (progress: DeepSeekChangeProgress) => {
+        const now = Date.now();
+        if (now - lastProgressWrite < 900) return;
+        lastProgressWrite = now;
+        // Redact before clamping, and drop the text entirely when the identity set cannot be built.
+        const thinkingTail = progress.thinkingTail && progressReplacements
+          ? tailWithin(redactString(progress.thinkingTail, progressReplacements), MAX_JOB_THINKING_TAIL_CHARS)
+          : '';
+        void this.repository.updateModelJobProgress(
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
+          {
+            receivedChars: progress.receivedChars,
+            reasoningChars: progress.reasoningChars,
+            ...(thinkingTail ? { thinkingTail } : {}),
+            updatedAt: now,
+          },
+        ).catch(() => undefined);
+      };
 
       const proposal = await proposeChange(this.env, {
         workspace: authorized.workspace,
@@ -1307,7 +1398,7 @@ export class Room extends DurableObject<Env> {
         prompt: input.prompt,
         consent: true,
         ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
-      });
+      }, undefined, onProgress);
       if (proposal.jobId !== input.jobId) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
 
       session = await authenticateHash(input.sessionHash, this.env);
@@ -1369,8 +1460,9 @@ export class Room extends DurableObject<Env> {
         session, envelope, input.workspaceId, input.jobId,
       );
       const candidateId = acknowledgement.workspace.domain.candidate?.id;
+      const autoApply = candidateId ? await this.autoApplyDraft(session, acknowledgement, input.workspaceId) : null;
       await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
-        input.actorId, 'completed', { ...committingData, ...(candidateId ? { candidateId } : {}) });
+        input.actorId, 'completed', { ...committingData, ...(candidateId ? { candidateId } : {}), ...(autoApply ?? {}) });
     } catch (error) {
       try {
         const job = await this.repository.getModelJob(
@@ -1384,12 +1476,46 @@ export class Room extends DurableObject<Env> {
           }
           return;
         }
+        const failureDetails = error instanceof ModelStreamFailure
+          ? boundedFailureDetails(error.details, progressReplacements)
+          : undefined;
         await this.repository.failModelJobAfterReceiptCheck(
-          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, safeModelFailureCode(error), safeModelFailureReasons(error),
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
+          safeModelFailureCode(error), safeModelFailureReasons(error), failureDetails,
         );
       } catch {
         try { await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS); } catch { /* retry on the next room alarm */ }
       }
+    }
+  }
+
+  /**
+   * F039: put a table draft into use right after it is proposed. The domain runs every review check; a draft
+   * that fails one, or a table that moved on meanwhile, stays a candidate for manual review. This never
+   * fails the rule request itself.
+   */
+  private async autoApplyDraft(
+    session: AuthenticatedSession,
+    proposed: CommandAck,
+    workspaceId: string,
+  ): Promise<{ autoApply: 'applied' | 'needs-review'; autoApplyReasons?: string[] }> {
+    try {
+      const applied = await this.authority.execute(session, {
+        commandId: crypto.randomUUID(),
+        expectedRevision: proposed.workspace.revision,
+        expectedEpoch: proposed.workspace.epoch,
+        type: 'evolve.autoApply',
+        payload: {},
+      }, workspaceId);
+      const candidate = applied.workspace.domain.candidate;
+      if (candidate?.status === 'active') return { autoApply: 'applied' };
+      const reasons = (candidate?.simulation?.checks ?? []).filter((check) => !check.passed).map((check) => check.message).slice(0, 6);
+      return { autoApply: 'needs-review', ...(reasons.length ? { autoApplyReasons: reasons } : {}) };
+    } catch (error) {
+      // A draft that existing records break (a new unique rule, a stricter field) fails while it is
+      // previewed, before any check result is stored, so the reason comes from the domain error.
+      const reasons = error instanceof AuthorityError && (error.status === 409 || error.status === 422) ? cleanReasons([error.message]) : [];
+      return { autoApply: 'needs-review', ...(reasons.length ? { autoApplyReasons: reasons } : {}) };
     }
   }
 
@@ -1408,7 +1534,7 @@ export class Room extends DurableObject<Env> {
         ...(candidateId ? { candidateId } : {}),
       });
     }
-    if (Date.now() - job.createdAt >= MODEL_JOB_RECOVERY_MS) {
+    if (Date.now() - job.createdAt >= this.modelRecoveryMs()) {
       const current = await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch);
       if (current && (current.status === 'running' || current.status === 'committing')) {
         await this.repository.failModelJobAfterReceiptCheck(
@@ -1420,7 +1546,7 @@ export class Room extends DurableObject<Env> {
   }
 
   private async recoverStaleModelJobs(): Promise<void> {
-    const stale = await this.repository.listStaleRunningModelJobs(Date.now() - MODEL_JOB_RECOVERY_MS);
+    const stale = await this.repository.listStaleRunningModelJobs(Date.now() - this.modelRecoveryMs());
     for (const job of stale) {
       if (job.data.kind === 'table-assistant') await this.reconcileTableAssistantJob(job);
       else await this.reconcileModelJob(job);

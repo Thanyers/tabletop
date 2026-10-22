@@ -5,6 +5,36 @@
 
 ## Lessons
 
+### 2026-10-22 — browser test ที่หาการ์ดด้วย "ชื่อการ์ด" แดงทั้งที่แอปถูก
+- **What happened:** หลัง merge `dev` (1f21aeb "tidy titles of referenced chat cards") browser suite แดงที่ `requestClarifyingQuestion`: `expect(questionArticle).toHaveCount(0)` ได้ 1 · ดูเหมือน "การ์ดคำถามไม่ถูกแทนหลังตอบ" แต่ตรวจ DOM + localStorage พบว่าการ์ดเก่าถูก dismiss จริง (`dismissed: [<job เดิม>]`) เหลือการ์ดใบเดียวคือ job ใหม่
+- **Root cause:** `chatCardTitle` ตัดชื่อการ์ดเหลือ **บรรทัดแรก** ของ prompt หลัง 1f21aeb · การ์ดคำถาม ("Make a shift table.") กับการ์ดคำตอบ (prompt เดิม + คำถาม clarify + คำตอบ) จึงมีชื่อเดียวกัน ⇒ locator `getByRole('article', { name: 'Make a shift table.' })` ไปจับการ์ดใบใหม่ ไม่ใช่ใบเก่า
+- **Correct behavior:** หาการ์ดแชทด้วย id ไม่ใช่ชื่อ — เอา job id จาก response ของ `POST /model` แล้วใช้ `article[data-canvas-object="table.chat.<jobId>"]` (ตรงกับ `sharedChatCanvasId`) · ถ้าต้องตรวจชื่อการ์ด ให้ assert `aria-label` แยกเป็นข้อของมันเอง · ก่อนสรุปว่าเป็น regression ของแอป ให้ dump DOM/localStorage/`GET /model` ก่อน 1 รอบ (ตามที่ทำในงานนี้) แล้วเทียบ baseline
+
+### 2026-10-22 — การ์ดที่ auto-apply แล้ว "หายเงียบ" แม้เทสต์ผ่านหมด
+- **What happened:** ผู้ใช้รายงานว่าหลังร่างกฎผ่านทุกขั้นและถูกเปิดใช้ การ์ดหายไปเฉย ๆ ทั้งที่ `npm test`/`test:cloudflare`/browser suite เขียวหมด · สาเหตุคือ #156/#157 ตั้งใจเอาการ์ดออก (`isFinishedResult` → `displayCards`) แล้วแทนด้วยแถบ "New rules added" 15 วินาที แต่แถบนั้นถูกยิงจาก effect ที่ต้อง "เห็นการ์ดตอน phase sending/waiting" ก่อน — ถ้าการ์ดจบเร็วจนไม่เคยRender สถานะรอ หรือหน้านั้นเพิ่งเปิด/เป็นสมาชิกคนอื่น การ์ดจะถูกกรองออกโดยไม่มีแถบแทน
+- **Root cause:** การลบ element ออกจาก UI (filter) ผูกกับสัญญาณทดแทน (notify) คนละเงื่อนไข: filter ใช้ `isFinishedResult(card)` ส่วน notify ต้องมี `watchedCardsRef.has(card.id)` · เทสต์ยืนยันแค่ "การ์ดหาย" + "แถบโผล่" ในเส้นทางที่ดูสถานะรอทัน จึงไม่จับเส้นทางที่การ์ดจบก่อนถูกRender
+- **Correct behavior:** เวลาจะซ่อน/ลบการ์ดด้วย filter ให้ผูกสัญญาณทดแทนด้วยเงื่อนไขที่กว้างกว่าเสมอ เช่น `createdAt >= mountedAt` (การ์ดที่เกิดหลังเปิดหน้า = ต้องแจ้ง) ไม่ใช่เฉพาะใบที่เคยเห็นสถานะรอ · และเขียนเทสต์ของเส้นทาง "จบเร็ว/เปิดหน้าทีหลัง" แยกอีกใบ · ตรวจด้วย `BROWSER_CHANNEL=msedge npm run test:cloudflare:browser`
+
+### 2026-10-22 — release 5.1.0: ปัญหาที่ dev ไม่เห็นเพราะ browser suite รันแค่ตอน release
+- **What happened:** release PR #152 ล้ม 2 เรื่องที่ merge เข้า dev ไปแล้วโดยไม่มีใครเห็น (1) #144 เอาป๊อปอัป "Move … without dragging" ออกแต่ browser suite ยังกด (2) เคส F038 ล้มบน CI เพราะการ์ดคำขอร่างกฎของสมาชิกหาย — เป็นบั๊ก server จาก F034-T3: `runModelJob` สร้าง `initialData` ไม่มี `prompt` แล้ว commit/finish เขียนทับ `data` ทั้งก้อน ร่างที่เสร็จจึงไม่มี prompt และ client ทิ้งการ์ดหลัง reload
+- **Root cause:** CI005 รัน browser suite แค่ PR เข้า `main` · บั๊ก (2) ซ่อนอยู่เพราะในเครื่องและใน CI ของ 4.4.0 สมาชิก reload ทันตอนงานยัง running (แข่งเวลา) · งานที่เขียนทับ `data` ด้วย object ใหม่ทิ้ง field ที่ `reserve*` เคยเก็บ
+- **Correct behavior:** PR ที่เปลี่ยน UI ที่ browser suite ใช้ (ปุ่ม/ป้าย/role) ให้รัน `npm run test:cloudflare:browser` ในเครื่องก่อน merge เข้า dev · เทสต์ "สมาชิกเห็นการ์ด" ให้ตรวจหลัง reload ด้วย ไม่ใช่แค่ตอน running · ถ้าเทสต์ผ่านในเครื่องแต่ล้มบน CI ให้ลอง `CI=true BROWSER_CHANNEL=chromium` + CPU throttle (`Emulation.setCPUThrottlingRate`) ก่อนสรุปว่า flaky · update/finish ที่เขียน `data` ใหม่ทั้งก้อน ต้องพก field ที่ reserve เก็บไว้ (เช่น `prompt`) ไปด้วย
+
+### 2026-10-22 — แถบแจ้งเตือนที่ auto-apply กฎมีปุ่มที่ header บังการคลิก
+- **What happened:** หลัง merge #156/#157 การ์ดที่ auto-apply แล้วกลายเป็นแถบ `.tt-notice--success` พร้อมปุ่ม **View rules** · browser suite คลิกปุ่มไม่ผ่าน 30 วินาที Playwright ฟ้องว่า `<a href="/demo">` จาก `header.tt-topbar` intercepts pointer events แล้ว element detached (แถบหมดอายุ) · ผู้ใช้ที่คลิกจริงจะกดไม่ติดใน viewport 1280×720 เช่นกัน
+- **Root cause:** `.tt-topbar` (z-index 30) อยู่เหนือ `.tt-notice` (z-index 26) ใน stacking ของ layout `height:100dvh; overflow:hidden` และแถบถูกวาดในตำแหน่งที่ header ทับจุดคลิก · ปุ่มที่เพิ่งเพิ่มทำให้แถบเป็น interactive ครั้งแรก จึงเพิ่งเจอ
+- **Correct behavior:** อย่า force-click ปิดบั๊ก · ในเทสต์ให้ยืนยันว่าแถบและปุ่มมีอยู่จริง แล้วเปิดการ์ด Rules ผ่านเมนู Objects แทน (`openCanvasObject(owner, 'table.rules')`) พร้อมรายงานเจ้าของ #156 · เวลาจะแก้จริง ให้ยก `.tt-notice` เป็น `position: relative; z-index: 40` (หรือย้ายแถบออกจากพื้นที่ header) แล้วรัน `BROWSER_CHANNEL=msedge npm run test:cloudflare:browser` ให้ผ่าน 2 รอบติด
+
+### 2026-10-22 — browser suite แดงที่ check หนึ่งทั้งที่ branch งานไม่เคยแตะไฟล์นั้น
+- **What happened:** `npm run test:cloudflare:browser` ล้มที่ check เดียวกันติดกัน 2 รอบ (`expected 'Draft ready for review'` ระหว่างทดสอบ AI proposal ของ encounter) ทั้งที่ F045 ไม่ได้แตะ `src/tabletop/ui/AIProposal.tsx` หรือ `tests/cloudflare-browser.mjs` · รัน suite บน tree สะอาด (`git stash -u` → build ใหม่) ก็ล้มที่ check เดียวกัน ⇒ เป็นสถานะของ `dev` ไม่ใช่ regression ของ branch
+- **Root cause:** expectation รอสถานะชั่วคราว "Draft ready for review" ซึ่งเกิดเฉพาะเมื่อ job `completed` มาถึง client ก่อน auto-apply ของ F039 ปรากฏใน projection — เป็นการแข่งกันของเวลา (poll 1.2s vs WebSocket push) ไม่ใช่สัญญาที่แน่นอน · F039 เคยรายงาน 27 PASS บน Node 26.3.1 แต่บน Node 22.23.2 + msedge สถานะนี้ไม่เกิดเลย
+- **Correct behavior:** เมื่อ browser suite แดง ให้รัน baseline ก่อนสรุปว่าเป็นงานเรา: `git stash push -u -m baseline && npm run build && npm run build:cloudflare && BROWSER_CHANNEL=msedge npm run test:cloudflare:browser; git stash pop` · แล้วแก้ expectation ให้ตรวจสถานะที่เกิดจริง (เช่น `dm.locator('.tt-ai-proposal__job strong')` → `Rules in use`) ไม่ใช่ลบ assertion · ห้ามสรุปว่า "flake" ถ้ายังไม่ได้เห็น baseline
+
+### 2026-10-22 — `npm run lint` รันไม่ได้เพราะ node_modules ไม่ครบ (ไม่ใช่โค้ดผิด)
+- **What happened:** ทั้ง Lead และ subagent เจอ `ERR_MODULE_NOT_FOUND: @eslint/js` จาก `eslint.config.js` แล้วเกือบรายงานว่า "lint รันไม่ได้" ทั้งที่ `@eslint/js` อยู่ใน `package.json` แล้ว
+- **Root cause:** checkout นี้มี `node_modules` ไม่ครบ (ติดตั้งบางส่วน) · `npm run typecheck`/`npm test` ยังทำงานเพราะไม่ต้องใช้ ESLint
+- **Correct behavior:** ก่อนข้าม lint ให้เช็ค `Test-Path node_modules/@eslint/js` · ถ้าไม่มี รัน `npm install --no-audit --no-fund` แล้วยืนยัน `git status --short package-lock.json` ต้องว่าง (lock ไม่เปลี่ยน) จากนั้นจึงรัน `npm run lint` และรายงานจำนวน error/warning จริง
+
 ### 2026-10-22 — เอกสารฟีเจอร์บอก "rollback ได้" แต่รุ่นเก่า parse ข้อมูลใหม่ไม่ผ่าน
 - **What happened:** F040 doc เขียนว่า rollback ได้เพราะ "รุ่นเก่าไม่รู้จัก `motion` แต่ยังเปิดโต๊ะได้" ตอนตัด release จึงเกือบออกเป็น 4.5.0 (MINOR)
 - **Root cause:** schema canvas/program เป็น `z.strictObject` — รุ่นเก่าเจอ key ใหม่แล้วปฏิเสธทั้งก้อน (`runtime/index.ts` ไม่แสดง canvas, `table-assistant.ts`/`ai.ts` ตอบ "The active table rules are invalid")

@@ -21,6 +21,31 @@ let tableAIReply = null;
 let tableAssistantReply = null;
 const modelStatuses = [];
 await mkdir(output, { recursive: true });
+
+/** F050: a synthetic SSE reply whose reasoning streams first, then holds on the gate and sends the JSON. */
+function streamingChangeResponse(reasoning, change, gate) {
+  const encoder = new TextEncoder();
+  const line = payload => encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
+  return new Response(new ReadableStream({
+    async start(controller) {
+      for (const step of reasoning) {
+        controller.enqueue(line({ model: 'deepseek-flash', choices: [{ index: 0, delta: { reasoning_content: step }, finish_reason: null }] }));
+        await new Promise(resolveStep => setTimeout(resolveStep, 90));
+      }
+      if (gate) await gate;
+      controller.enqueue(line({ model: 'deepseek-flash', choices: [{ index: 0, delta: { content: JSON.stringify(change) }, finish_reason: null }] }));
+      controller.enqueue(line({ model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }));
+      controller.enqueue(line({
+        model: 'deepseek-flash',
+        choices: [],
+        usage: { prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 30, completion_tokens_details: { reasoning_tokens: 0 } },
+      }));
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
 const mf = new Miniflare(convertV4MiniflareOptions({
   host: '127.0.0.1', port,
   log: new Log(LogLevel.ERROR),
@@ -75,7 +100,11 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       expect(typeof input.prompt).toBe('string');
       change = tableAIReply.change;
       const gate = tableAIReply.gate;
+      const streamReasoning = tableAIReply.streamReasoning;
       tableAIReply = null;
+      // F050: stream synthetic reasoning before the JSON, so the waiting card can be observed
+      // showing what the model is doing instead of only counting characters.
+      if (streamReasoning) return streamingChangeResponse(streamReasoning, change, gate);
       // An armed gate holds the reply so the browser can observe the waiting card.
       if (gate) await gate;
     } else {
@@ -298,10 +327,22 @@ try {
       modelStatuses.push({ http: response.status(), body });
     }
   });
+  // F004: `/` is the landing page for everyone; a signed-in account gets "Your tables" instead of sign-in.
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  await expect(dm.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
+  await expect(dm.getByRole('link', { name: 'Your tables', exact: true })).toHaveCount(2);
+  for (const link of await dm.getByRole('link', { name: 'Your tables', exact: true }).all()) await expect(link).toHaveAttribute('href', '/tables');
+  await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
+  await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
+  await dm.locator('.tt-public-welcome header').getByRole('link', { name: 'Your tables', exact: true }).click();
+  await expect(dm).toHaveURL(`${origin}/tables`);
   await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
   await expect(dm.locator('.tt-public-welcome')).toHaveCount(0);
-  await expect(dm.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toHaveCount(0);
-  await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
+  await dm.goBack();
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  mark('Signed-in `/` shows the landing page with Your tables (header link and button to /tables) and no sign-in; Back from /tables returns to it');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   await dm.getByRole('button', { name: 'Start a new table', exact: true }).click();
   await expect(dm).toHaveURL(`${origin}/new`);
@@ -398,7 +439,7 @@ try {
   // A table URL is an address, not access: outsiders get the same notice as for a missing table.
   const outsiderLink = await newPage(actors[3], `${origin}/t/${room.id}`);
   await expect(outsiderLink.getByText('This table is not available to this account.', { exact: false })).toBeVisible();
-  await expect(outsiderLink).toHaveURL(`${origin}/`);
+  await expect(outsiderLink).toHaveURL(`${origin}/tables`);
   await expect(outsiderLink.locator('.tt-canvas-panel')).toHaveCount(0);
   const missingLink = await newPage(actors[3], `${origin}/t/${randomUUID()}`);
   await expect(missingLink.getByText('This table is not available to this account.', { exact: false })).toBeVisible();
@@ -409,16 +450,17 @@ try {
   await signedOut.goto(origin); await signedOut.waitForLoadState('networkidle');
   await expect(signedOut).toHaveURL(`${origin}/t/${room.id}`);
   await expect(signedOut.locator('.tt-canvas-panel')).toBeVisible();
-  // Back and forward move between the table list and the open table.
-  // The table was created from /new, so back returns to the start page.
+  // Back and forward move between the landing page and the open table.
+  // Creating the table replaced the /new entry, so Back skips the start page and returns to `/`.
   await dm.goBack();
-  await expect(dm).toHaveURL(`${origin}/new`);
-  await expect(dm.getByTestId('start-page')).toBeVisible();
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  await expect(dm.getByTestId('start-page')).toHaveCount(0);
   await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
   await dm.goForward();
   await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
-  mark('Each table has its own /t/<id> URL: reload and back/forward follow it, sign-in returns to it, and outsiders see only an unavailable notice');
+  mark('Each table has its own /t/<id> URL: reload and back/forward follow it, Back after creating from /new skips /new, sign-in returns to it, and outsiders see only an unavailable notice on /tables');
   const metadata = await api(dm, '/api/admin/workspaces');
   expect(metadata.status).toBe(200);
   expect(JSON.stringify(metadata.body)).not.toContain('PRIVATE_DM_CF_BROWSER_MARKER');
@@ -465,7 +507,7 @@ try {
   await starter.reload(); await starter.waitForLoadState('networkidle');
   await expect(startPage).toBeVisible();
   await starter.goBack();
-  await expect(starter).toHaveURL(`${origin}/`);
+  await expect(starter).toHaveURL(`${origin}/tables`);
   await expect(starter.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
   await starter.goForward();
   await expect(startPage).toBeVisible();
@@ -531,15 +573,22 @@ try {
   await expect(askAI).toBeDisabled();
   await dm.getByLabel('Send this request and current rules or parameters to AI.', { exact: true }).check();
   await askAI.click();
-  await expect(dm.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
+  // F039 auto-applies a pending draft of every case kind, so the card goes from "Preparing draft"
+  // straight to "Rules in use"; the review-first label is no longer a state this flow reaches.
+  await expect(dm.locator('.tt-ai-proposal__job strong')).toHaveText('Rules in use', { timeout: 15_000 });
+  // F039: the draft passes every review check and goes into use on its own as a new rule revision.
+  await expect(dm.getByText('The new rules are in use.', { exact: true })).toBeVisible({ timeout: 15_000 });
   const proposed = (await api(dm, `/api/workspaces/${room.id}`)).body;
-  expect(proposed.domain.candidate.status).toBe('draft');
-  expect(proposed.domain.rule).toEqual({ allyTarget: false, apCost: 0, oncePerTurn: false });
+  expect(proposed.domain.candidate.status).toBe('active');
+  expect(proposed.domain.candidate.approval?.actorId).toBe(proposed.actor.actorId);
+  expect(proposed.domain.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
   expect(proposed.domain.candidate.change.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
+  expect(proposed.domain.revisions.at(-1)?.revision).toBe(proposed.domain.ruleRevision);
   expect(providerCalls).toBe(1);
+  await expect.poll(async () => (await api(pip, `/api/workspaces/${room.id}`)).body.domain.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
   await expect(pip.getByLabel('What would you like to change?', { exact: true })).toHaveCount(0);
   await expect(pip.getByTestId('canvas-object-dock').getByTestId('open-canvas-workspace.ai')).toHaveCount(0);
-  mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; creates a draft without activating it');
+  mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; the draft passes every check and goes into use on its own (F039)');
 
   const logoutResponse = pip.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
   await setTableOptionsOpen(pip, true);
@@ -553,11 +602,79 @@ try {
   await db.prepare('INSERT INTO web_sessions(token_hash,csrf_hash,user_id,created_at,last_seen_at,expires_at) VALUES(?,?,?,?,?,?)')
     .bind(hash(replacement), hash(csrf(replacement)), actors[2].id, Date.now(), Date.now(), Date.now() + 7 * 86_400_000).run();
   await pip.context().addCookies([{ name: 'tabletop_local_session', value: replacement, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  // F004: `/` no longer resumes a table; the account reaches it through its table list.
   await pip.goto(origin);
+  await expect(pip.getByRole('heading', { name: 'Welcome back, Pip', exact: true })).toBeVisible();
+  await expect(pip.locator('.tt-canvas-panel')).toHaveCount(0);
+  await pip.locator('.tt-account-gate__google').click();
+  await expect(pip).toHaveURL(`${origin}/tables`);
+  await pip.locator('.tt-existing-tables').getByRole('button', { name: /Dragon bridge/ }).click();
+  await expect(pip).toHaveURL(`${origin}/t/${room.id}`);
   await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
   const resumed = (await api(pip, `/api/workspaces/${room.id}`)).body;
   expect(resumed.actor.seat).toBe('pip');
   mark('Logout revokes the old cookie; a new session for the same account resumes its existing seat');
+
+  // F004 navigation: landing, table list, logo, table menu and unknown paths each keep their own URL.
+  const signInFromLanding = await newPage(null);
+  await expect(signInFromLanding.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await signInFromLanding.context().addCookies([{ name: 'tabletop_local_session', value: actors[0].token, url: origin, httpOnly: true, sameSite: 'Lax' }]);
+  await signInFromLanding.goto(origin); await signInFromLanding.waitForLoadState('networkidle');
+  await expect(signInFromLanding).toHaveURL(`${origin}/tables`);
+  await expect(signInFromLanding.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+  await signInFromLanding.context().close();
+  mark('Signing in from the landing page returns to /tables');
+  await dm.goto(origin); await dm.waitForLoadState('networkidle');
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  await dm.reload(); await dm.waitForLoadState('networkidle');
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
+  await dm.locator('.tt-account-gate__google').click();
+  await expect(dm).toHaveURL(`${origin}/tables`);
+  const tableList = dm.locator('.tt-existing-tables');
+  await expect(tableList.getByRole('heading', { name: 'Pick up where you left off' })).toBeVisible();
+  await expect(tableList.getByRole('button').first()).toContainText('Dragon bridge');
+  await expect(tableList.getByRole('button').first()).toContainText('Last opened · ');
+  await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
+  await dm.reload(); await dm.waitForLoadState('networkidle');
+  await expect(dm).toHaveURL(`${origin}/tables`);
+  await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+  await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
+  mark('Signed-in `/` survives reload as the landing page; /tables lists the last-opened table first and neither page auto-opens a table, even after reload');
+  await tableList.getByRole('button', { name: /Dragon bridge/ }).click();
+  await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  const tableLogo = dm.locator('.tt-topbar a.tt-brand');
+  await expect(tableLogo).toHaveAttribute('aria-label', 'Tabletop home');
+  await expect(tableLogo).toHaveAttribute('href', '/');
+  await tableLogo.click();
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  await dm.goBack();
+  await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  await dm.locator('.tt-workspace-picker__button').click();
+  await dm.locator('.tt-workspace-menu').getByRole('menuitem', { name: /All tables/ }).click();
+  await expect(dm).toHaveURL(`${origin}/tables`);
+  await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+  const chooserLogo = dm.locator('.tt-chooser__top a.tt-brand');
+  await expect(chooserLogo).toHaveAttribute('aria-label', 'Tabletop home');
+  await chooserLogo.click();
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  await dm.goBack();
+  await expect(dm).toHaveURL(`${origin}/tables`);
+  await dm.goBack();
+  await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  mark('Logo goes to `/` and Back returns to the table; the table menu "All tables" opens /tables and the chooser logo also goes to `/`');
+  await dm.goto(`${origin}/no-such-page`); await dm.waitForLoadState('networkidle');
+  await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
+  await dm.goto(`${origin}/t/${room.id}`); await dm.waitForLoadState('networkidle');
+  await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
+  mark('An unknown path shows the landing page at `/`');
   await verifyGenericTableBrowser({
     actors: { owners: genericOwners, members: genericMembers },
     newPage,

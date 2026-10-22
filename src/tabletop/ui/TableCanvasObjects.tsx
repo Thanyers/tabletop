@@ -15,6 +15,8 @@ import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedC
 import { applyTableCandidate } from './table-candidate-apply';
 import { NoteCard } from './NoteCard';
 import { autoMapping, buildImportRows, parseCsv } from './table-row-import';
+import { RollParameterControl } from './RollParameterControl';
+import { serverRollFor, useServerRollsTick } from './roll-store';
 import './record-actions.css';
 
 interface TableCanvasObjectProps {
@@ -140,6 +142,26 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
 
   useEffect(() => { setApplyFeedback(''); }, [candidateKey]);
 
+  // F039: anyone who may draft rules may take one out; a collection asks first because its rows go too.
+  const canRemove = viewerCan(view, 'rules.draft') && !readOnly;
+  const [pendingRemoval, setPendingRemoval] = useState<RuleRemoval | null>(null);
+  const [removeFeedback, setRemoveFeedback] = useState('');
+  const removeRule = async (removal: RuleRemoval) => {
+    setRemoveFeedback('');
+    setPendingRemoval(null);
+    try {
+      // A refusal is already shown as the table notice with its reason.
+      await onCommand('evolve.removeItem', { kind: removal.kind, id: removal.id });
+    } catch (error) {
+      setRemoveFeedback(error instanceof Error && error.message ? error.message : `${removal.title} could not be removed.`);
+    }
+  };
+  const requestRemoval = (removal: RuleRemoval) => {
+    if (busy !== null) return;
+    if (removal.kind === 'collection') setPendingRemoval(removal);
+    else void removeRule(removal);
+  };
+
   const applyProposal = async () => {
     if (!isOwner || readOnly || busy !== null || applying || state.candidate?.status === 'active') return;
     setApplyFeedback('');
@@ -168,24 +190,30 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
     {!expanded ? <p className="tt-canvas-inline__note">{program ? `${program.collections.length} collections · ${program.actions.length} actions · open to inspect rules, evidence and changes.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
       {program ? candidateChange && state.candidate?.status !== 'active'
         ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /></details>
-        : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} />
+        : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} onRemove={canRemove && busy === null ? requestRemoval : undefined} />
         : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
+      {pendingRemoval && <div className="tt-table-remove-confirm" role="alertdialog" aria-label={`Remove ${pendingRemoval.title}`}>
+        <p>Remove the table <strong>{pendingRemoval.title}</strong>? Its {state.records[pendingRemoval.id]?.length ?? 0} rows are deleted too. You can bring the rules back from history, but not the rows.</p>
+        <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" onClick={() => setPendingRemoval(null)}>Cancel</button><button type="button" className="tt-button tt-button--danger" onClick={() => void removeRule(pendingRemoval)}><Trash2 size={13} />Remove table and rows</button></div>
+      </div>}
+      {removeFeedback && <p className="tt-table-error" role="alert">{removeFeedback}</p>}
       <details className="tt-table-capabilities"><summary>What this table can do</summary>
         <p className="tt-table-inline-hint">{TABLE_CAPABILITIES.supported.length} capabilities · {TABLE_CAPABILITIES.gaps.length} known gaps · limits: {TABLE_CAPABILITY_LIMITS.collections} collections, {TABLE_CAPABILITY_LIMITS.fieldsPerCollection} fields, {TABLE_CAPABILITY_LIMITS.rowsPerCollection} rows per collection, {TABLE_CAPABILITY_LIMITS.canvasViews} views, {TABLE_CAPABILITY_LIMITS.computedColumns} computed columns</p>
         <ul className="tt-table-capability-list">{TABLE_CAPABILITIES.supported.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul>
         <details className="tt-table-capability-gaps"><summary>Known gaps ({TABLE_CAPABILITIES.gaps.length})</summary><ul className="tt-table-capability-list">{TABLE_CAPABILITIES.gaps.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul></details>
       </details>
       {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} />
-        {isOwner && <div className="tt-table-proposal__apply">
-          <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
-          {applying && <p className="tt-canvas-inline__note" role="status">Simulating and checking this proposal before activation.</p>}
-          {applyFeedback && <p className="tt-table-error" role="alert">{applyFeedback}</p>}
-        </div>}
         {isOwner && candidateState?.program?.canvas?.views.length ? <details className="tt-table-private-preview"><summary>Private preview</summary><DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /></details> : null}
       </section>}
       {isOwner && state.candidate && <details className={state.candidate.status === 'active' ? 'tt-table-history' : 'tt-table-advanced-checks'}><summary>{state.candidate.status === 'active' ? 'History and restore' : 'Advanced checks'}</summary><CandidateLifecycle view={view} onCommand={onCommand} busy={busy} readOnly={readOnly} /></details>}
       {isOwner && !readOnly && <details className="tt-table-manual-editor"><summary>Advanced manual rule change</summary><p>Paste a prepared table change only if needed. Normal requests can be written in plain language in the AI draft assistant.</p><form onSubmit={proposeManual}><label htmlFor="tt-table-manual-change">Table change</label><textarea id="tt-table-manual-change" rows={7} value={manualChange} onChange={(event) => { setManualChange(event.target.value); setManualError(''); }} placeholder={'{"kind":"table","program":{...},"initialRecords":{...}}'} spellCheck={false} /><small>New tables include initial records. Changes to an active table must preserve its collections and current records.</small>{manualError && <span role="alert" className="tt-table-error">{manualError}</span>}<button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || manualChange.trim().length === 0}>Propose manual change</button></form></details>}
       {!isOwner && <p className="tt-canvas-inline__note">Proposals and review controls are private to the owner. Files, active rules and records are shared with this table.</p>}
+      {/* The main call to action stays pinned to the bottom of the card however long the proposal is. */}
+      {isOwner && candidateChange && state.candidate?.status !== 'active' && <div className="tt-card-cta tt-table-proposal__apply">
+        <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
+        {applying && <p className="tt-canvas-inline__note" role="status">Simulating and checking this proposal before activation.</p>}
+        {applyFeedback && <p className="tt-table-error" role="alert">{applyFeedback}</p>}
+      </div>}
     </>}
   </div>;
 }
@@ -248,16 +276,25 @@ function localSandboxActor(view: WorkspaceView): ActorContext {
   };
 }
 
-function ProgramOverview({ program, state, label, change, members }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members'] }) {
+type RuleRemoval = { kind: 'action' | 'invariant' | 'view' | 'collection'; id: string; title: string };
+
+function RemoveRuleButton({ removal, onRemove }: { removal: RuleRemoval; onRemove?: (removal: RuleRemoval) => void }) {
+  if (!onRemove) return null;
+  return <button type="button" className="tt-table-rule-remove" aria-label={`Remove ${removal.title}`} title="Remove from the rules" onClick={() => onRemove(removal)}><Trash2 size={13} /></button>;
+}
+
+function ProgramOverview({ program, state, label, change, members, onRemove }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void }) {
   const sources = new Map(state.sources.map((source) => [source.id, source.filename]));
   const evidence = program.evidence ?? [];
+  const views = program.canvas?.views ?? [];
   return <section className="tt-table-program" aria-label={label}>
     <div className="tt-table-program__summary"><span><small>Tables</small><strong>{program.collections.length}</strong></span><span><small>Actions</small><strong>{program.actions.length}</strong></span><span><small>Checks</small><strong>{program.invariants.length}</strong></span></div>
     {program.description && <p className="tt-table-program__description">{program.description}</p>}
-    <details className="tt-table-rule-details"><summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>{program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} />)}</details>
-    <details className="tt-table-rule-details"><summary>Actions · {program.actions.length}</summary>{program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} />)}</details>
+    <details className="tt-table-rule-details"><summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>{program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} onRemove={onRemove} />)}</details>
+    <details className="tt-table-rule-details"><summary>Actions · {program.actions.length}</summary>{program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} onRemove={onRemove} />)}</details>
+    {onRemove && views.length > 0 && <details className="tt-table-rule-details"><summary>Views · {views.length}</summary><ul>{views.map((descriptor) => <li key={descriptor.id}>{descriptor.title} <small>({descriptor.kind})</small><RemoveRuleButton removal={{ kind: 'view', id: descriptor.id, title: descriptor.title }} onRemove={onRemove} /></li>)}</ul></details>}
     {change && program.collections.map((collection) => <ProposedRecords key={`proposed-${collection.id}`} collection={collection} records={change.initialRecords[collection.id] ?? []} members={members} />)}
-    {program.invariants.length > 0 && <details className="tt-table-rule-details"><summary>Data checks · {program.invariants.length}</summary><ul>{program.invariants.map((invariant) => <li key={invariant.id}>{invariant.message} <small>({invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(' + ')})</small></li>)}</ul></details>}
+    {program.invariants.length > 0 && <details className="tt-table-rule-details"><summary>Data checks · {program.invariants.length}</summary><ul>{program.invariants.map((invariant) => <li key={invariant.id}>{invariant.message} <small>({invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(' + ')})</small><RemoveRuleButton removal={{ kind: 'invariant', id: invariant.id, title: invariant.message }} onRemove={onRemove} /></li>)}</ul></details>}
     {program.turnOrder.length > 0 && <p className="tt-table-turn-order">Turn order: {program.turnOrder.map((seat) => seat === 'host' ? 'Owner' : seat.replace('member-', 'Member ')).join(' → ')}</p>}
     {evidence.length > 0 && <details className="tt-table-rule-details"><summary>Source evidence · {evidence.length}</summary><ul>{evidence.map((item, index) => <li key={`${item.sourceId}-${index}`}><strong>{sources.get(item.sourceId) ?? 'Source file'}</strong><blockquote>{item.quote}</blockquote></li>)}</ul></details>}
       {program.assumptions.length > 0 && <section className="tt-table-assumptions"><h4>Assumptions to review</h4><ul>{program.assumptions.map((assumption, index) => <li key={index}>{assumption}</li>)}</ul><p>Structural checks do not confirm these assumptions match your policy. The owner should review them and the cited evidence before approval.</p></section>}
@@ -266,16 +303,16 @@ function ProgramOverview({ program, state, label, change, members }: { program: 
   </section>;
 }
 
-function CollectionDefinition({ collection }: { collection: TableCollection }) {
-  return <section className="tt-table-program__group"><h4>{collection.title}</h4><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · required' : ' · optional'}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul></section>;
+function CollectionDefinition({ collection, onRemove }: { collection: TableCollection; onRemove?: (removal: RuleRemoval) => void }) {
+  return <section className="tt-table-program__group"><h4>{collection.title}<RemoveRuleButton removal={{ kind: 'collection', id: collection.id, title: collection.title }} onRemove={onRemove} /></h4><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · required' : ' · optional'}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul></section>;
 }
 
-function ActionDefinition({ action, program, members }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members'] }) {
+function ActionDefinition({ action, program, members, onRemove }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void }) {
   const effects = action.effects.map((effect) => {
     const param = action.parameters.find((item) => item.id === effect.record);
     return `${param?.label ?? 'Selected record'} → ${fieldLabel(program, param?.collection ?? '', effect.field)} ${effect.op === 'add' ? 'adds' : 'sets'} ${operandLabel(effect.value, action, program, members)}`;
   });
-  return <section className="tt-table-program__group"><h4>{action.title}</h4><p>{action.description}</p><small>Available to {action.roles.map((role) => role === 'owner' ? 'owner' : 'members').join(' and ')}{action.requireTurn ? ' · follows turn order' : ''}{action.advanceTurn ? ' · advances turn' : ''}</small>
+  return <section className="tt-table-program__group"><h4>{action.title}<RemoveRuleButton removal={{ kind: 'action', id: action.id, title: action.title }} onRemove={onRemove} /></h4><p>{action.description}</p><small>Available to {action.roles.map((role) => role === 'owner' ? 'owner' : 'members').join(' and ')}{action.requireTurn ? ' · follows turn order' : ''}{action.advanceTurn ? ' · advances turn' : ''}</small>
     {action.conditions.length > 0 && <ul className="tt-table-rule-list">{action.conditions.map((condition, index) => <li key={index}><strong>{operandLabel(condition.left, action, program, members)} {conditionOperator(condition.op)} {operandLabel(condition.right, action, program, members)}</strong><span>{condition.message}</span></li>)}</ul>}
     {effects.length > 0 && <ul className="tt-table-effect-list">{effects.map((effect, index) => <li key={index}>{effect}</li>)}</ul>}
   </section>;
@@ -346,7 +383,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
       {eligibleActions.length === 0 ? <p className="tt-canvas-inline__note">{collectionActions.length === 0 ? 'No table actions use this collection.' : `Actions for this collection are limited to ${formatActionRoles(collectionActions)}.`}</p> : <>
         <label htmlFor={actionSelectId}>Action<select id={actionSelectId} value={selectedActionId} disabled={busy !== null} onChange={(event) => chooseAction(event.target.value)}><option value="">Choose an action…</option>{eligibleActions.map((action) => <option value={action.id} key={action.id}>{action.title}</option>)}</select></label>
         {selectedAction && selectedActionRecordParameters.length > 1 && <label htmlFor={parameterSelectId}>Use this record as<select id={parameterSelectId} value={selectedParameterId} disabled={busy !== null} onChange={(event) => chooseRecordParameter(event.target.value)}><option value="">Choose a record field…</option>{selectedActionRecordParameters.map((parameter) => <option key={parameter.id} value={parameter.id}>{parameter.label}</option>)}</select></label>}
-        {selectedAction && (selectedActionRecordParameters.length === 1 || selectedParameterId) && <ActionForm action={selectedAction} state={state} currentSeat={view.actor.seat ?? 'host'} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} />}
+        {selectedAction && (selectedActionRecordParameters.length === 1 || selectedParameterId) && <ActionForm view={view} action={selectedAction} state={state} currentSeat={view.actor.seat ?? 'host'} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} onRoll={actionController.roll} />}
         {selectedAction && selectedActionRecordParameters.length > 1 && !selectedParameterId && <p className="tt-table-inline-hint">This action uses multiple records from this collection. Choose which record field should use the selected row.</p>}
       </>}
       {actionController.message && <p className="tt-table-error" role="alert">{actionController.message}</p>}
@@ -497,22 +534,25 @@ function TableActions({ view, state, busy, onCommand, expanded = false }: TableC
       <p className="tt-table-turn-indicator">Acting as {view.actor.role === 'owner' ? 'Owner' : `${view.actor.name} · member`}{view.actor.seat ? ` · ${view.actor.seat.replace('member-', 'Member ')}` : ''}{state.turn ? ` · current turn: ${turnLabel}` : ''}</p>
       {eligibleActions.length < actions.length && <p className="tt-table-action-restriction">Some actions are limited to {formatActionRoles(actions.filter((action) => !action.roles.includes(currentActorRole)))}.</p>}
       <label className="tt-table-action-picker" htmlFor={actionSelectId}>Choose an action<select id={actionSelectId} value={selectedActionId} onChange={(event) => setSelectedActionId(event.target.value)}><option value="">Choose an action…</option>{eligibleActions.map((action) => <option value={action.id} key={action.id}>{action.title}</option>)}</select></label>
-      {selectedAction && <ActionForm action={selectedAction} state={state} currentSeat={currentSeat} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} />}
+      {selectedAction && <ActionForm view={view} action={selectedAction} state={state} currentSeat={currentSeat} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} onRoll={actionController.roll} />}
     </>}
     {actionController.message && <p className="tt-table-error" role="alert">{actionController.message}</p>}
   </div>;
 }
 
-function ActionForm({ action, state, currentSeat, members, busy, values, onUpdate, onSubmit }: { action: TableAction; state: TableState; currentSeat: string; members?: WorkspaceView['members']; busy: string | null; values: Record<string, string | number | boolean>; onUpdate: (actionId: string, paramId: string, value: string | number | boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>, action: TableAction) => Promise<void> }) {
+function ActionForm({ view, action, state, currentSeat, members, busy, values, onUpdate, onSubmit, onRoll }: { view: WorkspaceView; action: TableAction; state: TableState; currentSeat: string; members?: WorkspaceView['members']; busy: string | null; values: Record<string, string | number | boolean>; onUpdate: (actionId: string, paramId: string, value: string | number | boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>, action: TableAction) => Promise<void>; onRoll: (actionId: string, parameterId: string) => Promise<void> }) {
   const formId = useId().replace(/:/g, '');
+  useServerRollsTick();
   const turnBlocked = action.requireTurn && state.turn !== currentSeat;
   const readOnly = busy === 'table.readOnly';
   const emptyRecordCollections = [...new Set(action.parameters.filter((parameter) => parameter.type === 'record' && !(state.records[parameter.collection ?? '']?.length)).map((parameter) => state.program?.collections.find((collection) => collection.id === parameter.collection)?.title ?? parameter.collection ?? 'records'))];
+  const missingRoll = action.parameters.some((parameter) => parameter.type === 'roll' && !serverRollFor(view, action.id, parameter.id));
   const submit = (event: FormEvent<HTMLFormElement>) => { void onSubmit(event, action); };
   return <form className="tt-table-action" onSubmit={submit}>
     <header><span className="tt-table-action__glyph"><Play size={14} /></span><span><strong>{action.title}</strong><small>{action.description}</small></span></header>
     {action.parameters.length > 0 && <div className="tt-table-action__inputs">{action.parameters.map((parameter) => {
       const id = `${formId}-tt-table-${action.id}-${parameter.id}`;
+      if (parameter.type === 'roll') return <RollParameterControl key={parameter.id} id={id} view={view} actionId={action.id} parameter={parameter} disabled={busy !== null || turnBlocked} onRoll={() => { void onRoll(action.id, parameter.id); }} />;
       const value = values[parameter.id] ?? (parameter.type === 'boolean' ? false : '');
       const recordChoices = parameter.type === 'record' ? state.records[parameter.collection ?? ''] ?? [] : [];
       const choices = parameter.choices ?? [];
@@ -525,10 +565,11 @@ function ActionForm({ action, state, currentSeat, members, busy, values, onUpdat
     })}</div>}
     {action.conditions.length > 0 && <details className="tt-table-action__requirements"><summary>Requirements · {action.conditions.length}</summary><ul className="tt-table-rule-list">{action.conditions.map((condition, index) => <li key={index}><strong>{operandLabel(condition.left, action, state.program ?? undefined, members)} {conditionOperator(condition.op)} {operandLabel(condition.right, action, state.program ?? undefined, members)}</strong><span>{condition.message}</span></li>)}</ul></details>}
     {readOnly && <p className="tt-table-action__disabled-reason" role="status">This table is read-only. Actions are paused while you review it.</p>}
-    {busy && !readOnly && <p className="tt-table-action__disabled-reason" role="status">{busy === 'table.act' ? 'Applying action…' : 'A table update is in progress. Actions are paused.'}</p>}
+    {busy && !readOnly && <p className="tt-table-action__disabled-reason" role="status">{busy === 'table.act' ? 'Applying action…' : busy === 'table.roll' ? 'Rolling…' : 'A table update is in progress. Actions are paused.'}</p>}
     {turnBlocked && <p className="tt-table-turn-blocked" role="status">Waiting for {state.turn === 'host' ? 'the owner' : state.turn?.replace('member-', 'Member ')} to act.</p>}
+    {missingRoll && !turnBlocked && <p className="tt-table-action__disabled-reason" role="status">กด “ทอย” ให้ server ทอยค่าของแอ็กชันนี้ก่อน</p>}
     {emptyRecordCollections.length > 0 && <p className="tt-table-action__disabled-reason" role="status">No records are available in {emptyRecordCollections.join(', ')} yet.</p>}
-    <button type="submit" className="tt-button tt-button--primary" disabled={busy !== null || turnBlocked || emptyRecordCollections.length > 0}><Play size={13} /> {busy === 'table.act' ? 'Applying…' : action.title}</button>
+    <button type="submit" className="tt-button tt-button--primary" disabled={busy !== null || turnBlocked || emptyRecordCollections.length > 0 || missingRoll}><Play size={13} /> {busy === 'table.act' ? 'Applying…' : action.title}</button>
   </form>;
 }
 
@@ -549,12 +590,22 @@ function useTableActionController(view: WorkspaceView, onCommand: WorkbenchProps
       return { ...current, [actionId]: actionValues };
     });
   };
+  const roll = async (actionId: string, parameterId: string) => {
+    setMessage('');
+    try { await onCommand('table.roll', { actionId, parameterId }); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'The roll could not be made.'); }
+  };
   const submit = async (event: FormEvent<HTMLFormElement>, action: TableAction) => {
     event.preventDefault();
     const raw = values[action.id] ?? {};
     const inputs: Record<string, TableValue> = {};
     for (const parameter of action.parameters) {
       const value = raw[parameter.id];
+      if (parameter.type === 'roll') {
+        // F048: the server fills this input from the pending roll; the client never sends a value.
+        if (!serverRollFor(view, action.id, parameter.id)) { setMessage(`กด “ทอย” ให้ server ทอย ${parameter.label} ก่อนส่ง`); return; }
+        continue;
+      }
       if (parameter.type === 'number') {
         if (value === undefined || value === '') { setMessage(`Enter ${parameter.label}.`); return; }
         const numeric = Number(value);
@@ -571,7 +622,7 @@ function useTableActionController(view: WorkspaceView, onCommand: WorkbenchProps
     catch (error) { setMessage(error instanceof Error ? error.message : 'The action could not be applied.'); }
   };
 
-  return { values, message, update, setRecordSelection, submit };
+  return { values, message, update, setRecordSelection, submit, roll };
 }
 
 function formatActionRoles(actions: TableAction[]): string {

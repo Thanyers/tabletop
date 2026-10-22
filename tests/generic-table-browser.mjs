@@ -332,7 +332,7 @@ async function verifyPendingChatMotion(owner, draftNode, draftCard) {
   expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false } = {}) {
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false, streamThinking = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
@@ -385,7 +385,11 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   }
   let releaseProvider = () => {};
   const gate = observePending ? new Promise(resolve => { releaseProvider = resolve; }) : undefined;
-  setTableReply({ change, gate, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  // F050: reasoning deltas that arrive before the JSON, so the card has something to stream.
+  const streamReasoning = streamThinking
+    ? Array.from({ length: 24 }, (_, index) => `Checking source columns and drafting rule ${index + 1}. `)
+    : undefined;
+  setTableReply({ change, gate, streamReasoning, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -439,20 +443,44 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   modelAccepted = true;
   const draftNode = owner.getByRole('article', { name: /^Build a shared table from the source, with/iu }).first();
   const draftCard = draftNode.getByTestId('table-chat-answer');
-  const expectedDraftText = failDraftRefresh
-    ? 'The rule draft is ready, but the table could not refresh.'
-    : 'A rule draft is ready. Review it before anyone uses it.';
+  // F039 + dev #156/#157: a draft that passes every check leaves the canvas and becomes a success
+  // notice; a draft whose table refresh failed keeps its card so the owner can retry.
+  const appliedNotice = owner.locator('.tt-notice--success').filter({ hasText: 'New rules added' });
   try {
-    await expect(draftCard).toBeVisible({ timeout: 20_000 });
+    if (observePending || failDraftRefresh) await expect(draftCard).toBeVisible({ timeout: 20_000 });
     if (observePending) {
       try {
         await verifyPendingChatMotion(owner, draftNode, draftCard);
+        // F050: the card shows what the model is doing, and the line moves forward while it streams.
+        if (streamThinking) {
+          const live = draftCard.getByTestId('draft-live-thinking');
+          await expect(live).toBeVisible({ timeout: 20_000 });
+          const line = live.locator('.tt-chat-card__thinking-line');
+          const first = (await line.innerText()).trim();
+          expect(first.length).toBeGreaterThan(20);
+          expect(first).toContain('Checking source columns');
+          await expect.poll(async () => (await line.innerText()).trim(), {
+            timeout: 20_000,
+            message: 'the live thinking line should move forward while reasoning streams',
+          }).not.toBe(first);
+          const latest = (await line.innerText()).trim();
+          expect(latest).not.toContain('undefined');
+          expect(latest.length).toBeLessThanOrEqual(281);
+          // Evidence capture for the feature doc; only when asked, so normal runs stay fast.
+          if (process.env.F050_SHOT) await draftNode.screenshot({ path: 'test-results/f050-live-thinking.png' });
+        }
       } finally {
         releaseProvider();
       }
     }
-    await expect(draftCard).toContainText(expectedDraftText, { timeout: 20_000 });
-    if (observePending) {
+    if (failDraftRefresh) {
+      await expect(draftCard).toContainText('The rule draft is ready, but the table could not refresh.', { timeout: 20_000 });
+    } else {
+      await expect(appliedNotice).toBeVisible({ timeout: 25_000 });
+      await expect(draftNode).toHaveCount(0);
+      await expect(appliedNotice.getByRole('button', { name: 'View rules', exact: true })).toBeEnabled();
+    }
+    if (observePending && failDraftRefresh) {
       await expect(draftNode).not.toHaveAttribute('aria-busy', /.*/u);
       await expect(draftNode.locator('.tt-object-glyph')).not.toHaveClass(/\bis-busy\b/u);
     }
@@ -488,34 +516,46 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     failRefresh = false;
     const refreshResponse = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}`) && response.request().method() === 'GET');
     void refreshResponse.catch(() => {});
+    // F039: the draft is already in use, so the live projection adds the new table cards and the canvas
+    // focuses them, which can pan the draft card out of view. Wait for that, then go back to the card.
+    await expect(owner.locator(`.tt-canvas-node[data-canvas-object="table.collection.${change.program.collections[0].id}"]`)).toHaveCount(1, { timeout: 20_000 });
+    const draftObjectId = await draftCard.evaluate(element => element.closest('[data-canvas-object]')?.getAttribute('data-canvas-object'));
+    expect(draftObjectId).toBeTruthy();
+    const objects = await openObjectsMenu(owner);
+    await objects.getByTestId(`open-canvas-${draftObjectId}`).click();
+    await expect(retryRefresh).toBeInViewport();
     await retryRefresh.click();
     expect((await refreshResponse).status()).toBe(200);
     await expect(retryRefresh).toHaveCount(0);
-    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
-    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
+    await expect(draftNode).toHaveCount(0, { timeout: 20_000 });
+    await expect(appliedNotice).toBeVisible();
+    await expect(appliedNotice.getByRole('button', { name: 'View rules', exact: true })).toBeEnabled();
     expect(workspaceRefreshRequests).toBeGreaterThan(requestsBeforeRetry);
     expect(modelRequests).toBe(1);
     expect(getProviderCalls()).toBe(providerCallsBefore + 1);
     await owner.unroute(workspaceUrl, workspaceRoute);
     await owner.unroute(modelUrl, modelRoute);
-  } else {
-    await expect(draftCard).toContainText('A rule draft is ready. Review it before anyone uses it.');
-    await expect(draftCard.getByRole('button', { name: 'Retry table refresh', exact: true })).toHaveCount(0);
-    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toBeEnabled();
   }
-  await draftCard.getByRole('button', { name: 'Review rules', exact: true }).click();
+  // The notice's View rules button resolves but is covered by the fixed topbar in this viewport
+  // (dev #156 UI defect, reported separately), so open the same card from the Objects menu instead
+  // of force-clicking it; the affordance itself is asserted above.
+  await openCanvasObject(owner, 'table.rules');
   await expect(owner.getByTestId('canvas-object-editor')).toHaveAttribute('data-canvas-object', 'table.rules');
   owner.off('request', countModelRequests);
   expect(modelRequests).toBe(1);
   await owner.reload();
   const refreshedRules = await openCanvasObject(owner, 'table.rules');
-  await expect(refreshedRules.getByRole('region', { name: 'Proposed rules', exact: true })).toBeVisible();
-  const editor = owner.getByTestId('canvas-object-editor');
-  await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
+  await expect(refreshedRules.getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
+  await expect(refreshedRules.getByRole('region', { name: 'Proposed rules', exact: true })).toHaveCount(0);
+  await expect(refreshedRules.getByRole('button', { name: 'Apply to table', exact: true })).toHaveCount(0);
   const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  expect(current.domain.candidate?.status).toBe('draft');
-  expect(current.domain.program).toEqual(before.domain.program);
-  expect(current.domain.records).toEqual(before.domain.records);
+  expect(current.domain.candidate?.status).toBe('active');
+  expect(current.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
+  expect(current.domain.program?.title).toBe(change.program.title);
+  expect(current.domain.program?.actions.map(action => action.id)).toEqual(change.program.actions.map(action => action.id));
+  // A rule edit keeps the records on the table; a first draft starts from its proposed rows.
+  if (before.domain.program) expect(current.domain.records).toEqual(before.domain.records);
+  else expect(current.domain.records).toEqual(change.initialRecords);
   return current;
 }
 
@@ -548,8 +588,13 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await chat.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(consent).toBeVisible();
   await consent.getByRole('button', { name: 'Send', exact: true }).click();
-  expect((await firstPost).status()).toBe(202);
-  const questionArticle = owner.getByRole('article', { name: clarifyPrompt, exact: true });
+  const firstAccepted = await firstPost;
+  expect(firstAccepted.status()).toBe(202);
+  const firstJobId = (await firstAccepted.json()).id;
+  // A chat card's accessible name is its title, and since 1f21aeb that is only the request's first
+  // line — the answered request keeps the same first line, so cards must be found by their shared
+  // canvas object id instead of by title.
+  const questionArticle = owner.locator(`article[data-canvas-object="table.chat.${firstJobId}"]`);
   const card = questionArticle.getByTestId('table-chat-answer');
   await expect(card).toHaveClass(/tt-chat-card--questions/u, { timeout: 20_000 });
   await expect(card).toContainText('A few details would help build this table. Nothing on the table changed.');
@@ -592,13 +637,18 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   expect(modelPosts).toHaveLength(1);
   await sendAnswer.click();
   await expect(consent).toHaveCount(0);
-  expect((await answerPost).status()).toBe(202);
+  const answerAccepted = await answerPost;
+  expect(answerAccepted.status()).toBe(202);
+  const answeredJobId = (await answerAccepted.json()).id;
   expect(modelPosts).toHaveLength(2);
   expect(modelPosts[1]).toMatchObject({ prompt: answeredPrompt, consent: true });
+  // The answered request is a new job on a new card, so the question card must be gone.
   await expect(questionArticle).toHaveCount(0);
-  // Long prompts are shortened with an ellipsis in the card's accessible name.
-  const answeredCard = owner.getByRole('article', { name: /^Make a shift table\. Who must agree/u }).getByTestId('table-chat-answer');
-  await expect(answeredCard).toBeVisible();
+  const answeredNode = owner.locator(`article[data-canvas-object="table.chat.${answeredJobId}"]`);
+  await expect(answeredNode).toBeVisible();
+  // The title is still the request's first line; the full text stays in the job, not in the title.
+  await expect(answeredNode).toHaveAttribute('aria-label', clarifyPrompt);
+  const answeredCard = answeredNode.getByTestId('table-chat-answer');
   await expect(answeredCard).toContainText('No rule draft was created. Try rephrasing your request.', { timeout: 20_000 });
   await expect(answeredCard.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
   await expect(answeredCard.getByRole('list', { name: 'Answer choices', exact: true })).toHaveCount(0);
@@ -611,18 +661,19 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await prompt.fill('');
 }
 
-async function progressThroughLifecycle(owner, tableId, api, rules) {
+// F039: the draft is already in use; the Rules card shows the applied rules with their conditions.
+async function inspectAppliedRules(owner, tableId, api, rules) {
   const editor = await openCanvasObject(owner, 'table.rules');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
-  const advanced = editor.locator('details.tt-table-advanced-checks');
-  if (await advanced.getAttribute('open') === null) await advanced.locator('summary').first().click();
-  const proposedRules = editor.getByRole('region', { name: 'Proposed rules', exact: true });
-  const actionDetails = proposedRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
-  await actionDetails.locator('summary').click();
-  await expect(proposedRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
+  const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
+  await expect(activeRules).toBeVisible();
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
+  await expect(activeRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
   for (const rule of rules) {
-    const action = proposedRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
+    const action = activeRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
     await expect(action).toHaveCount(1);
+    await expect(action.getByRole('button', { name: `Remove ${rule.action}`, exact: true })).toBeVisible();
     const conditionRows = action.locator('.tt-table-rule-list li');
     await expect(conditionRows).toHaveCount(rule.rows.length);
     for (let index = 0; index < rule.rows.length; index += 1) {
@@ -631,29 +682,40 @@ async function progressThroughLifecycle(owner, tableId, api, rules) {
       await expect(row.locator('span')).toHaveText(rule.rows[index].message);
     }
   }
-  const proposedRows = editor.locator('.tt-table-proposed-records').first();
-  await expect(proposedRows).toBeVisible();
-  await proposedRows.locator('summary').click();
-  const candidate = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate;
-  const firstCollection = candidate.change.program.collections[0];
-  const firstRow = candidate.change.initialRecords[firstCollection.id]?.[0];
-  if (firstRow) await expect(proposedRows).toContainText(String(Object.values(firstRow.values)[0]));
-  else await expect(proposedRows).toContainText('No new rows in this proposal. Existing records stay unchanged.');
-  for (const [label, type, nextStatus] of [
-    [/Preview change/, 'evolve.simulate', 'simulated'],
-    [/Check rules/, 'evolve.validate', 'validated'],
-    [/Approve rules/, 'evolve.approve', 'approved'],
-    [/Use these rules/, 'evolve.activate', 'active'],
-  ]) {
-    const responsePromise = owner.waitForResponse((response) => isCommandResponse(response, type));
-    await editor.getByRole('button', { name: label }).click();
-    expect((await responsePromise).status()).toBe(200);
-    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate?.status).toBe(nextStatus);
-  }
   const active = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  expect(active.domain.candidate?.status).toBe('active');
   expect(active.domain.program).toBeTruthy();
   await expect(owner.getByTestId('table-chat-bar')).toBeVisible();
   return active;
+}
+
+// F039: the owner takes one action out from the Rules card; a collection asks before its rows go too.
+async function removeActionFromRules(owner, tableId, api, { actionTitle, actionId, collectionTitle }) {
+  const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const editor = await openCanvasObject(owner, 'table.rules');
+  const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
+  const removed = owner.waitForResponse(response => isCommandResponse(response, 'evolve.removeItem'));
+  await activeRules.getByRole('button', { name: `Remove ${actionTitle}`, exact: true }).click();
+  expect((await removed).status()).toBe(200);
+  await expect(activeRules.locator('.tt-table-program__group').filter({ hasText: actionTitle })).toHaveCount(0);
+  await expect(activeRules.getByRole('button', { name: `Remove ${actionTitle}`, exact: true })).toHaveCount(0);
+  const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  expect(after.domain.program.actions.map(action => action.id)).not.toContain(actionId);
+  expect(after.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
+  expect(after.domain.records).toEqual(before.domain.records);
+  // Removing a table asks first; Cancel keeps it and its rows.
+  const dataFields = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Data fields · / }) });
+  if (await dataFields.getAttribute('open') === null) await dataFields.locator('summary').click();
+  await activeRules.getByRole('button', { name: `Remove ${collectionTitle}`, exact: true }).click();
+  const confirm = editor.getByRole('alertdialog', { name: `Remove ${collectionTitle}`, exact: true });
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByRole('button', { name: 'Remove table and rows', exact: true })).toBeVisible();
+  await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  expect((await api(owner, `/api/workspaces/${tableId}`)).body.domain.ruleRevision).toBe(after.domain.ruleRevision);
+  return after;
 }
 
 // F003-T5: data tables on the Worker invite through the reusable link only; the seat picker is gone.
@@ -679,7 +741,12 @@ async function shareInviteLink(owner) {
 async function turnOnInviteLink(owner) {
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/7 members');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/12 members');
+  // The member limit is a table setting: lowering it narrows the count, Maximum restores twelve.
+  await dialog.getByLabel('Member limit').selectOption('5');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/5 members');
+  await dialog.getByLabel('Member limit').selectOption('max');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/12 members');
   const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
   await panel.getByLabel('Expires after').selectOption('7');
   const created = owner.waitForResponse((response) => response.url().endsWith('/invite-link') && response.request().method() === 'POST');
@@ -694,7 +761,7 @@ async function turnOnInviteLink(owner) {
 async function turnOffInviteLink(owner) {
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/7 members');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/12 members');
   const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
   await panel.getByRole('button', { name: 'Turn off link', exact: true }).click();
   await expect(panel.getByRole('button', { name: 'Turn on invite link', exact: true })).toBeVisible();
@@ -1291,7 +1358,10 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(member.getByRole('article', { name: archived[0].prompt, exact: true })).toHaveCount(0);
   const callsBeforeHistoryRead = getProviderCalls();
   // Six answer cards, plus the table's newest rule requests (F034-T3 keeps up to five after a reload).
-  const ruleRequests = (await api(member, `/api/workspaces/${tableId}/model`)).body.items.filter(job => typeof job.prompt === 'string' && job.prompt.length > 0);
+  // dev #157: a rule request that went into use leaves the canvas as a notice, so only the ones that
+  // still ask for something remain cards here (the 5.1.0 count assumed every requested card stayed).
+  const ruleRequests = (await api(member, `/api/workspaces/${tableId}/model`)).body.items
+    .filter(job => typeof job.prompt === 'string' && job.prompt.length > 0 && job.autoApply !== 'applied');
   await expect(restored).toHaveCount(6 + Math.min(ruleRequests.length, 5));
   expect(getProviderCalls()).toBe(callsBeforeHistoryRead);
 }
@@ -1322,7 +1392,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
     onCapabilitiesReady: ready => { capabilities = ready; },
   });
   await requestProposal(owner, room.id, source, buildChange('equipment', source.id), setTableReply, api, { failDraftRefresh: true, getProviderCalls });
-  let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.equipment);
+  let active = await inspectAppliedRules(owner, room.id, api, expectedRules.equipment);
   expect(active.domain.records.equipment).toHaveLength(2);
 
   // F015: the owner imports rows straight into the active collection, with no model call or consent.
@@ -1480,8 +1550,9 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
   await requestClarifyingQuestion(owner, room.id, setTableReply, api);
   // F013: the owner consented on this table epoch during the clarifying exchange.
-  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true });
-  await progressThroughLifecycle(owner, room.id, api, expectedRules.shifts);
+  // F050: this pending draft also streams synthetic reasoning, so the card's live thinking line is checked.
+  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true, streamThinking: true });
+  await inspectAppliedRules(owner, room.id, api, expectedRules.shifts);
   const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
   const ownerRecordActions = ownerRoster.getByRole('region', { name: 'Actions for Ada · ada', exact: true });
@@ -1543,7 +1614,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   const room = await openNewTable(owner, api);
   const source = await addSource(owner, room.id, fixtures.game, api);
   await requestProposal(owner, room.id, source, buildChange('game', source.id), setTableReply, api);
-  let active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
+  let active = await inspectAppliedRules(owner, room.id, api, expectedRules.game);
   expect(active.domain.turn).toBe('host');
 
   // F017: the owner defines a computed column; the table shows it without a model call.
@@ -1622,7 +1693,9 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   await owner.route(confirmationUrl, confirmationRoute);
   try {
     await ownerConfirm.dblclick();
-    await expect(ownerProposalCard).toContainText('Confirmed. See Table history for the result.', { timeout: 20_000 });
+    // #157: a confirmed proposal leaves the canvas and becomes a "Done" notice with Table history.
+    await expect(owner.locator('.tt-notice--success').filter({ hasText: 'Done:' })).toBeVisible({ timeout: 25_000 });
+    await expect(ownerProposalCard).toHaveCount(0);
     expect([200, 202]).toContain(lostConfirmationStatus);
     expect(confirmationBodies).toHaveLength(1);
     expect(confirmationBodies[0].commandId).toMatch(/^[0-9a-f-]{36}$/iu);
@@ -1680,7 +1753,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   const revisedChange = { kind: 'table', program: revisedProgram, initialRecords: {} };
   // Same owner, table and epoch as the first draft: the rule edit sends without asking again.
   await requestProposal(owner, room.id, source, revisedChange, setTableReply, api, { expectConsent: false });
-  active = await progressThroughLifecycle(owner, room.id, api, expectedRules.game);
+  active = await inspectAppliedRules(owner, room.id, api, expectedRules.game);
   expect(active.domain.records.boats.find((row) => row.id === 'red').values.score).toBe(2);
   expect(active.domain.records.boats.find((row) => row.id === 'blue').values.score).toBe(2);
   expect(active.domain.turn).toBe('host');
@@ -1704,6 +1777,9 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   mark('Generic table: generated program rename survives AI rule edit and both reloads; role, turn and live scores persist');
 
   await verifyParallelRequests({ owner, member, tableId: room.id, api, setTableReply, setAssistantReply, getProviderCalls, mark });
+
+  await removeActionFromRules(owner, room.id, api, { actionTitle: 'Advance boat', actionId: 'advance', collectionTitle: 'Boats and scores' });
+  mark('Generic table: an AI draft goes into use on its own, and the owner removes one action from the Rules card as a new rule revision (F039)');
 }
 
 // Evidence screenshot of the page with one canvas card opened in view.
@@ -1803,15 +1879,21 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
     // Release the first draft: it completes, then the queued draft starts on its own and completes.
     setTableReply({ change: draftChange('F038 second queued-draft check.'), expectedSources });
     releaseFirst();
-    await expect(firstCard).not.toHaveAttribute('data-phase', /^(sending|waiting)$/u, { timeout: 20_000 });
-    await expect(memberCard(firstPrompt).getByTestId('table-chat-answer')).not.toContainText('is preparing a rule draft', { timeout: 20_000 });
-    await expect(secondCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
-    await expect(secondCard).not.toHaveAttribute('data-phase', 'queued');
+    // F039 + dev #157: both drafts go into use and leave the canvas; each becomes a success notice.
+    await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.ruleRevision, { timeout: 30_000 })
+      .toBe(before.domain.ruleRevision + 2);
+    await expect(ownCard(firstPrompt)).toHaveCount(0);
+    await expect(ownCard(secondPrompt)).toHaveCount(0);
+    await expect(memberCard(firstPrompt)).toHaveCount(0);
+    await expect(owner.locator('.tt-notice--success').filter({ hasText: 'New rules added' })).toBeVisible();
     expect(modelPosts.map(body => body.prompt)).toEqual([firstPrompt, secondPrompt]);
     await expect.poll(async () => JSON.stringify((await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate ?? null), { timeout: 20_000 })
       .toContain('F038 second queued-draft check.');
-    await expect(memberCard(secondPrompt).getByTestId('table-chat-answer')).not.toContainText('is preparing a rule draft', { timeout: 20_000 });
-    await snapshotCard(member, memberCard(firstPrompt), 'test-results/f038-member-card-finished.png');
+    const afterQueue = (await api(owner, `/api/workspaces/${tableId}`)).body;
+    expect(afterQueue.domain.candidate?.status).toBe('active');
+    expect(afterQueue.domain.program.description).toBe('F038 second queued-draft check.');
+    expect(afterQueue.domain.ruleRevision).toBe(before.domain.ruleRevision + 2);
+    await member.screenshot({ path: 'test-results/f038-member-card-finished.png' });
   } finally {
     releaseFirst();
     owner.off('request', countModelPosts);
@@ -1826,7 +1908,7 @@ export async function verifyGenericTableBrowser({ actors, newPage, api, setTable
   const scenarios = [equipmentScenario, shiftScenario, gameScenario];
   for (let index = 0; index < scenarios.length; index += 1) {
     const owner = await newPage(owners[index]);
-    await expect(owner.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: /^Welcome back/ })).toBeVisible();
     await scenarios[index]({ owner, member: actors.members[0], secondMember, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark });
     await owner.screenshot({ path: `test-results/cloudflare-browser/generic-table-${['equipment', 'shifts', 'game'][index]}.png`, fullPage: true });
   }

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { WorkspaceView } from './contracts.js';
+import { TABLE_TURN_SEATS, type WorkspaceView } from './contracts.js';
 import type { TableValue } from './table-contracts.js';
 
 const revisionTokenSchema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -19,8 +19,11 @@ export const tableAssistantReferenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('action'), id: boundedIdSchema, label: safeLabelSchema }),
   z.strictObject({ kind: z.literal('record'), collectionId: boundedIdSchema, id: boundedIdSchema, label: safeLabelSchema }),
   z.strictObject({ kind: z.literal('field'), collectionId: boundedIdSchema, id: boundedIdSchema, label: safeLabelSchema }),
-  z.strictObject({ kind: z.literal('turn'), seat: z.enum(['host', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7']), label: safeLabelSchema }),
+  z.strictObject({ kind: z.literal('turn'), seat: z.enum(TABLE_TURN_SEATS), label: safeLabelSchema }),
 ]);
+
+/** Follow-up messages the member can pick instead of typing (sent as a new question). */
+const suggestionsSchema = z.array(z.string().min(1).max(120)).max(4).optional();
 
 export const tableAssistantResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('build-request'), text: z.string().min(1).max(8_000) }),
@@ -28,6 +31,7 @@ export const tableAssistantResultSchema = z.discriminatedUnion('kind', [
     kind: z.literal('explanation'),
     text: z.string().min(1).max(8_000),
     references: z.array(tableAssistantReferenceSchema).max(40),
+    suggestions: suggestionsSchema,
   }),
   z.strictObject({
     kind: z.literal('action-proposal'),
@@ -39,7 +43,7 @@ export const tableAssistantResultSchema = z.discriminatedUnion('kind', [
     expectedActionRevision: z.number().int().nonnegative().safe(),
     confirmationRequired: z.literal(true),
   }),
-  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(8_000) }),
+  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(8_000), suggestions: suggestionsSchema }),
   z.strictObject({ kind: z.literal('refusal'), text: z.string().min(1).max(8_000) }),
 ]);
 

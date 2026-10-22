@@ -1,8 +1,11 @@
 import { z } from 'zod';
-import { DomainError, type ActorContext, type Seat } from '../shared/contracts';
+import { DomainError, SEATS, TABLE_TURN_SEATS, TABLE_TURN_SEAT_PATTERN, type ActorContext, type Seat } from '../shared/contracts';
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue } from '../shared/table-contracts';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
+import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
 import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
+import { liveCanvasCardIds, pruneCardMeta, touchCardMeta } from './table-card-meta';
+import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
 import { expressionWithinBounds, getGenerativeExpressionType, validateGenerativeProgram } from '../runtime/generative/validation';
@@ -30,12 +33,57 @@ const id = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/).refine(x => !forbiddenIde
 const text = z.string().min(1).max(500);
 const value: z.ZodType<TableValue> = z.union([z.string().max(500), z.number().finite().min(-1e9).max(1e9), z.boolean(), z.null(), z.array(z.string().max(100)).max(32)]);
 const bytes = (s: string) => new TextEncoder().encode(s).byteLength;
-const MAX_TABLE_ACTION_CREATES = 12;
+/**
+ * F047: one source of truth for the limits the prompt advertises and the schema enforces.
+ * The Zen of the old design was two hand-kept lists (prompt guide + zod), and they drifted:
+ * `manifestNodes <= 24` was enforced but never advertised.
+ */
+export const TABLE_LIMITS = {
+  collections: 6,
+  fieldsPerCollection: 12,
+  fieldChoices: 32,
+  actions: 16,
+  parametersPerAction: 8,
+  conditionsPerAction: 24,
+  effectsPerAction: 24,
+  createsPerAction: 12,
+  invariants: 12,
+  invariantFields: 6,
+  turnOrder: TABLE_TURN_SEATS.length,
+  evidence: 20,
+  assumptions: 12,
+  rowsPerCollection: 100,
+  rowsTotal: 200,
+  recordsBytes: 128 * 1024,
+  programBytes: 64 * 1024,
+} as const;
+const MAX_TABLE_ACTION_CREATES = TABLE_LIMITS.createsPerAction;
 const TABLE_RECORD_ID_PREFIX = 'record_';
 const TABLE_RECORD_ID_HASH_LENGTH = 12;
 const TABLE_RECORD_ORDINAL_WIDTH = String(MAX_TABLE_ACTION_CREATES - 1).length;
-const fieldSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'list']), required: z.boolean(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional(), default: value.optional() });
-const parameterSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'record']), collection: id.optional(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(32).optional() });
+const fieldSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'list']), required: z.boolean(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(TABLE_LIMITS.fieldChoices).optional(), default: value.optional() });
+/** F048: one to four groups of identical dice plus an optional whole-number modifier. */
+const rollGroupSchema: z.ZodType<RollGroup> = z.strictObject({
+  count: z.number().int().min(1).max(ROLL_LIMITS.dicePerGroup),
+  faces: z.number().int().min(ROLL_LIMITS.facesMin).max(ROLL_LIMITS.facesMax),
+});
+const rollSpecSchema: z.ZodType<RollSpec> = z.strictObject({
+  groups: z.array(rollGroupSchema).min(1).max(ROLL_LIMITS.groups),
+  modifier: z.number().int().min(-ROLL_LIMITS.modifier).max(ROLL_LIMITS.modifier).optional(),
+}).superRefine((spec, refinement) => {
+  for (const problem of rollSpecProblems(spec)) refinement.addIssue({ code: 'custom', message: problem });
+});
+const parameterSchema = z.strictObject({ id, label: text, type: z.enum(['text', 'number', 'boolean', 'record', 'roll']), collection: id.optional(), min: z.number().finite().min(-1e9).max(1e9).optional(), max: z.number().finite().min(-1e9).max(1e9).optional(), choices: z.array(z.string().max(100)).min(1).max(TABLE_LIMITS.fieldChoices).optional(), roll: rollSpecSchema.optional() })
+  .superRefine((parameter, refinement) => {
+    if (parameter.type === 'roll') {
+      if (!parameter.roll) refinement.addIssue({ code: 'custom', path: ['roll'], message: 'A roll parameter needs a roll spec.' });
+      if (parameter.collection !== undefined || parameter.min !== undefined || parameter.max !== undefined || parameter.choices !== undefined) {
+        refinement.addIssue({ code: 'custom', message: 'A roll parameter takes only a roll spec.' });
+      }
+    } else if (parameter.roll !== undefined) {
+      refinement.addIssue({ code: 'custom', path: ['roll'], message: 'Only a roll parameter takes a roll spec.' });
+    }
+  });
 const operand: z.ZodType<TableOperand> = z.union([z.strictObject({ literal: value }), z.strictObject({ input: id }), z.strictObject({ record: id, field: id }), z.strictObject({ system: z.enum(['actor', 'seat', 'turn']) }), z.strictObject({ expression: generativeExpressionSchema })]);
 const computedExpressionSchema: z.ZodType<ComputedExpression> = z.lazy(() => z.union([
   z.strictObject({ op: z.literal('field'), field: id }),
@@ -47,28 +95,131 @@ const computedExpressionSchema: z.ZodType<ComputedExpression> = z.lazy(() => z.u
 const computedColumnSchema: z.ZodType<ComputedColumn> = z.strictObject({ id, collection: id, label: z.string().min(1).max(40), expression: computedExpressionSchema });
 export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
   version: z.literal(1), title: z.string().min(1).max(100), description: text,
-  collections: z.array(z.strictObject({ id, title: text, fields: z.array(fieldSchema).min(1).max(12) })).min(1).max(6),
+  collections: z.array(z.strictObject({ id, title: text, fields: z.array(fieldSchema).min(1).max(TABLE_LIMITS.fieldsPerCollection) })).min(1).max(TABLE_LIMITS.collections),
   actions: z.array(z.strictObject({
     id, title: text, description: text, roles: z.array(z.enum(['owner', 'participant'])).min(1).max(2),
-    parameters: z.array(parameterSchema).max(8),
-    conditions: z.array(z.strictObject({ left: operand, op: z.enum(['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'contains']), right: operand, message: text })).max(24),
-    effects: z.array(z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand })).max(24),
+    parameters: z.array(parameterSchema).max(TABLE_LIMITS.parametersPerAction),
+    conditions: z.array(z.strictObject({ left: operand, op: z.enum(['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'contains']), right: operand, message: text })).max(TABLE_LIMITS.conditionsPerAction),
+    effects: z.array(z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand })).max(TABLE_LIMITS.effectsPerAction),
     creates: z.array(z.strictObject({ collection: id, values: z.record(id, operand) })).max(MAX_TABLE_ACTION_CREATES).optional(),
     requireTurn: z.boolean(), advanceTurn: z.boolean(),
-  })).min(1).max(16),
-  invariants: z.array(z.strictObject({ id, collection: id, fields: z.array(id).min(1).max(6), message: text })).max(12),
-  turnOrder: z.array(z.string().regex(/^(host|member-[1-7])$/)).max(8),
-  evidence: z.array(z.strictObject({ sourceId: z.string().min(1).max(100), quote: z.string().min(1).max(500) })).max(20),
-  assumptions: z.array(text).max(12),
+  })).min(1).max(TABLE_LIMITS.actions),
+  invariants: z.array(z.strictObject({ id, collection: id, fields: z.array(id).min(1).max(TABLE_LIMITS.invariantFields), message: text })).max(TABLE_LIMITS.invariants),
+  turnOrder: z.array(z.string().regex(TABLE_TURN_SEAT_PATTERN)).max(TABLE_LIMITS.turnOrder),
+  evidence: z.array(z.strictObject({ sourceId: z.string().min(1).max(100), quote: z.string().min(1).max(500) })).max(TABLE_LIMITS.evidence),
+  assumptions: z.array(text).max(TABLE_LIMITS.assumptions),
   canvas: generativeCanvasSchema.optional(),
 });
 export const tableRowSchema = z.strictObject({ id, values: z.record(id, value) });
-export const tableRecordsSchema = z.record(id, z.array(tableRowSchema).max(100)).superRefine((records, ctx) => {
+export const tableRecordsSchema = z.record(id, z.array(tableRowSchema).max(TABLE_LIMITS.rowsPerCollection)).superRefine((records, ctx) => {
   const rowCount = Object.values(records).reduce((count, rows) => count + rows.length, 0);
-  if (rowCount > 200) ctx.addIssue({ code: 'custom', message: 'A table supports at most 200 records.' });
-  if (bytes(JSON.stringify(records)) > 128 * 1024) ctx.addIssue({ code: 'custom', message: 'The records exceed the 128 KiB table limit.' });
+  if (rowCount > TABLE_LIMITS.rowsTotal) ctx.addIssue({ code: 'custom', message: `A table supports at most ${TABLE_LIMITS.rowsTotal} records.` });
+  if (bytes(JSON.stringify(records)) > TABLE_LIMITS.recordsBytes) ctx.addIssue({ code: 'custom', message: 'The records exceed the 128 KiB table limit.' });
 });
 export const tableChangeSchema = z.strictObject({ kind: z.literal('table'), program: tableProgramSchema, initialRecords: tableRecordsSchema });
+/** F046: the program without its canvas, validated like the rest of the program. */
+function withoutCanvas(program: TableProgram): TableProgram {
+  const next = { ...program } as TableProgram & { canvas?: TableProgram['canvas'] };
+  delete next.canvas;
+  return next as TableProgram;
+}
+
+/** F046: records keyed by every collection, so a program can be validated without a table state. */
+function emptyRecords(program: TableProgram): Record<string, TableRecord[]> {
+  return Object.fromEntries(program.collections.map(collection => [collection.id, []]));
+}
+
+/** F046: drop links to a removed view or collection; links are hints, so they never block a removal. */
+function dropRuleItemLinks(program: TableProgram, kind: 'view' | 'collection', removedId: string): void {
+  for (const descriptor of program.canvas?.views ?? []) {
+    const related = descriptor.relatedTo;
+    if (!related) continue;
+    if (kind === 'view' && related.views) {
+      related.views = related.views.filter(item => item !== removedId);
+      if (!related.views.length) delete related.views;
+    }
+    if (kind === 'collection' && related.collections) {
+      related.collections = related.collections.filter(item => item !== removedId);
+      if (!related.collections.length) delete related.collections;
+    }
+    if (!related.views && !related.collections) delete descriptor.relatedTo;
+  }
+}
+
+/** F046: one view removed, and every link that pointed at it cleaned up. */
+function withoutView(program: TableProgram, viewId: string): TableProgram {
+  const views = (program.canvas?.views ?? [])
+    .filter(view => view.id !== viewId)
+    .map(view => structuredClone(view));
+  const next = { ...program } as TableProgram & { canvas?: TableProgram['canvas'] };
+  if (views.length) next.canvas = { version: 1, views };
+  else delete next.canvas;
+  if (next.canvas) dropRuleItemLinks(next, 'view', viewId);
+  return next as TableProgram;
+}
+
+/** F046: view issues that do not already exist in the program without a canvas. */
+function viewIssues(program: TableProgram, coreIssues: ReadonlySet<string>): string[] {
+  if (!program.canvas || program.canvas.views.length === 0) return [];
+  return validateGenerativeProgram(program, emptyRecords(program))
+    .filter(issue => !coreIssues.has(issue));
+}
+
+/** F046: the runtime check (probe contexts) for views the static program check accepted. */
+function viewOutputIssues(program: TableProgram): string[] {
+  if (!program.canvas) return [];
+  try {
+    validateGenerativeOutput(program, emptyRecords(program));
+    return [];
+  } catch (error) {
+    return [error instanceof Error ? error.message : 'Generated table views are invalid.'];
+  }
+}
+
+/**
+ * F046: drop views until the people left in the canvas validate, trying one removal at a time first
+ * and dropping the last view only when no single removal helps (a plateau of independent bad views).
+ * Views are judged as a set because `relatedTo` links them, and a link to a dropped view is removed,
+ * so one bad view cannot take its neighbours with it.
+ */
+function salvageViewSet(program: TableProgram, check: (candidate: TableProgram) => string[]): TableProgram {
+  if (check(program).length === 0) return program;
+  let current = program;
+  const limit = program.canvas?.views.length ?? 0;
+  for (let guard = 0; guard < limit; guard += 1) {
+    const views = current.canvas?.views ?? [];
+    if (views.length === 0) return current;
+    for (const view of views) {
+      const candidate = withoutView(current, view.id);
+      if (check(candidate).length === 0) return candidate;
+    }
+    current = withoutView(current, views[views.length - 1]!.id);
+  }
+  return current;
+}
+
+/**
+ * F046: keep the table and drop only the canvas views that fail semantic validation.
+ *
+ * F023 salvaged schema errors only, so a view that parsed but was semantically wrong ("scene text
+ * must be text", a metric that is not a scalar, a control bound to an unknown action) still rejected
+ * the whole draft. A program whose own core is invalid is left untouched here: dropping views could
+ * not fix it, and the caller must report the real issue.
+ */
+function salvageInvalidViews(change: TableChange): TableChange {
+  const program = change.program;
+  if (!program.canvas || program.canvas.views.length === 0) return change;
+  const records = emptyRecords(program);
+  const coreIssues = new Set(validateGenerativeProgram(withoutCanvas(program), records));
+  if (coreIssues.size > 0) return change;
+  const staticIssues = viewIssues(program, coreIssues);
+  if (staticIssues.length === 0 && viewOutputIssues(program).length === 0) return change;
+
+  const trimmed = salvageViewSet(program, candidate => viewIssues(candidate, coreIssues));
+  const evaluated = salvageViewSet(trimmed, viewOutputIssues);
+  return { ...change, program: evaluated } as TableChange;
+}
+
 /** F023: drop only canvas views that fail the schema so one broken view cannot sink the whole draft. */
 function canvasSalvagedChange(value: unknown): TableChange | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -90,13 +241,15 @@ function canvasSalvagedChange(value: unknown): TableChange | null {
       kept.push(view);
     } catch { /* an unrepresentable view is skipped, not fatal */ }
   }
-  return { ...base, program: { ...core, ...(kept.length ? { canvas: { version: 1, views: kept } } : {}) } as TableProgram };
+  const change = { ...base, program: { ...core, ...(kept.length ? { canvas: { version: 1, views: kept } } : {}) } as TableProgram };
+  // F046: the surviving views still have to mean something.
+  return salvageInvalidViews(change);
 }
 
-/** F023: provider-side parse that tolerates malformed canvas views. */
+/** F023/F046: provider-side parse that tolerates malformed or semantically invalid canvas views. */
 export function parseTableChangeSalvagingCanvas(value: unknown): TableChange | null {
   const direct = tableChangeSchema.safeParse(value);
-  return direct.success ? direct.data : canvasSalvagedChange(value);
+  return direct.success ? salvageInvalidViews(direct.data) : canvasSalvagedChange(value);
 }
 
 export function parseBoundedTableChange(value: unknown): TableChange {
@@ -111,6 +264,8 @@ export function parseBoundedTableChange(value: unknown): TableChange {
 }
 const sourceInput = z.strictObject({ filename: z.string().min(1).max(120).regex(/^[^/\\\p{Cc}]+\.(csv|json|txt|md)$/iu), text: z.string().min(1).max(TABLE_FILE_BYTES) });
 const runInput = z.strictObject({ actionId: id, inputs: z.record(id, value) });
+/** F048: the client names the roll it wants; the server supplies every die. */
+const rollInput = z.strictObject({ actionId: id, parameterId: id });
 
 export function createTableState(): TableState {
   return { kind: 'table', sources: [], program: null, records: {}, turn: null, actionRevision: 0, activity: [], dataRevision: 0, ruleRevision: 0, candidate: null, revisions: [] };
@@ -124,7 +279,7 @@ function validValue(field: Pick<TableField, 'type' | 'required' | 'min' | 'max' 
   return typeof v === 'string' && (!field.required || v.trim().length > 0) && (!field.choices || field.choices.includes(v));
 }
 function checkRows(program: TableProgram, records: Record<string, TableRecord[]>) {
-  assert(bytes(JSON.stringify(records)) <= 128 * 1024, 'TABLE_LIMIT', 'The records exceed the 128 KiB table limit. No action was applied.');
+  assert(bytes(JSON.stringify(records)) <= TABLE_LIMITS.recordsBytes, 'TABLE_LIMIT', 'The records exceed the 128 KiB table limit. No action was applied.');
   assert(Object.keys(records).every(key => program.collections.some(c => c.id === key)), 'TABLE_SCHEMA', 'Records refer to an unknown collection.');
   assert(Object.values(records).reduce((n, rows) => n + rows.length, 0) <= 200, 'TABLE_LIMIT', 'A table supports at most 200 records.');
   for (const collection of program.collections) {
@@ -147,7 +302,7 @@ function checkRows(program: TableProgram, records: Record<string, TableRecord[]>
     }
   }
 }
-function checkProgram(program: TableProgram) {
+export function checkProgram(program: TableProgram) {
   unique(program.collections.map(c => c.id), 'Collection identifiers'); unique(program.actions.map(a => a.id), 'Action identifiers'); unique(program.turnOrder, 'Turn seats'); unique(program.invariants.map(i => i.id), 'Invariant identifiers');
   for (const c of program.collections) {
     unique(c.fields.map(f => f.id), 'Field identifiers');
@@ -162,6 +317,7 @@ function checkProgram(program: TableProgram) {
   for (const action of program.actions) {
     unique(action.parameters.map(p => p.id), 'Action parameter identifiers');
     unique(action.effects.map(e => `${e.record}.${e.field}`), 'Action effect targets');
+    assert(action.parameters.filter(p => p.type === 'roll').length <= 1, 'TABLE_SCHEMA', 'An action can use at most one server roll parameter.');
     assert(action.effects.length > 0 || (action.creates?.length ?? 0) > 0 || action.advanceTurn, 'TABLE_SCHEMA', 'An action must change a field, create a record, or advance the turn.');
     assert(!(action.requireTurn || action.advanceTurn) || program.turnOrder.length > 0, 'TABLE_SCHEMA', 'Turn actions need a turn order.');
     const resolveField = (parameter: string, field: string) => {
@@ -173,13 +329,18 @@ function checkProgram(program: TableProgram) {
       assert((p.type === 'record') === (p.collection !== undefined), 'TABLE_SCHEMA', 'Record parameters need a collection.');
       if (p.collection) assert(program.collections.some(c => c.id === p.collection), 'TABLE_SCHEMA', 'Unknown parameter collection.');
       assert((p.min === undefined && p.max === undefined || p.type === 'number') && (p.min === undefined || p.max === undefined || p.min <= p.max) && (!p.choices || p.type === 'text'), 'TABLE_SCHEMA', 'Parameter bounds do not match its type.');
+      assert((p.type === 'roll') === (p.roll !== undefined), 'TABLE_SCHEMA', 'Only a roll parameter takes a roll spec, and a roll parameter needs one.');
+      if (p.roll) {
+        const problems = rollSpecProblems(p.roll);
+        assert(problems.length === 0, 'TABLE_SCHEMA', problems[0] ?? 'The roll bounds are invalid.');
+      }
     }
     const operandType = (o: TableOperand): string => {
       if ('literal' in o) return o.literal === null ? 'null' : Array.isArray(o.literal) ? 'list' : typeof o.literal === 'string' ? 'text' : typeof o.literal;
       if ('expression' in o) return getGenerativeExpressionType(o.expression, program, action);
       if ('system' in o) return 'text';
       if ('record' in o) return resolveField(o.record, o.field).type;
-      const p = action.parameters.find(p => p.id === o.input); assert(p, 'TABLE_SCHEMA', 'Unknown input reference.'); return p.type === 'record' ? 'text' : p.type;
+      const p = action.parameters.find(p => p.id === o.input); assert(p, 'TABLE_SCHEMA', 'Unknown input reference.'); return p.type === 'record' ? 'text' : p.type === 'roll' ? 'number' : p.type;
     };
     for (const c of action.conditions) {
       const l = operandType(c.left), r = operandType(c.right);
@@ -209,7 +370,7 @@ function checkProgram(program: TableProgram) {
 
 export function applyTableChange(state: TableState, raw: TableChange, actor?: Pick<ActorContext, 'actorId' | 'seat'>): TableState {
   const change = parseBoundedTableChange(raw);
-  assert(bytes(JSON.stringify(change.program)) <= 64 * 1024 && bytes(JSON.stringify(change.initialRecords)) <= 128 * 1024, 'TABLE_LIMIT', 'The proposed rules or records exceed the table size limit.');
+  assert(bytes(JSON.stringify(change.program)) <= TABLE_LIMITS.programBytes && bytes(JSON.stringify(change.initialRecords)) <= TABLE_LIMITS.recordsBytes, 'TABLE_LIMIT', 'The proposed rules or records exceed the table size limit.');
   checkProgram(change.program);
   if (state.sources.length === 0) assert(change.program.evidence.length === 0, 'TABLE_EVIDENCE', 'Prompt-only tables cannot cite a source that is not on the table.');
   else {
@@ -257,14 +418,69 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
   const computedColumns = retainComputedColumns(state.computedColumns, change.program);
   return { ...structuredClone(state), program: structuredClone(change.program), records, turn, computedColumns };
 }
+export type RuleItemKind = 'action' | 'invariant' | 'view' | 'collection';
+
+/**
+ * F039: the active program without one action, unique constraint, view or collection. Removing a collection
+ * also removes its records and computed columns. Anything that still refers to the removed item (an action
+ * on that collection, a view showing it) blocks the removal, so the program stays valid.
+ */
+export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: string): TableState {
+  assert(state.program, 'TABLE_INACTIVE', 'There are no active rules to change.');
+  const program = structuredClone(state.program);
+  const records = structuredClone(state.records);
+  let found = false;
+  if (kind === 'action') { found = program.actions.some(item => item.id === id); program.actions = program.actions.filter(item => item.id !== id); }
+  if (kind === 'invariant') { found = program.invariants.some(item => item.id === id); program.invariants = program.invariants.filter(item => item.id !== id); }
+  if (kind === 'collection') { found = program.collections.some(item => item.id === id); program.collections = program.collections.filter(item => item.id !== id); delete records[id]; }
+  if (kind === 'view' && program.canvas) {
+    found = program.canvas.views.some(item => item.id === id);
+    program.canvas.views = program.canvas.views.filter(item => item.id !== id);
+    if (program.canvas.views.length === 0) delete program.canvas;
+  }
+  assert(found, 'RULE_ITEM_NOT_FOUND', 'That rule is no longer on this table.');
+  // F046: links between views are only hints, so drop links to what was removed instead of blocking.
+  if (kind === 'view' || kind === 'collection') dropRuleItemLinks(program, kind, id);
+  const users = ruleItemUsers(program, kind, id);
+  if (users.length > 0) throw new DomainError('RULE_ITEM_IN_USE', `Remove ${users.join(', ')} first; it still uses this.`);
+  try {
+    checkProgram(program);
+    checkRows(program, records);
+    const issues = validateGenerativeProgram(program, records);
+    assert(issues.length === 0, 'TABLE_SCHEMA', issues[0] ?? 'The remaining rules are invalid.');
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'The remaining rules are invalid.';
+    throw new DomainError('RULE_ITEM_IN_USE', `Something else on this table still uses it. Remove that first. (${reason})`);
+  }
+  const computedColumns = retainComputedColumns(state.computedColumns, program);
+  return { ...structuredClone(state), program, records, computedColumns };
+}
+
+/** Names of the rules that still use an action or collection, so the removal message can say what to remove first. */
+function ruleItemUsers(program: TableProgram, kind: RuleItemKind, id: string): string[] {
+  const views = program.canvas?.views ?? [];
+  const mentions = (value: unknown, key: string) => JSON.stringify(value).includes(`${JSON.stringify(key)}:${JSON.stringify(id)}`);
+  if (kind === 'action') return views.filter(view => mentions(view, 'actionId')).map(view => `the view “${view.title}”`);
+  if (kind !== 'collection') return [];
+  return [
+    ...program.actions.filter(action => action.parameters.some(p => p.collection === id) || (action.creates ?? []).some(create => create.collection === id)).map(action => `the action “${action.title}”`),
+    ...program.invariants.filter(invariant => invariant.collection === id).map(invariant => `the check “${invariant.message}”`),
+    ...views.filter(view => mentions(view, 'collection')).map(view => `the view “${view.title}”`),
+  ];
+}
+
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
 }
 function isGenerativeArray(value: GenerativeOutput): value is readonly GenerativeScalar[] { return Array.isArray(value); }
-const GENERATIVE_SEATS = ['learner-1', 'learner-2', 'mira', 'pip', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] as const satisfies readonly Seat[];
+/** The longest seat id any runtime can hand out; probing it bounds output that embeds the seat. */
+const LONGEST_SEAT: Seat = [...SEATS].sort((left, right) => right.length - left.length)[0]!;
 const MAX_SUPPORTED_ACTOR_ID_LENGTH = 160; // ID_SCHEMA permits actor IDs up to this length.
 const MAX_ACTOR_ID = '\u0000'.repeat(MAX_SUPPORTED_ACTOR_ID_LENGTH); // JSON escapes each NUL as six UTF-8 bytes.
-const MAX_GENERATIVE_VALIDATION_CONTEXTS = 64;
+// Probes grow with the seats a program names (about five per named seat), so a full twelve-member
+// turn order with actor, seat and turn branches needs about 68 contexts (64 was the seven-seat budget);
+// 96 keeps headroom for actor literals.
+const MAX_GENERATIVE_VALIDATION_CONTEXTS = 96;
 
 interface GenerativeValidationContext {
   actor: string;
@@ -272,9 +488,30 @@ interface GenerativeValidationContext {
   turn: string | null;
 }
 
-function generativeValidationContexts(program: TableProgram, canvas: NonNullable<TableProgram['canvas']>, actualContext?: GenerativeValidationContext): GenerativeValidationContext[] {
+/**
+ * Seats worth probing: every seat id the program or its rows mention (turn order, literals, record
+ * values) plus the longest seat id. A seat nothing mentions cannot select a branch of its own, so
+ * probing all twelve member seats on every canvas would only spend the validation budget.
+ */
+function mentionedSeats(program: TableProgram, records: Record<string, TableRecord[]>): Seat[] {
+  const mentioned = new Set<string>();
+  const pending: unknown[] = [program, records];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (typeof current === 'string') mentioned.add(current);
+    else if (Array.isArray(current)) pending.push(...current);
+    else if (current && typeof current === 'object') pending.push(...Object.values(current as Record<string, unknown>));
+  }
+  const seats = SEATS.filter((seat) => mentioned.has(seat));
+  // Prefer a mentioned seat that is as long as the longest one so the length probe adds no context.
+  const longest = seats.find((seat) => seat.length === LONGEST_SEAT.length) ?? LONGEST_SEAT;
+  return [longest, ...seats.filter((seat) => seat !== longest)];
+}
+
+function generativeValidationContexts(program: TableProgram, canvas: NonNullable<TableProgram['canvas']>, records: Record<string, TableRecord[]>, actualContext?: GenerativeValidationContext): GenerativeValidationContext[] {
   const systemValues = new Set<'actor' | 'seat' | 'turn'>();
-  const actorCandidates = new Set<string>([MAX_ACTOR_ID, 'host', ...GENERATIVE_SEATS, ...program.turnOrder]);
+  const probeSeats = mentionedSeats(program, records);
+  const actorCandidates = new Set<string>([MAX_ACTOR_ID, 'host', ...probeSeats, ...program.turnOrder]);
   const pending: unknown[] = [canvas];
   while (pending.length > 0) {
     const current = pending.pop();
@@ -292,7 +529,7 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
     }
   }
 
-  const maximumSeat = [...GENERATIVE_SEATS].sort((left, right) => right.length - left.length)[0];
+  const maximumSeat = probeSeats[0];
   const maximumTurn = [...program.turnOrder].sort((left, right) => right.length - left.length)[0] ?? null;
   const contexts: GenerativeValidationContext[] = [];
   const seen = new Set<string>();
@@ -313,7 +550,7 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
   }
   if (systemValues.has('seat')) {
     add({ actor: MAX_ACTOR_ID, turn: maximumTurn }); // An omitted seat evaluates to "host".
-    for (const seat of GENERATIVE_SEATS) add({ actor: MAX_ACTOR_ID, seat, turn: maximumTurn });
+    for (const seat of probeSeats) add({ actor: MAX_ACTOR_ID, seat, turn: maximumTurn });
   }
   if (systemValues.has('turn')) {
     add({ actor: MAX_ACTOR_ID, seat: maximumSeat, turn: null });
@@ -322,9 +559,9 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
 
   // Equality between system values can select a branch when their values coincide. Probe each
   // supported shared value without constructing the full actor × seat × turn product.
-  const sharedValues = new Set(['host', ...GENERATIVE_SEATS, ...program.turnOrder]);
+  const sharedValues = new Set<string>(['host', ...probeSeats, ...program.turnOrder]);
   for (const value of sharedValues) {
-    const seat = (GENERATIVE_SEATS as readonly string[]).includes(value) ? value as Seat : undefined;
+    const seat = probeSeats.find((candidate) => candidate === value);
     const turn = program.turnOrder.includes(value) ? value : null;
     if (systemValues.has('actor') && (systemValues.has('seat') || systemValues.has('turn'))) add({ actor: value, ...(seat ? { seat } : {}), turn });
     if (systemValues.has('seat') && systemValues.has('turn') && seat && program.turnOrder.includes(value)) add({ actor: MAX_ACTOR_ID, seat, turn: value });
@@ -337,7 +574,7 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
 function validateGenerativeOutput(program: TableProgram, records: Record<string, TableRecord[]>, actualContext?: GenerativeValidationContext): void {
   if (!program.canvas) return;
   try {
-    for (const context of generativeValidationContexts(program, program.canvas, actualContext)) {
+    for (const context of generativeValidationContexts(program, program.canvas, records, actualContext)) {
       evaluateGenerativeCanvas(program.canvas, { program, records, ...context });
     }
   } catch (error) {
@@ -417,7 +654,15 @@ function handleNoteCommand(state: TableState, type: string, payload: unknown, ct
   return { state: { ...structuredClone(state), notes: notes.filter(note => note.id !== input.noteId) }, label: 'Note removed.' };
 }
 
-export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } | null {
+export interface TableCommandDecision {
+  state: TableState;
+  label: string;
+  /** F048: the roll this command issued (`table.roll`) or consumed (`table.act`). */
+  roll?: RollResult;
+  rollParameterId?: string;
+}
+
+export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): TableCommandDecision | null {
   if (type === 'table.import') {
     // F008: any member may add a file; removal stays with the owner.
     requirePermission(ctx, 'files.add', ['owner', 'participant']);
@@ -430,7 +675,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     }
     const sha256 = ctx.hash(input.text), sourceId = `source_${sha256.slice(0, 32)}`;
     assert(!state.sources.some(s => s.id === sourceId), 'TABLE_DUPLICATE_SOURCE', 'This source is already on the table.');
-    return { state: { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate }, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
+    const next: TableState = { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate };
+    // F054: a file added by a person stamps the Files card; the simulator never writes timestamps.
+    next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return { state: next, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
   }
   if (type === 'table.removeSource') {
     requirePermission(ctx, 'files.remove', ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
@@ -438,7 +686,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     assert(!state.program?.evidence.some(e => e.sourceId === input.sourceId)
       && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
       'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it with the room.');
-    return { state: { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null }, label: 'Unused source removed.' };
+    const next: TableState = { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null };
+    // F054: removing a file moves the Files card's update time, but never invents a creation time.
+    if (state.cardMeta) next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return { state: next, label: 'Unused source removed.' };
   }
   if (type === 'table.setComputedColumns') {
     requirePermission(ctx, 'data.columns', ['owner']);
@@ -506,6 +757,36 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     hasRole(ctx, ['owner', 'participant']);
     return handleNoteCommand(state, type, payload, ctx);
   }
+  if (type === 'table.roll') {
+    // F048: only a member who may use the action may roll for it. Tables have no paused/defeated
+    // state; the same role, permission, and turn gates as `table.act` apply.
+    requirePermission(ctx, 'table.act', ['owner', 'participant']);
+    const input = parsePayload(rollInput, payload);
+    const program = state.program;
+    assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
+    const action = program.actions.find(a => a.id === input.actionId);
+    assert(action && action.roles.some(role => role === ctx.role), 'FORBIDDEN', 'Your role cannot perform this action.');
+    const parameter = action.parameters.find(p => p.id === input.parameterId);
+    assert(parameter && parameter.type === 'roll' && parameter.roll, 'TABLE_INPUT', 'Choose a roll parameter of this action.');
+    assert(!action.requireTurn || state.turn === (ctx.seat ?? 'host'), 'TABLE_TURN', 'Wait for your turn.');
+    assert(Number.isSafeInteger(ctx.now) && ctx.now >= 0 && Number.isSafeInteger(ctx.now + ROLL_LIMITS.pendingTtlMs), 'INVALID_CLOCK', 'The server clock is outside the supported range.');
+    const roll = createRoll(parameter.roll);
+    const pending: TablePendingRoll = {
+      actorId: ctx.actorId, actionId: action.id, parameterId: parameter.id,
+      groups: roll.groups, values: roll.values, total: roll.total,
+      modifier: parameter.roll.modifier ?? 0, dataRevision: state.dataRevision,
+      createdAt: ctx.now, expiresAt: ctx.now + ROLL_LIMITS.pendingTtlMs,
+    };
+    // A re-roll replaces the actor's earlier pending roll for the same parameter without using a slot.
+    const retained = retainPendingRolls(state.pendingRolls, ctx.now, pending);
+    assert(retained.length < ROLL_LIMITS.pendingPerTable, 'TABLE_LIMIT', 'Too many unused rolls are waiting on this table; finish or wait out an earlier one.');
+    const next = structuredClone(state);
+    next.pendingRolls = [...retained, pending];
+    const dice = roll.groups.map(group => `${group.count}d${group.faces}`).join(' + ');
+    const modifier = parameter.roll.modifier;
+    const modifierText = modifier === undefined || modifier === 0 ? '' : modifier > 0 ? ` + ${modifier}` : ` - ${Math.abs(modifier)}`;
+    return { state: next, label: `Rolled ${dice}${modifierText} = ${roll.total}.`, roll, rollParameterId: parameter.id };
+  }
   if (type !== 'table.act') return null;
   requirePermission(ctx, 'table.act', ['owner', 'participant']);
   const input = parsePayload(runInput, payload);
@@ -513,25 +794,51 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
   const action = program.actions.find(a => a.id === input.actionId);
   assert(action && action.roles.some(role => role === ctx.role), 'FORBIDDEN', 'Your role cannot perform this action.');
-  assert(Object.keys(input.inputs).length === action.parameters.length && Object.keys(input.inputs).every(key => action.parameters.some(p => p.id === key)), 'TABLE_INPUT', 'Provide exactly the required action inputs.');
+  const rollParameters = action.parameters.filter(p => p.type === 'roll');
+  // F048: the rolled value is server-issued. Naming it in the submission is a spoof attempt.
+  for (const p of rollParameters) {
+    assert(!Object.hasOwn(input.inputs, p.id), 'TABLE_ROLL_CLIENT_VALUE', 'A roll parameter is filled by the server; do not send a value for it.');
+  }
+  assert(Object.keys(input.inputs).length === action.parameters.length - rollParameters.length && Object.keys(input.inputs).every(key => action.parameters.some(p => p.id === key)), 'TABLE_INPUT', 'Provide exactly the required action inputs.');
   for (const p of action.parameters) {
+    if (p.type === 'roll') continue;
     const v = input.inputs[p.id];
     if (p.type === 'record') assert(typeof v === 'string' && state.records[p.collection!]?.some(row => row.id === v), 'TABLE_INPUT', 'Choose an existing record.');
     else assert(validValue({ ...p, type: p.type, required: true }, v), 'TABLE_INPUT', `${p.label} is invalid.`);
   }
   assert(!action.requireTurn || state.turn === (ctx.seat ?? 'host'), 'TABLE_TURN', 'Wait for your turn.');
+  // F048: consume the pending roll atomically — single use, same data revision, not expired.
+  const resolvedInputs: Record<string, TableValue> = { ...input.inputs };
+  let consumedRoll: RollResult | undefined;
+  let consumedRollParameterId: string | undefined;
+  for (const p of rollParameters) {
+    assert(p.roll, 'TABLE_SCHEMA', 'A roll parameter needs a roll spec.');
+    const pending = (state.pendingRolls ?? []).find(item => item.actorId === ctx.actorId && item.actionId === action.id && item.parameterId === p.id);
+    assert(pending, 'TABLE_ROLL_REQUIRED', 'Roll this action parameter on the server before sending the action.');
+    assert(pending.dataRevision === state.dataRevision, 'TABLE_ROLL_STALE', 'The table changed after that roll; roll again.');
+    assert(pending.expiresAt > ctx.now, 'TABLE_ROLL_EXPIRED', 'That roll expired; roll again.');
+    assertPendingRoll(pending, p.roll);
+    resolvedInputs[p.id] = pending.total;
+    consumedRoll = { groups: pending.groups.map(group => ({ count: group.count, faces: group.faces })), values: [...pending.values], total: pending.total };
+    consumedRollParameterId = p.id;
+  }
   const nextActionRevision = (state.actionRevision ?? 0) + 1;
   assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
-  const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: input.inputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn });
-  for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, input.inputs, c.left, ctx, evaluateExpression), resolve(action, state, input.inputs, c.right, ctx, evaluateExpression)), 'TABLE_CONDITION', c.message);
+  const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: resolvedInputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn });
+  for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, resolvedInputs, c.left, ctx, evaluateExpression), resolve(action, state, resolvedInputs, c.right, ctx, evaluateExpression)), 'TABLE_CONDITION', c.message);
   const next = structuredClone(state), touched = new Set<string>();
+  if (consumedRoll && consumedRollParameterId) {
+    const remaining = consumePendingRolls(next.pendingRolls, { actorId: ctx.actorId, actionId: action.id, parameterId: consumedRollParameterId });
+    if (remaining) next.pendingRolls = remaining;
+    else delete next.pendingRolls;
+  }
   // Resolve all effects against the same before-state. A swap is one atomic action.
   for (const effect of action.effects) {
     const p = action.parameters.find(p => p.id === effect.record)!;
     const row = next.records[p.collection!].find(row => row.id === input.inputs[p.id])!;
     const key = `${p.collection}.${row.id}.${effect.field}`;
     assert(!touched.has(key), 'TABLE_INPUT', 'Two parameters point at the same effect target.'); touched.add(key);
-    const resolved = resolve(action, state, input.inputs, effect.value, ctx, evaluateExpression);
+    const resolved = resolve(action, state, resolvedInputs, effect.value, ctx, evaluateExpression);
     if (effect.op === 'add') { const old = row.values[effect.field]; assert(typeof old === 'number' && typeof resolved === 'number', 'TABLE_VALUE', 'Only numeric values can be added.'); row.values[effect.field] = old + resolved; }
     else row.values[effect.field] = structuredClone(resolved);
   }
@@ -541,7 +848,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const values: Record<string, TableValue> = {};
     for (const field of collection.fields) {
       const createValue = create.values[field.id];
-      if (createValue !== undefined) values[field.id] = structuredClone(resolve(action, state, input.inputs, createValue, ctx, evaluateExpression));
+      if (createValue !== undefined) values[field.id] = structuredClone(resolve(action, state, resolvedInputs, createValue, ctx, evaluateExpression));
       else if (field.default !== undefined) values[field.id] = structuredClone(field.default);
     }
     const digest = ctx.hash(canonicalJson([action.id, index])).toLowerCase();
@@ -560,5 +867,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
   next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
   next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-100);
-  return { state: next, label: action.title };
+  return {
+    state: next,
+    label: action.title,
+    ...(consumedRoll ? { roll: consumedRoll } : {}),
+    ...(consumedRollParameterId ? { rollParameterId: consumedRollParameterId } : {}),
+  };
 }
