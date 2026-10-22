@@ -941,6 +941,22 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
+  /** Best-effort live progress for a running assistant job; never changes the job status. */
+  async updateTableAssistantProgress(
+    id: string,
+    workspaceId: string,
+    epoch: number,
+    actorId: string,
+    progress: { receivedChars: number; reasoningChars: number; updatedAt: number },
+  ): Promise<void> {
+    this.storage.sql.exec(
+      `UPDATE model_jobs SET data = json_set(data, '$.progress', json(?))
+       WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ? AND status = 'running'
+       AND json_extract(data, '$.kind') = 'table-assistant'`,
+      JSON.stringify(progress), id, workspaceId, epoch, actorId,
+    );
+  }
+
   async finishTableAssistantJob(
     id: string,
     workspaceId: string,
