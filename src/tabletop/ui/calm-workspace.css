@@ -469,3 +469,13 @@
 .tt-app .tt-canvas-selection-bar button:hover:not(:disabled) { background: var(--tt-canvas); }
 .tt-app .tt-canvas-selection-bar__clear { width: 32px; padding: 0 !important; justify-content: center; color: var(--tt-muted) !important; }
 @media (max-width: 640px) { .tt-app .tt-canvas-selection-bar > span { display: none; } }
+
+/* /tables: filters under the search, and a visible date on each row (F053). */
+.tt-chooser .tt-table-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 6px; }
+.tt-chooser .tt-table-filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--tt-muted); font-size: 12px; }
+.tt-chooser .tt-table-filters select { min-height: 30px; padding: 0 8px; border: 1px solid var(--tt-line); border-radius: 8px; background: var(--tt-paper, #fff); color: var(--tt-ink); font: inherit; font-size: 13px; }
+.tt-chooser .tt-table-filters__clear { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-moss, #356e5d); font: inherit; font-size: 13px; cursor: pointer; }
+.tt-chooser .tt-table-filters__clear:hover { background: var(--tt-canvas); }
+.tt-chooser .tt-table-filters__count { margin-left: auto; color: var(--tt-muted); font-size: 12px; }
+.tt-chooser .tt-existing-tables__updated { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.3; }
+.tt-chooser .tt-existing-tables__updated b { color: var(--tt-ink); font-weight: 600; }

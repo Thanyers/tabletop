@@ -7,7 +7,8 @@ import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/tabl
 import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
 import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
-import { matchesSearch, relativeTime } from './ui/relative-time';
+import { relativeTime } from './ui/relative-time';
+import { NO_TABLE_FILTER, filterTables, isFiltered, updatedDate, type TableListFilter, type TableOwnership, type TableRecency } from './ui/table-list-filter';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, isInviteLink, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
@@ -1000,11 +1001,14 @@ function NoticeBanner({ notice, onDismiss }: { notice: { text: string; tone: 'in
 
 function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onStart, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onHome: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onStart: () => void; onOpen: (id: string) => void }) {
   const lastId = readLastWorkspace();
-  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<TableListFilter>(NO_TABLE_FILTER);
+  const query = filter.query;
+  const setQuery = (value: string) => setFilter((current) => ({ ...current, query: value }));
   const now = Date.now();
-  // Last opened first, then the most recently changed (F053); tables without a time keep the server order.
-  const orderedWorkspaces = [...session.workspaces].sort((a, b) => Number(b.id === lastId) - Number(a.id === lastId) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-  const visibleWorkspaces = orderedWorkspaces.filter((workspace) => matchesSearch(query, [workspace.title, caseInfo[workspace.kind].title, workspace.role]));
+  // Newest change first (F053); "Last opened" stays a label and does not jump the order.
+  const visibleWorkspaces = filterTables(session.workspaces, filter, now, (kind) => caseInfo[kind].title);
+  const presentKinds = [...new Set(session.workspaces.map((workspace) => workspace.kind))];
+  const hasTimes = session.workspaces.some((workspace) => workspace.updatedAt !== undefined);
   return <main className="tt-chooser"><ChooserHeader session={session} account={account} busy={busy} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} onHome={onHome} />
     <NoticeBanner notice={notice} onDismiss={onDismissNotice} />
     <section className="tt-chooser__content"><h1>What are you here to do?</h1><p>Start with what you're working on. Your table will take shape around it.</p>
@@ -1015,8 +1019,27 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
           <h2>Pick up where you left off</h2>
           {session.workspaces.length > 1 && <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>}
         </div>
-        {visibleWorkspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span>{workspace.updatedAt !== undefined && <time className="tt-existing-tables__updated" dateTime={new Date(workspace.updatedAt).toISOString()} title={new Date(workspace.updatedAt).toLocaleString()}>Updated {relativeTime(workspace.updatedAt, now)}</time>}<ArrowRight size={16} /></button>)}
-        {visibleWorkspaces.length === 0 && <p className="tt-existing-tables__empty" role="status">No tables match “{query.trim()}”.</p>}
+        {session.workspaces.length > 1 && <div className="tt-table-filters" role="group" aria-label="Filter tables">
+          {presentKinds.length > 1 && <label><span>Type</span><select value={filter.kind} onChange={(event) => setFilter((current) => ({ ...current, kind: event.target.value as TableListFilter['kind'] }))}>
+            <option value="all">All types</option>
+            {presentKinds.map((kind) => <option key={kind} value={kind}>{caseInfo[kind].title}</option>)}
+          </select></label>}
+          <label><span>Role</span><select value={filter.ownership} onChange={(event) => setFilter((current) => ({ ...current, ownership: event.target.value as TableOwnership }))}>
+            <option value="all">Any role</option>
+            <option value="mine">Created by me</option>
+            <option value="joined">Joined</option>
+          </select></label>
+          {hasTimes && <label><span>Updated</span><select value={filter.recency} onChange={(event) => setFilter((current) => ({ ...current, recency: event.target.value as TableRecency }))}>
+            <option value="any">Any time</option>
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="month">Last 30 days</option>
+          </select></label>}
+          {isFiltered(filter) && <button type="button" className="tt-table-filters__clear" onClick={() => setFilter(NO_TABLE_FILTER)}><X size={13} aria-hidden="true" />Clear</button>}
+          <small className="tt-table-filters__count" role="status">{visibleWorkspaces.length} of {session.workspaces.length}</small>
+        </div>}
+        {visibleWorkspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span>{workspace.updatedAt !== undefined && <time className="tt-existing-tables__updated" dateTime={new Date(workspace.updatedAt).toISOString()} title={new Date(workspace.updatedAt).toLocaleString()}><b>{updatedDate(workspace.updatedAt, now)}</b>{relativeTime(workspace.updatedAt, now)}</time>}<ArrowRight size={16} /></button>)}
+        {visibleWorkspaces.length === 0 && <p className="tt-existing-tables__empty" role="status">{query.trim() ? `No tables match “${query.trim()}”` : 'No tables match these filters'}. <button type="button" className="tt-table-filters__clear" onClick={() => setFilter(NO_TABLE_FILTER)}>Clear filters</button></p>}
       </div>}
     </section>
   </main>;
