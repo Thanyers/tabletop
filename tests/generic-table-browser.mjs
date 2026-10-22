@@ -1255,7 +1255,8 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     expectedPromptContains: ownerPrompt, forbiddenTexts: [...forbidden, firstPrompt, firstText, followup],
   };
   const ownerCalls = getProviderCalls();
-  const memberCardForOwner = owner.getByRole('article', { name: firstPrompt, exact: true });
+  // F034-T3: another member's card is titled "<asker>: <prompt>".
+  const memberCardForOwner = owner.getByRole('article', { name: `${profile.actor.name}: ${firstPrompt}`, exact: true });
   await expect(memberCardForOwner).toBeVisible();
   await expect(memberCardForOwner.getByTestId('table-chat-answer')).toContainText(firstText);
   await expect(memberCardForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${profile.actor.name}`);
@@ -1269,7 +1270,7 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   });
   // The member sees the owner's card too, labelled with the owner as the asker.
   await member.reload();
-  const ownerCardForMember = member.getByRole('article', { name: ownerPrompt, exact: true });
+  const ownerCardForMember = member.getByRole('article', { name: `${ownerProfile.actor.name}: ${ownerPrompt}`, exact: true });
   await expect(ownerCardForMember.getByTestId('table-chat-answer')).toContainText(ownerReply.result.text);
   await expect(ownerCardForMember.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${ownerProfile.actor.name}`);
   await expect(member.getByRole('article', { name: firstPrompt, exact: true }).locator('.tt-chat-card__asker')).toHaveCount(0);
@@ -1612,7 +1613,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   // asker can confirm it (no Confirm button on the owner's screen).
   await owner.reload();
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
-  const memberProposalForOwner = owner.getByRole('article', { name: memberPrompt, exact: true });
+  const memberProposalForOwner = owner.getByRole('article', { name: `${memberName}: ${memberPrompt}`, exact: true });
   await expect(memberProposalForOwner.getByTestId('table-chat-answer')).toContainText(memberProposal.result.text);
   await expect(memberProposalForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${memberName}`);
   await expect(memberProposalForOwner).toContainText(`Only ${memberName} can confirm this proposal.`);
