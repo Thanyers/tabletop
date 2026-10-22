@@ -5,9 +5,10 @@ import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpe
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type TableClarification } from '../server/providers/deepseek-changes.js';
+import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
+import { aiTableDeadlineMs } from './ai-deadline.js';
 import { ReasonedDomainError } from './model-failure.js';
 import { FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
@@ -389,6 +390,7 @@ export async function proposeChange(
   env: Env,
   rawRequest: AIProposalRequest,
   fetchImpl?: typeof fetch,
+  onProgress?: (progress: DeepSeekChangeProgress) => void,
 ): Promise<AIProposalResult> {
   const parsed = requestSchema.safeParse(rawRequest);
   if (!parsed.success) fail('AI_INPUT_INVALID', 'Provide a bounded proposal request and explicit consent.');
@@ -446,7 +448,7 @@ export async function proposeChange(
     fail('AI_PROPOSAL_ALREADY_DISPATCHED', 'This proposal request has already been dispatched or is uncertain.');
   }
   if (prepared.kind === 'table' && prepared.providerInput.kind === 'table') {
-    return proposeGeneratedTable(env, request, prepared.providerInput, binding, fetchImpl);
+    return proposeGeneratedTable(env, request, prepared.providerInput, binding, fetchImpl, onProgress);
   }
 
   let change: ChangeSet;
@@ -492,13 +494,26 @@ async function proposeGeneratedTable(
   initialInput: Extract<DeepSeekChangeInput, { kind: 'table' }>,
   initialBinding: BillingBinding,
   fetchImpl?: typeof fetch,
+  onProgress?: (progress: DeepSeekChangeProgress) => void,
 ): Promise<AIProposalResult> {
   let input = initialInput;
   let binding = initialBinding;
-  const deadline = Date.now() + 180_000;
+  // F045: one configured deadline covers every repair attempt of this draft.
+  const deadlineMs = aiTableDeadlineMs(env);
+  const jobStartedAt = Date.now();
+  const deadline = jobStartedAt + deadlineMs;
   const MAX_ATTEMPTS = 4;
   const total: DeepSeekUsage = { promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 };
   let previousIssues: string[] = [];
+  let lastProgress: DeepSeekChangeProgress = { receivedChars: 0, reasoningChars: 0 };
+  // Our own deadline ended the job; the caller reports it as one failed rule draft.
+  const deadlineTimeout = (): ModelRequestTimeout => new ModelRequestTimeout({
+    timedOutBy: 'server',
+    limitMs: deadlineMs,
+    elapsedMs: Math.max(0, Date.now() - jobStartedAt),
+    receivedChars: lastProgress.receivedChars,
+    reasoningChars: lastProgress.reasoningChars,
+  });
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     let change: ChangeSet | undefined;
     let clarification: TableClarification | undefined;
@@ -507,9 +522,12 @@ async function proposeGeneratedTable(
     let previousOutput: string | undefined;
     try {
       const remaining = deadline - Date.now();
-      if (remaining < 1) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
+      if (remaining < 1) throw deadlineTimeout();
       const provider = new DeepSeekChangeProvider({ apiKey: env.DEEPSEEK_KEY!, fetch: fetchImpl, timeoutMs: remaining });
-      const result = await provider.propose(input, new AbortController().signal);
+      const result = await provider.propose(input, new AbortController().signal, (progress) => {
+        lastProgress = progress;
+        onProgress?.(progress);
+      });
       if ('clarification' in result) clarification = result.clarification;
       else change = result.change;
       usage = result.usage;
@@ -520,6 +538,17 @@ async function proposeGeneratedTable(
         previousOutput = error.previousOutput;
       } else {
         await markAIUsageUncertain(env, binding);
+        if (error instanceof ModelStreamFailure) {
+          // The provider reports its own bounded attempt; the job reports the whole-job deadline.
+          const details = {
+            ...error.details,
+            limitMs: deadlineMs,
+            elapsedMs: Math.max(0, Date.now() - jobStartedAt),
+          };
+          throw error instanceof ModelRequestTimeout ? new ModelRequestTimeout(details)
+            : error instanceof ModelProviderClosed ? new ModelProviderClosed(details)
+              : new ModelStreamFailure(error.code, error.message, details);
+        }
         throw safeProviderFailure(error);
       }
     }
@@ -536,7 +565,7 @@ async function proposeGeneratedTable(
       previousOutput = JSON.stringify(change).slice(0, 18_000);
     }
     if (attempt === MAX_ATTEMPTS || !issues.length) throw new ReasonedDomainError('MODEL_PROVIDER_OUTPUT_REJECTED', 'The generated tool did not pass validation. Nothing was activated.', issues);
-    if (Date.now() >= deadline) fail('MODEL_PROVIDER_TIMEOUT', 'The proposal timed out.');
+    if (Date.now() >= deadline) throw deadlineTimeout();
     if (attempt === MAX_ATTEMPTS - 1) {
       // F028: the final attempt asks for the smallest table that can still activate.
       previousIssues = issues;

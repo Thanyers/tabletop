@@ -531,7 +531,9 @@ try {
   await expect(askAI).toBeDisabled();
   await dm.getByLabel('Send this request and current rules or parameters to AI.', { exact: true }).check();
   await askAI.click();
-  await expect(dm.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
+  // F039 auto-applies a pending draft of every case kind, so the card goes from "Preparing draft"
+  // straight to "Rules in use"; the review-first label is no longer a state this flow reaches.
+  await expect(dm.locator('.tt-ai-proposal__job strong')).toHaveText('Rules in use', { timeout: 15_000 });
   // F039: the draft passes every review check and goes into use on its own as a new rule revision.
   await expect(dm.getByText('The new rules are in use.', { exact: true })).toBeVisible({ timeout: 15_000 });
   const proposed = (await api(dm, `/api/workspaces/${room.id}`)).body;
