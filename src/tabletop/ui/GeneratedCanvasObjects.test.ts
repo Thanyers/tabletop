@@ -6,9 +6,10 @@ import type { WorkspaceView } from '../shared/contracts';
 import type { GenerativeViewDescriptor } from '../shared/generative-contracts';
 import type { TableChange, TableState } from '../shared/table-contracts';
 import { planForWorkspace } from '../runtime';
-import { cafeQueueChange, lightShadowChange } from '../testing/generative-scenarios';
+import { cafeQueueChange, diceDuelChange, lightShadowChange } from '../testing/generative-scenarios';
 import { rollCombatChange } from '../testing/table-scenarios';
 import { beginControlSubmission, beginRangeCommit, controlSubmissionSignature, createControlSubmissionGate, finishControlSubmission, GeneratedCanvasObject } from './GeneratedCanvasObjects';
+import { resetControlDrafts, writeControlDraft } from './control-drafts';
 import { clearServerRollsFor, recordServerRoll } from './roll-store';
 import { TableCanvasObject } from './TableCanvasObjects';
 
@@ -179,5 +180,42 @@ describe('generated canvas renderer', () => {
     const moved = { ...view, domain: { ...view.domain, dataRevision: view.domain.dataRevision + 1 } };
     expect(renderView(moved, descriptorById(view, 'attack-controls'))).not.toContain('= 6');
     clearServerRollsFor(view);
+  });
+});
+
+describe('dice card renderer', () => {
+  it('renders the dice card with steppers, a ทอย button, and its formula', () => {
+    const view = workspace(diceDuelChange);
+    const markup = renderView(view, descriptorById(view, 'damage-dice'));
+
+    expect(markup).toContain('ทอย');
+    expect(markup).toContain('aria-label="Number of dice"');
+    expect(markup).toContain('aria-label="Faces per die"');
+    expect(markup).toContain('2d6 + 1');
+    expect(markup).toContain('Damage die');
+    expect(markup).toContain('Visual-only roll');
+    expect(markup).not.toContain('Dice results');
+  });
+
+  it('renders the dice card disabled in a preview-only proposal', () => {
+    const view = workspace(diceDuelChange);
+    const markup = renderView(view, descriptorById(view, 'damage-dice'), true);
+
+    expect(markup).toContain('Preview only');
+    expect(markup).toMatch(/class="[^"]*tt-dice__roll[^"]*"[^>]*disabled=""/);
+    expect(markup).toMatch(/aria-label="Fewer dice" disabled=""/);
+  });
+
+  it('shows a dice value written on another card in the bound form field', () => {
+    const view = workspace(diceDuelChange);
+    writeControlDraft({ workspaceId: view.id, actionId: 'apply_damage', parameterId: 'damage' }, 9, 'dice:test');
+
+    try {
+      const markup = renderView(view, descriptorById(view, 'damage-form'));
+
+      expect(markup).toContain('value="9"');
+    } finally {
+      resetControlDrafts();
+    }
   });
 });
