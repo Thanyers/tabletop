@@ -47,12 +47,15 @@
   (schema/evaluator/validation, ตำแหน่งวนลูป, ทิศย้อนกลับ, หยุดที่ `to`, ไม่แก้ projection เดิม)
 - `npm test` — **520 passed / 1 skipped** (Node 22.23.2); `npm run test:cloudflare` — **113/113**
 - `npm run typecheck` และ `npm run build` ผ่าน
-- prompt guide/คำสั่งเสียบ MOTION และตัวอย่างรถ 10 เมตรแล้ว — ยังไม่ได้รัน live corpus ยืนยันว่าโมเดลใช้ motion จริง (ต้องมี release บน staging ก่อน)
+- prompt guide/คำสั่งเสียบ MOTION และตัวอย่างรถ 10 เมตรแล้ว
+- live probe 2 รอบกับ `deepseek-flash` (สคริปต์ `experiments/tmp/car-edit-probe.ts`, ไม่ได้อยู่ใน repo): ให้ตารางที่มีฉากรถอยู่แล้วและขอ "วิ่งวนอัตโนมัติ ปรับความเร็วตามสไลเดอร์" — ทั้ง 2 รอบ **เก็บ view `track` ไว้** และใส่ `motion` ให้ car + wheel-1 + wheel-2 (3 elements) ด้วย `speed = math.multiply(settings.speed_mps, 72)` และ `loop: true` · ใช้เวลา 18–43s
+- **ดักได้ระหว่างทาง:** ตัวอย่าง expression ใน prompt เคยเขียน `{"op":"multiply",...}` (ขาด `{"op":"math","fn":"multiply"}`) ทำให้ schema ปฏิเสธ scene แล้วตัว salvage ตัด view ทิ้งเงียบ ๆ — แก้ตัวอย่างแล้วจึงผ่านทั้ง 2 รอบ
+- live probe สร้างโต๊ะใหม่จากคำขอ "สร้างสนาม..." ยังได้ controls/metric ไม่มี scene (โมเดลเลือกตารางข้อมูล) — เพิ่มคำสั่งบังคับให้คำขอเกี่ยวกับวัตถุที่เคลื่อนที่ต้องมี scene; ยังต้อง rerun หลัง merge
 - `npm run lint` รันในเครื่องไม่ได้ (ไม่มี `eslint` binary) — CI เป็นผู้รัน
 
 ## คำถามเปิด
 
-- live corpus ยังไม่ยืนยันว่าโมเดลเลือกใช้ `motion` แทน step action เมื่อผู้ใช้ขอ "รถวิ่งวน"
+- คำขอ "สร้างโต๊ะใหม่" ที่บรรยายวัตถุเคลื่อนที่ยังไม่รับประกันว่าโมเดลจะสร้าง scene (ต้อง rerun corpus หลังคำสั่งใหม่)
 - ตำแหน่งเริ่มต้นของแต่ละ client ต่างกัน (เริ่มที่ `from` ตอน mount) — ยอมรับสำหรับ POC; ถ้าต้องการทุกคนเห็นเฟสเดียวกันต้องใส่ epoch time ภายหลัง
 
 ## การตัดสินใจ
@@ -64,3 +67,5 @@
 | 2026-10-22 | เริ่มที่ `from` เมื่อ mount และวนที่ `to` | ตรงกับคำขอ "จาก 0 ไปสุดระยะทางแล้ว reset"; ไม่ต้องเก็บเวลาใน state |
 | 2026-10-22 | ไม่รองรับ line/polygon/drag | ลดความซับซ้อนของ hit-test/การลาก; รถสร้างจาก rect/circle ได้ |
 | 2026-10-22 | มีปุ่มหยุดและเคารพ reduced motion | อนิเมชันอัตโนมัติเกิน 5 วินาทีต้องหยุดได้ (WCAG 2.2.2) |
+| 2026-10-22 | prompt ระบุชัดว่าเป็น EDIT เมื่อ `program` ไม่ null และต้องเก็บ view/element id เดิม | live probe รอบแรกโมเดลทิ้งฉากรถเพราะ prompt ขึ้นต้นด้วย "Design..." ทุกครั้ง |
+| 2026-10-22 | ตัวอย่าง `speed` ต้องเป็น `{"op":"math","fn":"multiply"}` | ตัวอย่างเดิมขาด `op:"math"` ทำให้ schema ปฏิเสธ view แล้ว salvage ตัดทิ้งโดยไม่มีข้อความบอก |
