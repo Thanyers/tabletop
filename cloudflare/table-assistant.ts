@@ -216,7 +216,12 @@ function buildContext(input: TableAssistantInput): {
   }
   const recordsResult = recordsSchema.safeParse(table.records);
   if (!recordsResult.success) return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The shared table records are invalid.');
-  const notesResult = z.array(z.strictObject({ text: z.string().max(500), color: z.string().max(20) })).max(20).safeParse(table.notes ?? []);
+  // Stored notes carry position/author fields; the model only needs text and colour.
+  const rawNotes: unknown = table.notes ?? [];
+  const noteEntries = Array.isArray(rawNotes)
+    ? rawNotes.map((note) => (isObject(note) ? { text: note.text, color: note.color } : note))
+    : rawNotes;
+  const notesResult = z.array(z.strictObject({ text: z.string().max(500), color: z.string().max(20) })).max(20).safeParse(noteEntries);
   if (!notesResult.success) return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The shared table notes are invalid.');
   const rawStateBytes = new TextEncoder().encode(encodeJson({ program: table.program, records: table.records, notes: notesResult.data })).byteLength;
   if (rawStateBytes > MAX_ACTIVE_STATE_BYTES) {
