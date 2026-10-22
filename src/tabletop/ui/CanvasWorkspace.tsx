@@ -61,6 +61,8 @@ export interface CanvasAuxiliaryObject {
   id: string;
   title: string;
   eyebrow?: string;
+  /** A small, muted line under the title, e.g. who asked for an AI chat card. */
+  subtitle?: string;
   position?: { x: number; y: number };
   content?: ReactNode;
   renderContent?: (expanded: boolean) => ReactNode;
@@ -243,7 +245,7 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
     <header className="tt-canvas-node__head">
       <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
       <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
-      <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span></span>
+      <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
       <button className="tt-canvas-node__open nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onKeyDown={(event) => {
         if (event.key === 'Escape' && data.opened) {
           event.preventDefault();

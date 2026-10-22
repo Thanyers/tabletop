@@ -720,7 +720,9 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     if (!table) return [];
     return displayCards.map((card, index) => ({
       id: chatCardNodeId(scope, card),
-      title: chatCardTitle(card, table),
+      title: chatCardTitle(card),
+      // Another member's card names the asker in a muted line under the title (open visibility, F034).
+      subtitle: askerOf(card, table) ?? undefined,
       eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : 'AI answer',
       glyph: <Sparkles size={16} />,
       busy: card.phase === 'sending' || card.phase === 'waiting',
@@ -779,11 +781,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
 
-/** Another member's card is titled with their name first (open visibility, F034). */
-function chatCardTitle(card: ChatCard, view: TableView): string {
-  const prompt = card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt;
-  const asker = askerOf(card, view);
-  return asker ? `${asker}: ${prompt}` : prompt;
+function chatCardTitle(card: ChatCard): string {
+  return card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt;
 }
 
 /** The asker's name when the card belongs to another member, otherwise null. */
