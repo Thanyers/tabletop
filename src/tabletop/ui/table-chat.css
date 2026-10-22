@@ -160,8 +160,11 @@
 }
 
 /* A card the next chat message is about. */
-.tt-app .tt-table-chat-bar__reference { display: flex; align-items: center; gap: var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
-.tt-app .tt-table-chat-bar__reference-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 60%; padding: 3px 10px; overflow: hidden; border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-card-surface); color: var(--tt-moss); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-table-chat-bar__reference { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-1) var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
+.tt-app .tt-table-chat-bar__reference-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 0; padding: 0; list-style: none; }
+.tt-app .tt-table-chat-bar__reference-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 240px; padding: 2px 4px 2px 10px; border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-card-surface); color: var(--tt-moss); font-size: 13px; font-weight: 650; }
+.tt-app .tt-table-chat-bar__reference-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-table-chat-bar__reference .tt-table-chat-bar__reference-chip button { width: 20px; height: 20px; flex: none; }
 .tt-app .tt-table-chat-bar__reference small { flex: 1 1 auto; min-width: 0; color: var(--tt-muted); font-size: 12px; }
 .tt-app .tt-table-chat-bar__reference button { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tt-muted); cursor: pointer; }
 .tt-app .tt-table-chat-bar__reference button:hover { background: var(--tt-canvas); }
