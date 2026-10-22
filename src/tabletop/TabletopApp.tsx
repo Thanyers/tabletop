@@ -125,7 +125,7 @@ export default function TabletopApp() {
   const pageRef = useRef<'home' | 'new'>('home');
   pageRef.current = page;
   const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success'; action?: { label: string; run: () => void } } | null>(null);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState('');
@@ -209,10 +209,11 @@ export default function TabletopApp() {
     throw new ApiFailure('The action was accepted, but the latest table could not be refreshed. Refresh before repeating it.', 0);
   }, []);
 
-  const showNotice = useCallback((text: string, tone: 'info' | 'error' | 'success' = 'info') => {
-    setNotice({ text, tone });
+  const showNotice = useCallback((text: string, tone: 'info' | 'error' | 'success' = 'info', action?: { label: string; run: () => void }) => {
+    setNotice({ text, tone, ...(action ? { action } : {}) });
     if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current);
-    noticeTimerRef.current = window.setTimeout(() => setNotice(null), 7000);
+    // A notice with a button stays a little longer so it can be used.
+    noticeTimerRef.current = window.setTimeout(() => setNotice(null), action ? 15000 : 7000);
   }, []);
 
   const refreshSession = useCallback(async () => {
@@ -891,7 +892,7 @@ export default function TabletopApp() {
 
       {tableReadOnly && <div className="tt-notice tt-notice--info tt-table-readonly-notice" role="status"><span><ShieldCheck size={15} /></span><p>Editing this shared table is temporarily paused. Existing records and rules remain available to inspect.</p></div>}
 
-      {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
+      {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p>{notice.action && <button type="button" className="tt-notice__action" onClick={() => { notice.action?.run(); setNotice(null); }}>{notice.action.label}</button>}<button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
 
       <TableSurface
         view={view}
