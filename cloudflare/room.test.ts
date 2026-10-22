@@ -756,6 +756,48 @@ describe('Cloudflare room Durable Object', () => {
     expect(observedInputs.at(-1)?.conversation).toEqual([]);
   });
 
+  it('keeps an answer when the table changes while it generates, but still rejects a stale proposal (F038)', async () => {
+    const owner = newActor('Parallel answer owner');
+    await saveActor(owner);
+    const { roomId, stub } = await createActiveEquipmentTable(owner);
+    vi.mocked(respondToTablePrompt).mockImplementation(async (_environment, input) => {
+      if (input.workspace.domain.kind !== 'table') throw new Error('TABLE_ASSISTANT_EXPECTED_TABLE');
+      const domain = input.workspace.domain;
+      // Another request changes the table while this one is generating. The stub is opened here
+      // because I/O objects cannot cross from the test context into the Durable Object.
+      const inner = roomStub(roomId);
+      const latest = await call<WorkspaceView>(inner, `/api/workspaces/${roomId}`, owner);
+      const item = input.prompt === 'What can I borrow?' ? 'camera' : 'tripod';
+      const intervening = await issueCommand(inner, latest.body, owner, 'table.act', { actionId: 'borrow', inputs: { item } });
+      if (intervening.response.status !== 200) throw new Error('F038_INTERVENING_COMMAND_FAILED');
+      if (input.prompt === 'What can I borrow?') {
+        return assistantResponse(input, { kind: 'explanation', text: 'Available equipment can be borrowed.', references: [] });
+      }
+      return assistantResponse(input, {
+        kind: 'action-proposal', text: 'Return the camera.', actionId: 'return', inputs: { item: 'camera' },
+        expectedRevision: input.workspace.revision, expectedRuleRevision: domain.ruleRevision,
+        expectedActionRevision: domain.actionRevision, confirmationRequired: true,
+      });
+    });
+
+    const ask = async (prompt: string) => {
+      const view = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+      const commandId = randomUUID();
+      const accepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+        method: 'POST', body: { commandId, expectedRevision: view.body.revision, expectedEpoch: view.body.epoch, prompt, consent: true },
+        mutation: true,
+      });
+      expect(accepted.response.status).toBe(202);
+      return waitForTableAssistantJob(stub, roomId, owner, tableAssistantJobId(roomId, view.body.epoch, owner.id, commandId));
+    };
+
+    const answer = await ask('What can I borrow?');
+    expect(answer).toMatchObject({ status: 'completed', result: { kind: 'explanation' } });
+    const proposal = await ask('Return the camera I borrowed.');
+    expect(proposal.status).toBe('failed');
+    expect(proposal.failureCode).toBe('STALE_WORKSPACE');
+  });
+
   it('publishes a machine-readable assistant failure code with its duration (F037)', async () => {
     const owner = newActor('Assistant failure owner');
     await saveActor(owner);

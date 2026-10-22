@@ -117,6 +117,7 @@
 }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__head { min-height: 64px; gap: var(--tt-space-2); padding: var(--tt-space-3); border-color: color-mix(in srgb, var(--tt-card-edge), transparent 30%); border-radius: calc(var(--tt-card-radius) - 1px) calc(var(--tt-card-radius) - 1px) 0 0; background: var(--tt-card-surface); }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__identity { min-width: 0; }
+.tt-flow-wrap .tt-canvas-node__subtitle { overflow: hidden; color: var(--tt-muted, #6b7a80); font-size: 12px; font-weight: 500; line-height: 1.3; opacity: .8; text-overflow: ellipsis; white-space: nowrap; }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__title { min-width: 0; overflow: visible; overflow-wrap: anywhere; white-space: normal; }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-object-glyph { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--tt-flow-role-color), transparent 65%); color: var(--tt-flow-role-color); background: var(--tt-flow-role-wash); box-shadow: inset 0 0 0 3px var(--tt-card-surface); }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__title { font-size: var(--tt-type-title); font-weight: 650; line-height: 1.35; letter-spacing: -.3px; }

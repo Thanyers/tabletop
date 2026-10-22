@@ -11,15 +11,17 @@ import { TableChat } from './TableChat';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftHistoryCard, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftHistoryCard, draftInFlight, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
 
 const DRAFT_POLL_MS = 1_200;
-const DRAFT_POLL_LIMIT_MS = 60_000;
+// F038: past the server's 240s job recovery, so the asker always sees the final status
+// (was 60s: a draft still running at 61s stayed "Preparing…" for the asker while others saw it fail).
+const DRAFT_POLL_LIMIT_MS = 250_000;
 const ANSWER_POLL_MS = 1_000;
-const ANSWER_POLL_LIMIT_MS = 150_000;
+const ANSWER_POLL_LIMIT_MS = 250_000;
 const HISTORY_CARDS = 6;
 const DRAFT_HISTORY_CARDS = 5;
 const LOCAL_CARD_IDS = 80;
@@ -212,6 +214,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const [historyState, setHistoryState] = useState<{ scope: string; status: 'loading' | 'ready' | 'error' }>({ scope: '', status: 'loading' });
   const historyGeneration = useRef(0);
   const requestLock = useRef(false);
+  // F038: the queued rule request being started, so one queue step never starts twice.
+  const queueStartLock = useRef<string | null>(null);
   const confirmLocks = useRef(new Set<string>());
   const draftRefreshLocks = useRef(new Set<string>());
   // A settled draft is refreshed once; the POST response and the poll can both report completion.
@@ -318,10 +322,12 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   modeRef.current = mode;
   const historyStatus = historyState.scope === scope ? historyState.status : 'loading';
   const externalBusy = options.busy === true;
-  const requestsBusy = cards.some((card) => card.phase === 'sending' || card.phase === 'waiting' || card.confirming || card.confirmationPending);
+  // F038: questions run in parallel and rule requests queue, so a running request no longer blocks
+  // Send. Confirming an action, an unconfirmed request and a proposal awaiting a decision still do.
+  const confirmBusy = cards.some((card) => card.confirming || card.confirmationPending);
   const uncertainRequest = cards.some(isUncertainRequest);
   const pendingAction = table ? cards.some((card) => isPendingAction(card, table)) : false;
-  const sendBlocked = externalBusy || requestsBusy || uncertainRequest || pendingAction;
+  const sendBlocked = externalBusy || confirmBusy || uncertainRequest || pendingAction;
   isBlockedRef.current = sendBlocked;
 
   useEffect(() => {
@@ -516,47 +522,88 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     focusAcceptedCard(targetScope, card, job.id);
   }, [patchCard, focusAcceptedCard]);
 
+  /** Sends one card's request from the current table state; the card is already on the canvas. */
+  const startRequest = useCallback(async (targetScope: string, card: ChatCard, requestView: TableView, freshView?: () => Promise<TableView | null>): Promise<boolean> => {
+    const commandId = card.requestCommandId ?? crypto.randomUUID();
+    patchCard(targetScope, card.id, { phase: 'sending', requestCommandId: commandId, requestView });
+    try {
+      if (card.kind === 'draft') {
+        const accepted = await optionsRef.current.requestDraft(requestView, card.prompt, commandId);
+        acceptDraft(targetScope, card, accepted, requestView);
+      } else {
+        const accepted = await optionsRef.current.ask(requestView, card.prompt, commandId);
+        acceptAnswer(targetScope, card, accepted);
+      }
+      return true;
+    } catch (error) {
+      // A queued request may race the previous draft's refresh; read the table once more and resend as a new command.
+      if (freshView && error instanceof ApiFailure && error.code === 'STALE_REVISION') {
+        const latest = await freshView();
+        if (latest && targetScope === scopeRef.current) return startRequest(targetScope, { ...card, requestCommandId: undefined }, latest);
+      }
+      patchCard(targetScope, card.id, {
+        phase: 'failed',
+        requestError: errorText(error),
+        requestUncertain: isUncertain(error),
+        requestView: isUncertain(error) ? requestView : undefined,
+      });
+      return false;
+    }
+  }, [acceptAnswer, acceptDraft, patchCard]);
+
   const send = useCallback(async (prompt: string, forcedMode?: 'draft'): Promise<boolean> => {
     const current = viewRef.current;
     const targetScope = scopeRef.current;
     const selectedMode = forcedMode ?? modeRef.current;
-    if (!current || !targetScope || requestLock.current || isBlockedRef.current || !optionsRef.current.aiEnabled || (selectedMode === 'ask' && optionsRef.current.assistantAvailable === false) || prompt.trim().length < 3) return false;
+    if (!current || !targetScope || isBlockedRef.current || !optionsRef.current.aiEnabled || (selectedMode === 'ask' && optionsRef.current.assistantAvailable === false) || prompt.trim().length < 3) return false;
     if (selectedMode === 'draft' && (!viewerCan(current, 'rules.draft') || optionsRef.current.readOnly)) return false;
-    requestLock.current = true;
     const commandId = crypto.randomUUID();
-    const requestView = structuredClone(current);
+    const existing = cardStateRef.current.scope === targetScope ? cardStateRef.current.cards : [];
+    // F038: another rule draft is running, so this one waits its turn and starts from the table it leaves.
+    const queue = selectedMode === 'draft' && (draftInFlight(existing) || existing.some((item) => item.kind === 'draft' && item.phase === 'queued'));
     const card: ChatCard = {
       id: `${selectedMode === 'draft' ? 'draft' : 'answer'}-${commandId}`,
       kind: selectedMode === 'draft' ? 'draft' : 'answer',
       prompt,
       createdAt: Date.now(),
-      phase: 'sending',
-      requestCommandId: commandId,
-      requestView,
+      phase: queue ? 'queued' : 'sending',
+      requestCommandId: queue ? undefined : commandId,
     };
     updateCards(targetScope, (items) => [card, ...items]);
     optionsRef.current.focusObject(chatNodeId(targetScope, card.id));
-    try {
-      if (selectedMode === 'draft') {
-        const accepted = await optionsRef.current.requestDraft(requestView, prompt, commandId);
-        acceptDraft(targetScope, card, accepted, requestView);
-      } else {
-        const accepted = await optionsRef.current.ask(requestView, prompt, commandId);
-        acceptAnswer(targetScope, card, accepted);
-      }
-      return true;
-    } catch (error) {
-      patchCard(targetScope, card.id, {
-        phase: 'failed',
-        requestError: errorText(error),
-        requestUncertain: isUncertain(error),
-        requestView: isUncertain(error) ? card.requestView : undefined,
-      });
-      return false;
-    } finally {
-      requestLock.current = false;
+    if (queue) return true;
+    return startRequest(targetScope, { ...card, requestCommandId: commandId }, structuredClone(current));
+  }, [startRequest, updateCards]);
+
+  // F038: start the oldest queued rule request once the previous draft has finished and refreshed the table.
+  const queuedDraft = nextQueuedDraft(cards);
+  useEffect(() => {
+    if (!queuedDraft || queueStartLock.current === queuedDraft.id) return;
+    const targetScope = scope;
+    const current = viewRef.current;
+    if (!current || targetScope !== scopeRef.current) return;
+    if (!viewerCan(current, 'rules.draft') || optionsRef.current.readOnly || !optionsRef.current.aiEnabled) {
+      patchCard(targetScope, queuedDraft.id, { phase: 'failed', requestError: 'This rule request could not start: the table no longer accepts rule requests from you.' });
+      return;
     }
-  }, [acceptAnswer, acceptDraft, patchCard, updateCards]);
+    queueStartLock.current = queuedDraft.id;
+    void (async () => {
+      // Read the table the previous draft left, so the request is not rejected as stale.
+      await optionsRef.current.refresh(current.id).catch(() => undefined);
+      const latest = viewRef.current;
+      const stillQueued = cardStateRef.current.scope === targetScope
+        && cardStateRef.current.cards.some((item) => item.id === queuedDraft.id && item.phase === 'queued');
+      if (!latest || latest.id !== current.id || targetScope !== scopeRef.current || !stillQueued) return;
+      await startRequest(targetScope, queuedDraft, structuredClone(latest), async () => {
+        await optionsRef.current.refresh(current.id).catch(() => undefined);
+        await wait(250);
+        const fresh = viewRef.current;
+        return fresh && fresh.id === current.id ? structuredClone(fresh) : null;
+      });
+    })().finally(() => {
+      if (queueStartLock.current === queuedDraft.id) queueStartLock.current = null;
+    });
+  }, [queuedDraft, scope, patchCard, startRequest]);
 
   const retrySameRequest = useCallback(async (card: ChatCard) => {
     const current = viewRef.current;
@@ -668,13 +715,15 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const currentLocalState = readPrivateChatState(scope);
   const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState));
-  const operationBusy = externalBusy || requestsBusy;
+  const operationBusy = externalBusy || confirmBusy;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
     return displayCards.map((card, index) => ({
       id: chatCardNodeId(scope, card),
-      title: chatCardTitle(card, table),
-      eyebrow: card.kind === 'draft' ? 'Rule draft' : 'AI answer',
+      title: chatCardTitle(card),
+      // Another member's card names the asker in a muted line under the title (open visibility, F034).
+      subtitle: askerOf(card, table) ?? undefined,
+      eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : 'AI answer',
       glyph: <Sparkles size={16} />,
       busy: card.phase === 'sending' || card.phase === 'waiting',
       position: { x: 760, y: 40 + index * 300 },
@@ -732,11 +781,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
 
-/** Another member's card is titled with their name first (open visibility, F034). */
-function chatCardTitle(card: ChatCard, view: TableView): string {
-  const prompt = card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt;
-  const asker = askerOf(card, view);
-  return asker ? `${asker}: ${prompt}` : prompt;
+function chatCardTitle(card: ChatCard): string {
+  return card.prompt.length > 48 ? `${card.prompt.slice(0, 47)}…` : card.prompt;
 }
 
 /** The asker's name when the card belongs to another member, otherwise null. */
@@ -769,9 +815,17 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   const checkButton = card.pollTimedOut && (card.phase === 'waiting' || card.confirmationPending)
     ? <button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={onCheck}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Check status</button>
     : null;
+  if (card.phase === 'queued') {
+    return <div className="tt-chat-card" role="status" data-testid="table-chat-answer" data-phase="queued">
+      <p className="tt-chat-card__pending"><LoaderCircle size={14} />Queued. This rule request starts when the current rule draft finishes, from the table as that draft leaves it.</p>
+      <button type="button" className="tt-button tt-button--quiet" onClick={onDismiss}><X size={13} />Cancel this request</button>
+    </div>;
+  }
   if (card.phase === 'sending' || card.phase === 'waiting') {
+    // Open visibility: name the member whose request is running, so others do not start the same work.
+    const pendingAsker = askerOf(card, view);
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
-      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} chars={card.job?.progress?.receivedChars} /></p>
+      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingAsker ? card.kind === 'draft' ? `${pendingAsker} is preparing a rule draft…` : `${pendingAsker} is waiting for an answer…` : card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} chars={card.job?.progress?.receivedChars} /></p>
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
@@ -779,7 +833,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   if (card.phase === 'failed') {
     const message = card.requestError ?? card.error ?? card.modelJob?.message ?? card.job?.message ?? 'The request could not be completed.';
     const requestId = card.job?.id ?? card.modelJob?.id;
-    const failureCode = card.job?.failureCode;
+    const failureCode = card.job?.failureCode ?? card.modelJob?.failureCode;
     const failureReasons = card.job?.failureReasons;
     const durationMs = card.job?.durationMs;
     return <div
