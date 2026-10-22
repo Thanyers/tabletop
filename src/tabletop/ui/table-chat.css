@@ -121,3 +121,18 @@
 .tt-app .tt-chat-card__own-answer:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
 .tt-app .tt-chat-card__send-answer { justify-self: start; display: inline-flex; align-items: center; gap: var(--tt-space-2); }
 .tt-app .tt-chat-card__asker { color: var(--tt-muted); font-size: var(--tt-type-small); font-weight: 600; line-height: 16px; }
+
+/* F045: a rule draft that stopped early shows its partial answer and thinking tail, both bounded,
+   wrapped and scrollable so a 4,000-character answer never widens the card at 320px. */
+.tt-app .tt-chat-card__stop { display: grid; gap: var(--tt-space-2); min-width: 0; }
+.tt-app .tt-chat-card .tt-chat-card__stop-reason { color: var(--tt-ink); font-size: var(--tt-type-small); line-height: 16px; }
+.tt-app .tt-chat-card__partial { min-width: 0; border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px); background: var(--tt-paper); overflow: hidden; }
+.tt-app .tt-chat-card__partial > summary { padding: 6px 10px; color: var(--tt-ink); font-size: var(--tt-type-small, 12px); line-height: 16px; cursor: pointer; overflow-wrap: anywhere; }
+.tt-app .tt-chat-card__partial > summary:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: -2px; }
+.tt-app .tt-chat-card__partial > pre {
+  margin: 0; padding: 8px 10px; max-height: 220px; overflow: auto; overscroll-behavior: contain;
+  border-top: 1px solid var(--tt-line); background: var(--tt-card-surface); color: var(--tt-ink);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 12px; line-height: 18px;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; tab-size: 2;
+}
+.tt-app .tt-chat-card__partial--thinking > pre { max-height: 160px; color: var(--tt-muted); font-size: 11px; line-height: 16px; }
