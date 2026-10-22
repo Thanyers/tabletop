@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, MarkerType, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText } from 'lucide-react';
+import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2 } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
@@ -101,6 +101,20 @@ interface OpenObjectFocusRequest {
   attempts: number;
   frame?: number;
   timer?: number;
+}
+
+/** Cards deleted for everyone at this table (soft delete in the shared layout), oldest first. */
+function trashedForView(view: WorkspaceView): string[] {
+  if (view.domain.kind !== 'table') return [];
+  const trashed = (view.domain as unknown as { canvasLayout?: { trashed?: unknown } }).canvasLayout?.trashed;
+  return trashed && typeof trashed === 'object' && !Array.isArray(trashed) ? Object.keys(trashed) : [];
+}
+
+/** Mirrors the server rule: anyone tidies chat cards; views, data tables and files are the owner's. */
+function canTrash(view: WorkspaceView, id: string): boolean {
+  if (view.domain.kind !== 'table') return false;
+  if (/^table\.chat\.[a-f0-9]{64}$/u.test(id)) return view.actor.role === 'owner' || view.actor.role === 'participant';
+  return (/^table\.(view|collection)\./u.test(id) || id === 'table.sources') && view.actor.role === 'owner';
 }
 
 function sharedLayoutForView(view: WorkspaceView): SharedCanvasLayout | null {
@@ -608,11 +622,21 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     setHiddenIds(readHiddenObjects(workspaceKey));
     setCardSizes(readCardSizes(workspaceKey));
   }
-  const listedPlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds]);
+  const trashedList = useMemo(() => trashedForView(view), [view]);
+  const trashedIds = useMemo(() => new Set(trashedList), [trashedList]);
+  const listedPlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && !trashedIds.has(spec.id) && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds, trashedIds]);
   const visiblePlanNodes = useMemo(() => listedPlanNodes.filter((spec) => !hiddenIds.has(spec.id)), [listedPlanNodes, hiddenIds]);
   const planIds = useMemo(() => new Set(plan.nodes.map((spec) => spec.id)), [plan.nodes]);
   const planNodesById = useMemo(() => new Map(plan.nodes.map((spec) => [spec.id, spec])), [plan.nodes]);
-  const listedAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds]);
+  const listedAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && !trashedIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds, trashedIds]);
+  // Deleted cards that still exist, newest first, for the Deleted section of Objects.
+  const deletedObjects = useMemo(() => {
+    const titles = new Map<string, string>([
+      ...plan.nodes.map((spec) => [spec.id, spec.title] as [string, string]),
+      ...auxiliaryObjects.map((object) => [object.id, object.title] as [string, string]),
+    ]);
+    return [...trashedList].reverse().filter((id) => titles.has(id)).map((id) => ({ id, title: titles.get(id) ?? id }));
+  }, [trashedList, plan.nodes, auxiliaryObjects]);
   const visibleAuxiliaryObjects = useMemo(() => listedAuxiliaryObjects.filter((object) => !hiddenIds.has(object.id)), [listedAuxiliaryObjects, hiddenIds]);
   // First sight of a card decides whether it starts closed (see startsClosed).
   useEffect(() => {
@@ -1537,6 +1561,15 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     ...listedAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title, hidden: hiddenIds.has(object.id) })),
   ], [listedPlanNodes, listedAuxiliaryObjects, hiddenIds]);
   finderStateRef.current = { objectTitles, navigateToObject, hideObject };
+  const [deletedOpen, setDeletedOpen] = useState(false);
+  const [trashError, setTrashError] = useState<string | null>(null);
+  const tableReadOnly = busy === 'table.readOnly';
+  /** Soft delete for everyone (or restore): the card stays stored and comes back from Deleted. */
+  const trashObject = async (id: string, toTrash: boolean) => {
+    setTrashError(null);
+    const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, trash: { [id]: toTrash } });
+    if (!updated) setTrashError(toTrash ? 'Could not delete this card. Try again.' : 'Could not restore this card. Try again.');
+  };
   // A table-wide display setting wins; without one, the viewer's own choice, then the default.
   const tableConnections = view.domain.display?.connections;
   const canSetDisplay = viewerCan(view, 'table.rename') && busy !== 'table.readOnly';
@@ -1634,8 +1667,25 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
                 <button type="button" className="tt-canvas-objects__eye" data-testid={`toggle-canvas-${object.id}`} aria-pressed={!object.hidden} aria-label={object.hidden ? `Show ${object.title}` : `Hide ${object.title}`} title={object.hidden ? 'Show on canvas' : 'Hide from canvas'} onClick={(event) => { event.stopPropagation(); if (object.hidden) showObject(object.id); else hideObject(object.id); }}>
                   {object.hidden ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
                 </button>
+                {canTrash(view, object.id) && <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__delete" data-testid={`delete-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Delete ${object.title}`} title="Delete for everyone (restore from Deleted)" onClick={(event) => { event.stopPropagation(); void trashObject(object.id, true); }}>
+                  <Trash2 size={15} aria-hidden="true" />
+                </button>}
               </li>)}
             </ul>
+            {trashError && <p className="tt-canvas-objects__error" role="alert">{trashError}</p>}
+            {deletedObjects.length > 0 && <div className="tt-canvas-objects__deleted">
+              <button type="button" className="tt-canvas-objects__deleted-toggle" data-testid="canvas-deleted-toggle" aria-expanded={deletedOpen} onClick={(event) => { event.stopPropagation(); setDeletedOpen((open) => !open); }}>
+                <Trash2 size={15} aria-hidden="true" /><span>Deleted</span><small>{deletedObjects.length}</small>
+              </button>
+              {deletedOpen && <ul className="tt-canvas-objects__list">
+                {deletedObjects.map((object) => <li key={object.id}>
+                  <span className="tt-canvas-objects__deleted-title" title={object.title}>{object.title}</span>
+                  {canTrash(view, object.id) && <button type="button" className="tt-canvas-objects__eye" data-testid={`restore-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Restore ${object.title}`} title="Restore for everyone" onClick={(event) => { event.stopPropagation(); void trashObject(object.id, false); }}>
+                    <Undo2 size={15} aria-hidden="true" />
+                  </button>}
+                </li>)}
+              </ul>}
+            </div>}
           </nav>
         </div>
         {revisionNotice && <div key={revisionNotice.key} className="tt-canvas-revision-change" role="status" aria-live="polite" aria-atomic="true">

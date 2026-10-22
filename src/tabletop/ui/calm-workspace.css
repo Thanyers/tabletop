@@ -409,3 +409,11 @@
 .tt-flow-wrap .tt-canvas-resize-line.top, .tt-flow-wrap .tt-canvas-resize-line.bottom { height: 10px !important; }
 .tt-flow-wrap .tt-canvas-resize-line:hover { border-color: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 40%) !important; }
 .tt-flow-wrap .tt-canvas-resize-handle { width: 10px !important; height: 10px !important; border: 2px solid var(--tt-moss, #2f6f5e) !important; border-radius: 3px !important; background: var(--tt-paper, #fff) !important; }
+
+/* Objects: delete for everyone (soft) and the Deleted list to restore from. */
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__delete:hover:not(:disabled) { color: var(--tt-clay-1, #a4513a); }
+.tt-app .tt-canvas-objects__deleted { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--tt-line); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__deleted-toggle { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--tt-muted); }
+.tt-app .tt-canvas-objects__deleted-toggle small { margin-left: auto; }
+.tt-app .tt-canvas-objects__deleted-title { flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 6px 8px; color: var(--tt-muted); text-decoration: line-through; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-canvas-objects__error { margin: 6px 8px 0; color: var(--tt-clay-1, #a4513a); font-size: 13px; }
