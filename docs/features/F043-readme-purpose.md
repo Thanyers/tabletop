@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH: เอกสารเท่านั้น ไม่มีผลต่อ runtime |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F043-T1` |
@@ -30,3 +30,11 @@ README ยังอธิบายไม่ชัดว่า Tabletop ทำอ
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
 | 2026-10-22 | README เล่าคุณค่าและการใช้งาน; ผลตรวจอยู่ใน acceptance และสถานะรุ่นอยู่ใน deployment | ผู้ใช้ขอให้อธิบายทำอะไร/ทำไม/แก้ปัญหาอะไร โดยเก็บน้ำเสียงเดิม |
+
+## ผลตรวจ
+
+- Node `22.23.2`: ตรวจ local Markdown links และ image targets ใน README, docs index, acceptance, user guide และเอกสารงานนี้ 61/61 พบครบ
+- `git diff --check`: ผ่าน
+- `node scripts/check-public-files.mjs`: 586 files, findings ว่าง (ขอบเขต scanner ตามสคริปต์)
+- Independent reader review: PASS หลังระบุให้ชัดว่าคนตรวจ/อนุมัติ/เปิดใช้ และลบสถานะรุ่นเก่าที่ต้นคู่มือ
+- ไม่มีการทดสอบ runtime หรือ deploy ในงานเอกสารนี้

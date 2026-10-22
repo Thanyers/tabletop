@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `doing` | [F043](docs/features/F043-readme-purpose.md) |
+| F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
@@ -42,7 +42,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `doing` | Codex | `docs/F043-readme-purpose` | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
+| F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F027-T1 | reject บอกเหตุผลเชิงโครงสร้าง: เติม hint "join ข้าม collection ยังไม่รองรับ" เมื่อ reason ชี้ cross-record/cross-collection | `review` | ทีม Tabletop | `feat/F026-F027-reliability` | `cloudflare/model-failure.ts`, tests | — | unit ผ่าน ([F027](docs/features/F027-structural-reject-hint.md)) |
 | F031-T1 | thinking generation + output caps 32K + deadline 120s + compact schema guide + parse diagnostics | `review` | ทีม Tabletop | `feat/F031-thinking-generation` | `server/providers/deepseek-changes.ts`, `cloudflare/{ai,billing,room}.ts`, `server/providers/table-schema-guide.ts`, `ui/*`, tests | — | เกณฑ์: matched ≥18/20, first-attempt ≥50%, 0 length-truncation ([F031](docs/features/F031-thinking-generation.md)) |
 | F029-T1 | golden corpus 10 โจทย์ + วัด draft/clarify/reject rate (manual, ไม่ผูก CI) | `review` | ทีม Tabletop | `feat/F029-success-corpus` | `tests/corpus/table-prompts.json`, `server/corpus-success-rate.test.ts` | — | baseline 9/10 ([F029](docs/features/F029-golden-corpus.md)) |
