@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` (PR #176) |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | PATCH — เพิ่ม meta tag, ไฟล์ static และ header เท่านั้น ไม่มี schema/binding/secret · rollback ได้ทันที |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F051-T*` |
@@ -69,3 +69,9 @@ T3 แตะ `cloudflare/index.ts` และ `wrangler.jsonc` ซึ่งเป
 | --- | --- | --- |
 | 2026-10-22 | กันหน้าในแอปไม่ให้ติด index ด้วย `X-Robots-Tag` ไม่ใช่ `Disallow` ใน robots.txt | crawler ที่ถูก Disallow จะไม่เห็น noindex และยังเก็บ URL ได้ |
 | 2026-10-22 | prerender landing / แยก bundle เป็นงานถัดไป | ทำให้ PR นี้เล็กและ rollback ได้ทันที |
+| 2026-10-22 | T3 ใช้ `not_found_handling: "none"` แทนการเพิ่ม path ของแอปใน `run_worker_first` · asset จริงและ `/` ยังเสิร์ฟจาก asset server ตรง (ใช้ `_headers` เดิม) ส่วน path อื่นตกมาที่ Worker | ไม่ต้องดูแลรายการ path สองที่ · Worker ไม่ต้องรันทุกครั้งที่โหลด JS/รูป · HTML ที่ Worker ส่งได้ security header จาก `secured()` ชุดเดียวกับ `_headers` |
+| 2026-10-22 | รายการ route ของแอปใน Worker มาจาก `parseRoute` ตัวเดียวกับ client (ย้ายฟังก์ชัน pure ไป `src/tabletop/shared/route-paths.ts`, `routes.ts` re-export) | route ใหม่ของ client (เช่น `/tables` ใน PR #177) ได้ 200 + noindex เองโดยไม่ต้องแก้ Worker · `routes.ts` เดิมใช้ `window` จึง import ใน Worker ไม่ได้ |
+| 2026-10-22 | path ที่มีนามสกุลไฟล์แต่ไม่มีไฟล์ (เช่น `/favicon.ico`, chunk เก่า) = 404 `text/plain` ไม่ส่ง `index.html` | ไม่ส่ง HTML ไปให้ `<script>`/`<img>` · 404 สำหรับบอทเล็กลง |
+| 2026-10-22 | หน้า HTML ตอบก่อนการตรวจ `PUBLIC_ORIGIN` | ตรงกับพฤติกรรมเดิมตอน asset server ตอบเอง (เปิด `localhost` แทน `127.0.0.1` ตอน dev ได้) · การตรวจ origin มีไว้กัน API |
+| 2026-10-22 | `og:url`/canonical/รูปชี้ production เสมอ แม้บน staging | ตามเกณฑ์ T1 · staging ไม่ได้อยู่ใน sitemap · กัน index staging เป็นงานแยก |
+| 2026-10-22 | `og:image:alt` เป็นภาษาไทยให้ตรงกับ `<title>`/description เดิม | ไม่ตัดสินภาษาของ landing (คำถามเปิดข้อ 1) |
