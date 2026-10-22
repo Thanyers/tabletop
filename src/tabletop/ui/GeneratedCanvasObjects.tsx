@@ -514,6 +514,8 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
   onCommit: (action: TableAction, inputs: Record<string, TableValue>, ownerId: string) => Promise<boolean>;
 }) {
   const [drafts, setDrafts] = useState<Record<string, Record<string, TableValue>>>({});
+  // The form whose last submit was missing a value, so it can say so instead of doing nothing.
+  const [incomplete, setIncomplete] = useState<string | null>(null);
   const draftRef = useRef(drafts);
   const submissionGate = useRef<ControlSubmissionGate | null>(null);
   if (!submissionGate.current) submissionGate.current = createControlSubmissionGate();
@@ -524,7 +526,8 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
   const updateDraft = (control: EvaluatedControl, action: TableAction, parameterId: string, value: TableValue) => {
     const ownerId = `control:${control.descriptor.id}`;
     committedRanges.current.delete(control.descriptor.id);
-    const next = { ...(draftRef.current[control.descriptor.id] ?? {}), [parameterId]: value };
+    // Start from the shown defaults, so fields the person did not touch still count.
+    const next = { ...initialControlValues(control, action), ...(draftRef.current[control.descriptor.id] ?? {}), [parameterId]: value };
     draftRef.current = { ...draftRef.current, [control.descriptor.id]: next };
     setDrafts(draftRef.current);
     const inputs = resolvedActionInputs(control, next, action);
@@ -552,9 +555,13 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
 
   const submit = (event: FormEvent<HTMLFormElement>, control: EvaluatedControl, action: TableAction) => {
     event.preventDefault();
-    const values = draftRef.current[control.descriptor.id] ?? initialControlValues(control, action);
+    const values = { ...initialControlValues(control, action), ...(draftRef.current[control.descriptor.id] ?? {}) };
     const inputs = resolvedActionInputs(control, values, action);
-    if (!inputsAreComplete(action, inputs, state)) return;
+    if (!inputsAreComplete(action, inputs, state)) {
+      setIncomplete(control.descriptor.id);
+      return;
+    }
+    setIncomplete(null);
     void commitControl(control, action, inputs);
   };
 
@@ -574,7 +581,7 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
       };
       return <div className="tt-generated-control" key={descriptor.id}>
         {descriptor.kind === 'button' && <div className="tt-generated-control__button"><button type="button" className="tt-button tt-button--primary" disabled={!enabled} title={reason || undefined} onClick={() => action && void commitControl(control, action, resolvedActionInputs(control, controlValues, action))}>{descriptor.label}</button>{reason && <small role="status">{reason}</small>}</div>}
-        {descriptor.kind === 'form' && action && <form className="tt-table-action tt-generated-control__form" onSubmit={event => submit(event, control, action)}><header><span className="tt-table-action__glyph">⌑</span><span><strong>{descriptor.label}</strong><small>{action.description}</small></span></header><div className="tt-table-action__inputs">{action.parameters.filter(parameter => descriptor.inputs[parameter.id]?.kind === 'control').map(parameter => <ControlParameter key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} parameter={parameter} state={state} value={controlValues[parameter.id] ?? initialParameterValue(parameter)} disabled={!enabled} onChange={value => updateDraft(control, action, parameter.id, value)} />)}</div>{reason && <p className="tt-table-action__disabled-reason" role="status">{reason}</p>}<button type="submit" className="tt-button tt-button--primary" disabled={!enabled}>{descriptor.label}</button></form>}
+        {descriptor.kind === 'form' && action && <form className="tt-table-action tt-generated-control__form" onSubmit={event => submit(event, control, action)}><header><span className="tt-table-action__glyph">⌑</span><span><strong>{descriptor.label}</strong><small>{action.description}</small></span></header><div className="tt-table-action__inputs">{action.parameters.filter(parameter => descriptor.inputs[parameter.id]?.kind === 'control').map(parameter => <ControlParameter key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} parameter={parameter} state={state} value={controlValues[parameter.id] ?? initialParameterValue(parameter)} disabled={!enabled} onChange={value => updateDraft(control, action, parameter.id, value)} />)}</div>{reason && <p className="tt-table-action__disabled-reason" role="status">{reason}</p>}{!reason && incomplete === descriptor.id && <p className="tt-table-action__disabled-reason" role="alert">Fill in every field with a value in range, then send again.</p>}<button type="submit" className="tt-button tt-button--primary" disabled={!enabled}>{descriptor.label}</button></form>}
         {descriptor.kind === 'slider' && action && <div className="tt-generated-control__range"><label htmlFor={id}>{descriptor.label}<output>{formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))}</output></label><input id={id} type="range" min={descriptor.min} max={descriptor.max} step={descriptor.step ?? 'any'} value={Number(controlValues[descriptor.parameter] ?? descriptor.min)} disabled={!enabled} onChange={event => updateDraft(control, action, descriptor.parameter, Number(event.currentTarget.value))} onPointerDown={() => committedRanges.current.delete(descriptor.id)} onKeyDown={event => { if (isRangeCommitKey(event.key)) committedRanges.current.delete(descriptor.id); }} onPointerUp={commitRange} onKeyUp={event => { if (isRangeCommitKey(event.key)) commitRange(); }} onBlur={commitRange} aria-valuetext={formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))} />{reason && <small role="status">{reason}</small>}</div>}
         {descriptor.kind === 'toggle' && action && <label className="tt-generated-control__toggle"><span>{descriptor.label}</span><input type="checkbox" checked={Boolean(controlValues[descriptor.parameter])} disabled={!enabled} onChange={event => { const value = event.currentTarget.checked; updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }} />{reason && <small role="status">{reason}</small>}</label>}
         {descriptor.kind === 'select' && action && <label className="tt-generated-control__select" htmlFor={id}>{descriptor.label}<select id={id} value={encodeValue(controlScalar(controlValues[descriptor.parameter], descriptor.options[0]?.value ?? ''))} disabled={!enabled} onChange={event => { const value = decodeValue(event.currentTarget.value); updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }}>{descriptor.options.map((option, index) => <option value={encodeValue(option.value)} key={`${descriptor.id}-${index}`}>{option.label}</option>)}</select>{reason && <small role="status">{reason}</small>}</label>}
