@@ -2254,7 +2254,8 @@ describe('Cloudflare room Durable Object', () => {
 
     const job = await waitForModelJob(stub, expectedId, owner.id, roomId, workspace.epoch);
     expect(job.status).toBe('completed');
-    expect(JSON.stringify(job.data)).not.toContain(input.prompt);
+    // F034-T3: the finished job keeps its prompt so the table's draft history can still show it.
+    expect(job.data.prompt).toBe(input.prompt);
     expect(JSON.stringify(job.data)).not.toContain('change');
     // F039: a lesson draft goes into use on its own too.
     expect(job.data).toMatchObject({ autoApply: 'applied' });
@@ -2316,13 +2317,17 @@ describe('Cloudflare room Durable Object', () => {
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
     expect(poll.response.status).toBe(200);
     // Shared rule-draft history (F015/F034): the job view names the requester and its time.
-    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number) });
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number), prompt: input.prompt });
 
     const retry = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
       method: 'POST', body: input, mutation: true,
     });
     expect(retry.response.status).toBe(200);
-    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number) });
+    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number), prompt: input.prompt });
+    // F034-T3: the table's draft history still lists the finished request with its prompt.
+    const history = await call<{ items: TestModelJob[] }>(stub, `/api/workspaces/${roomId}/model`, owner);
+    expect(history.response.status).toBe(200);
+    expect(history.body.items).toEqual([expect.objectContaining({ id: jobId, status: 'completed', prompt: input.prompt })]);
     expect(vi.mocked(proposeChange)).toHaveBeenCalledTimes(1);
 
     const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
@@ -2429,7 +2434,7 @@ describe('Cloudflare room Durable Object', () => {
     const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
     expect(job.status).toBe('completed');
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
-    expect(poll.body).toEqual({ id: jobId, status: 'completed', askedBy: owner.id, createdAt: expect.any(Number) });
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', askedBy: owner.id, createdAt: expect.any(Number), prompt: input.prompt });
   });
 
   it('maps failed model jobs to actionable safe messages without exposing provider details', async () => {
