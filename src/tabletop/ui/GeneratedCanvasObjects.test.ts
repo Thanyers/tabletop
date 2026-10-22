@@ -7,7 +7,9 @@ import type { GenerativeViewDescriptor } from '../shared/generative-contracts';
 import type { TableChange, TableState } from '../shared/table-contracts';
 import { planForWorkspace } from '../runtime';
 import { cafeQueueChange, lightShadowChange } from '../testing/generative-scenarios';
+import { rollCombatChange } from '../testing/table-scenarios';
 import { beginControlSubmission, beginRangeCommit, controlSubmissionSignature, createControlSubmissionGate, finishControlSubmission, GeneratedCanvasObject } from './GeneratedCanvasObjects';
+import { clearServerRollsFor, recordServerRoll } from './roll-store';
 import { TableCanvasObject } from './TableCanvasObjects';
 
 function workspace(change: TableChange = cafeQueueChange, role: 'owner' | 'participant' = 'owner'): WorkspaceView {
@@ -146,5 +148,36 @@ describe('generated canvas renderer', () => {
     expect(beginRangeCommit(committedRanges, 'light-x')).toBe(false);
     committedRanges.delete('light-x');
     expect(beginRangeCommit(committedRanges, 'light-x')).toBe(true);
+  });
+
+  it('renders the server roll control for a roll parameter and locks the returned total until a re-roll', () => {
+    const view = workspace(rollCombatChange());
+    const descriptor = descriptorById(view, 'attack-controls');
+    const initial = renderView(view, descriptor);
+    expect(initial).toContain('ทอย');
+    expect(initial).toContain('2d6 + 3');
+    expect(initial).toContain('server roll');
+    expect(initial).toContain('กด “ทอย”');
+    expect(initial).not.toContain('ทอยอีกครั้ง');
+
+    recordServerRoll(view, 'attack', 'damage', { groups: [{ count: 2, faces: 6 }], values: [4, 5], total: 12 });
+    const rolled = renderView(view, descriptor);
+    expect(rolled).toContain('ทอยอีกครั้ง');
+    expect(rolled).toContain('4');
+    expect(rolled).toContain('5');
+    expect(rolled).toContain('= 12');
+    expect(rolled).toContain('ถูกล็อก');
+    clearServerRollsFor(view);
+    expect(renderView(view, descriptor)).toContain('2d6 + 3');
+  });
+
+  it('stops showing a rolled value once the table data revision moves on', () => {
+    const view = workspace(rollCombatChange());
+    recordServerRoll(view, 'attack', 'damage', { groups: [{ count: 2, faces: 6 }], values: [1, 2], total: 6 });
+    expect(renderView(view, descriptorById(view, 'attack-controls'))).toContain('= 6');
+    if (view.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    const moved = { ...view, domain: { ...view.domain, dataRevision: view.domain.dataRevision + 1 } };
+    expect(renderView(moved, descriptorById(view, 'attack-controls'))).not.toContain('= 6');
+    clearServerRollsFor(view);
   });
 });
