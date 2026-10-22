@@ -792,6 +792,7 @@ export default function TabletopApp() {
     ask: requestTableAssistant,
     pollAsk: pollTableAssistant,
     loadHistory: (target) => loadTableAssistantHistory(target),
+    loadDraftHistory: (target) => tabletopClient.modelHistory(target.id),
     historyRefreshKey: assistantActivity,
     confirm: confirmTableAssistantAction,
     attach: importTableFile,

@@ -17,6 +17,9 @@
 - ประวัติแชท AI ในโต๊ะเป็นของทุกคน: การ์ดของคนอื่นมีบรรทัด "Asked by <ชื่อ>" · action ที่ AI เสนอให้คนอื่น ขึ้นว่า "Only <ชื่อ> can confirm this proposal." ปุ่ม Prepare changes ของคำขอคนอื่นไม่แสดง
 - หน้าขอความยินยอมบอกว่า "Everyone at this table can see your questions, the answers and rule drafts." · คำว่า private chat / private conversation เปลี่ยนเป็น recent chat / table conversation
 - คนที่ไม่ใช่สมาชิก **ยังอ่านไม่ได้** เหมือนเดิม
+- แชทของคนอื่นขึ้นเองโดยไม่ต้องรีโหลด (T2)
+- คำขอร่างกฎของทุกคนขึ้นเป็นการ์ดในแชท ชื่อการ์ดเป็น "<ชื่อ>: <คำขอ>" · คำถามที่ AI ถามกลับ ตอบได้เฉพาะคนที่ขอ ("Only <ชื่อ> can answer this question.") (T3)
+- สมาชิกเห็นการ์ด Rules ตั้งแต่โต๊ะมีแค่ร่างกฎ · ขยับการ์ดแชทหรือการ์ด Rules แล้วทุกคนเห็นตำแหน่งเดียวกัน (T3)
 
 ## ขอบเขต
 
@@ -30,6 +33,8 @@
 - `cloudflare/room-repository.ts` — `listTableAssistantJobs({ scope: 'table' | 'actor' })`, `getTableModelJob` (อ่านงานของสมาชิกคนใดก็ได้ในโต๊ะ/epoch)
 - `cloudflare/room.ts` — history และ poll ใช้ scope ตาม policy · ทุก job view มี `askedBy` · confirm ยังใช้ `getModelJob(…, actorId)`
 - `src/tabletop/ui/useTableChat.tsx`, `TableChat.tsx`, `table-chat-consent.ts` — ป้ายผู้ถาม, ซ่อนการกระทำของคนอื่น, ข้อความตาม policy
+- T2: `Room.notifyAssistantActivity(excludeActorId)` ส่งเฟรม `{type:'assistant'}` ที่ไม่มีเนื้อหาแชท ให้ทุกคนยกเว้นคนที่ขอ → client โหลดประวัติแบบเงียบ
+- T3: `GET /model` (`listTableDraftJobs`) คืนคำขอร่างกฎที่มี prompt · `runtime/index.ts` ใส่ `table.rules` ให้ทุกคนเมื่อมี candidate ใต้ open · การ์ดแชทที่มี job ใช้ id `table.chat.<job id>` (`canvas-layout-ids.ts`) และ `sharedCanvasIds` รับ Rules แบบร่าง + การ์ดแชท (เก็บ 40 ใบล่าสุด) เฉพาะใต้ open
 
 ## วิธีกลับไปแบบส่วนตัว
 
@@ -39,7 +44,9 @@
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
-| F015 | policy switch + open + UI/copy + เอกสาร + เทสต์ทั้งสอง policy | unit: projectDomain ทั้ง open/private ทุกชนิดโต๊ะ + คนนอกยังถูกปฏิเสธ · room: history/poll ของคนอื่นอ่านได้ใต้ open, confirm ของคนอื่นถูกปฏิเสธ · browser: เทสต์ privacy เดิมเปลี่ยนเป็นตรวจว่าเห็น, การ์ดแชทคนอื่นมี "Asked by" และไม่มีปุ่ม Confirm |
+| T1 | policy switch + open + UI/copy + เอกสาร + เทสต์ทั้งสอง policy | unit: projectDomain ทั้ง open/private ทุกชนิดโต๊ะ + คนนอกยังถูกปฏิเสธ · room: history/poll ของคนอื่นอ่านได้ใต้ open, confirm ของคนอื่นถูกปฏิเสธ · browser: เทสต์ privacy เดิมเปลี่ยนเป็นตรวจว่าเห็น, การ์ดแชทคนอื่นมี "Asked by" และไม่มีปุ่ม Confirm |
+| T2 | แชทของคนอื่นขึ้นสด | สัญญาณไม่ส่งกลับให้คนขอ (กันการ์ดซ้ำตอน ack หาย) · merge แล้ว #115, #117 |
+| T3 | คำขอร่างกฎของทุกคน + การ์ด Rules แบบร่าง + ตำแหน่งการ์ดร่วม | unit: canvas layout ทั้ง open/private, ตัด 40 ใบ, runtime ให้สมาชิกเห็น Rules แบบร่าง · ตรวจมือสองบัญชี: ตำแหน่งการ์ดตรงกันหลังขยับทั้งสองทาง |
 
 ## คำถามเปิด
 
