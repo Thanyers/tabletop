@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { ActorContext } from '../shared/contracts';
+import { TABLE_TURN_SEATS, type ActorContext } from '../shared/contracts';
 import type { GenerativeExpression } from '../shared/generative-contracts';
 import type { TableChange, TableState } from '../shared/table-contracts';
 import { applyTableChange, createTableState, handleTableCommand, parseBoundedTableChange, tableRecordsSchema } from './table';
@@ -285,5 +285,55 @@ describe('bounded generic generative runtime', () => {
     const before = JSON.stringify(state);
     expect(() => handleTableCommand(state, 'table.act', { actionId: 'pass', inputs: { row: 'item-1' } }, owner)).toThrow('Canvas output exceeds deterministic bounds');
     expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it('keeps identity validation within budget for a full twelve-member turn order and still probes every named seat', () => {
+    const fullTurnOrder = [...TABLE_TURN_SEATS];
+    const message = 'x'.repeat(500);
+    const identityChange = (elements: GenerativeExpression[], turnOrder: string[] = fullTurnOrder, seatRecord = 'member-1'): TableChange => ({
+      kind: 'table',
+      program: {
+        version: 1, title: 'Twelve seats', description: 'Every seat takes a turn.',
+        collections: [{ id: 'items', title: 'Items', fields: [
+          { id: 'message', label: 'Message', type: 'text', required: true },
+          { id: 'seat_name', label: 'Seat', type: 'text', required: true },
+        ] }],
+        actions: [{ id: 'pass', title: 'Pass', description: 'Advance the turn.', roles: ['owner', 'participant'], parameters: [], conditions: [], effects: [], requireTurn: false, advanceTurn: true }],
+        invariants: [], turnOrder, evidence: [], assumptions: [],
+        canvas: { version: 1, views: [{ id: 'identity', kind: 'scene', title: 'Identity', width: 100, height: 100,
+          elements: elements.map((text, index) => ({ id: `label_${index}`, shape: 'text' as const, x: 0, y: 0, text })) }] },
+      },
+      initialRecords: { items: [{ id: 'item-1', values: { message, seat_name: seatRecord } }] },
+    });
+    const equals = (left: GenerativeExpression, right: GenerativeExpression): GenerativeExpression => ({
+      op: 'if', test: { op: 'compare', fn: 'eq', left, right }, then: { op: 'literal', value: 'same' }, otherwise: { op: 'literal', value: 'different' },
+    });
+    const actor: GenerativeExpression = { op: 'system', value: 'actor' };
+    const seat: GenerativeExpression = { op: 'system', value: 'seat' };
+    const turn: GenerativeExpression = { op: 'system', value: 'turn' };
+    // Actor, seat and turn branches plus a few literals across a turn order with every seat.
+    const busy = identityChange([
+      equals(actor, seat), equals(seat, turn), equals(actor, turn),
+      equals(seat, { op: 'literal', value: 'member-12' }), equals(turn, { op: 'literal', value: 'host' }),
+      equals(actor, { op: 'literal', value: 'owner-1' }), equals(actor, { op: 'literal', value: 'guest-a' }),
+    ]);
+    expect(() => activate(busy)).not.toThrow();
+    const state = activate(busy);
+    const twelfth: ActorContext = { ...owner, actorId: 'member-12-account', role: 'participant', seat: 'member-12' };
+    let current = state;
+    for (let step = 0; step < fullTurnOrder.length; step += 1) current = run(current, 'pass', {}, step === 0 ? owner : twelfth);
+    expect(current.turn).toBe('host');
+
+    // A seat that only a literal names is still probed, so its branch is checked.
+    const heavyFor = (test: GenerativeExpression): GenerativeExpression => ({
+      op: 'if', test, then: { op: 'recordField', collection: 'items', recordId: 'item-1', field: 'message' }, otherwise: { op: 'literal', value: 'ok' },
+    });
+    const many = (expression: GenerativeExpression) => Array.from({ length: 30 }, () => expression);
+    expect(() => activate(identityChange(many(heavyFor({ op: 'compare', fn: 'eq', left: seat, right: { op: 'literal', value: 'member-12' } })), ['host'])))
+      .toThrow('Canvas output exceeds deterministic bounds');
+    // A seat named only in the rows is probed too.
+    const fromRecord: GenerativeExpression = { op: 'recordField', collection: 'items', recordId: 'item-1', field: 'seat_name' };
+    expect(() => activate(identityChange(many(heavyFor({ op: 'compare', fn: 'eq', left: seat, right: fromRecord })), ['host'], 'member-11')))
+      .toThrow('Canvas output exceeds deterministic bounds');
   });
 });

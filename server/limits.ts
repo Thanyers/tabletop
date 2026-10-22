@@ -1,10 +1,25 @@
+import { MAX_TABLE_MEMBER_SEATS, tableMemberSeatLimit, type DomainState } from '../src/tabletop/shared/contracts.js';
+
 export const SESSION_IDLE_TTL_MS = 24 * 60 * 60 * 1000;
 export const SESSION_HARD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const WORKSPACE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const INVITE_TTL_MS = 10 * 60 * 1000;
 
 export const MAX_ACTIVE_WORKSPACES = 20;
-export const MAX_MEMBERS_PER_WORKSPACE = 8;
+/** The owner plus every member seat (Cloudflare runtime). */
+export const MAX_MEMBERS_PER_WORKSPACE = 1 + MAX_TABLE_MEMBER_SEATS;
+/**
+ * Active members (owner included) a workspace accepts right now. A table follows its own
+ * "max members" setting; lowering it never removes anyone, it only stops new joins.
+ */
+export function workspaceMemberCapacity(state: DomainState, runtimeSeats: number = MAX_TABLE_MEMBER_SEATS): number {
+  if (state.kind !== 'table') return 1 + runtimeSeats;
+  return 1 + tableMemberSeatLimit(state.display, runtimeSeats);
+}
+export function memberLimitMessage(capacity: number): string {
+  const seats = capacity - 1;
+  return `This table is full: it allows ${seats} ${seats === 1 ? 'member' : 'members'} besides the owner. Ask the owner to raise the limit or remove someone.`;
+}
 export const MAX_JSON_BODY_BYTES = 256 * 1024;
 export const MAX_WEBSOCKET_MESSAGE_BYTES = 64 * 1024;
 export const MAX_HTTP_REQUESTS_PER_MINUTE = 120;

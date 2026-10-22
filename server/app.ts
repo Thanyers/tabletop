@@ -108,6 +108,8 @@ const mimeTypes: Readonly<Record<string, string>> = {
 const inviteRedemptionSchema = z.object({ ticket: z.string() }).strict();
 const removeMemberSchema = z.strictObject({ actorId: z.string().regex(/^[A-Za-z0-9_-]{1,160}$/u) });
 const inviteCreationSchema = z.object({
+  // The Node/Postgres runtime stays at seven member seats (NODE_TABLE_MEMBER_SEATS): server/schema.sql
+  // CHECK constraints list member-1..member-7. The Worker accepts every seat in TABLE_MEMBER_SEATS.
   seat: z.enum([
     'learner-1', 'learner-2', 'mira', 'pip',
     'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7',

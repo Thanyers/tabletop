@@ -5,7 +5,9 @@
  * F047: the numeric limits are interpolated from `TABLE_LIMITS` and `GENERATIVE_LIMITS`, so the guide
  * cannot advertise one number while the validator enforces another. `manifestNodes` was the drift
  * that motivated this: the validator rejected a canvas the guide said nothing about.
+ * Seat names come from the shared seat list for the same reason.
  */
+import { MAX_TABLE_MEMBER_SEATS } from '../../src/tabletop/shared/contracts.js';
 import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
 import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
 
@@ -95,7 +97,7 @@ INVARIANT{id,collection,fields:[FIELD_ID 1..6],message}
 EVIDENCE{sourceId:string<=100,quote:string<=500}
 ROW{id,values:{FIELD_ID:VALUE}}
 RECORDS: {COLLECTION_ID:[ROW<=100]}
-TURNORDER: ("host"|"member-1"|...|"member-7")[<=8]
+TURNORDER: ("host"|"member-1"|...|"member-${MAX_TABLE_MEMBER_SEATS}")[<=${TABLE_LIMITS.turnOrder}]
 
 OPERAND (ONLY in condition.left/right, effect.value and create.values; never a raw AST):
   {literal:VALUE} | {input:PARAM_ID} | {record:PARAM_ID,field:FIELD_ID} | {system:"actor"|"seat"|"turn"} | {expression:EXPR}
