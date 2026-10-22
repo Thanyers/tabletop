@@ -38,7 +38,9 @@ check ที่ต้องผ่านชื่อ **`local-validation`** · CI
 
 **สองระดับ (CI005):**
 - PR และ push เข้า `dev` → **เช็คเร็ว** (public files, audit, lint, unit, typecheck+build, Worker tests, bundle) ราว 2–3 นาที · ข้าม browser suites
-- PR เข้า `main` (release/hotfix), push เข้า `main` และกด **Run workflow** เอง → **ครบทุกชุด** รวม browser suites ทั้งสาม · pipeline deploy (CD001) รอชุดเต็มบน merge commit ของ `main` ก่อน deploy เสมอ
+- PR เข้า `main` (release/hotfix), push เข้า `main` และกด **Run workflow** เอง → **ครบทุกชุด** รวม browser suites ทั้งสาม · pipeline deploy (CD001) รอ `local-validation` ของ merge commit บน `main` ก่อน deploy เสมอ
+- **ไม่รันซ้ำบน `main` (CI006):** ถ้าโค้ดของ merge commit (git tree) เหมือน head ของ release PR ทุกไฟล์ และ PR นั้นผ่านชุดเต็มมาแล้ว job `plan` จะใช้ผลเดิม ข้ามทุก job แล้วให้ `local-validation` ผ่านทันที → deploy เริ่มในไม่กี่วินาที · ถ้า `main` มี commit ที่ release branch ไม่มี (tree ไม่ตรง) หรือหา run ของ PR ไม่เจอ จะรันครบทุกชุดเหมือนเดิม จึงต้อง merge `origin/main` เข้า release branch ก่อนเปิด PR (§5 ข้อ 1)
+- **รันขนานกัน (CI006):** เช็คเร็ว + browser suite 3 job (demo+r1, Workers, generated) รันพร้อมกัน แต่ละ job build เอง · `local-validation` เป็น job สุดท้ายที่ผ่านเมื่อทุก job ที่รันผ่าน (ชื่อเดิมเพราะ ruleset บังคับ)
 - ข้อแลก: browser regression จะเห็นตอนเปิด release PR · PR เข้า `dev` ไม่ต้องรัน browser suite ในเครื่อง (รันชุดเต็มตอนเตรียม release ตาม [§5](#5-ออก-release)) · อยากเช็คก่อนก็กด Run workflow บน branch นั้นได้
 
 CI รัน `npm run lint` ด้วย: ห้าม `any` ที่เขียนเอง และห้าม `@ts-ignore` (กฎทั้งหมดอยู่ที่ [CONTRIBUTING → Lint](CONTRIBUTING.md#lint)) · pre-commit hook (husky) รัน `check-public-files` + lint ไฟล์ที่ stage ให้ก่อน commit · **ห้ามใช้ `--no-verify` ข้าม hook**
@@ -80,7 +82,7 @@ PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใ�
    - **PATCH** แก้บั๊ก/ข้อความ/CSS · **MINOR** ฟีเจอร์ใหม่ หรือ migration ที่เข้ากันได้ย้อนหลัง
    - **MAJOR** rollback ไม่ได้ถ้าไม่ทำอะไรเพิ่ม เช่น migration ย้อนไม่ได้, ต้องเพิ่ม secret/binding/config ก่อน deploy, เปลี่ยน response จน client เก่าพัง
 3. PR `release/X.Y.Z` → `main` → **AI merge เอง** เมื่อครบเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) · ชื่อ branch คือเลขเวอร์ชัน
-4. หลัง merge **pipeline ทำต่อเองทั้งหมด** ([`release-deploy.yml`](.github/workflows/release-deploy.yml), CD001): รอ `local-validation` ของ merge commit บน `main` ผ่าน → สร้าง annotated tag `vX.Y.Z` → build ครั้งเดียว → staging (D1 migration + deploy + smoke) → production ด้วย build เดียวกัน → smoke · ดูรายละเอียดที่หัวข้อถัดไป
+4. หลัง merge **pipeline ทำต่อเองทั้งหมด** ([`release-deploy.yml`](.github/workflows/release-deploy.yml), CD001): รอ `local-validation` ของ merge commit บน `main` ผ่าน (ใช้ผลของ release PR ถ้าโค้ดเหมือนกัน — CI006) → สร้าง annotated tag `vX.Y.Z` → build ครั้งเดียว → staging (D1 migration + deploy + smoke) → production ด้วย build เดียวกัน → smoke · ดูรายละเอียดที่หัวข้อถัดไป
 5. ติดตาม run ของ **Release deploy** จนจบ (`gh run watch`) แล้วรายงานผู้ใช้: เลขเวอร์ชัน, `/version` ของ staging/production, ลิงก์ run
 6. เปิด PR `main` → `dev` เพื่อนำ commit ของ release กลับเข้า `dev` (AI merge เองได้) พร้อมอัปเดต [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md)
 
