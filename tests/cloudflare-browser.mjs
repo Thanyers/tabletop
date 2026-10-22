@@ -43,7 +43,9 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     if (input.kind === 'table-assistant') {
       if (!tableAssistantReply) throw new Error('Unexpected table assistant request without an armed synthetic response.');
       expect(Object.keys(input).sort()).toEqual(['context', 'kind', 'prompt']);
-      expect(Object.keys(input.context).sort()).toEqual(['conversation', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(Object.keys(input.context).sort()).toEqual(['conversation', 'notes', 'program', 'records', 'role', 'seat', 'turn']);
+      // F037: shared notes travel with the assistant context; this table has none.
+      expect(input.context.notes).toEqual([]);
       expect(Array.isArray(input.context.conversation)).toBe(true);
       expect(input.context.conversation.length).toBeLessThanOrEqual(6);
       if (input.context.program) {

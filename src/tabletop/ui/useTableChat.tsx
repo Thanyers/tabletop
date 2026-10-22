@@ -454,6 +454,14 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }
   }, [scope, patchCard, pollModelOnce, pollAnswerOnce]);
 
+  // Under open visibility the card's canvas id changes to the shared job id once the server accepts it,
+  // so move the focus to the new node instead of leaving the viewport on the one that just went away.
+  const focusAcceptedCard = useCallback((targetScope: string, card: ChatCard, jobId: string) => {
+    if (targetScope !== scopeRef.current || card.job || card.modelJob) return;
+    const shared = VISIBILITY_POLICY === 'open' ? sharedChatCanvasId(jobId) : null;
+    if (shared) optionsRef.current.focusObject(shared);
+  }, []);
+
   const acceptDraft = useCallback((targetScope: string, card: ChatCard, job: ModelJob, current: TableView) => {
     patchCard(targetScope, card.id, {
       modelJob: job,
@@ -464,13 +472,14 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       error: job.status === 'failed' ? job.message ?? 'The draft could not be prepared.' : undefined,
       pollTimedOut: false,
     });
+    focusAcceptedCard(targetScope, card, job.id);
     if (job.status === 'completed' || job.status === 'complete') refreshAfterDraft(targetScope, card.id, current.id, job.id);
     if (current.domain.program && explicitDraftScopeRef.current === targetScope) {
       explicitDraftScopeRef.current = null;
       explicitDraftEntryRef.current = null;
       setExplicitDraftScope(null);
     }
-  }, [patchCard, refreshAfterDraft]);
+  }, [patchCard, refreshAfterDraft, focusAcceptedCard]);
 
   const acceptAnswer = useCallback((targetScope: string, card: ChatCard, job: TableAssistantJob) => {
     rememberJobCard(targetScope, job.id, card.id);
@@ -484,7 +493,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       confirmationPending: job.confirmationStatus === 'processing',
       pollTimedOut: false,
     });
-  }, [patchCard]);
+    focusAcceptedCard(targetScope, card, job.id);
+  }, [patchCard, focusAcceptedCard]);
 
   const send = useCallback(async (prompt: string, forcedMode?: 'draft'): Promise<boolean> => {
     const current = viewRef.current;
