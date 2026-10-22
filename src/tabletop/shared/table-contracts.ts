@@ -34,6 +34,19 @@ export interface ComputedColumn { id: string; collection: string; label: string;
 /** F037: a shared canvas note. Kept out of the program so it survives rule edits and stays a plain note. */
 export type NoteColor = 'yellow' | 'rose' | 'sky' | 'mint' | 'lavender' | 'sand';
 export interface TableNote { id: string; text: string; color: NoteColor; x: number; y: number; width: number; height: number; createdBy: string; createdAt: number; updatedAt: number }
+/** F054: who a canvas card came from. `ai` means an AI-drafted program applied by a person, not "the AI wrote this alone". */
+export type CanvasCardOrigin = 'ai' | 'human' | 'system' | 'demo';
+/**
+ * F054: when a canvas card was created and last changed, and who did it.
+ * Kept outside `TableProgram` so it never enters the candidate hash or the 64 KiB program budget.
+ * `actorId` is stored, never a display name, so the UI resolves names from the current members.
+ */
+export interface CanvasCardMeta {
+  createdAt: number; updatedAt: number;
+  createdBy?: string; updatedBy?: string;
+  origin: CanvasCardOrigin; revision?: number;
+  source: 'recorded' | 'inferred';
+}
 export interface TableState extends DomainBase {
   kind: 'table'; sources: TableSource[]; program: TableProgram | null;
   records: Record<string, TableRecord[]>; turn: string | null;
@@ -49,6 +62,12 @@ export interface TableState extends DomainBase {
   computedColumns?: ComputedColumn[];
   /** Shared sticky notes (F037). Omitted by rooms created before this field existed. */
   notes?: TableNote[];
+  /**
+   * F054: per-card timestamps and provenance, keyed by canvas node id (not by title, which can change).
+   * Written only by server-ordered commands, never by the simulator; bounded to 48 entries / 12 KiB.
+   * Omitted by rooms created before this field existed, so readers fall back to inference.
+   */
+  cardMeta?: Record<string, CanvasCardMeta>;
   /**
    * F048: rolls issued but not yet consumed by their action. Private to the roller, so projections
    * drop them; the action commit deletes the one it consumed.

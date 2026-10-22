@@ -127,6 +127,9 @@
   font-size: 9px;
   font-weight: 700;
 }
+/* F054: the note's updated time rides in the author line, so the note gains no extra row. */
+.tt-note__meta-sep { flex: 0 0 auto; color: #303d3a66; }
+.tt-note__meta-time { flex: 0 0 auto; color: #303d3a99; font-family: var(--tt-mono, 'IBM Plex Mono', monospace); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tt-note__grip {
   position: absolute;
   right: 3px;
