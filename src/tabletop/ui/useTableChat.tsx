@@ -8,6 +8,7 @@ import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
+import { chatReferencePrompt, onChatCardReference, type ChatCardReference } from './canvas-object-finder';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
@@ -233,6 +234,15 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const [acknowledgedRetry, setAcknowledgedRetry] = useState<{ prompt: string; key: string }>();
   const [retryPrefill, setRetryPrefill] = useState<{ text: string; key: number }>();
   const [composerMessage, setComposerMessage] = useState('');
+  // A card the person pointed the chat at; the next message is about that card.
+  const [cardReference, setCardReference] = useState<ChatCardReference | null>(null);
+  const cardReferenceRef = useRef(cardReference);
+  cardReferenceRef.current = cardReference;
+  const [referenceFocusKey, setReferenceFocusKey] = useState(0);
+  useEffect(() => onChatCardReference((reference) => {
+    setCardReference(reference);
+    setReferenceFocusKey((key) => key + 1);
+  }), []);
 
   const updateCards = useCallback((targetScope: string, update: (current: ChatCard[]) => ChatCard[]) => {
     if (!targetScope || targetScope !== scopeRef.current) return;
@@ -298,6 +308,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setAcknowledgedRetry(undefined);
     setRetryPrefill(undefined);
     setComposerMessage('');
+    setCardReference(null);
   }, [scope, updateCards]);
 
   useEffect(() => {
@@ -320,6 +331,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
   const mode = table ? tableChatMode(viewerCan(table, 'rules.draft') ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
     prompt: composerMessage,
+    referencedCard: cardReference !== null,
     hasCreateAction: table.domain.program?.actions.some(action => Boolean(action.creates?.length)) ?? false,
   }) : 'ask';
   const modeRef = useRef(mode);
@@ -759,6 +771,12 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       : owner ? 'Ask, add something, or change this table' : 'Ask about this table';
   const sourceFiles = table.domain.sources.map((source) => ({ id: source.id, filename: source.filename }));
   const prefill = retryPrefill ?? options.prefill;
+  const sendFromBar = async (message: string): Promise<boolean> => {
+    const reference = cardReferenceRef.current;
+    const accepted = await send(reference ? chatReferencePrompt(reference, message) : message);
+    if (accepted && reference) setCardReference(null);
+    return accepted;
+  };
   const bar = <TableChat
     key={scope}
     workspaceId={table.id}
@@ -775,12 +793,14 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onRetryHistory={retryHistory}
     prefill={prefill}
     acknowledged={acknowledgedRetry}
-    focusKey={focusKey}
+    focusKey={focusKey + referenceFocusKey}
     explicitRuleEdit={owner && Boolean(table.domain.program) && explicitDraftScope === scope}
     onCancelRuleEdit={cancelEditRules}
     onAttach={async (file) => { await optionsRef.current.attach(table, file); }}
-    onSend={send}
+    onSend={sendFromBar}
     onMessageChange={setComposerMessage}
+    cardReference={cardReference}
+    onClearCardReference={() => setCardReference(null)}
     composerAction={options.composerAction}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };

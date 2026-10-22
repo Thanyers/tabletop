@@ -366,3 +366,9 @@
    so Apply / Confirm / Review rules never ends up below the fold. */
 .tt-app .tt-card-cta { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-2); margin-top: var(--tt-space-2); padding: var(--tt-space-2) 0; border-top: 1px solid var(--tt-line); background: var(--tt-card-surface); box-shadow: 0 -10px 12px -10px rgb(0 0 0 / 0.18); }
 .tt-app .tt-card-cta > p { flex-basis: 100%; margin: 0; }
+
+/* Objects panel: an eye beside each card shows or hides it on the canvas. */
+.tt-app .tt-canvas-objects__list li { display: flex; align-items: center; gap: 2px; }
+.tt-app .tt-canvas-objects__list li > button:first-child { flex: 1 1 auto; min-width: 0; }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 32px; padding: 0; color: var(--tt-muted); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye[aria-pressed='true'] { color: var(--tt-moss); }

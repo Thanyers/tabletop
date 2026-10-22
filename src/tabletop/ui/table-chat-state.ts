@@ -3,7 +3,7 @@ import type { WorkspaceView } from '../shared/contracts';
 import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, tailWithin, type ModelFailureDetails, type ModelTimeoutSource } from '../shared/model-job-progress';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
-export interface TableChatRequestContext { prompt: string; hasCreateAction: boolean }
+export interface TableChatRequestContext { prompt: string; hasCreateAction: boolean; /** A card the message is about (chat reference). */ referencedCard?: boolean }
 
 export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: boolean, explicitDraft: boolean, request?: TableChatRequestContext): 'draft' | 'ask' {
   if (role !== 'owner') return 'ask';
@@ -13,6 +13,8 @@ export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: b
   // stays conversational; the assistant can offer the same builder explicitly.
   if (!prompt || /^(?:(?:how many|what|which|why|explain|summari[sz]e)\b|อธิบาย|สรุป|ทำไม|มี.{0,32}กี่)/iu.test(prompt)) return 'ask';
   const asksForChange = /\b(?:add|creat\w*|build|make|design|extend|chang\w*|edit|new|simplify)\b|เพิ่ม|สร้าง|ปรับ|แก้|ทำ|ขอ|อยาก/iu.test(prompt);
+  // A change asked about a specific card ("make this card harder") is a rule edit for that card.
+  if (request?.referencedCard && (asksForChange || /\b(?:harder|easier|more|less|remove|rename)\b|ยาก|ง่าย|ลด|ลบ|เปลี่ยน|เอาออก/iu.test(prompt))) return 'draft';
   const asksForUi = asksForChange && /\b(?:forms?|buttons?|cards?|charts?|graphs?|diagrams?|views?|ui)\b|ฟอร์ม|ปุ่ม|การ์ด|กราฟ|แผนภูมิ|หน้าจอ/iu.test(prompt);
   // "Change status in this table" is a data action. Require a direct
   // structural request before treating table/field words as builder intent.

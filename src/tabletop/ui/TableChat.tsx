@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowUp, LoaderCircle, Paperclip, X } from 'lucide-react';
+import { ArrowUp, AtSign, LoaderCircle, Paperclip, X } from 'lucide-react';
+import { runCanvasObjectCommand, type ChatCardReference } from './canvas-object-finder';
 import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import './table-chat.css';
@@ -36,6 +37,9 @@ export interface TableChatProps {
   /** F037: an extra round control rendered beside the composer (add a note). */
   composerAction?: ReactNode;
   onMessageChange?: (message: string) => void;
+  /** A card the next message is about, shown as a chip above the box. */
+  cardReference?: ChatCardReference | null;
+  onClearCardReference?: () => void;
 }
 
 /** One-line chat box fixed to the bottom centre of a shared table (F006). */
@@ -43,6 +47,7 @@ export function TableChat({
   workspaceId, epoch, actorId, mode, sourceFiles, placeholder, aiEnabled, canAttach, busy,
   acceptFiles, historyStatus = 'ready', onRetryHistory, prefill, acknowledged, focusKey = 0,
   explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction,
+  cardReference = null, onClearCardReference,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
   const [grantedKey, setGrantedKey] = useState<string | null>(() => storedConsent({ workspaceId, epoch, actorId }));
@@ -51,6 +56,8 @@ export function TableChat({
   const [attaching, setAttaching] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
   const [sendError, setSendError] = useState('');
+  // Result of a card command typed in the chat (open, find or hide a card); nothing goes to the AI.
+  const [objectNotice, setObjectNotice] = useState('');
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef(message);
@@ -120,6 +127,16 @@ export function TableChat({
   };
 
   const submit = () => {
+    if (trimmed.length > 0 && !controlsBusy) {
+      const command = runCanvasObjectCommand(trimmed);
+      if (command.handled) {
+        setObjectNotice(command.message);
+        setSendError('');
+        setMessage('');
+        return;
+      }
+    }
+    setObjectNotice('');
     if (!canSend) return;
     // Another control (e.g. a clarifying-answer card) may have stored consent since mount.
     const granted = grantedKey ?? storedConsent(scope);
@@ -148,6 +165,7 @@ export function TableChat({
     {historyStatus === 'error' && mode === 'ask' && <p className="tt-table-chat-bar__status is-error" role="alert">{VISIBILITY_POLICY === 'open' ? 'Table conversation history could not be loaded.' : 'Private conversation history could not be loaded.'} <button type="button" className="tt-table-chat-bar__retry" onClick={onRetryHistory}>Retry</button></p>}
     {attachmentError && <p className="tt-table-chat-bar__status is-error" role="alert">{attachmentError}</p>}
     {sendError && <p className="tt-table-chat-bar__status is-error" role="alert">{sendError}</p>}
+    {objectNotice && <p className="tt-table-chat-bar__status" role="status">{objectNotice}</p>}
     {asking && <div className="tt-table-chat-bar__consent" role="alertdialog" aria-label="Send to AI">
       <div className="tt-table-chat-bar__consent-copy">
         <span>{consentQuestion(mode)}</span>
@@ -160,6 +178,11 @@ export function TableChat({
         <button type="button" className="tt-table-chat-bar__consent-yes" disabled={!canSend} onClick={() => { setGrantedKey(rememberConsent(scope)); void send(); }}>Send</button>
         <button type="button" className="tt-table-chat-bar__consent-no" onClick={() => { setAsking(false); fieldRef.current?.focus(); }}>Cancel</button>
       </div>
+    </div>}
+    {cardReference && <div className="tt-table-chat-bar__reference" data-testid="chat-card-reference">
+      <span className="tt-table-chat-bar__reference-chip" title={cardReference.detail}><AtSign size={13} aria-hidden="true" />{cardReference.title}</span>
+      <small>{mode === 'draft' ? 'Your message changes this card’s rules.' : 'Your message is about this card.'}</small>
+      <button type="button" aria-label={`Stop referencing ${cardReference.title}`} onClick={() => { onClearCardReference?.(); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>
     </div>}
     <form className="tt-table-chat-bar__box" onSubmit={(event) => { event.preventDefault(); submit(); }}>
       {canAttach && <>

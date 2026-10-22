@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye } from 'lucide-react';
+import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
@@ -8,6 +8,7 @@ import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
 import { viewerCan } from '../shared/permissions';
+import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder } from './canvas-object-finder';
 import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
 import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
@@ -28,6 +29,8 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   onToggleOpen: (id: string) => void;
   /** Take the card off this viewer's canvas; the Objects panel brings it back. */
   onHide: (id: string) => void;
+  /** Point the table chat at this card; absent where there is no table chat. */
+  onReference?: (id: string, title: string) => void;
   onSelectNode: (id: string) => void;
 }
 
@@ -120,6 +123,30 @@ function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean }
 
 const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
 const hiddenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-hidden:${workspaceKey}`;
+const seenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-seen:${workspaceKey}`;
+
+/**
+ * Cards that start closed on a table that has its own views: the raw rules, actions, data tables, people and
+ * history. The generated views, chat and notes stay open. Each card is decided once, when this browser first
+ * sees it, so a card the person opened again stays open.
+ */
+function startsClosed(id: string, ids: readonly string[]): boolean {
+  if (!ids.some((other) => other.startsWith('table.view.'))) return false;
+  return id === 'table.rules' || id === 'table.actions' || id.startsWith('table.collection.') || id === 'workspace.people' || id === 'workspace.history';
+}
+
+function readSeenObjects(workspaceKey: string): Set<string> {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(seenStorageKey(workspaceKey)) ?? '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string').slice(0, 400) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeenObjects(workspaceKey: string, ids: ReadonlySet<string>): void {
+  try { window.localStorage.setItem(seenStorageKey(workspaceKey), JSON.stringify([...ids].slice(-400))); } catch { /* best effort */ }
+}
 
 function readHiddenObjects(workspaceKey: string): ReadonlySet<string> {
   try {
@@ -276,6 +303,9 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
     <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
     <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
     <span className="tt-canvas-node__controls">
+      {data.onReference && <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-label={`Ask about ${data.title} in chat`} title="Ask about or change this card in the chat" onClick={(event) => { event.stopPropagation(); data.onReference?.(data.id, data.title); }}>
+        <MessageSquareText size={15} aria-hidden="true" />
+      </button>}
       <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? `Minimize ${data.title}` : `Open ${data.title}`} title={data.opened ? 'Minimize' : 'Expand'} onKeyDown={(event) => {
         if (event.key === 'Escape' && data.opened) {
           event.preventDefault();
@@ -526,6 +556,26 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const planNodesById = useMemo(() => new Map(plan.nodes.map((spec) => [spec.id, spec])), [plan.nodes]);
   const listedAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds]);
   const visibleAuxiliaryObjects = useMemo(() => listedAuxiliaryObjects.filter((object) => !hiddenIds.has(object.id)), [listedAuxiliaryObjects, hiddenIds]);
+  // First sight of a card decides whether it starts closed (see startsClosed).
+  useEffect(() => {
+    if (view.kind !== 'table') return;
+    const ids = [...listedPlanNodes.map((spec) => spec.id), ...listedAuxiliaryObjects.map((object) => object.id)];
+    // Until the table has its own views nothing starts closed, so decide nothing yet.
+    if (!ids.some((id) => id.startsWith('table.view.'))) return;
+    const seen = readSeenObjects(workspaceKey);
+    const fresh = ids.filter((id) => !seen.has(id));
+    if (fresh.length === 0) return;
+    const closing = fresh.filter((id) => startsClosed(id, ids));
+    for (const id of fresh) seen.add(id);
+    writeSeenObjects(workspaceKey, seen);
+    if (closing.length === 0) return;
+    setHiddenIds((current) => {
+      const next = new Set(current);
+      for (const id of closing) next.add(id);
+      writeHiddenObjects(workspaceKey, next);
+      return next;
+    });
+  }, [listedAuxiliaryObjects, listedPlanNodes, view.kind, workspaceKey]);
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
   const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
@@ -719,6 +769,19 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     onOpenObject?.(nextId);
     onSelectNode(id);
   }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode]);
+  // The eye in the Objects panel: show a closed card again without moving the view to it.
+  const showObject = useCallback((id: string) => {
+    setHiddenIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      writeHiddenObjects(workspaceKey, next);
+      return next;
+    });
+  }, [workspaceKey]);
+  // Header button: the table chat's next message is about this card (e.g. "make it harder").
+  const referenceInChat = useMemo(() => view.kind !== 'table' || view.domain.kind !== 'table' ? undefined : (id: string, title: string) => {
+    referenceCardInChat({ id, title, detail: describeCardForChat(id, title, view) });
+  }, [view]);
   const hideObject = useCallback((id: string) => {
     setHiddenIds((current) => {
       const next = new Set(current);
@@ -913,6 +976,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           opened: activeOpenedId === spec.id,
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
+          onReference: referenceInChat,
           onSelectNode,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
@@ -959,6 +1023,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           opened: activeOpenedId === object.id,
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
+          onReference: referenceInChat,
           onSelectNode,
           selected: object.id === selectedNodeId,
           auxiliary: object,
@@ -1028,6 +1093,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const handleCanvasMoveStart = useCallback((event: MouseEvent | TouchEvent | null) => {
     if (event) cancelPendingOpenObjectFocus();
   }, [cancelPendingOpenObjectFocus]);
+
+  // A card asked for from elsewhere (e.g. View rules) is shown again if this viewer had closed it.
+  useEffect(() => {
+    if (focusNodeId && hiddenIds.has(focusNodeId)) showObject(focusNodeId);
+  }, [focusNodeId, focusRequestKey, hiddenIds, showObject]);
 
   useEffect(() => {
     if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId)) return;
@@ -1139,6 +1209,20 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     setHiddenIds(new Set());
     writeHiddenObjects(workspaceKey, new Set());
   }, [workspaceKey]);
+  // Chat commands ("เปิดการ์ด …", "open rules", "ซ่อนการ์ด …") find a card by name.
+  const finderStateRef = useRef({ objectTitles: [] as { id: string; title: string; hidden: boolean }[], navigateToObject: (_id: string) => {}, hideObject: (_id: string) => {} });
+  useEffect(() => registerCanvasObjectFinder((verb, query) => {
+    const { objectTitles: objects, navigateToObject: open, hideObject: hide } = finderStateRef.current;
+    const matches = matchCanvasObjects(objects, query);
+    if (matches.length === 0) return { handled: false };
+    const [first, ...others] = matches;
+    if (verb === 'hide') {
+      hide(first.id);
+      return { handled: true, message: `Closed “${first.title}”. Open it again from Objects or by typing “open ${first.title}”.` };
+    }
+    open(first.id);
+    return { handled: true, message: `Opened “${first.title}”.${others.length ? ` Also matching: ${others.slice(0, 3).map((item) => item.title).join(', ')}.` : ''}` };
+  }), []);
   useEffect(() => {
     if (!contextMenu) return;
     const close = (event: Event) => {
@@ -1372,6 +1456,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     ...listedPlanNodes.map((spec) => ({ id: spec.id, title: spec.title, hidden: hiddenIds.has(spec.id) })),
     ...listedAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title, hidden: hiddenIds.has(object.id) })),
   ], [listedPlanNodes, listedAuxiliaryObjects, hiddenIds]);
+  finderStateRef.current = { objectTitles, navigateToObject, hideObject };
   // A table-wide display setting wins; without one, the viewer's own choice, then the default.
   const tableConnections = view.domain.display?.connections;
   const canSetDisplay = viewerCan(view, 'table.rename') && busy !== 'table.readOnly';
@@ -1466,6 +1551,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             <ul className="tt-canvas-objects__list">
               {objectTitles.map((object) => <li key={object.id}>
                 <button type="button" data-testid={`open-canvas-${object.id}`} data-hidden={object.hidden || undefined} aria-label={object.hidden ? `Reopen ${object.title}` : `Open ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>{object.title}</button>
+                <button type="button" className="tt-canvas-objects__eye" data-testid={`toggle-canvas-${object.id}`} aria-pressed={!object.hidden} aria-label={object.hidden ? `Show ${object.title}` : `Hide ${object.title}`} title={object.hidden ? 'Show on canvas' : 'Hide from canvas'} onClick={(event) => { event.stopPropagation(); if (object.hidden) showObject(object.id); else hideObject(object.id); }}>
+                  {object.hidden ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+                </button>
               </li>)}
             </ul>
           </nav>
@@ -1480,4 +1568,21 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
 
 export function CanvasWorkspace(props: CanvasWorkspaceProps) {
   return <ReactFlowProvider><CanvasInner {...props} /></ReactFlowProvider>;
+}
+
+/** What the AI should understand a referenced card to be: its kind, and for data its fields. */
+function describeCardForChat(id: string, title: string, view: WorkspaceView): string {
+  const program = view.domain.kind === 'table' ? view.domain.program : null;
+  if (id.startsWith('table.collection.')) {
+    const collection = program?.collections.find((item) => `table.collection.${item.id}` === id);
+    return collection ? `data table “${collection.title}” (id ${collection.id}) with fields ${collection.fields.map((field) => `${field.label} [${field.id}, ${field.type}]`).join(', ')}` : `data table “${title}”`;
+  }
+  if (id.startsWith('table.view.')) {
+    const descriptor = program?.canvas?.views.find((item) => `table.view.${item.id}` === id);
+    return descriptor ? `${descriptor.kind} view “${descriptor.title}” (id ${descriptor.id})` : `view “${title}”`;
+  }
+  if (id === 'table.rules') return 'the table rules (collections, actions and checks)';
+  if (id === 'table.actions') return `the table actions${program ? `: ${program.actions.map((action) => action.title).join(', ')}` : ''}`;
+  if (id.startsWith('table.chat.')) return `an earlier chat answer titled “${title}”`;
+  return `card “${title}”`;
 }
