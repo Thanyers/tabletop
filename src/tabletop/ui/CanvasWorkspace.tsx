@@ -228,6 +228,29 @@ function defaultCanvasPosition(kind: WorkspaceView['kind'], spec: PlanNode) {
   return spec.position;
 }
 
+/**
+ * A card body that scrolls when its content is taller than the card. While it overflows it carries React Flow's
+ * `nowheel` class, so the wheel scrolls the card (and reaches buttons below the fold) instead of zooming the canvas.
+ */
+function CanvasNodeBody({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => setScrollable(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    for (const child of Array.from(element.children)) observer.observe(child);
+    const mutations = typeof MutationObserver === 'undefined' ? null : new MutationObserver(measure);
+    mutations?.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'class'] });
+    return () => { observer.disconnect(); mutations?.disconnect(); };
+  }, []);
+  return <div ref={ref} className={`tt-canvas-node__body nodrag nopan nokey${scrollable ? ' nowheel' : ''}`}>{children}</div>;
+}
+
 function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
   const moveButtonRef = useRef<HTMLButtonElement>(null);
   const [moveMenuOpen, setMoveMenuOpen] = useState(false);
@@ -329,7 +352,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         }}
       >
         <CanvasObjectHeader data={data} />
-        <div className="tt-canvas-node__body nodrag nopan nokey">{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</div>
+        <CanvasNodeBody>{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</CanvasNodeBody>
       </article>
     );
   }
@@ -362,9 +385,9 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
       {inputPorts.map((port, index) => <Handle key={`in-${port}`} type="target" position={Position.Left} id={port} style={portStyle(index, inputPorts.length)} />)}
       {outputPorts.map((port, index) => <Handle key={`out-${port}`} type="source" position={Position.Right} id={port} style={portStyle(index, outputPorts.length)} />)}
       <CanvasObjectHeader data={data} />
-      <div className="tt-canvas-node__body nodrag nopan nokey">
+      <CanvasNodeBody>
         <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} onEditRules={data.onEditRules} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
-      </div>
+      </CanvasNodeBody>
     </article>
   );
 }

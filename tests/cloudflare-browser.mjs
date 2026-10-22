@@ -60,7 +60,10 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       expect(typeof input.prompt).toBe('string');
       if (tableAssistantReply.expectedPromptContains) expect(input.prompt).toContain(tableAssistantReply.expectedPromptContains);
       change = tableAssistantReply.result;
+      const assistantGate = tableAssistantReply.gate;
       tableAssistantReply = null;
+      // F038: an armed gate holds the answer so other members can observe the running card.
+      if (assistantGate) await assistantGate;
     } else if (input.kind === 'table') {
       if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
       if (tableAIReply.expectedSources) expect(input.sources).toEqual(tableAIReply.expectedSources);
