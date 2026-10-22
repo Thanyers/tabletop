@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AuthorityError } from '../server/errors.js';
 import { DomainError } from '../src/tabletop/shared/contracts.js';
-import { MAX_FAILURE_REASON_CHARS, ReasonedDomainError, STRUCTURAL_HINT, cleanReasons, modelFailureMessage, safeModelFailureCode, safeModelFailureReasons } from './model-failure.js';
+import { MAX_FAILURE_REASON_CHARS, ReasonedDomainError, STRUCTURAL_HINT, cleanReasons, modelFailureMessage, safeAssistantFailureCode, safeModelFailureCode, safeModelFailureReasons, tableAssistantFailureMessage } from './model-failure.js';
 
 describe('model failure messages (F016)', () => {
   it('shows the real validation reasons instead of one generic sentence', () => {
@@ -31,6 +31,36 @@ describe('model failure messages (F016)', () => {
     expect(safeModelFailureReasons(new AuthorityError('TABLE_READ_ONLY', 'read only', 403))).toEqual([]);
     expect(safeModelFailureReasons(new Error('TABLE_ boom'))).toEqual([]);
     expect(safeModelFailureCode(new DomainError('TABLE_SCHEMA', 'bad'))).toBe('MODEL_PROVIDER_OUTPUT_REJECTED');
+  });
+});
+
+describe('table assistant failure messages', () => {
+  it('names the real cause for every known failure code', () => {
+    expect(tableAssistantFailureMessage('MODEL_PROVIDER_TIMEOUT')).toContain('took too long');
+    expect(tableAssistantFailureMessage('MODEL_PROVIDER_OUTPUT_TRUNCATED')).toContain('ran out of output space');
+    expect(tableAssistantFailureMessage('MODEL_PROVIDER_OUTPUT_TRUNCATED')).toContain('(code MODEL_PROVIDER_OUTPUT_TRUNCATED)');
+    expect(tableAssistantFailureMessage('ASSISTANT_INTERRUPTED')).toContain('stopped before it finished');
+    expect(tableAssistantFailureMessage('MODEL_PROVIDER_HTTP_ERROR')).toContain('AI provider returned an error');
+    expect(tableAssistantFailureMessage('BILLING_BUDGET')).toContain('budget');
+    expect(tableAssistantFailureMessage('STALE_WORKSPACE')).toContain('changed while the assistant was working');
+    expect(tableAssistantFailureMessage('ACTION_REJECTED')).toContain('not valid for the current table state');
+  });
+
+  it('always keeps the failure code visible for tracing', () => {
+    expect(tableAssistantFailureMessage('MODEL_PROVIDER_TIMEOUT')).toContain('(code MODEL_PROVIDER_TIMEOUT)');
+    expect(tableAssistantFailureMessage('SOMETHING_NEW')).toContain('(code SOMETHING_NEW)');
+    expect(tableAssistantFailureMessage(null)).toContain('(code UNKNOWN)');
+    expect(safeAssistantFailureCode('MODEL_PROVIDER_TIMEOUT')).toBe('MODEL_PROVIDER_TIMEOUT');
+    expect(safeAssistantFailureCode('not a code')).toBe('UNKNOWN');
+    expect(safeAssistantFailureCode({ code: 'X' })).toBe('UNKNOWN');
+  });
+
+  it('shows sanitized validation reasons for rejected answers', () => {
+    const message = tableAssistantFailureMessage('MODEL_PROVIDER_OUTPUT_REJECTED', ['Field "status" is missing.']);
+    expect(message).toContain('did not pass table validation: Field "status" is missing.');
+    expect(message).toContain('MODEL_PROVIDER_OUTPUT_REJECTED');
+    const assistantMessage = tableAssistantFailureMessage('TABLE_ASSISTANT_CONTEXT_TOO_LARGE', ['The conversation is too long.']);
+    expect(assistantMessage).toContain('The conversation is too long.');
   });
 });
 
