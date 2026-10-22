@@ -45,16 +45,17 @@ const rawReferenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('field'), collectionId: ID_SCHEMA, id: ID_SCHEMA }),
   z.strictObject({ kind: z.literal('turn'), seat: z.enum(['host', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7']) }),
 ]);
+const rawSuggestionsSchema = z.array(z.string().min(1).max(120)).max(4).optional();
 const rawResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('build-request'), text: z.string().min(1).max(4000) }),
-  z.strictObject({ kind: z.literal('explanation'), text: z.string().min(1).max(4000), references: z.array(rawReferenceSchema).max(40) }),
+  z.strictObject({ kind: z.literal('explanation'), text: z.string().min(1).max(4000), references: z.array(rawReferenceSchema).max(40), suggestions: rawSuggestionsSchema }),
   z.strictObject({
     kind: z.literal('action-proposal'),
     text: z.string().min(1).max(4000),
     actionId: ID_SCHEMA,
     inputs: z.record(ID_SCHEMA, tableValueSchema).refine((value) => Object.keys(value).length <= 20),
   }),
-  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(4000) }),
+  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(4000), suggestions: rawSuggestionsSchema }),
   z.strictObject({ kind: z.literal('refusal'), text: z.string().min(1).max(4000) }),
 ]);
 const recordsSchema = z.record(ID_SCHEMA, z.array(z.strictObject({ id: ID_SCHEMA, values: z.record(ID_SCHEMA, tableValueSchema) })).max(100));
@@ -272,6 +273,7 @@ function systemPrompt(): string {
     'Return an action-proposal only when the current prompt explicitly requests one exact supported action and identifies every required input. A proposal is not execution and always requires separate user confirmation. Use only an action and inputs present in the current context; do not invent an action, row, or input.',
     'Owners can extend their existing table with new collections, fields, data-entry forms, buttons, charts and scenes through the builder. If the current prompt asks to add or change these capabilities, or asks to create records but no create action exists, return build-request with a brief description of what can be prepared. This offers the builder; it does not change anything. Never tell an owner to edit program JSON or implement the feature manually. Existing supported actions still use action-proposal. Participants cannot change the table setup; explain that the owner can prepare it.',
     'If the request is ambiguous, ask one concise clarification. Refuse requests outside the application or unsafe requests, rather than refusing useful table changes the builder can prepare. Do not make up rules or claim that an action occurred.',
+    'When an explanation or clarification ends by inviting the user to choose, decide, or ask something next, put up to 4 short follow-up messages in suggestions, each written as the user would send it, in the language of the current prompt (for example "ใส่นาฬิกาข้างชื่อขั้นตอน"). The user picks one instead of typing. Leave suggestions out when nothing needs choosing; never suggest that the assistant play, choose a move, or take a turn for someone.',
     'For explanations, cite only current invariant IDs, action IDs, collection/field IDs, existing record IDs, or the current turn seat from the context. References must use the exact IDs and discriminants in the JSON schema.',
     'Return exactly one JSON object matching this schema, without markdown or extra keys:',
     JSON.stringify(z.toJSONSchema(rawResultSchema)),
@@ -647,7 +649,7 @@ function publicResult(
   if (raw.kind === 'explanation') {
     if (safeProgram === null) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'An explanation cannot cite rules before they are active.');
     const references = raw.references.map((reference) => enrichReference(reference, safeProgram, safeRecords, context.turn, replacements));
-    const parsed = tableAssistantResultSchema.safeParse({ kind: 'explanation', text, references });
+    const parsed = tableAssistantResultSchema.safeParse({ kind: 'explanation', text, references, ...publicSuggestions(raw.suggestions, replacements) });
     if (!parsed.success) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The assistant response did not match the supported format.');
     return parsed.data;
   }
@@ -697,9 +699,16 @@ function publicResult(
     if (!parsed.success) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The assistant proposal did not match the supported format.');
     return parsed.data;
   }
-  const parsed = tableAssistantResultSchema.safeParse({ kind: raw.kind, text });
+  const suggestions = raw.kind === 'clarification' ? publicSuggestions(raw.suggestions, replacements) : {};
+  const parsed = tableAssistantResultSchema.safeParse({ kind: raw.kind, text, ...suggestions });
   if (!parsed.success) return fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The assistant response did not match the supported format.');
   return parsed.data;
+}
+
+/** Follow-up messages offered as choices; redacted like the answer, duplicates and blanks dropped. */
+function publicSuggestions(raw: string[] | undefined, replacements: IdentityReplacement[]): { suggestions?: string[] } {
+  const suggestions = [...new Set((raw ?? []).map((item) => redactString(item, replacements).trim().slice(0, 120)).filter((item) => item.length >= 3))];
+  return suggestions.length ? { suggestions } : {};
 }
 
 function validateInput(input: TableAssistantInput): void {
