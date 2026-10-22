@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **ลูกเต๋าบนการ์ด controls (F049, MINOR):** การ์ด controls ชนิดใหม่ `kind:"dice"` — stepper จำนวนลูกเต๋า 1–10 และหน้า 2–100, ปุ่ม **ทอย**, หน้าลูกเต๋าพร้อมท่าทอยสั้น ๆ, ผลรวม + modifier และเคารพ `prefers-reduced-motion` (ผลขึ้นทันที) · ค่าที่ทอยถูกส่งข้ามการ์ดผ่าน shared draft store ฝั่ง client (คีย์ workspace/action/parameter) ให้ฟอร์มหรือปุ่มที่ bind parameter เดียวกันเห็นค่าและ submit ได้ · **v1 สุ่มฝั่ง client ด้วย `crypto.getRandomValues` และเป็น visual-only** ไม่มี server roll/hidden roll (งานถัดไป F048) · ไม่มี migration/secret/binding
+
 - **แก้คลิกขวา → Arrange objects กดไม่ได้:** เมนูอยู่ในชั้นเครื่องมือที่ปล่อยให้คลิกทะลุ (`pointer-events: none`) เมาส์จริงจึงไปโดน canvas ข้างใต้ · ตอนนี้กดได้ และเมนูไม่ล้นขอบจอเมื่อคลิกขวาใกล้ขอบ
 
 - **การ์ดผลลัพธ์ค้างเฉพาะเมื่อยังมีอะไรให้ทำ:** ข้อเสนอ action ที่กด Confirm แล้ว เปลี่ยนเป็นแถบ "Done: …" พร้อมปุ่ม Table history แทนการ์ด · การ์ดที่ยังต้องตอบคำถาม ตรวจเอง ยืนยัน ลองใหม่ หรือมี error ยังอยู่บน canvas
