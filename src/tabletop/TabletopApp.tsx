@@ -11,6 +11,7 @@ import { ApiFailure, clearInviteFragment, inviteFromFragment, isInviteLink, tabl
 import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
+import { HeaderPeople } from './ui/HeaderPeople';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
@@ -125,7 +126,7 @@ export default function TabletopApp() {
   const pageRef = useRef<'home' | 'new'>('home');
   pageRef.current = page;
   const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success'; action?: { label: string; run: () => void } } | null>(null);
   const [connection, setConnection] = useState<ConnectionState>('connecting');
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState('');
@@ -209,10 +210,11 @@ export default function TabletopApp() {
     throw new ApiFailure('The action was accepted, but the latest table could not be refreshed. Refresh before repeating it.', 0);
   }, []);
 
-  const showNotice = useCallback((text: string, tone: 'info' | 'error' | 'success' = 'info') => {
-    setNotice({ text, tone });
+  const showNotice = useCallback((text: string, tone: 'info' | 'error' | 'success' = 'info', action?: { label: string; run: () => void }) => {
+    setNotice({ text, tone, ...(action ? { action } : {}) });
     if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current);
-    noticeTimerRef.current = window.setTimeout(() => setNotice(null), 7000);
+    // A notice with a button stays a little longer so it can be used.
+    noticeTimerRef.current = window.setTimeout(() => setNotice(null), action ? 15000 : 7000);
   }, []);
 
   const refreshSession = useCallback(async () => {
@@ -877,12 +879,13 @@ export default function TabletopApp() {
         </div>
         <div className="tt-topbar__spacer" />
         <div className="tt-connection" data-state={connection} role="status" title="Live connection status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Offline' : 'Reconnecting'}</span></div>
-        {view.kind !== 'invoice' && <button type="button" className="tt-people-button" onClick={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} aria-label={`People at this table, ${view.members.length} connected`}><Users size={16} /><span>{view.members.length}</span></button>}
+        {view.kind !== 'invoice' && <HeaderPeople members={view.members} selfId={view.actor.actorId} store={cursorStore} onOpenPeople={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} />}
         {canInvite && <button type="button" className="tt-button tt-button--quiet tt-invite-button" onClick={openInviteDialog}><Plus size={14} /> Invite</button>}
         <details className="tt-table-options"><summary aria-label="Table options"><MoreHorizontal size={20} /></summary><div className="tt-table-options__body">
           <a href="/demo" target="_blank" rel="noopener"><Play size={15} />Try a demo</a>
           <button type="button" disabled={busy !== null} onClick={() => void openWorkspace(view.id)}><RefreshCw size={15} />Refresh table</button>
           {canReset && <button type="button" onClick={() => setResetOpen(true)}><RotateCcw size={15} />Reset table</button>}
+          <DisplaySettings view={view} disabled={busy !== null || tableReadOnly} onCommand={runCommand} />
           <small>{view.actor.role} · rules r{view.domain.ruleRevision} · data r{view.domain.dataRevision}</small>
           {headerAccount && <AccountBadge user={headerAccount} busy={busy === 'auth.logout'} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />}
         </div></details>
@@ -890,7 +893,7 @@ export default function TabletopApp() {
 
       {tableReadOnly && <div className="tt-notice tt-notice--info tt-table-readonly-notice" role="status"><span><ShieldCheck size={15} /></span><p>Editing this shared table is temporarily paused. Existing records and rules remain available to inspect.</p></div>}
 
-      {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
+      {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p>{notice.action && <button type="button" className="tt-notice__action" onClick={() => { notice.action?.run(); setNotice(null); }}>{notice.action.label}</button>}<button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
 
       <TableSurface
         view={view}
@@ -1050,4 +1053,24 @@ async function fileToBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+/** Table-wide display settings in the table options menu. Changes apply to everyone at this table. */
+function DisplaySettings({ view, disabled, onCommand }: { view: WorkspaceView; disabled: boolean; onCommand: (type: string, payload: unknown) => Promise<unknown> }) {
+  const canEdit = viewerCan(view, 'table.rename');
+  const connections = view.domain.display?.connections;
+  const value = connections === undefined ? 'auto' : connections ? 'on' : 'off';
+  return <section className="tt-display-settings" aria-label="Display settings">
+    <span className="tt-kicker">DISPLAY · THIS TABLE</span>
+    <label>Connection lines
+      <select value={value} disabled={disabled || !canEdit} title={canEdit ? 'Applies to everyone at this table' : 'Your role cannot change this table\'s display'} onChange={(event) => {
+        const next = event.target.value;
+        void onCommand('display.set', { connections: next === 'auto' ? null : next === 'on' });
+      }}>
+        <option value="auto">Automatic</option>
+        <option value="on">Show</option>
+        <option value="off">Hide</option>
+      </select>
+    </label>
+  </section>;
 }

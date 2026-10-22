@@ -1,4 +1,5 @@
 import type { CommandAck, CommandEnvelope, SessionView, WorkspaceView } from './shared/contracts';
+import type { ModelFailureDetails, ModelJobProgress } from './shared/model-job-progress';
 import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
 import { parseCursorRelay, type CursorRelay } from './shared/cursor-protocol';
 
@@ -46,6 +47,15 @@ export interface ModelJob {
   prompt?: string;
   /** F038: machine-readable failure code of a failed rule request. */
   failureCode?: string;
+  /** F039: the draft went into use on its own, or needs a manual review (with the failed checks). */
+  autoApply?: 'applied' | 'needs-review';
+  autoApplyReasons?: string[];
+  /** F045: live counters while the draft runs (answer and thinking characters received so far). */
+  progress?: ModelJobProgress;
+  /** F045: the configured whole-job stop for this draft (default 240s, at most 300s). */
+  limitMs?: number;
+  /** F045: why a failed draft stopped early and how much of the reply it had received. */
+  failureDetails?: ModelFailureDetails;
 }
 
 export interface TabletopCapabilities {

@@ -4,7 +4,7 @@
 | --- | --- |
 | สถานะ | `review` |
 | เจ้าของฟีเจอร์ | lead (AI) |
-| เวอร์ชันที่คาด | MINOR — เพิ่มความสามารถใน canvas descriptor (ไม่มี migration/secret/binding) · rollback กลับรุ่นก่อนได้ (รุ่นเก่าไม่รู้จัก `motion` จึงไม่วาดภาพเคลื่อนไหว แต่ยังเปิดโต๊ะได้) |
+| เวอร์ชันที่คาด | MINOR — เพิ่มความสามารถใน canvas descriptor (ไม่มี migration/secret/binding) · **rollback ไม่สะอาด** (ตรวจ 2026-10-22): schema canvas ของรุ่นเก่าเป็น `strictObject` โต๊ะที่มี `motion` จะไม่แสดงการ์ด canvas และ AI ของโต๊ะนั้นล้ม จึงออกเป็น 5.0.0 (MAJOR) |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F040-T*` |
 
 ## ทำไม

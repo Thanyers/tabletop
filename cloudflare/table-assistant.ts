@@ -70,7 +70,8 @@ const providerUsageSchema = z.object({
 type Seat = 'host' | 'member-1' | 'member-2' | 'member-3' | 'member-4' | 'member-5' | 'member-6' | 'member-7';
 type RawReference = z.infer<typeof rawReferenceSchema>;
 type RawAssistantResult = z.infer<typeof rawResultSchema>;
-type IdentityReplacement = { token: string; replacement: string; wordBoundary: boolean };
+/** One identity token replaced before any model text reaches a member (F045 reuses this for drafts). */
+export type IdentityReplacement = { token: string; replacement: string; wordBoundary: boolean };
 type AssistantContext = {
   conversation: TableAssistantConversationEntry[];
   role: 'owner' | 'participant';
@@ -122,7 +123,7 @@ function memberSeat(workspace: WorkspaceView, member: WorkspaceView['actor']): S
   return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'A table member has no supported seat.');
 }
 
-function createIdentityReplacements(workspace: WorkspaceView): IdentityReplacement[] {
+export function createIdentityReplacements(workspace: WorkspaceView): IdentityReplacement[] {
   const actorIds = new Map<string, { token: string; replacement: string }>();
   const names = new Map<string, { token: string; replacement: string }>();
   const seats = new Set<Seat>();
@@ -150,7 +151,7 @@ function createIdentityReplacements(workspace: WorkspaceView): IdentityReplaceme
   return replacements.sort((left, right) => right.token.length - left.token.length || Number(left.wordBoundary) - Number(right.wordBoundary));
 }
 
-function redactString(value: string, replacements: IdentityReplacement[]): string {
+export function redactString(value: string, replacements: IdentityReplacement[]): string {
   let result = value;
   for (const { token, replacement, wordBoundary } of replacements) {
     const escaped = token.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');

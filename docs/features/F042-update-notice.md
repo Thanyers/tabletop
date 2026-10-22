@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` |
+| สถานะ | `done` — ออกใน 5.0.0 |
 | เจ้าของฟีเจอร์ | JitrudeeDongdee (Claude) |
 | เวอร์ชันที่คาด | MINOR — ฟีเจอร์ใหม่ฝั่ง client · ไม่มี migration/secret/binding · rollback ได้ทันที |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F042-T1` |

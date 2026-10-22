@@ -257,6 +257,65 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
   const computedColumns = retainComputedColumns(state.computedColumns, change.program);
   return { ...structuredClone(state), program: structuredClone(change.program), records, turn, computedColumns };
 }
+export type RuleItemKind = 'action' | 'invariant' | 'view' | 'collection';
+
+/**
+ * F039: the active program without one action, unique constraint, view or collection. Removing a collection
+ * also removes its records and computed columns. Anything that still refers to the removed item (an action
+ * on that collection, a view showing it) blocks the removal, so the program stays valid.
+ */
+export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: string): TableState {
+  assert(state.program, 'TABLE_INACTIVE', 'There are no active rules to change.');
+  const program = structuredClone(state.program);
+  const records = structuredClone(state.records);
+  let found = false;
+  if (kind === 'action') { found = program.actions.some(item => item.id === id); program.actions = program.actions.filter(item => item.id !== id); }
+  if (kind === 'invariant') { found = program.invariants.some(item => item.id === id); program.invariants = program.invariants.filter(item => item.id !== id); }
+  if (kind === 'collection') { found = program.collections.some(item => item.id === id); program.collections = program.collections.filter(item => item.id !== id); delete records[id]; }
+  if (kind === 'view' && program.canvas) {
+    found = program.canvas.views.some(item => item.id === id);
+    program.canvas.views = program.canvas.views.filter(item => item.id !== id);
+    if (program.canvas.views.length === 0) delete program.canvas;
+  }
+  assert(found, 'RULE_ITEM_NOT_FOUND', 'That rule is no longer on this table.');
+  // Links between views are only hints, so drop links to what was removed instead of blocking.
+  for (const descriptor of program.canvas?.views ?? []) {
+    const related = descriptor.relatedTo;
+    if (!related) continue;
+    if (kind === 'view' && related.views) related.views = related.views.filter(item => item !== id);
+    if (kind === 'collection' && related.collections) related.collections = related.collections.filter(item => item !== id);
+    if (related.views?.length === 0) delete related.views;
+    if (related.collections?.length === 0) delete related.collections;
+    if (!related.views && !related.collections) delete descriptor.relatedTo;
+  }
+  const users = ruleItemUsers(program, kind, id);
+  if (users.length > 0) throw new DomainError('RULE_ITEM_IN_USE', `Remove ${users.join(', ')} first; it still uses this.`);
+  try {
+    checkProgram(program);
+    checkRows(program, records);
+    const issues = validateGenerativeProgram(program, records);
+    assert(issues.length === 0, 'TABLE_SCHEMA', issues[0] ?? 'The remaining rules are invalid.');
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'The remaining rules are invalid.';
+    throw new DomainError('RULE_ITEM_IN_USE', `Something else on this table still uses it. Remove that first. (${reason})`);
+  }
+  const computedColumns = retainComputedColumns(state.computedColumns, program);
+  return { ...structuredClone(state), program, records, computedColumns };
+}
+
+/** Names of the rules that still use an action or collection, so the removal message can say what to remove first. */
+function ruleItemUsers(program: TableProgram, kind: RuleItemKind, id: string): string[] {
+  const views = program.canvas?.views ?? [];
+  const mentions = (value: unknown, key: string) => JSON.stringify(value).includes(`${JSON.stringify(key)}:${JSON.stringify(id)}`);
+  if (kind === 'action') return views.filter(view => mentions(view, 'actionId')).map(view => `the view “${view.title}”`);
+  if (kind !== 'collection') return [];
+  return [
+    ...program.actions.filter(action => action.parameters.some(p => p.collection === id) || (action.creates ?? []).some(create => create.collection === id)).map(action => `the action “${action.title}”`),
+    ...program.invariants.filter(invariant => invariant.collection === id).map(invariant => `the check “${invariant.message}”`),
+    ...views.filter(view => mentions(view, 'collection')).map(view => `the view “${view.title}”`),
+  ];
+}
+
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
 }

@@ -1259,4 +1259,69 @@ describe('F035 role permissions at the authority', () => {
     const removed = await call<ApiError>(base, `/api/workspaces/${workspaceId}/members/remove`, { session, body: { actorId: target.actorId } });
     expect([removed.response.status, (removed.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
   });
+
+  it('lets an unassigned member apply their own draft and remove a rule, but not a Viewer (F039)', async () => {
+    const { base, owner, workspaceId, members: [first, viewer] } = await tableWithMembers(2);
+    const session = first.session;
+    let view = await currentView(base, session, workspaceId);
+    const run = async (type: string, payload: unknown) => {
+      const result = await command(base, session, view, type, payload);
+      expect(result.response.status, `${type}: ${JSON.stringify(result.body)}`).toBe(200);
+      view = (result.body as CommandAck).workspace;
+    };
+    await run('table.import', tableScenarioSources.game);
+    if (view.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    await run('evolve.propose', { change: gameChange(view.domain.sources[0].id) });
+
+    // The owner may not apply a draft somebody else asked for.
+    const byOwner = await command(base, owner, await currentView(base, owner, workspaceId), 'evolve.autoApply', {});
+    expect([byOwner.response.status, (byOwner.body as ApiError).errorCode]).toEqual([403, 'FORBIDDEN']);
+
+    view = await currentView(base, session, workspaceId);
+    await run('evolve.autoApply', {});
+    if (view.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(view.domain.ruleRevision).toBe(1);
+    expect(view.domain.candidate?.status).toBe('active');
+    expect(view.domain.program?.actions.map((action) => action.id)).toEqual(['advance']);
+
+    await assignRole(base, owner, workspaceId, viewer.actorId, 'viewer');
+    const viewerView = await currentView(base, viewer.session, workspaceId);
+    for (const [type, payload] of [
+      ['evolve.autoApply', {}],
+      ['evolve.removeItem', { kind: 'action', id: 'advance' }],
+    ] as const) {
+      const denied = await command(base, viewer.session, viewerView, type, payload);
+      expect([denied.response.status, (denied.body as ApiError).errorCode], type).toEqual([403, 'FORBIDDEN']);
+    }
+
+    view = await currentView(base, session, workspaceId);
+    await run('evolve.removeItem', { kind: 'action', id: 'advance' });
+    if (view.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(view.domain.ruleRevision).toBe(2);
+    expect(view.domain.program?.actions).toEqual([]);
+    const missing = await command(base, session, view, 'evolve.removeItem', { kind: 'action', id: 'advance' });
+    expect([missing.response.status, (missing.body as ApiError).errorCode]).toEqual([422, 'RULE_ITEM_NOT_FOUND']);
+  });
+
+  it('lets the owner set the table display for everyone and refuses a Viewer (display.set)', async () => {
+    const { base, owner, workspaceId, members: [viewer] } = await tableWithMembers(1);
+    await assignRole(base, owner, workspaceId, viewer.actorId, 'viewer');
+    const denied = await command(base, viewer.session, await currentView(base, viewer.session, workspaceId), 'display.set', { connections: false });
+    expect([denied.response.status, (denied.body as ApiError).errorCode]).toEqual([403, 'FORBIDDEN']);
+
+    const hidden = await command(base, owner, await currentView(base, owner, workspaceId), 'display.set', { connections: false });
+    expect(hidden.response.status, JSON.stringify(hidden.body)).toBe(200);
+    expect((hidden.body as CommandAck).workspace.domain.display).toEqual({ connections: false });
+    // The setting is shared: the Viewer reads it too.
+    expect((await currentView(base, viewer.session, workspaceId)).domain.display).toEqual({ connections: false });
+    const auto = await command(base, owner, (hidden.body as CommandAck).workspace, 'display.set', { connections: null });
+    expect(auto.response.status, JSON.stringify(auto.body)).toBe(200);
+    expect((auto.body as CommandAck).workspace.domain.display).toBeUndefined();
+
+    // Display settings exist on every table kind.
+    const lesson = await createWorkspace(base, owner, 'teaching');
+    const lessonDisplay = await command(base, owner, lesson, 'display.set', { connections: true });
+    expect(lessonDisplay.response.status, JSON.stringify(lessonDisplay.body)).toBe(200);
+    expect((lessonDisplay.body as CommandAck).workspace.domain.display).toEqual({ connections: true });
+  });
 });
