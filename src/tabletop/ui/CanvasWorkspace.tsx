@@ -589,7 +589,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         <CanvasObjectHeader data={data} />
         <CanvasNodeBody>{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</CanvasNodeBody>
       </article>
-      <CanvasCardResizer data={data} selected={selected} />
+      <CanvasCardResizer data={data} selected={selected && data.selected} />
     </>);
   }
 
@@ -626,7 +626,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
       </CanvasNodeBody>
     </article>
     {/* After the card so the edges sit on top of it. */}
-    <CanvasCardResizer data={data} selected={selected} />
+    <CanvasCardResizer data={data} selected={selected && data.selected} />
   </>);
 }
 
@@ -782,6 +782,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   // Cards this viewer closed. Kept per table in this browser; the Objects panel lists them to bring them back.
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => readHiddenObjects(workspaceKey));
   const [cardSizes, setCardSizes] = useState<CardSizes>(() => readCardSizes(workspaceKey));
+  // A group of cards picked with Shift+click or a Shift+drag box; they move, hide and go to chat together.
+  const [multiIds, setMultiIds] = useState<ReadonlySet<string>>(new Set());
   // F054: the Objects order, remembered per table in this browser like closed cards and sizes.
   const [cardSort, setCardSort] = useState<CardSortMode>(() => readCardSortMode(workspaceKey));
   const hiddenScopeRef = useRef(workspaceKey);
@@ -1028,6 +1030,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       const step = event.shiftKey ? 4 : 1;
       event.preventDefault();
       event.stopPropagation();
+      if (multiIds.size > 1) {
+        for (const id of multiIds) moveCanvasObject(id, dx * step, dy * step);
+        setMoveAnnouncement(`${multiIds.size} cards moved ${label}.`);
+        return;
+      }
       const selected = selectedNodeId ? flow.getNode(selectedNodeId) : undefined;
       if (selected) {
         moveCanvasObject(selected.id, dx * step, dy * step);
@@ -1040,7 +1047,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [cancelPendingOpenObjectFocus, flow, moveCanvasObject, selectedNodeId]);
+  }, [cancelPendingOpenObjectFocus, flow, moveCanvasObject, selectedNodeId, multiIds]);
 
 
   useEffect(() => {
@@ -1361,7 +1368,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             ?? (!isShared ? workspacePositionsRef.current[spec.id] : undefined)
             ?? defaultCanvasPosition(view.kind, spec);
         })(),
-        selected: spec.id === selectedNodeId,
+        selected: spec.id === selectedNodeId || multiIds.has(spec.id),
         ...sizedNode(cardSizes[spec.id]),
         zIndex: activeOpenedId === spec.id ? 20 : spec.id === selectedNodeId ? 10 : 0,
         data: {
@@ -1413,7 +1420,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             ?? (!isShared ? workspacePositionsRef.current[object.id] : undefined)
             ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 };
         })(),
-        selected: object.id === selectedNodeId,
+        selected: object.id === selectedNodeId || multiIds.has(object.id),
         ...sizedNode(cardSizes[object.id]),
         zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
         data: {
@@ -1436,7 +1443,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules, cardSizes, resizeObject, cardMetaById, renameFromHeader]);
+  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules, cardSizes, resizeObject, cardMetaById, renameFromHeader, multiIds]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
@@ -1470,17 +1477,22 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     writeCanvasLayout(workspaceKey, current);
   }, [workspaceKey, persistLayout]);
 
-  const handleNodeDragStart = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
+  // A drag moves the card under the pointer and, when it belongs to the group, every other selected card.
+  const handleNodeDragStart = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode, dragged: CanvasNode[] = [node]) => {
     cancelPendingOpenObjectFocus();
-    draggingNodeIdsRef.current.add(node.id);
-    dragStartPositionsRef.current.set(node.id, node.position);
+    for (const item of dragged.length ? dragged : [node]) {
+      draggingNodeIdsRef.current.add(item.id);
+      dragStartPositionsRef.current.set(item.id, item.position);
+    }
   }, [cancelPendingOpenObjectFocus]);
 
-  const persistPosition = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode) => {
-    draggingNodeIdsRef.current.delete(node.id);
-    const before = dragStartPositionsRef.current.get(node.id);
-    dragStartPositionsRef.current.delete(node.id);
-    commitUserPosition(node.id, { x: node.position.x, y: node.position.y }, before);
+  const persistPosition = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode, dragged: CanvasNode[] = [node]) => {
+    for (const item of dragged.length ? dragged : [node]) {
+      draggingNodeIdsRef.current.delete(item.id);
+      const before = dragStartPositionsRef.current.get(item.id);
+      dragStartPositionsRef.current.delete(item.id);
+      commitUserPosition(item.id, { x: item.position.x, y: item.position.y }, before);
+    }
   }, [commitUserPosition]);
 
   const handleNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
@@ -1577,7 +1589,6 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   // Right-click on the empty canvas: arrange every card again from scratch, as on first load.
   // targets: the cards a right-click on a card acts on; absent for a right-click on the empty canvas.
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targets?: string[] } | null>(null);
-  const [multiIds, setMultiIds] = useState<ReadonlySet<string>>(new Set());
   const arrangeObjects = useCallback(async () => {
     setContextMenu(null);
     cancelPendingOpenObjectFocus();
@@ -1885,12 +1896,18 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [multiIds]);
 
   useEffect(() => {
+    // React Flow drags every selected card together, so the group is selected there too.
     setNodes((current) => current.map((node) => ({
       ...node,
-      selected: node.id === selectedNodeId,
+      selected: node.id === selectedNodeId || multiIds.has(node.id),
       data: { ...node.data, selected: node.id === selectedNodeId },
     })));
-  }, [selectedNodeId, setNodes]);
+  }, [selectedNodeId, multiIds, setNodes]);
+  const syncBoxSelection = useCallback(({ nodes: picked }: { nodes: CanvasNode[] }) => {
+    // A Shift+drag box that catches two or more cards becomes the group.
+    if (picked.length < 2) return;
+    setMultiIds((current) => current.size === picked.length && picked.every((node) => current.has(node.id)) ? current : new Set(picked.map((node) => node.id)));
+  }, []);
 
   // Chat commands ("open rules") still match on the canvas order of every listed card, hidden ones included.
   const objectTitles = useMemo(() => cardRows, [cardRows]);
@@ -1933,6 +1950,15 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const [deletedOpen, setDeletedOpen] = useState(false);
   const tableReadOnly = busy === 'table.readOnly';
   /** Soft delete for everyone (or restore): the card stays stored and comes back from Deleted. */
+  const hideGroup = (ids: readonly string[]) => {
+    for (const id of ids) hideObject(id);
+    setMultiIds(new Set());
+  };
+  /** Points the chat at every card in the group (the chat takes up to five). */
+  const askAboutGroup = (ids: readonly string[]) => {
+    if (!referenceInChat) return;
+    for (const id of ids.slice(0, 5)) referenceInChat(id, nodes.find((node) => node.id === id)?.data.title ?? id);
+  };
   /** Soft delete several cards in one shared-layout change (the server takes up to 24 at a time). */
   const trashObjects = async (ids: readonly string[]) => {
     setTrashError(null);
@@ -1990,6 +2016,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onPaneClick={clear}
           onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu(contextMenuPosition(event.clientX, event.clientY)); }}
           onNodeContextMenu={openCardMenu}
+          onSelectionChange={syncBoxSelection}
+          deleteKeyCode={null}
           onMoveEnd={persistViewport}
           nodesDraggable
           nodesConnectable={false}
@@ -2024,12 +2052,20 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           const close = () => setContextMenu(null);
           return <div className="tt-canvas-context-menu" role="menu" aria-label={single ? single.data.title : `${targets.length} cards`} style={{ left: contextMenu.x, top: contextMenu.y }}>
             {targets.length > 1 && <p className="tt-canvas-context-menu__note">{targets.length} cards selected (Shift+click)</p>}
-            <button type="button" role="menuitem" data-testid="card-menu-hide" autoFocus onClick={() => { for (const id of targets) hideObject(id); setMultiIds(new Set()); close(); }}><EyeOff size={15} aria-hidden="true" />Hide {label}</button>
-            {referenceInChat && <button type="button" role="menuitem" data-testid="card-menu-ask" onClick={() => {
-              for (const id of targets.slice(0, 5)) referenceInChat(id, nodes.find((node) => node.id === id)?.data.title ?? id);
-              close();
-            }}><MessageSquareText size={15} aria-hidden="true" />Ask about {targets.length > 1 ? `these ${Math.min(targets.length, 5)} cards` : 'this card'} in chat</button>}
+            <button type="button" role="menuitem" data-testid="card-menu-hide" autoFocus onClick={() => { hideGroup(targets); close(); }}><EyeOff size={15} aria-hidden="true" />Hide {label}</button>
+            {referenceInChat && <button type="button" role="menuitem" data-testid="card-menu-ask" onClick={() => { askAboutGroup(targets); close(); }}><MessageSquareText size={15} aria-hidden="true" />Ask about {targets.length > 1 ? `these ${Math.min(targets.length, 5)} cards` : 'this card'} in chat</button>}
             {deletable && <button type="button" role="menuitem" data-testid="card-menu-delete" disabled={busy === 'table.readOnly'} onClick={() => { void trashObjects(targets); setMultiIds(new Set()); close(); }}><Trash2 size={15} aria-hidden="true" />Delete {label} for everyone</button>}
+          </div>;
+        })()}
+        {multiIds.size > 1 && (() => {
+          const ids = [...multiIds].filter((id) => nodes.some((node) => node.id === id));
+          const deletable = ids.length > 0 && ids.every((id) => canTrash(view, id));
+          return <div className="tt-canvas-selection-bar" role="toolbar" aria-label={`${ids.length} cards selected`} data-testid="canvas-selection-bar">
+            <span><b>{ids.length}</b> cards selected · drag one to move them all</span>
+            {referenceInChat && <button type="button" data-testid="selection-ask" onClick={() => askAboutGroup(ids)} title={ids.length > 5 ? 'The chat takes the first 5 cards' : undefined}><MessageSquareText size={15} aria-hidden="true" />Ask in chat</button>}
+            <button type="button" data-testid="selection-hide" onClick={() => hideGroup(ids)}><EyeOff size={15} aria-hidden="true" />Hide</button>
+            {deletable && <button type="button" data-testid="selection-delete" disabled={busy === 'table.readOnly'} onClick={() => { void trashObjects(ids); setMultiIds(new Set()); }}><Trash2 size={15} aria-hidden="true" />Delete</button>}
+            <button type="button" className="tt-canvas-selection-bar__clear" data-testid="selection-clear" aria-label="Clear selection" title="Clear selection (Esc)" onClick={() => setMultiIds(new Set())}><X size={15} aria-hidden="true" /></button>
           </div>;
         })()}
         {contextMenu && !contextMenu.targets && <div className="tt-canvas-context-menu" role="menu" aria-label="Canvas" style={{ left: contextMenu.x, top: contextMenu.y }}>
