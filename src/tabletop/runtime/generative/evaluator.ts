@@ -1,4 +1,4 @@
-import { GENERATIVE_LIMITS, type ControlDescriptor, type ControlInputBinding, type GenerativeCanvas, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar, type ScenePrimitive } from '../../shared/generative-contracts';
+import { GENERATIVE_LIMITS, type ControlDescriptor, type ControlInputBinding, type GenerativeCanvas, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar, type SceneMotion, type ScenePrimitive } from '../../shared/generative-contracts';
 import type { TableAction, TableProgram, TableRecord, TableValue } from '../../shared/table-contracts';
 import { expressionWithinBounds, validateGenerativeProgram } from './validation';
 
@@ -18,13 +18,15 @@ export interface GenerativeEvaluationContext {
 export interface GenerativeEvaluationOptions { fuel?: number }
 export type GenerativeExpressionSession = (expression: GenerativeExpression) => GenerativeOutput;
 export type EvaluatedScenePrimitive =
-  | { id: string; shape: 'rect'; x: number; y: number; width: number; height: number; rx?: number; fill?: string; stroke?: string; strokeWidth?: number; drag?: EvaluatedSceneDragBinding }
-  | { id: string; shape: 'circle'; cx: number; cy: number; r: number; fill?: string; stroke?: string; strokeWidth?: number; drag?: EvaluatedSceneDragBinding }
+  | { id: string; shape: 'rect'; x: number; y: number; width: number; height: number; rx?: number; fill?: string; stroke?: string; strokeWidth?: number; drag?: EvaluatedSceneDragBinding; motion?: EvaluatedSceneMotion }
+  | { id: string; shape: 'circle'; cx: number; cy: number; r: number; fill?: string; stroke?: string; strokeWidth?: number; drag?: EvaluatedSceneDragBinding; motion?: EvaluatedSceneMotion }
   | { id: string; shape: 'line'; x1: number; y1: number; x2: number; y2: number; stroke?: string; strokeWidth?: number; drag?: EvaluatedSceneDragBinding }
   | { id: string; shape: 'polygon'; points: { x: number; y: number }[]; fill?: string; stroke?: string; strokeWidth?: number; drag?: EvaluatedSceneDragBinding }
-  | { id: string; shape: 'text'; x: number; y: number; text: string; fontSize?: number; fill?: string; stroke?: string; drag?: EvaluatedSceneDragBinding };
+  | { id: string; shape: 'text'; x: number; y: number; text: string; fontSize?: number; fill?: string; stroke?: string; drag?: EvaluatedSceneDragBinding; motion?: EvaluatedSceneMotion };
 export interface EvaluatedChartPoint { id: string; category: GenerativeScalar; value: number }
 export interface EvaluatedSceneDragBinding { actionId: string; xParameter: string; yParameter?: string; inputs: Record<string, TableValue> }
+/** F040: numbers the client animates between; `loop` keeps wrapping at `to`. */
+export interface EvaluatedSceneMotion { axis: 'x' | 'y'; from: number; to: number; speed: number; loop: boolean }
 export interface EvaluatedControl { descriptor: ControlDescriptor; inputValues: Record<string, TableValue>; value?: GenerativeOutput }
 export type EvaluatedGenerativeView =
   | { id: string; kind: 'scene'; title: string; width: number; height: number; elements: EvaluatedScenePrimitive[] }
@@ -308,14 +310,27 @@ export function evaluateGenerativeExpression(expression: GenerativeExpression, c
 function numericSceneValue(value: number | GenerativeExpression, context: GenerativeEvaluationContext, spend: () => void, variables: Readonly<Record<string, GenerativeRuntimeBinding>> = {}): number {
   return typeof value === 'number' ? value : asNumber(evaluateWithSpend(value, context, spend, variables));
 }
+function evaluatedMotion(motion: SceneMotion | undefined, context: GenerativeEvaluationContext, spend: () => void): EvaluatedSceneMotion | undefined {
+  if (!motion) return undefined;
+  return {
+    axis: motion.axis,
+    from: numericSceneValue(motion.from, context, spend),
+    to: numericSceneValue(motion.to, context, spend),
+    speed: numericSceneValue(motion.speed, context, spend),
+    loop: motion.loop ?? true,
+  };
+}
 function scenePrimitive(element: ScenePrimitive, context: GenerativeEvaluationContext, spend: () => void): EvaluatedScenePrimitive {
   const drag = evaluatedDrag(element.drag, context, spend);
   const strokeWidth = element.shape !== 'text' && 'strokeWidth' in element && element.strokeWidth !== undefined ? numericSceneValue(element.strokeWidth, context, spend) : undefined;
-  if (element.shape === 'rect') return { id: element.id, shape: 'rect', x: numericSceneValue(element.x, context, spend), y: numericSceneValue(element.y, context, spend), width: numericSceneValue(element.width, context, spend), height: numericSceneValue(element.height, context, spend), ...(element.rx === undefined ? {} : { rx: numericSceneValue(element.rx, context, spend) }), ...(element.fill === undefined ? {} : { fill: element.fill }), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(drag ? { drag } : {}) };
-  if (element.shape === 'circle') return { id: element.id, shape: 'circle', cx: numericSceneValue(element.cx, context, spend), cy: numericSceneValue(element.cy, context, spend), r: numericSceneValue(element.r, context, spend), ...(element.fill === undefined ? {} : { fill: element.fill }), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(drag ? { drag } : {}) };
+  const sourceMotion = element.shape === 'rect' || element.shape === 'circle' || element.shape === 'text' ? element.motion : undefined;
+  const motion = evaluatedMotion(sourceMotion, context, spend);
+  const motionFields = motion ? { motion } : {};
+  if (element.shape === 'rect') return { id: element.id, shape: 'rect', x: numericSceneValue(element.x, context, spend), y: numericSceneValue(element.y, context, spend), width: numericSceneValue(element.width, context, spend), height: numericSceneValue(element.height, context, spend), ...(element.rx === undefined ? {} : { rx: numericSceneValue(element.rx, context, spend) }), ...(element.fill === undefined ? {} : { fill: element.fill }), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(drag ? { drag } : {}), ...motionFields };
+  if (element.shape === 'circle') return { id: element.id, shape: 'circle', cx: numericSceneValue(element.cx, context, spend), cy: numericSceneValue(element.cy, context, spend), r: numericSceneValue(element.r, context, spend), ...(element.fill === undefined ? {} : { fill: element.fill }), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(drag ? { drag } : {}), ...motionFields };
   if (element.shape === 'line') return { id: element.id, shape: 'line', x1: numericSceneValue(element.x1, context, spend), y1: numericSceneValue(element.y1, context, spend), x2: numericSceneValue(element.x2, context, spend), y2: numericSceneValue(element.y2, context, spend), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(drag ? { drag } : {}) };
   if (element.shape === 'polygon') return { id: element.id, shape: 'polygon', points: element.points.map(point => ({ x: numericSceneValue(point.x, context, spend), y: numericSceneValue(point.y, context, spend) })), ...(element.fill === undefined ? {} : { fill: element.fill }), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(drag ? { drag } : {}) };
-  return { id: element.id, shape: 'text', x: numericSceneValue(element.x, context, spend), y: numericSceneValue(element.y, context, spend), text: typeof element.text === 'string' ? element.text : asText(evaluateWithSpend(element.text, context, spend)), ...(element.fontSize === undefined ? {} : { fontSize: numericSceneValue(element.fontSize, context, spend) }), ...(element.fill === undefined ? {} : { fill: element.fill }), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(drag ? { drag } : {}) };
+  return { id: element.id, shape: 'text', x: numericSceneValue(element.x, context, spend), y: numericSceneValue(element.y, context, spend), text: typeof element.text === 'string' ? element.text : asText(evaluateWithSpend(element.text, context, spend)), ...(element.fontSize === undefined ? {} : { fontSize: numericSceneValue(element.fontSize, context, spend) }), ...(element.fill === undefined ? {} : { fill: element.fill }), ...(element.stroke === undefined ? {} : { stroke: element.stroke }), ...(drag ? { drag } : {}), ...motionFields };
 }
 
 export function evaluateGenerativeCanvas(canvas: GenerativeCanvas, context: GenerativeEvaluationContext, options: GenerativeEvaluationOptions = {}): EvaluatedGenerativeView[] {
