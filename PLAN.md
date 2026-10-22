@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
@@ -42,15 +43,16 @@
 | F046 | เก็บตารางที่ยังใช้ได้เมื่อการ์ด canvas ผิดเชิงความหมาย (semantic view salvage) | `review` | [F046](docs/features/F046-semantic-view-salvage.md) |
 | F047 | ลดการปฏิเสธร่างที่เกิดจากชื่อ/เพดานที่ไม่ได้บอก: normalize id, guide จากค่าคงที่เดียว, classifier 4 intent | `review` | [F047](docs/features/F047-generation-reliability.md) |
 | F048 | ลูกเต๋าที่ server ทอยให้เป็น parameter ของ action: `table.roll` + pending roll อายุ 10 นาทีผูก `dataRevision` + ใช้ครั้งเดียว + เก็บหน้าเต๋า/ผลลง event | `review` | [F048](docs/features/F048-roll-parameter.md) |
-| F051 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F051](docs/features/F051-seo-baseline.md) |
+| F053 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F053](docs/features/F053-seo-baseline.md) |
 | F049 | ลูกเต๋าบนการ์ด controls: stepper จำนวน/หน้า + ปุ่ม ทอย + หน้าลูกเต๋า/ผลรวม และค่าที่ทอยได้ส่งต่อให้การ์ดอื่นที่ bind parameter เดียวกัน (v1 สุ่มฝั่ง client, visual-only; server roll = F048) · prompt guide ให้ drafter เขียน dice ได้ | `review` | [F049](docs/features/F049-dice-visual.md) |
 | F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `review` | [F050](docs/features/F050-live-thinking.md) |
-| F051 | การ์ด dice ที่ผูก `roll` parameter ใช้ `table.roll` ของ server: แสดงหน้าเต๋า/ผลรวมจาก roll-store, ไม่เขียน shared draft และไม่ใช้ client RNG · dice ที่ผูก `number` ยัง client-side/visual-only · ไม่เปลี่ยน wire contract | `review` | [F051](docs/features/F051-server-dice.md) |
+| F060 | การ์ด dice ที่ผูก `roll` parameter ใช้ `table.roll` ของ server: แสดงหน้าเต๋า/ผลรวมจาก roll-store, ไม่เขียน shared draft และไม่ใช้ client RNG · dice ที่ผูก `number` ยัง client-side/visual-only · ไม่เปลี่ยน wire contract | `review` | [F053](docs/features/F060-server-dice.md) |
 
 ## งาน
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F046-T1 | semantic view salvage + link cleanup ใน domain (ไม่แตะ provider ที่ F045 ถือ) | `review` | lead (AI) | `feat/F046-view-salvage` | `src/tabletop/domain/table.ts`, `table-canvas-salvage.test.ts`, เอกสาร | — | ไม่เปลี่ยนสัญญา JSON/จำนวนครั้งที่เรียกโมเดล |
 | F047-T1 | normalize id ที่โมเดลตั้ง + เขียน reference ใหม่ทั้ง program/records/views | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/id-normalization.ts` (ใหม่), `server/providers/deepseek-changes.ts` | — | ชื่อชนกัน = ยกเลิกทั้งก้อน |
 | F047-T2 | `TABLE_LIMITS` เป็นแหล่งเดียว + guide interpolate + drift test | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/table.ts`, `server/providers/table-schema-guide.ts` (+ test) | — | ปิดช่อง manifestNodes/depth |
@@ -108,9 +110,10 @@
 | F035-T4 | UI: หน้าต่าง People เลือก role รายคน + หน้าจัดการ role (เลือกจาก role ตั้งต้น หรือสร้างเองด้วยการติ๊กสิทธิ์) + ซ่อนปุ่มตามสิทธิ์จริง | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `TabletopApp.tsx` (`InviteDialog`), `ui/RoleSettings.tsx` (ใหม่), `ui/*` ที่เช็ค owner | F035-T3 | hotspot `TabletopApp.tsx` |
 | F035-T5 | role ตั้งต้นของ case อื่น: บทเรียน (ครู/ผู้เรียน), เกม encounter (DM/ผู้เล่น), invoice · การกระทำในเกมที่ผูกที่นั่ง (ตอบคำถาม, shield) คงผูกที่นั่งเดิม | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `shared/permissions.ts`, `domain/{teaching,encounter,invoice}.ts` | F035-T2 | |
 | F035-T6 | เทสต์ (subagent) + คู่มือ + CHANGELOG | `review` | JitrudeeDongdee (Claude) + subagent | `feat/F035-role-permissions` | tests, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F035-T4 | ทุกสิทธิ์ต้องมีเทสต์ด้านถูกปฏิเสธ |
-| F051-T1 | meta OG/Twitter/canonical + apple-touch-icon + รูป og:image 1200×630 ใน `public/` | `review` | lead (AI) | `feat/F051-seo-baseline` (#176) | `index.html`, `public/` | — | ไม่แตะ copy ของ landing |
-| F051-T2 | `public/robots.txt` + `public/sitemap.xml` (`/`, `/demo`) | `review` | lead (AI) | `feat/F051-seo-baseline` (#176) | `public/` | — | ห้าม Disallow `/t/` |
-| F051-T3 | Worker คุม HTML route: `X-Robots-Tag: noindex` ให้หน้าในแอป + 404 จริงให้ path ที่ไม่รู้จัก | `review` | lead (AI) | `feat/F051-seo-baseline` (#176) | `cloudflare/index.ts`, `wrangler.jsonc`, `cloudflare/*.test.ts` | — | hotspot `cloudflare/index.ts` |
-| F051-T4 | spec + CHANGELOG + การตัดสินใจใน F051 | `review` | lead (AI) | `feat/F051-seo-baseline` (#176) | `spec.md`, `CHANGELOG.md`, `docs/features/F051-seo-baseline.md` | T1–T3 | |
+| F053-T1 | meta OG/Twitter/canonical + apple-touch-icon + รูป og:image 1200×630 ใน `public/` | `review` | lead (AI) | `feat/F053-seo-baseline` (#176) | `index.html`, `public/` | — | ไม่แตะ copy ของ landing |
+| F053-T2 | `public/robots.txt` + `public/sitemap.xml` (`/`, `/demo`) | `review` | lead (AI) | `feat/F053-seo-baseline` (#176) | `public/` | — | ห้าม Disallow `/t/` |
+| F053-T3 | Worker คุม HTML route: `X-Robots-Tag: noindex` ให้หน้าในแอป + 404 จริงให้ path ที่ไม่รู้จัก | `review` | lead (AI) | `feat/F053-seo-baseline` (#176) | `cloudflare/index.ts`, `wrangler.jsonc`, `cloudflare/*.test.ts` | — | hotspot `cloudflare/index.ts` |
+| F053-T4 | spec + CHANGELOG + การตัดสินใจใน F053 | `review` | lead (AI) | `feat/F053-seo-baseline` (#176) | `spec.md`, `CHANGELOG.md`, `docs/features/F053-seo-baseline.md` | T1–T3 | |
 | F050-T1..T3 | provider ส่ง thinking tail มากับ progress · worker redact/เก็บ · การ์ดแสดงบรรทัด live thinking | `doing` | lead (AI) | `feat/F050-live-thinking` | `server/providers/deepseek-changes.ts`, `cloudflare/room.ts`, `ui/table-chat-state.ts`, `ui/useTableChat.tsx`, `ui/table-chat.css` | — | ต้องไม่แก้ `table-assistant-contracts.ts` (assistant เป็น strictObject) |
-| F050-T4..T5 | fixture stream reasoning + browser check + เอกสาร/spec/CHANGELOG | `doing` | lead (AI) | `feat/F050-live-thinking` | `tests/cloudflare-browser.mjs`, `tests/generic-table-browser.mjs`, `docs/features/F050-live-thinking.md`, `spec.md`, `CHANGELOG.md` | F050-T1..T3 | browser ต้องผ่าน 2 รอบติด |
+| F050-T4..T5 | fixture stream reasoning + browser check + เอกสาร/spec/CHANGELOG | `done` | lead (AI) | `feat/F050-live-thinking` (#173) | `tests/cloudflare-browser.mjs`, `tests/generic-table-browser.mjs`, `docs/features/F050-live-thinking.md`, `spec.md`, `CHANGELOG.md` | F050-T1..T3 | browser ผ่าน 2 รอบติดบน `dev` @ `9ff8dd4` |
+| F050-T6 | แก้ locator ของ browser test ที่ผูกกับ "ชื่อการ์ด": หลัง 1f21aeb ชื่อการ์ด = บรรทัดแรกของคำขอ การ์ดคำถามกับคำตอบจึงชื่อซ้ำกัน → หาการ์ดด้วย `data-canvas-object="table.chat.<jobId>"` แทน | `review` | lead (AI) | `fix/browser-clarify-card-locator` | `tests/generic-table-browser.mjs` | — | ทำให้ browser suite เขียวบน `dev` ปัจจุบัน |

@@ -14,7 +14,7 @@ import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tablet
 /**
  * F049: the exact dice control example embedded in the guide below.
  * The drafter may author `kind:"dice"` on a numeric parameter (client rolls it, visual-only)
- * or on a `roll` parameter (F051: the server rolls the program's roll spec and the card shows it).
+ * or on a `roll` parameter (F060: the server rolls the program's roll spec and the card shows it).
  */
 export const TABLE_DICE_EXAMPLE: ControlsViewDescriptor = {
   id: 'damage-die',
