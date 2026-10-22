@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http';
-import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainDecision, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
 import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
@@ -75,7 +75,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
   ]),
   table: new Set([
-    'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.setComputedColumns', 'canvas.layout',
+    'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.roll', 'table.setComputedColumns', 'canvas.layout',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
     'evolve.autoApply', 'evolve.removeItem',
@@ -224,6 +224,8 @@ function mapDomainError(error: DomainError): AuthorityError {
   const conflictCodes = new Set([
     'STALE_CANDIDATE', 'STALE_LESSON', 'APPROVAL_EXPIRED', 'APPROVAL_REVOKED', 'APPROVAL_MISMATCH',
     'CANDIDATE_PENDING', 'REACTION_CLOSED', 'IDEMPOTENCY_MISMATCH', 'STALE_LAYOUT',
+    // F048: a missing, expired, or stale roll is a state conflict, not a malformed command.
+    'TABLE_ROLL_REQUIRED', 'TABLE_ROLL_EXPIRED', 'TABLE_ROLL_STALE',
   ]);
   const status = error.code === 'FORBIDDEN' ? 403 : conflictCodes.has(error.code) ? 409 : 422;
   return new AuthorityError(error.code, error.message, status);
@@ -832,7 +834,7 @@ export class CommandAuthority {
     session: AuthenticatedSession,
     envelope: CommandEnvelope,
     requestHash: string,
-    decision: { state: DomainState; label: string },
+    decision: DomainDecision,
     context: ActorContext,
     now: number,
   ): Promise<CommandAck> {
@@ -846,7 +848,14 @@ export class CommandAuthority {
     const projected = projectDomain(decision.state, nextContext);
     const members = await transaction.listMembers();
     const view = this.toWorkspaceView(nextWorkspace, member, projected, members);
-    const ack: CommandAck = { ok: true, commandId: envelope.commandId, duplicate: false, workspace: view };
+    const ack: CommandAck = {
+      ok: true,
+      commandId: envelope.commandId,
+      duplicate: false,
+      workspace: view,
+      // F048: the roller gets the faces back; the stored response only ever reaches the same actor.
+      ...(decision.roll ? { roll: decision.roll } : {}),
+    };
     const eventId = randomId();
     let eventPayload: unknown = envelope.payload;
     if (envelope.type === 'table.import'
@@ -856,6 +865,19 @@ export class CommandAuthority {
       eventPayload = source
         ? { sourceId: source.id, filename: source.filename, sha256: source.sha256 }
         : { redacted: true };
+    }
+    // F048: record the exact dice and the parameter they filled with the command event, so the
+    // rolled row is reproducible from history alone after the action commits.
+    if (decision.roll && (envelope.type === 'table.roll' || envelope.type === 'table.act')) {
+      eventPayload = {
+        ...(isRecord(envelope.payload) ? envelope.payload : {}),
+        roll: {
+          ...(decision.rollParameterId ? { parameterId: decision.rollParameterId } : {}),
+          groups: decision.roll.groups,
+          values: decision.roll.values,
+          total: decision.roll.total,
+        },
+      };
     }
     const eventData = {
       type: envelope.type,

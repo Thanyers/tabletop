@@ -1,14 +1,45 @@
 /**
  * F031: compact prompt guide that replaces the 36 KB JSON Schema dump.
  * Hand-written prompt artifact only — the zod schemas stay authoritative.
- * Seat counts come from the shared seat list so the guide cannot drift from the validator.
+ *
+ * F047: the numeric limits are interpolated from `TABLE_LIMITS` and `GENERATIVE_LIMITS`, so the guide
+ * cannot advertise one number while the validator enforces another. `manifestNodes` was the drift
+ * that motivated this: the validator rejected a canvas the guide said nothing about.
+ * Seat names come from the shared seat list for the same reason.
  */
-import { MAX_TABLE_MEMBER_SEATS, TABLE_TURN_SEATS } from '../../src/tabletop/shared/contracts.js';
+import { MAX_TABLE_MEMBER_SEATS } from '../../src/tabletop/shared/contracts.js';
+import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
+import { GENERATIVE_LIMITS } from '../../src/tabletop/shared/generative-contracts.js';
+
+const LIMITS = [
+  `collections<=${TABLE_LIMITS.collections}`,
+  `fields<=${TABLE_LIMITS.fieldsPerCollection} per collection`,
+  `actions<=${TABLE_LIMITS.actions}`,
+  `parameters<=${TABLE_LIMITS.parametersPerAction} per action`,
+  `creates<=${TABLE_LIMITS.createsPerAction} per action`,
+  `conditions<=${TABLE_LIMITS.conditionsPerAction} per action`,
+  `effects<=${TABLE_LIMITS.effectsPerAction} per action`,
+  `invariants<=${TABLE_LIMITS.invariants} (fields<=${TABLE_LIMITS.invariantFields} each)`,
+  `turnOrder<=${TABLE_LIMITS.turnOrder} seats`,
+  `evidence<=${TABLE_LIMITS.evidence}`,
+  `assumptions<=${TABLE_LIMITS.assumptions}`,
+  `views<=${GENERATIVE_LIMITS.canvasViews}`,
+  `canvas manifest nodes (2 + collections + actions + views)<=${GENERATIVE_LIMITS.manifestNodes}`,
+  `expression depth<=${GENERATIVE_LIMITS.expressionDepth}`,
+  `expression nodes<=${GENERATIVE_LIMITS.expressionNodes}`,
+  `expression array items<=${GENERATIVE_LIMITS.arrayItems}`,
+  `scene elements<=${GENERATIVE_LIMITS.sceneElements}`,
+  `polygon points 3..${GENERATIVE_LIMITS.scenePoints}`,
+  `controls<=${GENERATIVE_LIMITS.controlsPerView} per view`,
+  `rows<=${TABLE_LIMITS.rowsPerCollection} per collection and <=${TABLE_LIMITS.rowsTotal} total`,
+  'evidence quote<=500',
+  `numbers finite with |n|<=${GENERATIVE_LIMITS.numberMagnitude}`,
+].join('; ');
 
 export const TABLE_SCHEMA_GUIDE = `TABLE-CHANGE COMPACT SCHEMA v1 (hand-written prompt guide; the app's zod validator is authoritative)
 
 BUDGET: max_tokens=32768 for the single reply (reasoning tokens count toward it).
-LIMITS: collections<=6; fields<=12 per collection; actions<=16; parameters<=8 per action; creates<=12 per action; conditions<=24 per action; effects<=24 per action; invariants<=12 (fields<=6 each); turnOrder<=${TABLE_TURN_SEATS.length} seats; evidence<=20; assumptions<=12; views<=12; scene elements<=128; polygon points 3..64; controls<=24 per view; rows<=100 per collection and <=200 total; evidence quote<=500; numbers finite with |n|<=1e9.
+LIMITS: ${LIMITS}.
 ID: /^[a-z][a-z0-9_-]{0,39}$/, never a JS builtin name (constructor, prototype, __proto__, toString, valueOf, hasOwnProperty, ...).
 VALUE: string<=500 | number | boolean | null | string[] (<=32 items, each <=100 chars).
 STRICT: every object below rejects unknown keys and requires exactly the keys listed; "?" marks an optional key. The root has exactly three keys; canvas is INSIDE program.
@@ -20,8 +51,19 @@ FIELD{id,label,type:text|number|boolean|list,required:boolean,min?,max?,choices?
   Only number fields take min/max (min<=max); only text fields take choices (1..32 strings, each<=100); default must satisfy type, choices and bounds.
 ACTION{id,title,description,roles,parameters,conditions,effects,creates?,requireTurn:boolean,advanceTurn:boolean}
   roles = ("owner"|"participant")[1..2]; an action must set a field, create a row, or advanceTurn; requireTurn/advanceTurn need a non-empty turnOrder.
-PARAM{id,label,type:text|number|boolean|record,collection?,min?,max?,choices?}
+PARAM{id,label,type:text|number|boolean|record|roll,collection?,min?,max?,choices?,roll?}
   record params MUST have collection; only number params take min/max; only text params take choices.
+  ROLL{groups:[{count:1..10,faces:2..100}] 1..4,modifier?:integer -1000..1000}
+  A roll param carries exactly one roll spec (no collection/min/max/choices); total dice across groups <=20.
+  The SERVER rolls it: a player presses the roll button, the server returns the dice, and the action input
+  for that parameter is NOT sent by the client. A roll behaves as a number in OPERAND {input:ROLL_ID};
+  at most ONE roll param per action. Both sides of a condition/effect still type-check against that number.
+  ATTACK EXAMPLE (one roll param; monsters.damage_taken must be a number field; damage feeds it additively):
+  ACTION{id:"attack",title:"Attack",description:"Roll damage against one monster",roles:["owner","participant"],
+    parameters:[{id:"target",label:"Target",type:"record",collection:"monsters"},
+                {id:"damage",label:"Damage roll",type:"roll",roll:{groups:[{count:2,faces:6}],modifier:3}}],
+    conditions:[],effects:[{record:"target",field:"damage_taken",op:"add",value:{input:"damage"}}],
+    requireTurn:false,advanceTurn:false}
 CONDITION{left:OPERAND,op:eq|neq|lt|lte|gt|gte|contains,right:OPERAND,message}
 EFFECT{record:PARAM_ID,field:FIELD_ID,op:set|add,value:OPERAND}
 CREATE{collection:COLLECTION_ID,values:{FIELD_ID:OPERAND}}
@@ -29,7 +71,7 @@ INVARIANT{id,collection,fields:[FIELD_ID 1..6],message}
 EVIDENCE{sourceId:string<=100,quote:string<=500}
 ROW{id,values:{FIELD_ID:VALUE}}
 RECORDS: {COLLECTION_ID:[ROW<=100]}
-TURNORDER: ("host"|"member-1"|...|"member-${MAX_TABLE_MEMBER_SEATS}")[<=${TABLE_TURN_SEATS.length}]
+TURNORDER: ("host"|"member-1"|...|"member-${MAX_TABLE_MEMBER_SEATS}")[<=${TABLE_LIMITS.turnOrder}]
 
 OPERAND (ONLY in condition.left/right, effect.value and create.values; never a raw AST):
   {literal:VALUE} | {input:PARAM_ID} | {record:PARAM_ID,field:FIELD_ID} | {system:"actor"|"seat"|"turn"} | {expression:EXPR}

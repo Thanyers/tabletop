@@ -7,7 +7,8 @@ import type { Env } from './contracts.js';
 import { csrfForToken } from './auth.js';
 import { canonicalJson, hashValue, sha256 } from '../server/codec.js';
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
-import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { equipmentChange, rollCombatChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { rollTotal } from '../src/tabletop/domain/roll.js';
 import type { PendingDirectoryChange } from './room-repository.js';
 import { proposeChange } from './ai.js';
 import type { AIProposalRequest, AIProposalResult } from './ai.js';
@@ -1406,6 +1407,56 @@ describe('Cloudflare room Durable Object', () => {
       force: 12, mass: 2, time: 2,
     });
     expect(teachingUpdate.response.status).toBe(200);
+  });
+
+  it('issues and consumes one server roll on the room path and records the dice in room_events (F048)', async () => {
+    const owner = newActor('Roll owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    let current = workspace;
+    const change = rollCombatChange();
+    for (const [type, payload] of [
+      ['evolve.propose', { change }], ['evolve.simulate', {}], ['evolve.validate', {}], ['evolve.approve', {}], ['evolve.activate', {}],
+    ] as const) {
+      const result = await issueCommand(stub, current, owner, type, payload);
+      expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+      current = (result.body as CommandAck).workspace;
+    }
+
+    const roll = await issueCommand(stub, current, owner, 'table.roll', { actionId: 'attack', parameterId: 'damage' });
+    expect(roll.response.status, JSON.stringify(roll.body)).toBe(200);
+    const rollAck = roll.body as CommandAck;
+    expect(rollAck.roll?.groups).toEqual([{ count: 2, faces: 6 }]);
+    expect(rollAck.roll?.values).toHaveLength(2);
+    if (rollAck.workspace.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(rollAck.workspace.domain.pendingRolls).toBeUndefined();
+
+    const spoof = await issueCommand(stub, rollAck.workspace, owner, 'table.act', { actionId: 'attack', inputs: { target: 'hero', damage: 2 } });
+    expect(spoof.response.status).toBe(422);
+    expect((spoof.body as PublicError).errorCode).toBe('TABLE_ROLL_CLIENT_VALUE');
+
+    const acted = await issueCommand(stub, rollAck.workspace, owner, 'table.act', { actionId: 'attack', inputs: { target: 'hero' } });
+    expect(acted.response.status, JSON.stringify(acted.body)).toBe(200);
+    const actAck = acted.body as CommandAck;
+    if (actAck.workspace.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    expect(actAck.workspace.domain.records.hits?.at(-1)?.values).toEqual({ target: 'hero', damage: rollAck.roll?.total });
+    expect(actAck.workspace.domain.records.fighters?.[0]?.values.damage_taken).toBe(rollAck.roll?.total);
+
+    const reuse = await issueCommand(stub, actAck.workspace, owner, 'table.act', { actionId: 'attack', inputs: { target: 'hero' } });
+    expect(reuse.response.status).toBe(409);
+    expect((reuse.body as PublicError).errorCode).toBe('TABLE_ROLL_REQUIRED');
+
+    const events = await inspectRoom<{ event_type: string; event_data: string }>(stub,
+      `SELECT event_type, event_data FROM room_events WHERE workspace_id = '${roomId}' AND event_type IN ('table.roll', 'table.act') ORDER BY workspace_sequence`);
+    const payloads = events.map((event) => (JSON.parse(event.event_data) as { payload?: Record<string, unknown> }));
+    const rollEvent = payloads.find((item) => typeof item.payload?.parameterId === 'string');
+    const actEvent = payloads.find((item) => item.payload !== undefined && 'inputs' in item.payload);
+    const recordedRoll = rollEvent?.payload?.roll as { parameterId?: string; values?: number[]; total?: number } | undefined;
+    const recordedActRoll = actEvent?.payload?.roll as { parameterId?: string; values?: number[]; total?: number } | undefined;
+    expect(recordedRoll).toMatchObject({ parameterId: 'damage', values: rollAck.roll?.values, total: rollAck.roll?.total });
+    expect(recordedActRoll).toMatchObject({ parameterId: 'damage', values: rollAck.roll?.values, total: rollAck.roll?.total });
+    expect(rollTotal(recordedActRoll?.values ?? [], 3)).toBe(recordedActRoll?.total);
+    expect(actEvent?.payload?.inputs).toEqual({ target: 'hero' });
   });
 
   it('lets the table owner remove a member, closes their socket, hides the room in D1, and lets them rejoin by a new invite (F003-T1)', async () => {

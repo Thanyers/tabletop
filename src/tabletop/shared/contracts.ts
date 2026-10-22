@@ -1,4 +1,5 @@
 import type { AccessConfig, Permission } from './permissions';
+import type { RollResult } from './roll';
 import type { TableChange, TableProgram, TableState } from './table-contracts';
 export type CaseKind = 'invoice' | 'teaching' | 'encounter' | 'table';
 export type Role = 'owner' | 'teacher' | 'learner' | 'dm' | 'player' | 'participant';
@@ -91,10 +92,16 @@ export interface EncounterPausedState { at: number; remainingReactionMs: number 
 export interface EncounterState extends DomainBase { kind: 'encounter'; characters: Character[]; turn: Character['id']; phase: 'turn.start' | 'reaction.open' | 'action.resolved' | 'turn.end'; pendingHit: PendingHit | null; rule: EncounterRule; events: EncounterEvent[]; dmNote?: string; seed: number; paused?: EncounterPausedState }
 export type DomainState = InvoiceState | TeachingState | EncounterState | TableState;
 export interface DomainCommand { type: string; payload: unknown }
-export interface DomainDecision { state: DomainState; label: string }
+export interface DomainDecision {
+  state: DomainState;
+  label: string;
+  /** F048: the roll this decision produced (`table.roll`) or consumed (`table.act`). */
+  roll?: RollResult;
+  rollParameterId?: string;
+}
 export interface CommandEnvelope extends DomainCommand { commandId: string; expectedRevision: string; expectedEpoch: number }
 export interface WorkspaceView { id: string; title: string; kind: CaseKind; epoch: number; revision: string; actor: Member; members: Member[]; domain: DomainState; createdAt: number; expiresAt: number }
 export interface SessionView { csrfToken: string; actorId: string; name: string; expiresAt: number; workspaces: { id: string; title: string; kind: CaseKind; role: Role }[] }
-export interface CommandAck { ok: true; commandId: string; duplicate: boolean; workspace: WorkspaceView }
+export interface CommandAck { ok: true; commandId: string; duplicate: boolean; workspace: WorkspaceView; /** F048: returned only to the caller that issued or consumed the roll. */ roll?: RollResult }
 export interface ApiError { ok: false; errorCode: string; message: string; requestId?: string }
 export class DomainError extends Error { constructor(public readonly code: string, message: string) { super(message); this.name = 'DomainError' } }

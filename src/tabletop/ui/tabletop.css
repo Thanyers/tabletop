@@ -1121,7 +1121,7 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-canvas-node__open:focus-visible,
 .tt-canvas-object-dock button:focus-visible { outline: 3px solid #315eb0; outline-offset: 2px; }
 .tt-canvas-node.is-expanded { width: min(760px, calc(100vw - 48px)); max-width: min(94vw, 760px); border-color: #72a89a; box-shadow: 0 0 0 3px #24796b20, 0 16px 38px #263f3b20; }
-.tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: min(52dvh, 380px); overflow: auto; overscroll-behavior: contain; }
+.tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: none; overflow: visible; }
 .tt-canvas-node--auxiliary { width: 440px; }
 .tt-canvas-node--auxiliary:not(.is-expanded) .tt-canvas-node__body { max-height: 280px; overflow: auto; overscroll-behavior: contain; }
 .tt-canvas-object-dock {
@@ -1189,7 +1189,7 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 
 @media (max-width: 760px) {
   .tt-canvas-node.is-expanded { width: calc(100vw - 24px); max-width: calc(100vw - 24px); }
-  .tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: min(52dvh, 380px); }
+  .tt-canvas-node.is-expanded .tt-canvas-node__body { max-height: none; }
   .tt-canvas-object-dock { right: 8px; bottom: 8px; left: 8px; max-width: none; }
   .tt-canvas-object-dock__label { font-size: 10px; }
   .tt-canvas-object-dock button { min-height: 40px; max-width: 190px; font-size: 12px; }

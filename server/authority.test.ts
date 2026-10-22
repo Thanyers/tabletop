@@ -12,7 +12,9 @@ import type { ApiError } from '../src/tabletop/shared/contracts.js';
 import { hashValue } from './codec.js';
 import { startServer, type StartedServer } from './start.js';
 import { MAX_HTTP_REQUESTS_PER_MINUTE } from './limits.js';
-import { gameChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { gameChange, rollCombatChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { ROLL_LIMITS } from '../src/tabletop/shared/roll.js';
+import { rollTotal } from '../src/tabletop/domain/roll.js';
 
 interface TestSession {
   cookie: string;
@@ -263,6 +265,91 @@ describe('tabletop server authority', () => {
       expect(events.body).toMatchObject({ resync: true });
       expect((events.body as { cursor: string }).cursor).not.toBe(memberBefore.revision);
     } finally { socket.close(); }
+  });
+
+  it('issues a server roll, consumes it once, records the dice, and rejects a missing, tampered, or expired roll (F048)', async () => {
+    let clock = Date.parse('2026-10-22T12:00:00.000Z');
+    const { base, server } = await openServer(':memory:', () => clock);
+    const owner = await createSession(base, 'Roll owner');
+    const member = await createSession(base, 'Roll member');
+    let view = await createWorkspace(base, owner, 'table');
+    const joined = await redeem(base, member, (await invite(base, owner, view.id, 'member-1')).ticket);
+    // Joining changes the member list, so the owner's creation view is no longer the current one.
+    view = await currentView(base, owner, view.id);
+
+    const change = rollCombatChange();
+    for (const type of ['evolve.propose', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) {
+      const result = await command(base, owner, view, type, type === 'evolve.propose' ? { change } : {});
+      expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+      view = (result.body as CommandAck).workspace;
+    }
+
+    // A participant whose seat does not hold the turn cannot roll for the action.
+    const memberView = await currentView(base, joined.session, view.id);
+    const memberRoll = await command(base, joined.session, memberView, 'table.roll', { actionId: 'attack', parameterId: 'damage' });
+    expect(memberRoll.response.status).toBe(422);
+    expect((memberRoll.body as ApiError).errorCode).toBe('TABLE_TURN');
+
+    const rollResult = await command(base, owner, view, 'table.roll', { actionId: 'attack', parameterId: 'damage' });
+    expect(rollResult.response.status, JSON.stringify(rollResult.body)).toBe(200);
+    const rollAck = rollResult.body as CommandAck;
+    expect(rollAck.roll?.groups).toEqual([{ count: 2, faces: 6 }]);
+    expect(rollAck.roll?.values).toHaveLength(2);
+    for (const value of rollAck.roll?.values ?? []) {
+      expect(value).toBeGreaterThanOrEqual(1);
+      expect(value).toBeLessThanOrEqual(6);
+    }
+    expect(rollAck.roll?.total).toBe((rollAck.roll?.values ?? []).reduce((sum, value) => sum + value, 0) + 3);
+    if (rollAck.workspace.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    // The pending roll is authoritative state but never appears in a member projection.
+    expect(rollAck.workspace.domain.pendingRolls).toBeUndefined();
+    const memberAfterRoll = await currentView(base, joined.session, view.id);
+    expect(memberAfterRoll.domain.kind === 'table' && memberAfterRoll.domain.pendingRolls).toBeFalsy();
+
+    // A client-sent value for a roll parameter is rejected and does not consume the pending roll.
+    const spoof = await command(base, owner, rollAck.workspace, 'table.act', { actionId: 'attack', inputs: { target: 'hero', damage: 1 } });
+    expect(spoof.response.status).toBe(422);
+    expect((spoof.body as ApiError).errorCode).toBe('TABLE_ROLL_CLIENT_VALUE');
+
+    const acted = await command(base, owner, rollAck.workspace, 'table.act', { actionId: 'attack', inputs: { target: 'hero' } });
+    expect(acted.response.status, JSON.stringify(acted.body)).toBe(200);
+    const actAck = acted.body as CommandAck;
+    expect(actAck.roll).toEqual(rollAck.roll);
+    if (actAck.workspace.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    const hit = actAck.workspace.domain.records.hits?.at(-1);
+    expect(hit?.values).toEqual({ target: 'hero', damage: rollAck.roll?.total });
+    expect(actAck.workspace.domain.records.fighters?.[0]?.values.damage_taken).toBe(rollAck.roll?.total);
+
+    // The recorded history carries the exact faces and total, and the submitted inputs omit the roll.
+    const events = await server.database.query<{ event_data: unknown }>(
+      `SELECT event_data FROM events WHERE workspace_id = $1 AND event_type IN ('table.roll', 'table.act') ORDER BY workspace_sequence`,
+      [view.id],
+    );
+    const payloads = events.rows.map((row) => (typeof row.event_data === 'string' ? JSON.parse(row.event_data) : row.event_data) as { payload?: Record<string, unknown> });
+    const rollEvent = payloads.find((item) => typeof item.payload?.parameterId === 'string');
+    const actEvent = payloads.find((item) => item.payload !== undefined && 'inputs' in item.payload);
+    const recordedRoll = rollEvent?.payload?.roll as { parameterId?: string; groups?: unknown; values?: number[]; total?: number } | undefined;
+    const recordedActRoll = actEvent?.payload?.roll as { parameterId?: string; values?: number[]; total?: number } | undefined;
+    expect(recordedRoll).toMatchObject({ parameterId: 'damage', groups: [{ count: 2, faces: 6 }], values: rollAck.roll?.values, total: rollAck.roll?.total });
+    expect(recordedActRoll).toMatchObject({ parameterId: 'damage', values: rollAck.roll?.values, total: rollAck.roll?.total });
+    expect(rollTotal(recordedActRoll?.values ?? [], 3)).toBe(recordedActRoll?.total);
+    expect(actEvent?.payload?.inputs).toEqual({ target: 'hero' });
+    expect(actEvent?.payload?.inputs).not.toHaveProperty('damage');
+
+    // Reuse is refused after the single use.
+    const reuse = await command(base, owner, actAck.workspace, 'table.act', { actionId: 'attack', inputs: { target: 'hero' } });
+    expect(reuse.response.status).toBe(409);
+    expect((reuse.body as ApiError).errorCode).toBe('TABLE_ROLL_REQUIRED');
+
+    // Expiry is checked against server time, not the client.
+    const beforeExpiry = await currentView(base, owner, view.id);
+    const expiryRoll = await command(base, owner, beforeExpiry, 'table.roll', { actionId: 'attack', parameterId: 'damage' });
+    expect(expiryRoll.response.status).toBe(200);
+    clock += ROLL_LIMITS.pendingTtlMs + 1;
+    const afterExpiry = await currentView(base, owner, view.id);
+    const expired = await command(base, owner, afterExpiry, 'table.act', { actionId: 'attack', inputs: { target: 'hero' } });
+    expect(expired.response.status).toBe(409);
+    expect((expired.body as ApiError).errorCode).toBe('TABLE_ROLL_EXPIRED');
   });
 
   it('creates table owners, redeems participant seats, and shows imported source text to participants read-only (F008)', async () => {

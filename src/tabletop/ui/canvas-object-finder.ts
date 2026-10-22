@@ -105,6 +105,14 @@ export function chatReferencePrompt(reference: ChatCardReference, message: strin
   return `[การ์ด “${reference.title}”] ${message}\n(Card in question: ${reference.detail})`;
 }
 
+/** A follow-up picked from an answer keeps the card the original question was about. */
+export function followUpPrompt(original: string, message: string): string {
+  const { reference } = splitReferencedPrompt(original);
+  if (!reference) return message;
+  const detail = /\n\(Card in question: ([^]*)\)$/u.exec(original)?.[1] ?? reference;
+  return chatReferencePrompt({ id: '', title: reference, detail }, message);
+}
+
 /** Centre the canvas on a point in canvas coordinates (e.g. another member's live cursor). */
 let pointFocus: ((x: number, y: number) => void) | null = null;
 

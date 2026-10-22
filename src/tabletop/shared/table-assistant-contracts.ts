@@ -22,12 +22,16 @@ export const tableAssistantReferenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('turn'), seat: z.enum(TABLE_TURN_SEATS), label: safeLabelSchema }),
 ]);
 
+/** Follow-up messages the member can pick instead of typing (sent as a new question). */
+const suggestionsSchema = z.array(z.string().min(1).max(120)).max(4).optional();
+
 export const tableAssistantResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('build-request'), text: z.string().min(1).max(8_000) }),
   z.strictObject({
     kind: z.literal('explanation'),
     text: z.string().min(1).max(8_000),
     references: z.array(tableAssistantReferenceSchema).max(40),
+    suggestions: suggestionsSchema,
   }),
   z.strictObject({
     kind: z.literal('action-proposal'),
@@ -39,7 +43,7 @@ export const tableAssistantResultSchema = z.discriminatedUnion('kind', [
     expectedActionRevision: z.number().int().nonnegative().safe(),
     confirmationRequired: z.literal(true),
   }),
-  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(8_000) }),
+  z.strictObject({ kind: z.literal('clarification'), text: z.string().min(1).max(8_000), suggestions: suggestionsSchema }),
   z.strictObject({ kind: z.literal('refusal'), text: z.string().min(1).max(8_000) }),
 ]);
 
