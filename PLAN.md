@@ -31,6 +31,7 @@
 | F034 | สมาชิกเห็นทุกอย่างในโต๊ะ + แชท AI และคำขอร่างกฎของทุกคน แบบสด (สวิตช์ `VISIBILITY_POLICY`, เก็บแบบ private ไว้) | `doing` | [F034](docs/features/F034-open-visibility.md) |
 | F035 | Role permission ตั้งค่าได้ต่อโต๊ะและต่อคน: role ตั้งต้นตาม case + สร้างเอง · ค่าเริ่มต้น = เท่าเจ้าของยกเว้นลบ/รีเซ็ตโต๊ะ | `doing` | [F035](docs/features/F035-role-permissions.md) |
 | F036 | ปลดเพดานเงินของ AI: ไม่จำกัดงบ แต่ยังบันทึกและ settle การใช้จริงทุกงาน (POC) | `review` | lead (AI) | `fix/F036-uncapped-budget` | `cloudflare/{billing,ai,index}.ts`, `vitest.cloudflare.config.ts`, tests | — | ไม่มี schema/binding/secret · CF 102, unit 476 |
+| F037 | Comment card แบบ post-it บน canvas: สร้างจากปุ่มข้างแชท/แชท ลากย้าย แก้ข้อความ เปลี่ยนสี ลบ และเห็นร่วมกัน | `doing` | lead (AI) | `feat/F037-note-cards` | `shared/table-contracts.ts`, `domain/table.ts`, `runtime/index.ts`, `ui/*`, tests | — | เก็บนอก program (ไม่มี migration) · backend + unit 6 ผ่าน · UI ยังไม่ทำ |
 
 ## งาน
 

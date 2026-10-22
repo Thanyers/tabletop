@@ -408,6 +408,8 @@ export class TabletopClient {
     onWorkspace: (workspace: WorkspaceView) => void,
     onStatus: (status: ConnectionState) => void,
     onCursor?: (cursor: CursorRelay | null) => void,
+    /** The table's AI chat changed (open visibility, F015); reload history through the API. */
+    onAssistant?: () => void,
   ): (() => void) & { sendCursor: (point: { x: number; y: number } | null) => void } {
     let stopped = false;
     let socket: WebSocket | null = null;
@@ -428,6 +430,7 @@ export class TabletopClient {
           const data = JSON.parse(String(event.data)) as { type?: string; workspace?: WorkspaceView };
           if (data.type === 'projection' && data.workspace) onWorkspace(data.workspace);
           else if (data.type === 'cursor') { const cursor = parseCursorRelay(data); if (cursor) onCursor?.(cursor); }
+          else if (data.type === 'assistant') onAssistant?.();
         } catch {
           // Ignore malformed push frames; the next reconnect also reads the current projection.
         }

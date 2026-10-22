@@ -73,6 +73,8 @@ type AssistantContext = {
   seat: Seat;
   program: Omit<TableProgram, 'evidence' | 'assumptions'> | null;
   records: Record<string, TableRecord[]>;
+  /** F037: shared notes are supporting knowledge for questions and drafts. */
+  notes: { text: string; color: string }[];
   turn: Seat | null;
 };
 
@@ -214,7 +216,9 @@ function buildContext(input: TableAssistantInput): {
   }
   const recordsResult = recordsSchema.safeParse(table.records);
   if (!recordsResult.success) return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The shared table records are invalid.');
-  const rawStateBytes = new TextEncoder().encode(encodeJson({ program: table.program, records: table.records })).byteLength;
+  const notesResult = z.array(z.strictObject({ text: z.string().max(500), color: z.string().max(20) })).max(20).safeParse(table.notes ?? []);
+  if (!notesResult.success) return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'The shared table notes are invalid.');
+  const rawStateBytes = new TextEncoder().encode(encodeJson({ program: table.program, records: table.records, notes: notesResult.data })).byteLength;
   if (rawStateBytes > MAX_ACTIVE_STATE_BYTES) {
     return fail('TABLE_ASSISTANT_CONTEXT_TOO_LARGE', 'The active table is too large to send to the assistant. No data was omitted.');
   }
@@ -235,6 +239,7 @@ function buildContext(input: TableAssistantInput): {
     seat,
     program: safeProgram === null ? null : omitEvidenceAndAssumptions(safeProgram),
     records: safeRecords,
+    notes: redactTree(notesResult.data, replacements) as { text: string; color: string }[],
     turn,
   };
   return { context, replacements, safeProgram, safeRecords };

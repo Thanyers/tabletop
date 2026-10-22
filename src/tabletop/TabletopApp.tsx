@@ -12,6 +12,7 @@ import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
+import { NewNoteButton } from './ui/NoteCard';
 import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
@@ -403,6 +404,8 @@ export default function TabletopApp() {
   }, [setWorkspace, showNotice]);
 
   const cursorStore = useMemo(() => createCursorStore(), []);
+  // Bumped when another member's AI chat changes so the chat history reloads live (F015).
+  const [assistantActivity, setAssistantActivity] = useState(0);
   const cursorSendRef = useRef<((point: { x: number; y: number } | null) => void) | null>(null);
   const liveCursors = useMemo(() => ({ store: cursorStore, send: (point: { x: number; y: number } | null) => cursorSendRef.current?.(point) }), [cursorStore]);
   useEffect(() => {
@@ -410,7 +413,8 @@ export default function TabletopApp() {
     cursorStore.clear();
     const subscription = tabletopClient.subscribe(view.id, (next) => {
       if (workspaceRef.current?.id === next.id) setWorkspace(next);
-    }, setConnection, (cursor) => { if (cursor) cursorStore.apply(cursor); else cursorStore.clear(); });
+    }, setConnection, (cursor) => { if (cursor) cursorStore.apply(cursor); else cursorStore.clear(); },
+    () => setAssistantActivity((key) => key + 1));
     cursorSendRef.current = subscription.sendCursor;
     return () => { cursorSendRef.current = null; cursorStore.clear(); subscription(); };
   }, [view?.id, setWorkspace, cursorStore]);
@@ -788,11 +792,15 @@ export default function TabletopApp() {
     ask: requestTableAssistant,
     pollAsk: pollTableAssistant,
     loadHistory: (target) => loadTableAssistantHistory(target),
+    historyRefreshKey: assistantActivity,
     confirm: confirmTableAssistantAction,
     attach: importTableFile,
     focusObject: requestCanvasFocus,
     notify: showNotice,
     prefill: aiPrefill,
+    composerAction: view && isTableWorkspaceView(view)
+      ? <NewNoteButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand} />
+      : undefined,
   });
 
   if (starting) return <LoadingScreen />;

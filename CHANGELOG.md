@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 4.2.0 — 2026-10-22
+
+MINOR: note card แบบ post-it บน canvas — สร้างจากปุ่มข้างช่องแชท ลากย้าย แก้ข้อความ เปลี่ยน 6 สี ขยาย/หด และลบได้ ทุกคนในโต๊ะเห็นร่วมกัน · โน้ตถูกส่งเป็นบริบทให้ AI ตอนถาม/ร่างกฎ · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v4.0.0 ได้
+
+- **Note card (F037):** เก็บใน `TableState.notes` แยกจาก program/records → รอดจากการแก้กฎ · คำสั่ง `table.addNote/updateNote/moveNote/removeNote` สำหรับ owner+participant · จำกัด 20 ใบ 500 ตัวอักษร 6 สี · ตำแหน่งเก็บในโน้ตเอง ไม่กิน 24 ช่องของ canvasLayout · มุมเหลี่ยม ไล่สี base→เข้ม เงาแบบกระดาษยก
+- **โน้ตเป็นความรู้ให้ AI:** assistant ตรวจและปิดชื่อสมาชิก (redact) พร้อมนับไบต์ตามงบเดิม · rule draft ส่ง notes ไม่เกิน 20 ใบเข้า provider
+
 ## 4.0.0 — 2026-10-22
 
 MAJOR: สมาชิกทุกคนเห็นทั้งโต๊ะและแชท AI ของกันและกัน (F034) + ปลดเพดานเงิน AI (F036) + People dialog ใช้ลิงก์เชิญ (F003-T5/T6) + เช็คเร็วบน dev (CI005) · ไม่มี schema/migration/secret ใหม่ · rollback โค้ดได้ แต่ข้อมูลที่เคยซ่อนจะถูกเห็นไปแล้ว
@@ -168,3 +175,5 @@ release แรกที่ติด tag ตามรูปแบบ `vMAJOR.MINO
 ## 2026-10-18 — initial Cloudflare alpha
 
 - เปิด Google login, saved rooms, invitations, DeepSeek draft jobs และ durable budget ledger สำหรับสาม workflow เดิม ดู [บันทึกรุ่นแรก](docs/CLOUDFLARE_RELEASE.md)
+
+- **F037 (ยังไม่ครบ — UI ยังไม่ทำ):** note card แบบ post-it เก็บใน `TableState.notes` แยกจาก program · คำสั่ง `table.addNote/updateNote/moveNote/removeNote` (ทุกสมาชิก) · จำกัด 20 โน้ต 500 ตัวอักษร 6 สี · ไม่ bump rule/data revision
