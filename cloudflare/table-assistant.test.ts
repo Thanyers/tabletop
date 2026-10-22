@@ -114,18 +114,32 @@ function providerFetch(result: unknown, inspect?: (content: string, body: Record
     const parsed: unknown = JSON.parse(text);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Expected provider object.');
     const body = parsed as Record<string, unknown>;
-    if (body.model !== 'deepseek-flash' || body.max_tokens !== 1024 || body.tool_choice !== 'none'
+    if (body.model !== 'deepseek-flash' || body.max_tokens !== 8192 || body.tool_choice !== 'none'
+      || body.stream !== true || !isRecord(body.stream_options) || body.stream_options.include_usage !== true
       || body.thinking === undefined || !Array.isArray(body.messages)) throw new Error('Unexpected provider limits.');
     const user = body.messages.find((message) => typeof message === 'object' && message !== null
       && (message as { role?: unknown }).role === 'user') as { content?: unknown } | undefined;
     if (typeof user?.content !== 'string') throw new Error('Expected a bounded user context.');
     inspect?.(user.content, body);
-    return new Response(JSON.stringify({
-      model: 'deepseek-flash',
-      choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(result) } }],
-      usage: { prompt_tokens: 45, completion_tokens: 80, total_tokens: 125, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 35 },
-    }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const payload = JSON.stringify(result);
+    const chunks: string[] = [];
+    for (let index = 0; index < payload.length; index += 37) chunks.push(payload.slice(index, index + 37));
+    const events = [
+      ...chunks.map((content) => ({ model: 'deepseek-flash', choices: [{ index: 0, delta: { content } }] })),
+      { model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
+      {
+        model: 'deepseek-flash',
+        choices: [],
+        usage: { prompt_tokens: 45, completion_tokens: 80, total_tokens: 125, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 35 },
+      },
+    ];
+    const stream = `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`;
+    return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function billingRow(jobId: string): Promise<{ status: string; max_input_tokens: number; max_output_tokens: number } | undefined> {
@@ -151,7 +165,7 @@ describe('Cloudflare table assistant', () => {
     };
     const stateBefore = JSON.stringify(input.workspace.domain);
     const response = await respondToTablePrompt(testEnv, input, providerFetch(raw, (content, body) => {
-      expect(body.max_tokens).toBe(1024);
+      expect(body.max_tokens).toBe(8192);
       expect(new TextEncoder().encode(JSON.stringify(body)).byteLength).toBeLessThanOrEqual(48 * 1024);
       const user = JSON.parse(content) as { kind: string; prompt: string; context: Record<string, unknown> };
       expect(user.kind).toBe('table-assistant');
@@ -181,7 +195,7 @@ describe('Cloudflare table assistant', () => {
     expect(response.usage).toMatchObject({ promptTokens: 45, completionTokens: 80, cacheMissTokens: 35 });
     expect(JSON.stringify(input.workspace.domain)).toBe(stateBefore);
     const bill = await billingRow(input.jobId);
-    expect(bill).toMatchObject({ status: 'settled', max_output_tokens: 1024 });
+    expect(bill).toMatchObject({ status: 'settled', max_output_tokens: 8192 });
     expect(bill?.max_input_tokens).toBeGreaterThan(0);
   });
 
@@ -323,5 +337,34 @@ describe('Cloudflare table assistant', () => {
       .rejects.toMatchObject({ code: 'TABLE_ASSISTANT_CONSENT_REQUIRED' });
     const forged = { ...input, jobId: await digest(`forged:${crypto.randomUUID()}`), actorId: 'other-account' };
     await expect(respondToTablePrompt(testEnv, forged, failingFetch)).rejects.toMatchObject({ code: 'TABLE_ASSISTANT_FORBIDDEN' });
+  });
+
+  it('reports incremental provider progress before the final JSON is complete (F037)', async () => {
+    const input = await assistantInput();
+    const payload = { kind: 'build-request', text: 'Prepare a form.' };
+    const seen: number[] = [];
+    const response = await respondToTablePrompt(testEnv, input, providerFetch(payload), (progress) => {
+      seen.push(progress.receivedChars);
+    });
+    expect(response.result).toMatchObject({ kind: 'build-request' });
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen.at(-1)).toBe(JSON.stringify(payload).length);
+    expect([...seen].sort((left, right) => left - right)).toEqual(seen);
+  });
+
+  it('reports a streamed answer cut by the token ceiling as truncated (F037)', async () => {
+    const input = await assistantInput();
+    const events = [
+      { model: 'deepseek-flash', choices: [{ index: 0, delta: { content: '{"kind":' } }] },
+      { model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: 'length' }] },
+      {
+        model: 'deepseek-flash',
+        choices: [],
+        usage: { prompt_tokens: 45, completion_tokens: 8_192, total_tokens: 8_237, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 35 },
+      },
+    ];
+    const stream = `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`;
+    const truncatedFetch: typeof fetch = async () => new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    await expect(respondToTablePrompt(testEnv, input, truncatedFetch)).rejects.toMatchObject({ code: 'MODEL_PROVIDER_OUTPUT_TRUNCATED' });
   });
 });

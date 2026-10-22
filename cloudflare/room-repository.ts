@@ -941,6 +941,22 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
+  /** Best-effort live progress for a running assistant job; never changes the job status. */
+  async updateTableAssistantProgress(
+    id: string,
+    workspaceId: string,
+    epoch: number,
+    actorId: string,
+    progress: { receivedChars: number; reasoningChars: number; updatedAt: number },
+  ): Promise<void> {
+    this.storage.sql.exec(
+      `UPDATE model_jobs SET data = json_set(data, '$.progress', json(?))
+       WHERE id = ? AND workspace_id = ? AND epoch = ? AND actor_id = ? AND status = 'running'
+       AND json_extract(data, '$.kind') = 'table-assistant'`,
+      JSON.stringify(progress), id, workspaceId, epoch, actorId,
+    );
+  }
+
   async finishTableAssistantJob(
     id: string,
     workspaceId: string,
@@ -955,7 +971,7 @@ export class RoomRepository implements WorkspaceRepository {
           `UPDATE model_jobs SET status = ?, data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
            AND actor_id = ? AND status = 'running' AND revoked_at IS NULL
            AND json_extract(data, '$.kind') = 'table-assistant'`,
-          status, JSON.stringify(data), id, workspaceId, epoch, actorId,
+          status, JSON.stringify(status === 'failed' ? { ...data, failedAt: Date.now() } : data), id, workspaceId, epoch, actorId,
         );
       });
       const row = this.rows(
@@ -1150,7 +1166,7 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec(
         `UPDATE model_jobs SET status = 'failed', data = ? WHERE id = ? AND workspace_id = ? AND epoch = ?
          AND actor_id = ? AND status IN ('running', 'committing') AND revoked_at IS NULL`,
-        JSON.stringify({ ...job.data, failure, ...(reasons.length ? { reasons } : {}) }), id, workspaceId, epoch, actorId,
+        JSON.stringify({ ...job.data, failure, failedAt: Date.now(), ...(reasons.length ? { reasons } : {}) }), id, workspaceId, epoch, actorId,
       );
       return 'failed';
     }));

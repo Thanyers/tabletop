@@ -68,6 +68,9 @@ interface TestTableAssistantJob {
   expectedRevision: string;
   expectedEpoch: number;
   message?: string;
+  failureCode?: string;
+  failureReasons?: string[];
+  durationMs?: number;
   result?: TableAssistantResult;
   confirmationStatus?: 'available' | 'processing' | 'confirmed' | 'stale' | 'rejected';
   serverOmittedConversationEntries?: number;
@@ -751,6 +754,49 @@ describe('Cloudflare room Durable Object', () => {
     expect(accepted.response.status).toBe(202);
     await waitForTableAssistantJob(other.stub, other.roomId, owner, tableAssistantJobId(other.roomId, other.workspace.epoch, owner.id, commandId));
     expect(observedInputs.at(-1)?.conversation).toEqual([]);
+  });
+
+  it('publishes a machine-readable assistant failure code with its duration (F037)', async () => {
+    const owner = newActor('Assistant failure owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    vi.mocked(respondToTablePrompt).mockRejectedValue(new DomainError(
+      'MODEL_PROVIDER_TIMEOUT', 'PRIVATE_PROVIDER_TEXT_SENTINEL',
+    ));
+    const commandId = randomUUID();
+    const jobId = tableAssistantJobId(roomId, workspace.epoch, owner.id, commandId);
+    const accepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: { commandId, expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+        prompt: 'Explain why the car loop stopped.', consent: true }, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    const failed = await waitForTableAssistantJob(stub, roomId, owner, jobId);
+    expect(failed.status).toBe('failed');
+    expect(failed.failureCode).toBe('MODEL_PROVIDER_TIMEOUT');
+    expect(failed.message).toContain('(code MODEL_PROVIDER_TIMEOUT)');
+    expect(failed.durationMs).toBeGreaterThanOrEqual(0);
+    expect(JSON.stringify(failed)).not.toContain('PRIVATE_PROVIDER_TEXT_SENTINEL');
+  });
+
+  it('keeps sanitized validation reasons and the failure code for tests (F037)', async () => {
+    const owner = newActor('Assistant reason owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    vi.mocked(respondToTablePrompt).mockRejectedValue(new ReasonedDomainError(
+      'MODEL_PROVIDER_OUTPUT_REJECTED', 'PRIVATE_PROVIDER_TEXT_SENTINEL', ['A rule edit must keep every field definition.'],
+    ));
+    const commandId = randomUUID();
+    const jobId = tableAssistantJobId(roomId, workspace.epoch, owner.id, commandId);
+    const accepted = await call<TestTableAssistantJob>(stub, `/api/workspaces/${roomId}/assistant`, owner, {
+      method: 'POST', body: { commandId, expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+        prompt: 'Rename the status field.', consent: true }, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    const failed = await waitForTableAssistantJob(stub, roomId, owner, jobId);
+    expect(failed.failureCode).toBe('MODEL_PROVIDER_OUTPUT_REJECTED');
+    expect(failed.failureReasons).toEqual(['A rule edit must keep every field definition.']);
+    expect(failed.message).toContain('A rule edit must keep every field definition.');
+    expect(JSON.stringify(failed)).not.toContain('PRIVATE_PROVIDER_TEXT_SENTINEL');
   });
 
   it('bounds table assistant continuity to six completed entries and whole-entry 16 KiB pruning', async () => {

@@ -27,7 +27,7 @@ import {
 } from '../src/tabletop/shared/table-assistant-contracts.js';
 import { decideDomain } from '../src/tabletop/domain/index.js';
 import { CURSOR_MIN_INTERVAL_MS, cursorRelay, parseCursorInput, type CursorInput } from '../src/tabletop/shared/cursor-protocol.js';
-import { modelFailureMessage, safeModelFailureCode, safeModelFailureReasons } from './model-failure.js';
+import { cleanReasons, modelFailureMessage, safeAssistantFailureCode, safeModelFailureCode, safeModelFailureReasons, tableAssistantFailureMessage } from './model-failure.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
@@ -238,15 +238,6 @@ function parseTableAssistantHistoryQuery(url: URL): { before?: string; limit: nu
   return { ...(beforeValues[0] === undefined ? {} : { before: beforeValues[0] }), limit };
 }
 
-function tableAssistantFailureMessage(failure: unknown): string {
-  if (failure === 'STALE_WORKSPACE' || failure === 'STALE_REVISION') {
-    return 'The table changed while the response was being prepared. Refresh and ask again.';
-  }
-  if (failure === 'TABLE_READ_ONLY') return 'This table is read-only right now. No action was applied.';
-  if (failure === 'ACTION_REJECTED') return 'The suggested action is not valid for the current table state.';
-  return 'The table assistant could not complete this request. Review the table and try again.';
-}
-
 function tableAssistantConfirmationMessage(status: unknown, failure: unknown): string | undefined {
   if (failure === 'IDEMPOTENCY_MISMATCH') {
     return 'This confirmation conflicted with an earlier command. No suggested action was applied. Ask for a fresh suggestion.';
@@ -271,6 +262,7 @@ function tableAssistantJobViewFor(job: RoomModelJob): TableAssistantJob {
       || job.data.expectedEpoch !== job.epoch || prompt.length === 0
       || prompt.length > MAX_TABLE_ASSISTANT_PROMPT_CHARS) throw new AuthorityError('INTERNAL_ERROR');
   if (job.status === 'failed' || job.status === 'revoked') {
+    const failureReasons = cleanReasons(job.data.reasons);
     return {
       id: job.id,
       createdAt: job.createdAt,
@@ -278,17 +270,36 @@ function tableAssistantJobViewFor(job: RoomModelJob): TableAssistantJob {
       status: 'failed',
       expectedRevision,
       expectedEpoch: job.epoch,
-      message: tableAssistantFailureMessage(job.data.failure),
+      message: tableAssistantFailureMessage(job.data.failure, failureReasons),
+      failureCode: safeAssistantFailureCode(job.data.failure),
+      ...(failureReasons.length ? { failureReasons } : {}),
+      ...(typeof job.data.failedAt === 'number' && job.data.failedAt >= job.createdAt
+        ? { durationMs: Math.min(3_600_000, Math.round(job.data.failedAt - job.createdAt)) }
+        : {}),
     };
   }
-  if (job.status === 'running') return {
-    id: job.id,
-    createdAt: job.createdAt,
-    prompt,
-    status: 'running',
-    expectedRevision,
-    expectedEpoch: job.epoch,
-  };
+  if (job.status === 'running') {
+    const progress = job.data.progress;
+    const live = isRecord(progress)
+      && Number.isSafeInteger(progress.receivedChars) && (progress.receivedChars as number) >= 0 && (progress.receivedChars as number) <= 1_000_000
+      && Number.isSafeInteger(progress.reasoningChars) && (progress.reasoningChars as number) >= 0 && (progress.reasoningChars as number) <= 1_000_000
+      && Number.isSafeInteger(progress.updatedAt) && (progress.updatedAt as number) >= 0
+      ? {
+        receivedChars: progress.receivedChars as number,
+        reasoningChars: progress.reasoningChars as number,
+        updatedAt: progress.updatedAt as number,
+      }
+      : null;
+    return {
+      id: job.id,
+      createdAt: job.createdAt,
+      prompt,
+      status: 'running',
+      expectedRevision,
+      expectedEpoch: job.epoch,
+      ...(live ? { progress: live } : {}),
+    };
+  }
   const parsed = tableAssistantResultSchema.safeParse(job.data.result);
   if (!parsed.success) throw new AuthorityError('INTERNAL_ERROR');
   return {
@@ -1120,6 +1131,17 @@ export class Room extends DurableObject<Env> {
       const job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
       if (!job || job.status !== 'running' || job.data.kind !== 'table-assistant') return;
 
+      let lastProgressWrite = 0;
+      const onProgress = (progress: { receivedChars: number; reasoningChars: number }) => {
+        const now = Date.now();
+        if (now - lastProgressWrite < 900) return;
+        lastProgressWrite = now;
+        void this.repository.updateTableAssistantProgress(
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
+          { ...progress, updatedAt: now },
+        ).catch(() => undefined);
+      };
+
       const response = await respondToTablePrompt(this.env, {
         workspace: authorized.workspace,
         actorId: input.actorId,
@@ -1129,7 +1151,7 @@ export class Room extends DurableObject<Env> {
         consent: true,
         conversation: input.conversation,
         conversationOmittedCount: input.conversationOmittedCount,
-      });
+      }, undefined, onProgress);
       if (response.jobId !== input.jobId) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
       const result = tableAssistantResultSchema.safeParse(response.result);
       if (!result.success) throw new AuthorityError('TABLE_ASSISTANT_OUTPUT_REJECTED');
@@ -1186,12 +1208,14 @@ export class Room extends DurableObject<Env> {
         input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'completed', data,
       );
     } catch (error) {
+      // Keep the specific cause instead of flattening every fault into one untraceable code.
       const failure = error instanceof AuthorityError && error.code === 'TABLE_READ_ONLY'
         ? 'TABLE_READ_ONLY'
-        : 'ASSISTANT_FAILED';
+        : safeModelFailureCode(error);
+      const reasons = safeModelFailureReasons(error);
       await this.repository.finishTableAssistantJob(
         input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, 'failed',
-        { ...initialData, failure },
+        { ...initialData, failure, ...(reasons.length ? { reasons } : {}) },
       ).catch(() => false);
     }
   }
