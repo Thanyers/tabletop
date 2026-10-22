@@ -1,0 +1,8 @@
+# F051: app pages (/new, /join, /t/<id>) are kept out of search results with an
+# X-Robots-Tag: noindex header from the Worker, not with Disallow here: a crawler
+# blocked by robots.txt never sees that header and may still list the bare URL.
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://tabletop.ptchrr.workers.dev/sitemap.xml

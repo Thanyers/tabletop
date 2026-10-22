@@ -1,7 +1,7 @@
 import { RoleSettings } from './ui/RoleSettings';
 import { viewerCan } from './shared/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
 import { NODE_TABLE_MEMBER_SEATS, TABLE_MEMBER_SEATS, tableMemberSeatLimit, type CaseKind, type Seat, type SessionView, type WorkspaceView } from './shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
@@ -12,7 +12,7 @@ import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { HeaderPeople } from './ui/HeaderPeople';
-import { AccountBadge, AccountSignIn } from './ui/account';
+import { AccountBadge, AccountSignIn, SignedInWelcome } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
 import { NewNoteButton } from './ui/NoteCard';
@@ -26,6 +26,7 @@ import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
 import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './ui/table-candidate-apply';
 import { recordServerRoll } from './ui/roll-store';
+import { LoadingScreen } from '../loading/LoadingScreen';
 import './ui/tabletop.css';
 import './ui/calm-workspace.css';
 
@@ -85,6 +86,10 @@ function workspaceLabel(workspace: WorkspaceView): string {
   return workspaceDisplayTitle(workspace);
 }
 
+function readLastWorkspace(): string | null {
+  try { return window.localStorage.getItem(lastWorkspaceKey); } catch { return null; }
+}
+
 function saveLastWorkspace(id: string | null): void {
   try {
     if (id) window.localStorage.setItem(lastWorkspaceKey, id);
@@ -115,6 +120,13 @@ function accountForHeader(authStatus: AuthStatus | null, session: SessionView): 
   return authStatus.user ?? { id: session.actorId, name: session.name, email: '', isAdmin: false };
 }
 
+type AppPage = 'landing' | 'tables' | 'new';
+
+/** Where to land after Google sign-in: the page asked for, or the table list when it was the landing page. */
+function rememberReturnPath(path: string): void {
+  saveReturnPath(parseRoute(path)?.name === 'landing' ? routePath({ name: 'tables' }) : path);
+}
+
 export default function TabletopApp() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [capabilities, setCapabilities] = useState<TabletopCapabilities>(localCapabilities);
@@ -122,9 +134,9 @@ export default function TabletopApp() {
   const [view, setView] = useState<WorkspaceView | null>(null);
   const [starting, setStarting] = useState(true);
   // Which page shows while no table is open: the table list or the /new start page.
-  const [page, setPage] = useState<'home' | 'new'>('home');
+  const [page, setPage] = useState<AppPage>('landing');
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
-  const pageRef = useRef<'home' | 'new'>('home');
+  const pageRef = useRef<AppPage>('landing');
   pageRef.current = page;
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'error' | 'success'; action?: { label: string; run: () => void } } | null>(null);
@@ -190,7 +202,7 @@ export default function TabletopApp() {
     }
     if (next) {
       saveLastWorkspace(next.id);
-      setPage('home');
+      setPage('tables');
     }
   }, []);
 
@@ -298,7 +310,7 @@ export default function TabletopApp() {
             if (savePendingInvite(fragmentTicket)) clearInviteFragment();
             else showNotice('This tab could not save the invitation securely. Keep the invitation link and try again after signing in.', 'error');
           }
-          saveReturnPath(returnPath ?? window.location.pathname);
+          rememberReturnPath(returnPath ?? window.location.pathname);
           setSession(null);
           setWorkspace(null);
           return;
@@ -318,6 +330,7 @@ export default function TabletopApp() {
           showNotice('Feature access could not be checked. Uploads and AI requests are disabled until you refresh.', 'error');
           if (error instanceof ApiFailure && error.status === 401) {
             if (currentAuth?.mode === 'google') setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
+            rememberReturnPath(returnPath ?? window.location.pathname);
             return;
           }
         }
@@ -348,23 +361,21 @@ export default function TabletopApp() {
             if (error instanceof ApiFailure && error.status === 401) throw error;
             if (!alive) return;
             // Do not reveal whether the table exists; members and outsiders see the same notice.
-            window.history.replaceState({}, document.title, '/');
+            setPage('tables');
             showNotice('This table is not available to this account. Ask the table owner for an invitation.', 'error');
           }
         } else if (route?.name === 'new') {
           setPage('new');
-        } else if (route?.name !== 'join') {
-          if (!route) window.history.replaceState({}, document.title, '/');
-          let lastId: string | null = null;
-          try { lastId = window.localStorage.getItem(lastWorkspaceKey); } catch { lastId = null; }
-          const resumeId = currentSession.workspaces.find((item) => item.id === lastId)?.id ?? currentSession.workspaces[0]?.id;
-          if (resumeId) {
-            const resumed = await tabletopClient.workspace(resumeId);
-            if (alive) setWorkspace(resumed);
-          }
+        } else if (route?.name === 'tables' || route?.name === 'join') {
+          // A new account has no list to show, so it goes straight to starting a table.
+          setPage(currentSession.workspaces.length === 0 ? 'new' : 'tables');
+        } else {
+          // `/` and unknown paths show the landing page; the first URL sync rewrites unknown paths to `/`.
+          setPage('landing');
         }
       } catch (error) {
         if (error instanceof ApiFailure && error.status === 401 && currentAuth?.mode === 'google') {
+          rememberReturnPath(returnPath ?? window.location.pathname);
           setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
         }
         if (alive) showNotice(errorText(error), 'error');
@@ -382,8 +393,9 @@ export default function TabletopApp() {
     const mode = urlSyncRef.current;
     urlSyncRef.current = 'push';
     if (mode === 'none' || window.location.pathname === target) return;
-    if (mode === 'replace') window.history.replaceState({}, document.title, target);
-    else window.history.pushState({}, document.title, target);
+    // Pushed entries remember the app page before them, so "Your tables" can step back instead of stacking `/`.
+    if (mode === 'replace') window.history.replaceState(window.history.state, document.title, target);
+    else window.history.pushState({ tabletopFrom: window.location.pathname }, document.title, target);
   }, [view?.id, page, starting]);
 
   useEffect(() => {
@@ -396,10 +408,9 @@ export default function TabletopApp() {
           setWorkspace(opened);
         }, (error) => showNotice(errorText(error), 'error'));
       } else {
-        const nextPage = route?.name === 'new' ? 'new' : 'home';
+        const nextPage: AppPage = route?.name === 'new' ? 'new' : route?.name === 'tables' ? 'tables' : 'landing';
         if (!workspaceRef.current && pageRef.current === nextPage) return;
         urlSyncRef.current = 'none';
-        saveLastWorkspace(null);
         setWorkspace(null);
         setPage(nextPage);
       }
@@ -441,6 +452,8 @@ export default function TabletopApp() {
     setBusy('workspace.create');
     try {
       const next = await tabletopClient.createWorkspace(kind);
+      // Tables are only created from /new; replace it so Back does not reopen the start page.
+      urlSyncRef.current = 'replace';
       setWorkspace(next);
       await refreshSession();
       showNotice(`${caseInfo[kind].title} is ready.`, 'success');
@@ -457,7 +470,26 @@ export default function TabletopApp() {
     setPage('new');
   }, [setWorkspace]);
 
-  const leaveStartPage = useCallback(() => setPage('home'), []);
+  const leaveStartPage = useCallback(() => {
+    if ((window.history.state as { tabletopFrom?: string } | null)?.tabletopFrom === routePath({ name: 'tables' })) {
+      window.history.back();
+      return;
+    }
+    urlSyncRef.current = 'replace';
+    setPage('tables');
+  }, []);
+
+  const openTablesPage = useCallback(() => {
+    setWorkspaceMenuOpen(false);
+    setWorkspace(null);
+    setPage('tables');
+  }, [setWorkspace]);
+
+  const openLandingPage = useCallback(() => {
+    setWorkspaceMenuOpen(false);
+    setWorkspace(null);
+    setPage('landing');
+  }, [setWorkspace]);
 
   // A typed description starts an empty shared table and waits in its rule draft;
   // nothing reaches the model until the owner consents; source files are optional.
@@ -821,7 +853,7 @@ export default function TabletopApp() {
   if (!session) return <FailureScreen onRetry={retryBootstrap} notice={notice} />;
   const headerAccount = accountForHeader(authStatus, session);
   if (!view && page === 'new') return <StartPage
-    header={<ChooserHeader session={session} account={headerAccount} busy={busy} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} onHome={leaveStartPage} />}
+    header={<ChooserHeader session={session} account={headerAccount} busy={busy} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} onHome={openLandingPage} />}
     notice={<NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />}
     busy={busy !== null}
     tableReadOnly={capabilities.tableReadOnly === true}
@@ -831,7 +863,8 @@ export default function TabletopApp() {
     onStartEmpty={() => void createWorkspace('table')}
     onBack={leaveStartPage}
   />;
-  if (!view) return <WorkspaceChooser session={session} account={headerAccount} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
+  if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} onOpenTables={openTablesPage} onStart={openStartPage} />;
+  if (!view) return <WorkspaceChooser session={session} account={headerAccount} onHome={openLandingPage} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
@@ -873,7 +906,7 @@ export default function TabletopApp() {
     <UploadCapabilityProvider enabled={capabilities.uploads} reason={capabilities.uploads ? '' : 'File uploads are disabled for this service. Manual editing remains available.'}>
     <div className="tt-app" data-workspace-kind={view?.kind}>
       <header className="tt-topbar">
-        <a className="tt-brand" href="/" aria-label="All tables" onClick={(event) => { event.preventDefault(); setWorkspace(null); saveLastWorkspace(null); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
+        <a className="tt-brand" href="/" aria-label="Tabletop home" onClick={(event) => { event.preventDefault(); openLandingPage(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a>
         <span className="tt-topbar__divider" aria-hidden="true" />
         <div className="tt-workspace-picker">
           {renameDraft !== null ? <form className="tt-table-rename" onSubmit={(event) => { event.preventDefault(); submitRename(); }}>
@@ -888,7 +921,7 @@ export default function TabletopApp() {
           </>}
           {workspaceMenuOpen && <>
             <button className="tt-menu-dismiss" type="button" aria-label="Close table menu" onClick={() => setWorkspaceMenuOpen(false)} />
-            <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<hr /><span className="tt-kicker">START A TABLE</span><button role="menuitem" type="button" onClick={openStartPage}><Plus size={15} /><span><strong>New table</strong><small>Choose a prepared table or describe your own</small></span><ArrowRight size={14} /></button><hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
+            <div className="tt-workspace-menu" role="menu"><span className="tt-kicker">YOUR TABLES</span>{session.workspaces.map((item) => <button role="menuitem" type="button" className={item.id === view.id ? 'is-current' : ''} key={item.id} onClick={() => void openWorkspace(item.id)}><CaseIcon kind={item.kind} /><span><strong>{item.title}</strong><small>{caseInfo[item.kind].title} · {item.role}</small></span>{item.id === view.id && <Check size={14} />}</button>)}<button role="menuitem" type="button" onClick={openTablesPage}><ArrowLeft size={15} /><span><strong>All tables</strong><small>See every table you own or joined</small></span></button><hr /><span className="tt-kicker">START A TABLE</span><button role="menuitem" type="button" onClick={openStartPage}><Plus size={15} /><span><strong>New table</strong><small>Choose a prepared table or describe your own</small></span><ArrowRight size={14} /></button><hr /><a role="menuitem" className="tt-workspace-menu__demo" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={15} fill="currentColor" /><span><strong>Auto demo</strong><small>Opens in a new tab</small></span><ArrowRight size={14} /></a></div>
           </>}
         </div>
         <div className="tt-topbar__spacer" />
@@ -950,16 +983,13 @@ export default function TabletopApp() {
   );
 }
 
-function LoadingScreen() {
-  return <main className="tt-loading" role="status" aria-live="polite"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><strong>Opening your table</strong><span><LoaderCircle size={14} className="tt-spin" /> Checking your workspace</span></main>;
-}
 
 function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onRetry: () => void }) {
   return <main className="tt-failure"><span className="tt-dialog__mark"><CircleAlert size={18} /></span><p className="tt-kicker">TABLETOP</p><h1>The table could not be opened</h1><p>{notice?.text ?? 'Check your connection and try again.'}</p><button type="button" className="tt-button tt-button--primary" onClick={onRetry}><RefreshCw size={14} /> Try again</button></main>;
 }
 
 function ChooserHeader({ session, account, busy, onSignOut, onLoadAdminWorkspaces, onHome }: { session: SessionView; account: GoogleAuthUser | null; busy: string | null; onSignOut: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; onHome?: () => void }) {
-  return <header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop" onClick={(event) => { event.preventDefault(); onHome?.(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>;
+  return <header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop home" onClick={(event) => { event.preventDefault(); onHome?.(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>;
 }
 
 function NoticeBanner({ notice, onDismiss }: { notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismiss: () => void }) {
@@ -967,13 +997,15 @@ function NoticeBanner({ notice, onDismiss }: { notice: { text: string; tone: 'in
   return <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p><button type="button" aria-label="Dismiss message" onClick={onDismiss}><X size={14} /></button></div>;
 }
 
-function WorkspaceChooser({ session, account, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onStart, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onStart: () => void; onOpen: (id: string) => void }) {
-  return <main className="tt-chooser"><ChooserHeader session={session} account={account} busy={busy} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} />
+function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, busy, tableReadOnly, notice, onDismissNotice, onSignOut, onStart, onOpen }: { session: SessionView; account: GoogleAuthUser | null; onHome: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; busy: string | null; tableReadOnly: boolean; notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismissNotice: () => void; onSignOut: () => void; onStart: () => void; onOpen: (id: string) => void }) {
+  const lastId = readLastWorkspace();
+  const orderedWorkspaces = [...session.workspaces].sort((a, b) => Number(b.id === lastId) - Number(a.id === lastId));
+  return <main className="tt-chooser"><ChooserHeader session={session} account={account} busy={busy} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} onHome={onHome} />
     <NoticeBanner notice={notice} onDismiss={onDismissNotice} />
     <section className="tt-chooser__content"><h1>What are you here to do?</h1><p>Start with what you're working on. Your table will take shape around it.</p>
       <button className="tt-start-own-table" type="button" disabled={busy !== null} onClick={onStart}><Plus size={18} />Start a new table</button>
       {tableReadOnly && <p role="status">New shared tables are temporarily paused. You can still open a prepared table or an existing one.</p>}
-      {session.workspaces.length > 0 && <div className="tt-existing-tables"><h2>Pick up where you left off</h2>{session.workspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
+      {session.workspaces.length > 0 && <div className="tt-existing-tables"><h2>Pick up where you left off</h2>{orderedWorkspaces.map((workspace) => <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span><ArrowRight size={16} /></button>)}</div>}
     </section>
   </main>;
 }

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MAX_TABLE_MEMBER_SEATS, type SessionView, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { randomId } from '../server/codec.js';
 import { BUILD_INFO_FILE, parseBuildInfo } from '../server/build-info.js';
+import { isPagePath, servePage } from './pages.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { accountForSession, authenticateRequest, authStatus, finishGoogle, limit, logout, primary, publicOrigin, requireMutation, requireOrigin, startGoogle } from './auth.js';
 import { GOOGLE_CALLBACK_PATH, type DirectoryReference, type Env } from './contracts.js';
@@ -96,7 +97,7 @@ async function adminWorkspaces(request: Request, env: Env): Promise<Response> {
 }
 
 async function buildVersion(request: Request, env: Env): Promise<Response> {
-  // An absent file falls through to the SPA index.html, which fails parsing and reports 404.
+  // An absent file is a 404 from the asset binding (or HTML from older builds, which fails parsing).
   const asset = await env.ASSETS.fetch(new Request(new URL(`/${BUILD_INFO_FILE}`, request.url)));
   const info = asset.ok ? parseBuildInfo(await asset.json().catch(() => null)) : null;
   if (!info) throw new AuthorityError('NOT_FOUND', 'Build information is unavailable.', 404);
@@ -105,6 +106,8 @@ async function buildVersion(request: Request, env: Env): Promise<Response> {
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  // F051: pages come before the origin check, as they did when the asset server answered them.
+  if ((request.method === 'GET' || request.method === 'HEAD') && isPagePath(url.pathname)) return servePage(request, env);
   if (url.origin !== publicOrigin(env)) throw new AuthorityError('ORIGIN_REJECTED');
   const path = url.pathname;
   const method = request.method;
@@ -115,7 +118,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (method === 'GET' && path === '/version') return buildVersion(request, env);
   if (path.startsWith('/internal/')) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
-  if (!path.startsWith('/api/')) return env.ASSETS.fetch(request);
+  if (!path.startsWith('/api/')) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
   if (method === 'GET' && path === '/api/auth/status') return authStatus(request, env);
   if (method === 'GET' && path === '/api/auth/google/start') return startGoogle(request, env);
   if (method === 'GET' && path === GOOGLE_CALLBACK_PATH) return finishGoogle(request, env);

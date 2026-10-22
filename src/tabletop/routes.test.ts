@@ -5,16 +5,17 @@ const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
 
 describe('app routes', () => {
   it('maps each page path to a route and back', () => {
-    expect(parseRoute('/')).toEqual({ name: 'home' });
+    expect(parseRoute('/')).toEqual({ name: 'landing' });
+    expect(parseRoute('/tables/')).toEqual({ name: 'tables' });
     expect(parseRoute('/new')).toEqual({ name: 'new' });
     expect(parseRoute('/join/')).toEqual({ name: 'join' });
     expect(parseRoute(`/t/${id}`)).toEqual({ name: 'table', id });
     expect(parseRoute(`/t/${id}/`)).toEqual({ name: 'table', id });
-    for (const path of ['/', '/new', '/join', `/t/${id}`]) expect(routePath(parseRoute(path)!)).toBe(path);
+    for (const path of ['/', '/tables', '/new', '/join', `/t/${id}`]) expect(routePath(parseRoute(path)!)).toBe(path);
   });
 
   it('rejects paths the app does not own and malformed table ids', () => {
-    for (const path of ['/demo', '/t/', '/t/not-a-uuid', `/t/${id.toUpperCase()}`, `/t/${id}/extra`, '/table/abc', '/api/session', '/t/0f8fad5b-d9cb-169f-a165-70867728950e']) {
+    for (const path of ['/demo', '/t/', '/t/not-a-uuid', `/t/${id.toUpperCase()}`, `/t/${id}/extra`, `/t/${id}/history`, '/table/abc', '/api/session', '/t/0f8fad5b-d9cb-169f-a165-70867728950e']) {
       expect(parseRoute(path)).toBeNull();
     }
   });
