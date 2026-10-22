@@ -31,6 +31,8 @@
 .tt-public-welcome .tt-brand > span:last-child > span { color: var(--tt-moss, #356e5d); }
 .tt-public-welcome__header-note { margin-left: auto; color: var(--tt-muted, #667268); font-size: 0.75rem; }
 .tt-public-welcome__signin { display: inline-flex; min-height: 2.25rem; align-items: center; gap: 0.25rem; padding: 0 0.6875rem; border: 1px solid var(--tt-line, #d9d4c4); border-radius: 0.625rem; color: var(--tt-moss, #356e5d); font-size: 0.75rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.tt-public-welcome__language { display: inline-flex; min-height: 2.25rem; align-items: center; gap: 0.3125rem; padding: 0 0.625rem; border: 0; border-radius: 0.625rem; color: var(--tt-muted, #667268); background: transparent; font: 600 0.75rem/1 Manrope, 'Noto Sans Thai', system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+.tt-public-welcome__language:hover { color: var(--tt-ink, #303d3a); background: var(--tt-cream-2, #eeeee2); }
 .tt-public-welcome__signin:hover { border-color: var(--tt-moss, #356e5d); background: var(--tt-green-2, #e8f0e4); }
 
 .tt-public-welcome__content { width: min(100%, 80rem); margin: 0 auto; padding: 0 clamp(1.25rem, 4vw, 3.375rem); }
@@ -153,7 +155,7 @@
 .tt-public-welcome__thesis span { flex: 0 0 auto; color: var(--tt-ochre-1, #89632f); font: 700 0.5625rem/1.4 Manrope, 'Noto Sans Thai', system-ui, sans-serif; letter-spacing: .1em; }
 .tt-public-welcome__thesis p { margin: 0; color: var(--tt-ink, #303d3a); font-size: clamp(1.125rem, 2.4vw, 1.6875rem); font-weight: 650; letter-spacing: -.035em; }
 
-.tt-public-welcome__lenses { padding: clamp(2.8125rem, 7vw, 4.75rem) 0; border-top: 1px solid var(--tt-line, #d9d4c4); }
+.tt-public-welcome__lenses { padding: clamp(2.8125rem, 7vw, 4.75rem) 0; }
 .tt-public-welcome__section-heading { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-bottom: 1.875rem; }
 .tt-public-welcome__section-heading h2, .tt-public-welcome__today-heading h2 { max-width: 25ch; margin: 0.625rem 0 0; color: var(--tt-ink, #303d3a); font-size: clamp(1.5rem, 3.2vw, 2.375rem); letter-spacing: -.04em; line-height: 1.2; }
 .tt-public-welcome__section-heading > p { max-width: 37ch; margin: 0; color: var(--tt-muted, #667268); font-size: 0.75rem; line-height: 1.7; }
@@ -180,7 +182,7 @@
 .tt-public-welcome__demos-heading > p { max-width: 45ch; margin: 0; color: var(--tt-muted, #667268); font-size: 0.6875rem; line-height: 1.7; }
 .tt-public-welcome__demo-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.125rem; margin-top: 1.1875rem; }
 .tt-public-welcome__demo-figures figure { min-width: 0; margin: 0; padding: 0.625rem; border: 1px solid var(--tt-line, #d9d4c4); border-radius: var(--tt-radius-large, 1.125rem); background: var(--tt-card-surface, #fffdf7); box-shadow: var(--tt-shadow-piece, 0 0.1875rem 0 #d8d4c480, 0 0.5rem 1.25rem #303d3a0d); }
-.tt-public-welcome__demo-figures img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: top; border: 1px solid var(--tt-line, #d9d4c4); border-radius: 0.6875rem; }
+.tt-public-welcome__demo-figures img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; object-position: top; border: 1px solid var(--tt-line, #d9d4c4); border-radius: 0.6875rem; }
 .tt-public-welcome__demo-figures figcaption { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 0.25rem 0.1875rem; }
 .tt-public-welcome__demo-figures figcaption > span { display: grid; gap: 0.125rem; }
 .tt-public-welcome__demo-figures strong { color: var(--tt-ink, #303d3a); font-size: 0.8125rem; }
@@ -188,6 +190,10 @@
 .tt-public-welcome__demo-figures a { display: inline-flex; min-height: 2.125rem; align-items: center; gap: 0.3125rem; padding: 0 0.5625rem; border-radius: 0.5625rem; color: var(--tt-moss, #356e5d); font-size: 0.6875rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
 .tt-public-welcome__demo-figures a:hover { background: var(--tt-green-2, #e8f0e4); }
 .tt-public-welcome__demo-note { margin: 0.625rem 0 0; color: var(--tt-muted, #667268); font-size: 0.625rem; }
+
+.tt-public-welcome__closing { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: clamp(2.5rem, 6vw, 3.75rem) 0; border-top: 1px solid var(--tt-line, #d9d4c4); }
+.tt-public-welcome__closing h2 { max-width: 24ch; margin: 0.625rem 0 0; color: var(--tt-ink, #303d3a); font-size: clamp(1.375rem, 2.8vw, 2rem); letter-spacing: -.035em; line-height: 1.25; }
+.tt-public-welcome__closing .tt-account-gate__google { flex: none; width: auto; min-width: 15rem; }
 
 .tt-public-welcome__footer { display: flex; min-height: 4.75rem; align-items: center; justify-content: space-between; gap: 1.25rem; color: var(--tt-muted, #667268); font-size: 0.6875rem; }
 .tt-public-welcome .tt-public-welcome__footer .tt-brand { font-size: 0.9375rem; }
@@ -206,6 +212,7 @@
 @media (max-width: 700px) {
   .tt-public-welcome__header { min-height: 3.875rem; }
   .tt-public-welcome__header-note { display: none; }
+  .tt-public-welcome__language { margin-left: auto; }
   .tt-public-welcome__hero { grid-template-columns: minmax(0, 1fr); gap: 1.6875rem; padding-top: 2.625rem; }
   .tt-public-welcome__hero h1 { max-width: 16ch; font-size: clamp(2.1875rem, 8vw, 3.0625rem); }
   .tt-public-welcome__story { order: 2; }
@@ -220,6 +227,8 @@
   .tt-public-welcome__capabilities article { padding-top: 0.8125rem; }
   .tt-public-welcome__capabilities p { max-width: 54ch; }
   .tt-public-welcome__demo-figures { grid-template-columns: minmax(0, 1fr); }
+  .tt-public-welcome__closing { align-items: stretch; flex-direction: column; }
+  .tt-public-welcome__closing .tt-account-gate__google { width: 100%; min-width: 0; }
 }
 
 @media (max-width: 420px) {
@@ -234,3 +243,8 @@
 @media (prefers-reduced-motion: reduce) {
   .tt-public-welcome *, .tt-public-welcome *::before, .tt-public-welcome *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; }
 }
+
+/* Thai stacks vowels and tone marks above and below the line: no negative tracking, taller lines. */
+.tt-public-welcome[lang="th"] :is(h1, h2, h3) { letter-spacing: 0; line-height: 1.4; }
+.tt-public-welcome[lang="th"] .tt-public-welcome__hero h1 { font-size: clamp(2rem, 3.8vw, 3.125rem); }
+.tt-public-welcome[lang="th"] :is(.tt-public-welcome__eyebrow, .tt-account-gate__eyebrow, .tt-public-welcome__capability-label) { letter-spacing: .02em; }
