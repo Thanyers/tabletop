@@ -4,6 +4,7 @@ import { createInvoiceState, handleInvoiceCommand } from './invoice';
 import { createTeachingState, handleTeachingCommand } from './teaching';
 import { createEncounterState, handleEncounterCommand } from './encounter';
 import { handleEvolutionCommand } from './evolution';
+import { handleDisplayCommand } from './display';
 import { createTableState, handleTableCommand } from './table';
 import { handleCanvasLayout } from './canvas-layout';
 
@@ -27,6 +28,8 @@ export function decideDomain(state: DomainState, command: DomainCommand, ctx: Ac
   if (state.kind === 'table' && command.type === 'canvas.layout') return handleCanvasLayout(state, command.payload, ctx);
   const access = handleAccessCommand(state, command.type, command.payload, ctx);
   if (access) return access;
+  const display = handleDisplayCommand(state, command.type, command.payload, ctx);
+  if (display) return display;
   if (state.kind === 'table') decision = handleTableCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'invoice') decision = handleInvoiceCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'teaching') decision = handleTeachingCommand(state, command.type, command.payload, ctx);

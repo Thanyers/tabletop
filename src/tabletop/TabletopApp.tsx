@@ -883,6 +883,7 @@ export default function TabletopApp() {
           <a href="/demo" target="_blank" rel="noopener"><Play size={15} />Try a demo</a>
           <button type="button" disabled={busy !== null} onClick={() => void openWorkspace(view.id)}><RefreshCw size={15} />Refresh table</button>
           {canReset && <button type="button" onClick={() => setResetOpen(true)}><RotateCcw size={15} />Reset table</button>}
+          <DisplaySettings view={view} disabled={busy !== null || tableReadOnly} onCommand={runCommand} />
           <small>{view.actor.role} · rules r{view.domain.ruleRevision} · data r{view.domain.dataRevision}</small>
           {headerAccount && <AccountBadge user={headerAccount} busy={busy === 'auth.logout'} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />}
         </div></details>
@@ -1050,4 +1051,24 @@ async function fileToBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+/** Table-wide display settings in the table options menu. Changes apply to everyone at this table. */
+function DisplaySettings({ view, disabled, onCommand }: { view: WorkspaceView; disabled: boolean; onCommand: (type: string, payload: unknown) => Promise<unknown> }) {
+  const canEdit = viewerCan(view, 'table.rename');
+  const connections = view.domain.display?.connections;
+  const value = connections === undefined ? 'auto' : connections ? 'on' : 'off';
+  return <section className="tt-display-settings" aria-label="Display settings">
+    <span className="tt-kicker">DISPLAY · THIS TABLE</span>
+    <label>Connection lines
+      <select value={value} disabled={disabled || !canEdit} title={canEdit ? 'Applies to everyone at this table' : 'Your role cannot change this table\'s display'} onChange={(event) => {
+        const next = event.target.value;
+        void onCommand('display.set', { connections: next === 'auto' ? null : next === 'on' });
+      }}>
+        <option value="auto">Automatic</option>
+        <option value="on">Show</option>
+        <option value="off">Hide</option>
+      </select>
+    </label>
+  </section>;
 }
