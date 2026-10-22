@@ -1753,7 +1753,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       for (let attempt = 0; attempt < 60; attempt += 1) {
         await pause();
         if (!isCurrentScope()) return null;
-        const eligibleIds = ids.filter((id) => activeOpenedIdRef.current !== id && !draggingNodeIdsRef.current.has(id));
+        // A card that left the canvas while this batch settled (hidden, or a chat card that became a
+        // notice) can never measure; waiting for it would drop the whole batch and nothing re-seeds it.
+        const eligibleIds = ids.filter((id) => activeOpenedIdRef.current !== id && !draggingNodeIdsRef.current.has(id) && flow.getNode(id) !== undefined);
         if (eligibleIds.length === 0) return new Map();
         const measured = eligibleIds.map((id) => flow.getNode(id));
         if (measured.some((node) => !node || !Number.isFinite(node.measured?.width) || !Number.isFinite(node.measured?.height))) {

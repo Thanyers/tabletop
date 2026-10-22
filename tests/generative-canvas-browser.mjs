@@ -616,11 +616,16 @@ try {
       const viewport = page.viewportSize();
       const chatTop = (await page.getByTestId('table-chat-bar').boundingBox())?.y ?? viewport.height;
       if (box && box.y >= 0 && box.y + box.height <= chatTop - 8) return;
-      const delta = box ? Math.min(400, Math.max(80, box.y + box.height - chatTop + 120)) : 300;
+      // Positive delta pans the canvas up (target below the window); negative pans it down
+      // (target scrolled just above the top edge — panning up there pushed it further away).
+      const delta = box && box.y < 0
+        ? -Math.min(400, Math.max(80, 120 - box.y))
+        : box ? Math.min(400, Math.max(80, box.y + box.height - chatTop + 120)) : 300;
       // Empty canvas on the left, below the Objects button.
-      await page.mouse.move(150, 700);
+      const startY = delta > 0 ? 700 : 300;
+      await page.mouse.move(150, startY);
       await page.mouse.down();
-      await page.mouse.move(150, 700 - delta, { steps: 8 });
+      await page.mouse.move(150, startY - delta, { steps: 8 });
       await page.mouse.up();
     }
     await expect(locator).toBeInViewport();
@@ -676,10 +681,12 @@ try {
     } else if (expectedControl === 'scene') {
       const scene = preview.locator('svg.tt-generated-scene');
       await scene.scrollIntoViewIfNeeded();
-      await expect(scene).toBeInViewport();
       await expect(scene).toBeVisible();
       const light = scene.locator('.tt-generated-scene__shape[aria-label="Move light-source"]');
       await expect(light).toHaveAttribute('data-drag-enabled', 'true');
+      // The open card sits on a transformed canvas, so scrolling alone may leave the handle off-screen.
+      if (!await expect(light).toBeInViewport({ timeout: 1_000 }).then(() => true, () => false)) await panCanvasUntilVisible(owner, light);
+      await expect(scene).toBeInViewport();
       const beforeValues = trialRecords.lights.find((record) => record.id === 'light-1').values;
       const target = { x: Math.min(100, beforeValues.light_x + 20), y: Math.min(100, beforeValues.light_y + 10) };
       expect(target.x).toBeGreaterThan(beforeValues.light_x);
