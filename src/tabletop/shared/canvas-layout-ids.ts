@@ -1,7 +1,7 @@
 // Which Canvas cards share one position for everyone at a table (F007).
 // Private cards (a person's chat answers, the owner's draft trial) stay per browser.
 
-export const SHARED_CANVAS_ID_PATTERN = /^table\.(collection|view)\.[a-z][a-z0-9_-]{0,39}$|^table\.(actions|rules|sources)$|^workspace\.(people|history)$|^table\.chat\.[a-f0-9]{64}$/;
+export const SHARED_CANVAS_ID_PATTERN = /^table\.(collection|view)\.[a-z][a-z0-9_-]{0,39}$|^table\.(actions|rules|sources)$|^workspace\.(people|history)$|^table\.note\.[a-z0-9_-]{6,40}$|^table\.chat\.[a-f0-9]{64}$/;
 
 /** Under open visibility (F034) chat cards are shared too, keyed by their job id so every member places the same card. */
 export const SHARED_CHAT_CANVAS_ID_PATTERN = /^table\.chat\.[a-f0-9]{64}$/;

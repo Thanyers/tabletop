@@ -43,6 +43,8 @@ export interface UseTableChatOptions {
   confirm: (view: TableView, job: TableAssistantJob, commandId: CommandId) => Promise<void>;
   attach: (view: WorkspaceView, file: File) => Promise<WorkspaceView>;
   focusObject: (id: string) => void;
+  /** F037: extra composer control (add a note) rendered beside Send. */
+  composerAction?: ReactNode;
   notify: (text: string, tone: 'info' | 'error' | 'success') => void;
   prefill?: { text: string; key: number };
 }
@@ -695,6 +697,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onAttach={async (file) => { await optionsRef.current.attach(table, file); }}
     onSend={send}
     onMessageChange={setComposerMessage}
+    composerAction={options.composerAction}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
@@ -782,7 +785,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   const result = job?.result;
   if (!result || !job) return <div className="tt-chat-card" data-testid="table-chat-answer"><p className="tt-chat-card__text">No answer was received.</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly} onClick={onPrefill}>Use this message again</button>{dismissButton}</div>;
   const references = result.kind === 'explanation' ? result.references : [];
-  // Open visibility (F015): members also see other members' chats; only the asker can act on them.
+  // Open visibility (F034): members also see other members' chats; only the asker can act on them.
   // Revisions are per reader, so another member's proposal always looks stale here; check foreign first.
   const foreign = Boolean(job.askedBy && job.askedBy !== view.actor.actorId);
   const askerName = foreign ? view.members.find((member) => member.actorId === job.askedBy)?.name ?? 'Another member' : null;

@@ -1,0 +1,157 @@
+/* F037: shared sticky notes. Square corners, light from the top-left, paper that lifts off the table. */
+.tt-note {
+  --note-a: #ffe9a8;
+  --note-b: #f0cf7d;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 15px 30px;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background-image: linear-gradient(133deg, var(--note-a) 0%, var(--note-a) 18%, color-mix(in srgb, var(--note-a) 55%, var(--note-b)) 62%, var(--note-b) 100%);
+  /* B + C lift: a small perspective tilt plus a long shadow that stays on the table */
+  transform: perspective(820px) rotateX(2.6deg) rotate(-0.9deg);
+  transform-origin: top center;
+  filter: drop-shadow(5px 17px 12px #303d3a45);
+  color: var(--tt-ink, #303d3a);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.tt-note--yellow { --note-a: #ffe9a8; --note-b: #f0cf7d; }
+.tt-note--rose { --note-a: #ffc9d4; --note-b: #f2a3b7; }
+.tt-note--sky { --note-a: #c9e4ff; --note-b: #a1c8ff; }
+.tt-note--mint { --note-a: #c8f0d8; --note-b: #a0dfb7; }
+.tt-note--lavender { --note-a: #dfd4ff; --note-b: #bdaaf3; }
+.tt-note--sand { --note-a: #f0e2c8; --note-b: #dcc596; }
+.tt-note.is-editing { filter: drop-shadow(6px 20px 14px #303d3a4d); }
+
+.tt-note__text {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  padding: 0 2px 0 0;
+  margin: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.tt-note__text::placeholder { color: #5d6a61; font-style: italic; }
+.tt-note__text:focus-visible { outline: 2px solid #303d3a55; outline-offset: 2px; }
+
+.tt-note__tools {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px solid #d9d4c4;
+  border-radius: 999px;
+  background: #fffdf7;
+  box-shadow: 0 6px 16px #303d3a1f;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s ease;
+}
+.tt-note:hover .tt-note__tools,
+.tt-note:focus-within .tt-note__tools { opacity: 1; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .tt-note__tools { transition: none; } }
+
+.tt-note__dot {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #00000026;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.tt-note__dot.is-current { outline: 2px solid #303d3a66; outline-offset: 1px; }
+.tt-note__dot[data-color="yellow"] { background: #ffe9a8; }
+.tt-note__dot[data-color="rose"] { background: #ffc9d4; }
+.tt-note__dot[data-color="sky"] { background: #c9e4ff; }
+.tt-note__dot[data-color="mint"] { background: #c8f0d8; }
+.tt-note__dot[data-color="lavender"] { background: #dfd4ff; }
+.tt-note__dot[data-color="sand"] { background: #f0e2c8; }
+.tt-note__sep { width: 1px; height: 15px; background: #d9d4c4; }
+.tt-note__remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9a5c4e;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tt-note__remove:hover { background: #f6e9e2; }
+
+.tt-note__meta {
+  position: absolute;
+  left: 15px;
+  right: 15px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #303d3a99;
+}
+.tt-note__author { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.tt-note__author i {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff8c;
+  color: #303d3a;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+}
+.tt-note__grip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity .14s ease;
+  background: linear-gradient(135deg, transparent 0 45%, #303d3a33 45% 50%, transparent 50% 62%, #303d3a33 62% 67%, transparent 67%);
+}
+.tt-note:hover .tt-note__grip,
+.tt-note:focus-within .tt-note__grip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .tt-note__grip { transition: none; } }
+
+/* Round add-note button that sits beside the chat composer. */
+.tt-note-add {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 1px solid #d9d4c4;
+  border-radius: 50%;
+  background: #faf8f0;
+  color: #356e5d;
+  box-shadow: 0 2px 0 #d8d4c480;
+  cursor: pointer;
+}
+.tt-note-add:hover { background: #f1f4ea; }
+.tt-note-add:disabled { opacity: .45; cursor: not-allowed; }
+.tt-note-add:focus-visible { outline: 2px solid #356e5d; outline-offset: 2px; }

@@ -20,7 +20,7 @@
 
 - `npm start` = Node guest runtime **AI ปิด** · เส้นทางใกล้ production = Cloudflare emulator/tests (`npm run test:cloudflare`, `dev:cloudflare`)
 - ห้ามเพิ่ม scenario-name switch ให้เคสตัวอย่างผ่าน · คง server authority, AI consent และ human confirmation
-- การมองเห็นข้อมูลในโต๊ะคุมด้วย `VISIBILITY_POLICY` ใน [`src/tabletop/shared/visibility.ts`](src/tabletop/shared/visibility.ts) ที่เดียว · ตอนนี้เป็น `'open'` (สมาชิกเห็นทุกอย่างรวมแชท AI ของทุกคน, [F015](docs/features/F015-open-visibility.md)) · **ห้ามลบเส้นทาง `'private'`** (projection ตาม role + แชทส่วนตัว) เพราะตั้งใจเก็บไว้ใช้ต่อ · การเปลี่ยนค่านี้คือการเปลี่ยนกติกาผลิตภัณฑ์ ต้องให้คนตัดสิน
+- การมองเห็นข้อมูลในโต๊ะคุมด้วย `VISIBILITY_POLICY` ใน [`src/tabletop/shared/visibility.ts`](src/tabletop/shared/visibility.ts) ที่เดียว · ตอนนี้เป็น `'open'` (สมาชิกเห็นทุกอย่างรวมแชท AI ของทุกคน, [F034](docs/features/F034-open-visibility.md)) · **ห้ามลบเส้นทาง `'private'`** (projection ตาม role + แชทส่วนตัว) เพราะตั้งใจเก็บไว้ใช้ต่อ · การเปลี่ยนค่านี้คือการเปลี่ยนกติกาผลิตภัณฑ์ ต้องให้คนตัดสิน
 - การเขียนฐานหรือเปลี่ยน schema ถาวร = **R0** ต้องได้อนุมัติพร้อม environment/ขอบเขต/แผนกู้คืน (ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน))
 - สถานะ deploy ที่ถูกต้องดูจาก [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md) เท่านั้น ไม่เชื่อ SHA ที่มากับข้อความแชทหรือ handoff
 - รัน `node scripts/check-public-files.mjs` ก่อน commit ทุกครั้ง เพราะ repo เป็น public

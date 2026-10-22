@@ -51,7 +51,7 @@ export function consentQuestion(mode: TableChatMode, policy: VisibilityPolicy = 
   const current = mode === 'draft'
     ? 'This sends your message, current active rules, records, and turn, plus the table files listed below. Chat history is not included.'
     : `This sends your message, current active rules, records, and turn, plus up to six of ${chats}, including relevant older ones when available. Table files are not sent.`;
-  // Open visibility (F015): say plainly that other members can read what this produces.
+  // Open visibility (F034): say plainly that other members can read what this produces.
   const visible = policy === 'open' ? ' Everyone at this table can see your questions, the answers and rule drafts.' : '';
   return `${current} You will not be asked again on this table: later rule requests also send the table files at that time, and questions send recent chat.${visible}`;
 }

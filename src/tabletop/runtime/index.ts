@@ -52,6 +52,8 @@ export const capabilityRegistry: Readonly<Record<string, Capability>> = {
   'table.collection': { version: 1, inputs: { rows: port('TableRowsV1'), revision: port('RuleRevisionV1') }, outputs: { rows: port('TableRowsV1') }, evaluate: identity('rows') },
   'table.actions': { version: 1, inputs: { revision: port('RuleRevisionV1'), actions: port('TableActionsV1') }, outputs: { actions: port('TableActionsV1') }, evaluate: identity('actions') },
   'table.canvas': { version: 1, inputs: { canvas: port('GenerativeCanvasV1') }, outputs: { canvas: port('GenerativeCanvasV1') }, evaluate: identity('canvas') },
+  // F037: a note is a leaf object; the card reads its text and colour from the table state by id.
+  'table.note': { version: 1, inputs: {}, outputs: {}, evaluate: () => ({}) },
   'table.generated-view.scene': generatedViewCapability('scene'),
   'table.generated-view.chart': generatedViewCapability('chart'),
   'table.generated-view.metric': generatedViewCapability('metric'),
@@ -172,6 +174,10 @@ export function manifestForWorkspace(view: WorkspaceView): Manifest {
     if (state.program) {
       nodes.push(node('table.actions', 'table.actions', 'Actions', 580 + Math.ceil(state.program.collections.length / 2) * 540, 40, { actions: state.program.actions }));
       bindings.push(binding('table.rules', 'revision', 'table.actions', 'revision', 'RuleRevisionV1'));
+    }
+    // F037: shared notes render at their own stored position, so they never consume canvasLayout slots.
+    for (const note of state.notes ?? []) {
+      nodes.push(node(`table.note.${note.id}`, 'table.note', note.text.trim().slice(0, 60) || 'Note', note.x, note.y, {}, 'shared'));
     }
 
     const canvas = state.program?.canvas;

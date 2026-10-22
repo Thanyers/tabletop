@@ -90,6 +90,8 @@ const tableDomainSchema = z.object({
   program: tableProgramSchema.nullable(),
   records: tableRecordsSchema,
   turn: z.string().max(40).nullable(),
+  // F037: notes travel with the table state so the draft can use them as knowledge.
+  notes: z.array(z.object({ text: z.string().max(500), color: z.string().max(20) })).max(20).optional(),
 });
 const billingUsageSchema = z.strictObject({
   promptTokens: z.number().int().safe().nonnegative(),
@@ -160,19 +162,11 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function billingConfigured(env: Env): { monthly: number; daily: number } {
+/** F036: no money cap. Only the provider key is required; usage is still metered per job. */
+function billingConfigured(env: Env): void {
   if (!env.DEEPSEEK_KEY || env.DEEPSEEK_KEY.length > 4096 || /\s/.test(env.DEEPSEEK_KEY)) {
     fail('MODEL_NOT_CONFIGURED', 'AI proposals are not configured for this workspace.');
   }
-  const read = (raw: string | undefined): number | null => {
-    if (!raw || !/^\d{1,12}$/.test(raw)) return null;
-    const amount = Number(raw);
-    return Number.isSafeInteger(amount) && amount > 0 && amount <= 100_000_000_000 ? amount : null;
-  };
-  const monthly = read(env.AI_MONTHLY_BUDGET_MICRO_USD);
-  const daily = env.AI_DAILY_BUDGET_MICRO_USD === undefined ? monthly : read(env.AI_DAILY_BUDGET_MICRO_USD);
-  if (monthly === null || daily === null) fail('MODEL_NOT_CONFIGURED', 'AI proposals are not configured for this workspace.');
-  return { monthly, daily };
 }
 
 function actorAndRole(request: AIProposalRequest): void {
@@ -239,6 +233,7 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
       program: structuredClone(parsed.data.program),
       records: structuredClone(parsed.data.records),
       turn: parsed.data.turn,
+      ...(parsed.data.notes?.length ? { notes: parsed.data.notes.map(({ text, color }) => ({ text, color })) } : {}),
     };
     return {
       kind: 'table',
