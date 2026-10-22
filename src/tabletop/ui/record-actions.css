@@ -135,3 +135,9 @@
     gap: 9px;
   }
 }
+
+/* F039: take one rule out of the active rules. */
+.tt-app .tt-table-rule-remove { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-inline-start: var(--tt-space-2); padding: 0; border: 1px solid transparent; border-radius: var(--tt-radius-small); background: transparent; color: var(--tt-muted); vertical-align: middle; cursor: pointer; }
+.tt-app .tt-table-rule-remove:hover, .tt-app .tt-table-rule-remove:focus-visible { border-color: #a8483a; color: #a8483a; }
+.tt-app .tt-table-remove-confirm { display: grid; gap: var(--tt-space-2); padding: var(--tt-space-3); border: 1px solid #a8483a; border-radius: var(--tt-radius-medium); }
+.tt-app .tt-table-remove-confirm p { margin: 0; }

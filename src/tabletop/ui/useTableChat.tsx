@@ -871,8 +871,18 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       {dismissButton}
     </div>;
   }
-  if (card.kind === 'draft') {
+  // F039: a draft the server put into use on its own.
+  if (card.kind === 'draft' && card.modelJob?.autoApply === 'applied' && !card.pollError) {
     return <div className="tt-chat-card" data-testid="table-chat-answer">
+      <p><Sparkles size={14} /> The new rules were added to the table. Remove any rule you do not want from the Rules card.</p>
+      {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
+      <button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />View rules</button>{dismissButton}
+    </div>;
+  }
+  if (card.kind === 'draft') {
+    const reviewReasons = card.modelJob?.autoApply === 'needs-review' ? card.modelJob.autoApplyReasons ?? [] : [];
+    return <div className="tt-chat-card" data-testid="table-chat-answer">
+      {card.modelJob?.autoApply === 'needs-review' && !card.pollError && <p className="tt-chat-card__hint">These rules were not added automatically because a check did not pass{reviewReasons.length ? `: ${reviewReasons.join(' ')}` : '.'}</p>}
       <p><Sparkles size={14} /> {card.pollError ? 'The rule draft is ready, but the table could not refresh.' : 'A rule draft is ready. Review it before anyone uses it.'}</p>
       {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
       {card.pollError && <><p className="tt-chat-card__error" role="alert">{card.pollError}</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly || card.checking} onClick={onRetryRefresh}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Retry table refresh</button></>}

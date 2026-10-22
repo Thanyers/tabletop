@@ -140,6 +140,26 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
 
   useEffect(() => { setApplyFeedback(''); }, [candidateKey]);
 
+  // F039: anyone who may draft rules may take one out; a collection asks first because its rows go too.
+  const canRemove = viewerCan(view, 'rules.draft') && !readOnly;
+  const [pendingRemoval, setPendingRemoval] = useState<RuleRemoval | null>(null);
+  const [removeFeedback, setRemoveFeedback] = useState('');
+  const removeRule = async (removal: RuleRemoval) => {
+    setRemoveFeedback('');
+    setPendingRemoval(null);
+    try {
+      const result = await onCommand('evolve.removeItem', { kind: removal.kind, id: removal.id });
+      if (!result) setRemoveFeedback(`${removal.title} could not be removed.`);
+    } catch (error) {
+      setRemoveFeedback(error instanceof Error && error.message ? error.message : `${removal.title} could not be removed.`);
+    }
+  };
+  const requestRemoval = (removal: RuleRemoval) => {
+    if (busy !== null) return;
+    if (removal.kind === 'collection') setPendingRemoval(removal);
+    else void removeRule(removal);
+  };
+
   const applyProposal = async () => {
     if (!isOwner || readOnly || busy !== null || applying || state.candidate?.status === 'active') return;
     setApplyFeedback('');
@@ -168,8 +188,13 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
     {!expanded ? <p className="tt-canvas-inline__note">{program ? `${program.collections.length} collections · ${program.actions.length} actions · open to inspect rules, evidence and changes.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
       {program ? candidateChange && state.candidate?.status !== 'active'
         ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /></details>
-        : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} />
+        : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} onRemove={canRemove && busy === null ? requestRemoval : undefined} />
         : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
+      {pendingRemoval && <div className="tt-table-remove-confirm" role="alertdialog" aria-label={`Remove ${pendingRemoval.title}`}>
+        <p>Remove the table <strong>{pendingRemoval.title}</strong>? Its {state.records[pendingRemoval.id]?.length ?? 0} rows are deleted too. You can bring the rules back from history, but not the rows.</p>
+        <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" onClick={() => setPendingRemoval(null)}>Cancel</button><button type="button" className="tt-button tt-button--danger" onClick={() => void removeRule(pendingRemoval)}><Trash2 size={13} />Remove table and rows</button></div>
+      </div>}
+      {removeFeedback && <p className="tt-table-error" role="alert">{removeFeedback}</p>}
       <details className="tt-table-capabilities"><summary>What this table can do</summary>
         <p className="tt-table-inline-hint">{TABLE_CAPABILITIES.supported.length} capabilities · {TABLE_CAPABILITIES.gaps.length} known gaps · limits: {TABLE_CAPABILITY_LIMITS.collections} collections, {TABLE_CAPABILITY_LIMITS.fieldsPerCollection} fields, {TABLE_CAPABILITY_LIMITS.rowsPerCollection} rows per collection, {TABLE_CAPABILITY_LIMITS.canvasViews} views, {TABLE_CAPABILITY_LIMITS.computedColumns} computed columns</p>
         <ul className="tt-table-capability-list">{TABLE_CAPABILITIES.supported.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul>
@@ -248,16 +273,25 @@ function localSandboxActor(view: WorkspaceView): ActorContext {
   };
 }
 
-function ProgramOverview({ program, state, label, change, members }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members'] }) {
+type RuleRemoval = { kind: 'action' | 'invariant' | 'view' | 'collection'; id: string; title: string };
+
+function RemoveRuleButton({ removal, onRemove }: { removal: RuleRemoval; onRemove?: (removal: RuleRemoval) => void }) {
+  if (!onRemove) return null;
+  return <button type="button" className="tt-table-rule-remove" aria-label={`Remove ${removal.title}`} title="Remove from the rules" onClick={() => onRemove(removal)}><Trash2 size={13} /></button>;
+}
+
+function ProgramOverview({ program, state, label, change, members, onRemove }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void }) {
   const sources = new Map(state.sources.map((source) => [source.id, source.filename]));
   const evidence = program.evidence ?? [];
+  const views = program.canvas?.views ?? [];
   return <section className="tt-table-program" aria-label={label}>
     <div className="tt-table-program__summary"><span><small>Tables</small><strong>{program.collections.length}</strong></span><span><small>Actions</small><strong>{program.actions.length}</strong></span><span><small>Checks</small><strong>{program.invariants.length}</strong></span></div>
     {program.description && <p className="tt-table-program__description">{program.description}</p>}
-    <details className="tt-table-rule-details"><summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>{program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} />)}</details>
-    <details className="tt-table-rule-details"><summary>Actions · {program.actions.length}</summary>{program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} />)}</details>
+    <details className="tt-table-rule-details"><summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>{program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} onRemove={onRemove} />)}</details>
+    <details className="tt-table-rule-details"><summary>Actions · {program.actions.length}</summary>{program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} onRemove={onRemove} />)}</details>
+    {onRemove && views.length > 0 && <details className="tt-table-rule-details"><summary>Views · {views.length}</summary><ul>{views.map((descriptor) => <li key={descriptor.id}>{descriptor.title} <small>({descriptor.kind})</small><RemoveRuleButton removal={{ kind: 'view', id: descriptor.id, title: descriptor.title }} onRemove={onRemove} /></li>)}</ul></details>}
     {change && program.collections.map((collection) => <ProposedRecords key={`proposed-${collection.id}`} collection={collection} records={change.initialRecords[collection.id] ?? []} members={members} />)}
-    {program.invariants.length > 0 && <details className="tt-table-rule-details"><summary>Data checks · {program.invariants.length}</summary><ul>{program.invariants.map((invariant) => <li key={invariant.id}>{invariant.message} <small>({invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(' + ')})</small></li>)}</ul></details>}
+    {program.invariants.length > 0 && <details className="tt-table-rule-details"><summary>Data checks · {program.invariants.length}</summary><ul>{program.invariants.map((invariant) => <li key={invariant.id}>{invariant.message} <small>({invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(' + ')})</small><RemoveRuleButton removal={{ kind: 'invariant', id: invariant.id, title: invariant.message }} onRemove={onRemove} /></li>)}</ul></details>}
     {program.turnOrder.length > 0 && <p className="tt-table-turn-order">Turn order: {program.turnOrder.map((seat) => seat === 'host' ? 'Owner' : seat.replace('member-', 'Member ')).join(' → ')}</p>}
     {evidence.length > 0 && <details className="tt-table-rule-details"><summary>Source evidence · {evidence.length}</summary><ul>{evidence.map((item, index) => <li key={`${item.sourceId}-${index}`}><strong>{sources.get(item.sourceId) ?? 'Source file'}</strong><blockquote>{item.quote}</blockquote></li>)}</ul></details>}
       {program.assumptions.length > 0 && <section className="tt-table-assumptions"><h4>Assumptions to review</h4><ul>{program.assumptions.map((assumption, index) => <li key={index}>{assumption}</li>)}</ul><p>Structural checks do not confirm these assumptions match your policy. The owner should review them and the cited evidence before approval.</p></section>}
@@ -266,16 +300,16 @@ function ProgramOverview({ program, state, label, change, members }: { program: 
   </section>;
 }
 
-function CollectionDefinition({ collection }: { collection: TableCollection }) {
-  return <section className="tt-table-program__group"><h4>{collection.title}</h4><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · required' : ' · optional'}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul></section>;
+function CollectionDefinition({ collection, onRemove }: { collection: TableCollection; onRemove?: (removal: RuleRemoval) => void }) {
+  return <section className="tt-table-program__group"><h4>{collection.title}<RemoveRuleButton removal={{ kind: 'collection', id: collection.id, title: collection.title }} onRemove={onRemove} /></h4><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · required' : ' · optional'}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul></section>;
 }
 
-function ActionDefinition({ action, program, members }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members'] }) {
+function ActionDefinition({ action, program, members, onRemove }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void }) {
   const effects = action.effects.map((effect) => {
     const param = action.parameters.find((item) => item.id === effect.record);
     return `${param?.label ?? 'Selected record'} → ${fieldLabel(program, param?.collection ?? '', effect.field)} ${effect.op === 'add' ? 'adds' : 'sets'} ${operandLabel(effect.value, action, program, members)}`;
   });
-  return <section className="tt-table-program__group"><h4>{action.title}</h4><p>{action.description}</p><small>Available to {action.roles.map((role) => role === 'owner' ? 'owner' : 'members').join(' and ')}{action.requireTurn ? ' · follows turn order' : ''}{action.advanceTurn ? ' · advances turn' : ''}</small>
+  return <section className="tt-table-program__group"><h4>{action.title}<RemoveRuleButton removal={{ kind: 'action', id: action.id, title: action.title }} onRemove={onRemove} /></h4><p>{action.description}</p><small>Available to {action.roles.map((role) => role === 'owner' ? 'owner' : 'members').join(' and ')}{action.requireTurn ? ' · follows turn order' : ''}{action.advanceTurn ? ' · advances turn' : ''}</small>
     {action.conditions.length > 0 && <ul className="tt-table-rule-list">{action.conditions.map((condition, index) => <li key={index}><strong>{operandLabel(condition.left, action, program, members)} {conditionOperator(condition.op)} {operandLabel(condition.right, action, program, members)}</strong><span>{condition.message}</span></li>)}</ul>}
     {effects.length > 0 && <ul className="tt-table-effect-list">{effects.map((effect, index) => <li key={index}>{effect}</li>)}</ul>}
   </section>;

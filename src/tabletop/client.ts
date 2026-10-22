@@ -46,6 +46,9 @@ export interface ModelJob {
   prompt?: string;
   /** F038: machine-readable failure code of a failed rule request. */
   failureCode?: string;
+  /** F039: the draft went into use on its own, or needs a manual review (with the failed checks). */
+  autoApply?: 'applied' | 'needs-review';
+  autoApplyReasons?: string[];
 }
 
 export interface TabletopCapabilities {
