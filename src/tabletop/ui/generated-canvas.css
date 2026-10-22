@@ -237,7 +237,7 @@
   align-items: center;
 }
 
-/* F049: visual dice card. The roll is client-side and only fills a shared draft. */
+/* F049/F050: visual dice card. A number parameter rolls client-side into a shared draft; a roll parameter shows the server roll. */
 .tt-dice {
   display: grid;
   gap: 10px;
