@@ -66,7 +66,9 @@
   animation: tt-glyph-orbit 1.2s linear infinite;
 }
 .tt-app .tt-object-glyph.is-busy svg { animation: tt-glyph-breathe 1.8s ease-in-out infinite; transform-origin: center; }
-.tt-app .tt-chat-card p.tt-chat-card__pending--working { align-items: center; justify-content: center; text-align: center; }
+.tt-app .tt-chat-card p.tt-chat-card__pending--working { flex-wrap: wrap; align-items: center; justify-content: center; text-align: center; }
+/* The long elapsed line drops below instead of squeezing "Preparing an answer…" into a sliver. */
+.tt-app .tt-chat-card__shimmer { white-space: nowrap; }
 /* The waiting card centres its status in the whole card body. */
 .tt-app .tt-canvas-node__body:has(> .tt-chat-card--working) { display: grid; }
 .tt-app .tt-chat-card--working { align-content: center; justify-items: center; min-height: 100%; }
@@ -143,3 +145,9 @@
 .tt-app .tt-table-chat-bar__reference small { flex: 1 1 auto; min-width: 0; color: var(--tt-muted); font-size: 12px; }
 .tt-app .tt-table-chat-bar__reference button { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tt-muted); cursor: pointer; }
 .tt-app .tt-table-chat-bar__reference button:hover { background: var(--tt-canvas); }
+/* Follow-ups the AI offers: pick one instead of typing. */
+.tt-app .tt-chat-card__suggestions { display: grid; gap: 6px; }
+.tt-app .tt-chat-card__suggestions button { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 55%); border-radius: var(--tt-radius-medium, 10px); background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 92%); color: var(--tt-ink); font: inherit; font-size: 14px; line-height: 1.4; text-align: left; cursor: pointer; }
+.tt-app .tt-chat-card__suggestions button svg { flex: none; margin-top: 3px; color: var(--tt-moss, #2f6f5e); }
+.tt-app .tt-chat-card__suggestions button:hover:not(:disabled) { background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 84%); }
+.tt-app .tt-chat-card__suggestions button:disabled { opacity: .55; cursor: default; }
