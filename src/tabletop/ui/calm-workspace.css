@@ -446,3 +446,12 @@
 @media (hover: hover) {
   .tt-app .tt-flow-wrap .tt-canvas-node:not(:hover):not(:focus-within) .tt-canvas-node__rename { opacity: 0; }
 }
+
+/* The group bar: what a Shift+click / Shift+drag group can do at once. */
+.tt-app .tt-canvas-selection-bar { position: absolute; z-index: 40; top: 12px; left: 50%; display: flex; align-items: center; gap: 4px; max-width: calc(100% - 24px); padding: 6px 6px 6px 14px; transform: translateX(-50%); border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-paper); box-shadow: 0 10px 30px #303d3a22; pointer-events: auto; font-size: 13px; color: var(--tt-muted); }
+.tt-app .tt-canvas-selection-bar > span { margin-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-app .tt-canvas-selection-bar b { color: var(--tt-ink); }
+.tt-app .tt-canvas-selection-bar button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--tt-ink); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.tt-app .tt-canvas-selection-bar button:hover:not(:disabled) { background: var(--tt-canvas); }
+.tt-app .tt-canvas-selection-bar__clear { width: 32px; padding: 0 !important; justify-content: center; color: var(--tt-muted) !important; }
+@media (max-width: 640px) { .tt-app .tt-canvas-selection-bar > span { display: none; } }
