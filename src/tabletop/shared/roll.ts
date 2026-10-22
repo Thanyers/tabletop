@@ -50,6 +50,14 @@ export function rollDiceCount(spec: RollSpec): number {
   return spec.groups.reduce((total, group) => total + group.count, 0);
 }
 
+/** Display notation for a declared roll, e.g. `2d6 + 3`. Shared by both roll controls (F048, F051). */
+export function rollNotation(spec: RollSpec): string {
+  const groups = spec.groups.map(group => `${group.count}d${group.faces}`).join(' + ');
+  const modifier = spec.modifier;
+  if (modifier === undefined || modifier === 0) return groups;
+  return `${groups} ${modifier > 0 ? '+' : '-'} ${Math.abs(modifier)}`;
+}
+
 /** Problems with a declared roll spec; empty when it is valid. Mirrors the zod bounds. */
 export function rollSpecProblems(spec: RollSpec): string[] {
   const problems: string[] = [];

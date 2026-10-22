@@ -1,15 +1,15 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyTableChange, createTableState } from '../domain/table';
 import type { WorkspaceView } from '../shared/contracts';
-import type { GenerativeViewDescriptor } from '../shared/generative-contracts';
-import type { TableChange, TableState } from '../shared/table-contracts';
+import type { ControlDescriptor, GenerativeViewDescriptor } from '../shared/generative-contracts';
+import type { TableAction, TableChange, TableState } from '../shared/table-contracts';
 import { planForWorkspace } from '../runtime';
 import { cafeQueueChange, diceDuelChange, lightShadowChange } from '../testing/generative-scenarios';
-import { rollCombatChange } from '../testing/table-scenarios';
-import { beginControlSubmission, beginRangeCommit, controlSubmissionSignature, createControlSubmissionGate, finishControlSubmission, GeneratedCanvasObject } from './GeneratedCanvasObjects';
-import { resetControlDrafts, writeControlDraft } from './control-drafts';
+import { rollCombatChange, rollDiceCardChange } from '../testing/table-scenarios';
+import { beginControlSubmission, beginRangeCommit, controlSubmissionSignature, createControlSubmissionGate, diceRollMode, finishControlSubmission, GeneratedCanvasObject } from './GeneratedCanvasObjects';
+import { readControlDraftValue, resetControlDrafts, writeControlDraft } from './control-drafts';
 import { clearServerRollsFor, recordServerRoll } from './roll-store';
 import { TableCanvasObject } from './TableCanvasObjects';
 
@@ -186,8 +186,15 @@ describe('generated canvas renderer', () => {
 describe('dice card renderer', () => {
   it('renders the dice card with steppers, a ทอย button, and its formula', () => {
     const view = workspace(diceDuelChange);
-    const markup = renderView(view, descriptorById(view, 'damage-dice'));
+    const viewDescriptor = descriptorById(view, 'damage-dice');
+    if (view.domain.kind !== 'table' || viewDescriptor.kind !== 'controls') throw new Error('Expected a controls view.');
+    const dice = viewDescriptor.controls.find(control => control.kind === 'dice');
+    if (dice?.kind !== 'dice') throw new Error('Expected a dice control.');
+    const action = view.domain.program?.actions.find(item => item.id === 'apply_damage');
+    if (!action) throw new Error('Expected the dice action.');
+    const markup = renderView(view, viewDescriptor);
 
+    expect(diceRollMode(action, dice)).toBe('client');
     expect(markup).toContain('ทอย');
     expect(markup).toContain('aria-label="Number of dice"');
     expect(markup).toContain('aria-label="Faces per die"');
@@ -217,5 +224,76 @@ describe('dice card renderer', () => {
     } finally {
       resetControlDrafts();
     }
+  });
+});
+
+describe('server roll dice card', () => {
+  function serverDiceFixture(): { view: WorkspaceView; viewDescriptor: GenerativeViewDescriptor; dice: Extract<ControlDescriptor, { kind: 'dice' }>; action: TableAction } {
+    const view = workspace(rollDiceCardChange());
+    const viewDescriptor = descriptorById(view, 'attack-dice');
+    if (view.domain.kind !== 'table' || viewDescriptor.kind !== 'controls') throw new Error('Expected a controls view.');
+    const dice = viewDescriptor.controls.find(control => control.kind === 'dice');
+    if (dice?.kind !== 'dice') throw new Error('Expected a dice control.');
+    const action = view.domain.program?.actions.find(item => item.id === 'attack');
+    if (!action) throw new Error('Expected the attack action.');
+    return { view, viewDescriptor, dice, action };
+  }
+
+  it('renders the program roll spec and shows the server-rolled faces and total', () => {
+    resetControlDrafts();
+    const { view, viewDescriptor, dice, action } = serverDiceFixture();
+    const target = { workspaceId: view.id, actionId: 'attack', parameterId: 'damage' };
+    const initial = renderView(view, viewDescriptor);
+
+    expect(diceRollMode(action, dice)).toBe('server');
+    expect(initial).toContain('server roll');
+    // The card's own 1d6 is not authoritative; the program says 2d6 + 3.
+    expect(initial).toContain('2d6 + 3');
+    expect(initial).toContain('ทอย');
+    expect(initial).not.toContain('1d6');
+    expect(initial).not.toContain('aria-label="Number of dice"');
+    expect(initial).not.toContain('Visual-only roll');
+    expect(readControlDraftValue(target)).toBeUndefined();
+
+    recordServerRoll(view, 'attack', 'damage', { groups: [{ count: 2, faces: 6 }], values: [4, 5], total: 12 });
+    try {
+      const rolled = renderView(view, viewDescriptor);
+
+      expect(rolled).toContain('ทอยอีกครั้ง');
+      expect(rolled).toContain('aria-label="Die 1: 4"');
+      expect(rolled).toContain('aria-label="Die 2: 5"');
+      expect(rolled).toContain('<strong>12</strong>');
+      expect(rolled).toContain('9 + 3');
+      expect(rolled).toContain('ถูกล็อก');
+      expect(rolled).not.toContain('Visual-only roll');
+      expect(readControlDraftValue(target)).toBeUndefined();
+    } finally {
+      clearServerRollsFor(view);
+    }
+  });
+
+  it('never calls the client CSPRNG path for a roll parameter', () => {
+    const { view, viewDescriptor, dice, action } = serverDiceFixture();
+    const random = vi.spyOn(globalThis.crypto, 'getRandomValues');
+
+    try {
+      expect(diceRollMode(action, dice)).toBe('server');
+      renderView(view, viewDescriptor);
+      recordServerRoll(view, 'attack', 'damage', { groups: [{ count: 2, faces: 6 }], values: [1, 2], total: 6 });
+      renderView(view, viewDescriptor);
+
+      expect(random).not.toHaveBeenCalled();
+    } finally {
+      random.mockRestore();
+      clearServerRollsFor(view);
+    }
+  });
+
+  it('disables the server dice card in a preview-only proposal', () => {
+    const { view, viewDescriptor } = serverDiceFixture();
+    const markup = renderView(view, viewDescriptor, true);
+
+    expect(markup).toContain('Preview only');
+    expect(markup).toMatch(/class="[^"]*tt-dice__roll[^"]*"[^>]*disabled=""/);
   });
 });
