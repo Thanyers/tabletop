@@ -2,7 +2,6 @@ import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
 import type { Env } from './contracts.js';
 
-const MAX_BUDGET_MICRO_USD = 100_000_000_000;
 const MAX_INPUT_TOKENS = 65_000;
 const MAX_OUTPUT_TOKENS = 32_768;
 const RESERVED_OUTPUT_TOKENS = 16_384;
@@ -113,24 +112,8 @@ export function usageMicroUsd(usage: Usage): number {
   return Number(amount);
 }
 
-function budget(value: string | undefined): number | null {
-  if (value === undefined || value === '') return null;
-  if (!/^\d{1,12}$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= MAX_BUDGET_MICRO_USD ? parsed : null;
-}
-
-function configuredLimits(env: Env): { monthly: number; daily: number } {
-  requireCondition(typeof env.DEEPSEEK_KEY === 'string' && env.DEEPSEEK_KEY.length > 0, 'MODEL_NOT_CONFIGURED');
-  const monthly = budget(env.AI_MONTHLY_BUDGET_MICRO_USD);
-  const daily = env.AI_DAILY_BUDGET_MICRO_USD === undefined
-    ? monthly
-    : budget(env.AI_DAILY_BUDGET_MICRO_USD);
-  // POC: 0 or unset budget knobs mean 'no cap' so testing is not blocked; positive values still cap.
-  if (monthly === null && daily === null) return { monthly: MAX_BUDGET_MICRO_USD, daily: MAX_BUDGET_MICRO_USD };
-  requireCondition(monthly !== null && daily !== null, 'MODEL_NOT_CONFIGURED');
-  return { monthly, daily };
-}
+// F036: there is no money cap. Usage is still reserved and settled per job so real spend stays
+// measurable; only the job-count guards and the token bounds remain.
 
 function utcKeys(now: number): { day: string; month: string } {
   const date = new Date(now);
@@ -267,7 +250,9 @@ export class Billing extends DurableObject<Env> {
     const parsed = reserveSchema.safeParse(raw);
     requireCondition(parsed.success, 'BILLING_REQUEST_INVALID');
     const input = parsed.data;
-    const limits = configuredLimits(this.env);
+    // F036: the money cap is off by default so testing measures real usage instead of
+    // tripping a reservation cap. Rows are still written and settled, so spend stays auditable.
+    requireCondition(Boolean(this.env.DEEPSEEK_KEY), 'MODEL_NOT_CONFIGURED');
     const now = Date.now();
     const keys = utcKeys(now);
     // F032: thinking runs can request 32K output, but reserving that much per call trips the daily/monthly cap long before real spend. Reserve a realistic ceiling; settlement still charges actual usage.
@@ -283,14 +268,6 @@ export class Billing extends DurableObject<Env> {
         return { ...publicJob(existing), duplicate: true };
       }
 
-      const spentMonth = Number(this.sql.exec<{ amount: number }>(
-        `SELECT COALESCE(SUM(CASE WHEN status = 'settled' THEN actual_micro_usd ELSE reserved_micro_usd END), 0) AS amount
-         FROM billing_jobs WHERE month_key = ?`, keys.month,
-      ).toArray()[0]?.amount ?? 0);
-      const spentDay = Number(this.sql.exec<{ amount: number }>(
-        `SELECT COALESCE(SUM(CASE WHEN status = 'settled' THEN actual_micro_usd ELSE reserved_micro_usd END), 0) AS amount
-         FROM billing_jobs WHERE day_key = ?`, keys.day,
-      ).toArray()[0]?.amount ?? 0);
       const roomJobs = Number(this.sql.exec<{ amount: number }>(
         'SELECT COUNT(*) AS amount FROM billing_jobs WHERE workspace_id = ? AND day_key = ?', input.workspaceId, keys.day,
       ).toArray()[0]?.amount ?? 0);
@@ -301,7 +278,6 @@ export class Billing extends DurableObject<Env> {
         `SELECT COUNT(*) AS amount FROM billing_jobs
          WHERE status IN ('reserved','dispatching') AND lease_expires_at > ?`, now,
       ).toArray()[0]?.amount ?? 0);
-      requireCondition(spentMonth + reserved <= limits.monthly && spentDay + reserved <= limits.daily, 'BILLING_BUDGET');
       requireCondition(roomJobs < MAX_ROOM_DAILY_JOBS && actorJobs < MAX_ACTOR_DAILY_JOBS
         && activeJobs < MAX_GLOBAL_IN_FLIGHT, 'BILLING_QUOTA');
 
