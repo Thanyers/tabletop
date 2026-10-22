@@ -75,8 +75,19 @@ FIELD{id,label,type:text|number|boolean|list,required:boolean,min?,max?,choices?
   Only number fields take min/max (min<=max); only text fields take choices (1..32 strings, each<=100); default must satisfy type, choices and bounds.
 ACTION{id,title,description,roles,parameters,conditions,effects,creates?,requireTurn:boolean,advanceTurn:boolean}
   roles = ("owner"|"participant")[1..2]; an action must set a field, create a row, or advanceTurn; requireTurn/advanceTurn need a non-empty turnOrder.
-PARAM{id,label,type:text|number|boolean|record,collection?,min?,max?,choices?}
+PARAM{id,label,type:text|number|boolean|record|roll,collection?,min?,max?,choices?,roll?}
   record params MUST have collection; only number params take min/max; only text params take choices.
+  ROLL{groups:[{count:1..10,faces:2..100}] 1..4,modifier?:integer -1000..1000}
+  A roll param carries exactly one roll spec (no collection/min/max/choices); total dice across groups <=20.
+  The SERVER rolls it: a player presses the roll button, the server returns the dice, and the action input
+  for that parameter is NOT sent by the client. A roll behaves as a number in OPERAND {input:ROLL_ID};
+  at most ONE roll param per action. Both sides of a condition/effect still type-check against that number.
+  ATTACK EXAMPLE (one roll param; monsters.damage_taken must be a number field; damage feeds it additively):
+  ACTION{id:"attack",title:"Attack",description:"Roll damage against one monster",roles:["owner","participant"],
+    parameters:[{id:"target",label:"Target",type:"record",collection:"monsters"},
+                {id:"damage",label:"Damage roll",type:"roll",roll:{groups:[{count:2,faces:6}],modifier:3}}],
+    conditions:[],effects:[{record:"target",field:"damage_taken",op:"add",value:{input:"damage"}}],
+    requireTurn:false,advanceTurn:false}
 CONDITION{left:OPERAND,op:eq|neq|lt|lte|gt|gte|contains,right:OPERAND,message}
 EFFECT{record:PARAM_ID,field:FIELD_ID,op:set|add,value:OPERAND}
 CREATE{collection:COLLECTION_ID,values:{FIELD_ID:OPERAND}}
