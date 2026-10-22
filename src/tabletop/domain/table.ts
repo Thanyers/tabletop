@@ -257,6 +257,40 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
   const computedColumns = retainComputedColumns(state.computedColumns, change.program);
   return { ...structuredClone(state), program: structuredClone(change.program), records, turn, computedColumns };
 }
+export type RuleItemKind = 'action' | 'invariant' | 'view' | 'collection';
+
+/**
+ * F039: the active program without one action, unique constraint, view or collection. Removing a collection
+ * also removes its records and computed columns. Anything that still refers to the removed item (an action
+ * on that collection, a view showing it) blocks the removal, so the program stays valid.
+ */
+export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: string): TableState {
+  assert(state.program, 'TABLE_INACTIVE', 'There are no active rules to change.');
+  const program = structuredClone(state.program);
+  const records = structuredClone(state.records);
+  let found = false;
+  if (kind === 'action') { found = program.actions.some(item => item.id === id); program.actions = program.actions.filter(item => item.id !== id); }
+  if (kind === 'invariant') { found = program.invariants.some(item => item.id === id); program.invariants = program.invariants.filter(item => item.id !== id); }
+  if (kind === 'collection') { found = program.collections.some(item => item.id === id); program.collections = program.collections.filter(item => item.id !== id); delete records[id]; }
+  if (kind === 'view' && program.canvas) {
+    found = program.canvas.views.some(item => item.id === id);
+    program.canvas.views = program.canvas.views.filter(item => item.id !== id);
+    if (program.canvas.views.length === 0) delete program.canvas;
+  }
+  assert(found, 'RULE_ITEM_NOT_FOUND', 'That rule is no longer on this table.');
+  try {
+    checkProgram(program);
+    checkRows(program, records);
+    const issues = validateGenerativeProgram(program, records);
+    assert(issues.length === 0, 'TABLE_SCHEMA', issues[0] ?? 'The remaining rules are invalid.');
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'The remaining rules are invalid.';
+    throw new DomainError('RULE_ITEM_IN_USE', `Something else on this table still uses it. Remove that first. (${reason})`);
+  }
+  const computedColumns = retainComputedColumns(state.computedColumns, program);
+  return { ...structuredClone(state), program, records, computedColumns };
+}
+
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
 }

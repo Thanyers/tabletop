@@ -2,12 +2,18 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { decideDomain } from './index';
 import { createTableState, handleTableCommand } from './table';
-import { equipmentChange, tableScenarioSources } from '../testing/table-scenarios';
+import { equipmentChange, shiftsChange, tableScenarioSources } from '../testing/table-scenarios';
 import type { ActorContext, DomainState } from '../shared/contracts';
 import { permissionsFor, type Permission } from '../shared/permissions';
 
 const owner: ActorContext = { actorId: 'test-owner', name: 'Fixture', role: 'owner', workspaceId: 'fixture', epoch: 1, now: 1, hash: value => createHash('sha256').update(JSON.stringify(value)).digest('hex') };
 const member: ActorContext = { ...owner, actorId: 'test-member', role: 'participant', seat: 'member-1', permissions: new Set<Permission>(['rules.draft']) };
+
+function activeShifts(): DomainState {
+  const imported = handleTableCommand(createTableState(), 'table.import', tableScenarioSources.shifts, owner)!.state;
+  const draft = decideDomain(imported, { type: 'evolve.propose', payload: { change: shiftsChange(imported.sources[0].id) } }, owner).state;
+  return decideDomain(draft, { type: 'evolve.autoApply', payload: {} }, owner).state;
+}
 
 function drafted(by: ActorContext): DomainState {
   const imported = handleTableCommand(createTableState(), 'table.import', tableScenarioSources.equipment, owner)!.state;
@@ -36,5 +42,37 @@ describe('F039 evolve.autoApply', () => {
     expect(() => decideDomain(draft, { type: 'evolve.autoApply', payload: {} }, member)).toThrow(/Only the person who asked/u);
     const viewer = { ...member, permissions: new Set<Permission>(permissionsFor('table').filter(p => p !== 'rules.draft')) };
     expect(() => decideDomain(drafted(member), { type: 'evolve.autoApply', payload: {} }, viewer)).toThrow();
+  });
+});
+
+describe('F039 evolve.removeItem', () => {
+  const active = () => decideDomain(drafted(owner), { type: 'evolve.autoApply', payload: {} }, owner).state;
+
+  it('removes one rule as a new revision that history can restore', () => {
+    const state = activeShifts();
+    if (state.kind !== 'table' || !state.program) throw Error('Expected an active table');
+    const removable = state.program.invariants[0];
+    expect(removable?.id).toBe('slot_unique');
+    const result = decideDomain(state, { type: 'evolve.removeItem', payload: { kind: 'invariant', id: removable!.id } }, member);
+    if (result.state.kind !== 'table') throw Error('Expected table');
+    expect(result.state.program?.invariants.some(item => item.id === removable!.id)).toBe(false);
+    expect(result.state.ruleRevision).toBe(state.ruleRevision + 1);
+    expect(result.state.revisions.at(-1)?.revision).toBe(result.state.ruleRevision);
+  });
+
+  it('refuses to remove a collection that an action still uses', () => {
+    const state = active();
+    if (state.kind !== 'table' || !state.program) throw Error('Expected an active table');
+    expect(() => decideDomain(state, { type: 'evolve.removeItem', payload: { kind: 'collection', id: 'equipment' } }, owner)).toThrow(/still uses it/u);
+  });
+
+  it('removes an action and an unknown id is refused', () => {
+    const state = active();
+    if (state.kind !== 'table' || !state.program) throw Error('Expected an active table');
+    const outcomes = state.program.actions.map(action => {
+      try { decideDomain(state, { type: 'evolve.removeItem', payload: { kind: 'action', id: action.id } }, owner); return 'removed'; } catch (error) { return (error as Error).message; }
+    });
+    expect(outcomes).toContain('removed');
+    expect(() => decideDomain(state, { type: 'evolve.removeItem', payload: { kind: 'action', id: 'missing' } }, owner)).toThrow(/no longer on this table/u);
   });
 });

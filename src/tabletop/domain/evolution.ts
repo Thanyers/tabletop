@@ -17,7 +17,7 @@ import { calculatePhysics, physicsParamsSchema } from './physics';
 import { assert, canonicalJson, hash, parsePayload, requirePermission } from './helpers';
 import type { Permission } from '../shared/permissions';
 import { makeTeachingQuestionId } from './teaching';
-import { applyTableChange, tableChangeIssues, tableChangeSchema } from './table';
+import { applyTableChange, removeTableRuleItem, tableChangeIssues, tableChangeSchema } from './table';
 import { jsonWithinBudget } from '../shared/json-budget';
 import { expressionWithinBounds } from '../runtime/generative';
 
@@ -329,6 +329,7 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     return { state: proposeCandidate(state, change, ctx), label: `Rollback candidate prepared from revision ${input.revision}; approval and activation are still required.` };
   }
   if (type === 'evolve.autoApply') return autoApplyCandidate(state, payload, ctx);
+  if (type === 'evolve.removeItem') return removeRuleItem(state, payload, ctx);
   if (type === 'evolve.simulate') {
     requireCaseRole(state, ctx, 'rules.approve');
     parsePayload(noPayloadSchema, payload);
@@ -433,4 +434,29 @@ function autoApplyCandidate(state: DomainState, payload: unknown, ctx: ActorCont
   const approved = step(validated.state, 'evolve.approve').state;
   const active = step(approved, 'evolve.activate').state;
   return { state: active, label: `Rules applied automatically as rule revision ${active.ruleRevision}.` };
+}
+
+const removeItemSchema = z.strictObject({ kind: z.enum(['action', 'invariant', 'view', 'collection']), id: z.string().min(1).max(80) });
+
+/** F039: take one rule out of the active table program as a new rule revision, so history can restore it. */
+function removeRuleItem(state: DomainState, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } {
+  requireCaseRole(state, ctx, 'rules.draft');
+  assert(state.kind === 'table', 'RULE_ITEM_UNSUPPORTED', 'Only table rules can be removed one by one.');
+  const input = parsePayload(removeItemSchema, payload);
+  const next = removeTableRuleItem(state, input.kind, input.id);
+  if (input.kind === 'collection') next.dataRevision += 1;
+  const revision = next.ruleRevision + 1;
+  next.ruleRevision = revision;
+  const program = structuredClone(next.program!);
+  next.revisions.push({
+    revision,
+    change: { kind: 'table', program: structuredClone(program), initialRecords: {} },
+    activatedAt: ctx.now,
+    actorId: ctx.actorId,
+    candidateHash: hash(ctx, { workspaceId: ctx.workspaceId, removed: input, revision, now: ctx.now }),
+    snapshot: { kind: 'table', program },
+  });
+  next.revisions = next.revisions.slice(-20);
+  while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
+  return { state: next, label: `Removed a ${input.kind} from the rules as rule revision ${revision}.` };
 }
