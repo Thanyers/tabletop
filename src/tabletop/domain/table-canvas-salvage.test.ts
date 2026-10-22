@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applyTableChange, createTableState, parseBoundedTableChange, parseTableChangeSalvagingCanvas } from './table';
 
 const metric = { id: 'total_view', kind: 'metric', title: 'Total items', value: { op: 'literal', value: 1 } };
@@ -67,6 +67,54 @@ describe('provider parse salvage (F023)', () => {
     const invalid = change({ version: 1, views: [metric] }) as { program: { collections: { fields: unknown[] }[] } };
     invalid.program.collections[0].fields = [];
     expect(parseTableChangeSalvagingCanvas(invalid)).toBeNull();
+  });
+});
+
+/** Schema-valid text primitive whose expression returns a number: only semantic validation catches it. */
+const numericTextScene = {
+  id: 'jar_scene', kind: 'scene', title: 'Jar', width: 320, height: 220,
+  elements: [{ id: 'jar_label', shape: 'text', x: 10, y: 10, text: { op: 'literal', value: 3 } }],
+};
+
+describe('semantic view salvage (F046)', () => {
+  it('drops a view that parses but means nothing', () => {
+    const salvaged = parseTableChangeSalvagingCanvas(change({ version: 1, views: [metric, numericTextScene] }));
+    expect(salvaged?.program.canvas?.views.map((view) => view.id)).toEqual(['total_view']);
+  });
+
+  it('keeps two views that link to each other', () => {
+    const first = { ...metric, id: 'first_view', relatedTo: { views: ['second_view'] } };
+    const second = { ...metric, id: 'second_view', relatedTo: { views: ['first_view'] } };
+    const salvaged = parseTableChangeSalvagingCanvas(change({ version: 1, views: [first, second] }));
+    expect(salvaged?.program.canvas?.views.map((view) => view.id)).toEqual(['first_view', 'second_view']);
+  });
+
+  it('does not take a valid neighbour down with the dropped view', () => {
+    const neighbour = { ...metric, id: 'neighbour_view', relatedTo: { views: ['jar_scene'] } };
+    const salvaged = parseTableChangeSalvagingCanvas(change({ version: 1, views: [numericTextScene, neighbour] }));
+    expect(salvaged?.program.canvas?.views.map((view) => view.id)).toEqual(['neighbour_view']);
+    expect(salvaged?.program.canvas?.views[0].relatedTo).toBeUndefined();
+  });
+
+  it('drops a view that points at a view that does not exist', () => {
+    const dangling = { ...metric, id: 'dangling_view', relatedTo: { views: ['missing_view'] } };
+    const salvaged = parseTableChangeSalvagingCanvas(change({ version: 1, views: [dangling, metric] }));
+    expect(salvaged?.program.canvas?.views.map((view) => view.id)).toEqual(['total_view']);
+  });
+
+  it('leaves the canvas alone when the program core is the thing that is wrong', () => {
+    const invalid = change({ version: 1, views: [metric] }) as {
+      program: { actions: { effects: { field: string }[] }[] };
+    };
+    invalid.program.actions[0].effects[0].field = 'missing';
+    const parsed = parseTableChangeSalvagingCanvas(invalid);
+    expect(parsed?.program.canvas?.views.map((view) => view.id)).toEqual(['total_view']);
+    expect(() => applyTableChange(createTableState(), parsed!)).toThrow();
+  });
+
+  it('drops the whole canvas when every view is semantically invalid', () => {
+    const salvaged = parseTableChangeSalvagingCanvas(change({ version: 1, views: [numericTextScene] }));
+    expect(salvaged?.program.canvas).toBeUndefined();
   });
 });
 

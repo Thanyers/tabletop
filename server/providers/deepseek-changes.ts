@@ -3,6 +3,7 @@ import { CLARIFY_LANGUAGE_ISSUE, clarifyMatchesRequestLanguage } from './clarify
 import { TABLE_SCHEMA_GUIDE } from './table-schema-guide.js';
 import { encounterRuleSchema, physicsParamsSchema } from '../../src/tabletop/domain/index.js';
 import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
+import { normalizeGeneratedTableChange } from '../../src/tabletop/domain/id-normalization.js';
 import { DomainError, type ChangeSet } from '../../src/tabletop/shared/contracts.js';
 import type { TableProgram, TableRecord } from '../../src/tabletop/shared/table-contracts.js';
 import { jsonWithinBudget } from '../../src/tabletop/shared/json-budget.js';
@@ -117,6 +118,11 @@ export class RejectedChangeReply extends DomainError {
 export interface DeepSeekChangeProgress {
   receivedChars: number;
   reasoningChars: number;
+  /**
+   * F050: the bounded tail of the thinking received so far, so a waiting card can show what the
+   * model is doing instead of only counting characters. The caller redacts it before storing.
+   */
+  thinkingTail?: string;
 }
 
 /** Provider progress plus the bounded text that is worth keeping as evidence. */
@@ -347,7 +353,11 @@ async function readChangeStream(
           }
         }
         if (chunk.usage !== undefined && chunk.usage !== null) usageRaw = chunk.usage;
-        onProgress?.({ receivedChars: state.receivedChars, reasoningChars: state.reasoningChars });
+        onProgress?.({
+          receivedChars: state.receivedChars,
+          reasoningChars: state.reasoningChars,
+          ...(state.thinkingTail ? { thinkingTail: state.thinkingTail } : {}),
+        });
       }
     }
   } catch (error) {
@@ -462,6 +472,9 @@ function changeFrom(content: string, kind: DeepSeekChangeInput['kind'], usage: D
   if (!jsonWithinBudget(output) || !expressionWithinBounds(output)) {
     throw new RejectedChangeReply(usage, ['Reduce expression nesting and program size to the documented limits.'], content.slice(0, 18_000));
   }
+  // F047: spend nothing on orthography. A camelCase id is a naming defect, not a design one, so the
+  // host renames it (and every reference) before the authoritative schema judges the draft.
+  if (kind === 'table') output = normalizeGeneratedTableChange(output);
   if (kind === 'table' && typeof output === 'object' && output !== null && (output as { kind?: unknown }).kind === 'clarify') {
     const clarify = tableClarifySchema.safeParse(output);
     if (!clarify.success) throw new RejectedChangeReply(usage, formatValidationIssues(clarify.error.issues, output), content.slice(0, 18_000));

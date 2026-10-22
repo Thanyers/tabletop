@@ -266,6 +266,8 @@ function actionParameterValue(context: GenerativeEvaluationContext, actionId: st
     if (typeof value !== 'string' || !context.records[parameter.collection ?? '']?.some(row => row.id === value)) fail('Control record input is unavailable.');
     return;
   }
+  // F048: a roll parameter is filled by the server roll, never by a bound control value.
+  if (parameter.type === 'roll') fail('A roll action parameter is filled by the server roll, not by a control value.');
   if (parameter.type === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > GENERATIVE_LIMITS.numberMagnitude || parameter.min !== undefined && value < parameter.min || parameter.max !== undefined && value > parameter.max) fail('Control number input is outside its action bounds.');
     return;

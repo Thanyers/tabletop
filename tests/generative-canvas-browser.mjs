@@ -1037,7 +1037,7 @@ try {
     const memberOneActor = actors[index * 3 + 1];
     const memberTwoActor = actors[index * 3 + 2];
     const owner = await newPage(ownerActor);
-    await expect(owner.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: /^Welcome back/ })).toBeVisible();
     const created = await createFreshTable(owner);
     const tableId = created.id;
     const source = scenario.file ? await attachSource(owner, tableId, scenario.file) : null;

@@ -53,3 +53,61 @@ export function gameChange(sourceId: string): TableChange {
   program.actions = [advance]; program.turnOrder = ['host', 'member-1'];
   return { kind: 'table', program, initialRecords: { boats: [{ id: 'red', values: { seat: 'host', score: 0 } }, { id: 'blue', values: { seat: 'member-1', score: 0 } }] } };
 }
+
+/**
+ * F048: one attack action whose damage comes from a server roll (2d6 + 3). The roll feeds an
+ * additive number field and is copied into a created hits row, so a test can read the total back.
+ */
+export function rollCombatChange(sourceId?: string): TableChange {
+  const quote = 'Roll two six-sided dice plus three for damage on your turn.';
+  const program = baseProgram('Sparring match', sourceId ?? '', quote);
+  program.evidence = sourceId ? [{ sourceId, quote }] : [];
+  program.collections = [
+    { id: 'fighters', title: 'Fighters', fields: [textField('name'), { id: 'damage_taken', label: 'Damage taken', type: 'number', required: true, min: 0, max: 500 }] },
+    { id: 'hits', title: 'Hits', fields: [textField('target'), { id: 'damage', label: 'Damage', type: 'number', required: true, min: 0, max: 500 }] },
+  ];
+  const attack = baseAction('attack');
+  attack.title = 'Attack';
+  attack.description = 'Roll damage and record the hit';
+  attack.parameters = [
+    { id: 'target', label: 'Target', type: 'record', collection: 'fighters' },
+    { id: 'damage', label: 'Damage roll', type: 'roll', roll: { groups: [{ count: 2, faces: 6 }], modifier: 3 } },
+  ];
+  attack.effects = [{ record: 'target', field: 'damage_taken', op: 'add', value: { input: 'damage' } }];
+  attack.creates = [{ collection: 'hits', values: { target: { input: 'target' }, damage: { input: 'damage' } } }];
+  attack.requireTurn = true;
+  program.actions = [attack];
+  program.turnOrder = ['host', 'member-1'];
+  program.canvas = {
+    version: 1,
+    views: [{
+      id: 'attack-controls', kind: 'controls', title: 'Attack controls',
+      controls: [{
+        id: 'attack-form', kind: 'form', label: 'Attack', actionId: 'attack',
+        inputs: { target: { kind: 'control' }, damage: { kind: 'control' } },
+      }],
+    }],
+  };
+  return {
+    kind: 'table', program,
+    initialRecords: { fighters: [{ id: 'hero', values: { name: 'Hero', damage_taken: 0 } }], hits: [] },
+  };
+}
+
+/**
+ * F051: the same server-roll attack, exposed as a visual dice card bound to the `roll` parameter.
+ * The dice control deliberately declares 1d6 while the roll spec is 2d6 + 3, so a test can prove
+ * the card renders the program's spec and never authorises its own faces/count.
+ */
+export function rollDiceCardChange(sourceId?: string): TableChange {
+  const change = rollCombatChange(sourceId);
+  change.program.canvas?.views.push({
+    id: 'attack-dice', kind: 'controls', title: 'Attack dice',
+    controls: [{
+      id: 'attack-dice', kind: 'dice', label: 'Damage dice', actionId: 'attack', parameter: 'damage',
+      faces: 6, count: 1, modifier: 0,
+      inputs: { target: { kind: 'record', collection: 'fighters', recordId: 'hero' }, damage: { kind: 'control' } },
+    }],
+  });
+  return change;
+}

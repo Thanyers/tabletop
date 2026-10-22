@@ -4,7 +4,7 @@ import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelF
 import {
   canApplyWorkspaceRefresh, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
   draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard,
-  nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
+  LIVE_THINKING_LINE_CHARS, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
 } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
@@ -205,6 +205,34 @@ describe('draft server limit and early stop (F045)', () => {
     expect(short?.partialChars).toBe(14);
     expect(short?.thinkingText).toBe('checking the columns');
     expect(short?.thinkingChars).toBe(20);
+  });
+});
+
+describe('live thinking line while a draft runs (F050)', () => {
+  it('returns null while the job has no thinking text, so the card keeps its old shape', () => {
+    expect(liveThinkingLine(undefined)).toBeNull();
+    expect(liveThinkingLine('')).toBeNull();
+    expect(liveThinkingLine('  \n\t ')).toBeNull();
+  });
+
+  it('collapses whitespace and keeps short thinking whole', () => {
+    expect(liveThinkingLine('checking  the\ncolumns\tnow')).toBe('checking the columns now');
+  });
+
+  it('keeps the newest text and cuts on a word boundary when the tail is long', () => {
+    const tail = `${'alpha '.repeat(100)}newest conclusion`;
+    const line = liveThinkingLine(tail);
+    expect(line).not.toBeNull();
+    expect(line?.startsWith('…')).toBe(true);
+    expect(line?.slice(1).startsWith('alpha ')).toBe(true);
+    expect(line?.endsWith('newest conclusion')).toBe(true);
+    expect(line?.length).toBeLessThanOrEqual(LIVE_THINKING_LINE_CHARS + 1);
+    expect(line).not.toContain('  ');
+  });
+
+  it('is bounded by the job tail, never by an unbounded provider reply', () => {
+    const line = liveThinkingLine('x'.repeat(MAX_JOB_THINKING_TAIL_CHARS));
+    expect(line).toHaveLength(LIVE_THINKING_LINE_CHARS + 1);
   });
 });
 

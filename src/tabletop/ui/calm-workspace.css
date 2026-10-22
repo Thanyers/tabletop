@@ -110,10 +110,10 @@
   overflow-y: auto;
 }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node.is-expanded .tt-canvas-node__body {
-  max-height: min(70dvh, 680px);
+  /* Expand shows the whole card: no inner scroll. Wide tables still scroll sideways. */
+  max-height: none;
   overflow-x: auto;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow-y: visible;
 }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__head { min-height: 64px; gap: var(--tt-space-2); padding: var(--tt-space-3); border-color: color-mix(in srgb, var(--tt-card-edge), transparent 30%); border-radius: calc(var(--tt-card-radius) - 1px) calc(var(--tt-card-radius) - 1px) 0 0; background: var(--tt-card-surface); }
 .tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node__identity { min-width: 0; }
@@ -397,3 +397,38 @@
 .tt-app .tt-header-people__self { opacity: 0.75; }
 .tt-app .tt-header-people__menu > .tt-header-people__all { justify-content: center; min-height: 36px; border-top: 1px solid var(--tt-line); border-radius: 0 0 8px 8px; color: var(--tt-moss); font-weight: 650; }
 .tt-app .tt-header-people__note { margin: 0; padding: 6px 8px; color: var(--tt-muted); font-size: 12px; }
+
+/* Long titles: two lines on a closed card, all of it when expanded (hover shows it too). */
+.tt-app .tt-flow-wrap .tt-canvas-node:not(.is-expanded) .tt-canvas-node__title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+/* Resize: select a card, then drag an edge or corner. A sized card fills the box and scrolls inside it. */
+.tt-flow-wrap .react-flow__node.is-sized > .tt-canvas-node { width: 100% !important; max-width: none !important; height: 100%; display: flex; flex-direction: column; }
+.tt-flow-wrap .react-flow__node.is-sized > .tt-canvas-node > .tt-canvas-node__body { flex: 1 1 auto; min-height: 0 !important; max-height: none !important; overflow: auto !important; }
+.tt-flow-wrap .tt-canvas-resize-line { border-color: transparent !important; }
+.tt-flow-wrap .tt-canvas-resize-line.left, .tt-flow-wrap .tt-canvas-resize-line.right { width: 10px !important; }
+.tt-flow-wrap .tt-canvas-resize-line.top, .tt-flow-wrap .tt-canvas-resize-line.bottom { height: 10px !important; }
+.tt-flow-wrap .tt-canvas-resize-line:hover { border-color: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 40%) !important; }
+.tt-flow-wrap .tt-canvas-resize-handle { width: 10px !important; height: 10px !important; border: 2px solid var(--tt-moss, #2f6f5e) !important; border-radius: 3px !important; background: var(--tt-paper, #fff) !important; }
+
+/* Objects: delete for everyone (soft) and the Deleted list to restore from. */
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__delete:hover:not(:disabled) { color: var(--tt-clay-1, #a4513a); }
+.tt-app .tt-canvas-objects__deleted { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--tt-line); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__deleted-toggle { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--tt-muted); }
+.tt-app .tt-canvas-objects__deleted-toggle small { margin-left: auto; }
+.tt-app .tt-canvas-objects__deleted-title { flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 6px 8px; color: var(--tt-muted); text-decoration: line-through; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-canvas-objects__error { margin: 6px 8px 0; color: var(--tt-clay-1, #a4513a); font-size: 13px; }
+
+/* Objects: search, stars (listed first) and rename. */
+.tt-app .tt-flow-wrap .tt-canvas-objects__panel { width: min(360px, calc(100vw - 24px)); }
+.tt-app .tt-canvas-objects__search { display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--tt-line); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-muted); }
+.tt-app .tt-canvas-objects__search input { flex: 1 1 auto; min-width: 0; height: 34px; border: 0; outline: 0; background: transparent; color: var(--tt-ink); font: inherit; font-size: 14px; }
+.tt-app .tt-canvas-objects__search:focus-within { border-color: var(--tt-moss, #2f6f5e); }
+.tt-app .tt-canvas-objects__empty { margin: 4px 8px; color: var(--tt-muted); font-size: 13px; }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__star { color: color-mix(in srgb, var(--tt-muted), transparent 40%); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__star[aria-pressed='true'] { color: #c9922b; }
+.tt-app .tt-canvas-objects__rename { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--tt-moss, #2f6f5e); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: 14px; }
+/* Rename and delete show on hover or keyboard focus so the list stays calm; always on touch screens. */
+@media (hover: hover) {
+  .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__more { opacity: 0; }
+  .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__star[aria-pressed='false'] { opacity: .35; }
+}
