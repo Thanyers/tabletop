@@ -160,19 +160,11 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function billingConfigured(env: Env): { monthly: number; daily: number } {
+/** F036: no money cap. Only the provider key is required; usage is still metered per job. */
+function billingConfigured(env: Env): void {
   if (!env.DEEPSEEK_KEY || env.DEEPSEEK_KEY.length > 4096 || /\s/.test(env.DEEPSEEK_KEY)) {
     fail('MODEL_NOT_CONFIGURED', 'AI proposals are not configured for this workspace.');
   }
-  const read = (raw: string | undefined): number | null => {
-    if (!raw || !/^\d{1,12}$/.test(raw)) return null;
-    const amount = Number(raw);
-    return Number.isSafeInteger(amount) && amount > 0 && amount <= 100_000_000_000 ? amount : null;
-  };
-  const monthly = read(env.AI_MONTHLY_BUDGET_MICRO_USD);
-  const daily = env.AI_DAILY_BUDGET_MICRO_USD === undefined ? monthly : read(env.AI_DAILY_BUDGET_MICRO_USD);
-  if (monthly === null || daily === null) fail('MODEL_NOT_CONFIGURED', 'AI proposals are not configured for this workspace.');
-  return { monthly, daily };
 }
 
 function actorAndRole(request: AIProposalRequest): void {

@@ -30,6 +30,7 @@
 | F007 | ตำแหน่งการ์ดเป็นของทั้งโต๊ะ ทุกคนเห็นเหมือนกัน | `review` | [F007](docs/features/F007-shared-card-layout.md) |
 | F034 | สมาชิกเห็นทุกอย่างในโต๊ะ + แชท AI และคำขอร่างกฎของทุกคน แบบสด (สวิตช์ `VISIBILITY_POLICY`, เก็บแบบ private ไว้) | `doing` | [F034](docs/features/F034-open-visibility.md) |
 | F035 | Role permission ตั้งค่าได้ต่อโต๊ะและต่อคน: role ตั้งต้นตาม case + สร้างเอง · ค่าเริ่มต้น = เท่าเจ้าของยกเว้นลบ/รีเซ็ตโต๊ะ | `doing` | [F035](docs/features/F035-role-permissions.md) |
+| F036 | ปลดเพดานเงินของ AI: ไม่จำกัดงบ แต่ยังบันทึกและ settle การใช้จริงทุกงาน (POC) | `review` | lead (AI) | `fix/F036-uncapped-budget` | `cloudflare/{billing,ai,index}.ts`, `vitest.cloudflare.config.ts`, tests | — | ไม่มี schema/binding/secret · CF 102, unit 476 |
 
 ## งาน
 
