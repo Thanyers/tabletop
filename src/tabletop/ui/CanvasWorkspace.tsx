@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Move, Play, Scale, Swords, Table2, Workflow } from 'lucide-react';
+import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
@@ -26,7 +26,6 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   opened: boolean;
   onToggleOpen: (id: string) => void;
   onSelectNode: (id: string) => void;
-  onMove: (id: string, dx: number, dy: number) => void;
 }
 
 interface PlanCanvasNodeData extends CanvasNodeBaseData {
@@ -252,60 +251,20 @@ function CanvasNodeBody({ children }: { children: ReactNode }) {
 }
 
 function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
-  const moveButtonRef = useRef<HTMLButtonElement>(null);
-  const [moveMenuOpen, setMoveMenuOpen] = useState(false);
-  const [moveAnnouncement, setMoveAnnouncement] = useState('');
-  const moveMenuId = `canvas-move-${data.id}`;
-
-  const move = (dx: number, dy: number, direction: string) => {
-    data.onMove(data.id, dx, dy);
-    setMoveAnnouncement(`${data.title} moved ${direction}.`);
-    setMoveMenuOpen(false);
-    window.requestAnimationFrame(() => moveButtonRef.current?.focus());
-  };
-
-  return <>
-    <header className="tt-canvas-node__head">
-      <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
-      <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
-      <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
-      <button className="tt-canvas-node__open nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onKeyDown={(event) => {
-        if (event.key === 'Escape' && data.opened) {
-          event.preventDefault();
-          event.stopPropagation();
-          data.onToggleOpen(data.id);
-        }
-      }} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
-        {data.opened ? 'Close' : 'Open'}
-      </button>
-      <button ref={moveButtonRef} className="tt-canvas-node__move-toggle nodrag nopan nokey" type="button" aria-expanded={moveMenuOpen} aria-controls={moveMenuId} aria-label={`Move ${data.title} without dragging`} title="Move without dragging" onKeyDown={(event) => {
-        if (event.key === 'Escape' && moveMenuOpen) {
-          event.preventDefault();
-          event.stopPropagation();
-          setMoveMenuOpen(false);
-        }
-      }} onClick={(event) => { event.stopPropagation(); data.onSelectNode(data.id); setMoveMenuOpen((open) => !open); }}>
-        <Move size={16} aria-hidden="true" />
-      </button>
-    </header>
-    {moveMenuOpen && <div id={moveMenuId} className="tt-canvas-move-tools nodrag nopan nokey" role="group" aria-label={`Move ${data.title} without dragging`} onKeyDown={(event) => {
-      if (event.key === 'Escape') {
+  return <header className="tt-canvas-node__head">
+    <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
+    <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
+    <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
+    <button className="tt-canvas-node__open nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onKeyDown={(event) => {
+      if (event.key === 'Escape' && data.opened) {
         event.preventDefault();
         event.stopPropagation();
-        setMoveMenuOpen(false);
-        window.requestAnimationFrame(() => moveButtonRef.current?.focus());
+        data.onToggleOpen(data.id);
       }
-    }}>
-      <span>Move object</span>
-      <div className="tt-canvas-move-tools__directions">
-        <button type="button" aria-label={`Move ${data.title} up`} onClick={(event) => { event.stopPropagation(); move(0, -1, 'up'); }}><ArrowUp size={16} aria-hidden="true" /></button>
-        <button type="button" aria-label={`Move ${data.title} left`} onClick={(event) => { event.stopPropagation(); move(-1, 0, 'left'); }}><ArrowLeft size={16} aria-hidden="true" /></button>
-        <button type="button" aria-label={`Move ${data.title} down`} onClick={(event) => { event.stopPropagation(); move(0, 1, 'down'); }}><ArrowDown size={16} aria-hidden="true" /></button>
-        <button type="button" aria-label={`Move ${data.title} right`} onClick={(event) => { event.stopPropagation(); move(1, 0, 'right'); }}><ArrowRight size={16} aria-hidden="true" /></button>
-      </div>
-    </div>}
-    <span className="tt-canvas-visually-hidden" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</span>
-  </>;
+    }} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
+      {data.opened ? 'Close' : 'Open'}
+    </button>
+  </header>;
 }
 
 function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
@@ -662,6 +621,35 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     commitUserPosition(id, position, node.position);
   }, [cancelPendingOpenObjectFocus, commitUserPosition, flow, setNodes]);
 
+  // Arrow keys: move the selected card, or pan the view when no card is selected (Shift = bigger steps).
+  // Captured on window so React Flow's own node arrow handling (which would not save the position) never runs.
+  const [moveAnnouncement, setMoveAnnouncement] = useState('');
+  useEffect(() => {
+    const directions: Record<string, [number, number, string]> = { ArrowUp: [0, -1, 'up'], ArrowDown: [0, 1, 'down'], ArrowLeft: [-1, 0, 'left'], ArrowRight: [1, 0, 'right'] };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const direction = directions[event.key];
+      if (!direction || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .tt-canvas-node__body, .tt-canvas-objects')) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const [dx, dy, label] = direction;
+      const step = event.shiftKey ? 4 : 1;
+      event.preventDefault();
+      event.stopPropagation();
+      const selected = selectedNodeId ? flow.getNode(selectedNodeId) : undefined;
+      if (selected) {
+        moveCanvasObject(selected.id, dx * step, dy * step);
+        setMoveAnnouncement(`${selected.data.title} moved ${label}.`);
+        return;
+      }
+      cancelPendingOpenObjectFocus();
+      const viewport = flow.getViewport();
+      void flow.setViewport({ x: viewport.x - dx * 80 * step, y: viewport.y - dy * 80 * step, zoom: viewport.zoom });
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [cancelPendingOpenObjectFocus, flow, moveCanvasObject, selectedNodeId]);
+
   useEffect(() => {
     if (!objectsMenuOpen) return;
     const closeOutside = (event: PointerEvent) => {
@@ -868,7 +856,6 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           opened: activeOpenedId === spec.id,
           onToggleOpen: toggleOpenObject,
           onSelectNode,
-          onMove: moveCanvasObject,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
           selected: spec.id === selectedNodeId,
@@ -914,7 +901,6 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           opened: activeOpenedId === object.id,
           onToggleOpen: toggleOpenObject,
           onSelectNode,
-          onMove: moveCanvasObject,
           selected: object.id === selectedNodeId,
           auxiliary: object,
         },
@@ -1336,6 +1322,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         </ReactFlow>
       )}
       <div className="tt-canvas-tools">
+        <span className="tt-canvas-visually-hidden" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</span>
         <div className="tt-canvas-objects" ref={objectsMenuRef} onKeyDown={(event) => {
           if (event.key === 'Escape' && objectsMenuOpen) {
             event.preventDefault();
