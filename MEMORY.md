@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-22 — release PR ล้มเพราะรันเทสต์ในเครื่องไม่ครบทุกขั้นของ CI
+- **What happened:** release/4.3.0 (PR #125) ล้มที่ `demo:auto:run` (persona demos 2 ฉากคาดว่าผู้เรียน/ผู้เล่นจะถูกปฏิเสธ แต่ F035 ให้สิทธิ์ค่าเริ่มต้นแล้ว) · ก่อนหน้านั้น #120 merge เข้า dev โดยไม่ได้รัน browser suites จน `test:cloudflare:browser` บน dev พัง (แก้ใน #122)
+- **Root cause:** ตรวจในเครื่องแค่ lint/unit/Cloudflare/browser 3 ชุด แต่ `validate.yml` มี `demo:auto:run`, `npm audit`, component-lab, `check-client-secrets` ด้วย · และ PR เข้า `dev` รันเฉพาะเช็คเร็ว (CI005) browser suites จึงไม่จับให้
+- **Correct behavior:** ก่อนเปิด PR ที่เปลี่ยนสิทธิ์/แชท/canvas และก่อนเปิด release PR ให้รันครบทุก step ของ `.github/workflows/validate.yml` ในเครื่อง: `npm audit --audit-level=high && npm run lint && npm test && node --import tsx --test scripts/component-lab/component-lab.test.ts && npm run build && node scripts/check-client-secrets.mjs && npm run test:cloudflare && npm run build:cloudflare && npm run demo:auto:run && npm run test:r1:browser && npm run test:cloudflare:browser && npm run test:generative:browser` · และ merge `origin/main` เข้า release branch ใหม่ทุกครั้งที่ main ขยับก่อน merge release
+
 ### 2026-10-21 — arm failure ครั้งเดียวใน browser test ไม่พอ เพราะแอป refresh ได้หลายครั้ง
 - **What happened:** หลังแก้ CD003 (dedupe + sticky error) CI ยังล้ม `Community equipment` ด้วย `workspaceRefreshRequests=2` — GET ครั้งแรกถูก synthetic failure แต่ครั้งที่สองสำเร็จและล้าง error
 - **Root cause:** route interception แบบ fail ครั้งเดียวพึ่งจำนวน refresh ที่แน่นอน; แอปมี refresh จาก POST response, poll และ retry
