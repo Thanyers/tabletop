@@ -47,14 +47,25 @@ export type SceneValue = number | GenerativeExpression;
 export interface ScenePoint { x: SceneValue; y: SceneValue }
 interface ScenePaint { fill?: string; stroke?: string; strokeWidth?: SceneValue }
 export interface SceneDragBinding { actionId: string; xParameter: string; yParameter?: string; inputs: Record<string, ControlInputBinding> }
+/** F040: the host animates this axis from `from` to `to` at `speed` scene units per second. */
+export interface SceneMotion {
+  axis: 'x' | 'y';
+  from: SceneValue;
+  to: SceneValue;
+  /** Scene units per second; must evaluate to a positive number to move. */
+  speed: SceneValue;
+  /** Defaults to true; false stops at `to`. */
+  loop?: boolean;
+}
 interface SceneInteraction { drag?: SceneDragBinding }
+interface MovableSceneInteraction extends SceneInteraction { motion?: SceneMotion }
 interface ViewRelations { relatedTo?: { views?: string[]; collections?: string[] } }
 export type ScenePrimitive =
-  | ({ id: string; shape: 'rect'; x: SceneValue; y: SceneValue; width: SceneValue; height: SceneValue; rx?: SceneValue } & ScenePaint & SceneInteraction)
-  | ({ id: string; shape: 'circle'; cx: SceneValue; cy: SceneValue; r: SceneValue } & ScenePaint & SceneInteraction)
+  | ({ id: string; shape: 'rect'; x: SceneValue; y: SceneValue; width: SceneValue; height: SceneValue; rx?: SceneValue } & ScenePaint & MovableSceneInteraction)
+  | ({ id: string; shape: 'circle'; cx: SceneValue; cy: SceneValue; r: SceneValue } & ScenePaint & MovableSceneInteraction)
   | ({ id: string; shape: 'line'; x1: SceneValue; y1: SceneValue; x2: SceneValue; y2: SceneValue } & Pick<ScenePaint, 'stroke' | 'strokeWidth'> & SceneInteraction)
   | ({ id: string; shape: 'polygon'; points: ScenePoint[] } & ScenePaint & SceneInteraction)
-  | ({ id: string; shape: 'text'; x: SceneValue; y: SceneValue; text: string | GenerativeExpression; fontSize?: SceneValue } & Pick<ScenePaint, 'fill' | 'stroke'> & SceneInteraction);
+  | ({ id: string; shape: 'text'; x: SceneValue; y: SceneValue; text: string | GenerativeExpression; fontSize?: SceneValue } & Pick<ScenePaint, 'fill' | 'stroke'> & MovableSceneInteraction);
 
 export interface SceneViewDescriptor extends ViewRelations { id: string; kind: 'scene'; title: string; width: number; height: number; elements: ScenePrimitive[] }
 export interface ChartViewDescriptor extends ViewRelations { id: string; kind: 'chart'; title: string; chart: 'bar' | 'line' | 'scatter'; collection: string; categoryField: string; value: GenerativeExpression; color?: string }

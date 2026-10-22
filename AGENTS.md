@@ -21,7 +21,7 @@
 
 | Branch | หน้าที่ | ใครเขียนได้ |
 | --- | --- | --- |
-| `main` | **release เท่านั้น** ทุก merge คือรุ่นที่จะ tag `vX.Y.Z` | merge ผ่าน PR โดยคน |
+| `main` | **release เท่านั้น** ทุก merge คือรุ่นที่จะ tag `vX.Y.Z` | merge ผ่าน PR · **AI merge เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) |
 | `dev` | branch รวมงานของรุ่นถัดไป | merge ผ่าน PR · **AI merge เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) |
 | `feat/*`, `fix/*`, `docs/*` | งานหนึ่งเรื่อง แตกจาก `dev` → PR กลับ `dev` | AI / คน |
 | `release/X.Y.Z` | เตรียมออกรุ่น แตกจาก `dev` → PR เข้า `main` · แก้ได้แค่บั๊กและ CHANGELOG ห้ามเพิ่มฟีเจอร์ | AI / คน |
@@ -29,7 +29,7 @@
 
 `main` มีทางเข้าแค่ 2 ทาง คือ `release/*` และ `hotfix/*` · ห้ามเปิด PR จาก `feat/*` หรือ `dev` เข้า `main` ตรง ๆ
 
-**จุดที่คนต้องกดมีจุดเดียว:** merge PR เข้า `main` (release/hotfix) เพราะ merge นั้นคือการตัดสินใจปล่อยรุ่นและ deploy อัตโนมัติ · PR เข้า `dev` AI merge เองได้
+**ไม่มีจุดที่คนต้องกด** (ผู้ใช้เปลี่ยนกฎเมื่อ 2026-10-22 เพราะโปรเจกต์ต้องการความเร็ว): AI merge ได้ทั้ง PR เข้า `dev` และ release/hotfix เข้า `main` · ที่ต้องรักษาไว้คือ **ทุกรุ่นมี tag + CHANGELOG ให้ย้อนกลับได้** · ข้อยกเว้นที่ยังต้องถามคนมีข้อเดียว ดู [§8](#8-ขอบเขตของ-ai)
 
 ## 3. CI
 
@@ -74,60 +74,66 @@ PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใ�
 ## 5. ออก release
 
 1. แตก `release/X.Y.Z` จาก `origin/dev` แก้ได้แค่บั๊กและย้ายหัวข้อ `Unreleased` ใน `CHANGELOG.md` เป็น `X.Y.Z` · ถ้า `main` มี commit ที่ `dev` ไม่มี ให้ merge `origin/main` เข้า release branch ด้วย
-   - **รันครบทุกขั้นของ [`validate.yml`](.github/workflows/validate.yml) ในเครื่องก่อนเปิด release PR** (รวม `demo:auto:run` และ browser suites ทั้งสาม) เพราะ PR เข้า `dev` รันแค่เช็คเร็ว regression จะมาโผล่ตรงนี้ · ใส่ผลไว้ใน PR · PR เข้า `dev` ไม่ต้องรันชุดเต็มในเครื่อง (ผู้ใช้ตัดสินเมื่อ 2026-10-22 เพื่อไม่ให้งานช้า)
-2. **เสนอเลขเวอร์ชันพร้อมเหตุผล** แล้วรอคนเคาะ · ตัดสินด้วยคำถาม "deploy แล้ว rollback ทันทีได้ไหม"
+   - ชุดเต็มของ [`validate.yml`](.github/workflows/validate.yml) (รวม browser suites ทั้งสาม) **รันใน CI บน release PR เอง** ไม่ต้องรันในเครื่องก่อน · ถ้าล้ม แก้บน release branch แล้ว push ใหม่
+2. **AI ตั้งเลขเวอร์ชันเอง** ไม่ต้องรอคนเคาะ · เขียนเหตุผลไว้ในบรรทัดแรกใต้หัวข้อ `## X.Y.Z` ของ `CHANGELOG.md` (bump อะไร + rollback ไปรุ่นไหนได้) · ตัดสินด้วยคำถาม "deploy แล้ว rollback ทันทีได้ไหม"
    - **PATCH** แก้บั๊ก/ข้อความ/CSS · **MINOR** ฟีเจอร์ใหม่ หรือ migration ที่เข้ากันได้ย้อนหลัง
    - **MAJOR** rollback ไม่ได้ถ้าไม่ทำอะไรเพิ่ม เช่น migration ย้อนไม่ได้, ต้องเพิ่ม secret/binding/config ก่อน deploy, เปลี่ยน response จน client เก่าพัง
-3. PR `release/X.Y.Z` → `main` → **คน merge** · การ merge นี้คือการตัดสินใจปล่อยรุ่น ชื่อ branch คือเลขเวอร์ชันที่คนเคาะแล้ว
+3. PR `release/X.Y.Z` → `main` → **AI merge เอง** เมื่อครบเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) · ชื่อ branch คือเลขเวอร์ชัน
 4. หลัง merge **pipeline ทำต่อเองทั้งหมด** ([`release-deploy.yml`](.github/workflows/release-deploy.yml), CD001): รอ `local-validation` ของ merge commit บน `main` ผ่าน → สร้าง annotated tag `vX.Y.Z` → build ครั้งเดียว → staging (D1 migration + deploy + smoke) → production ด้วย build เดียวกัน → smoke · ดูรายละเอียดที่หัวข้อถัดไป
-5. เปิด PR `main` → `dev` เพื่อนำ commit ของ release กลับเข้า `dev`
+5. ติดตาม run ของ **Release deploy** จนจบ (`gh run watch`) แล้วรายงานผู้ใช้: เลขเวอร์ชัน, `/version` ของ staging/production, ลิงก์ run
+6. เปิด PR `main` → `dev` เพื่อนำ commit ของ release กลับเข้า `dev` (AI merge เองได้) พร้อมอัปเดต [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md)
 
-## 6. Deploy (อัตโนมัติหลังคน merge release)
+AI ออก release เมื่อผู้ใช้สั่งในแชท (เช่น "release", "ขึ้น prod") แล้วทำตั้งแต่ข้อ 1 ถึง 6 เองจนจบ ไม่ต้องให้คนเปิด GitHub
+
+## 6. Deploy (อัตโนมัติหลัง merge release)
 
 pipeline ทำงานเฉพาะ merge จาก `release/X.Y.Z` หรือ `hotfix/X.Y.Z` เข้า `main` และต้องมีหัวข้อ `## X.Y.Z` ใน `CHANGELOG.md` · merge อื่นเข้า `main` ไม่ deploy
 
 - **config จริงอยู่ใน GitHub secrets** (`WRANGLER_CONFIG_STAGING`, `WRANGLER_CONFIG_PRODUCTION`) ไม่อยู่ใน git · pipeline ตรวจชื่อ Worker, `PUBLIC_ORIGIN`, D1 ID ก่อนใช้ เพื่อไม่ให้ config staging ไป deploy production
 - **D1 migration รันอัตโนมัติ** staging ก่อน แล้วค่อย production หลัง staging ผ่าน · ก่อนรันทุกครั้งบันทึก D1 Time Travel bookmark ไว้ใน summary ของ run (กู้ได้ด้วย `wrangler d1 time-travel restore`) · เอา bookmark ไม่ได้ = ไม่ migrate
-- **smoke** เป็นการอ่านอย่างเดียว: `/healthz`, `/readyz`, `/api/capabilities`, `/version` ต้องตรงกับ tag, `/` และ `/new` · ไม่ล็อกอิน ไม่สร้างห้อง ไม่เรียก AI → การตรวจที่ต้องล็อกอินหรือใช้ AI ยังต้องทำด้วยมือบน staging ก่อน merge release
-- **ล้มที่ขั้นไหนก็หยุดทันที** เปิด GitHub issue "Deploy failed" พร้อม `job_started_at` / `detected_at` / ขั้นที่ล้ม · **ไม่ rollback production อัตโนมัติ** (ดูข้อห้าม rollback ใน [DEPLOYMENTS](docs/DEPLOYMENTS.md)) · คนแก้แล้วรัน **Release deploy** ใหม่ด้วย SHA เดิม (workflow_dispatch) และบันทึกลง `MEMORY.md` → Deploy failures
+- **smoke** เป็นการอ่านอย่างเดียว: `/healthz`, `/readyz`, `/api/capabilities`, `/version` ต้องตรงกับ tag, `/` และ `/new` · ไม่ล็อกอิน ไม่สร้างห้อง ไม่เรียก AI → smoke ไม่ครอบ flow ที่ต้องล็อกอินหรือใช้ AI
+- **ล้มที่ขั้นไหนก็หยุดทันที** เปิด GitHub issue "Deploy failed" พร้อม `job_started_at` / `detected_at` / ขั้นที่ล้ม · **ไม่ rollback production อัตโนมัติ** (ดูข้อห้าม rollback ใน [DEPLOYMENTS](docs/DEPLOYMENTS.md)) · AI แจ้งผู้ใช้ทันที แก้ (ถ้าเป็นปัญหาในโค้ด ให้ออกรุ่น PATCH ใหม่) หรือรัน **Release deploy** ใหม่ด้วย SHA เดิม (workflow_dispatch) ถ้าเป็นปัญหาชั่วคราว และบันทึกลง `MEMORY.md` → Deploy failures
 - หลัง deploy อัปเดต [`docs/DEPLOYMENTS.md`](docs/DEPLOYMENTS.md) ผ่าน PR เข้า `dev`
 
 ตั้งค่าครั้งแรกและการกู้คืน: [TEAM_HANDOFF_TH → Deploy อัตโนมัติ (CD001)](docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001) · การขออนุมัติเขียนฐานด้วยมืออยู่ที่ [ส่งรุ่นใหม่และกู้คืน](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน)
 
 ## 7. Hotfix
 
-ใช้เมื่อผู้ใช้ทำงานไม่ได้ ข้อมูลเสียหาย หรือมีช่องโหว่ความปลอดภัยเท่านั้น · AI **เสนอ** ได้ แต่คนเป็นผู้ตัดสินว่าจะ hotfix หรือรอ release ปกติ
+ใช้เมื่อผู้ใช้ทำงานไม่ได้ ข้อมูลเสียหาย หรือมีช่องโหว่ความปลอดภัย · AI ตัดสินเองได้ว่าจะ hotfix หรือรอ release ปกติ (แจ้งผู้ใช้พร้อมเหตุผล) · ถ้า `dev` ไม่มีของค้างที่ยังไม่พร้อม การออก release ปกติก็เร็วพอ ๆ กัน
 
 ```bash
 git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รันบน prod ไม่ใช่ main HEAD
 ```
 
-แก้เฉพาะบั๊กนั้น → CHANGELOG (PATCH) → PR เข้า `main` → คน merge → pipeline tag + deploy เอง → **PR กลับเข้า `dev` ในวันเดียวกัน**
+แก้เฉพาะบั๊กนั้น → CHANGELOG (PATCH) → PR เข้า `main` → AI merge ตาม §8 → pipeline tag + deploy เอง → **PR กลับเข้า `dev` ในวันเดียวกัน**
 
 ## 8. ขอบเขตของ AI
 
-**ทำได้:** แตก branch · แก้โค้ดและเอกสาร · รันเทสต์ · push branch งานของตัวเอง · เปิด PR · เสนอเลขเวอร์ชัน · สร้างและ push annotated tag **หลังคนเคาะเลขแล้ว และ check บน `main` ผ่านแล้ว** (ปกติ pipeline สร้างให้เอง) · กดรัน **Release deploy** ซ้ำด้วย SHA เดิมเมื่อคนสั่ง
+**ทำได้:** แตก branch · แก้โค้ดและเอกสาร · รันเทสต์ · push branch งานของตัวเอง · เปิด PR · **ตั้งเลขเวอร์ชัน** · **merge release/hotfix เข้า `main`** · สร้างและ push annotated tag เมื่อ check บน `main` ผ่านแล้ว (ปกติ pipeline สร้างให้เอง) · กดรัน **Release deploy** ซ้ำด้วย SHA เดิม
 
-**merge PR เข้า `dev` เองได้ เมื่อครบทุกข้อ:**
-1. base ของ PR คือ `dev` และ PR ไม่ใช่ draft
+**merge PR เข้า `dev` หรือ `main` เองได้ เมื่อครบทุกข้อ:**
+1. base ของ PR คือ `dev` หรือ `main` และ PR ไม่ใช่ draft · PR เข้า `main` ต้องมาจาก `release/X.Y.Z` หรือ `hotfix/X.Y.Z` และมีหัวข้อ `## X.Y.Z` ใน `CHANGELOG.md`
 2. check `local-validation` ของ commit ล่าสุดใน PR ผ่าน และ GitHub บอกว่า mergeable (ไม่มี conflict)
 3. ใช้ `gh pr merge <n> --merge` (merge commit) · **ห้ามใช้ `--admin`** หรือวิธีใดที่ข้าม ruleset
 4. merge เฉพาะ PR ที่ AI เปิดเอง หรือที่ผู้ใช้สั่งให้ merge · หลัง merge แจ้งผู้ใช้พร้อมลิงก์ PR และ merge commit
+5. PR เข้า `main`: check `local-validation` ต้องเป็น **ชุดเต็ม** (PR เข้า `main` รันชุดเต็มอยู่แล้วตาม [§3](#3-ci))
+
+**ข้อยกเว้นเดียวที่ยังต้องให้คนตอบในแชทก่อน merge เข้า `main`:** release ที่มี D1 migration แบบย้อนไม่ได้ (drop/rename column/table, ลบหรือเขียนทับข้อมูลเดิม) · เพราะ rollback ด้วยเลขเวอร์ชันกู้ข้อมูลไม่ได้ (เป็น R0 ตาม [CLAUDE.md](CLAUDE.md)) · migration แบบเพิ่มอย่างเดียว (เพิ่ม table/column nullable) ไม่ต้องถาม
 
 **ห้ามเด็ดขาด:**
-- merge PR เข้า `main` (release/hotfix) — คนเท่านั้น
+- merge เข้า `main` จาก branch อื่นที่ไม่ใช่ `release/*` / `hotfix/*`
 - push ตรงเข้า `main` / `dev` หรือ force push
-- deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · การ deploy เกิดจาก pipeline หลังคน merge release เท่านั้น
+- deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · การ deploy เกิดจาก pipeline หลัง merge release เท่านั้น
 - แก้ `release-deploy.yml` ให้ข้ามการรอ check, ข้าม smoke หรือ deploy จาก branch อื่นนอกจาก `main`
 - ลบหรือย้าย tag ที่ push แล้ว (รุ่นพังให้ออกรุ่นใหม่)
-- ตั้งเลขเวอร์ชันเองโดยไม่มีคนเคาะ หรือ hardcode เลขเวอร์ชันไว้ที่อื่นนอกจาก git tag
+- hardcode เลขเวอร์ชันไว้ที่อื่นนอกจาก git tag · ข้ามเลข หรือใช้เลขที่เคย tag แล้ว
 - ใส่ secret, Worker/D1 ID จริง, room/account ID, invite link, อีเมล/ชื่อผู้ใช้จริง หรือ path ส่วนตัวลงไฟล์ที่ track — **repo นี้เป็น public**
 
 ## 9. ตั้งค่า repo ครั้งเดียว (admin ของ repo)
 
 AI ทำขั้นนี้ไม่ได้ เพราะต้องใช้สิทธิ์ admin · ถ้ายังไม่ได้ตั้ง branch protection กติกาข้างบนเป็นแค่ข้อตกลง ระบบยังไม่ได้บังคับ
 
-ป้องกัน `main` และ `dev`: ต้องผ่าน PR, check `local-validation` ผ่าน, ห้าม force push และห้ามลบ · ruleset ที่ใช้จริง (`protect-main-and-dev`, ตรวจ 2026-10-22) ตั้ง review ไว้ **0 คน** เพื่อให้ AI merge เข้า `dev` ได้ · การกันไม่ให้ AI merge เข้า `main` จึงเป็น **กติกาใน §8 ไม่ใช่สิ่งที่ระบบบังคับ** ถ้าต้องการให้ระบบบังคับ ให้แยก ruleset ของ `main` แล้วตั้ง review ≥1 (AI ใช้ token ของผู้ใช้ จึงต้องให้คนอื่น approve)
+ป้องกัน `main` และ `dev`: ต้องผ่าน PR, check `local-validation` ผ่าน, ห้าม force push และห้ามลบ · ruleset ที่ใช้จริง (`protect-main-and-dev`, ตรวจ 2026-10-22) ตั้ง review ไว้ **0 คน** เพื่อให้ AI merge ได้ทั้ง `dev` และ `main` (ตามกฎ 2026-10-22) · ที่ระบบยังบังคับคือ ต้องผ่าน PR + `local-validation` ผ่าน + ห้าม force push · **ห้ามเพิ่ม review ≥1 ให้ `main`** ไม่อย่างนั้น AI จะ release เองไม่ได้
 
 ```bash
 gh api -X POST repos/Thanyers/tabletop/rulesets --input - <<'EOF'
