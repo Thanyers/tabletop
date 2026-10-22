@@ -1,18 +1,31 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 15:35 (Asia/Bangkok)** ทั้งสอง environment รายงาน **4.3.0 / 12c40a4** จาก annotated tag [v4.3.0](https://github.com/Thanyers/tabletop/tree/v4.3.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 17:25 (Asia/Bangkok)** ทั้งสอง environment รายงาน **5.0.0 / e8c2d73** จาก annotated tag [v5.0.0](https://github.com/Thanyers/tabletop/releases/tag/v5.0.0)
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [12c40a4](https://github.com/Thanyers/tabletop/commit/12c40a49d15d11a9b024da04859110dd51ca7a6b) — PR #125 | commit และ build เดียวกัน |
-| Release | v4.3.0 / 4.3.0 | v4.3.0 / 4.3.0 |
+| Source | [e8c2d73](https://github.com/Thanyers/tabletop/commit/e8c2d73e85e0a97e49c9dbd7c41291c3014328f9) — PR #141 | commit และ build เดียวกัน |
+| Release | v5.0.0 / 5.0.0 | v5.0.0 / 5.0.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 5.0.0 และ 4.4.0 (22 ตุลาคม 2569)
+
+ออกสองรุ่นติดกัน AI merge release เองตามกฎใหม่ ([AGENTS.md §8](../AGENTS.md#8-ขอบเขตของ-ai))
+
+- **4.4.0 (MINOR, F038)** — [PR #138](https://github.com/Thanyers/tabletop/pull/138) → `d04da37`, [run 39761035504](https://github.com/Thanyers/tabletop/actions/runs/39761035504) success · `/version` ทั้งสองที่ = `4.4.0 / d04da37`
+- **5.0.0 (MAJOR: F040 `motion`, F041, F042, #136)** — [PR #141](https://github.com/Thanyers/tabletop/pull/141) → `e8c2d73`, [run 39762394546](https://github.com/Thanyers/tabletop/actions/runs/39762394546) success · build เดียว `built_at` 2026-10-22T10:21:33Z
+  - D1: `no pending D1 migrations` ทั้งสองที่
+  - Staging Worker version `77a1c73d-ab15-4b20-9986-9f8362345442` · Production `104713e6-aeb0-4965-8d00-6f907f843e1a` · smoke 6/6 PASS ทั้งสองที่
+  - `/version` ตรวจซ้ำด้วยมือหลัง run จบ = `5.0.0 / e8c2d73` ทั้งสองที่
+  - MAJOR เพราะ rollback กลับ 4.4.0 ทำให้โต๊ะที่ใช้ `motion` ไม่แสดง canvas และ AI ล้ม (ดู CHANGELOG) · ถ้ามีปัญหาให้แก้ไปข้างหน้าเป็น 5.0.x
+- ยังไม่ได้ตรวจด้วยมือแบบล็อกอิน/ใช้ AI — smoke ไม่ครอบ
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-5.0.0`
 
 ## ผลตรวจ deploy 4.3.0 (22 ตุลาคม 2569)
 
