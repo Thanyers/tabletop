@@ -49,6 +49,8 @@ const inputSchema = z.discriminatedUnion('kind', [
     program: tableProgramSchema.nullable(),
     turn: z.string().max(40).nullable(),
     records: tableRecordsSchema.optional(),
+    /** F037: shared notes act as supporting knowledge for the draft. */
+    notes: z.array(z.strictObject({ text: z.string().max(500), color: z.string().max(20) })).max(20).optional(),
     repair: z.strictObject({ attempt: z.number().int().min(2).max(3), issues: z.array(z.string().max(MAX_REPAIR_ISSUE_CHARS)).min(1).max(MAX_REPAIR_ISSUES), previousOutput: z.string().max(18_000).optional() }).optional(),
   }),
 ]);
@@ -56,7 +58,7 @@ const inputSchema = z.discriminatedUnion('kind', [
 export type DeepSeekChangeInput =
   | { kind: 'teaching'; prompt: string; parameters: { force: number; mass: number; time: number } }
   | { kind: 'encounter'; prompt: string; rule: { allyTarget: boolean; apCost: 0 | 1; oncePerTurn: boolean } }
-  | { kind: 'table'; prompt: string; sources: { id: string; filename: string; text: string }[]; program: TableProgram | null; turn: string | null; records?: Record<string, TableRecord[]>; repair?: { attempt: number; issues: string[]; previousOutput?: string } };
+  | { kind: 'table'; prompt: string; sources: { id: string; filename: string; text: string }[]; program: TableProgram | null; turn: string | null; records?: Record<string, TableRecord[]>; notes?: { text: string; color: string }[]; repair?: { attempt: number; issues: string[]; previousOutput?: string } };
 
 export interface DeepSeekChangeUsage {
   promptTokens: number;
