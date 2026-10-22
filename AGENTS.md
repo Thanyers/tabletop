@@ -22,12 +22,14 @@
 | Branch | หน้าที่ | ใครเขียนได้ |
 | --- | --- | --- |
 | `main` | **release เท่านั้น** ทุก merge คือรุ่นที่จะ tag `vX.Y.Z` | merge ผ่าน PR โดยคน |
-| `dev` | branch รวมงานของรุ่นถัดไป | merge ผ่าน PR โดยคน |
+| `dev` | branch รวมงานของรุ่นถัดไป | merge ผ่าน PR · **AI merge เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) |
 | `feat/*`, `fix/*`, `docs/*` | งานหนึ่งเรื่อง แตกจาก `dev` → PR กลับ `dev` | AI / คน |
 | `release/X.Y.Z` | เตรียมออกรุ่น แตกจาก `dev` → PR เข้า `main` · แก้ได้แค่บั๊กและ CHANGELOG ห้ามเพิ่มฟีเจอร์ | AI / คน |
 | `hotfix/X.Y.Z` | บั๊ก production ด่วน แตกจาก **tag ที่รันอยู่บน prod** → PR เข้า `main` | AI / คน |
 
 `main` มีทางเข้าแค่ 2 ทาง คือ `release/*` และ `hotfix/*` · ห้ามเปิด PR จาก `feat/*` หรือ `dev` เข้า `main` ตรง ๆ
+
+**จุดที่คนต้องกดมีจุดเดียว:** merge PR เข้า `main` (release/hotfix) เพราะ merge นั้นคือการตัดสินใจปล่อยรุ่นและ deploy อัตโนมัติ · PR เข้า `dev` AI merge เองได้
 
 ## 3. CI
 
@@ -67,7 +69,7 @@ gh pr create --draft --base dev --head feat/<ID>-<ชื่อ> --title "<ID>: .
 # แก้ → ตรวจ → อัปเดต spec.md + PLAN.md → gh pr ready
 ```
 
-PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใช้เห็นอะไร ผลตรวจ (คำสั่ง + จำนวนที่ผ่าน + รุ่น Node) ข้อจำกัด และสิ่งที่ operator ต้องทำก่อน deploy (ถ้ามี) · จากนั้น **คนเป็นผู้ review และ merge**
+PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใช้เห็นอะไร ผลตรวจ (คำสั่ง + จำนวนที่ผ่าน + รุ่น Node) ข้อจำกัด และสิ่งที่ operator ต้องทำก่อน deploy (ถ้ามี) · จากนั้น **AI merge เข้า `dev` เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) (คนจะ review หรือ merge เองก็ได้)
 
 ## 5. ออก release
 
@@ -105,8 +107,16 @@ git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รั
 
 **ทำได้:** แตก branch · แก้โค้ดและเอกสาร · รันเทสต์ · push branch งานของตัวเอง · เปิด PR · เสนอเลขเวอร์ชัน · สร้างและ push annotated tag **หลังคนเคาะเลขแล้ว และ check บน `main` ผ่านแล้ว** (ปกติ pipeline สร้างให้เอง) · กดรัน **Release deploy** ซ้ำด้วย SHA เดิมเมื่อคนสั่ง
 
+**merge PR เข้า `dev` เองได้ เมื่อครบทุกข้อ:**
+1. base ของ PR คือ `dev` และ PR ไม่ใช่ draft
+2. check `local-validation` ของ commit ล่าสุดใน PR ผ่าน และ GitHub บอกว่า mergeable (ไม่มี conflict)
+3. ถ้า PR แตะ UI, canvas, แชท, สิทธิ์ หรือขั้นตอนเชิญ ต้องรันครบทุกขั้นของ [`validate.yml`](.github/workflows/validate.yml) ในเครื่องให้ผ่านก่อน (รวม `demo:auto:run` และ browser suites ทั้งสาม) เพราะ CI ของ `dev` ข้าม browser suites (CI005) · ใส่ผลไว้ใน PR
+4. ใช้ `gh pr merge <n> --merge` (merge commit) · **ห้ามใช้ `--admin`** หรือวิธีใดที่ข้าม ruleset
+5. merge เฉพาะ PR ที่ AI เปิดเอง หรือที่ผู้ใช้สั่งให้ merge · หลัง merge แจ้งผู้ใช้พร้อมลิงก์ PR และ merge commit
+
 **ห้ามเด็ดขาด:**
-- merge PR ใด ๆ หรือ push ตรงเข้า `main` / `dev`
+- merge PR เข้า `main` (release/hotfix) — คนเท่านั้น
+- push ตรงเข้า `main` / `dev` หรือ force push
 - deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · การ deploy เกิดจาก pipeline หลังคน merge release เท่านั้น
 - แก้ `release-deploy.yml` ให้ข้ามการรอ check, ข้าม smoke หรือ deploy จาก branch อื่นนอกจาก `main`
 - ลบหรือย้าย tag ที่ push แล้ว (รุ่นพังให้ออกรุ่นใหม่)
@@ -117,14 +127,14 @@ git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รั
 
 AI ทำขั้นนี้ไม่ได้ เพราะต้องใช้สิทธิ์ admin · ถ้ายังไม่ได้ตั้ง branch protection กติกาข้างบนเป็นแค่ข้อตกลง ระบบยังไม่ได้บังคับ
 
-ป้องกัน `main` และ `dev`: ต้องผ่าน PR, review 1 คน, check `local-validation` ผ่าน, ห้าม force push และห้ามลบ
+ป้องกัน `main` และ `dev`: ต้องผ่าน PR, check `local-validation` ผ่าน, ห้าม force push และห้ามลบ · ruleset ที่ใช้จริง (`protect-main-and-dev`, ตรวจ 2026-10-22) ตั้ง review ไว้ **0 คน** เพื่อให้ AI merge เข้า `dev` ได้ · การกันไม่ให้ AI merge เข้า `main` จึงเป็น **กติกาใน §8 ไม่ใช่สิ่งที่ระบบบังคับ** ถ้าต้องการให้ระบบบังคับ ให้แยก ruleset ของ `main` แล้วตั้ง review ≥1 (AI ใช้ token ของผู้ใช้ จึงต้องให้คนอื่น approve)
 
 ```bash
 gh api -X POST repos/Thanyers/tabletop/rulesets --input - <<'EOF'
 {"name":"protect-main-and-dev","target":"branch","enforcement":"active",
  "conditions":{"ref_name":{"include":["refs/heads/main","refs/heads/dev"],"exclude":[]}},
  "rules":[{"type":"deletion"},{"type":"non_fast_forward"},
-  {"type":"pull_request","parameters":{"required_approving_review_count":1,"dismiss_stale_reviews_on_push":true,
+  {"type":"pull_request","parameters":{"required_approving_review_count":0,"dismiss_stale_reviews_on_push":true,
    "require_code_owner_review":false,"require_last_push_approval":false,"required_review_thread_resolution":false}},
   {"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false,
    "required_status_checks":[{"context":"local-validation"}]}}]}
