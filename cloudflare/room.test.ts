@@ -2148,13 +2148,13 @@ describe('Cloudflare room Durable Object', () => {
 
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
     expect(poll.response.status).toBe(200);
-    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification });
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number) });
 
     const retry = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
       method: 'POST', body: input, mutation: true,
     });
     expect(retry.response.status).toBe(200);
-    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification });
+    expect(retry.body).toEqual({ id: jobId, status: 'completed', clarification, askedBy: owner.id, createdAt: expect.any(Number) });
     expect(vi.mocked(proposeChange)).toHaveBeenCalledTimes(1);
 
     const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
@@ -2183,7 +2183,7 @@ describe('Cloudflare room Durable Object', () => {
     const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
     expect(job.status).toBe('completed');
     const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
-    expect(poll.body).toEqual({ id: jobId, status: 'completed' });
+    expect(poll.body).toEqual({ id: jobId, status: 'completed', askedBy: owner.id, createdAt: expect.any(Number) });
   });
 
   it('maps failed model jobs to actionable safe messages without exposing provider details', async () => {
