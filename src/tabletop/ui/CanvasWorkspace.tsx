@@ -32,6 +32,8 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   onHide: (id: string) => void;
   /** Point the table chat at this card; absent where there is no table chat. */
   onReference?: (id: string, title: string) => void;
+  /** Rename this card for everyone; absent when this viewer cannot. A blank title brings back the original. */
+  onRename?: (id: string, title: string) => void;
   onSelectNode: (id: string) => void;
   /** Save the size (and moved corner) after this viewer drags a card edge. */
   onResize: (id: string, box: CanvasBox) => void;
@@ -372,11 +374,31 @@ function CanvasNodeBody({ children }: { children: ReactNode }) {
 }
 
 function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const startEditing = () => { if (data.onRename) setDraft(data.title); };
+  const finish = (save: boolean) => {
+    if (draft === null) return;
+    const title = draft.replace(/\s+/gu, ' ').trim().slice(0, 120);
+    setDraft(null);
+    if (save && title !== data.title) data.onRename?.(data.id, title);
+  };
   return <header className="tt-canvas-node__head">
     <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
     <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
-    <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title" title={data.title}>{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
+    <span className="tt-canvas-node__identity">
+      {draft !== null
+        ? <input className="tt-canvas-node__title-input nodrag nopan nokey" data-testid={`card-title-input-${data.id}`} aria-label={`New name for ${data.title}`} maxLength={120} autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => finish(true)} onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+          if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+        }} />
+        : <span className="tt-canvas-node__title" title={data.onRename ? `${data.title} (double-click to rename)` : data.title} onDoubleClick={(event) => { if (!data.onRename) return; event.stopPropagation(); startEditing(); }}>{data.title}</span>}
+      {data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}
+    </span>
     <span className="tt-canvas-node__controls">
+      {data.onRename && draft === null && <button className="tt-canvas-node__open tt-canvas-node__icon tt-canvas-node__rename nodrag nopan nokey" type="button" data-testid={`rename-card-${data.id}`} aria-label={`Rename ${data.title}`} title="Rename for everyone (leave blank for the original name)" onClick={(event) => { event.stopPropagation(); startEditing(); }}>
+        <Pencil size={14} aria-hidden="true" />
+      </button>}
       {data.onReference && <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-label={`Ask about ${data.title} in chat`} title="Ask about or change this card in the chat" onClick={(event) => { event.stopPropagation(); data.onReference?.(data.id, data.title); }}>
         <MessageSquareText size={15} aria-hidden="true" />
       </button>}
@@ -901,6 +923,15 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const referenceInChat = useMemo(() => view.kind !== 'table' || view.domain.kind !== 'table' ? undefined : (id: string, title: string) => {
     referenceCardInChat({ id, title, detail: describeCardForChat(id, title, view) });
   }, [view]);
+  const [trashError, setTrashError] = useState<string | null>(null);
+  /** Saves a card's name for everyone (shared layout); a blank name brings back the card's own title. */
+  const renameCanvasObject = useCallback(async (id: string, title: string): Promise<boolean> => {
+    setTrashError(null);
+    const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, titles: { [id]: title || null } });
+    if (!updated) setTrashError('Could not rename this card. Try again.');
+    return Boolean(updated);
+  }, [onCommand]);
+  const renameFromHeader = useCallback((id: string, title: string) => { void renameCanvasObject(id, title); }, [renameCanvasObject]);
   const resizeObject = useCallback((id: string, box: CanvasBox) => {
     const width = Math.round(box.width);
     const height = Math.round(box.height);
@@ -1109,6 +1140,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
           onReference: referenceInChat,
+          onRename: canRename(view, spec.id) && busy !== 'table.readOnly' ? renameFromHeader : undefined,
           onSelectNode,
           onResize: resizeObject,
           spec,
@@ -1158,6 +1190,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
           onReference: referenceInChat,
+          onRename: canRename(view, object.id) && busy !== 'table.readOnly' ? renameFromHeader : undefined,
           onSelectNode,
           onResize: resizeObject,
           selected: object.id === selectedNodeId,
@@ -1166,7 +1199,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules, cardSizes, resizeObject]);
+  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules, cardSizes, resizeObject, renameFromHeader]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
@@ -1630,12 +1663,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     const title = renameDraft.replace(/\s+/gu, ' ').trim().slice(0, 120);
     const current = objectTitles.find((object) => object.id === id)?.title ?? '';
     if (title === current) return;
-    setTrashError(null);
-    const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, titles: { [id]: title || null } });
-    if (!updated) setTrashError('Could not rename this card. Try again.');
+    await renameCanvasObject(id, title);
   };
   const [deletedOpen, setDeletedOpen] = useState(false);
-  const [trashError, setTrashError] = useState<string | null>(null);
   const tableReadOnly = busy === 'table.readOnly';
   /** Soft delete for everyone (or restore): the card stays stored and comes back from Deleted. */
   const trashObject = async (id: string, toTrash: boolean) => {
