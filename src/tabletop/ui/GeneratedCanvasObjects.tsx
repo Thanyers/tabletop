@@ -8,6 +8,8 @@ import { evaluateGenerativeCanvas, type EvaluatedControl, type EvaluatedGenerati
 import type { WorkspaceView } from '../shared/contracts';
 import type { Command } from './types';
 import { applySceneMotion, MOTION_FRAME_MS, sceneHasMotion } from './scene-motion';
+import { RollParameterControl } from './RollParameterControl';
+import { serverRollFor, useServerRollsTick } from './roll-store';
 import './generated-canvas.css';
 
 interface LocalActionPreview {
@@ -112,6 +114,8 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
     if (previewOnly && !sandboxCommand) return null;
     const unavailable = actionUnavailableReason(action, state, view, busy);
     if (unavailable) { setActionError(unavailable); clearPreview(key, ownerId); return null; }
+    // F048: the pending roll only exists on the server, so a roll action cannot be previewed locally.
+    if (action.parameters.some(parameter => parameter.type === 'roll')) return null;
     try {
       const result = handleTableCommand(structuredClone(state), 'table.act', { actionId: action.id, inputs }, localActorContext(view));
       if (!result) throw new Error('This table action is not available.');
@@ -129,9 +133,13 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
     if (previewOnly && !sandboxCommand) return false;
     const unavailable = actionUnavailableReason(action, state, view, busy);
     if (unavailable) { setActionError(unavailable); clearPreview(key, ownerId); return false; }
-    const localState = simulate(action, inputs, ownerId);
-    if (!localState) return false;
-    publishPreview(key, { ownerId, state: localState, action, inputs, committing: true });
+    // F048: a roll action commits straight to the server; there is no local preview to show.
+    const serverRolled = action.parameters.some(parameter => parameter.type === 'roll');
+    if (!serverRolled) {
+      const localState = simulate(action, inputs, ownerId);
+      if (!localState) return false;
+      publishPreview(key, { ownerId, state: localState, action, inputs, committing: true });
+    }
     try {
       const updated = await (sandboxCommand ?? onCommand)('table.act', { actionId: action.id, inputs });
       if (!updated) {
@@ -149,6 +157,22 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
     }
   }, [state, view, busy, key, onCommand, sandboxCommand, simulate, previewOnly]);
 
+  /** F048: ask the authority for the dice. The value is never typed by the client. */
+  const roll = useCallback(async (actionId: string, parameterId: string): Promise<boolean> => {
+    if (previewOnly) { setActionError('Rolls are available once this table is active.'); return false; }
+    const action = state.program?.actions.find(item => item.id === actionId);
+    const unavailable = action ? actionUnavailableReason(action, state, view, busy) : 'The action is unavailable.';
+    if (unavailable) { setActionError(unavailable); return false; }
+    try {
+      await onCommand('table.roll', { actionId, parameterId });
+      setActionError('');
+      return true;
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The roll could not be made.');
+      return false;
+    }
+  }, [busy, onCommand, previewOnly, state, view]);
+
   const content = projectedView && currentDescriptor ? <GeneratedViewContent
     projected={projectedView}
     actionProjected={actionProjectedView}
@@ -161,6 +185,7 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
     busy={allBusy}
     onSimulate={simulate}
     onCommit={commit}
+    onRoll={roll}
   /> : <p className="tt-generated-canvas__error" role="status">{projection.error ?? 'This generated view is no longer part of the active table.'}</p>;
 
   return <section className={'tt-canvas-inline tt-generated-canvas' + (expanded ? ' tt-generated-canvas--expanded' : '')} aria-label={descriptor.title}>
@@ -171,7 +196,7 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
   </section>;
 }
 
-function GeneratedViewContent({ projected, actionProjected, descriptor, actionState, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
+function GeneratedViewContent({ projected, actionProjected, descriptor, actionState, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit, onRoll }: {
   projected: EvaluatedGenerativeView;
   actionProjected?: EvaluatedGenerativeView;
   descriptor: GenerativeViewDescriptor;
@@ -183,13 +208,14 @@ function GeneratedViewContent({ projected, actionProjected, descriptor, actionSt
   busy: boolean;
   onSimulate: (action: TableAction, inputs: Record<string, TableValue>, ownerId: string) => TableState | null;
   onCommit: (action: TableAction, inputs: Record<string, TableValue>, ownerId: string) => Promise<boolean>;
+  onRoll: (actionId: string, parameterId: string) => Promise<boolean>;
 }) {
   if (projected.kind === 'metric' && descriptor.kind === 'metric') return <MetricView projected={projected} />;
   if (projected.kind === 'chart' && descriptor.kind === 'chart') return <ChartView projected={projected} expanded={previewOnly || false} />;
   if (projected.kind === 'scene' && descriptor.kind === 'scene') return <SceneView projected={projected} actionProjected={actionProjected?.kind === 'scene' ? actionProjected : undefined} descriptor={descriptor} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
   if (projected.kind === 'controls' && descriptor.kind === 'controls') {
     if (actionProjected?.kind !== 'controls') return <p className="tt-generated-canvas__error" role="status">Controls are unavailable until the committed table state can be evaluated.</p>;
-    return <ControlsView projected={actionProjected} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
+    return <ControlsView projected={actionProjected} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} onRoll={onRoll} />;
   }
   return <p className="tt-generated-canvas__error" role="status">The generated view type does not match its descriptor.</p>;
 }
@@ -347,7 +373,7 @@ function SceneView({ projected, actionProjected, descriptor, state, workspaceVie
     }
     dragRef.current = null;
     setDragging(false);
-    if (session.moved && inputsAreComplete(session.action, session.lastInputs, state)) void onCommit(session.action, session.lastInputs, `scene:${descriptor.id}:${session.binding.actionId}`);
+    if (session.moved && inputsAreComplete(session.action, session.lastInputs, workspaceView, state)) void onCommit(session.action, session.lastInputs, `scene:${descriptor.id}:${session.binding.actionId}`);
     else clearPreview(key, `scene:${descriptor.id}:${session.binding.actionId}`);
   };
   const cancelDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -502,7 +528,7 @@ function dragInputs(binding: NonNullable<EvaluatedScenePrimitive['drag']>, actio
   return Object.fromEntries(action.parameters.map(parameter => [parameter.id, inputs[parameter.id]]).filter(([, value]) => value !== undefined)) as Record<string, TableValue>;
 }
 
-function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
+function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit, onRoll }: {
   projected: Extract<EvaluatedGenerativeView, { kind: 'controls' }>;
   state: TableState;
   workspaceView: WorkspaceView;
@@ -512,6 +538,7 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
   busy: boolean;
   onSimulate: (action: TableAction, inputs: Record<string, TableValue>, ownerId: string) => TableState | null;
   onCommit: (action: TableAction, inputs: Record<string, TableValue>, ownerId: string) => Promise<boolean>;
+  onRoll: (actionId: string, parameterId: string) => Promise<boolean>;
 }) {
   const [drafts, setDrafts] = useState<Record<string, Record<string, TableValue>>>({});
   // The form whose last submit was missing a value, so it can say so instead of doing nothing.
@@ -521,7 +548,14 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
   if (!submissionGate.current) submissionGate.current = createControlSubmissionGate();
   const committedRanges = useRef(new Set<string>());
   draftRef.current = drafts;
-  const disabledReason = (action: TableAction | undefined) => previewOnly && !sandboxEnabled ? 'Preview only.' : busy ? 'A table action is in progress.' : !action ? 'The action is unavailable.' : actionUnavailableReason(action, state, workspaceView, null);
+  // F048: re-render the completeness check when a server roll lands or the table data moves on.
+  useServerRollsTick();
+  const disabledReason = (action: TableAction | undefined, control: EvaluatedControl) => previewOnly && !sandboxEnabled ? 'Preview only.'
+    : busy ? 'A table action is in progress.'
+      : !action ? 'The action is unavailable.'
+        : action.parameters.some(parameter => parameter.type === 'roll') && control.descriptor.kind !== 'form'
+          ? 'Roll actions need a form control.'
+          : actionUnavailableReason(action, state, workspaceView, null);
 
   const updateDraft = (control: EvaluatedControl, action: TableAction, parameterId: string, value: TableValue) => {
     const ownerId = `control:${control.descriptor.id}`;
@@ -531,13 +565,13 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
     draftRef.current = { ...draftRef.current, [control.descriptor.id]: next };
     setDrafts(draftRef.current);
     const inputs = resolvedActionInputs(control, next, action);
-    if (inputsAreComplete(action, inputs, state)) onSimulate(action, inputs, ownerId);
+    if (inputsAreComplete(action, inputs, workspaceView, state)) onSimulate(action, inputs, ownerId);
     else clearPreview(previewStoreKey, ownerId);
   };
 
   const commitControl = async (control: EvaluatedControl, action: TableAction, inputs: Record<string, TableValue>) => {
     const id = control.descriptor.id;
-    if (!inputsAreComplete(action, inputs, state)) return;
+    if (!inputsAreComplete(action, inputs, workspaceView, state)) return;
     const signature = controlSubmissionSignature(workspaceView, state, action, inputs, control.descriptor.kind);
     const gate = submissionGate.current!;
     if (!beginControlSubmission(gate, id, signature)) return;
@@ -557,7 +591,7 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
     event.preventDefault();
     const values = { ...initialControlValues(control, action), ...(draftRef.current[control.descriptor.id] ?? {}) };
     const inputs = resolvedActionInputs(control, values, action);
-    if (!inputsAreComplete(action, inputs, state)) {
+    if (!inputsAreComplete(action, inputs, workspaceView, state)) {
       setIncomplete(control.descriptor.id);
       return;
     }
@@ -570,9 +604,10 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
     {projected.controls.map(control => {
       const descriptor = control.descriptor;
       const action = state.program?.actions.find(item => item.id === descriptor.actionId);
-      const reason = disabledReason(action);
+      const reason = disabledReason(action, control);
       const controlValues = draftRef.current[descriptor.id] ?? initialControlValues(control, action);
       const enabled = !reason && !!action;
+      const missingRoll = action?.parameters.some(parameter => parameter.type === 'roll' && !serverRollFor(workspaceView, action.id, parameter.id)) ?? false;
       const id = controlId(workspaceView, descriptor.id);
       const commitRange = () => {
         if (!action || !Object.hasOwn(draftRef.current[descriptor.id] ?? {}, descriptor.kind === 'slider' ? descriptor.parameter : '') || !beginRangeCommit(committedRanges.current, descriptor.id)) return;
@@ -581,7 +616,9 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
       };
       return <div className="tt-generated-control" key={descriptor.id}>
         {descriptor.kind === 'button' && <div className="tt-generated-control__button"><button type="button" className="tt-button tt-button--primary" disabled={!enabled} title={reason || undefined} onClick={() => action && void commitControl(control, action, resolvedActionInputs(control, controlValues, action))}>{descriptor.label}</button>{reason && <small role="status">{reason}</small>}</div>}
-        {descriptor.kind === 'form' && action && <form className="tt-table-action tt-generated-control__form" onSubmit={event => submit(event, control, action)}><header><span className="tt-table-action__glyph">⌑</span><span><strong>{descriptor.label}</strong><small>{action.description}</small></span></header><div className="tt-table-action__inputs">{action.parameters.filter(parameter => descriptor.inputs[parameter.id]?.kind === 'control').map(parameter => <ControlParameter key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} parameter={parameter} state={state} value={controlValues[parameter.id] ?? initialParameterValue(parameter)} disabled={!enabled} onChange={value => updateDraft(control, action, parameter.id, value)} />)}</div>{reason && <p className="tt-table-action__disabled-reason" role="status">{reason}</p>}{!reason && incomplete === descriptor.id && <p className="tt-table-action__disabled-reason" role="alert">Fill in every field with a value in range, then send again.</p>}<button type="submit" className="tt-button tt-button--primary" disabled={!enabled}>{descriptor.label}</button></form>}
+        {descriptor.kind === 'form' && action && <form className="tt-table-action tt-generated-control__form" onSubmit={event => submit(event, control, action)}><header><span className="tt-table-action__glyph">⌑</span><span><strong>{descriptor.label}</strong><small>{action.description}</small></span></header><div className="tt-table-action__inputs">{action.parameters.filter(parameter => descriptor.inputs[parameter.id]?.kind === 'control').map(parameter => parameter.type === 'roll'
+          ? <RollParameterControl key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} view={workspaceView} actionId={action.id} parameter={parameter} disabled={!enabled} onRoll={() => { void onRoll(action.id, parameter.id); }} />
+          : <ControlParameter key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} parameter={parameter} state={state} value={controlValues[parameter.id] ?? initialParameterValue(parameter)} disabled={!enabled} onChange={value => updateDraft(control, action, parameter.id, value)} />)}</div>{reason && <p className="tt-table-action__disabled-reason" role="status">{reason}</p>}{!reason && incomplete === descriptor.id && <p className="tt-table-action__disabled-reason" role="alert">{missingRoll ? 'กด “ทอย” ให้ server ทอยค่าของแอ็กชันนี้ก่อน' : 'Fill in every field with a value in range, then send again.'}</p>}<button type="submit" className="tt-button tt-button--primary" disabled={!enabled}>{descriptor.label}</button></form>}
         {descriptor.kind === 'slider' && action && <div className="tt-generated-control__range"><label htmlFor={id}>{descriptor.label}<output>{formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))}</output></label><input id={id} type="range" min={descriptor.min} max={descriptor.max} step={descriptor.step ?? 'any'} value={Number(controlValues[descriptor.parameter] ?? descriptor.min)} disabled={!enabled} onChange={event => updateDraft(control, action, descriptor.parameter, Number(event.currentTarget.value))} onPointerDown={() => committedRanges.current.delete(descriptor.id)} onKeyDown={event => { if (isRangeCommitKey(event.key)) committedRanges.current.delete(descriptor.id); }} onPointerUp={commitRange} onKeyUp={event => { if (isRangeCommitKey(event.key)) commitRange(); }} onBlur={commitRange} aria-valuetext={formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))} />{reason && <small role="status">{reason}</small>}</div>}
         {descriptor.kind === 'toggle' && action && <label className="tt-generated-control__toggle"><span>{descriptor.label}</span><input type="checkbox" checked={Boolean(controlValues[descriptor.parameter])} disabled={!enabled} onChange={event => { const value = event.currentTarget.checked; updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }} />{reason && <small role="status">{reason}</small>}</label>}
         {descriptor.kind === 'select' && action && <label className="tt-generated-control__select" htmlFor={id}>{descriptor.label}<select id={id} value={encodeValue(controlScalar(controlValues[descriptor.parameter], descriptor.options[0]?.value ?? ''))} disabled={!enabled} onChange={event => { const value = decodeValue(event.currentTarget.value); updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }}>{descriptor.options.map((option, index) => <option value={encodeValue(option.value)} key={`${descriptor.id}-${index}`}>{option.label}</option>)}</select>{reason && <small role="status">{reason}</small>}</label>}
@@ -606,6 +643,7 @@ function initialControlValues(control: EvaluatedControl, action: TableAction | u
   const descriptor = control.descriptor;
   if ('parameter' in descriptor && control.value !== undefined && isGenerativeScalar(control.value)) values[descriptor.parameter] = control.value;
   for (const parameter of action.parameters) {
+    if (parameter.type === 'roll') continue;
     if (descriptor.inputs[parameter.id]?.kind !== 'control' || Object.hasOwn(values, parameter.id)) continue;
     values[parameter.id] = initialParameterValue(parameter);
   }
@@ -622,6 +660,8 @@ function initialParameterValue(parameter: TableParameter): TableValue {
 function resolvedActionInputs(control: EvaluatedControl, values: Record<string, TableValue>, action: TableAction): Record<string, TableValue> {
   const resolved: Record<string, TableValue> = { ...control.inputValues };
   for (const parameter of action.parameters) {
+    // F048: the rolled total is injected by the server commit, never sent by the client.
+    if (parameter.type === 'roll') continue;
     if (control.descriptor.inputs[parameter.id]?.kind === 'control' && Object.hasOwn(values, parameter.id)) resolved[parameter.id] = values[parameter.id];
   }
   return resolved;
@@ -635,9 +675,11 @@ function actionUnavailableReason(action: TableAction, state: TableState, view: W
   return null;
 }
 
-function inputsAreComplete(action: TableAction, inputs: Record<string, TableValue>, state: TableState): boolean {
-  if (Object.keys(inputs).length !== action.parameters.length) return false;
+function inputsAreComplete(action: TableAction, inputs: Record<string, TableValue>, view: WorkspaceView, state: TableState): boolean {
+  const interactiveParameters = action.parameters.filter(parameter => parameter.type !== 'roll');
+  if (Object.keys(inputs).length !== interactiveParameters.length) return false;
   return action.parameters.every(parameter => {
+    if (parameter.type === 'roll') return Boolean(serverRollFor(view, action.id, parameter.id));
     const value = inputs[parameter.id];
     if (parameter.type === 'record') return typeof value === 'string' && Boolean(state.records[parameter.collection ?? '']?.some(row => row.id === value));
     if (parameter.type === 'number') return typeof value === 'number' && Number.isFinite(value) && (parameter.min === undefined || value >= parameter.min) && (parameter.max === undefined || value <= parameter.max);

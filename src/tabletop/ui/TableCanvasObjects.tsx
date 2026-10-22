@@ -15,6 +15,8 @@ import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedC
 import { applyTableCandidate } from './table-candidate-apply';
 import { NoteCard } from './NoteCard';
 import { autoMapping, buildImportRows, parseCsv } from './table-row-import';
+import { RollParameterControl } from './RollParameterControl';
+import { serverRollFor, useServerRollsTick } from './roll-store';
 import './record-actions.css';
 
 interface TableCanvasObjectProps {
@@ -381,7 +383,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
       {eligibleActions.length === 0 ? <p className="tt-canvas-inline__note">{collectionActions.length === 0 ? 'No table actions use this collection.' : `Actions for this collection are limited to ${formatActionRoles(collectionActions)}.`}</p> : <>
         <label htmlFor={actionSelectId}>Action<select id={actionSelectId} value={selectedActionId} disabled={busy !== null} onChange={(event) => chooseAction(event.target.value)}><option value="">Choose an action…</option>{eligibleActions.map((action) => <option value={action.id} key={action.id}>{action.title}</option>)}</select></label>
         {selectedAction && selectedActionRecordParameters.length > 1 && <label htmlFor={parameterSelectId}>Use this record as<select id={parameterSelectId} value={selectedParameterId} disabled={busy !== null} onChange={(event) => chooseRecordParameter(event.target.value)}><option value="">Choose a record field…</option>{selectedActionRecordParameters.map((parameter) => <option key={parameter.id} value={parameter.id}>{parameter.label}</option>)}</select></label>}
-        {selectedAction && (selectedActionRecordParameters.length === 1 || selectedParameterId) && <ActionForm action={selectedAction} state={state} currentSeat={view.actor.seat ?? 'host'} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} />}
+        {selectedAction && (selectedActionRecordParameters.length === 1 || selectedParameterId) && <ActionForm view={view} action={selectedAction} state={state} currentSeat={view.actor.seat ?? 'host'} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} onRoll={actionController.roll} />}
         {selectedAction && selectedActionRecordParameters.length > 1 && !selectedParameterId && <p className="tt-table-inline-hint">This action uses multiple records from this collection. Choose which record field should use the selected row.</p>}
       </>}
       {actionController.message && <p className="tt-table-error" role="alert">{actionController.message}</p>}
@@ -532,22 +534,25 @@ function TableActions({ view, state, busy, onCommand, expanded = false }: TableC
       <p className="tt-table-turn-indicator">Acting as {view.actor.role === 'owner' ? 'Owner' : `${view.actor.name} · member`}{view.actor.seat ? ` · ${view.actor.seat.replace('member-', 'Member ')}` : ''}{state.turn ? ` · current turn: ${turnLabel}` : ''}</p>
       {eligibleActions.length < actions.length && <p className="tt-table-action-restriction">Some actions are limited to {formatActionRoles(actions.filter((action) => !action.roles.includes(currentActorRole)))}.</p>}
       <label className="tt-table-action-picker" htmlFor={actionSelectId}>Choose an action<select id={actionSelectId} value={selectedActionId} onChange={(event) => setSelectedActionId(event.target.value)}><option value="">Choose an action…</option>{eligibleActions.map((action) => <option value={action.id} key={action.id}>{action.title}</option>)}</select></label>
-      {selectedAction && <ActionForm action={selectedAction} state={state} currentSeat={currentSeat} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} />}
+      {selectedAction && <ActionForm view={view} action={selectedAction} state={state} currentSeat={currentSeat} members={view.members} busy={busy} values={actionController.values[selectedAction.id] ?? {}} onUpdate={actionController.update} onSubmit={actionController.submit} onRoll={actionController.roll} />}
     </>}
     {actionController.message && <p className="tt-table-error" role="alert">{actionController.message}</p>}
   </div>;
 }
 
-function ActionForm({ action, state, currentSeat, members, busy, values, onUpdate, onSubmit }: { action: TableAction; state: TableState; currentSeat: string; members?: WorkspaceView['members']; busy: string | null; values: Record<string, string | number | boolean>; onUpdate: (actionId: string, paramId: string, value: string | number | boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>, action: TableAction) => Promise<void> }) {
+function ActionForm({ view, action, state, currentSeat, members, busy, values, onUpdate, onSubmit, onRoll }: { view: WorkspaceView; action: TableAction; state: TableState; currentSeat: string; members?: WorkspaceView['members']; busy: string | null; values: Record<string, string | number | boolean>; onUpdate: (actionId: string, paramId: string, value: string | number | boolean) => void; onSubmit: (event: FormEvent<HTMLFormElement>, action: TableAction) => Promise<void>; onRoll: (actionId: string, parameterId: string) => Promise<void> }) {
   const formId = useId().replace(/:/g, '');
+  useServerRollsTick();
   const turnBlocked = action.requireTurn && state.turn !== currentSeat;
   const readOnly = busy === 'table.readOnly';
   const emptyRecordCollections = [...new Set(action.parameters.filter((parameter) => parameter.type === 'record' && !(state.records[parameter.collection ?? '']?.length)).map((parameter) => state.program?.collections.find((collection) => collection.id === parameter.collection)?.title ?? parameter.collection ?? 'records'))];
+  const missingRoll = action.parameters.some((parameter) => parameter.type === 'roll' && !serverRollFor(view, action.id, parameter.id));
   const submit = (event: FormEvent<HTMLFormElement>) => { void onSubmit(event, action); };
   return <form className="tt-table-action" onSubmit={submit}>
     <header><span className="tt-table-action__glyph"><Play size={14} /></span><span><strong>{action.title}</strong><small>{action.description}</small></span></header>
     {action.parameters.length > 0 && <div className="tt-table-action__inputs">{action.parameters.map((parameter) => {
       const id = `${formId}-tt-table-${action.id}-${parameter.id}`;
+      if (parameter.type === 'roll') return <RollParameterControl key={parameter.id} id={id} view={view} actionId={action.id} parameter={parameter} disabled={busy !== null || turnBlocked} onRoll={() => { void onRoll(action.id, parameter.id); }} />;
       const value = values[parameter.id] ?? (parameter.type === 'boolean' ? false : '');
       const recordChoices = parameter.type === 'record' ? state.records[parameter.collection ?? ''] ?? [] : [];
       const choices = parameter.choices ?? [];
@@ -560,10 +565,11 @@ function ActionForm({ action, state, currentSeat, members, busy, values, onUpdat
     })}</div>}
     {action.conditions.length > 0 && <details className="tt-table-action__requirements"><summary>Requirements · {action.conditions.length}</summary><ul className="tt-table-rule-list">{action.conditions.map((condition, index) => <li key={index}><strong>{operandLabel(condition.left, action, state.program ?? undefined, members)} {conditionOperator(condition.op)} {operandLabel(condition.right, action, state.program ?? undefined, members)}</strong><span>{condition.message}</span></li>)}</ul></details>}
     {readOnly && <p className="tt-table-action__disabled-reason" role="status">This table is read-only. Actions are paused while you review it.</p>}
-    {busy && !readOnly && <p className="tt-table-action__disabled-reason" role="status">{busy === 'table.act' ? 'Applying action…' : 'A table update is in progress. Actions are paused.'}</p>}
+    {busy && !readOnly && <p className="tt-table-action__disabled-reason" role="status">{busy === 'table.act' ? 'Applying action…' : busy === 'table.roll' ? 'Rolling…' : 'A table update is in progress. Actions are paused.'}</p>}
     {turnBlocked && <p className="tt-table-turn-blocked" role="status">Waiting for {state.turn === 'host' ? 'the owner' : state.turn?.replace('member-', 'Member ')} to act.</p>}
+    {missingRoll && !turnBlocked && <p className="tt-table-action__disabled-reason" role="status">กด “ทอย” ให้ server ทอยค่าของแอ็กชันนี้ก่อน</p>}
     {emptyRecordCollections.length > 0 && <p className="tt-table-action__disabled-reason" role="status">No records are available in {emptyRecordCollections.join(', ')} yet.</p>}
-    <button type="submit" className="tt-button tt-button--primary" disabled={busy !== null || turnBlocked || emptyRecordCollections.length > 0}><Play size={13} /> {busy === 'table.act' ? 'Applying…' : action.title}</button>
+    <button type="submit" className="tt-button tt-button--primary" disabled={busy !== null || turnBlocked || emptyRecordCollections.length > 0 || missingRoll}><Play size={13} /> {busy === 'table.act' ? 'Applying…' : action.title}</button>
   </form>;
 }
 
@@ -584,12 +590,22 @@ function useTableActionController(view: WorkspaceView, onCommand: WorkbenchProps
       return { ...current, [actionId]: actionValues };
     });
   };
+  const roll = async (actionId: string, parameterId: string) => {
+    setMessage('');
+    try { await onCommand('table.roll', { actionId, parameterId }); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'The roll could not be made.'); }
+  };
   const submit = async (event: FormEvent<HTMLFormElement>, action: TableAction) => {
     event.preventDefault();
     const raw = values[action.id] ?? {};
     const inputs: Record<string, TableValue> = {};
     for (const parameter of action.parameters) {
       const value = raw[parameter.id];
+      if (parameter.type === 'roll') {
+        // F048: the server fills this input from the pending roll; the client never sends a value.
+        if (!serverRollFor(view, action.id, parameter.id)) { setMessage(`กด “ทอย” ให้ server ทอย ${parameter.label} ก่อนส่ง`); return; }
+        continue;
+      }
       if (parameter.type === 'number') {
         if (value === undefined || value === '') { setMessage(`Enter ${parameter.label}.`); return; }
         const numeric = Number(value);
@@ -606,7 +622,7 @@ function useTableActionController(view: WorkspaceView, onCommand: WorkbenchProps
     catch (error) { setMessage(error instanceof Error ? error.message : 'The action could not be applied.'); }
   };
 
-  return { values, message, update, setRecordSelection, submit };
+  return { values, message, update, setRecordSelection, submit, roll };
 }
 
 function formatActionRoles(actions: TableAction[]): string {

@@ -22,7 +22,11 @@ export function projectDomain(state: DomainState, ctx: ActorContext, policy: Vis
   if (policy === 'open') {
     const full = clone(state);
     // Retired view positions are dropped for everyone, as before.
-    if (full.kind === 'table' && state.kind === 'table' && state.canvasLayout) full.canvasLayout = projectCanvasLayout(state, 'open');
+    if (full.kind === 'table' && state.kind === 'table') {
+      if (state.canvasLayout) full.canvasLayout = projectCanvasLayout(state, 'open');
+      // F048: an unused roll belongs to the member who rolled it; never broadcast it to the table.
+      delete full.pendingRolls;
+    }
     return full;
   }
   return projectPrivate(state, ctx);
@@ -34,6 +38,8 @@ function projectPrivate(state: DomainState, ctx: ActorContext): DomainState {
     if (ctx.role !== 'owner' && ctx.role !== 'participant') throw new DomainError('FORBIDDEN', 'Only room members may read this table.');
     const projected = clone(state);
     if (state.canvasLayout) projected.canvasLayout = projectCanvasLayout(state, 'private');
+    // F048: pending rolls stay private to their roller under either visibility policy.
+    delete projected.pendingRolls;
     if (ctx.role === 'participant') {
       // F008: table files are visible to every member; drafts and draft history stay with the owner.
       projected.candidate = null; projected.revisions = [];
