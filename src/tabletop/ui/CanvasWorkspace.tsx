@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, MarkerType, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, Focus, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2, Star, Pencil, Search } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
@@ -539,7 +539,11 @@ function CanvasCardResizer({ data, selected }: { data: CanvasNodeData; selected:
   />;
 }
 
+/** Cards picked with Shift+click, so right-click can hide (or ask about, or delete) them together. */
+const MultiSelectionContext = createContext<ReadonlySet<string>>(new Set());
+
 function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
+  const multiSelected = useContext(MultiSelectionContext).has(data.id);
   if (data.kind === 'plan' && isCanvasNoteId(data.id)) {
     const note = data.view.domain.kind === 'table'
       ? data.view.domain.notes?.find((item) => `table.note.${item.id}` === data.id)
@@ -562,7 +566,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
   if (data.kind === 'auxiliary') {
     return (<>
       <article
-        className={'tt-canvas-node tt-canvas-node--auxiliary tt-canvas-node--role-auxiliary' + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+        className={'tt-canvas-node tt-canvas-node--auxiliary tt-canvas-node--role-auxiliary' + (selected ? ' is-selected' : '') + (multiSelected ? ' is-multi-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
         data-canvas-editor
         data-testid={data.opened ? 'canvas-object-editor' : undefined}
@@ -595,7 +599,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
 
   return (<>
     <article
-      className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + ' tt-canvas-node--role-' + role + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
+      className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + ' tt-canvas-node--role-' + role + (selected ? ' is-selected' : '') + (multiSelected ? ' is-multi-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
         data-canvas-editor
         data-testid={data.opened ? 'canvas-object-editor' : undefined}
@@ -1571,7 +1575,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [plan.bindings, planNodesById, revisionNotice, visibleIds]);
 
   // Right-click on the empty canvas: arrange every card again from scratch, as on first load.
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  // targets: the cards a right-click on a card acts on; absent for a right-click on the empty canvas.
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targets?: string[] } | null>(null);
+  const [multiIds, setMultiIds] = useState<ReadonlySet<string>>(new Set());
   const arrangeObjects = useCallback(async () => {
     setContextMenu(null);
     cancelPendingOpenObjectFocus();
@@ -1630,6 +1636,12 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     open(first.id);
     return { handled: true, message: `Opened “${first.title}”.${others.length ? ` Also matching: ${others.slice(0, 3).map((item) => item.title).join(', ')}.` : ''}` };
   }), []);
+  useEffect(() => {
+    if (multiIds.size === 0) return;
+    const clearGroup = (event: KeyboardEvent) => { if (event.key === 'Escape') setMultiIds(new Set()); };
+    document.addEventListener('keydown', clearGroup);
+    return () => document.removeEventListener('keydown', clearGroup);
+  }, [multiIds]);
   useEffect(() => {
     if (!contextMenu) return;
     const close = (event: Event) => {
@@ -1847,9 +1859,30 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     // A content control may have navigated to another object. Do not select its
     // old container again while that same click bubbles through React Flow.
     if (event.target instanceof Element && event.target.closest('.tt-canvas-node__body')) return;
+    if (event.shiftKey) {
+      // Shift+click adds or removes a card from the group; the card selected before joins the group too.
+      setMultiIds((current) => {
+        const next = new Set(current);
+        if (next.size === 0 && selectedNodeId && selectedNodeId !== node.id) next.add(selectedNodeId);
+        if (next.has(node.id)) next.delete(node.id);
+        else next.add(node.id);
+        return next;
+      });
+      return;
+    }
+    setMultiIds(new Set());
     onSelectNode(node.id);
-  }, [onSelectNode]);
-  const clear = useCallback(() => onSelectNode(null), [onSelectNode]);
+  }, [onSelectNode, selectedNodeId]);
+  const clear = useCallback(() => { setMultiIds(new Set()); onSelectNode(null); }, [onSelectNode]);
+  const openCardMenu = useCallback((event: React.MouseEvent, node: CanvasNode) => {
+    // Keep the browser's own menu for typing and for copying selected text.
+    if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if ((window.getSelection()?.toString() ?? '').trim()) return;
+    event.preventDefault();
+    // A right-click on a card in the Shift group acts on the whole group; otherwise on that card alone.
+    const targets = multiIds.has(node.id) ? [...multiIds] : [node.id];
+    setContextMenu({ ...contextMenuPosition(event.clientX, event.clientY), targets });
+  }, [multiIds]);
 
   useEffect(() => {
     setNodes((current) => current.map((node) => ({
@@ -1900,6 +1933,12 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const [deletedOpen, setDeletedOpen] = useState(false);
   const tableReadOnly = busy === 'table.readOnly';
   /** Soft delete for everyone (or restore): the card stays stored and comes back from Deleted. */
+  /** Soft delete several cards in one shared-layout change (the server takes up to 24 at a time). */
+  const trashObjects = async (ids: readonly string[]) => {
+    setTrashError(null);
+    const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, trash: Object.fromEntries(ids.slice(0, 24).map((id) => [id, true])) });
+    if (!updated) setTrashError('Could not delete these cards. Try again.');
+  };
   const trashObject = async (id: string, toTrash: boolean) => {
     setTrashError(null);
     const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, trash: { [id]: toTrash } });
@@ -1939,7 +1978,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           {emptyContent ?? <><strong>This table is ready for its first object</strong><p>Add a source or start the sample workflow from the table panel.</p></>}
         </div>
       ) : (
-        <ReactFlow<CanvasNode, CanvasEdge>
+        <MultiSelectionContext.Provider value={multiIds}><ReactFlow<CanvasNode, CanvasEdge>
           nodes={nodes}
           edges={visibleEdges}
           nodeTypes={nodeTypes}
@@ -1950,6 +1989,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onNodeClick={choose}
           onPaneClick={clear}
           onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu(contextMenuPosition(event.clientX, event.clientY)); }}
+          onNodeContextMenu={openCardMenu}
           onMoveEnd={persistViewport}
           nodesDraggable
           nodesConnectable={false}
@@ -1972,11 +2012,27 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             onZoomIn={cancelPendingOpenObjectFocus}
             onZoomOut={cancelPendingOpenObjectFocus}
           />
-        </ReactFlow>
+        </ReactFlow></MultiSelectionContext.Provider>
       )}
       <div className="tt-canvas-tools">
         <span className="tt-canvas-visually-hidden" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</span>
-        {contextMenu && <div className="tt-canvas-context-menu" role="menu" aria-label="Canvas" style={{ left: contextMenu.x, top: contextMenu.y }}>
+        {contextMenu?.targets && (() => {
+          const targets = contextMenu.targets.filter((id) => nodes.some((node) => node.id === id));
+          const single = targets.length === 1 ? nodes.find((node) => node.id === targets[0]) : undefined;
+          const label = single ? 'card' : `${targets.length} cards`;
+          const deletable = targets.length > 0 && targets.every((id) => canTrash(view, id));
+          const close = () => setContextMenu(null);
+          return <div className="tt-canvas-context-menu" role="menu" aria-label={single ? single.data.title : `${targets.length} cards`} style={{ left: contextMenu.x, top: contextMenu.y }}>
+            {targets.length > 1 && <p className="tt-canvas-context-menu__note">{targets.length} cards selected (Shift+click)</p>}
+            <button type="button" role="menuitem" data-testid="card-menu-hide" autoFocus onClick={() => { for (const id of targets) hideObject(id); setMultiIds(new Set()); close(); }}><EyeOff size={15} aria-hidden="true" />Hide {label}</button>
+            {referenceInChat && <button type="button" role="menuitem" data-testid="card-menu-ask" onClick={() => {
+              for (const id of targets.slice(0, 5)) referenceInChat(id, nodes.find((node) => node.id === id)?.data.title ?? id);
+              close();
+            }}><MessageSquareText size={15} aria-hidden="true" />Ask about {targets.length > 1 ? `these ${Math.min(targets.length, 5)} cards` : 'this card'} in chat</button>}
+            {deletable && <button type="button" role="menuitem" data-testid="card-menu-delete" disabled={busy === 'table.readOnly'} onClick={() => { void trashObjects(targets); setMultiIds(new Set()); close(); }}><Trash2 size={15} aria-hidden="true" />Delete {label} for everyone</button>}
+          </div>;
+        })()}
+        {contextMenu && !contextMenu.targets && <div className="tt-canvas-context-menu" role="menu" aria-label="Canvas" style={{ left: contextMenu.x, top: contextMenu.y }}>
           <button type="button" role="menuitem" autoFocus onClick={() => void arrangeObjects()}><LayoutGrid size={15} aria-hidden="true" />Arrange objects</button>
           {hiddenIds.size > 0 && <button type="button" role="menuitem" onClick={revealAllObjects}><Eye size={15} aria-hidden="true" />Show closed cards ({hiddenIds.size})</button>}
         </div>}
