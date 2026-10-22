@@ -121,3 +121,10 @@
 .tt-app .tt-chat-card__own-answer:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
 .tt-app .tt-chat-card__send-answer { justify-self: start; display: inline-flex; align-items: center; gap: var(--tt-space-2); }
 .tt-app .tt-chat-card__asker { color: var(--tt-muted); font-size: var(--tt-type-small); font-weight: 600; line-height: 16px; }
+
+/* A card the next chat message is about. */
+.tt-app .tt-table-chat-bar__reference { display: flex; align-items: center; gap: var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
+.tt-app .tt-table-chat-bar__reference-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 60%; padding: 3px 10px; overflow: hidden; border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-card-surface); color: var(--tt-moss); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-table-chat-bar__reference small { flex: 1 1 auto; min-width: 0; color: var(--tt-muted); font-size: 12px; }
+.tt-app .tt-table-chat-bar__reference button { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tt-muted); cursor: pointer; }
+.tt-app .tt-table-chat-bar__reference button:hover { background: var(--tt-canvas); }

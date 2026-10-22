@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff } from 'lucide-react';
+import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
@@ -8,7 +8,7 @@ import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
 import { viewerCan } from '../shared/permissions';
-import { matchCanvasObjects, registerCanvasObjectFinder } from './canvas-object-finder';
+import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder } from './canvas-object-finder';
 import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
 import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
@@ -29,6 +29,8 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   onToggleOpen: (id: string) => void;
   /** Take the card off this viewer's canvas; the Objects panel brings it back. */
   onHide: (id: string) => void;
+  /** Point the table chat at this card; absent where there is no table chat. */
+  onReference?: (id: string, title: string) => void;
   onSelectNode: (id: string) => void;
 }
 
@@ -301,6 +303,9 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
     <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
     <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
     <span className="tt-canvas-node__controls">
+      {data.onReference && <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-label={`Ask about ${data.title} in chat`} title="Ask about or change this card in the chat" onClick={(event) => { event.stopPropagation(); data.onReference?.(data.id, data.title); }}>
+        <MessageSquareText size={15} aria-hidden="true" />
+      </button>}
       <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? `Minimize ${data.title}` : `Open ${data.title}`} title={data.opened ? 'Minimize' : 'Expand'} onKeyDown={(event) => {
         if (event.key === 'Escape' && data.opened) {
           event.preventDefault();
@@ -773,6 +778,10 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       return next;
     });
   }, [workspaceKey]);
+  // Header button: the table chat's next message is about this card (e.g. "make it harder").
+  const referenceInChat = useMemo(() => view.kind !== 'table' || view.domain.kind !== 'table' ? undefined : (id: string, title: string) => {
+    referenceCardInChat({ id, title, detail: describeCardForChat(id, title, view) });
+  }, [view]);
   const hideObject = useCallback((id: string) => {
     setHiddenIds((current) => {
       const next = new Set(current);
@@ -967,6 +976,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           opened: activeOpenedId === spec.id,
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
+          onReference: referenceInChat,
           onSelectNode,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
@@ -1013,6 +1023,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           opened: activeOpenedId === object.id,
           onToggleOpen: toggleOpenObject,
           onHide: hideObject,
+          onReference: referenceInChat,
           onSelectNode,
           selected: object.id === selectedNodeId,
           auxiliary: object,
@@ -1557,4 +1568,21 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
 
 export function CanvasWorkspace(props: CanvasWorkspaceProps) {
   return <ReactFlowProvider><CanvasInner {...props} /></ReactFlowProvider>;
+}
+
+/** What the AI should understand a referenced card to be: its kind, and for data its fields. */
+function describeCardForChat(id: string, title: string, view: WorkspaceView): string {
+  const program = view.domain.kind === 'table' ? view.domain.program : null;
+  if (id.startsWith('table.collection.')) {
+    const collection = program?.collections.find((item) => `table.collection.${item.id}` === id);
+    return collection ? `data table “${collection.title}” (id ${collection.id}) with fields ${collection.fields.map((field) => `${field.label} [${field.id}, ${field.type}]`).join(', ')}` : `data table “${title}”`;
+  }
+  if (id.startsWith('table.view.')) {
+    const descriptor = program?.canvas?.views.find((item) => `table.view.${item.id}` === id);
+    return descriptor ? `${descriptor.kind} view “${descriptor.title}” (id ${descriptor.id})` : `view “${title}”`;
+  }
+  if (id === 'table.rules') return 'the table rules (collections, actions and checks)';
+  if (id === 'table.actions') return `the table actions${program ? `: ${program.actions.map((action) => action.title).join(', ')}` : ''}`;
+  if (id.startsWith('table.chat.')) return `an earlier chat answer titled “${title}”`;
+  return `card “${title}”`;
 }
