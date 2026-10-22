@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-22 — การ์ดที่ auto-apply แล้ว "หายเงียบ" แม้เทสต์ผ่านหมด
+- **What happened:** ผู้ใช้รายงานว่าหลังร่างกฎผ่านทุกขั้นและถูกเปิดใช้ การ์ดหายไปเฉย ๆ ทั้งที่ `npm test`/`test:cloudflare`/browser suite เขียวหมด · สาเหตุคือ #156/#157 ตั้งใจเอาการ์ดออก (`isFinishedResult` → `displayCards`) แล้วแทนด้วยแถบ "New rules added" 15 วินาที แต่แถบนั้นถูกยิงจาก effect ที่ต้อง "เห็นการ์ดตอน phase sending/waiting" ก่อน — ถ้าการ์ดจบเร็วจนไม่เคยRender สถานะรอ หรือหน้านั้นเพิ่งเปิด/เป็นสมาชิกคนอื่น การ์ดจะถูกกรองออกโดยไม่มีแถบแทน
+- **Root cause:** การลบ element ออกจาก UI (filter) ผูกกับสัญญาณทดแทน (notify) คนละเงื่อนไข: filter ใช้ `isFinishedResult(card)` ส่วน notify ต้องมี `watchedCardsRef.has(card.id)` · เทสต์ยืนยันแค่ "การ์ดหาย" + "แถบโผล่" ในเส้นทางที่ดูสถานะรอทัน จึงไม่จับเส้นทางที่การ์ดจบก่อนถูกRender
+- **Correct behavior:** เวลาจะซ่อน/ลบการ์ดด้วย filter ให้ผูกสัญญาณทดแทนด้วยเงื่อนไขที่กว้างกว่าเสมอ เช่น `createdAt >= mountedAt` (การ์ดที่เกิดหลังเปิดหน้า = ต้องแจ้ง) ไม่ใช่เฉพาะใบที่เคยเห็นสถานะรอ · และเขียนเทสต์ของเส้นทาง "จบเร็ว/เปิดหน้าทีหลัง" แยกอีกใบ · ตรวจด้วย `BROWSER_CHANNEL=msedge npm run test:cloudflare:browser`
+
 ### 2026-10-22 — release 5.1.0: ปัญหาที่ dev ไม่เห็นเพราะ browser suite รันแค่ตอน release
 - **What happened:** release PR #152 ล้ม 2 เรื่องที่ merge เข้า dev ไปแล้วโดยไม่มีใครเห็น (1) #144 เอาป๊อปอัป "Move … without dragging" ออกแต่ browser suite ยังกด (2) เคส F038 ล้มบน CI เพราะการ์ดคำขอร่างกฎของสมาชิกหาย — เป็นบั๊ก server จาก F034-T3: `runModelJob` สร้าง `initialData` ไม่มี `prompt` แล้ว commit/finish เขียนทับ `data` ทั้งก้อน ร่างที่เสร็จจึงไม่มี prompt และ client ทิ้งการ์ดหลัง reload
 - **Root cause:** CI005 รัน browser suite แค่ PR เข้า `main` · บั๊ก (2) ซ่อนอยู่เพราะในเครื่องและใน CI ของ 4.4.0 สมาชิก reload ทันตอนงานยัง running (แข่งเวลา) · งานที่เขียนทับ `data` ด้วย object ใหม่ทิ้ง field ที่ `reserve*` เคยเก็บ

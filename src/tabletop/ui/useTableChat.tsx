@@ -12,7 +12,7 @@ import { chatReferencePrompt, followUpPrompt, onChatCardReference, splitReferenc
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -731,7 +731,11 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setRetryPrefill({ text: card.prompt, key: Date.now() });
   }, [editRules]);
 
-  // Notify once when a result this page watched in progress finishes with nothing left to do.
+  // Notify once when a result finishes with nothing left to do.
+  // A card can finish before this page ever renders its waiting phase (a fast draft, a reload during the
+  // last poll), so a card created after the page opened counts as seen too. Otherwise the card is removed
+  // by `isFinishedResult` below and no notice replaces it: it would vanish silently.
+  const mountedAtRef = useRef(Date.now());
   const watchedCardsRef = useRef(new Set<string>());
   const notifiedCardsRef = useRef(new Set<string>());
   useEffect(() => {
@@ -740,7 +744,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         if (card.phase === 'sending' || card.phase === 'waiting' || card.confirming || card.confirmationPending) watchedCardsRef.current.add(card.id);
         continue;
       }
-      if (!watchedCardsRef.current.has(card.id) || notifiedCardsRef.current.has(card.id)) continue;
+      const createdWhileOpen = (card.job?.createdAt ?? card.createdAt) >= mountedAtRef.current;
+      if ((!watchedCardsRef.current.has(card.id) && !createdWhileOpen) || notifiedCardsRef.current.has(card.id)) continue;
       notifiedCardsRef.current.add(card.id);
       const request = splitReferencedPrompt(card.prompt).message.slice(0, 80);
       if (card.kind === 'draft') {
@@ -884,8 +889,19 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       : card.kind === 'draft'
         ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…'
         : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…';
+    // F050: a running draft shows what the model is doing, not only how many characters arrived.
+    // The thinking tail exists only on the rule-draft job, never on an answer job.
+    const liveThinkingTail = card.kind === 'draft' ? card.modelJob?.progress?.thinkingTail : undefined;
+    const liveThinking = liveThinkingTail ? liveThinkingLine(liveThinkingTail) : null;
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
       <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingText}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} limitMs={card.kind === 'draft' ? card.modelJob?.limitMs : undefined} chars={progress?.receivedChars} reasoningChars={progress?.reasoningChars} /></p>
+      {liveThinking && <div className="tt-chat-card__thinking" data-testid="draft-live-thinking" data-thinking-chars={progress?.reasoningChars}>
+        <p className="tt-chat-card__thinking-line" aria-live="off">{liveThinking}</p>
+        {liveThinkingTail && liveThinkingTail.length > liveThinking.length && <details className="tt-chat-card__thinking-full">
+          <summary>More of the latest thinking</summary>
+          <pre>{liveThinkingTail}</pre>
+        </details>}
+      </div>}
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
