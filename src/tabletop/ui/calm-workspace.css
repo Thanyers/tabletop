@@ -432,3 +432,9 @@
   .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__more { opacity: 0; }
   .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__star[aria-pressed='false'] { opacity: .35; }
 }
+
+/* Rename on the card itself: the pencil shows on hover or focus; double-clicking the title works too. */
+.tt-app .tt-flow-wrap .tt-canvas-node__title-input { width: 100%; min-width: 0; padding: 4px 8px; border: 1px solid var(--tt-moss, #2f6f5e); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: var(--tt-type-title); font-weight: 650; }
+@media (hover: hover) {
+  .tt-app .tt-flow-wrap .tt-canvas-node:not(:hover):not(:focus-within) .tt-canvas-node__rename { opacity: 0; }
+}
