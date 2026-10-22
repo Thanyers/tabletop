@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
 | F004 | แยก URL path ให้แต่ละหน้า (`/`, `/new`, `/t/<id>`, `/join`) | `review` | [F004](docs/features/F004-url-paths.md) |
@@ -51,6 +52,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F046-T1 | semantic view salvage + link cleanup ใน domain (ไม่แตะ provider ที่ F045 ถือ) | `review` | lead (AI) | `feat/F046-view-salvage` | `src/tabletop/domain/table.ts`, `table-canvas-salvage.test.ts`, เอกสาร | — | ไม่เปลี่ยนสัญญา JSON/จำนวนครั้งที่เรียกโมเดล |
 | F047-T1 | normalize id ที่โมเดลตั้ง + เขียน reference ใหม่ทั้ง program/records/views | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/id-normalization.ts` (ใหม่), `server/providers/deepseek-changes.ts` | — | ชื่อชนกัน = ยกเลิกทั้งก้อน |
 | F047-T2 | `TABLE_LIMITS` เป็นแหล่งเดียว + guide interpolate + drift test | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/table.ts`, `server/providers/table-schema-guide.ts` (+ test) | — | ปิดช่อง manifestNodes/depth |
