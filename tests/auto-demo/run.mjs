@@ -662,6 +662,13 @@ async function runTeachingStaleAndRoles(request, db, scenario) {
       ['Lesson rule revision is one', (view) => safeRecord(view.domain).ruleRevision === 1]],
     checkpoint: (view) => ({ ...teachingPhysicsCheckpoint(view.domain), ruleRevision: safeRecord(view.domain).ruleRevision }),
   });
+  // F035: an unassigned member holds every lesson permission, so seat the learner on the Learner preset first.
+  teacherView = await successfulCommandStep(request, scenario, teacher, teacherView, 'access.assign', {
+    actorId: learner.id, roleId: 'learner',
+  }, {
+    label: 'ครูกำหนดบทบาท Learner ให้ผู้เรียน', expected: 'ผู้เรียนอยู่ใน preset Learner ที่ไม่มีสิทธิ์แก้บทเรียน',
+    checks: [['Learner preset is assigned', (view) => safeRecord(safeRecord(view.domain).access).assignments?.[learner.id] === 'learner']],
+  });
   const learnerView = await readWorkspace(request, learner, teacherView.id);
   await expectedRejectionStep(request, scenario, learner, learnerView, 'teaching.answer', {
     questionId: oldQuestion, lessonRevision: oldRevision, value: 10,
@@ -672,8 +679,8 @@ async function runTeachingStaleAndRoles(request, db, scenario) {
   await expectedRejectionStep(request, scenario, learner, learnerView, 'teaching.setParameters', {
     force: 0, mass: 1, time: 2,
   }, {
-    label: 'ปฏิเสธผู้เรียนที่พยายามแก้บทเรียน', expected: 'ROLE_FORBIDDEN ก่อน reducer เปลี่ยน state',
-    errorCode: 'ROLE_FORBIDDEN', status: 403,
+    label: 'ปฏิเสธผู้เรียนที่พยายามแก้บทเรียน', expected: 'FORBIDDEN (ไม่มีสิทธิ์ lesson.parameters) ก่อน reducer เปลี่ยน state',
+    errorCode: 'FORBIDDEN', status: 403,
   });
 }
 
@@ -796,6 +803,13 @@ async function runEncounterPause(request, db, scenario) {
   await expectedRejectionStep(request, scenario, dm, workspace, 'encounter.resolve', {}, {
     label: 'ปฏิเสธ resolve ระหว่างพัก', expected: 'ENCOUNTER_PAUSED; hit ยังไม่ถูก resolve',
     errorCode: 'ENCOUNTER_PAUSED', status: 422,
+  });
+  // F035: an unassigned player may run the encounter, so seat Mira on the Player preset first.
+  workspace = await successfulCommandStep(request, scenario, dm, workspace, 'access.assign', {
+    actorId: mira.id, roleId: 'player',
+  }, {
+    label: 'DM กำหนดบทบาท Player ให้ Mira', expected: 'Mira อยู่ใน preset Player ที่ไม่มีสิทธิ์คุมเกม',
+    checks: [['Player preset is assigned', (view) => safeRecord(safeRecord(view.domain).access).assignments?.[mira.id] === 'player']],
   });
   const miraView = await readWorkspace(request, mira, workspace.id);
   await expectedRejectionStep(request, scenario, mira, miraView, 'encounter.resume', {}, {
