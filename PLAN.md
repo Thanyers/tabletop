@@ -44,6 +44,7 @@
 | F048 | ลูกเต๋าที่ server ทอยให้เป็น parameter ของ action: `table.roll` + pending roll อายุ 10 นาทีผูก `dataRevision` + ใช้ครั้งเดียว + เก็บหน้าเต๋า/ผลลง event | `review` | [F048](docs/features/F048-roll-parameter.md) |
 | F051 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F051](docs/features/F051-seo-baseline.md) |
 | F049 | ลูกเต๋าบนการ์ด controls: stepper จำนวน/หน้า + ปุ่ม ทอย + หน้าลูกเต๋า/ผลรวม และค่าที่ทอยได้ส่งต่อให้การ์ดอื่นที่ bind parameter เดียวกัน (v1 สุ่มฝั่ง client, visual-only; server roll = F048) · prompt guide ให้ drafter เขียน dice ได้ | `review` | [F049](docs/features/F049-dice-visual.md) |
+| F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `review` | [F050](docs/features/F050-live-thinking.md) |
 
 ## งาน
 
@@ -110,3 +111,5 @@
 | F051-T2 | `public/robots.txt` + `public/sitemap.xml` (`/`, `/demo`) | `review` | lead (AI) | `feat/F051-seo-baseline` (#176) | `public/` | — | ห้าม Disallow `/t/` |
 | F051-T3 | Worker คุม HTML route: `X-Robots-Tag: noindex` ให้หน้าในแอป + 404 จริงให้ path ที่ไม่รู้จัก | `review` | lead (AI) | `feat/F051-seo-baseline` (#176) | `cloudflare/index.ts`, `wrangler.jsonc`, `cloudflare/*.test.ts` | — | hotspot `cloudflare/index.ts` |
 | F051-T4 | spec + CHANGELOG + การตัดสินใจใน F051 | `review` | lead (AI) | `feat/F051-seo-baseline` (#176) | `spec.md`, `CHANGELOG.md`, `docs/features/F051-seo-baseline.md` | T1–T3 | |
+| F050-T1..T3 | provider ส่ง thinking tail มากับ progress · worker redact/เก็บ · การ์ดแสดงบรรทัด live thinking | `doing` | lead (AI) | `feat/F050-live-thinking` | `server/providers/deepseek-changes.ts`, `cloudflare/room.ts`, `ui/table-chat-state.ts`, `ui/useTableChat.tsx`, `ui/table-chat.css` | — | ต้องไม่แก้ `table-assistant-contracts.ts` (assistant เป็น strictObject) |
+| F050-T4..T5 | fixture stream reasoning + browser check + เอกสาร/spec/CHANGELOG | `doing` | lead (AI) | `feat/F050-live-thinking` | `tests/cloudflare-browser.mjs`, `tests/generic-table-browser.mjs`, `docs/features/F050-live-thinking.md`, `spec.md`, `CHANGELOG.md` | F050-T1..T3 | browser ต้องผ่าน 2 รอบติด |

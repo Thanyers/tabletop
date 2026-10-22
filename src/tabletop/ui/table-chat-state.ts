@@ -270,3 +270,24 @@ export function draftPartialLabel(summary: DraftFailureSummary): string {
 export function draftThinkingLabel(summary: DraftFailureSummary): string {
   return `Show the last ${summary.thinkingChars.toLocaleString()} characters of the model's thinking`;
 }
+
+/** F050: how much of the live thinking the waiting card shows as one readable line. */
+export const LIVE_THINKING_LINE_CHARS = 280;
+
+/**
+ * F050: one line saying what the model is doing right now, from the bounded live tail.
+ * Whitespace is collapsed and the line keeps the newest text, so the card streams forward
+ * instead of growing a wall of chain-of-thought. Returns null when the job kept no text.
+ */
+export function liveThinkingLine(tail: string | undefined, maxChars = LIVE_THINKING_LINE_CHARS): string | null {
+  if (!tail) return null;
+  const collapsed = tail.replace(/\s+/gu, ' ').trim();
+  if (!collapsed) return null;
+  if (collapsed.length <= maxChars) return collapsed;
+  // Keep the tail: the newest words are what "what is it doing" means.
+  const window = tailWithin(collapsed, maxChars);
+  // Start on a word boundary so a cut never leaves half a word at the front.
+  const space = window.indexOf(' ');
+  const kept = space > 0 && space < 60 ? window.slice(space + 1) : window;
+  return `…${kept.trimStart()}`;
+}

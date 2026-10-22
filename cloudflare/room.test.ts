@@ -63,8 +63,8 @@ interface TestModelJob {
   autoApply?: 'applied' | 'needs-review';
   autoApplyReasons?: string[];
   failureCode?: string;
-  /** F045: live counters while the draft runs. */
-  progress?: { receivedChars: number; reasoningChars: number; updatedAt: number };
+  /** F045: live counters while the draft runs; F050 adds the bounded thinking tail. */
+  progress?: { receivedChars: number; reasoningChars: number; thinkingTail?: string; updatedAt: number };
   /** F045: the configured whole-job deadline the draft runs under. */
   limitMs?: number;
   /** F045: bounded, redacted stop evidence for a failed draft. */
@@ -2541,6 +2541,44 @@ describe('Cloudflare room Durable Object', () => {
       progress: { receivedChars: 1_250, reasoningChars: 4_800 },
     });
     expect(poll.body.progress?.updatedAt).toEqual(expect.any(Number));
+  });
+
+  it('streams a bounded, identity-redacted thinking tail on a running draft (F050)', async () => {
+    const owner = newActor('Live thinking owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const thinkingTail = `checking ${owner.name} (${owner.id}) ${'z'.repeat(1_200)}`;
+    let providerStarted = false;
+    let releaseProvider = () => {};
+    const providerWait = new Promise<void>((resolve) => { releaseProvider = resolve; });
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request, _fetchImpl, onProgress) => {
+      providerStarted = true;
+      onProgress?.({ receivedChars: 0, reasoningChars: thinkingTail.length, thinkingTail });
+      await providerWait;
+      return modelResult(request);
+    });
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    await waitForCondition(() => providerStarted);
+    let liveProgress: TestModelJob['progress'];
+    for (let attempt = 0; attempt < 40 && !liveProgress?.thinkingTail; attempt += 1) {
+      liveProgress = (await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner)).body.progress;
+      if (!liveProgress?.thinkingTail) await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    releaseProvider();
+    expect(liveProgress?.thinkingTail).toBeDefined();
+    expect(liveProgress?.thinkingTail?.length).toBeLessThanOrEqual(600);
+    // The live tail is redacted on the way into the row, exactly like the failure details.
+    expect(liveProgress?.thinkingTail).not.toContain(owner.name);
+    expect(liveProgress?.thinkingTail).not.toContain(owner.id);
+    await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
   });
 
   it('keeps bounded, identity-redacted failure details when our own deadline stops a draft (F045)', async () => {

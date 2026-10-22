@@ -332,7 +332,7 @@ async function verifyPendingChatMotion(owner, draftNode, draftCard) {
   expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
 }
 
-async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false } = {}) {
+async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false, streamThinking = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const sourceNames = before.domain.sources.map(item => item.filename);
@@ -385,7 +385,11 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   }
   let releaseProvider = () => {};
   const gate = observePending ? new Promise(resolve => { releaseProvider = resolve; }) : undefined;
-  setTableReply({ change, gate, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  // F050: reasoning deltas that arrive before the JSON, so the card has something to stream.
+  const streamReasoning = streamThinking
+    ? Array.from({ length: 24 }, (_, index) => `Checking source columns and drafting rule ${index + 1}. `)
+    : undefined;
+  setTableReply({ change, gate, streamReasoning, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -447,6 +451,24 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     if (observePending) {
       try {
         await verifyPendingChatMotion(owner, draftNode, draftCard);
+        // F050: the card shows what the model is doing, and the line moves forward while it streams.
+        if (streamThinking) {
+          const live = draftCard.getByTestId('draft-live-thinking');
+          await expect(live).toBeVisible({ timeout: 20_000 });
+          const line = live.locator('.tt-chat-card__thinking-line');
+          const first = (await line.innerText()).trim();
+          expect(first.length).toBeGreaterThan(20);
+          expect(first).toContain('Checking source columns');
+          await expect.poll(async () => (await line.innerText()).trim(), {
+            timeout: 20_000,
+            message: 'the live thinking line should move forward while reasoning streams',
+          }).not.toBe(first);
+          const latest = (await line.innerText()).trim();
+          expect(latest).not.toContain('undefined');
+          expect(latest.length).toBeLessThanOrEqual(281);
+          // Evidence capture for the feature doc; only when asked, so normal runs stay fast.
+          if (process.env.F050_SHOT) await draftNode.screenshot({ path: 'test-results/f050-live-thinking.png' });
+        }
       } finally {
         releaseProvider();
       }
@@ -1513,7 +1535,8 @@ async function shiftScenario({ owner, member, newPage, api, setTableReply, mark 
   const source = await addSource(owner, room.id, fixtures.shifts, api, 'drop');
   await requestClarifyingQuestion(owner, room.id, setTableReply, api);
   // F013: the owner consented on this table epoch during the clarifying exchange.
-  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true });
+  // F050: this pending draft also streams synthetic reasoning, so the card's live thinking line is checked.
+  await requestProposal(owner, room.id, source, buildChange('shifts', source.id), setTableReply, api, { expectConsent: false, observePending: true, streamThinking: true });
   await inspectAppliedRules(owner, room.id, api, expectedRules.shifts);
   const ownerRoster = await openCanvasObject(owner, 'table.collection.people');
   await ownerRoster.getByRole('button', { name: 'Select Ada · ada', exact: true }).click();
