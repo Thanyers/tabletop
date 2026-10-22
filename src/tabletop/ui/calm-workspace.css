@@ -370,7 +370,11 @@
 /* Objects panel: an eye beside each card shows or hides it on the canvas. */
 .tt-app .tt-canvas-objects__list li { display: flex; align-items: center; gap: 2px; }
 .tt-app .tt-canvas-objects__list li > button:first-child { flex: 1 1 auto; min-width: 0; }
+/* F054: a listed card is a two-line grid — name, then its meta line — so three actions still fit at 280px. */
+.tt-app .tt-canvas-objects__list li.tt-canvas-objects__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 2px; border-radius: 6px; }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 32px; padding: 0; color: var(--tt-muted); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 36px; padding: 0; color: var(--tt-muted); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus:hover:not(:disabled) { border-color: #d9e6df; color: var(--tt-moss); background: #eaf3ee; }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye[aria-pressed='true'] { color: var(--tt-moss); }
 
 /* A notification's action button (e.g. View rules after new rules went into use). */
@@ -446,3 +450,22 @@
   .tt-chooser .tt-existing-tables > button { flex-wrap: wrap; }
   .tt-chooser .tt-existing-tables__updated { order: 3; width: 100%; padding-left: 43px; }
 }
+
+/* Shift+click group: a dashed ring on each picked card; right-click acts on all of them. */
+.tt-app .tt-flow-wrap .tt-canvas-node.is-multi-selected { outline: 2px dashed var(--tt-moss, #2f6f5e); outline-offset: 3px; }
+.tt-app .tt-canvas-context-menu__note { margin: 2px 10px 6px; color: var(--tt-muted); font-size: 12px; }
+
+/* Rename on the card itself: the pencil shows on hover or focus; double-clicking the title works too. */
+.tt-app .tt-flow-wrap .tt-canvas-node__title-input { width: 100%; min-width: 0; padding: 4px 8px; border: 1px solid var(--tt-moss, #2f6f5e); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: var(--tt-type-title); font-weight: 650; }
+@media (hover: hover) {
+  .tt-app .tt-flow-wrap .tt-canvas-node:not(:hover):not(:focus-within) .tt-canvas-node__rename { opacity: 0; }
+}
+
+/* The group bar: what a Shift+click / Shift+drag group can do at once. */
+.tt-app .tt-canvas-selection-bar { position: absolute; z-index: 40; top: 12px; left: 50%; display: flex; align-items: center; gap: 4px; max-width: calc(100% - 24px); padding: 6px 6px 6px 14px; transform: translateX(-50%); border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-paper); box-shadow: 0 10px 30px #303d3a22; pointer-events: auto; font-size: 13px; color: var(--tt-muted); }
+.tt-app .tt-canvas-selection-bar > span { margin-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-app .tt-canvas-selection-bar b { color: var(--tt-ink); }
+.tt-app .tt-canvas-selection-bar button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--tt-ink); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.tt-app .tt-canvas-selection-bar button:hover:not(:disabled) { background: var(--tt-canvas); }
+.tt-app .tt-canvas-selection-bar__clear { width: 32px; padding: 0 !important; justify-content: center; color: var(--tt-muted) !important; }
+@media (max-width: 640px) { .tt-app .tt-canvas-selection-bar > span { display: none; } }

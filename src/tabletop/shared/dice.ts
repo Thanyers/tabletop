@@ -1,9 +1,10 @@
 /**
  * F049: bounded dice maths shared by program validation and the visual dice card.
  *
- * v1 randomness is CLIENT-SIDE and visual-only: `secureDiceRandom` uses the
- * Web Crypto CSPRNG and the result only fills a client draft. Authoritative,
- * server-side rolls are the separate follow-up F048.
+ * For a `number` parameter randomness is CLIENT-SIDE and visual-only: `secureDiceRandom`
+ * uses the Web Crypto CSPRNG and the result only fills a client draft. For a `roll`
+ * parameter the card shows the authoritative F048 server roll instead (F060), so this
+ * module is never the source of a rolled value there.
  */
 
 /** Hard limits for a dice control; they are enforced by the zod schema and program validation. */

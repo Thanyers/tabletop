@@ -3,7 +3,37 @@ import type { RollResult } from './roll';
 import type { TableChange, TableProgram, TableState } from './table-contracts';
 export type CaseKind = 'invoice' | 'teaching' | 'encounter' | 'table';
 export type Role = 'owner' | 'teacher' | 'learner' | 'dm' | 'player' | 'participant';
-export type Seat = 'learner-1' | 'learner-2' | 'mira' | 'pip' | 'member-1' | 'member-2' | 'member-3' | 'member-4' | 'member-5' | 'member-6' | 'member-7';
+/**
+ * Member seats a table (kind `table`) can hand out besides its owner. This list is the single source
+ * of truth for the Cloudflare runtime: seat types, zod enums, guards, link seat picking and the UI
+ * derive from it. Only ever append; a stored seat must keep parsing.
+ */
+export const MAX_TABLE_MEMBER_SEATS = 12;
+export const TABLE_MEMBER_SEATS = [
+  'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6',
+  'member-7', 'member-8', 'member-9', 'member-10', 'member-11', 'member-12',
+] as const;
+/**
+ * The Node/Postgres guest runtime keeps seven member seats: its `server/schema.sql` CHECK constraints
+ * list member-1..member-7, and widening them is a persisted schema change.
+ */
+export const NODE_TABLE_MEMBER_SEATS = 7;
+export type TableMemberSeat = typeof TABLE_MEMBER_SEATS[number];
+export const SEATS = ['learner-1', 'learner-2', 'mira', 'pip', ...TABLE_MEMBER_SEATS] as const;
+export type Seat = typeof SEATS[number];
+/** Seats that can hold a table's turn: the owner ("host") and every member seat. */
+export const TABLE_TURN_SEATS = ['host', ...TABLE_MEMBER_SEATS] as const;
+export type TableTurnSeat = typeof TABLE_TURN_SEATS[number];
+export const TABLE_TURN_SEAT_PATTERN = new RegExp(`^(${TABLE_TURN_SEATS.join('|')})$`, 'u');
+export function isSeat(value: unknown): value is Seat {
+  return typeof value === 'string' && (SEATS as readonly string[]).includes(value);
+}
+export function isTableMemberSeat(value: unknown): value is TableMemberSeat {
+  return typeof value === 'string' && (TABLE_MEMBER_SEATS as readonly string[]).includes(value);
+}
+export function isTableTurnSeat(value: unknown): value is TableTurnSeat {
+  return typeof value === 'string' && (TABLE_TURN_SEATS as readonly string[]).includes(value);
+}
 /** `permissions` is set by the server from the table's access settings (F035); without it, legacy role checks apply. */
 export interface ActorContext { actorId: string; name: string; role: Role; seat?: Seat; workspaceId: string; epoch: number; now: number; hash(value: unknown): string; permissions?: ReadonlySet<Permission> }
 export interface Member { actorId: string; name: string; role: Role; seat?: Seat }
@@ -37,8 +67,18 @@ export interface Candidate {
   approval: { id: string; actorId: string; candidateHash: string; proofHash: string; epoch: number; expiresAt: number; revoked: boolean } | null;
 }
 export interface RevisionRecord { revision: number; change: ChangeSet; activatedAt: number; actorId: string; candidateHash: string; snapshot: { kind: 'invoice'; rules: RateRule[] } | { kind: 'teaching'; parameters: PhysicsParams } | { kind: 'encounter'; rule: EncounterRule } | { kind: 'table'; program: TableProgram } }
-/** Table-wide display settings; a missing field follows the default. */
-export interface DisplaySettings { connections?: boolean }
+/**
+ * Table-wide display settings; a missing field follows the default.
+ * `maxMembers` caps how many member seats (owner not counted) may be filled; missing = the runtime maximum.
+ */
+export interface DisplaySettings { connections?: boolean; maxMembers?: number }
+/** Member seats (owner not counted) this table accepts, never above the runtime's own seat count. */
+export function tableMemberSeatLimit(display: DisplaySettings | undefined, runtimeSeats: number = MAX_TABLE_MEMBER_SEATS): number {
+  const configured = display?.maxMembers;
+  return typeof configured === 'number' && Number.isInteger(configured) && configured >= 1
+    ? Math.min(configured, runtimeSeats)
+    : runtimeSeats;
+}
 export interface DomainBase { dataRevision: number; ruleRevision: number; candidate: Candidate | null; revisions: RevisionRecord[]; access?: AccessConfig; display?: DisplaySettings }
 export interface InvoiceRun { id: string; createdAt: number; dataRevision: number; ruleRevision: number; result: InvoiceResult; sourceIds: string[] }
 export interface InvoiceState extends DomainBase { kind: 'invoice'; shipments: Shipment[]; invoiceLines: InvoiceLine[]; sources: Artifact[]; rules: RateRule[]; runs: InvoiceRun[] }

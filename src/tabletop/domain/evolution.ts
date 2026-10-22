@@ -18,6 +18,7 @@ import { assert, canonicalJson, hash, parsePayload, requirePermission } from './
 import type { Permission } from '../shared/permissions';
 import { makeTeachingQuestionId } from './teaching';
 import { applyTableChange, removeTableRuleItem, tableChangeIssues, tableChangeSchema } from './table';
+import { diffCardMeta, liveCanvasCardIds, pruneCardMeta, ruleItemCardId, touchCardMeta } from './table-card-meta';
 import { jsonWithinBudget } from '../shared/json-budget';
 import { expressionWithinBounds } from '../runtime/generative';
 
@@ -278,6 +279,11 @@ function nextStateWithChange(state: DomainState, candidate: Candidate, ctx: Acto
     next.revisions = next.revisions.slice(-20);
     while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
   }
+  // F054: activation is the one place program cards are diffed. It runs after the revision is stored,
+  // and it never runs inside applyTableChange, so a simulation stays free of timestamps.
+  if (state.kind === 'table' && next.kind === 'table' && candidate.change.kind === 'table') {
+    next.cardMeta = pruneCardMeta(diffCardMeta(state, next.program, ctx.now, ctx.actorId, revision), liveCanvasCardIds(next));
+  }
   if (next.candidate) next.candidate.status = 'active';
   return next;
 }
@@ -459,5 +465,15 @@ function removeRuleItem(state: DomainState, payload: unknown, ctx: ActorContext)
   });
   next.revisions = next.revisions.slice(-20);
   while (next.revisions.length > 1 && new TextEncoder().encode(JSON.stringify(next.revisions)).byteLength > 256 * 1024) next.revisions.shift();
+  // F054: the removed card loses its meta; the Rules card (and the Actions card for an action) records the change.
+  let cardMeta = next.cardMeta ?? {};
+  const removedCardId = ruleItemCardId(input.kind, input.id);
+  if (removedCardId) {
+    cardMeta = { ...cardMeta };
+    delete cardMeta[removedCardId];
+  }
+  cardMeta = touchCardMeta(cardMeta, 'table.rules', ctx.now, ctx.actorId, 'ai', revision);
+  if (input.kind === 'action') cardMeta = touchCardMeta(cardMeta, 'table.actions', ctx.now, ctx.actorId, 'ai', revision);
+  next.cardMeta = pruneCardMeta(cardMeta, liveCanvasCardIds(next));
   return { state: next, label: `Removed a ${input.kind} from the rules as rule revision ${revision}.` };
 }

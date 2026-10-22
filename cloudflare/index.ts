@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SessionView, WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { MAX_TABLE_MEMBER_SEATS, type SessionView, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { randomId } from '../server/codec.js';
 import { BUILD_INFO_FILE, parseBuildInfo } from '../server/build-info.js';
 import { isPagePath, servePage } from './pages.js';
@@ -128,7 +128,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'POST' && path === '/api/auth/logout') return logout(request, env);
   if (method === 'GET' && path === '/api/capabilities') {
     const enabled = Boolean(env.DEEPSEEK_KEY);
-    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), inviteLinks: true, tableAssistant: { available: true }, table: tableCapabilitySummary(), model: { enabled,
+    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), model: { enabled,
       reason: enabled ? 'DeepSeek Flash proposes changes for your review.' : 'AI is awaiting a provider key.' } });
   }
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);

@@ -588,8 +588,13 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   await chat.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(consent).toBeVisible();
   await consent.getByRole('button', { name: 'Send', exact: true }).click();
-  expect((await firstPost).status()).toBe(202);
-  const questionArticle = owner.getByRole('article', { name: clarifyPrompt, exact: true });
+  const firstAccepted = await firstPost;
+  expect(firstAccepted.status()).toBe(202);
+  const firstJobId = (await firstAccepted.json()).id;
+  // A chat card's accessible name is its title, and since 1f21aeb that is only the request's first
+  // line — the answered request keeps the same first line, so cards must be found by their shared
+  // canvas object id instead of by title.
+  const questionArticle = owner.locator(`article[data-canvas-object="table.chat.${firstJobId}"]`);
   const card = questionArticle.getByTestId('table-chat-answer');
   await expect(card).toHaveClass(/tt-chat-card--questions/u, { timeout: 20_000 });
   await expect(card).toContainText('A few details would help build this table. Nothing on the table changed.');
@@ -632,13 +637,18 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   expect(modelPosts).toHaveLength(1);
   await sendAnswer.click();
   await expect(consent).toHaveCount(0);
-  expect((await answerPost).status()).toBe(202);
+  const answerAccepted = await answerPost;
+  expect(answerAccepted.status()).toBe(202);
+  const answeredJobId = (await answerAccepted.json()).id;
   expect(modelPosts).toHaveLength(2);
   expect(modelPosts[1]).toMatchObject({ prompt: answeredPrompt, consent: true });
+  // The answered request is a new job on a new card, so the question card must be gone.
   await expect(questionArticle).toHaveCount(0);
-  // Long prompts are shortened with an ellipsis in the card's accessible name.
-  const answeredCard = owner.getByRole('article', { name: /^Make a shift table\. Who must agree/u }).getByTestId('table-chat-answer');
-  await expect(answeredCard).toBeVisible();
+  const answeredNode = owner.locator(`article[data-canvas-object="table.chat.${answeredJobId}"]`);
+  await expect(answeredNode).toBeVisible();
+  // The title is still the request's first line; the full text stays in the job, not in the title.
+  await expect(answeredNode).toHaveAttribute('aria-label', clarifyPrompt);
+  const answeredCard = answeredNode.getByTestId('table-chat-answer');
   await expect(answeredCard).toContainText('No rule draft was created. Try rephrasing your request.', { timeout: 20_000 });
   await expect(answeredCard.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
   await expect(answeredCard.getByRole('list', { name: 'Answer choices', exact: true })).toHaveCount(0);
@@ -731,7 +741,12 @@ async function shareInviteLink(owner) {
 async function turnOnInviteLink(owner) {
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/7 members');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/12 members');
+  // The member limit is a table setting: lowering it narrows the count, Maximum restores twelve.
+  await dialog.getByLabel('Member limit').selectOption('5');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/5 members');
+  await dialog.getByLabel('Member limit').selectOption('max');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/12 members');
   const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
   await panel.getByLabel('Expires after').selectOption('7');
   const created = owner.waitForResponse((response) => response.url().endsWith('/invite-link') && response.request().method() === 'POST');
@@ -746,7 +761,7 @@ async function turnOnInviteLink(owner) {
 async function turnOffInviteLink(owner) {
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/7 members');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/12 members');
   const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
   await panel.getByRole('button', { name: 'Turn off link', exact: true }).click();
   await expect(panel.getByRole('button', { name: 'Turn on invite link', exact: true })).toBeVisible();

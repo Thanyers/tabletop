@@ -13,7 +13,6 @@ import {
   INVITE_TTL_MS,
   MAX_COMMAND_TYPE_CHARS,
   MAX_DISPLAY_NAME_CHARS,
-  MAX_MEMBERS_PER_WORKSPACE,
   MAX_NAME_INPUT_CHARS,
   MAX_REVISION_TOKEN_CHARS,
   SESSION_TOKEN_MAX_LENGTH,
@@ -24,6 +23,8 @@ import {
   SESSION_IDLE_TTL_MS,
   MAX_WORKSPACE_TITLE_CHARS,
   WORKSPACE_TTL_MS,
+  memberLimitMessage,
+  workspaceMemberCapacity,
 } from './limits.js';
 import type {
   InvitationRecord,
@@ -477,7 +478,8 @@ export class CommandAuthority {
       } else if (await transaction.hasActiveInvitation(seat, now)) {
         throw new AuthorityError('SEAT_UNAVAILABLE');
       }
-      if (await transaction.countMembers() >= MAX_MEMBERS_PER_WORKSPACE) throw new AuthorityError('MEMBER_LIMIT_REACHED');
+      const capacity = workspaceMemberCapacity(workspace.domainState);
+      if (await transaction.countMembers() >= capacity) throw new AuthorityError('MEMBER_LIMIT_REACHED', memberLimitMessage(capacity));
       const invitation: InvitationRecord = {
         ticketHash: sha256(ticket),
         workspaceId,

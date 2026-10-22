@@ -6,7 +6,7 @@ import type { Room } from './room.js';
 import { UPDATED_AT_HEADER, type Env } from './contracts.js';
 import { csrfForToken } from './auth.js';
 import { canonicalJson, hashValue, sha256 } from '../server/codec.js';
-import { DomainError, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { DomainError, MAX_TABLE_MEMBER_SEATS, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { equipmentChange, rollCombatChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { rollTotal } from '../src/tabletop/domain/roll.js';
 import type { PendingDirectoryChange } from './room-repository.js';
@@ -1762,19 +1762,63 @@ describe('Cloudflare room Durable Object', () => {
       expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: 'member-1' });
     });
 
-    it('fills all seven member seats through the link and rejects the eighth joiner (F003-T3)', async () => {
+    it('fills all twelve member seats through the link and rejects the next joiner (F003-T3)', async () => {
       const table = await linkTable('Capacity link owner');
       const link = await table.createLink(1);
-      for (let index = 1; index <= 7; index += 1) {
+      for (let index = 1; index <= MAX_TABLE_MEMBER_SEATS; index += 1) {
         const actor = await table.joiner(`Capacity joiner ${index}`);
         const joined = await table.join(actor, link.link);
         expect(joined.response.status).toBe(200);
         expect((joined.body as WorkspaceView).actor).toMatchObject({ seat: `member-${index}` });
       }
-      const eighth = await table.joiner('Capacity joiner 8');
-      expectError(await table.join(eighth, link.link), 429, 'MEMBER_LIMIT_REACHED');
-      expect(await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships WHERE revoked_at IS NULL')).toHaveLength(8);
-      expect(await inspectRoom(table.stub, `SELECT actor_id FROM room_memberships WHERE actor_id = '${eighth.id}'`)).toHaveLength(0);
+      const extra = await table.joiner('Capacity joiner extra');
+      expectError(await table.join(extra, link.link), 429, 'MEMBER_LIMIT_REACHED');
+      expect(await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships WHERE revoked_at IS NULL')).toHaveLength(1 + MAX_TABLE_MEMBER_SEATS);
+      expect(await inspectRoom(table.stub, `SELECT actor_id FROM room_memberships WHERE actor_id = '${extra.id}'`)).toHaveLength(0);
+    });
+
+    it('follows the table member limit for link joins and invitations, and lowering it removes no one', async () => {
+      const table = await linkTable('Member limit owner');
+      const setLimit = async (maxMembers: number | null) => {
+        const current = await call<WorkspaceView>(table.stub, `/api/workspaces/${table.roomId}`, table.owner);
+        const result = await issueCommand(table.stub, current.body, table.owner, 'display.set', { maxMembers });
+        expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+        return (result.body as CommandAck).workspace;
+      };
+      expect((await setLimit(2)).domain.display).toEqual({ maxMembers: 2 });
+      const link = await table.createLink(1);
+      const joined = [];
+      for (let index = 1; index <= 2; index += 1) {
+        const actor = await table.joiner(`Limited joiner ${index}`);
+        const result = await table.join(actor, link.link);
+        expect(result.response.status).toBe(200);
+        joined.push(actor);
+      }
+      const third = await table.joiner('Limited joiner 3');
+      const refused = await table.join(third, link.link);
+      expectError(refused, 429, 'MEMBER_LIMIT_REACHED');
+      expect((refused.body as PublicError).message).toContain('allows 2 members besides the owner');
+      // A single-use invitation is refused too while the table is full.
+      const invite = await call<PublicError>(table.stub, `/api/workspaces/${table.roomId}/invites`, table.owner, {
+        method: 'POST', body: { seat: 'member-12' }, mutation: true,
+      });
+      expectError(invite, 429, 'MEMBER_LIMIT_REACHED');
+
+      // Lowering below the current count keeps everyone; it only blocks new joins.
+      await setLimit(1);
+      expect(await inspectRoom(table.stub, 'SELECT actor_id FROM room_memberships WHERE revoked_at IS NULL')).toHaveLength(3);
+      for (const actor of joined) expect((await table.join(actor, link.link)).response.status).toBe(200);
+      expectError(await table.join(third, link.link), 429, 'MEMBER_LIMIT_REACHED');
+
+      // Back to the maximum, the next person joins and the twelfth seat can be invited.
+      await setLimit(null);
+      const rejoined = await table.join(third, link.link);
+      expect(rejoined.response.status).toBe(200);
+      expect((rejoined.body as WorkspaceView).actor).toMatchObject({ seat: 'member-3' });
+      const twelfth = await call<{ ticket: string }>(table.stub, `/api/workspaces/${table.roomId}/invites`, table.owner, {
+        method: 'POST', body: { seat: 'member-12' }, mutation: true,
+      });
+      expect(twelfth.response.status).toBe(201);
     });
 
     it('skips a seat that has a pending single-use invite and leaves that invite redeemable (F003-T3)', async () => {

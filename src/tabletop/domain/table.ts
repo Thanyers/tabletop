@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { DomainError, type ActorContext, type Seat } from '../shared/contracts';
+import { DomainError, SEATS, TABLE_TURN_SEATS, TABLE_TURN_SEAT_PATTERN, type ActorContext, type Seat } from '../shared/contracts';
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue } from '../shared/table-contracts';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
 import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
 import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
+import { liveCanvasCardIds, pruneCardMeta, touchCardMeta } from './table-card-meta';
 import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
@@ -48,7 +49,7 @@ export const TABLE_LIMITS = {
   createsPerAction: 12,
   invariants: 12,
   invariantFields: 6,
-  turnOrder: 8,
+  turnOrder: TABLE_TURN_SEATS.length,
   evidence: 20,
   assumptions: 12,
   rowsPerCollection: 100,
@@ -104,7 +105,7 @@ export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
     requireTurn: z.boolean(), advanceTurn: z.boolean(),
   })).min(1).max(TABLE_LIMITS.actions),
   invariants: z.array(z.strictObject({ id, collection: id, fields: z.array(id).min(1).max(TABLE_LIMITS.invariantFields), message: text })).max(TABLE_LIMITS.invariants),
-  turnOrder: z.array(z.string().regex(/^(host|member-[1-7])$/)).max(TABLE_LIMITS.turnOrder),
+  turnOrder: z.array(z.string().regex(TABLE_TURN_SEAT_PATTERN)).max(TABLE_LIMITS.turnOrder),
   evidence: z.array(z.strictObject({ sourceId: z.string().min(1).max(100), quote: z.string().min(1).max(500) })).max(TABLE_LIMITS.evidence),
   assumptions: z.array(text).max(TABLE_LIMITS.assumptions),
   canvas: generativeCanvasSchema.optional(),
@@ -472,10 +473,14 @@ export function tableChangeIssues(state: TableState, change: TableChange): strin
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
 }
 function isGenerativeArray(value: GenerativeOutput): value is readonly GenerativeScalar[] { return Array.isArray(value); }
-const GENERATIVE_SEATS = ['learner-1', 'learner-2', 'mira', 'pip', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7'] as const satisfies readonly Seat[];
+/** The longest seat id any runtime can hand out; probing it bounds output that embeds the seat. */
+const LONGEST_SEAT: Seat = [...SEATS].sort((left, right) => right.length - left.length)[0]!;
 const MAX_SUPPORTED_ACTOR_ID_LENGTH = 160; // ID_SCHEMA permits actor IDs up to this length.
 const MAX_ACTOR_ID = '\u0000'.repeat(MAX_SUPPORTED_ACTOR_ID_LENGTH); // JSON escapes each NUL as six UTF-8 bytes.
-const MAX_GENERATIVE_VALIDATION_CONTEXTS = 64;
+// Probes grow with the seats a program names (about five per named seat), so a full twelve-member
+// turn order with actor, seat and turn branches needs about 68 contexts (64 was the seven-seat budget);
+// 96 keeps headroom for actor literals.
+const MAX_GENERATIVE_VALIDATION_CONTEXTS = 96;
 
 interface GenerativeValidationContext {
   actor: string;
@@ -483,9 +488,30 @@ interface GenerativeValidationContext {
   turn: string | null;
 }
 
-function generativeValidationContexts(program: TableProgram, canvas: NonNullable<TableProgram['canvas']>, actualContext?: GenerativeValidationContext): GenerativeValidationContext[] {
+/**
+ * Seats worth probing: every seat id the program or its rows mention (turn order, literals, record
+ * values) plus the longest seat id. A seat nothing mentions cannot select a branch of its own, so
+ * probing all twelve member seats on every canvas would only spend the validation budget.
+ */
+function mentionedSeats(program: TableProgram, records: Record<string, TableRecord[]>): Seat[] {
+  const mentioned = new Set<string>();
+  const pending: unknown[] = [program, records];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (typeof current === 'string') mentioned.add(current);
+    else if (Array.isArray(current)) pending.push(...current);
+    else if (current && typeof current === 'object') pending.push(...Object.values(current as Record<string, unknown>));
+  }
+  const seats = SEATS.filter((seat) => mentioned.has(seat));
+  // Prefer a mentioned seat that is as long as the longest one so the length probe adds no context.
+  const longest = seats.find((seat) => seat.length === LONGEST_SEAT.length) ?? LONGEST_SEAT;
+  return [longest, ...seats.filter((seat) => seat !== longest)];
+}
+
+function generativeValidationContexts(program: TableProgram, canvas: NonNullable<TableProgram['canvas']>, records: Record<string, TableRecord[]>, actualContext?: GenerativeValidationContext): GenerativeValidationContext[] {
   const systemValues = new Set<'actor' | 'seat' | 'turn'>();
-  const actorCandidates = new Set<string>([MAX_ACTOR_ID, 'host', ...GENERATIVE_SEATS, ...program.turnOrder]);
+  const probeSeats = mentionedSeats(program, records);
+  const actorCandidates = new Set<string>([MAX_ACTOR_ID, 'host', ...probeSeats, ...program.turnOrder]);
   const pending: unknown[] = [canvas];
   while (pending.length > 0) {
     const current = pending.pop();
@@ -503,7 +529,7 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
     }
   }
 
-  const maximumSeat = [...GENERATIVE_SEATS].sort((left, right) => right.length - left.length)[0];
+  const maximumSeat = probeSeats[0];
   const maximumTurn = [...program.turnOrder].sort((left, right) => right.length - left.length)[0] ?? null;
   const contexts: GenerativeValidationContext[] = [];
   const seen = new Set<string>();
@@ -524,7 +550,7 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
   }
   if (systemValues.has('seat')) {
     add({ actor: MAX_ACTOR_ID, turn: maximumTurn }); // An omitted seat evaluates to "host".
-    for (const seat of GENERATIVE_SEATS) add({ actor: MAX_ACTOR_ID, seat, turn: maximumTurn });
+    for (const seat of probeSeats) add({ actor: MAX_ACTOR_ID, seat, turn: maximumTurn });
   }
   if (systemValues.has('turn')) {
     add({ actor: MAX_ACTOR_ID, seat: maximumSeat, turn: null });
@@ -533,9 +559,9 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
 
   // Equality between system values can select a branch when their values coincide. Probe each
   // supported shared value without constructing the full actor × seat × turn product.
-  const sharedValues = new Set(['host', ...GENERATIVE_SEATS, ...program.turnOrder]);
+  const sharedValues = new Set<string>(['host', ...probeSeats, ...program.turnOrder]);
   for (const value of sharedValues) {
-    const seat = (GENERATIVE_SEATS as readonly string[]).includes(value) ? value as Seat : undefined;
+    const seat = probeSeats.find((candidate) => candidate === value);
     const turn = program.turnOrder.includes(value) ? value : null;
     if (systemValues.has('actor') && (systemValues.has('seat') || systemValues.has('turn'))) add({ actor: value, ...(seat ? { seat } : {}), turn });
     if (systemValues.has('seat') && systemValues.has('turn') && seat && program.turnOrder.includes(value)) add({ actor: MAX_ACTOR_ID, seat, turn: value });
@@ -548,7 +574,7 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
 function validateGenerativeOutput(program: TableProgram, records: Record<string, TableRecord[]>, actualContext?: GenerativeValidationContext): void {
   if (!program.canvas) return;
   try {
-    for (const context of generativeValidationContexts(program, program.canvas, actualContext)) {
+    for (const context of generativeValidationContexts(program, program.canvas, records, actualContext)) {
       evaluateGenerativeCanvas(program.canvas, { program, records, ...context });
     }
   } catch (error) {
@@ -649,7 +675,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     }
     const sha256 = ctx.hash(input.text), sourceId = `source_${sha256.slice(0, 32)}`;
     assert(!state.sources.some(s => s.id === sourceId), 'TABLE_DUPLICATE_SOURCE', 'This source is already on the table.');
-    return { state: { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate }, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
+    const next: TableState = { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate };
+    // F054: a file added by a person stamps the Files card; the simulator never writes timestamps.
+    next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return { state: next, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
   }
   if (type === 'table.removeSource') {
     requirePermission(ctx, 'files.remove', ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
@@ -657,7 +686,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     assert(!state.program?.evidence.some(e => e.sourceId === input.sourceId)
       && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
       'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it with the room.');
-    return { state: { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null }, label: 'Unused source removed.' };
+    const next: TableState = { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null };
+    // F054: removing a file moves the Files card's update time, but never invents a creation time.
+    if (state.cardMeta) next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return { state: next, label: 'Unused source removed.' };
   }
   if (type === 'table.setComputedColumns') {
     requirePermission(ctx, 'data.columns', ['owner']);

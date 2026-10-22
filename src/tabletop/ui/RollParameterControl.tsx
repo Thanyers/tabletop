@@ -1,15 +1,9 @@
 import { useId } from 'react';
 import type { WorkspaceView } from '../shared/contracts';
+import { rollNotation } from '../shared/roll';
 import type { TableParameter } from '../shared/table-contracts';
 import { useServerRoll } from './roll-store';
 import './roll-control.css';
-
-function rollNotation(parameter: TableParameter): string {
-  const groups = parameter.roll?.groups.map((group) => `${group.count}d${group.faces}`).join(' + ') ?? '1d6';
-  const modifier = parameter.roll?.modifier;
-  if (modifier === undefined || modifier === 0) return groups;
-  return `${groups} ${modifier > 0 ? '+' : '-'} ${Math.abs(modifier)}`;
-}
 
 /**
  * F048: the control bound to a `roll` action parameter. The value comes from `table.roll` and stays
@@ -27,7 +21,7 @@ export function RollParameterControl({ id, view, actionId, parameter, disabled, 
   const controlId = id ?? `tt-roll-${generatedId}`;
   const resultId = `${controlId}-result`;
   const roll = useServerRoll(view, actionId, parameter.id);
-  const notation = rollNotation(parameter);
+  const notation = parameter.roll ? rollNotation(parameter.roll) : '1d6';
   return <section className="tt-table-roll" aria-label={parameter.label}>
     <header className="tt-table-roll__header">
       <span className="tt-table-roll__label" id={`${controlId}-label`}>{parameter.label}</span>

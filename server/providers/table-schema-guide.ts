@@ -5,14 +5,16 @@
  * F047: the numeric limits are interpolated from `TABLE_LIMITS` and `GENERATIVE_LIMITS`, so the guide
  * cannot advertise one number while the validator enforces another. `manifestNodes` was the drift
  * that motivated this: the validator rejected a canvas the guide said nothing about.
+ * Seat names come from the shared seat list for the same reason.
  */
+import { MAX_TABLE_MEMBER_SEATS } from '../../src/tabletop/shared/contracts.js';
 import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
 import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
 
 /**
  * F049: the exact dice control example embedded in the guide below.
- * The drafter may author `kind:"dice"`: the client rolls it (visual-only, no server roll)
- * and fills one numeric action parameter that another card can submit.
+ * The drafter may author `kind:"dice"` on a numeric parameter (client rolls it, visual-only)
+ * or on a `roll` parameter (F060: the server rolls the program's roll spec and the card shows it).
  */
 export const TABLE_DICE_EXAMPLE: ControlsViewDescriptor = {
   id: 'damage-die',
@@ -95,7 +97,7 @@ INVARIANT{id,collection,fields:[FIELD_ID 1..6],message}
 EVIDENCE{sourceId:string<=100,quote:string<=500}
 ROW{id,values:{FIELD_ID:VALUE}}
 RECORDS: {COLLECTION_ID:[ROW<=100]}
-TURNORDER: ("host"|"member-1"|...|"member-7")[<=8]
+TURNORDER: ("host"|"member-1"|...|"member-${MAX_TABLE_MEMBER_SEATS}")[<=${TABLE_LIMITS.turnOrder}]
 
 OPERAND (ONLY in condition.left/right, effect.value and create.values; never a raw AST):
   {literal:VALUE} | {input:PARAM_ID} | {record:PARAM_ID,field:FIELD_ID} | {system:"actor"|"seat"|"turn"} | {expression:EXPR}
@@ -132,8 +134,9 @@ CONTROL (each: id,label,actionId,inputs:BINDINGS) =
   | dice{kind:"dice",parameter,faces:2..100,count:1..10,modifier?:integer -1000..1000}
 BINDINGS: {PARAM_ID: {kind:"control"} | {kind:"literal",value:VALUE} | {kind:"expression",value:EXPR} | {kind:"record",collection:COLLECTION_ID,recordId:ID}}
   Every action parameter must be covered; the parameter a slider/toggle/select/dice edits binds {kind:"control"}.
-DICE: dice must bind one number PARAM (faces/count are whole numbers in range; modifier is an optional whole number).
-  The client rolls count d faces + modifier on the device (visual-only; the server does not roll) and fills the parameter
-  for the other cards that bind the same action, so a form on another controls view can submit the rolled value.
+DICE: dice must bind one number PARAM or one roll PARAM (faces/count whole numbers in range; modifier optional whole number).
+  Number PARAM: the client rolls count d faces + modifier (visual-only) and fills it for other cards.
+  Roll PARAM: faces/count are only validated display defaults; the SERVER rolls the parameter's roll spec, the card
+  shows those faces and total, and the action sends no value.
   EXAMPLE (one controls view; the same action also has a form on another view covering every input):
   ${TABLE_DICE_EXAMPLE_JSON}`;
