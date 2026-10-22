@@ -1501,7 +1501,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onNodeDragStop={persistPosition}
           onNodeClick={choose}
           onPaneClick={clear}
-          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }); }}
+          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu(contextMenuPosition(event.clientX, event.clientY)); }}
           onMoveEnd={persistViewport}
           nodesDraggable
           nodesConnectable={false}
@@ -1585,4 +1585,14 @@ function describeCardForChat(id: string, title: string, view: WorkspaceView): st
   if (id === 'table.actions') return `the table actions${program ? `: ${program.actions.map((action) => action.title).join(', ')}` : ''}`;
   if (id.startsWith('table.chat.')) return `an earlier chat answer titled “${title}”`;
   return `card “${title}”`;
+}
+
+/** Keep the right-click menu on screen when opened near the right or bottom edge. */
+function contextMenuPosition(x: number, y: number): { x: number; y: number } {
+  const width = 220;
+  const height = 110;
+  return {
+    x: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
+    y: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
+  };
 }
