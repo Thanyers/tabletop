@@ -1,18 +1,32 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 15:35 (Asia/Bangkok)** ทั้งสอง environment รายงาน **4.3.0 / 12c40a4** จาก annotated tag [v4.3.0](https://github.com/Thanyers/tabletop/tree/v4.3.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 17:15 (Asia/Bangkok)** ทั้งสอง environment รายงาน **4.4.0 / d04da37** จาก annotated tag [v4.4.0](https://github.com/Thanyers/tabletop/tree/v4.4.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [12c40a4](https://github.com/Thanyers/tabletop/commit/12c40a49d15d11a9b024da04859110dd51ca7a6b) — PR #125 | commit และ build เดียวกัน |
-| Release | v4.3.0 / 4.3.0 | v4.3.0 / 4.3.0 |
+| Source | [d04da37](https://github.com/Thanyers/tabletop/commit/d04da37f0fc952635d0eba11b76f8b21bc2a26bb) — PR #138 | commit และ build เดียวกัน |
+| Release | v4.4.0 / 4.4.0 | v4.4.0 / 4.4.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 4.4.0 (22 ตุลาคม 2569)
+
+Release 4.4.0 (MINOR) ผ่าน pipeline CD001 ([run 39761035504](https://github.com/Thanyers/tabletop/actions/runs/39761035504)) — [PR #138](https://github.com/Thanyers/tabletop/pull/138) จาก `dev` @ `1063062` + `main` (4.3.1) · รวม F038 (#131, #135) และ #128 · ไม่รวม #134/#136/#137 ที่ merge เข้า dev หลังตัด branch
+
+- ก่อนเปิด PR รัน validate.yml เต็มชุดในเครื่อง (Node 26, Chrome) ผ่านทุกขั้น: unit 512, Cloudflare 112, demo, browser r1 7 / cloudflare 26 / generative 8
+- Validate บน merge commit `main` ผ่าน แล้ว Release deploy เริ่มเอง (10:10–10:11 UTC)
+- Tag `v4.4.0` (annotated) → `d04da37`; build ครั้งเดียว `4.4.0 / d04da37` (`built_at` 2026-10-22T10:10:59Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production — ไม่มี schema change
+- Staging: Worker version `8c69d101-d41e-478c-8a19-605ae2bbeace`, smoke PASS
+- Production: Worker version `66313fbe-3507-4c6f-9753-60bb250a2ea7`, smoke PASS
+- `/version` ทั้งสอง environment = `4.4.0 / d04da37` (ตรวจซ้ำด้วยมือ 17:15 น.)
+- ยังไม่ได้ตรวจด้วยมือแบบล็อกอินหลายบัญชี (คิวร่างกฎ/คำถามขนาน) บน staging — browser suite ครอบคลุมด้วย synthetic AI
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-4.4.0` · 5.0.0 (#141) merge เข้า `main` แล้วแต่ยังไม่ได้บันทึกที่นี่
 
 ## ผลตรวจ deploy 4.3.0 (22 ตุลาคม 2569)
 

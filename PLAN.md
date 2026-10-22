@@ -33,7 +33,7 @@
 | F036 | ปลดเพดานเงินของ AI: ไม่จำกัดงบ แต่ยังบันทึกและ settle การใช้จริงทุกงาน (POC) | `review` | lead (AI) | `fix/F036-uncapped-budget` | `cloudflare/{billing,ai,index}.ts`, `vitest.cloudflare.config.ts`, tests | — | ไม่มี schema/binding/secret · CF 102, unit 476 |
 | F037 | Comment card แบบ post-it บน canvas: สร้างจากปุ่มข้างแชท/แชท ลากย้าย แก้ข้อความ เปลี่ยนสี ลบ และเห็นร่วมกัน | `doing` | lead (AI) | `feat/F037-note-cards` | `shared/table-contracts.ts`, `domain/table.ts`, `runtime/index.ts`, `ui/*`, tests | — | เก็บนอก program (ไม่มี migration) · backend + unit 6 ผ่าน · UI ยังไม่ทำ |
 | F042 | แจ้งคนที่เปิดหน้าอยู่ให้รีเฟรชเมื่อ release ใหม่ขึ้น staging/production | `review` | [F042](docs/features/F042-update-notice.md) |
-| F038 | ถามขนานกันได้ระหว่างที่การ์ดอื่นทำงาน + คำขอร่างกฎเข้าคิวต่อจากร่างที่กำลังทำ | `review` | [F038](docs/features/F038-parallel-requests.md) |
+| F038 | ถามขนานกันได้ระหว่างที่การ์ดอื่นทำงาน + คำขอร่างกฎเข้าคิวต่อจากร่างที่กำลังทำ | `done` (4.4.0) | [F038](docs/features/F038-parallel-requests.md) |
 | F040 | Scene motion: วัตถุวิ่งวนจาก `from` ถึง `to` อัตโนมัติ ความเร็วจาก parameter + ปุ่มหยุด/reduced motion | `review` | [F040](docs/features/F040-scene-motion.md) |
 | F041 | เพดาน response ของ table assistant: กัน raw SSE 16 MiB แต่จำกัดคำตอบที่ถอดแล้ว 256K ตัวอักษร, output 32K, timeout 180s | `review` | [F041](docs/features/F041-assistant-response-cap.md) |
 
@@ -81,9 +81,9 @@
 | F021 | พิมพ์ข้อความต่อได้ระหว่างรอร่างกฎ/คำตอบ (ช่องข้อความไม่ล็อก ปุ่มส่งยังรอ) | `review` | Claude Code | `fix/F019-type-while-drafting` | `src/tabletop/ui/TableChat.tsx` | — | |
 | F020 | ร่างกฎล้มซ้ำเพราะ "Field bounds do not match its type": แยกข้อความตรวจ field เป็น 3 กรณีพร้อมชื่อ field + ใส่กฎลงคำสั่ง AI | `review` | Claude Code | `fix/F018-field-bounds` | `src/tabletop/domain/table.ts` (checkProgram), `server/providers/deepseek-changes.ts` (prompt), `table.test.ts` | — | พบจากข้อความ F016 บน staging |
 | F034-T3 | คำขอร่างกฎ (`/model`) ของทุกคนเป็นการ์ดในแชท (เก็บ prompt, `GET /model`, poll ข้ามคน, การ์ดคนอื่นตอบคำถาม AI ไม่ได้) + สมาชิกเห็นการ์ด Rules ตอนมีแค่ร่าง + ตำแหน่งการ์ดแชท/Rules ร่วมกันทุกคน | `review` | JitrudeeDongdee (Claude) | `feat/F034-live-chat` | `cloudflare/room*.ts`, `client.ts`, `useTableChat.tsx`, `table-chat-state.ts`, `runtime/index.ts`, `canvas-layout*.ts` | — | T1 (#112), T2 (#115, #117) merge แล้ว |
-| F038-T1 | server: คำตอบธรรมดาไม่ล้ม `STALE_WORKSPACE` เมื่อโต๊ะเปลี่ยนระหว่างสร้าง (proposal ยังเช็ค revision) | `review` | lead (AI) | `feat/F038-parallel-requests` | `cloudflare/room.ts`, `cloudflare/room.test.ts` | — | |
-| F038-T2 | client: Send ไม่บล็อกระหว่างรอ · ask ขนาน · draft เข้าคิวและเริ่มเองหลัง refresh | `review` | lead (AI) | `feat/F038-parallel-requests` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, tests | F038-T1 | hotspot `tests/generic-table-browser.mjs` |
-| F038-T3 | คู่มือ + CHANGELOG | `review` | lead (AI) | `feat/F038-parallel-requests` | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | — | |
+| F038-T1 | server: คำตอบธรรมดาไม่ล้ม `STALE_WORKSPACE` เมื่อโต๊ะเปลี่ยนระหว่างสร้าง (proposal ยังเช็ค revision) | `done` (4.4.0) | lead (AI) | `feat/F038-parallel-requests` | `cloudflare/room.ts`, `cloudflare/room.test.ts` | — | |
+| F038-T2 | client: Send ไม่บล็อกระหว่างรอ · ask ขนาน · draft เข้าคิวและเริ่มเองหลัง refresh | `done` (4.4.0) | lead (AI) | `feat/F038-parallel-requests` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, tests | F038-T1 | hotspot `tests/generic-table-browser.mjs` |
+| F038-T3 | คู่มือ + CHANGELOG | `done` (4.4.0) | lead (AI) | `feat/F038-parallel-requests` | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | — | |
 | F040-T1 | contract + zod + evaluator + validation ของ `motion` | `review` | lead (AI) | `feat/F040-scene-motion` | `shared/generative-contracts.ts`, `runtime/generative/{schema,evaluator,validation}.ts`, tests | — | |
 | F040-T2 | UI: clock/วนลูป/ปุ่มหยุด/reduced motion | `review` | lead (AI) | `feat/F040-scene-motion` | `ui/GeneratedCanvasObjects.tsx`, `ui/scene-motion.ts`, `ui/generated-canvas.css`, tests | F040-T1 | hotspot `ui/GeneratedCanvasObjects.tsx` |
 | F040-T3 | prompt guide + ตัวอย่างรถวิ่งวน + CHANGELOG | `review` | lead (AI) | `feat/F040-scene-motion` | `server/providers/table-schema-guide.ts`, `server/providers/deepseek-changes.ts`, `CHANGELOG.md`, `spec.md` | F040-T1 | |
