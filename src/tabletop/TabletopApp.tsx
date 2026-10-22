@@ -24,6 +24,7 @@ import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
 import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './ui/table-candidate-apply';
+import { recordServerRoll } from './ui/roll-store';
 import './ui/tabletop.css';
 import './ui/calm-workspace.css';
 
@@ -480,6 +481,13 @@ export default function TabletopApp() {
     if (blocksForeground) setBusy(type);
     try {
       const ack = await tabletopClient.command(commandView, type, payload);
+      // F048: keep the dice the authority just rolled for this member, keyed by action/parameter.
+      if (type === 'table.roll' && ack.roll) {
+        const request = payload as { actionId?: unknown; parameterId?: unknown } | null;
+        if (request && typeof request.actionId === 'string' && typeof request.parameterId === 'string') {
+          recordServerRoll(ack.workspace, request.actionId, request.parameterId, ack.roll);
+        }
+      }
       if (expectedView && !sameTableCandidateScope(ack.workspace, expectedView)) return null;
       if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(commandView, workspaceRef.current))) return null;
       const latest = await latestAfterAck(ack, commandView.id, requestSequence);
