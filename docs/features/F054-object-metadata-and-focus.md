@@ -1,13 +1,13 @@
-# F052 — เวลาและที่มาของการ์ด + ปุ่มพาไปหาการ์ดบน Objects panel
+# F054 — เวลาและที่มาของการ์ด + ปุ่มพาไปหาการ์ดบน Objects panel
 
 | | |
 | --- | --- |
 | สถานะ | `review` — v1 ครบ (ข้อมูล + UI + unit/browser evidence) เหลือ browser suite ของ repo |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | **MINOR** — เพิ่ม field เสริมแบบ optional ใน state, ไม่มี migration; rollback แล้วเวลาใหม่หายแต่โต๊ะยังทำงาน (ตัดสินด้วย "deploy แล้ว rollback ทันทีได้ไหม") |
-| งานในกระดาน | `F052-T1`…`T8` (เพิ่มแถวใน [PLAN.md](../../PLAN.md) แล้ว) |
-| ภาพดีไซน์ | [F052-objects-panel.html](../previews/F052-objects-panel.html) · [desktop, Created · newest](../previews/F052-objects-panel-desktop.jpg) / [Canvas order](../previews/F052-objects-panel-canvas-order.jpg) / [mobile](../previews/F052-objects-panel-mobile.jpg) |
-| ภาพจากแอปจริง | [panel 3 actions](../previews/F052-panel-3actions.jpg) · [desktop focus](../previews/F052-desktop-focus.jpg) · [mobile focus](../previews/F052-mobile-focus.jpg) · [280px](../previews/F052-panel-280.jpg) |
+| งานในกระดาน | `F054-T1`…`T8` (เพิ่มแถวใน [PLAN.md](../../PLAN.md) แล้ว) |
+| ภาพดีไซน์ | [F054-objects-panel.html](../previews/F054-objects-panel.html) · [desktop, Created · newest](../previews/F054-objects-panel-desktop.jpg) / [Canvas order](../previews/F054-objects-panel-canvas-order.jpg) / [mobile](../previews/F054-objects-panel-mobile.jpg) |
+| ภาพจากแอปจริง | [panel 3 actions](../previews/F054-panel-3actions.jpg) · [desktop focus](../previews/F054-desktop-focus.jpg) · [mobile focus](../previews/F054-mobile-focus.jpg) · [280px](../previews/F054-panel-280.jpg) |
 
 ## ทำไม
 
@@ -274,12 +274,12 @@ resolver ต้อง deterministic และไม่เขียน state ร�
 - [x] `npm run test:cloudflare` → 127/127 (backend layer, before UI)
 - [x] `npm run build` และ `npm run build:cloudflare` (dry-run) → ผ่าน (มี chunk-size warning เดิม)
 - [ ] repo browser suites (`tests/*-browser.mjs`) — T6; ใช้ UI Lab/Chrome ตรวจ flow แทนแล้ว
-- [x] preview gate: `ui-gate --full docs/previews/F052-objects-panel.html` → **14/16 measured, 4 skipped**; 2 fail เป็น deliberate: hardcoded values ใน mock (production ใช้ token) และ one-sided accent border ซึ่งเป็น design system เดิม (`canvas-visual-flow.css:2-15`)
+- [x] preview gate: `ui-gate --full docs/previews/F054-objects-panel.html` → **14/16 measured, 4 skipped**; 2 fail เป็น deliberate: hardcoded values ใน mock (production ใช้ token) และ one-sided accent border ซึ่งเป็น design system เดิม (`canvas-visual-flow.css:2-15`)
 
 ## คำถามเปิด
 
 1. การเปลี่ยนข้อมูลใน collection (row) ควรนับเป็น "updated" ของการ์ดหรือไม่ (v1 เลือกไม่นับ)
-2. อนาคตจะเปลี่ยน panel เป็น dock ถาวรหรือไม่ (นอก scope ของ F052)
+2. อนาคตจะเปลี่ยน panel เป็น dock ถาวรหรือไม่ (นอก scope ของ F054)
 3. T8 AI-origin (auto vs reviewed vs pasted) จะทำต่อเมื่อมีคำถามจริงจากผู้ใช้
 
 ## การตัดสินใจ
