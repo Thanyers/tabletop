@@ -29,10 +29,13 @@ export function RoleSettings({ view, busy, onCommand }: {
       : <ul className="tt-role-settings__members">
         {members.map((member) => {
           const current = assignedRole(view.kind, access, member.actorId);
+          // The server refuses changing the role of someone who holds a permission the viewer lacks.
+          const stronger = !grantable(current);
           return <li key={member.actorId}>
             <span className="tt-role-settings__name">{member.name}</span>
             {canManage
-              ? <select aria-label={`Role for ${member.name}`} value={current.id} disabled={busy}
+              ? <select aria-label={`Role for ${member.name}`} value={current.id} disabled={busy || stronger}
+                title={stronger ? 'This person has permissions you do not have' : undefined}
                 onChange={(event) => void onCommand('access.assign', { actorId: member.actorId, roleId: event.target.value })}>
                 {roles.map((role) => <option key={role.id} value={role.id} disabled={!grantable(role) && role.id !== current.id}>{role.name}</option>)}
               </select>
