@@ -141,7 +141,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.full_suite == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -155,6 +155,11 @@ jobs:
         env:
           DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
         run: npm run build
+      - name: Bundle Cloudflare without publishing
+        # The persona demos serve worker-build/index.js through Miniflare.
+        env:
+          WRANGLER_SEND_METRICS: false
+        run: npm run build:cloudflare
       - name: Install test browser
         run: node node_modules/playwright/cli.js install --with-deps chromium
       - name: Repeatable persona demos and replay report
@@ -190,7 +195,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.full_suite == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -241,7 +246,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.full_suite == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
