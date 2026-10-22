@@ -38,7 +38,12 @@ export function PublicWelcome({ children }: { children: ReactNode }) {
 
   return <main className="tt-account-gate tt-public-welcome">
     <header className="tt-public-welcome__header">
-      <a className="tt-brand tt-public-welcome__brand" href="/" aria-label="Tabletop home">
+      <a className="tt-brand tt-public-welcome__brand" href="/" aria-label="Tabletop home" onClick={(event) => {
+        // Already home: a full reload would only replay both loading stages.
+        if (window.location.pathname !== '/') return;
+        event.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }}>
         <span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span>
         <span>tabletop<span>.</span></span>
       </a>

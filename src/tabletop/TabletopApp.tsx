@@ -26,6 +26,7 @@ import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
 import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './ui/table-candidate-apply';
 import { recordServerRoll } from './ui/roll-store';
+import { LoadingScreen } from '../loading/LoadingScreen';
 import './ui/tabletop.css';
 import './ui/calm-workspace.css';
 
@@ -944,9 +945,6 @@ export default function TabletopApp() {
   );
 }
 
-function LoadingScreen() {
-  return <main className="tt-loading" role="status" aria-live="polite"><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><strong>Opening your table</strong><span><LoaderCircle size={14} className="tt-spin" /> Checking your workspace</span></main>;
-}
 
 function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onRetry: () => void }) {
   return <main className="tt-failure"><span className="tt-dialog__mark"><CircleAlert size={18} /></span><p className="tt-kicker">TABLETOP</p><h1>The table could not be opened</h1><p>{notice?.text ?? 'Check your connection and try again.'}</p><button type="button" className="tt-button tt-button--primary" onClick={onRetry}><RefreshCw size={14} /> Try again</button></main>;
