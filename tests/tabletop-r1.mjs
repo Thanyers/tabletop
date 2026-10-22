@@ -98,7 +98,7 @@ async function closeExpandedObjects(page) {
   while (await editors.count()) {
     const editor = editors.first();
     const objectId = await editor.getAttribute('data-canvas-object');
-    await editor.getByRole('button', { name: 'Close object', exact: true }).click();
+    await editor.getByRole('button', { name: /^Minimize /u }).click();
     await expect(board(page).locator(`.tt-canvas-node[data-canvas-object="${objectId}"]`)).not.toHaveClass(/is-expanded/);
   }
 }

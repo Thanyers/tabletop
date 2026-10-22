@@ -345,11 +345,6 @@
 .tt-app .tt-table-capability-list { display: grid; gap: var(--tt-space-1); margin: 0; padding-inline-start: var(--tt-space-4); font-size: var(--tt-type-small); }
 .tt-app .tt-table-capability-gaps > summary { cursor: pointer; color: var(--tt-muted); }
 
-/* A card's main call to action stays pinned to the bottom edge of the scrolling card body,
-   so Apply / Confirm / Review rules never ends up below the fold. */
-.tt-app .tt-card-cta { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-2); margin-top: var(--tt-space-2); padding: var(--tt-space-2) 0; border-top: 1px solid var(--tt-line); background: var(--tt-card-surface); box-shadow: 0 -10px 12px -10px rgb(0 0 0 / 0.18); }
-.tt-app .tt-card-cta > p { flex-basis: 100%; margin: 0; }
-
 /* Table-wide display settings in the table options menu. */
 .tt-app .tt-display-settings { display: grid; gap: var(--tt-space-1); padding: var(--tt-space-2) 0; border-top: 1px solid var(--tt-line); }
 .tt-app .tt-display-settings label { display: flex; align-items: center; justify-content: space-between; gap: var(--tt-space-3); font-size: var(--tt-type-body); }
@@ -366,3 +361,8 @@
 
 /* Closed cards stay listed in the Objects panel, muted, so they can be reopened. */
 .tt-app .tt-canvas-objects__list button[data-hidden] { color: var(--tt-muted); font-style: italic; }
+
+/* A card's main call to action stays pinned to the bottom edge of the scrolling card body,
+   so Apply / Confirm / Review rules never ends up below the fold. */
+.tt-app .tt-card-cta { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-2); margin-top: var(--tt-space-2); padding: var(--tt-space-2) 0; border-top: 1px solid var(--tt-line); background: var(--tt-card-surface); box-shadow: 0 -10px 12px -10px rgb(0 0 0 / 0.18); }
+.tt-app .tt-card-cta > p { flex-basis: 100%; margin: 0; }

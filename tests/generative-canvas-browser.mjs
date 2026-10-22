@@ -338,7 +338,7 @@ try {
   async function assertZoomSurvivesPendingObjectFocus(page, tableId, nodeId) {
     const editor = page.getByTestId('canvas-object-editor');
     const closeCurrentEditor = async () => {
-      const closeObject = page.getByRole('button', { name: 'Close object', exact: true });
+      const closeObject = page.getByRole('button', { name: /^Minimize /u });
       if (await closeObject.count() > 0) {
         await closeObject.first().click();
         await expect(editor).toHaveCount(0);

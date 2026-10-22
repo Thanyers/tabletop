@@ -1421,7 +1421,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   const camera = active.domain.records.equipment.find((row) => row.id === 'camera');
   expect(camera.values).toMatchObject({ available: false, borrower: active.actor.actorId, borrow_note: 'Reserved for the community workshop' });
   const expandedEquipment = await openCanvasObject(member, 'table.collection.equipment');
-  await expandedEquipment.getByRole('button', { name: 'Close object', exact: true }).click();
+  await expandedEquipment.getByRole('button', { name: /^Minimize /u }).click();
   const equipmentPreview = member.locator('.tt-canvas-node[data-canvas-object="table.collection.equipment"] .tt-table-collection__preview');
   await expect(equipmentPreview).toContainText(`Borrower: ${active.actor.name}`);
   await expect(equipmentPreview).not.toContainText(active.actor.actorId);
