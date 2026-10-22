@@ -1318,7 +1318,9 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   await expect(newestHistoryNode.getByTestId('table-chat-answer')).toContainText(archived[20].answer);
   await expect(member.getByRole('article', { name: archived[0].prompt, exact: true })).toHaveCount(0);
   const callsBeforeHistoryRead = getProviderCalls();
-  await expect(restored).toHaveCount(6);
+  // Six answer cards, plus the table's newest rule requests (F034-T3 keeps up to five after a reload).
+  const ruleRequests = (await api(member, `/api/workspaces/${tableId}/model`)).body.items.filter(job => typeof job.prompt === 'string' && job.prompt.length > 0);
+  await expect(restored).toHaveCount(6 + Math.min(ruleRequests.length, 5));
   expect(getProviderCalls()).toBe(callsBeforeHistoryRead);
 }
 
