@@ -49,7 +49,8 @@ export interface UseTableChatOptions {
   focusObject: (id: string) => void;
   /** F037: extra composer control (add a note) rendered beside Send. */
   composerAction?: ReactNode;
-  notify: (text: string, tone: 'info' | 'error' | 'success') => void;
+  /** A short notification; the optional action (e.g. View rules) shows as a button on it. */
+  notify: (text: string, tone: 'info' | 'error' | 'success', action?: { label: string; run: () => void }) => void;
   prefill?: { text: string; key: number };
 }
 
@@ -729,8 +730,25 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setRetryPrefill({ text: card.prompt, key: Date.now() });
   }, [editRules]);
 
+  // Notify once when a draft this page watched being prepared goes into use.
+  const watchedDraftsRef = useRef(new Set<string>());
+  const notifiedDraftsRef = useRef(new Set<string>());
+  useEffect(() => {
+    for (const card of cards) {
+      if (card.kind !== 'draft') continue;
+      if (!isAppliedDraft(card)) {
+        if (card.phase === 'sending' || card.phase === 'waiting') watchedDraftsRef.current.add(card.id);
+        continue;
+      }
+      if (!watchedDraftsRef.current.has(card.id) || notifiedDraftsRef.current.has(card.id)) continue;
+      notifiedDraftsRef.current.add(card.id);
+      const request = card.prompt.split('\n')[0].slice(0, 80);
+      optionsRef.current.notify(`New rules added: “${request}”`, 'success', { label: 'View rules', run: () => optionsRef.current.focusObject('table.rules') });
+    }
+  }, [cards]);
   const currentLocalState = readPrivateChatState(scope);
-  const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState));
+  // A draft that went into use on its own needs no card: it becomes a notification (below) instead.
+  const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState) && !isAppliedDraft(card));
   const operationBusy = externalBusy || confirmBusy;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
@@ -958,4 +976,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     {checkButton}
     {dismissButton}
   </div>;
+}
+
+function isAppliedDraft(card: ChatCard): boolean {
+  return card.kind === 'draft' && card.modelJob?.autoApply === 'applied' && !card.pollError;
 }
