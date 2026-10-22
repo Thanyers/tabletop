@@ -39,6 +39,7 @@
 | F041 | เพดาน response ของ table assistant: กัน raw SSE 16 MiB แต่จำกัดคำตอบที่ถอดแล้ว 256K ตัวอักษร, output 32K, timeout 180s | `done` (5.0.0) | [F041](docs/features/F041-assistant-response-cap.md) |
 | F044 | Scene motion hardening: fresh-build ต้องได้ scene, browser proof ของลูป/Pause, diagnostics ของ view ที่ถูกตัด, ตัดสินใจ shared phase และวัดเพดานจริงก่อนขยาย | `todo` | [F044](docs/features/F044-scene-motion-hardening.md) |
 | F045 | เห็นความคืบหน้าระหว่างรอ (thinking/answer) + streaming เส้นทางร่างกฎ + เก็บ partial เมื่อ timeout + แยก "ตัดที่เพดานเรา" จาก "ผู้ให้บริการหยุด" | `doing` (T1–T5 merge เข้า `dev` แล้ว #155 · T6 รอ release) | [F045](docs/features/F045-transparent-streaming-timeout.md) |
+| F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `doing` | [F050](docs/features/F050-live-thinking.md) |
 
 ## งาน
 
@@ -97,3 +98,5 @@
 | F035-T4 | UI: หน้าต่าง People เลือก role รายคน + หน้าจัดการ role (เลือกจาก role ตั้งต้น หรือสร้างเองด้วยการติ๊กสิทธิ์) + ซ่อนปุ่มตามสิทธิ์จริง | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `TabletopApp.tsx` (`InviteDialog`), `ui/RoleSettings.tsx` (ใหม่), `ui/*` ที่เช็ค owner | F035-T3 | hotspot `TabletopApp.tsx` |
 | F035-T5 | role ตั้งต้นของ case อื่น: บทเรียน (ครู/ผู้เรียน), เกม encounter (DM/ผู้เล่น), invoice · การกระทำในเกมที่ผูกที่นั่ง (ตอบคำถาม, shield) คงผูกที่นั่งเดิม | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `shared/permissions.ts`, `domain/{teaching,encounter,invoice}.ts` | F035-T2 | |
 | F035-T6 | เทสต์ (subagent) + คู่มือ + CHANGELOG | `review` | JitrudeeDongdee (Claude) + subagent | `feat/F035-role-permissions` | tests, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F035-T4 | ทุกสิทธิ์ต้องมีเทสต์ด้านถูกปฏิเสธ |
+| F050-T1..T3 | provider ส่ง thinking tail มากับ progress · worker redact/เก็บ · การ์ดแสดงบรรทัด live thinking | `doing` | lead (AI) | `feat/F050-live-thinking` | `server/providers/deepseek-changes.ts`, `cloudflare/room.ts`, `ui/table-chat-state.ts`, `ui/useTableChat.tsx`, `ui/table-chat.css` | — | ต้องไม่แก้ `table-assistant-contracts.ts` (assistant เป็น strictObject) |
+| F050-T4..T5 | fixture stream reasoning + browser check + เอกสาร/spec/CHANGELOG | `doing` | lead (AI) | `feat/F050-live-thinking` | `tests/cloudflare-browser.mjs`, `tests/generic-table-browser.mjs`, `docs/features/F050-live-thinking.md`, `spec.md`, `CHANGELOG.md` | F050-T1..T3 | browser ต้องผ่าน 2 รอบติด |

@@ -1375,14 +1375,24 @@ export class Room extends DurableObject<Env> {
       progressReplacements = draftIdentityReplacements(authorized.workspace);
 
       // Store live counters at most once per interval; the final status always wins afterwards.
+      // F050: the bounded thinking tail rides along so the waiting card can show the live text.
       let lastProgressWrite = 0;
       const onProgress = (progress: DeepSeekChangeProgress) => {
         const now = Date.now();
         if (now - lastProgressWrite < 900) return;
         lastProgressWrite = now;
+        // Redact before clamping, and drop the text entirely when the identity set cannot be built.
+        const thinkingTail = progress.thinkingTail && progressReplacements
+          ? tailWithin(redactString(progress.thinkingTail, progressReplacements), MAX_JOB_THINKING_TAIL_CHARS)
+          : '';
         void this.repository.updateModelJobProgress(
           input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
-          { receivedChars: progress.receivedChars, reasoningChars: progress.reasoningChars, updatedAt: now },
+          {
+            receivedChars: progress.receivedChars,
+            reasoningChars: progress.reasoningChars,
+            ...(thinkingTail ? { thinkingTail } : {}),
+            updatedAt: now,
+          },
         ).catch(() => undefined);
       };
 

@@ -137,6 +137,26 @@
 }
 .tt-app .tt-chat-card__partial--thinking > pre { max-height: 160px; color: var(--tt-muted); font-size: 11px; line-height: 16px; }
 
+/* F050: the live thinking line while a rule draft runs. One ellipsised line at any width, so a long
+   reasoning tail can never push the card's buttons off-screen at 320px; the full bound stays in the details. */
+.tt-app .tt-chat-card__thinking { display: grid; gap: 4px; min-width: 0; margin-top: var(--tt-space-2); }
+.tt-app .tt-chat-card .tt-chat-card__thinking-line {
+  display: block; min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
+  border-radius: 0 var(--tt-radius-medium, 10px) var(--tt-radius-medium, 10px) 0;
+  background: var(--tt-paper); color: var(--tt-muted);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tt-app .tt-chat-card__thinking-full > summary { color: var(--tt-muted); font-size: 12px; line-height: 16px; cursor: pointer; }
+.tt-app .tt-chat-card__thinking-full > summary:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 2px; }
+.tt-app .tt-chat-card__thinking-full > pre {
+  margin: 4px 0 0; padding: 8px 10px; max-height: 160px; overflow: auto; overscroll-behavior: contain;
+  border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px);
+  background: var(--tt-card-surface); color: var(--tt-muted);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 16px;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+}
+
 /* A card the next chat message is about. */
 .tt-app .tt-table-chat-bar__reference { display: flex; align-items: center; gap: var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
 .tt-app .tt-table-chat-bar__reference-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 60%; padding: 3px 10px; overflow: hidden; border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-card-surface); color: var(--tt-moss); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
