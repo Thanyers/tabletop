@@ -730,25 +730,29 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setRetryPrefill({ text: card.prompt, key: Date.now() });
   }, [editRules]);
 
-  // Notify once when a draft this page watched being prepared goes into use.
-  const watchedDraftsRef = useRef(new Set<string>());
-  const notifiedDraftsRef = useRef(new Set<string>());
+  // Notify once when a result this page watched in progress finishes with nothing left to do.
+  const watchedCardsRef = useRef(new Set<string>());
+  const notifiedCardsRef = useRef(new Set<string>());
   useEffect(() => {
     for (const card of cards) {
-      if (card.kind !== 'draft') continue;
-      if (!isAppliedDraft(card)) {
-        if (card.phase === 'sending' || card.phase === 'waiting') watchedDraftsRef.current.add(card.id);
+      if (!isFinishedResult(card)) {
+        if (card.phase === 'sending' || card.phase === 'waiting' || card.confirming || card.confirmationPending) watchedCardsRef.current.add(card.id);
         continue;
       }
-      if (!watchedDraftsRef.current.has(card.id) || notifiedDraftsRef.current.has(card.id)) continue;
-      notifiedDraftsRef.current.add(card.id);
+      if (!watchedCardsRef.current.has(card.id) || notifiedCardsRef.current.has(card.id)) continue;
+      notifiedCardsRef.current.add(card.id);
       const request = card.prompt.split('\n')[0].slice(0, 80);
-      optionsRef.current.notify(`New rules added: “${request}”`, 'success', { label: 'View rules', run: () => optionsRef.current.focusObject('table.rules') });
+      if (card.kind === 'draft') {
+        optionsRef.current.notify(`New rules added: “${request}”`, 'success', { label: 'View rules', run: () => optionsRef.current.focusObject('table.rules') });
+      } else {
+        optionsRef.current.notify(`Done: “${request}”`, 'success', { label: 'Table history', run: () => optionsRef.current.focusObject('workspace.history') });
+      }
     }
   }, [cards]);
   const currentLocalState = readPrivateChatState(scope);
-  // A draft that went into use on its own needs no card: it becomes a notification (below) instead.
-  const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState) && !isAppliedDraft(card));
+  // A result stays on the canvas only while it asks for something (answer, review, confirm, retry, an error);
+  // a finished one becomes a notification (below) instead.
+  const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState) && !isFinishedResult(card));
   const operationBusy = externalBusy || confirmBusy;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
@@ -978,6 +982,9 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   </div>;
 }
 
-function isAppliedDraft(card: ChatCard): boolean {
-  return card.kind === 'draft' && card.modelJob?.autoApply === 'applied' && !card.pollError;
+/** A result with nothing left to do: rules that went into use, or an AI proposal that was confirmed. */
+function isFinishedResult(card: ChatCard): boolean {
+  if (card.pollError || card.requestError || card.error) return false;
+  if (card.kind === 'draft') return card.modelJob?.autoApply === 'applied';
+  return card.job?.result?.kind === 'action-proposal' && card.job.confirmationStatus === 'confirmed' && !card.confirming && !card.confirmationPending;
 }
