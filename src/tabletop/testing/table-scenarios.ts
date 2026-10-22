@@ -93,3 +93,21 @@ export function rollCombatChange(sourceId?: string): TableChange {
     initialRecords: { fighters: [{ id: 'hero', values: { name: 'Hero', damage_taken: 0 } }], hits: [] },
   };
 }
+
+/**
+ * F051: the same server-roll attack, exposed as a visual dice card bound to the `roll` parameter.
+ * The dice control deliberately declares 1d6 while the roll spec is 2d6 + 3, so a test can prove
+ * the card renders the program's spec and never authorises its own faces/count.
+ */
+export function rollDiceCardChange(sourceId?: string): TableChange {
+  const change = rollCombatChange(sourceId);
+  change.program.canvas?.views.push({
+    id: 'attack-dice', kind: 'controls', title: 'Attack dice',
+    controls: [{
+      id: 'attack-dice', kind: 'dice', label: 'Damage dice', actionId: 'attack', parameter: 'damage',
+      faces: 6, count: 1, modifier: 0,
+      inputs: { target: { kind: 'record', collection: 'fighters', recordId: 'hero' }, damage: { kind: 'control' } },
+    }],
+  });
+  return change;
+}

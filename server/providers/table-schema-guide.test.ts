@@ -61,7 +61,7 @@ function diceChange(): TableChange {
 describe('F049 dice prompt guide', () => {
   it('teaches the dice control and embeds the exact example', () => {
     expect(TABLE_SCHEMA_GUIDE).toContain('dice{kind:"dice",parameter,faces:2..100,count:1..10');
-    expect(TABLE_SCHEMA_GUIDE).toContain('DICE: dice must bind one number PARAM');
+    expect(TABLE_SCHEMA_GUIDE).toContain('DICE: dice must bind one number PARAM or one roll PARAM');
     expect(TABLE_SCHEMA_GUIDE).toContain(JSON.stringify(TABLE_DICE_EXAMPLE));
   });
 
