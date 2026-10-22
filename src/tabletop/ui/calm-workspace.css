@@ -345,6 +345,11 @@
 .tt-app .tt-table-capability-list { display: grid; gap: var(--tt-space-1); margin: 0; padding-inline-start: var(--tt-space-4); font-size: var(--tt-type-small); }
 .tt-app .tt-table-capability-gaps > summary { cursor: pointer; color: var(--tt-muted); }
 
+/* Table-wide display settings in the table options menu. */
+.tt-app .tt-display-settings { display: grid; gap: var(--tt-space-1); padding: var(--tt-space-2) 0; border-top: 1px solid var(--tt-line); }
+.tt-app .tt-display-settings label { display: flex; align-items: center; justify-content: space-between; gap: var(--tt-space-3); font-size: var(--tt-type-body); }
+.tt-app .tt-display-settings select { min-height: 30px; padding: 0 var(--tt-space-2); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-small); background: var(--tt-card-surface); color: var(--tt-ink); font: inherit; }
+
 /* Card header: icon buttons for minimize/expand and close. */
 .tt-app .tt-canvas-node__controls { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; margin-inline-start: auto; }
 .tt-app .tt-flow-wrap .tt-canvas-node__icon { display: inline-grid; place-items: center; width: 32px; min-width: 32px; padding: 0; }

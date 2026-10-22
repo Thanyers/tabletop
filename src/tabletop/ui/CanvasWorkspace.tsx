@@ -7,6 +7,7 @@ import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
 import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
+import { viewerCan } from '../shared/permissions';
 import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
 import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
@@ -1371,13 +1372,21 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     ...listedPlanNodes.map((spec) => ({ id: spec.id, title: spec.title, hidden: hiddenIds.has(spec.id) })),
     ...listedAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title, hidden: hiddenIds.has(object.id) })),
   ], [listedPlanNodes, listedAuxiliaryObjects, hiddenIds]);
-  const showConnections = resolveConnectionsVisible(connectionsPreference, edges.length);
+  // A table-wide display setting wins; without one, the viewer's own choice, then the default.
+  const tableConnections = view.domain.display?.connections;
+  const canSetDisplay = viewerCan(view, 'table.rename') && busy !== 'table.readOnly';
+  const showConnections = tableConnections ?? resolveConnectionsVisible(connectionsPreference, edges.length);
   const visibleEdges = showConnections ? edges : [];
   const toggleConnections = () => {
     const next = !showConnections;
+    if (tableConnections !== undefined || canSetDisplay) {
+      if (canSetDisplay) void onCommand('display.set', { connections: next });
+      return;
+    }
     writeConnectionsPreference(connectionsStorage(), next);
     setConnectionsPreference(next);
   };
+  const connectionsLocked = tableConnections !== undefined && !canSetDisplay;
   const hasVisibleObjects = objectTitles.length > 0;
 
   return (
@@ -1451,7 +1460,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           </button>
           <nav id="tt-canvas-objects-list" className="tt-canvas-objects__panel" aria-label="Canvas objects" data-testid="canvas-object-dock" hidden={!objectsMenuOpen}>
             {previousView && <button type="button" onClick={() => { cancelPendingOpenObjectFocus(); void flow.setViewport(previousView, { duration: canvasMotionDuration(180) }); setPreviousView(null); setObjectsMenuOpen(false); objectsButtonRef.current?.focus(); }}><ArrowLeft size={16} aria-hidden="true" />Previous view</button>}
-            <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} onClick={(event) => { event.stopPropagation(); toggleConnections(); }}>
+            <button className="tt-canvas-connections" type="button" data-testid="canvas-connections-toggle" aria-pressed={showConnections} aria-label={`Connections, ${edges.length}`} disabled={connectionsLocked} title={connectionsLocked ? 'Set for everyone at this table' : canSetDisplay ? 'Changes this table for everyone' : undefined} onClick={(event) => { event.stopPropagation(); toggleConnections(); }}>
               <Workflow size={16} aria-hidden="true" /><span>Connections</span><small>{edges.length}</small><i aria-hidden="true">{showConnections ? 'On' : 'Off'}</i>
             </button>
             <ul className="tt-canvas-objects__list">
