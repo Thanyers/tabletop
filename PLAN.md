@@ -39,12 +39,16 @@
 | F041 | เพดาน response ของ table assistant: กัน raw SSE 16 MiB แต่จำกัดคำตอบที่ถอดแล้ว 256K ตัวอักษร, output 32K, timeout 180s | `done` (5.0.0) | [F041](docs/features/F041-assistant-response-cap.md) |
 | F044 | Scene motion hardening: fresh-build ต้องได้ scene, browser proof ของลูป/Pause, diagnostics ของ view ที่ถูกตัด, ตัดสินใจ shared phase และวัดเพดานจริงก่อนขยาย | `todo` | [F044](docs/features/F044-scene-motion-hardening.md) |
 | F045 | เห็นความคืบหน้าระหว่างรอ (thinking/answer) + streaming เส้นทางร่างกฎ + เก็บ partial เมื่อ timeout + แยก "ตัดที่เพดานเรา" จาก "ผู้ให้บริการหยุด" | `review` | [F045](docs/features/F045-transparent-streaming-timeout.md) |
+| F047 | ลดการปฏิเสธร่างที่เกิดจากชื่อ/เพดานที่ไม่ได้บอก: normalize id, guide จากค่าคงที่เดียว, classifier 4 intent | `review` | [F047](docs/features/F047-generation-reliability.md) |
 
 ## งาน
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F045-T1 | UI: แสดง 180s server limit + thinking/answer counters | `review` | lead (AI) | `feat/F045-stream-visibility` | `ui/useTableChat.tsx` | — | ไม่เปลี่ยน server |
+| F047-T1 | normalize id ที่โมเดลตั้ง + เขียน reference ใหม่ทั้ง program/records/views | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/id-normalization.ts` (ใหม่), `server/providers/deepseek-changes.ts` | — | ชื่อชนกัน = ยกเลิกทั้งก้อน |
+| F047-T2 | `TABLE_LIMITS` เป็นแหล่งเดียว + guide interpolate + drift test | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/table.ts`, `server/providers/table-schema-guide.ts` (+ test) | — | ปิดช่อง manifestNodes/depth |
+| F047-T3 | classifier 4 intent (`build/edit/ask/act`) ใช้ร่วม | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/shared/chat-intent.ts` (ใหม่), `ui/table-chat-state.ts` | — | กำกวมไปทางสร้าง/แก้ |
 | F045-T2 | Draft SSE streaming + progress | `todo` | lead (AI) | — | `server/providers/deepseek-changes.ts`, `cloudflare/ai.ts` | — | fallback JSON เดิม |
 | F045-T3 | Room/client เก็บและแสดง progress ของร่างกฎ | `todo` | lead (AI) | — | `cloudflare/{room,room-repository}.ts`, `client.ts`, `ui/useTableChat.tsx` | F045-T2 | |
 | F045-T4 | Partial output + failure details เมื่อ timeout | `todo` | lead (AI) | — | provider/ai/room/model-failure, UI | F045-T3 | redact + ≤4,000 chars |
