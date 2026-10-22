@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-22 — เอกสารฟีเจอร์บอก "rollback ได้" แต่รุ่นเก่า parse ข้อมูลใหม่ไม่ผ่าน
+- **What happened:** F040 doc เขียนว่า rollback ได้เพราะ "รุ่นเก่าไม่รู้จัก `motion` แต่ยังเปิดโต๊ะได้" ตอนตัด release จึงเกือบออกเป็น 4.5.0 (MINOR)
+- **Root cause:** schema canvas/program เป็น `z.strictObject` — รุ่นเก่าเจอ key ใหม่แล้วปฏิเสธทั้งก้อน (`runtime/index.ts` ไม่แสดง canvas, `table-assistant.ts`/`ai.ts` ตอบ "The active table rules are invalid")
+- **Correct behavior:** ก่อนตั้งเลข release ที่เพิ่ม field ใน state ที่บันทึกไว้ ให้รัน `git grep -n strictObject <tag ล่าสุด> -- src/tabletop/runtime/generative/schema.ts src/tabletop/domain/table.ts` แล้วดูว่า schema ที่รับ field ใหม่เป็น strict ไหม · ถ้า strict = รุ่นเก่าอ่านข้อมูลใหม่ไม่ได้ → MAJOR (เหมือน F005, 5.0.0)
+
 ### 2026-10-22 — release PR ล้มเพราะรันเทสต์ในเครื่องไม่ครบทุกขั้นของ CI
 - **What happened:** release/4.3.0 (PR #125) ล้มที่ `demo:auto:run` (persona demos 2 ฉากคาดว่าผู้เรียน/ผู้เล่นจะถูกปฏิเสธ แต่ F035 ให้สิทธิ์ค่าเริ่มต้นแล้ว) · ก่อนหน้านั้น #120 merge เข้า dev โดยไม่ได้รัน browser suites จน `test:cloudflare:browser` บน dev พัง (แก้ใน #122)
 - **Root cause:** ตรวจในเครื่องแค่ lint/unit/Cloudflare/browser 3 ชุด แต่ `validate.yml` มี `demo:auto:run`, `npm audit`, component-lab, `check-client-secrets` ด้วย · และ PR เข้า `dev` รันเฉพาะเช็คเร็ว (CI005) browser suites จึงไม่จับให้
