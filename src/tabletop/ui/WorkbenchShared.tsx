@@ -46,7 +46,7 @@ export function CandidateLifecycle({ view, onCommand, busy, readOnly = false }: 
               {candidate.simulation.checks.map((check) => <div className={check.passed ? 'is-passed' : 'is-failed'} key={check.id}><span aria-hidden="true">{check.passed ? <Check size={13} /> : <X size={13} />}</span><span>{check.message}</span><b>{check.passed ? 'Pass' : 'Needs work'}</b></div>)}
             </div></details>
           )}
-          <div className="tt-lifecycle-actions">
+          <div className="tt-lifecycle-actions tt-card-cta">
             {candidate.status === 'draft' && <button type="button" onClick={() => run('evolve.simulate')} disabled={isBusy}>Preview change</button>}
             {candidate.status === 'simulated' && <button type="button" onClick={() => run('evolve.validate')} disabled={isBusy}>Check rules</button>}
             {candidate.status === 'validated' && <button type="button" onClick={() => run('evolve.approve')} disabled={isBusy}>Approve rules</button>}

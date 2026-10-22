@@ -876,7 +876,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       <p><Sparkles size={14} /> {card.pollError ? 'The rule draft is ready, but the table could not refresh.' : 'A rule draft is ready. Review it before anyone uses it.'}</p>
       {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
       {card.pollError && <><p className="tt-chat-card__error" role="alert">{card.pollError}</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly || card.checking} onClick={onRetryRefresh}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Retry table refresh</button></>}
-      <button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}
+      <div className="tt-card-cta"><button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}</div>
     </div>;
   }
   const job = card.job;
@@ -918,7 +918,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
             : stale ? <p className="tt-chat-card__error" role="status">The table changed after this proposal. Ask again for a fresh proposal.</p>
             : !roleAllowed ? <p className="tt-chat-card__error" role="status">This seat cannot confirm the proposed action.</p>
               : !turnAllowed ? <p className="tt-chat-card__error" role="status">This action is only available on the required turn.</p>
-                : <div className="tt-chat-card__action-buttons"><button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy || card.confirming || status !== 'available'} onClick={onConfirm}>{card.confirming ? <LoaderCircle size={14} className="tt-spin" /> : <Check size={14} />}Confirm action</button><button type="button" className="tt-button tt-button--quiet" disabled={busy || card.confirmationPending} onClick={onDismiss}>Skip this proposal</button></div>}
+                : <div className="tt-chat-card__action-buttons tt-card-cta"><button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy || card.confirming || status !== 'available'} onClick={onConfirm}>{card.confirming ? <LoaderCircle size={14} className="tt-spin" /> : <Check size={14} />}Confirm action</button><button type="button" className="tt-button tt-button--quiet" disabled={busy || card.confirmationPending} onClick={onDismiss}>Skip this proposal</button></div>}
     {card.confirmationError && <p className="tt-chat-card__error" role="alert">{card.confirmationError}</p>}
     {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
     {checkButton}
