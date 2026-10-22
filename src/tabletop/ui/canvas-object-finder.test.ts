@@ -62,4 +62,13 @@ describe('where-is questions and referenced titles', () => {
     expect(splitReferencedPrompt('[การ์ด “[การ์ด “bpnn อยู่ไหน”] bpmn อยู่ไหน”] เปิดให้หน่อย\n(Card in question: …)')).toEqual({ reference: 'bpnn อยู่ไหน', message: 'เปิดให้หน่อย' });
     expect(splitReferencedPrompt('ปกติ')).toEqual({ reference: null, message: 'ปกติ' });
   });
+
+  it('a picked follow-up keeps the card the question was about', async () => {
+    const { chatReferencePrompt, followUpPrompt, splitReferencedPrompt } = await import('./canvas-object-finder');
+    const original = chatReferencePrompt({ id: 'x', title: 'BPMN', detail: 'view flow_scene' }, 'มีนาฬิกาไหม');
+    const next = followUpPrompt(original, 'ใส่นาฬิกาข้างชื่อขั้นตอน');
+    expect(splitReferencedPrompt(next)).toEqual({ reference: 'BPMN', message: 'ใส่นาฬิกาข้างชื่อขั้นตอน' });
+    expect(next).toContain('(Card in question: view flow_scene)');
+    expect(followUpPrompt('ปกติ', 'ต่อเลย')).toBe('ต่อเลย');
+  });
 });
