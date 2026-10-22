@@ -2,10 +2,14 @@
 
 ## Unreleased
 
-- คนที่เปิดหน้าค้างไว้จะเห็นแถบ "มีเวอร์ชันใหม่ (vX.Y.Z) รีเฟรชหน้าเพื่อใช้รุ่นล่าสุด" ภายใน ~5 นาทีหลัง deploy หรือทันทีที่กลับมาที่แท็บ ทั้ง staging และ production · กดรีเฟรชหรือไว้ทีหลังได้ ไม่รีเฟรชเอง ([F042](docs/features/F042-update-notice.md))
+## 5.0.0 — 2026-10-22
 
+MAJOR: แถบแจ้งให้รีเฟรชเมื่อมีเวอร์ชันใหม่ (F042) + วัตถุวิ่งวนใน scene (F040) + แก้เพดาน response ของ assistant (F041) + การ์ดสูงเลื่อนด้วยล้อเมาส์ (#136) · ไม่มี migration/secret/binding/config ใหม่ · **MAJOR เพราะ rollback กลับ v4.4.0 ไม่สะอาด:** schema canvas ของรุ่นเก่าเป็น strict จึงไม่รู้จัก `motion` — โต๊ะที่บันทึกกฎที่มี `motion` แล้ว เมื่อถอยไป 4.4.0 การ์ด canvas ที่สร้างจะไม่แสดง และ assistant/การร่างกฎของโต๊ะนั้นตอบ "The active table rules are invalid" (ข้อมูลไม่หาย กลับมา 5.0.0 แล้วปกติ) · ถ้าต้องถอย ให้แก้ไปข้างหน้าเป็น 5.0.x แทน · แถบรีเฟรชจะเห็นผลตั้งแต่ release ถัดจากรุ่นนี้
+
+- คนที่เปิดหน้าค้างไว้จะเห็นแถบ "มีเวอร์ชันใหม่ (vX.Y.Z) รีเฟรชหน้าเพื่อใช้รุ่นล่าสุด" ภายใน ~5 นาทีหลัง deploy หรือทันทีที่กลับมาที่แท็บ ทั้ง staging และ production · กดรีเฟรชหรือไว้ทีหลังได้ ไม่รีเฟรชเอง ([F042](docs/features/F042-update-notice.md))
 - **รถ/วัตถุวิ่งวนอัตโนมัติใน scene (F040, MINOR):** primitive `rect`/`circle`/`text` รับ `motion {axis,from,to,speed,loop?}` ได้ — host เลื่อนตำแหน่งจาก `from` ถึง `to` ด้วยความเร็ว `speed` หน่วยต่อวินาที แล้ววนกลับมาเริ่มใหม่ (หรือหยุดที่ `to` เมื่อ `loop:false`) · `speed` เป็น expression ได้ เช่นอ่าน `speed_mps` จาก record ที่สไลเดอร์เขียน ทำให้ "ปรับความเร็วตาม parameter" ทำงานจริง · มีปุ่ม Pause/Play ใต้ scene และถ้าเครื่องตั้ง reduced motion จะไม่เล่นอนิเมชัน · การเคลื่อนไหวเป็นฝั่ง client ไม่เขียน state/ไม่มี migration · โมเดลได้รับ MOTION ใน prompt guide พร้อมตัวอย่างรถ 10 เมตร ([F040](docs/features/F040-scene-motion.md))
 - **แก้ assistant ตอบไม่ได้เพราะเพดาน response (F041, PATCH):** เดิม `MAX_RESPONSE_BYTES = 64 KiB` นับ **raw SSE** ซึ่งกิน ~294 bytes/token (วัดจริง 188 tokens = 55,890 bytes) ทำให้คำตอบไทยยาวแค่ ~200 tokens ก็ขึ้น `MODEL_PROVIDER_RESPONSE_TOO_LARGE` · ตอนนี้นับคำตอบที่ถอดแล้ว (256K ตัวอักษร) และกัน raw stream ที่ 16 MiB · assistant รับ output 32,768 tokens และ timeout 180s · ไม่มี schema/migration/secret ([F041](docs/features/F041-assistant-response-cap.md))
+- **การ์ดที่สูงเกินจอเลื่อนด้วยล้อเมาส์ได้ (#136, PATCH):** เลื่อนล้อเมาส์บนการ์ด canvas ที่เนื้อหายาวจะเลื่อนในการ์ด ไม่ซูม/เลื่อนทั้ง canvas
 
 ## 4.4.0 — 2026-10-22
 
