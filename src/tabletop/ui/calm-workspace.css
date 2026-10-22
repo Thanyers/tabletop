@@ -417,3 +417,18 @@
 .tt-app .tt-canvas-objects__deleted-toggle small { margin-left: auto; }
 .tt-app .tt-canvas-objects__deleted-title { flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 6px 8px; color: var(--tt-muted); text-decoration: line-through; text-overflow: ellipsis; white-space: nowrap; }
 .tt-app .tt-canvas-objects__error { margin: 6px 8px 0; color: var(--tt-clay-1, #a4513a); font-size: 13px; }
+
+/* Objects: search, stars (listed first) and rename. */
+.tt-app .tt-flow-wrap .tt-canvas-objects__panel { width: min(360px, calc(100vw - 24px)); }
+.tt-app .tt-canvas-objects__search { display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--tt-line); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-muted); }
+.tt-app .tt-canvas-objects__search input { flex: 1 1 auto; min-width: 0; height: 34px; border: 0; outline: 0; background: transparent; color: var(--tt-ink); font: inherit; font-size: 14px; }
+.tt-app .tt-canvas-objects__search:focus-within { border-color: var(--tt-moss, #2f6f5e); }
+.tt-app .tt-canvas-objects__empty { margin: 4px 8px; color: var(--tt-muted); font-size: 13px; }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__star { color: color-mix(in srgb, var(--tt-muted), transparent 40%); }
+.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__star[aria-pressed='true'] { color: #c9922b; }
+.tt-app .tt-canvas-objects__rename { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--tt-moss, #2f6f5e); border-radius: var(--tt-radius-small); background: var(--tt-paper); color: var(--tt-ink); font: inherit; font-size: 14px; }
+/* Rename and delete show on hover or keyboard focus so the list stays calm; always on touch screens. */
+@media (hover: hover) {
+  .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__more { opacity: 0; }
+  .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__star[aria-pressed='false'] { opacity: .35; }
+}

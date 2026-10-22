@@ -110,3 +110,18 @@ const loanCollection: TableCollection = { id: 'loans', title: 'Loan terms', fiel
 export const loanAmortizationChange = change(program('Loan amortization calculator', [loanCollection], [action('recalculate', [recordParameter('loan', 'loans')], [
   { record: 'loan', field: 'payment', op: 'set', value: expression(monthlyPayment) },
 ])]), { loans: [{ id: 'loan-1', values: { principal: 1000, annual_rate: 0.12, months: 12, payment: 0 } }] });
+
+// F049: one dice card fills `damage`; a separate form card on its own view binds the same action parameter.
+const heroCollection: TableCollection = { id: 'heroes', title: 'Heroes', fields: [numberField('hp', 0, 1000)] };
+const heroRecord = { kind: 'record' as const, collection: 'heroes', recordId: 'hero-1' };
+const applyDamage = action('apply_damage', [recordParameter('hero', 'heroes'), { id: 'damage', label: 'Damage', type: 'number', min: 0, max: 100 }], [
+  { record: 'hero', field: 'hp', op: 'add', value: expression(math('multiply', { op: 'literal', value: -1 }, { op: 'input', id: 'damage' })) },
+]);
+export const diceDuelChange = change(program('Dice damage duel', [heroCollection], [applyDamage], [], { version: 1, views: [
+  { id: 'damage-dice', kind: 'controls', title: 'Damage die', relatedTo: { collections: ['heroes'] }, controls: [
+    control({ id: 'damage-dice', kind: 'dice', label: 'Damage die', actionId: 'apply_damage', parameter: 'damage', faces: 6, count: 2, modifier: 1, inputs: { hero: heroRecord, damage: { kind: 'control' } } }),
+  ] },
+  { id: 'damage-form', kind: 'controls', title: 'Apply damage', relatedTo: { views: ['damage-dice'], collections: ['heroes'] }, controls: [
+    control({ id: 'damage-form', kind: 'form', label: 'Apply damage', actionId: 'apply_damage', inputs: { hero: heroRecord, damage: { kind: 'control' } } }),
+  ] },
+] }), { heroes: [{ id: 'hero-1', values: { hp: 100 } }] });
