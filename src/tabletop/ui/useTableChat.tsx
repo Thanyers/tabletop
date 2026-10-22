@@ -80,18 +80,22 @@ function isUncertain(error: unknown): boolean {
 }
 
 /** The card keeps counting while the answer is in flight, so a slow request never looks frozen. */
-function ElapsedLabel({ startedAt, kind, chars }: { startedAt: number; kind: ChatCard['kind']; chars?: number }) {
+const DRAFT_DEADLINE_SECONDS = 180;
+const ASSISTANT_DEADLINE_SECONDS = 180;
+function ElapsedLabel({ startedAt, kind, chars, reasoningChars }: { startedAt: number; kind: ChatCard['kind']; chars?: number; reasoningChars?: number }) {
   const [seconds, setSeconds] = useState(() => Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
   useEffect(() => {
     const timer = window.setInterval(() => setSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000))), 1000);
     return () => window.clearInterval(timer);
   }, [startedAt]);
-  const limit = kind === 'draft' ? 180 : 120;
+  // Both server paths stop at 180s; the client polls longer (250s) to receive that final status.
+  const limit = kind === 'draft' ? DRAFT_DEADLINE_SECONDS : ASSISTANT_DEADLINE_SECONDS;
   return <span className="tt-chat-card__elapsed" aria-live="off">
     <span className="tt-chat-card__elapsed-time">{seconds}s</span>
-    <span> / {limit}s</span>
-    {chars !== undefined && chars > 0 && <span> · {chars} chars</span>}
-    {seconds >= limit && <strong> · waiting for the final status…</strong>}
+    <span> / {limit}s server limit</span>
+    {reasoningChars !== undefined && reasoningChars > 0 && <span> · thinking {reasoningChars.toLocaleString()} chars</span>}
+    {chars !== undefined && chars > 0 && <span> · answer {chars.toLocaleString()} chars</span>}
+    {seconds >= limit && <strong> · waiting for the final status from the server…</strong>}
   </span>;
 }
 
@@ -825,7 +829,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     // Open visibility: name the member whose request is running, so others do not start the same work.
     const pendingAsker = askerOf(card, view);
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
-      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingAsker ? card.kind === 'draft' ? `${pendingAsker} is preparing a rule draft…` : `${pendingAsker} is waiting for an answer…` : card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} chars={card.job?.progress?.receivedChars} /></p>
+      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingAsker ? card.kind === 'draft' ? `${pendingAsker} is preparing a rule draft…` : `${pendingAsker} is waiting for an answer…` : card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} chars={card.job?.progress?.receivedChars} reasoningChars={card.job?.progress?.reasoningChars} /></p>
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
