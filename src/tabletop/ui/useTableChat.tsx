@@ -12,15 +12,15 @@ import { chatReferencePrompt, onChatCardReference, type ChatCardReference } from
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftHistoryCard, draftInFlight, draftRefreshPatch, historyCard, isUncertainRequest, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
 
 const DRAFT_POLL_MS = 1_200;
-// F038: past the server's 240s job recovery, so the asker always sees the final status
-// (was 60s: a draft still running at 61s stayed "Preparing…" for the asker while others saw it fail).
-const DRAFT_POLL_LIMIT_MS = 250_000;
+// F045: a draft is polled past its configured server limit (240s by default, at most 300s) so the
+// asker always sees the final status; draftPollLimitMs() adds the 70s grace to the reported limit.
+// (Was a fixed 250s, which stopped polling early once a longer limit was configured.)
 const ANSWER_POLL_MS = 1_000;
 const ANSWER_POLL_LIMIT_MS = 250_000;
 const HISTORY_CARDS = 6;
@@ -82,16 +82,16 @@ function isUncertain(error: unknown): boolean {
 }
 
 /** The card keeps counting while the answer is in flight, so a slow request never looks frozen. */
-const DRAFT_DEADLINE_SECONDS = 180;
 const ASSISTANT_DEADLINE_SECONDS = 180;
-function ElapsedLabel({ startedAt, kind, chars, reasoningChars }: { startedAt: number; kind: ChatCard['kind']; chars?: number; reasoningChars?: number }) {
+function ElapsedLabel({ startedAt, kind, limitMs, chars, reasoningChars }: { startedAt: number; kind: ChatCard['kind']; limitMs?: number; chars?: number; reasoningChars?: number }) {
   const [seconds, setSeconds] = useState(() => Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
   useEffect(() => {
     const timer = window.setInterval(() => setSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000))), 1000);
     return () => window.clearInterval(timer);
   }, [startedAt]);
-  // Both server paths stop at 180s; the client polls longer (250s) to receive that final status.
-  const limit = kind === 'draft' ? DRAFT_DEADLINE_SECONDS : ASSISTANT_DEADLINE_SECONDS;
+  // F045: a rule draft names its configured stop (default 240s); an answer keeps the 180s path.
+  // The client polls past it (draftPollLimitMs), so the label waits for the server's final status.
+  const limit = kind === 'draft' ? draftLimitSeconds({ limitMs }) : ASSISTANT_DEADLINE_SECONDS;
   return <span className="tt-chat-card__elapsed" aria-live="off">
     <span className="tt-chat-card__elapsed-time">{seconds}s</span>
     <span> / {limit}s server limit</span>
@@ -454,7 +454,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       const startedAt = Date.now();
       void (async () => {
         const interval = card.kind === 'draft' ? DRAFT_POLL_MS : ANSWER_POLL_MS;
-        const limit = card.kind === 'draft' ? DRAFT_POLL_LIMIT_MS : ANSWER_POLL_LIMIT_MS;
+        // F045: a draft outlives its poll grace only if the server raised the configured limit.
+        const limit = card.kind === 'draft' ? draftPollLimitMs(card.modelJob) : ANSWER_POLL_LIMIT_MS;
         while (!cancelled && Date.now() - startedAt < limit) {
           await wait(interval);
           if (cancelled || scopeRef.current !== startScope) return;
@@ -855,6 +856,8 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   onBuild: () => void;
 }) {
   const dismissalBlocked = isUncertainRequest(card) || card.confirming === true || card.confirmationPending === true;
+  // F045: a rule draft reports its live counters on the model job; an answer reports them on its own job.
+  const progress = card.modelJob?.progress ?? card.job?.progress;
   // Another member's rule request (F034): readable here, answered and retried only by them.
   const draftAsker = card.kind === 'draft' ? askerOf(card, view) : null;
   const dismissButton = <button type="button" className="tt-chat-card__dismiss" aria-label="Close this card" disabled={dismissalBlocked} onClick={onDismiss}><X size={13} /></button>;
@@ -870,8 +873,13 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   if (card.phase === 'sending' || card.phase === 'waiting') {
     // Open visibility: name the member whose request is running, so others do not start the same work.
     const pendingAsker = askerOf(card, view);
+    const pendingText = pendingAsker
+      ? card.kind === 'draft' ? `${pendingAsker} is preparing a rule draft…` : `${pendingAsker} is waiting for an answer…`
+      : card.kind === 'draft'
+        ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…'
+        : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…';
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
-      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingAsker ? card.kind === 'draft' ? `${pendingAsker} is preparing a rule draft…` : `${pendingAsker} is waiting for an answer…` : card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} chars={card.job?.progress?.receivedChars} reasoningChars={card.job?.progress?.reasoningChars} /></p>
+      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingText}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} limitMs={card.kind === 'draft' ? card.modelJob?.limitMs : undefined} chars={progress?.receivedChars} reasoningChars={progress?.reasoningChars} /></p>
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
@@ -882,6 +890,9 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     const failureCode = card.job?.failureCode ?? card.modelJob?.failureCode;
     const failureReasons = card.job?.failureReasons;
     const durationMs = card.job?.durationMs;
+    // F045: a rule draft that stopped early keeps what the provider had already sent, and says
+    // whether our own limit or the provider closed it. A missing failureDetails renders nothing extra.
+    const draftFailure = card.kind === 'draft' ? draftFailureSummary(card.modelJob?.failureDetails) : null;
     return <div
       className="tt-chat-card"
       data-testid="table-chat-answer"
@@ -889,8 +900,24 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       data-failure-code={failureCode}
       data-failure-reasons={failureReasons?.length ? failureReasons.join(' | ') : undefined}
       data-duration-ms={durationMs}
+      data-timed-out-by={draftFailure?.timedOutBy}
+      data-limit-ms={draftFailure?.limitMs}
+      data-partial-chars={draftFailure?.partialChars}
     >
       <p className="tt-chat-card__error" role="alert"><CircleAlert size={14} />{message}</p>
+      {draftFailure && <div className="tt-chat-card__stop">
+        <p className="tt-chat-card__stop-reason" data-testid="draft-stop-reason">{draftStopReason(draftFailure)}</p>
+        {draftFailure.partialText
+          ? <details className="tt-chat-card__partial" data-testid="draft-partial">
+            <summary>{draftPartialLabel(draftFailure)}</summary>
+            <pre>{draftFailure.partialText}</pre>
+          </details>
+          : <p className="tt-chat-card__hint">{draftPartialLabel(draftFailure)}.</p>}
+        {draftFailure.thinkingText && <details className="tt-chat-card__partial tt-chat-card__partial--thinking" data-testid="draft-thinking-tail">
+          <summary>{draftThinkingLabel(draftFailure)}</summary>
+          <pre>{draftFailure.thinkingText}</pre>
+        </details>}
+      </div>}
       {(requestId || failureCode) && <p className="tt-chat-card__trace">
         {failureCode ? `Code ${failureCode}` : 'Code UNKNOWN'}{durationMs !== undefined ? ` · ${(durationMs / 1000).toFixed(1)}s` : ''} · Request {requestId ? `${requestId.slice(0, 16)}…` : 'not assigned'} — quote this when reporting the failure.
       </p>}

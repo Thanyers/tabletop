@@ -375,3 +375,25 @@
 
 /* A notification's action button (e.g. View rules after new rules went into use). */
 .tt-app .tt-notice > button.tt-notice__action { width: auto; height: 28px; padding: 0 12px; border: 1px solid currentColor; border-radius: 999px; font: inherit; font-weight: 650; white-space: nowrap; cursor: pointer; }
+
+/* Header people: avatars, and a list that jumps to someone's live cursor. */
+.tt-app .tt-header-people { position: relative; }
+.tt-app .tt-header-people__button { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; }
+.tt-app .tt-header-avatars { display: inline-flex; }
+.tt-app .tt-header-avatars > span { position: relative; margin-inline-start: -6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--tt-paper); }
+.tt-app .tt-header-avatars > span:first-child { margin-inline-start: 0; }
+.tt-app .tt-header-avatars > span.is-live::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; border: 2px solid var(--tt-paper); border-radius: 50%; background: #2f9e6a; }
+.tt-app .tt-header-avatar { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--tt-avatar-color); color: #fff; font-size: 11px; font-weight: 750; letter-spacing: 0.02em; }
+.tt-app .tt-header-people__more { color: var(--tt-muted); font-size: 12px; font-weight: 650; }
+.tt-app .tt-header-people__menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: grid; gap: 2px; width: 260px; padding: 6px; border: 1px solid var(--tt-line); border-radius: 12px; background: var(--tt-paper); box-shadow: 0 12px 36px #303d3a24; }
+.tt-app .tt-header-people__menu > button, .tt-app .tt-header-people__self { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-ink); font: inherit; text-align: left; }
+.tt-app .tt-header-people__menu > button { cursor: pointer; }
+.tt-app .tt-header-people__menu > button:hover, .tt-app .tt-header-people__menu > button:focus-visible { background: var(--tt-canvas); }
+.tt-app .tt-header-people__menu span:not(.tt-header-avatar) { display: grid; flex: 1 1 auto; min-width: 0; }
+.tt-app .tt-header-people__menu strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.tt-app .tt-header-people__menu small { color: var(--tt-muted); font-size: 12px; }
+.tt-app .tt-header-people__menu i { width: 8px; height: 8px; border-radius: 50%; background: var(--tt-line); }
+.tt-app .tt-header-people__menu i.is-live { background: #2f9e6a; }
+.tt-app .tt-header-people__self { opacity: 0.75; }
+.tt-app .tt-header-people__menu > .tt-header-people__all { justify-content: center; min-height: 36px; border-top: 1px solid var(--tt-line); border-radius: 0 0 8px 8px; color: var(--tt-moss); font-weight: 650; }
+.tt-app .tt-header-people__note { margin: 0; padding: 6px 8px; color: var(--tt-muted); font-size: 12px; }
