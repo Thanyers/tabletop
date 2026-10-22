@@ -7,7 +7,33 @@
  * that motivated this: the validator rejected a canvas the guide said nothing about.
  */
 import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
-import { GENERATIVE_LIMITS } from '../../src/tabletop/shared/generative-contracts.js';
+import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
+
+/**
+ * F049: the exact dice control example embedded in the guide below.
+ * The drafter may author `kind:"dice"` on a numeric parameter (client rolls it, visual-only)
+ * or on a `roll` parameter (F051: the server rolls the program's roll spec and the card shows it).
+ */
+export const TABLE_DICE_EXAMPLE: ControlsViewDescriptor = {
+  id: 'damage-die',
+  kind: 'controls',
+  title: 'Damage die',
+  controls: [{
+    id: 'damage-dice',
+    kind: 'dice',
+    label: 'Damage die',
+    actionId: 'apply_damage',
+    parameter: 'damage',
+    faces: 6,
+    count: 2,
+    modifier: 1,
+    inputs: {
+      hero: { kind: 'record', collection: 'heroes', recordId: 'hero-1' },
+      damage: { kind: 'control' },
+    },
+  }],
+};
+const TABLE_DICE_EXAMPLE_JSON = JSON.stringify(TABLE_DICE_EXAMPLE);
 
 const LIMITS = [
   `collections<=${TABLE_LIMITS.collections}`,
@@ -49,8 +75,19 @@ FIELD{id,label,type:text|number|boolean|list,required:boolean,min?,max?,choices?
   Only number fields take min/max (min<=max); only text fields take choices (1..32 strings, each<=100); default must satisfy type, choices and bounds.
 ACTION{id,title,description,roles,parameters,conditions,effects,creates?,requireTurn:boolean,advanceTurn:boolean}
   roles = ("owner"|"participant")[1..2]; an action must set a field, create a row, or advanceTurn; requireTurn/advanceTurn need a non-empty turnOrder.
-PARAM{id,label,type:text|number|boolean|record,collection?,min?,max?,choices?}
+PARAM{id,label,type:text|number|boolean|record|roll,collection?,min?,max?,choices?,roll?}
   record params MUST have collection; only number params take min/max; only text params take choices.
+  ROLL{groups:[{count:1..10,faces:2..100}] 1..4,modifier?:integer -1000..1000}
+  A roll param carries exactly one roll spec (no collection/min/max/choices); total dice across groups <=20.
+  The SERVER rolls it: a player presses the roll button, the server returns the dice, and the action input
+  for that parameter is NOT sent by the client. A roll behaves as a number in OPERAND {input:ROLL_ID};
+  at most ONE roll param per action. Both sides of a condition/effect still type-check against that number.
+  ATTACK EXAMPLE (one roll param; monsters.damage_taken must be a number field; damage feeds it additively):
+  ACTION{id:"attack",title:"Attack",description:"Roll damage against one monster",roles:["owner","participant"],
+    parameters:[{id:"target",label:"Target",type:"record",collection:"monsters"},
+                {id:"damage",label:"Damage roll",type:"roll",roll:{groups:[{count:2,faces:6}],modifier:3}}],
+    conditions:[],effects:[{record:"target",field:"damage_taken",op:"add",value:{input:"damage"}}],
+    requireTurn:false,advanceTurn:false}
 CONDITION{left:OPERAND,op:eq|neq|lt|lte|gt|gte|contains,right:OPERAND,message}
 EFFECT{record:PARAM_ID,field:FIELD_ID,op:set|add,value:OPERAND}
 CREATE{collection:COLLECTION_ID,values:{FIELD_ID:OPERAND}}
@@ -92,5 +129,12 @@ DRAG{actionId,xParameter,yParameter?,inputs:BINDINGS}
 CONTROL (each: id,label,actionId,inputs:BINDINGS) =
   button{kind:"button"} | form{kind:"form"} | slider{kind:"slider",parameter,min,max,step?,value?:EXPR}
   | toggle{kind:"toggle",parameter,value?:EXPR} | select{kind:"select",parameter,options:[{label,value:string|number|boolean} 1..32],value?:EXPR}
+  | dice{kind:"dice",parameter,faces:2..100,count:1..10,modifier?:integer -1000..1000}
 BINDINGS: {PARAM_ID: {kind:"control"} | {kind:"literal",value:VALUE} | {kind:"expression",value:EXPR} | {kind:"record",collection:COLLECTION_ID,recordId:ID}}
-  Every action parameter must be covered; the parameter a slider/toggle/select edits binds {kind:"control"}.`;
+  Every action parameter must be covered; the parameter a slider/toggle/select/dice edits binds {kind:"control"}.
+DICE: dice must bind one number PARAM or one roll PARAM (faces/count whole numbers in range; modifier optional whole number).
+  Number PARAM: the client rolls count d faces + modifier (visual-only) and fills it for other cards.
+  Roll PARAM: faces/count are only validated display defaults; the SERVER rolls the parameter's roll spec, the card
+  shows those faces and total, and the action sends no value.
+  EXAMPLE (one controls view; the same action also has a form on another view covering every input):
+  ${TABLE_DICE_EXAMPLE_JSON}`;

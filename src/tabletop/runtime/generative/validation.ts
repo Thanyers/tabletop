@@ -1,5 +1,6 @@
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, GENERATIVE_LIMITS, type ControlInputBinding, type GenerativeExpression } from '../../shared/generative-contracts';
 import type { TableAction, TableField, TableProgram, TableRecord, TableValue } from '../../shared/table-contracts';
+import { validateDiceSpec } from '../../shared/dice';
 
 export type GenerativeStaticType = 'number' | 'text' | 'boolean' | 'list' | 'null' | 'rows' | 'unknown';
 type ScopeBinding = { kind: 'row'; collection: string } | { kind: 'value'; type: GenerativeStaticType };
@@ -40,7 +41,8 @@ function valueType(value: TableValue): GenerativeStaticType {
 function parameterType(action: TableAction, id: string): GenerativeStaticType {
   const parameter = action.parameters.find(item => item.id === id);
   assert(parameter, 'Expression refers to an unknown action input.');
-  return parameter.type === 'record' ? 'text' : parameter.type === 'text' ? 'text' : parameter.type;
+  // F048: a server roll fills its parameter with a number.
+  return parameter.type === 'record' ? 'text' : parameter.type === 'roll' ? 'number' : parameter.type === 'text' ? 'text' : parameter.type;
 }
 function recordInputCollection(action: TableAction, parameterId: string): string {
   const parameter = action.parameters.find(item => item.id === parameterId && item.type === 'record');
@@ -210,10 +212,16 @@ function assertControlBinding(action: TableAction, program: TableProgram, inputs
   let controlCount = 0;
   for (const parameter of action.parameters) {
     const binding = inputs[parameter.id];
+    // F048: only a control can collect a roll; a literal would let a program smuggle in a fixed value.
+    assert(parameter.type !== 'roll' || binding.kind === 'control', 'A roll input must bind to a control.');
     if (binding.kind === 'control') {
       controlCount += 1;
       const expected = controlParameters[parameter.id];
-      assert(expected && (parameter.type === expected || parameter.type === 'record' && expected === 'text'), 'A control input does not match its action parameter.');
+      // F048: a roll parameter behaves as a number for its interactive control.
+      const matches = parameter.type === expected
+        || parameter.type === 'record' && expected === 'text'
+        || parameter.type === 'roll' && expected === 'number';
+      assert(expected && matches, 'A control input does not match its action parameter.');
     } else if (binding.kind === 'literal') {
       const expected = actionInputType(action, parameter.id);
       assert(isCompatible(expected, valueType(binding.value)), 'A literal control binding has the wrong value type.');
@@ -352,9 +360,18 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
             interactiveType = 'boolean';
           } else if (control.kind === 'select') {
             const parameter = action.parameters.find(item => item.id === control.parameter);
-            assert(parameter && parameter.type !== 'record', 'Select must bind a scalar action parameter.');
+            assert(parameter && parameter.type !== 'record' && parameter.type !== 'roll', 'Select must bind a scalar action parameter.');
             assert(control.options.every(option => actionInputType(action, control.parameter) === valueType(option.value) && (!parameter.choices || parameter.choices.includes(String(option.value)))), 'Select options do not match the action parameter.');
             interactiveType = actionInputType(action, control.parameter);
+          } else if (control.kind === 'dice') {
+            // F051: dice may bind a number parameter (client-side, visual-only) or a roll parameter
+            // (the server rolls the program's roll spec). The card's own faces/count stay valid but
+            // are not authoritative for a roll parameter.
+            const parameter = action.parameters.find(item => item.id === control.parameter);
+            assert(parameter && (parameter.type === 'number' || parameter.type === 'roll'), 'Dice must bind a number or roll action parameter.');
+            const diceIssues = validateDiceSpec(control);
+            assert(diceIssues.length === 0, diceIssues[0] ?? 'Dice control limits are invalid.');
+            interactiveType = 'number';
           }
           const interactiveParameters: Record<string, GenerativeStaticType> = control.kind === 'form'
             ? Object.fromEntries(Object.entries(control.inputs).filter(([, binding]) => binding.kind === 'control').map(([parameter]) => [parameter, actionInputType(action, parameter)]))

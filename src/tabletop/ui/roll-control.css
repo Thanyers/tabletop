@@ -1,0 +1,86 @@
+/* F048: the server-roll control bound to one action parameter. */
+.tt-table-roll {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgb(36 121 107 / 28%);
+  border-radius: 10px;
+  background: rgb(36 121 107 / 6%);
+}
+
+.tt-table-roll__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.tt-table-roll__label {
+  font-weight: 600;
+}
+
+.tt-table-roll__notation {
+  color: var(--tt-muted, #5b6b67);
+}
+
+.tt-table-roll__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.tt-table-roll__button {
+  flex: 0 0 auto;
+}
+
+.tt-table-roll__result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tt-table-roll__dice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tt-table-roll__die {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid rgb(36 121 107 / 45%);
+  border-radius: 7px;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.tt-table-roll__total {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-table-roll__locked,
+.tt-table-roll__hint {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--tt-muted, #5b6b67);
+  font-size: 0.85em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tt-table-roll__result {
+    animation: tt-roll-settle 180ms ease-out;
+  }
+}
+
+@keyframes tt-roll-settle {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: none; }
+}
