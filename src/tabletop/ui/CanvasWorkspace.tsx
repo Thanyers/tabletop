@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow } from 'lucide-react';
+import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
@@ -26,6 +26,8 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   selected: boolean;
   opened: boolean;
   onToggleOpen: (id: string) => void;
+  /** Take the card off this viewer's canvas; the Objects panel brings it back. */
+  onHide: (id: string) => void;
   onSelectNode: (id: string) => void;
 }
 
@@ -117,6 +119,23 @@ function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean }
 }
 
 const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
+const hiddenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-hidden:${workspaceKey}`;
+
+function readHiddenObjects(workspaceKey: string): ReadonlySet<string> {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(hiddenStorageKey(workspaceKey)) ?? '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string' && id.length <= 240).slice(0, 200) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeHiddenObjects(workspaceKey: string, ids: ReadonlySet<string>): void {
+  try {
+    if (ids.size === 0) window.localStorage.removeItem(hiddenStorageKey(workspaceKey));
+    else window.localStorage.setItem(hiddenStorageKey(workspaceKey), JSON.stringify([...ids].slice(0, 200)));
+  } catch { /* private mode: closing still works until reload */ }
+}
 
 function readCanvasLayout(workspaceKey: string): SavedCanvasLayout {
   try {
@@ -256,15 +275,20 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
     <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
     <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
     <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
-    <button className="tt-canvas-node__open nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? 'Close object' : `Open ${data.title}`} onKeyDown={(event) => {
-      if (event.key === 'Escape' && data.opened) {
-        event.preventDefault();
-        event.stopPropagation();
-        data.onToggleOpen(data.id);
-      }
-    }} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
-      {data.opened ? 'Close' : 'Open'}
-    </button>
+    <span className="tt-canvas-node__controls">
+      <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-expanded={data.opened} aria-label={data.opened ? `Minimize ${data.title}` : `Open ${data.title}`} title={data.opened ? 'Minimize' : 'Expand'} onKeyDown={(event) => {
+        if (event.key === 'Escape' && data.opened) {
+          event.preventDefault();
+          event.stopPropagation();
+          data.onToggleOpen(data.id);
+        }
+      }} onClick={(event) => { event.stopPropagation(); data.onToggleOpen(data.id); }}>
+        {data.opened ? <Minimize2 size={15} aria-hidden="true" /> : <Maximize2 size={15} aria-hidden="true" />}
+      </button>
+      <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-label={`Close ${data.title}`} title="Close (reopen from Objects)" onClick={(event) => { event.stopPropagation(); data.onHide(data.id); }}>
+        <X size={15} aria-hidden="true" />
+      </button>
+    </span>
   </header>;
 }
 
@@ -489,10 +513,19 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const localPhysicsWorkspace = useRef('');
   const teachingParams = view.domain.kind === 'teaching' ? view.domain.parameters : null;
   const allowedNodeIds = useMemo(() => visibleNodeIds ? new Set(visibleNodeIds) : null, [visibleNodeIds]);
-  const visiblePlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds]);
+  // Cards this viewer closed. Kept per table in this browser; the Objects panel lists them to bring them back.
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => readHiddenObjects(workspaceKey));
+  const hiddenScopeRef = useRef(workspaceKey);
+  if (hiddenScopeRef.current !== workspaceKey) {
+    hiddenScopeRef.current = workspaceKey;
+    setHiddenIds(readHiddenObjects(workspaceKey));
+  }
+  const listedPlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds]);
+  const visiblePlanNodes = useMemo(() => listedPlanNodes.filter((spec) => !hiddenIds.has(spec.id)), [listedPlanNodes, hiddenIds]);
   const planIds = useMemo(() => new Set(plan.nodes.map((spec) => spec.id)), [plan.nodes]);
   const planNodesById = useMemo(() => new Map(plan.nodes.map((spec) => [spec.id, spec])), [plan.nodes]);
-  const visibleAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds]);
+  const listedAuxiliaryObjects = useMemo(() => auxiliaryObjects.filter((object) => !planIds.has(object.id) && (!allowedNodeIds || allowedNodeIds.has(object.id))), [auxiliaryObjects, planIds, allowedNodeIds]);
+  const visibleAuxiliaryObjects = useMemo(() => listedAuxiliaryObjects.filter((object) => !hiddenIds.has(object.id)), [listedAuxiliaryObjects, hiddenIds]);
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
   const activeOpenedId = openedObjectId === undefined ? internalOpenedId : openedObjectId;
@@ -651,6 +684,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [cancelPendingOpenObjectFocus, flow, moveCanvasObject, selectedNodeId]);
 
+
   useEffect(() => {
     if (!objectsMenuOpen) return;
     const closeOutside = (event: PointerEvent) => {
@@ -685,8 +719,30 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     onOpenObject?.(nextId);
     onSelectNode(id);
   }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode]);
+  const hideObject = useCallback((id: string) => {
+    setHiddenIds((current) => {
+      const next = new Set(current);
+      next.add(id);
+      writeHiddenObjects(workspaceKey, next);
+      return next;
+    });
+    if (activeOpenedId === id) {
+      if (openedObjectId === undefined) setInternalOpenedId(null);
+      onOpenObject?.(null);
+    }
+    if (selectedNodeId === id) onSelectNode(null);
+  }, [activeOpenedId, onOpenObject, onSelectNode, openedObjectId, selectedNodeId, workspaceKey]);
   const navigateToObject = useCallback((id: string) => {
-    if (!nodes.some((node) => node.id === id)) return;
+    const reopening = hiddenIds.has(id);
+    if (reopening) {
+      // Bring a closed card back; the open-and-focus request below waits for it to be laid out.
+      setHiddenIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        writeHiddenObjects(workspaceKey, next);
+        return next;
+      });
+    } else if (!nodes.some((node) => node.id === id)) return;
     cancelPendingOpenObjectFocus();
     setPreviousView(flow.getViewport());
     if (openedObjectId === undefined) setInternalOpenedId(id);
@@ -702,7 +758,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       flow.fitView({ nodes: [{ id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: canvasMotionDuration(200) });
       objectsButtonRef.current?.focus();
     }));
-  }, [cancelPendingOpenObjectFocus, flow, focusNodeId, focusRequestKey, nodes, onOpenObject, openedObjectId, onSelectNode, requestOpenObjectFocus, view.kind]);
+  }, [cancelPendingOpenObjectFocus, flow, focusNodeId, focusRequestKey, hiddenIds, nodes, onOpenObject, openedObjectId, onSelectNode, requestOpenObjectFocus, view.kind, workspaceKey]);
 
   useEffect(() => {
     const request = pendingOpenObjectFocusRef.current;
@@ -856,6 +912,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           capability: spec.capability,
           opened: activeOpenedId === spec.id,
           onToggleOpen: toggleOpenObject,
+          onHide: hideObject,
           onSelectNode,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
@@ -901,6 +958,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           capability: object.eyebrow ?? 'table tool',
           opened: activeOpenedId === object.id,
           onToggleOpen: toggleOpenObject,
+          onHide: hideObject,
           onSelectNode,
           selected: object.id === selectedNodeId,
           auxiliary: object,
@@ -1040,6 +1098,58 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       };
     });
   }, [plan.bindings, planNodesById, revisionNotice, visibleIds]);
+
+  // Right-click on the empty canvas: arrange every card again from scratch, as on first load.
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const arrangeObjects = useCallback(async () => {
+    setContextMenu(null);
+    cancelPendingOpenObjectFocus();
+    const current = flow.getNodes();
+    if (current.length === 0) return;
+    const layoutNodes: CanvasLayoutNode[] = current.map((node) => ({
+      id: node.id,
+      role: node.data.kind === 'plan' ? canvasLayoutRole(node.data.spec.capability, node.id) : 'reference',
+      width: node.measured?.width ?? node.width ?? 360,
+      height: node.measured?.height ?? node.height ?? 260,
+      position: node.position,
+      pinned: isCanvasNoteId(node.id),
+    }));
+    const notes = new Set(layoutNodes.filter((node) => isCanvasNoteId(node.id)).map((node) => node.id));
+    const result = layoutCanvas(layoutNodes, edges.map((edge) => ({ source: edge.source, target: edge.target })), { fixedIds: notes });
+    const arranged = new Map(Object.entries(result.positions).filter(([id]) => !notes.has(id)));
+    if (arranged.size === 0) return;
+    setNodes((nodesNow) => nodesNow.map((node) => {
+      const position = arranged.get(node.id);
+      return position ? { ...node, position } : node;
+    }));
+    for (const [id, position] of arranged) rememberPosition(id, position);
+    const shared = [...arranged].filter(([id]) => remoteLayoutEnabled && isSharedCanvasNodeForView(id, view));
+    for (let index = 0; index < shared.length; index += 24) {
+      const positions = Object.fromEntries(shared.slice(index, index + 24).map(([id, point]) => [id, { x: point.x, y: point.y, pinned: true }]));
+      try {
+        const updated = await onCommand('canvas.layout', { expectedLayoutRevision: sharedLayoutRef.current?.revision ?? 0, positions });
+        const layout = updated && updated.domain.kind === 'table' ? updated.domain.canvasLayout : undefined;
+        if (layout) sharedLayoutRef.current = layout;
+      } catch { /* the table notice explains a refused arrangement; local positions stay */ }
+    }
+    window.requestAnimationFrame(() => { void flow.fitView({ padding: 0.12, duration: canvasMotionDuration(240) }); });
+  }, [cancelPendingOpenObjectFocus, edges, flow, onCommand, remoteLayoutEnabled, rememberPosition, setNodes, view]);
+  const revealAllObjects = useCallback(() => {
+    setContextMenu(null);
+    setHiddenIds(new Set());
+    writeHiddenObjects(workspaceKey, new Set());
+  }, [workspaceKey]);
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent && event.key !== 'Escape') return;
+      if (event instanceof PointerEvent && event.target instanceof Element && event.target.closest('.tt-canvas-context-menu')) return;
+      setContextMenu(null);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', close); };
+  }, [contextMenu]);
 
   useEffect(() => {
     if (view.kind !== 'table' || nodes.length === 0) return;
@@ -1259,9 +1369,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [selectedNodeId, setNodes]);
 
   const objectTitles = useMemo(() => [
-    ...visiblePlanNodes.map((spec) => ({ id: spec.id, title: spec.title })),
-    ...visibleAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title })),
-  ], [visiblePlanNodes, visibleAuxiliaryObjects]);
+    ...listedPlanNodes.map((spec) => ({ id: spec.id, title: spec.title, hidden: hiddenIds.has(spec.id) })),
+    ...listedAuxiliaryObjects.map((object) => ({ id: object.id, title: object.title, hidden: hiddenIds.has(object.id) })),
+  ], [listedPlanNodes, listedAuxiliaryObjects, hiddenIds]);
   // A table-wide display setting wins; without one, the viewer's own choice, then the default.
   const tableConnections = view.domain.display?.connections;
   const canSetDisplay = viewerCan(view, 'table.rename') && busy !== 'table.readOnly';
@@ -1306,6 +1416,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onNodeDragStop={persistPosition}
           onNodeClick={choose}
           onPaneClick={clear}
+          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }); }}
           onMoveEnd={persistViewport}
           nodesDraggable
           nodesConnectable={false}
@@ -1332,6 +1443,10 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       )}
       <div className="tt-canvas-tools">
         <span className="tt-canvas-visually-hidden" role="status" aria-live="polite" aria-atomic="true">{moveAnnouncement}</span>
+        {contextMenu && <div className="tt-canvas-context-menu" role="menu" aria-label="Canvas" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          <button type="button" role="menuitem" autoFocus onClick={() => void arrangeObjects()}><LayoutGrid size={15} aria-hidden="true" />Arrange objects</button>
+          {hiddenIds.size > 0 && <button type="button" role="menuitem" onClick={revealAllObjects}><Eye size={15} aria-hidden="true" />Show closed cards ({hiddenIds.size})</button>}
+        </div>}
         <div className="tt-canvas-objects" ref={objectsMenuRef} onKeyDown={(event) => {
           if (event.key === 'Escape' && objectsMenuOpen) {
             event.preventDefault();
@@ -1350,7 +1465,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             </button>
             <ul className="tt-canvas-objects__list">
               {objectTitles.map((object) => <li key={object.id}>
-                <button type="button" data-testid={`open-canvas-${object.id}`} aria-label={`Open ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>{object.title}</button>
+                <button type="button" data-testid={`open-canvas-${object.id}`} data-hidden={object.hidden || undefined} aria-label={object.hidden ? `Reopen ${object.title}` : `Open ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>{object.title}</button>
               </li>)}
             </ul>
           </nav>
