@@ -15,6 +15,7 @@ import { applyInvoiceOperations, invoiceChangeSchema, invoiceSourceHash, reconci
 import { encounterRuleSchema } from './encounter';
 import { calculatePhysics, physicsParamsSchema } from './physics';
 import { assert, canonicalJson, hash, parsePayload, requirePermission } from './helpers';
+import type { Permission } from '../shared/permissions';
 import { makeTeachingQuestionId } from './teaching';
 import { applyTableChange, tableChangeIssues, tableChangeSchema } from './table';
 import { jsonWithinBudget } from '../shared/json-budget';
@@ -327,6 +328,7 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     const change = restoreRevision(state, input.revision);
     return { state: proposeCandidate(state, change, ctx), label: `Rollback candidate prepared from revision ${input.revision}; approval and activation are still required.` };
   }
+  if (type === 'evolve.autoApply') return autoApplyCandidate(state, payload, ctx);
   if (type === 'evolve.simulate') {
     requireCaseRole(state, ctx, 'rules.approve');
     parsePayload(noPayloadSchema, payload);
@@ -401,4 +403,34 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     return { state: next, label: `Candidate activated as rule revision ${next.ruleRevision}.` };
   }
   return null;
+}
+
+/**
+ * F039: apply the asker's own table draft in one command. It runs the same simulate → validate → approve →
+ * activate steps as the manual review, so every check still applies; only the permission differs, because
+ * anyone who may draft rules may put their own draft into use. A draft that fails a check stays a candidate
+ * with its check results, for manual review.
+ */
+function autoApplyCandidate(state: DomainState, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } {
+  requireCaseRole(state, ctx, 'rules.draft');
+  parsePayload(noPayloadSchema, payload);
+  assert(state.kind === 'table', 'AUTO_APPLY_UNSUPPORTED', 'Only table rules are applied automatically.');
+  assert(state.candidate, 'CANDIDATE_NOT_FOUND', 'There is no rule draft to apply.');
+  assert(state.candidate.createdBy === ctx.actorId, 'FORBIDDEN', 'Only the person who asked for this draft can apply it automatically.');
+  assert(state.candidate.status === 'draft', 'CANDIDATE_NOT_DRAFT', 'This draft is already being reviewed.');
+  const reviewer: ActorContext = { ...ctx, permissions: new Set<Permission>([...(ctx.permissions ?? []), 'rules.approve']) };
+  const step = (current: DomainState, command: string) => {
+    const result = handleEvolutionCommand(current, command, {}, reviewer);
+    if (!result) throw new DomainError('INVALID_COMMAND', 'The review step is not available.');
+    return result;
+  };
+  const simulated = step(state, 'evolve.simulate').state;
+  const validated = step(simulated, 'evolve.validate');
+  const failed = validated.state.candidate?.simulation?.checks.filter((check) => !check.passed) ?? [];
+  if (validated.state.candidate?.status !== 'validated' || failed.length > 0) {
+    return { state: validated.state, label: `Rules need a manual review: ${failed.map((check) => check.message).join(' ') || 'a check did not pass.'}` };
+  }
+  const approved = step(validated.state, 'evolve.approve').state;
+  const active = step(approved, 'evolve.activate').state;
+  return { state: active, label: `Rules applied automatically as rule revision ${active.ruleRevision}.` };
 }
