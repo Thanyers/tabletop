@@ -1,8 +1,35 @@
 import { DomainError, type ActorContext, type DomainState, type EncounterState, type TeachingState } from '../shared/contracts';
 import { clone } from './helpers';
 import { projectCanvasLayout } from './canvas-layout';
+import { VISIBILITY_POLICY, type VisibilityPolicy } from '../shared/visibility';
 
-export function projectDomain(state: DomainState, ctx: ActorContext): DomainState {
+/** Membership/role gate shared by both visibility policies. */
+function assertCanRead(state: DomainState, ctx: ActorContext): void {
+  if (state.kind === 'table') {
+    if (ctx.role !== 'owner' && ctx.role !== 'participant') throw new DomainError('FORBIDDEN', 'Only room members may read this table.');
+  } else if (state.kind === 'invoice') {
+    if (ctx.role !== 'owner') throw new DomainError('FORBIDDEN', 'Only the invoice owner can read invoice evidence and results.');
+  } else if (state.kind === 'teaching') {
+    if (ctx.role !== 'teacher' && ctx.role !== 'learner') throw new DomainError('FORBIDDEN', 'Only a teacher or learner can read this lesson.');
+  } else if (ctx.role !== 'dm' && (ctx.role !== 'player' || (ctx.seat !== 'mira' && ctx.seat !== 'pip'))) {
+    throw new DomainError('FORBIDDEN', 'Only a seated player or the DM can read this encounter.');
+  }
+}
+
+/** What one member receives. Under the 'open' policy (F034) members see the whole state. */
+export function projectDomain(state: DomainState, ctx: ActorContext, policy: VisibilityPolicy = VISIBILITY_POLICY): DomainState {
+  assertCanRead(state, ctx);
+  if (policy === 'open') {
+    const full = clone(state);
+    // Retired view positions are dropped for everyone, as before.
+    if (full.kind === 'table' && state.kind === 'table' && state.canvasLayout) full.canvasLayout = projectCanvasLayout(state);
+    return full;
+  }
+  return projectPrivate(state, ctx);
+}
+
+/** The 'private' policy: role projections, kept for later use. */
+function projectPrivate(state: DomainState, ctx: ActorContext): DomainState {
   if (state.kind === 'table') {
     if (ctx.role !== 'owner' && ctx.role !== 'participant') throw new DomainError('FORBIDDEN', 'Only room members may read this table.');
     const projected = clone(state);

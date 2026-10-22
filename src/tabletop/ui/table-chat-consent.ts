@@ -1,3 +1,5 @@
+import { VISIBILITY_POLICY, type VisibilityPolicy } from '../shared/visibility';
+
 export type TableChatMode = 'draft' | 'ask';
 
 /** One AI consent covers both request modes for one actor on one table epoch (F013). */
@@ -44,9 +46,12 @@ export function rememberConsent(scope: TableChatConsentScope): string {
   return key;
 }
 
-export function consentQuestion(mode: TableChatMode): string {
+export function consentQuestion(mode: TableChatMode, policy: VisibilityPolicy = VISIBILITY_POLICY): string {
+  const chats = policy === 'open' ? 'your recent chat exchanges' : 'your private chat exchanges';
   const current = mode === 'draft'
     ? 'This sends your message, current active rules, records, and turn, plus the table files listed below. Chat history is not included.'
-    : 'This sends your message, current active rules, records, and turn, plus up to six of your private chat exchanges, including relevant older ones when available. Table files are not sent.';
-  return `${current} You will not be asked again on this table: later rule requests also send the table files at that time, and questions send recent chat.`;
+    : `This sends your message, current active rules, records, and turn, plus up to six of ${chats}, including relevant older ones when available. Table files are not sent.`;
+  // Open visibility (F034): say plainly that other members can read what this produces.
+  const visible = policy === 'open' ? ' Everyone at this table can see your questions, the answers and rule drafts.' : '';
+  return `${current} You will not be asked again on this table: later rule requests also send the table files at that time, and questions send recent chat.${visible}`;
 }

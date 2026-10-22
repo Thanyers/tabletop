@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 4.0.0 — 2026-10-22
+
+MAJOR: สมาชิกทุกคนเห็นทั้งโต๊ะและแชท AI ของกันและกัน (F034) + ปลดเพดานเงิน AI (F036) + People dialog ใช้ลิงก์เชิญ (F003-T5/T6) + เช็คเร็วบน dev (CI005) · ไม่มี schema/migration/secret ใหม่ · rollback โค้ดได้ แต่ข้อมูลที่เคยซ่อนจะถูกเห็นไปแล้ว
+
+- **เปลี่ยนการมองเห็น (MAJOR):** สมาชิกทุกคนในโต๊ะเห็นข้อมูลโต๊ะครบทุกอย่าง (ร่างกฎ, โน้ต DM/ครู, ค่าทอยที่ยังไม่เปิด, คำตอบของผู้เรียนคนอื่น) และเห็นแชท AI ของทุกคนพร้อมชื่อผู้ถาม · ยืนยัน action ได้เฉพาะคนถาม · คนนอกโต๊ะยังอ่านไม่ได้ · **ข้อมูลที่เคยซ่อนบน environment ที่ deploy จะถูกเห็นย้อนหลัง** · กลับไปแบบเดิมได้ด้วย `VISIBILITY_POLICY = 'private'` ([F034](docs/features/F034-open-visibility.md))
+- **ปลดเพดานเงินของ AI ทั้งหมด (F036):** ไม่มีการปฏิเสธงานเพราะงบอีกต่อไป — ทุกงานยังจอง/บันทึก/settle การใช้จริงลง ledger เพื่อวัดค่าจริงและ optimize · env งบยังอยู่ใน config แต่ไม่มีผลแล้ว · ไม่มี schema/binding/secret ใหม่ · ยังคงเพดานจำนวนงาน (50/ห้อง/วัน, 200/คน/วัน, 8 พร้อมกัน) และขอบเขต token
+- POC: `AI_DAILY_BUDGET_MICRO_USD` / `AI_MONTHLY_BUDGET_MICRO_USD` = 0 หรือไม่ตั้ง = **ไม่จำกัดงบ** (ยังวัด usage) เพื่อไม่ให้เทสติด "budget reached" (F033)
+- หน้าต่าง People ของโต๊ะข้อมูลเหลือแค่รายชื่อ ตัวนับ `N/7 members` ลิงก์เชิญใช้ซ้ำ และปุ่ม Remove · เอาส่วน AVAILABLE SEATS และคำเชิญครั้งเดียวต่อที่นั่งออก (โต๊ะสอนและโต๊ะเกม รวมถึง Node guest runtime ยังเชิญทีละที่นั่ง) · `/api/capabilities` บอก `inviteLinks` · คู่มือเชิญเพื่อนเขียนใหม่ ([F003](docs/features/F003-reusable-invite-link.md) T5–T6)
+- CI: PR และ push เข้า `dev` รันเฉพาะเช็คเร็ว (lint, unit, typecheck, build, Worker tests) · browser suites ทั้งสามรันเฉพาะ release PR เข้า `main`, push เข้า `main` และ Run workflow เอง (CI005)
+
 ## 3.4.2 — 2026-10-21
 
 PATCH: POC — ตั้ง AI budget เป็น 0/ไม่ตั้ง = ไม่จำกัดงบ (ยังวัด usage) ไม่ต้องชน "budget reached" ระหว่างเทส · ไม่มี schema/migration · rollback กลับ v3.4.1 ได้

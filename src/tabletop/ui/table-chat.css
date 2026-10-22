@@ -117,3 +117,4 @@
 .tt-app .tt-chat-card__own-answer { width: 100%; margin-top: var(--tt-space-2); padding: var(--tt-space-2) var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px); background: var(--tt-paper); color: var(--tt-ink); font: inherit; }
 .tt-app .tt-chat-card__own-answer:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 1px; }
 .tt-app .tt-chat-card__send-answer { justify-self: start; display: inline-flex; align-items: center; gap: var(--tt-space-2); }
+.tt-app .tt-chat-card__asker { color: var(--tt-muted); font-size: var(--tt-type-small); font-weight: 600; line-height: 16px; }
