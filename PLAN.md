@@ -33,6 +33,7 @@
 | F036 | ปลดเพดานเงินของ AI: ไม่จำกัดงบ แต่ยังบันทึกและ settle การใช้จริงทุกงาน (POC) | `review` | lead (AI) | `fix/F036-uncapped-budget` | `cloudflare/{billing,ai,index}.ts`, `vitest.cloudflare.config.ts`, tests | — | ไม่มี schema/binding/secret · CF 102, unit 476 |
 | F037 | Comment card แบบ post-it บน canvas: สร้างจากปุ่มข้างแชท/แชท ลากย้าย แก้ข้อความ เปลี่ยนสี ลบ และเห็นร่วมกัน | `doing` | lead (AI) | `feat/F037-note-cards` | `shared/table-contracts.ts`, `domain/table.ts`, `runtime/index.ts`, `ui/*`, tests | — | เก็บนอก program (ไม่มี migration) · backend + unit 6 ผ่าน · UI ยังไม่ทำ |
 | F038 | ถามขนานกันได้ระหว่างที่การ์ดอื่นทำงาน + คำขอร่างกฎเข้าคิวต่อจากร่างที่กำลังทำ | `review` | [F038](docs/features/F038-parallel-requests.md) |
+| F040 | Scene motion: วัตถุวิ่งวนจาก `from` ถึง `to` อัตโนมัติ ความเร็วจาก parameter + ปุ่มหยุด/reduced motion | `doing` | [F040](docs/features/F040-scene-motion.md) |
 
 ## งาน
 
@@ -81,6 +82,9 @@
 | F038-T1 | server: คำตอบธรรมดาไม่ล้ม `STALE_WORKSPACE` เมื่อโต๊ะเปลี่ยนระหว่างสร้าง (proposal ยังเช็ค revision) | `review` | lead (AI) | `feat/F038-parallel-requests` | `cloudflare/room.ts`, `cloudflare/room.test.ts` | — | |
 | F038-T2 | client: Send ไม่บล็อกระหว่างรอ · ask ขนาน · draft เข้าคิวและเริ่มเองหลัง refresh | `review` | lead (AI) | `feat/F038-parallel-requests` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, tests | F038-T1 | hotspot `tests/generic-table-browser.mjs` |
 | F038-T3 | คู่มือ + CHANGELOG | `review` | lead (AI) | `feat/F038-parallel-requests` | `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | — | |
+| F040-T1 | contract + zod + evaluator + validation ของ `motion` | `doing` | lead (AI) | `feat/F040-scene-motion` | `shared/generative-contracts.ts`, `runtime/generative/{schema,evaluator,validation}.ts`, tests | — | |
+| F040-T2 | UI: clock/วนลูป/ปุ่มหยุด/reduced motion | `todo` | lead (AI) | `feat/F040-scene-motion` | `ui/GeneratedCanvasObjects.tsx`, `ui/generated-canvas.css`, tests | F040-T1 | hotspot `ui/GeneratedCanvasObjects.tsx` |
+| F040-T3 | prompt guide + ตัวอย่างรถวิ่งวน + CHANGELOG | `todo` | lead (AI) | `feat/F040-scene-motion` | `server/providers/table-schema-guide.ts`, `server/providers/deepseek-changes.ts`, `CHANGELOG.md`, `spec.md` | F040-T1 | |
 | F035-T1 | โมเดลสิทธิ์: แค็ตตาล็อก permission ต่อชนิดโต๊ะ + role ตั้งต้นตาม case + role ที่สร้างเอง + การกำหนด role รายคน เก็บใน domain state (ไม่มี SQL migration) + ค่าเริ่มต้นเมื่อไม่กำหนด | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `src/tabletop/shared/permissions.ts` (ใหม่), `shared/contracts.ts`, `domain/*` | F034-T1 | แทน `PERMISSION_POLICY` ใน WIP 753635a |
 | F035-T2 | บังคับสิทธิ์ที่ server ทุกจุด: คำสั่ง domain, เชิญ/เอาออก/เปลี่ยนชื่อ/อนุมัติ, `/model`, ลิงก์เชิญ, AI · ลบ/รีเซ็ตโต๊ะ = เจ้าของเท่านั้นเสมอ · เอาเจ้าของออกไม่ได้ | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `server/authority.ts`, `cloudflare/room.ts`, `cloudflare/ai.ts`, `cloudflare/table-assistant.ts`, `domain/{table,evolution,teaching,encounter,invoice}.ts` | F035-T1 | hotspot `cloudflare/room.ts` |
 | F035-T3 | คำสั่งจัดการ role: สร้าง/แก้/ลบ role, กำหนด role ให้คน (ต้องมี `roles.manage`, ให้สิทธิ์เกินตัวเองไม่ได้, แตะ role เจ้าของไม่ได้) | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `domain/access.ts` (ใหม่), `server/authority.ts` (`publicCommands`) | F035-T1 | |
