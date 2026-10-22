@@ -604,7 +604,7 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
   useServerRollsTick();
   const disabledReason = (action: TableAction | undefined, control: EvaluatedControl) => {
     const descriptor = control.descriptor;
-    // F051: a dice card bound to a roll parameter is that action's visual server-roll control.
+    // F060: a dice card bound to a roll parameter is that action's visual server-roll control.
     const serverDice = descriptor.kind === 'dice' && action?.parameters.some(parameter => parameter.id === descriptor.parameter && parameter.type === 'roll');
     return previewOnly && !sandboxEnabled ? 'Preview only.'
       : busy ? 'A table action is in progress.'
@@ -702,14 +702,14 @@ interface DiceControlProps {
 }
 
 /**
- * F051: dice bound to a `roll` parameter always use the server roll. Number parameters keep the
+ * F060: dice bound to a `roll` parameter always use the server roll. Number parameters keep the
  * F049 client-side, visual-only roll, so the two sources never mix on one card.
  */
 export function diceRollMode(action: TableAction, descriptor: DiceDescriptor): 'server' | 'client' {
   return action.parameters.find(parameter => parameter.id === descriptor.parameter)?.type === 'roll' ? 'server' : 'client';
 }
 
-/** F049/F051: a visual dice card; the bound parameter decides where the roll comes from. */
+/** F049/F060: a visual dice card; the bound parameter decides where the roll comes from. */
 function DiceControl(props: DiceControlProps) {
   const parameter = props.action.parameters.find(item => item.id === props.descriptor.parameter);
   if (!parameter) return <p className="tt-table-error" role="alert">This dice card refers to an unknown action parameter.</p>;
@@ -719,7 +719,7 @@ function DiceControl(props: DiceControlProps) {
 }
 
 /**
- * F051: the dice card for a `roll` parameter. It asks the same `table.roll` command (and roll store)
+ * F060: the dice card for a `roll` parameter. It asks the same `table.roll` command (and roll store)
  * as `RollParameterControl`, shows the server's faces and total, and never writes a client draft.
  */
 function ServerDiceControl({ descriptor, action, parameter, view, enabled, reason, onRoll }: DiceControlProps & { parameter: TableParameter }) {

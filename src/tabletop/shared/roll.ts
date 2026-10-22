@@ -50,7 +50,7 @@ export function rollDiceCount(spec: RollSpec): number {
   return spec.groups.reduce((total, group) => total + group.count, 0);
 }
 
-/** Display notation for a declared roll, e.g. `2d6 + 3`. Shared by both roll controls (F048, F051). */
+/** Display notation for a declared roll, e.g. `2d6 + 3`. Shared by both roll controls (F048, F060). */
 export function rollNotation(spec: RollSpec): string {
   const groups = spec.groups.map(group => `${group.count}d${group.faces}`).join(' + ');
   const modifier = spec.modifier;

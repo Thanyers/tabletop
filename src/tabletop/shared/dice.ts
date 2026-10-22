@@ -3,7 +3,7 @@
  *
  * For a `number` parameter randomness is CLIENT-SIDE and visual-only: `secureDiceRandom`
  * uses the Web Crypto CSPRNG and the result only fills a client draft. For a `roll`
- * parameter the card shows the authoritative F048 server roll instead (F051), so this
+ * parameter the card shows the authoritative F048 server roll instead (F060), so this
  * module is never the source of a rolled value there.
  */
 
