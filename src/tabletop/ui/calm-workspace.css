@@ -361,3 +361,8 @@
 
 /* Closed cards stay listed in the Objects panel, muted, so they can be reopened. */
 .tt-app .tt-canvas-objects__list button[data-hidden] { color: var(--tt-muted); font-style: italic; }
+
+/* A card's main call to action stays pinned to the bottom edge of the scrolling card body,
+   so Apply / Confirm / Review rules never ends up below the fold. */
+.tt-app .tt-card-cta { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-2); margin-top: var(--tt-space-2); padding: var(--tt-space-2) 0; border-top: 1px solid var(--tt-line); background: var(--tt-card-surface); box-shadow: 0 -10px 12px -10px rgb(0 0 0 / 0.18); }
+.tt-app .tt-card-cta > p { flex-basis: 100%; margin: 0; }

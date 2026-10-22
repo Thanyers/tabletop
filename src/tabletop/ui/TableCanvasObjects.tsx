@@ -176,16 +176,17 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
         <details className="tt-table-capability-gaps"><summary>Known gaps ({TABLE_CAPABILITIES.gaps.length})</summary><ul className="tt-table-capability-list">{TABLE_CAPABILITIES.gaps.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul></details>
       </details>
       {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} />
-        {isOwner && <div className="tt-table-proposal__apply">
-          <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
-          {applying && <p className="tt-canvas-inline__note" role="status">Simulating and checking this proposal before activation.</p>}
-          {applyFeedback && <p className="tt-table-error" role="alert">{applyFeedback}</p>}
-        </div>}
         {isOwner && candidateState?.program?.canvas?.views.length ? <details className="tt-table-private-preview"><summary>Private preview</summary><DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /></details> : null}
       </section>}
       {isOwner && state.candidate && <details className={state.candidate.status === 'active' ? 'tt-table-history' : 'tt-table-advanced-checks'}><summary>{state.candidate.status === 'active' ? 'History and restore' : 'Advanced checks'}</summary><CandidateLifecycle view={view} onCommand={onCommand} busy={busy} readOnly={readOnly} /></details>}
       {isOwner && !readOnly && <details className="tt-table-manual-editor"><summary>Advanced manual rule change</summary><p>Paste a prepared table change only if needed. Normal requests can be written in plain language in the AI draft assistant.</p><form onSubmit={proposeManual}><label htmlFor="tt-table-manual-change">Table change</label><textarea id="tt-table-manual-change" rows={7} value={manualChange} onChange={(event) => { setManualChange(event.target.value); setManualError(''); }} placeholder={'{"kind":"table","program":{...},"initialRecords":{...}}'} spellCheck={false} /><small>New tables include initial records. Changes to an active table must preserve its collections and current records.</small>{manualError && <span role="alert" className="tt-table-error">{manualError}</span>}<button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || manualChange.trim().length === 0}>Propose manual change</button></form></details>}
       {!isOwner && <p className="tt-canvas-inline__note">Proposals and review controls are private to the owner. Files, active rules and records are shared with this table.</p>}
+      {/* The main call to action stays pinned to the bottom of the card however long the proposal is. */}
+      {isOwner && candidateChange && state.candidate?.status !== 'active' && <div className="tt-card-cta tt-table-proposal__apply">
+        <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
+        {applying && <p className="tt-canvas-inline__note" role="status">Simulating and checking this proposal before activation.</p>}
+        {applyFeedback && <p className="tt-table-error" role="alert">{applyFeedback}</p>}
+      </div>}
     </>}
   </div>;
 }
