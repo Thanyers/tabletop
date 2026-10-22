@@ -14,6 +14,9 @@ const ORIGIN = 'https://tabletop.test';
 const WORKER_NAME = 'tabletop-r1-auto-demo';
 const SQLITE_SCRIPT_NAME = WORKER_NAME;
 const RUN_ID = randomUUID();
+// Mirrors src/tabletop/shared/visibility.ts (F034). The runner is plain JS and cannot import the
+// TypeScript switch, so assertions branch on this copy. Keep the two in sync.
+const VISIBILITY_POLICY = 'open';
 const STARTED_AT = new Date().toISOString();
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const safeCode = (value) => typeof value === 'string' && /^[A-Z][A-Z0-9_]{2,79}$/u.test(value) ? value : 'UNEXPECTED_RESULT';
@@ -517,19 +520,28 @@ async function runTeachingExperiments(request, db, scenario) {
   const learnerTwoPreferenceDomain = safeRecord(learnerTwoPreferences.body).domain;
   addStep(scenario, {
     label: 'ตรวจกราฟที่ครูกำหนดในมุมมองผู้เรียน', actor: teacher.name, command: 'GET authorized learner projections',
-    expected: 'ฟ้าเห็นกราฟระดับสูงที่ครูกำหนด; ต้นยังไม่มีค่ามุมมองส่วนตัวที่ถูกกำหนดให้ฟ้า',
+    expected: VISIBILITY_POLICY === 'open'
+      ? 'ฟ้าเห็นกราฟระดับสูงที่ครูกำหนด; ต้นเห็นค่ามุมมองเดียวกับฟ้าเพราะนโยบาย open'
+      : 'ฟ้าเห็นกราฟระดับสูงที่ครูกำหนด; ต้นยังไม่มีค่ามุมมองส่วนตัวที่ถูกกำหนดให้ฟ้า',
     observed: learnerOnePreferences.status === 200 && learnerTwoPreferences.status === 200
-      ? 'Fresh learner projections confirm the targeted setting and peer isolation.' : 'One or more learner projections could not be read.',
-    checkpoint: { privateFieldsHidden: true },
+      ? (VISIBILITY_POLICY === 'open'
+        ? 'Fresh learner projections confirm the targeted setting and shared visibility.'
+        : 'Fresh learner projections confirm the targeted setting and peer isolation.')
+      : 'One or more learner projections could not be read.',
+    checkpoint: { privateFieldsHidden: VISIBILITY_POLICY !== 'open' },
     checks: [
       ['Learner one GET returned HTTP 200', learnerOnePreferences.status === 200],
       ['Learner two GET returned HTTP 200', learnerTwoPreferences.status === 200],
       ['Learner one sees its targeted graph and advanced difficulty',
         safeRecord(safeRecord(learnerOnePreferenceDomain).representations)[learnerOneId] === 'graph'
           && safeRecord(safeRecord(learnerOnePreferenceDomain).difficulties)[learnerOneId] === 'advanced'],
-      ['Learner two has no setting assigned to learner one',
-        !Object.hasOwn(safeRecord(safeRecord(learnerTwoPreferenceDomain).representations), learnerOneId)
-          && !Object.hasOwn(safeRecord(safeRecord(learnerTwoPreferenceDomain).difficulties), learnerOneId)],
+      ...(VISIBILITY_POLICY === 'open'
+        ? [['Learner two sees the same personal settings under open visibility',
+          safeRecord(safeRecord(learnerTwoPreferenceDomain).representations)[learnerOneId] === 'graph'
+            && safeRecord(safeRecord(learnerTwoPreferenceDomain).difficulties)[learnerOneId] === 'advanced']]
+        : [['Learner two has no setting assigned to learner one',
+          !Object.hasOwn(safeRecord(safeRecord(learnerTwoPreferenceDomain).representations), learnerOneId)
+            && !Object.hasOwn(safeRecord(safeRecord(learnerTwoPreferenceDomain).difficulties), learnerOneId)]]),
     ],
   });
   teacherView = await successfulCommandStep(request, scenario, teacher, teacherView, 'teaching.saveNote', {
@@ -544,11 +556,17 @@ async function runTeachingExperiments(request, db, scenario) {
   oneView = await successfulCommandStep(request, scenario, learnerOne, oneView, 'teaching.answer', {
     questionId, lessonRevision, value: 4,
   }, {
-    label: 'ผู้เรียนฟ้าส่งคำตอบของตนเอง', expected: 'มีคำตอบของฟ้าในมุมมองฟ้าเท่านั้น; ข้อมูลครูไม่ปรากฏ',
+    label: 'ผู้เรียนฟ้าส่งคำตอบของตนเอง',
+    expected: VISIBILITY_POLICY === 'open'
+      ? 'มีคำตอบของฟ้าในมุมมองฟ้า และครูเห็นหมายเหตุของตน (นโยบาย open)'
+      : 'มีคำตอบของฟ้าในมุมมองฟ้าเท่านั้น; ข้อมูลครูไม่ปรากฏ',
     checks: [
       ['Learner one answer is visible to its actor', (view) => safeRecord(view.domain).answers?.length === 1
         && safeRecord(view.domain).answers[0]?.correct === true],
-      ['Teacher note is hidden from learner one', (view) => !Object.hasOwn(safeRecord(view.domain), 'teacherNote')],
+      [VISIBILITY_POLICY === 'open' ? 'Teacher note is shared under open visibility' : 'Teacher note is hidden from learner one',
+        (view) => (VISIBILITY_POLICY === 'open'
+          ? safeRecord(view.domain).teacherNote === 'AUTO_DEMO_PRIVATE_TEACHER_NOTE_SENTINEL'
+          : !Object.hasOwn(safeRecord(view.domain), 'teacherNote'))],
     ],
     checkpoint: (view) => ({ ...teachingPhysicsCheckpoint(view.domain), privateFieldsHidden: !Object.hasOwn(safeRecord(view.domain), 'teacherNote') }),
   });
@@ -558,12 +576,20 @@ async function runTeachingExperiments(request, db, scenario) {
     lessonRevision: safeRecord(twoView.domain).ruleRevision,
     value: 4,
   }, {
-    label: 'ผู้เรียนต้นส่งคำตอบแยกจากฟ้า', expected: 'มุมมองของต้นมีเฉพาะคำตอบของต้น',
+    label: 'ผู้เรียนต้นส่งคำตอบแยกจากฟ้า',
+    expected: VISIBILITY_POLICY === 'open'
+      ? 'มุมมองของต้นมีคำตอบของทั้งสองคนและหมายเหตุครู ตามนโยบาย open'
+      : 'มุมมองของต้นมีเฉพาะคำตอบของต้น',
     checks: [
-      ['Learner two answer is visible to its actor', (view) => safeRecord(view.domain).answers?.length === 1
-        && safeRecord(view.domain).answers[0]?.correct === true],
-      ['Other learner answer is hidden', (view) => safeRecord(view.domain).answers?.every((answer) => safeRecord(answer).actorId !== learnerOneId)],
-      ['Teacher note is hidden from learner two', (view) => !Object.hasOwn(safeRecord(view.domain), 'teacherNote')],
+      ['Learner two answer is visible to its actor', (view) => safeRecord(view.domain).answers?.some((answer) => safeRecord(answer).correct === true) === true],
+      [VISIBILITY_POLICY === 'open' ? 'Peer answer is shared under open visibility' : 'Other learner answer is hidden',
+        (view) => (VISIBILITY_POLICY === 'open'
+          ? safeRecord(view.domain).answers?.some((answer) => safeRecord(answer).actorId === learnerOneId) === true
+          : safeRecord(view.domain).answers?.every((answer) => safeRecord(answer).actorId !== learnerOneId))],
+      [VISIBILITY_POLICY === 'open' ? 'Teacher note is shared under open visibility' : 'Teacher note is hidden from learner two',
+        (view) => (VISIBILITY_POLICY === 'open'
+          ? safeRecord(view.domain).teacherNote === 'AUTO_DEMO_PRIVATE_TEACHER_NOTE_SENTINEL'
+          : !Object.hasOwn(safeRecord(view.domain), 'teacherNote'))],
     ],
     checkpoint: (view) => ({ ...teachingPhysicsCheckpoint(view.domain), privateFieldsHidden: !Object.hasOwn(safeRecord(view.domain), 'teacherNote') }),
   });
@@ -574,29 +600,50 @@ async function runTeachingExperiments(request, db, scenario) {
   const learnerTwoLatestDomain = safeRecord(learnerTwoLatest.body).domain;
   const learnerOneAnswers = Array.isArray(safeRecord(learnerOneLatestDomain).answers) ? safeRecord(learnerOneLatestDomain).answers : [];
   const learnerTwoAnswers = Array.isArray(safeRecord(learnerTwoLatestDomain).answers) ? safeRecord(learnerTwoLatestDomain).answers : [];
-  const privateFieldsHidden = !Object.hasOwn(safeRecord(learnerOneLatestDomain), 'teacherNote')
-    && !Object.hasOwn(safeRecord(learnerTwoLatestDomain), 'teacherNote')
-    && learnerOneAnswers.every((answer) => safeRecord(answer).actorId !== learnerTwoId)
-    && learnerTwoAnswers.every((answer) => safeRecord(answer).actorId !== learnerOneId);
+  const sharedByPolicy = VISIBILITY_POLICY === 'open';
+  const visibilityHolds = sharedByPolicy
+    ? Object.hasOwn(safeRecord(learnerOneLatestDomain), 'teacherNote')
+      && Object.hasOwn(safeRecord(learnerTwoLatestDomain), 'teacherNote')
+      && learnerOneAnswers.length === 2 && learnerTwoAnswers.length === 2
+    : !Object.hasOwn(safeRecord(learnerOneLatestDomain), 'teacherNote')
+      && !Object.hasOwn(safeRecord(learnerTwoLatestDomain), 'teacherNote')
+      && learnerOneAnswers.every((answer) => safeRecord(answer).actorId !== learnerTwoId)
+      && learnerTwoAnswers.every((answer) => safeRecord(answer).actorId !== learnerOneId);
   addStep(scenario, {
     label: 'ตรวจว่าคำตอบของผู้เรียนทั้งสองยังแยกกัน', actor: teacher.name, command: 'GET authorized projections',
-    expected: 'ครูเห็นคำตอบ 2 รายการโดยไม่บันทึกเนื้อหาส่วนตัวลงรายงาน',
+    expected: sharedByPolicy
+      ? 'ครูเห็นคำตอบ 2 รายการ; ผู้เรียนทั้งสองเห็นคำตอบของกันและกันตามนโยบาย open'
+      : 'ครูเห็นคำตอบ 2 รายการโดยไม่บันทึกเนื้อหาส่วนตัวลงรายงาน',
     observed: learnerOneLatest.status === 200 && learnerTwoLatest.status === 200
-      ? 'Fresh learner projections contain only each learner’s own answer; report stores visibility checks.' : 'One or more learner projections could not be read.',
+      ? (sharedByPolicy
+        ? 'Fresh learner projections share both answers under open visibility; report stores visibility checks.'
+        : 'Fresh learner projections contain only each learner’s own answer; report stores visibility checks.')
+      : 'One or more learner projections could not be read.',
     checks: [
       ['Teacher sees two answers', safeRecord(currentTeacher.domain).answers?.length === 2],
       ['Learner one fresh GET returned HTTP 200', learnerOneLatest.status === 200],
       ['Learner two fresh GET returned HTTP 200', learnerTwoLatest.status === 200],
-      ['Learner one sees only its own correct answer', learnerOneAnswers.length === 1
-        && safeRecord(learnerOneAnswers[0]).actorId === learnerOneId && safeRecord(learnerOneAnswers[0]).correct === true],
-      ['Learner two sees only its own correct answer', learnerTwoAnswers.length === 1
-        && safeRecord(learnerTwoAnswers[0]).actorId === learnerTwoId && safeRecord(learnerTwoAnswers[0]).correct === true],
-      ['Peer answers and teacher note stay hidden', privateFieldsHidden],
+      ...(sharedByPolicy
+        ? [['Learner one sees both correct answers under open visibility', learnerOneAnswers.length === 2
+          && learnerOneAnswers.every((answer) => safeRecord(answer).correct === true)],
+        ['Learner two sees both correct answers under open visibility', learnerTwoAnswers.length === 2
+          && learnerTwoAnswers.every((answer) => safeRecord(answer).correct === true)],
+        ['Peer answers and teacher note are shared', visibilityHolds]]
+        : [['Learner one sees only its own correct answer', learnerOneAnswers.length === 1
+          && safeRecord(learnerOneAnswers[0]).actorId === learnerOneId && safeRecord(learnerOneAnswers[0]).correct === true],
+        ['Learner two sees only its own correct answer', learnerTwoAnswers.length === 1
+          && safeRecord(learnerTwoAnswers[0]).actorId === learnerTwoId && safeRecord(learnerTwoAnswers[0]).correct === true],
+        ['Peer answers and teacher note stay hidden', visibilityHolds]]),
     ],
-    checkpoint: { privateFieldsHidden },
+    checkpoint: { privateFieldsHidden: !sharedByPolicy },
   });
-  assert.equal(safeRecord(learnerOneAnswers[0]).actorId, learnerOneId);
-  assert.equal(safeRecord(learnerTwoAnswers[0]).actorId, learnerTwoId);
+  if (sharedByPolicy) {
+    assert.equal(learnerOneAnswers.length, 2);
+    assert.equal(learnerTwoAnswers.length, 2);
+  } else {
+    assert.equal(safeRecord(learnerOneAnswers[0]).actorId, learnerOneId);
+    assert.equal(safeRecord(learnerTwoAnswers[0]).actorId, learnerTwoId);
+  }
 }
 
 async function runTeachingStaleAndRoles(request, db, scenario) {
@@ -692,14 +739,25 @@ async function runEncounterShield(request, db, scenario) {
   });
   const miraView = await readWorkspace(request, mira, workspace.id);
   const maskedHit = safeRecord(miraView.domain).pendingHit;
+  const dmPendingHit = safeRecord(safeRecord(workspace.domain).pendingHit);
   addStep(scenario, {
     label: 'ตรวจ projection ของ Mira ก่อนตอบโต้', actor: mira.name, command: 'GET authorized player projection',
-    expected: 'roll และ damage ซ่อนจากผู้เล่น', observed: 'Player projection masks private hit values.',
-    checkpoint: { privateFieldsHidden: safeRecord(maskedHit).roll === null && safeRecord(maskedHit).damage === null },
-    checks: [
-      ['Player roll is hidden', safeRecord(maskedHit).roll === null],
-      ['Player damage is hidden', safeRecord(maskedHit).damage === null],
-    ],
+    expected: VISIBILITY_POLICY === 'open'
+      ? 'ผู้เล่นเห็นค่า roll และ damage เดียวกับ DM ภายใต้นโยบาย open'
+      : 'roll และ damage ซ่อนจากผู้เล่น',
+    observed: VISIBILITY_POLICY === 'open'
+      ? 'Player projection matches the DM under open visibility.'
+      : 'Player projection masks private hit values.',
+    checkpoint: { privateFieldsHidden: VISIBILITY_POLICY !== 'open' },
+    checks: VISIBILITY_POLICY === 'open'
+      ? [
+        ['Player roll matches the DM', safeRecord(maskedHit).roll === dmPendingHit.roll],
+        ['Player damage matches the DM', safeRecord(maskedHit).damage === dmPendingHit.damage],
+      ]
+      : [
+        ['Player roll is hidden', safeRecord(maskedHit).roll === null],
+        ['Player damage is hidden', safeRecord(maskedHit).damage === null],
+      ],
   });
   const shielded = await successfulCommandStep(request, scenario, mira, miraView, 'encounter.shield', { target: 'pip' }, {
     label: 'Mira ใช้เกราะช่วย Pip', expected: 'บันทึก reaction intent ตามกติกาที่ active',
