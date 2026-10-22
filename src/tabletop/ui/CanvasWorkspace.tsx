@@ -914,43 +914,68 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     writeCanvasLayout(workspaceKey, layout);
   }, [persistLayout, workspaceKey]);
 
-  const commitUserPosition = useCallback((id: string, position: CanvasPoint, before?: CanvasPoint) => {
+  // The newest local move per card; an older server answer must not pull that card back (no flicker while
+  // arrow keys repeat or a group moves).
+  const latestMoveSequenceRef = useRef(new Map<string, number>());
+  type CanvasMove = { id: string; position: CanvasPoint; before?: CanvasPoint };
+  /** Saves moved cards in one shared-layout change, so a group never answers itself card by card. */
+  const commitUserPositions = useCallback((moves: readonly CanvasMove[]) => {
     const scope = layoutScopeRef.current;
     if (scope.key !== workspaceKey) return;
-    rememberPosition(id, position);
-    // F037: notes carry their own coordinates, so dragging one is a note move, not a shared layout change.
-    if (id.startsWith('table.note.')) {
-      void onCommand('table.moveNote', { noteId: id.slice('table.note.'.length), x: Math.round(position.x), y: Math.round(position.y) });
-      return;
+    const shared: CanvasMove[] = [];
+    for (const move of moves) {
+      rememberPosition(move.id, move.position);
+      // F037: notes carry their own coordinates, so dragging one is a note move, not a shared layout change.
+      if (move.id.startsWith('table.note.')) {
+        void onCommand('table.moveNote', { noteId: move.id.slice('table.note.'.length), x: Math.round(move.position.x), y: Math.round(move.position.y) });
+      } else if (remoteLayoutEnabled && isSharedCanvasNodeForView(move.id, view)) {
+        shared.push(move);
+      }
     }
-    if (!remoteLayoutEnabled || !isSharedCanvasNodeForView(id, view)) return;
+    if (shared.length === 0) return;
     const sequence = ++layoutMoveSequenceRef.current;
+    for (const move of shared) latestMoveSequenceRef.current.set(move.id, sequence);
     const isCurrentScope = () => layoutScopeRef.current === scope;
+    // A card moved again locally after this request keeps its newer place.
+    const isNewer = (id: string) => (latestMoveSequenceRef.current.get(id) ?? 0) > sequence;
     const revertToCanonical = () => {
       if (!isCurrentScope()) return;
-      const canonical = sharedLayoutRef.current?.positions[id] ?? before;
-      if (!canonical) return;
-      workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: canonical };
-      setNodes((current) => current.map((node) => node.id === id ? { ...node, position: { x: canonical.x, y: canonical.y } } : node));
+      const reverted = new Map<string, CanvasPoint>();
+      for (const move of shared) {
+        if (isNewer(move.id)) continue;
+        const canonical = sharedLayoutRef.current?.positions[move.id] ?? move.before;
+        if (!canonical) continue;
+        workspacePositionsRef.current = { ...workspacePositionsRef.current, [move.id]: canonical };
+        reverted.set(move.id, canonical);
+      }
+      if (reverted.size === 0) return;
+      setNodes((current) => current.map((node) => {
+        const point = reverted.get(node.id);
+        return point ? { ...node, position: { x: point.x, y: point.y } } : node;
+      }));
     };
     const applyCanonicalLayout = (canonicalLayout: SharedCanvasLayout, canonicalView: WorkspaceView) => {
       if (!isCurrentScope()) return;
       sharedLayoutRef.current = canonicalLayout;
       appliedSharedLayoutRevisionRef.current = canonicalLayout.revision;
-      const canonical = canonicalLayout.positions[id] ?? position;
       const visibleCanonicalPositions = new Map<string, CanvasPoint>();
       for (const [nodeId, point] of Object.entries(canonicalLayout.positions)) {
-        if (!isSharedCanvasNodeForView(nodeId, canonicalView)) continue;
+        if (!isSharedCanvasNodeForView(nodeId, canonicalView) || isNewer(nodeId)) continue;
         workspacePositionsRef.current = { ...workspacePositionsRef.current, [nodeId]: { ...point, pinned: true } };
         pinnedNodeIdsRef.current.add(nodeId);
         visibleCanonicalPositions.set(nodeId, point);
       }
-      workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: { ...canonical, pinned: true } };
+      for (const move of shared) {
+        if (isNewer(move.id) || visibleCanonicalPositions.has(move.id)) continue;
+        workspacePositionsRef.current = { ...workspacePositionsRef.current, [move.id]: { ...move.position, pinned: true } };
+        visibleCanonicalPositions.set(move.id, move.position);
+      }
       setNodes((current) => current.map((node) => {
-        const point = visibleCanonicalPositions.get(node.id) ?? (node.id === id ? canonical : undefined);
-        return point ? { ...node, position: { x: point.x, y: point.y } } : node;
+        const point = visibleCanonicalPositions.get(node.id);
+        return point && (node.position.x !== point.x || node.position.y !== point.y) ? { ...node, position: { x: point.x, y: point.y } } : node;
       }));
     };
+    const positions = Object.fromEntries(shared.slice(0, 24).map((move) => [move.id, { ...move.position, pinned: true }]));
     const send = async () => {
       if (!isCurrentScope()) return;
       if (sequence <= layoutBlockedThroughRef.current) {
@@ -960,7 +985,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       const attempt = async (expectedLayoutRevision: number) => {
         if (!isCurrentScope()) return null;
         try {
-          const updated = await onCommand('canvas.layout', { expectedLayoutRevision, positions: { [id]: { ...position, pinned: true } } });
+          const updated = await onCommand('canvas.layout', { expectedLayoutRevision, positions });
           return isCurrentScope() && updated && canvasLayoutScopeKey(updated) === workspaceKey ? updated : null;
         } catch {
           return null;
@@ -971,12 +996,14 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       if (!updated) {
         if (!isCurrentScope()) return;
         // Someone else may have moved a different card at the same moment. Retry once on
-        // the newer layout, but only if nobody moved this card in between (F007).
+        // the newer layout, but only if nobody moved these cards in between (F007).
         await new Promise((resolve) => window.setTimeout(resolve, 350));
         if (!isCurrentScope()) return;
         const latest = sharedLayoutRef.current;
-        const latestPoint = latest?.positions[id];
-        const untouched = !latestPoint || (before !== undefined && Math.abs(latestPoint.x - before.x) < 0.5 && Math.abs(latestPoint.y - before.y) < 0.5);
+        const untouched = shared.every((move) => {
+          const latestPoint = latest?.positions[move.id];
+          return !latestPoint || (move.before !== undefined && Math.abs(latestPoint.x - move.before.x) < 0.5 && Math.abs(latestPoint.y - move.before.y) < 0.5);
+        });
         if (latest && latest.revision !== expectedLayoutRevision && untouched && sequence > layoutBlockedThroughRef.current) {
           updated = await attempt(latest.revision);
         }
@@ -992,15 +1019,44 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     };
     layoutCommandQueueRef.current = layoutCommandQueueRef.current.then(send, send);
   }, [onCommand, remoteLayoutEnabled, rememberPosition, setNodes, view, workspaceKey]);
+  const commitUserPosition = useCallback((id: string, position: CanvasPoint, before?: CanvasPoint) => {
+    commitUserPositions([{ id, position, before }]);
+  }, [commitUserPositions]);
 
-  const moveCanvasObject = useCallback((id: string, dx: number, dy: number) => {
+  // Arrow-key moves collect while keys repeat and save once the keys rest, so the server sees one move
+  // per burst instead of a queue of moves that answer each other and pull the cards back.
+  const keyMoveBurstRef = useRef<{ moves: Map<string, CanvasMove>; timer: number } | null>(null);
+  const flushKeyMoves = useCallback(() => {
+    const burst = keyMoveBurstRef.current;
+    if (!burst) return;
+    window.clearTimeout(burst.timer);
+    keyMoveBurstRef.current = null;
+    for (const id of burst.moves.keys()) draggingNodeIdsRef.current.delete(id);
+    commitUserPositions([...burst.moves.values()]);
+  }, [commitUserPositions]);
+  useEffect(() => () => flushKeyMoves(), [flushKeyMoves]);
+  /** Arrow-key move of one card or a whole group: moves on screen at once, saves after the burst. */
+  const moveCanvasObjects = useCallback((ids: readonly string[], dx: number, dy: number) => {
     cancelPendingOpenObjectFocus();
-    const node = flow.getNode(id);
-    if (!node) return;
-    const position = { x: node.position.x + dx * 48, y: node.position.y + dy * 48 };
-    setNodes((current) => current.map((candidate) => candidate.id === id ? { ...candidate, position } : candidate));
-    commitUserPosition(id, position, node.position);
-  }, [cancelPendingOpenObjectFocus, commitUserPosition, flow, setNodes]);
+    const burst = keyMoveBurstRef.current ?? { moves: new Map<string, CanvasMove>(), timer: 0 };
+    const moved = new Map<string, CanvasPoint>();
+    for (const id of ids) {
+      const node = flow.getNode(id);
+      if (!node) continue;
+      const base = burst.moves.get(id)?.position ?? node.position;
+      const position = { x: base.x + dx * 48, y: base.y + dy * 48 };
+      moved.set(id, position);
+      // Like a drag: the shared layout does not pull a card back while its keys are still moving it.
+      draggingNodeIdsRef.current.add(id);
+      burst.moves.set(id, { id, position, before: burst.moves.get(id)?.before ?? node.position });
+    }
+    if (moved.size === 0) return;
+    setNodes((current) => current.map((candidate) => moved.has(candidate.id) ? { ...candidate, position: moved.get(candidate.id)! } : candidate));
+    window.clearTimeout(burst.timer);
+    burst.timer = window.setTimeout(flushKeyMoves, 300);
+    keyMoveBurstRef.current = burst;
+  }, [cancelPendingOpenObjectFocus, flow, flushKeyMoves, setNodes]);
+  const moveCanvasObject = useCallback((id: string, dx: number, dy: number) => moveCanvasObjects([id], dx, dy), [moveCanvasObjects]);
 
   // Arrow keys: move the selected card, or pan the view when no card is selected (Shift = bigger steps).
   // Captured on window so React Flow's own node arrow handling (which would not save the position) never runs.
@@ -1031,7 +1087,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       event.preventDefault();
       event.stopPropagation();
       if (multiIds.size > 1) {
-        for (const id of multiIds) moveCanvasObject(id, dx * step, dy * step);
+        moveCanvasObjects([...multiIds], dx * step, dy * step);
         setMoveAnnouncement(`${multiIds.size} cards moved ${label}.`);
         return;
       }
@@ -1047,7 +1103,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [cancelPendingOpenObjectFocus, flow, moveCanvasObject, selectedNodeId, multiIds]);
+  }, [cancelPendingOpenObjectFocus, flow, moveCanvasObject, moveCanvasObjects, selectedNodeId, multiIds]);
 
 
   useEffect(() => {
@@ -1487,13 +1543,15 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [cancelPendingOpenObjectFocus]);
 
   const persistPosition = useCallback((_event: MouseEvent | TouchEvent, node: CanvasNode, dragged: CanvasNode[] = [node]) => {
+    const moves: { id: string; position: CanvasPoint; before?: CanvasPoint }[] = [];
     for (const item of dragged.length ? dragged : [node]) {
       draggingNodeIdsRef.current.delete(item.id);
       const before = dragStartPositionsRef.current.get(item.id);
       dragStartPositionsRef.current.delete(item.id);
-      commitUserPosition(item.id, { x: item.position.x, y: item.position.y }, before);
+      moves.push({ id: item.id, position: { x: item.position.x, y: item.position.y }, before });
     }
-  }, [commitUserPosition]);
+    commitUserPositions(moves);
+  }, [commitUserPositions]);
 
   const handleNodesChange = useCallback((changes: NodeChange<CanvasNode>[]) => {
     onNodesChange(changes);
