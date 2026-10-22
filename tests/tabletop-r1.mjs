@@ -239,13 +239,16 @@ try {
   expect(peer.domain.answers.map(answer => answer.actorId)).toEqual([firstLearner.actor.actorId]);
   expect(peer.domain.representations[firstLearner.actor.actorId]).toBe('graph');
   expect(peer.domain.difficulties[firstLearner.actor.actorId]).toBe('advanced');
+  // F035: an unassigned learner may change the lesson; on the Learner preset the server refuses it.
+  expect((await commandFrom(teacher, 'access.assign', { actorId: peer.actor.actorId, roleId: 'learner' })).status).toBe(200);
   const forbidden = await commandFrom(learner2, 'teaching.setParameters', { force: 0, mass: 1, time: 2 });
   expect(forbidden.status).toBe(403);
+  expect(forbidden.body.errorCode).toBe('FORBIDDEN');
   await expectSeparatedObjects(teacher);
   await expectSeparatedObjects(learner1);
   await teacher.screenshot({ path: join(output, 'teaching-teacher.png') });
   await learner1.screenshot({ path: join(output, 'teaching-learner.png') });
-  mark('Three real sessions share physics; local exploration stays per learner, teacher note, representations and answers are visible to every member (F015 open visibility; was: scoped per learner), learners still cannot change the lesson');
+  mark('Three real sessions share physics; local exploration stays per learner, teacher note, representations and answers are visible to every member (F015 open visibility; was: scoped per learner), a learner on the Learner preset cannot change the lesson (F035)');
   await learner2.reload(); await expect(learner2.locator('.tt-canvas-node--lesson-scene')).toContainText('4 m');
   const tableOptions = teacher.locator('.tt-table-options');
   if (await tableOptions.getAttribute('open') === null) await tableOptions.locator('summary').click();
@@ -293,13 +296,16 @@ try {
   await expectSeparatedObjects(mira);
   await dm.screenshot({ path: join(output, 'encounter-dm.png') });
   await mira.screenshot({ path: join(output, 'encounter-player.png') });
+  // F035: an unassigned player may run the encounter; on the Player preset the server refuses it.
+  expect((await commandFrom(dm, 'access.assign', { actorId: playerProjection.actor.actorId, roleId: 'player' })).status).toBe(200);
   const illegalResolve = await commandFrom(mira, 'encounter.resolve', {});
   expect(illegalResolve.status).toBe(403);
+  expect(illegalResolve.body.errorCode).toBe('FORBIDDEN');
   const endTurnActions = await openObject(dm, 'encounter.actions');
   await clickCommand(dm, endTurnActions.getByRole('button', { name: /End .*turn/ }), 'encounter.endTurn');
   await expect(mira.locator('.tt-inline-character-list')).toContainText('2 AP');
   await pip.reload(); await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
-  mark('DM + two players share a real reaction; hit values and DM note are visible to players (F015 open visibility; was: hidden), players still cannot resolve, ally shield consumes AP, turn restores AP and reload preserves HP');
+  mark('DM + two players share a real reaction; hit values and DM note are visible to players (F015 open visibility; was: hidden), a player on the Player preset cannot resolve (F035), ally shield consumes AP, turn restores AP and reload preserves HP');
   expect(errors).toEqual([]);
   mark('No uncaught browser JavaScript errors across all seven independent contexts');
   await writeFile(join(output, 'report.json'), JSON.stringify({ checks, errors, date: new Date().toISOString(), liveModel: 'not configured', hosting: 'local loopback' }, null, 2));

@@ -8,3 +8,4 @@
 export type VisibilityPolicy = 'open' | 'private';
 
 export const VISIBILITY_POLICY: VisibilityPolicy = 'open';
+

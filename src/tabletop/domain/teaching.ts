@@ -6,7 +6,7 @@ import {
   type TeachingState,
 } from '../shared/contracts';
 import { calculatePhysics, physicsParamsSchema } from './physics';
-import { assert, hash, hasRole, ID_SCHEMA, makeId, parsePayload } from './helpers';
+import { assert, hash, hasRole, requirePermission, ID_SCHEMA, makeId, parsePayload } from './helpers';
 
 const representationSchema = z.object({
   actorId: ID_SCHEMA,
@@ -48,7 +48,7 @@ export function createTeachingState(ctx: ActorContext): TeachingState {
 
 export function handleTeachingCommand(state: TeachingState, type: string, payload: unknown, ctx: ActorContext): { state: TeachingState; label: string } | null {
   if (type === 'teaching.setParameters') {
-    hasRole(ctx, ['teacher']);
+    requirePermission(ctx, 'lesson.parameters', ['teacher']);
     const nextParams = parsePayload(physicsParamsSchema, payload);
     if (nextParams.force === state.parameters.force && nextParams.mass === state.parameters.mass && nextParams.time === state.parameters.time) {
       return { state: structuredClone(state), label: 'Lesson parameters are unchanged.' };
@@ -63,7 +63,7 @@ export function handleTeachingCommand(state: TeachingState, type: string, payloa
     return { state: next, label: `Shared lesson updated to revision ${next.ruleRevision}.` };
   }
   if (type === 'teaching.setRepresentation') {
-    hasRole(ctx, ['teacher']);
+    requirePermission(ctx, 'lesson.representation', ['teacher']);
     const input = parsePayload(representationSchema, payload);
     const next = structuredClone(state);
     next.representations[input.actorId] = input.representation;
@@ -92,7 +92,7 @@ export function handleTeachingCommand(state: TeachingState, type: string, payloa
     return { state: next, label: correct ? 'Answer saved as correct.' : 'Answer saved with a worked hint.' };
   }
   if (type === 'teaching.saveNote') {
-    hasRole(ctx, ['teacher']);
+    requirePermission(ctx, 'lesson.note', ['teacher']);
     const input = parsePayload(noteSchema, payload);
     const next = structuredClone(state);
     next.teacherNote = input.text;

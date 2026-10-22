@@ -1,8 +1,10 @@
+import type { AccessConfig, Permission } from './permissions';
 import type { TableChange, TableProgram, TableState } from './table-contracts';
 export type CaseKind = 'invoice' | 'teaching' | 'encounter' | 'table';
 export type Role = 'owner' | 'teacher' | 'learner' | 'dm' | 'player' | 'participant';
 export type Seat = 'learner-1' | 'learner-2' | 'mira' | 'pip' | 'member-1' | 'member-2' | 'member-3' | 'member-4' | 'member-5' | 'member-6' | 'member-7';
-export interface ActorContext { actorId: string; name: string; role: Role; seat?: Seat; workspaceId: string; epoch: number; now: number; hash(value: unknown): string }
+/** `permissions` is set by the server from the table's access settings (F035); without it, legacy role checks apply. */
+export interface ActorContext { actorId: string; name: string; role: Role; seat?: Seat; workspaceId: string; epoch: number; now: number; hash(value: unknown): string; permissions?: ReadonlySet<Permission> }
 export interface Member { actorId: string; name: string; role: Role; seat?: Seat }
 export interface SourcePage { number: number; text: string }
 export interface Artifact {
@@ -34,7 +36,7 @@ export interface Candidate {
   approval: { id: string; actorId: string; candidateHash: string; proofHash: string; epoch: number; expiresAt: number; revoked: boolean } | null;
 }
 export interface RevisionRecord { revision: number; change: ChangeSet; activatedAt: number; actorId: string; candidateHash: string; snapshot: { kind: 'invoice'; rules: RateRule[] } | { kind: 'teaching'; parameters: PhysicsParams } | { kind: 'encounter'; rule: EncounterRule } | { kind: 'table'; program: TableProgram } }
-export interface DomainBase { dataRevision: number; ruleRevision: number; candidate: Candidate | null; revisions: RevisionRecord[] }
+export interface DomainBase { dataRevision: number; ruleRevision: number; candidate: Candidate | null; revisions: RevisionRecord[]; access?: AccessConfig }
 export interface InvoiceRun { id: string; createdAt: number; dataRevision: number; ruleRevision: number; result: InvoiceResult; sourceIds: string[] }
 export interface InvoiceState extends DomainBase { kind: 'invoice'; shipments: Shipment[]; invoiceLines: InvoiceLine[]; sources: Artifact[]; rules: RateRule[]; runs: InvoiceRun[] }
 export type Representation = 'text' | 'scene' | 'graph';

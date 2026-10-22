@@ -14,7 +14,7 @@ import {
 import { applyInvoiceOperations, invoiceChangeSchema, invoiceSourceHash, reconcileInvoice, validateRuleSet } from './invoice';
 import { encounterRuleSchema } from './encounter';
 import { calculatePhysics, physicsParamsSchema } from './physics';
-import { assert, canonicalJson, hash, hasRole, parsePayload } from './helpers';
+import { assert, canonicalJson, hash, parsePayload, requirePermission } from './helpers';
 import { makeTeachingQuestionId } from './teaching';
 import { applyTableChange, tableChangeIssues, tableChangeSchema } from './table';
 import { jsonWithinBudget } from '../shared/json-budget';
@@ -79,9 +79,9 @@ function hashCandidate(ctx: ActorContext, candidate: Pick<Candidate, 'change' | 
   });
 }
 
-function requireCaseRole(state: DomainState, ctx: ActorContext): void {
+function requireCaseRole(state: DomainState, ctx: ActorContext, permission: 'rules.draft' | 'rules.approve'): void {
   const role = state.kind === 'invoice' || state.kind === 'table' ? 'owner' : state.kind === 'teaching' ? 'teacher' : 'dm';
-  hasRole(ctx, [role]);
+  requirePermission(ctx, permission, [role]);
 }
 
 function assertChangeMatchesState(state: DomainState, change: ChangeSet): void {
@@ -89,7 +89,7 @@ function assertChangeMatchesState(state: DomainState, change: ChangeSet): void {
 }
 
 function proposeCandidate(state: DomainState, change: ChangeSet, ctx: ActorContext): DomainState {
-  requireCaseRole(state, ctx);
+  requireCaseRole(state, ctx, 'rules.draft');
   assertChangeMatchesState(state, change);
   const source = sourceHash(state, ctx);
   const deltaHash = hash(ctx, planDelta(change));
@@ -315,20 +315,20 @@ function restoreRevision(state: DomainState, revision: number): ChangeSet {
 
 export function handleEvolutionCommand(state: DomainState, type: string, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } | null {
   if (type === 'evolve.propose') {
-    requireCaseRole(state, ctx);
+    requireCaseRole(state, ctx, 'rules.draft');
     assert(jsonWithinBudget(payload) && expressionWithinBounds(payload), 'INVALID_PAYLOAD', 'The candidate exceeds the allowed structure or expression depth.');
     const input = parsePayload(proposeSchema, payload);
     assertChangeMatchesState(state, input.change);
     return { state: proposeCandidate(state, input.change, ctx), label: 'Candidate created against the current data and rule revisions.' };
   }
   if (type === 'evolve.rollback') {
-    requireCaseRole(state, ctx);
+    requireCaseRole(state, ctx, 'rules.draft');
     const input = parsePayload(rollbackSchema, payload);
     const change = restoreRevision(state, input.revision);
     return { state: proposeCandidate(state, change, ctx), label: `Rollback candidate prepared from revision ${input.revision}; approval and activation are still required.` };
   }
   if (type === 'evolve.simulate') {
-    requireCaseRole(state, ctx);
+    requireCaseRole(state, ctx, 'rules.approve');
     parsePayload(noPayloadSchema, payload);
     assert(state.candidate, 'CANDIDATE_NOT_FOUND', 'Propose a candidate before running a simulation.');
     const candidate = structuredClone(state.candidate);
@@ -343,7 +343,7 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     return { state: next, label: 'Deterministic before/after simulation saved; Active state is unchanged.' };
   }
   if (type === 'evolve.validate') {
-    requireCaseRole(state, ctx);
+    requireCaseRole(state, ctx, 'rules.approve');
     parsePayload(noPayloadSchema, payload);
     assert(state.candidate, 'CANDIDATE_NOT_FOUND', 'Propose a candidate before validation.');
     const candidate = structuredClone(state.candidate);
@@ -357,7 +357,7 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     return { state: next, label: failed.length ? `Validation blocked: ${failed.map((check) => check.message).join(' ')}` : 'Trusted validation proof passed.' };
   }
   if (type === 'evolve.approve') {
-    requireCaseRole(state, ctx);
+    requireCaseRole(state, ctx, 'rules.approve');
     parsePayload(noPayloadSchema, payload);
     assert(state.candidate, 'CANDIDATE_NOT_FOUND', 'There is no candidate to approve.');
     const candidate = structuredClone(state.candidate);
@@ -382,7 +382,7 @@ export function handleEvolutionCommand(state: DomainState, type: string, payload
     return { state: next, label: 'Human approval recorded for this candidate and proof.' };
   }
   if (type === 'evolve.activate') {
-    requireCaseRole(state, ctx);
+    requireCaseRole(state, ctx, 'rules.approve');
     parsePayload(noPayloadSchema, payload);
     assert(state.candidate, 'CANDIDATE_NOT_FOUND', 'There is no candidate to activate.');
     const candidate = structuredClone(state.candidate);

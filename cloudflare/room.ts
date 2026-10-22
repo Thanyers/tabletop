@@ -316,6 +316,7 @@ function tableAssistantJobViewFor(job: RoomModelJob): TableAssistantJob {
   };
 }
 
+/** Adds who asked, when, and what, so open visibility (F015) can show rule requests to the table. */
 function modelJobView(job: RoomModelJob): PublicModelJob {
   return {
     ...modelJobStatusView(job),
@@ -509,7 +510,8 @@ export class Room extends DurableObject<Env> {
       if (suffix === 'invite-link' && (request.method === 'GET' || request.method === 'POST')) {
         const authorized = await this.authorize(request, workspaceId);
         // F003-T3: only the owner of a data table manages its reusable link.
-        if (authorized.workspace.kind !== 'table' || authorized.workspace.actor.role !== 'owner') throw new AuthorityError('ROLE_FORBIDDEN');
+        if (authorized.workspace.kind !== 'table'
+            || !authorized.context.permissions?.has('members.invite')) throw new AuthorityError('ROLE_FORBIDDEN');
         if (request.method === 'GET') return json(200, this.repository.inviteLinkStatus(workspaceId, Date.now()), { 'x-request-id': requestId });
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
@@ -562,9 +564,8 @@ export class Room extends DurableObject<Env> {
         const authorized = await this.authorize(request, workspaceId);
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
-        const requiredModelRole = authorized.workspace.kind === 'invoice' || authorized.workspace.kind === 'table' ? 'owner'
-          : authorized.workspace.kind === 'teaching' ? 'teacher' : 'dm';
-        if (authorized.member.role !== requiredModelRole) throw new AuthorityError('ROLE_FORBIDDEN');
+        // F035: drafting rules (incl. AI drafts) needs the rules.draft permission.
+        if (!authorized.context.permissions?.has('rules.draft')) throw new AuthorityError('ROLE_FORBIDDEN');
         const input = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({
@@ -690,6 +691,8 @@ export class Room extends DurableObject<Env> {
         if (authorized.member.role !== 'owner' && authorized.member.role !== 'participant') {
           throw new AuthorityError('ROLE_FORBIDDEN');
         }
+        // F035: asking the table AI needs the ai.ask permission.
+        if (!authorized.context.permissions?.has('ai.ask')) throw new AuthorityError('ROLE_FORBIDDEN');
         const input = parseTableAssistantRequest(await readJson(request, MAX_COMMAND_BODY_BYTES));
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({

@@ -120,6 +120,19 @@ async function command(
   return { response, body, envelope };
 }
 
+async function currentView(base: string, session: TestSession, workspaceId: string): Promise<WorkspaceView> {
+  const { response, body } = await call<WorkspaceView>(base, `/api/workspaces/${workspaceId}`, { session });
+  expect(response.status).toBe(200);
+  return body as WorkspaceView;
+}
+
+/** F035: give a member a role through the public command, as the owner (or another manager) would. */
+async function assignRole(base: string, session: TestSession, workspaceId: string, actorId: string, roleId: string): Promise<WorkspaceView> {
+  const result = await command(base, session, await currentView(base, session, workspaceId), 'access.assign', { actorId, roleId });
+  expect(result.response.status, JSON.stringify(result.body)).toBe(200);
+  return (result.body as CommandAck).workspace;
+}
+
 interface SocketProjection {
   type: 'projection';
   workspace: WorkspaceView;
@@ -277,7 +290,9 @@ describe('tabletop server authority', () => {
     if ((participantView.body as WorkspaceView).domain.kind !== 'table') throw new Error('Expected participant table projection.');
     expect(((participantView.body as WorkspaceView).domain as Extract<WorkspaceView['domain'], { kind: 'table' }>).sources.map(source => source.filename)).toEqual([tableScenarioSources.equipment.filename]);
 
-    const memberImport = await command(base, redeemed.session, participantView.body as WorkspaceView, 'table.import', {
+    // F035: an unassigned member may remove files; a Contributor (files.add without files.remove) may not.
+    await assignRole(base, owner, workspace.id, participant.actorId, 'contributor');
+    const memberImport = await command(base, redeemed.session, await currentView(base, redeemed.session, workspace.id), 'table.import', {
       filename: 'second.txt', text: 'participants can add sources',
     });
     expect(memberImport.response.status).toBe(200);
@@ -288,7 +303,7 @@ describe('tabletop server authority', () => {
     expect((removeDenied.body as ApiError).errorCode).toBe('FORBIDDEN');
   });
 
-  it('lets only the table owner remove a participant, who then loses access (F003-T1)', async () => {
+  it('lets only members with members.remove remove a participant, who then loses access (F003-T1, F035)', async () => {
     const { base } = await openServer();
     const owner = await createSession(base, 'Remove owner');
     const first = await createSession(base, 'First participant');
@@ -297,6 +312,7 @@ describe('tabletop server authority', () => {
     const firstJoin = await redeem(base, first, (await invite(base, owner, workspace.id, 'member-1')).ticket);
     const secondJoin = await redeem(base, second, (await invite(base, owner, workspace.id, 'member-2')).ticket);
     const path = `/api/workspaces/${workspace.id}/members/remove`;
+    await assignRole(base, owner, workspace.id, first.actorId, 'editor');
 
     const byParticipant = await call<WorkspaceView>(base, path, { session: firstJoin.session, body: { actorId: second.actorId } });
     expect(byParticipant.response.status).toBe(403);
@@ -365,9 +381,12 @@ describe('tabletop server authority', () => {
     expect((learnerView.body as WorkspaceView).domain).toMatchObject({ teacherNote: 'Answer key: private.' });
     expect((learnerView.body as WorkspaceView).revision).not.toBe(learnerWorkspaceBeforePrivateChange.revision);
 
-    const deniedTeacherAction = await command(base, learnerSession, learnerView.body as WorkspaceView, 'teaching.setParameters', { force: 20, mass: 2, time: 2 });
+    // F035: an unassigned learner holds lesson.parameters; the Learner preset does not, and the domain refuses it.
+    workspace = await assignRole(base, teacher, workspace.id, learner.actorId, 'learner');
+    const learnerPresetView = await currentView(base, learnerSession, workspace.id);
+    const deniedTeacherAction = await command(base, learnerSession, learnerPresetView, 'teaching.setParameters', { force: 20, mass: 2, time: 2 });
     expect(deniedTeacherAction.response.status).toBe(403);
-    expect((deniedTeacherAction.body as ApiError).errorCode).toBe('ROLE_FORBIDDEN');
+    expect((deniedTeacherAction.body as ApiError).errorCode).toBe('FORBIDDEN');
 
     const commandId = randomUUID();
     const first = await command(base, teacher, workspace, 'teaching.setParameters', { force: 20, mass: 2, time: 2 }, commandId);
@@ -732,13 +751,15 @@ describe('tabletop server authority', () => {
       const directory = await call<SessionView>(base, '/api/session', { session });
       expect((directory.body as SessionView).workspaces.find((item) => item.id === workspace.id)?.title).toBe('Friday boat club');
     }
+    // F035: a Contributor has no table.rename (an unassigned member would).
+    const ownerAfterAssign = await assignRole(base, owner, workspace.id, member.actorId, 'contributor');
     const memberView = (await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: joined.session })).body as WorkspaceView;
     expect(memberView.title).toBe('Friday boat club');
     const memberRename = await command(base, joined.session, memberView, 'workspace.rename', { title: 'Taken over' });
     expect(memberRename.response.status).toBe(403);
     expect((memberRename.body as ApiError).errorCode).toBe('ROLE_FORBIDDEN');
     for (const payload of [{ title: '   ' }, { title: 'line\nbreak' }, { title: 'x'.repeat(101) }, { title: 5 }, { name: 'wrong field' }, { title: 'ok', extra: true }]) {
-      const rejected = await command(base, owner, renamedView, 'workspace.rename', payload);
+      const rejected = await command(base, owner, ownerAfterAssign, 'workspace.rename', payload);
       expect(rejected.response.status, JSON.stringify(payload)).toBeGreaterThanOrEqual(400);
       expect((rejected.body as ApiError).errorCode, JSON.stringify(payload)).toBe('INVALID_COMMAND_PAYLOAD');
     }
@@ -1097,5 +1118,145 @@ describe('tabletop server authority', () => {
       await rm(safeDirectory, { recursive: true, force: true });
       expect(dirname(safeDirectory)).toBe(safeTempRoot);
     }
+  });
+});
+
+describe('F035 role permissions at the authority', () => {
+  async function tableWithMembers(count: number) {
+    const { base } = await openServer();
+    const owner = await createSession(base, 'Role owner');
+    const workspace = await createWorkspace(base, owner, 'table');
+    const members: Array<{ actorId: string; session: TestSession }> = [];
+    for (let index = 1; index <= count; index += 1) {
+      const guest = await createSession(base, `Member ${index}`);
+      const joined = await redeem(base, guest, (await invite(base, owner, workspace.id, `member-${index}`)).ticket);
+      members.push({ actorId: guest.actorId, session: joined.session });
+    }
+    return { base, owner, workspaceId: workspace.id, members };
+  }
+
+  it('lets an unassigned member invite, rename, remove another member and run the whole rule review, but not reset or remove the owner', async () => {
+    const { base, owner, workspaceId, members: [first, second] } = await tableWithMembers(2);
+    const session = first.session;
+
+    const invited = await call<InviteResponse>(base, `/api/workspaces/${workspaceId}/invites`, { session, body: { seat: 'member-3' } });
+    expect(invited.response.status, JSON.stringify(invited.body)).toBe(201);
+    const renamed = await command(base, session, await currentView(base, session, workspaceId), 'workspace.rename', { title: 'Member named' });
+    expect(renamed.response.status).toBe(200);
+    expect((renamed.body as CommandAck).workspace.title).toBe('Member named');
+
+    let view = await currentView(base, session, workspaceId);
+    const run = async (type: string, payload: unknown) => {
+      const result = await command(base, session, view, type, payload);
+      expect(result.response.status, `${type}: ${JSON.stringify(result.body)}`).toBe(200);
+      view = (result.body as CommandAck).workspace;
+    };
+    await run('table.import', tableScenarioSources.game);
+    if (view.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    await run('evolve.propose', { change: gameChange(view.domain.sources[0].id) });
+    for (const type of ['evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate']) await run(type, {});
+    expect(view.domain.kind === 'table' && view.domain.ruleRevision).toBe(1);
+
+    const removeOwner = await call<WorkspaceView>(base, `/api/workspaces/${workspaceId}/members/remove`, { session, body: { actorId: owner.actorId } });
+    expect(removeOwner.response.status).toBe(409);
+    expect((removeOwner.body as ApiError).errorCode).toBe('MEMBER_NOT_REMOVABLE');
+    const removed = await call<WorkspaceView>(base, `/api/workspaces/${workspaceId}/members/remove`, { session, body: { actorId: second.actorId } });
+    expect(removed.response.status).toBe(200);
+    expect((removed.body as WorkspaceView).members.map((member) => member.actorId)).not.toContain(second.actorId);
+
+    const reset = await command(base, session, await currentView(base, session, workspaceId), 'workspace.reset', {});
+    expect(reset.response.status).toBe(403);
+    expect((reset.body as ApiError).errorCode).toBe('ROLE_FORBIDDEN');
+  });
+
+  it('refuses every management action for a Viewer', async () => {
+    const { base, owner, workspaceId, members: [viewer, other] } = await tableWithMembers(2);
+    await assignRole(base, owner, workspaceId, viewer.actorId, 'viewer');
+    const session = viewer.session;
+    const view = await currentView(base, session, workspaceId);
+    expect(view.domain.access?.assignments).toEqual({ [viewer.actorId]: 'viewer' });
+
+    const invited = await call<ApiError>(base, `/api/workspaces/${workspaceId}/invites`, { session, body: { seat: 'member-3' } });
+    expect([invited.response.status, (invited.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    const removed = await call<ApiError>(base, `/api/workspaces/${workspaceId}/members/remove`, { session, body: { actorId: other.actorId } });
+    expect([removed.response.status, (removed.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    const renamed = await command(base, session, view, 'workspace.rename', { title: 'Viewer named' });
+    expect([renamed.response.status, (renamed.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    for (const [type, payload] of [
+      ['table.import', { filename: 'viewer.txt', text: 'viewer text' }],
+      ['evolve.propose', { change: gameChange('missing-source') }],
+      ['evolve.simulate', {}],
+      ['access.assign', { actorId: other.actorId, roleId: 'viewer' }],
+      ['access.saveRole', { name: 'Viewer made', permissions: [] }],
+    ] as const) {
+      const denied = await command(base, session, view, type, payload);
+      expect([denied.response.status, (denied.body as ApiError).errorCode], type).toEqual([403, 'FORBIDDEN']);
+    }
+    const reset = await command(base, session, view, 'workspace.reset', {});
+    expect([reset.response.status, (reset.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+  });
+
+  it('lets an unassigned learner change lesson settings and write notes, but answers stay with the learner seat', async () => {
+    const { base } = await openServer();
+    const teacher = await createSession(base, 'Lesson teacher');
+    const guest = await createSession(base, 'Lesson learner');
+    const workspace = await createWorkspace(base, teacher, 'teaching');
+    const joined = await redeem(base, guest, (await invite(base, teacher, workspace.id, 'learner-1')).ticket);
+    const changed = await command(base, joined.session, await currentView(base, joined.session, workspace.id), 'teaching.setParameters', { force: 20, mass: 2, time: 2 });
+    expect(changed.response.status, JSON.stringify(changed.body)).toBe(200);
+    expect((changed.body as CommandAck).workspace.domain).toMatchObject({ parameters: { force: 20, mass: 2, time: 2 } });
+    const note = await command(base, joined.session, (changed.body as CommandAck).workspace, 'teaching.saveNote', { text: 'Learner note' });
+    expect(note.response.status, JSON.stringify(note.body)).toBe(200);
+    const view = (note.body as CommandAck).workspace;
+    if (view.domain.kind !== 'teaching') throw new Error('Expected a lesson.');
+    const teacherAnswer = await command(base, teacher, await currentView(base, teacher, workspace.id), 'teaching.answer', { questionId: 'any', value: 1 });
+    expect([teacherAnswer.response.status, (teacherAnswer.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+  });
+
+  it('assigns roles only to current non-owner members', async () => {
+    const { base, owner, workspaceId, members: [member] } = await tableWithMembers(1);
+    const outsider = await createSession(base, 'Outsider');
+    const view = await currentView(base, owner, workspaceId);
+    const toOwner = await command(base, owner, view, 'access.assign', { actorId: owner.actorId, roleId: 'viewer' });
+    expect([toOwner.response.status, (toOwner.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    const byMember = await command(base, member.session, await currentView(base, member.session, workspaceId), 'access.assign', { actorId: owner.actorId, roleId: 'viewer' });
+    expect([byMember.response.status, (byMember.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    const toOutsider = await command(base, owner, view, 'access.assign', { actorId: outsider.actorId, roleId: 'viewer' });
+    expect([toOutsider.response.status, (toOutsider.body as ApiError).errorCode]).toEqual([404, 'MEMBER_NOT_FOUND']);
+    const malformed = await command(base, owner, view, 'access.assign', { roleId: 'viewer' });
+    expect([malformed.response.status, (malformed.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
+    const back = await assignRole(base, owner, workspaceId, member.actorId, 'default');
+    expect(back.domain.access?.assignments).toEqual({});
+  });
+
+  it('stops a role manager from granting permissions they do not hold', async () => {
+    const { base, owner, workspaceId, members: [manager, target] } = await tableWithMembers(2);
+    const saved = await command(base, owner, await currentView(base, owner, workspaceId), 'access.saveRole', {
+      name: 'Role keeper', permissions: ['roles.manage', 'rules.draft', 'files.add', 'table.act', 'ai.ask'],
+    });
+    expect(saved.response.status, JSON.stringify(saved.body)).toBe(200);
+    const roleId = (saved.body as CommandAck).workspace.domain.access?.roles[0]?.id;
+    if (!roleId) throw new Error('Expected a custom role.');
+    await assignRole(base, owner, workspaceId, manager.actorId, roleId);
+    const session = manager.session;
+    // The target is unassigned (every permission), so a weaker manager cannot change their role at all.
+    const strongerTarget = await command(base, session, await currentView(base, session, workspaceId), 'access.assign', { actorId: target.actorId, roleId: 'viewer' });
+    expect([strongerTarget.response.status, (strongerTarget.body as ApiError).errorCode]).toEqual([403, 'FORBIDDEN']);
+    await assignRole(base, owner, workspaceId, target.actorId, 'viewer');
+
+    for (const [type, payload] of [
+      ['access.assign', { actorId: target.actorId, roleId: 'manager' }],
+      ['access.assign', { actorId: manager.actorId, roleId: 'manager' }],
+      ['access.assign', { actorId: target.actorId, roleId: 'default' }],
+      ['access.saveRole', { name: 'Remover', permissions: ['members.remove'] }],
+      ['access.saveRole', { id: roleId, name: 'Role keeper', permissions: ['roles.manage', 'members.remove'] }],
+    ] as const) {
+      const denied = await command(base, session, await currentView(base, session, workspaceId), type, payload);
+      expect([denied.response.status, (denied.body as ApiError).errorCode], JSON.stringify(payload)).toEqual([403, 'FORBIDDEN']);
+    }
+    const contributor = await assignRole(base, session, workspaceId, target.actorId, 'contributor');
+    expect(contributor.domain.access?.assignments[target.actorId]).toBe('contributor');
+    const removed = await call<ApiError>(base, `/api/workspaces/${workspaceId}/members/remove`, { session, body: { actorId: target.actorId } });
+    expect([removed.response.status, (removed.body as ApiError).errorCode]).toEqual([403, 'ROLE_FORBIDDEN']);
   });
 });

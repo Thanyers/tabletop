@@ -176,9 +176,7 @@ function actorAndRole(request: AIProposalRequest): void {
   if (actor.actorId !== actorId || !member || member.role !== actor.role) {
     fail('AI_FORBIDDEN', 'The current room membership cannot request this proposal.');
   }
-  const requiredRole = workspace.kind === 'invoice' ? 'owner'
-    : workspace.kind === 'table' ? 'owner' : workspace.kind === 'teaching' ? 'teacher' : 'dm';
-  if (actor.role !== requiredRole) fail('AI_FORBIDDEN', 'The current room role cannot request this proposal.');
+  // F035: the Room checks the rules.draft permission before dispatching; here only the caller's membership.
   if (workspace.domain.kind !== workspace.kind || !Number.isSafeInteger(workspace.epoch)
     || workspace.epoch < 0 || typeof workspace.revision !== 'string' || workspace.revision.length > 256) {
     fail('AI_CONTEXT_INVALID', 'The current room state is invalid.');

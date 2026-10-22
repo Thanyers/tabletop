@@ -355,7 +355,7 @@ try {
   expect((await action).status()).toBe(200);
   await expect.poll(async () => (await api(pip, `/api/workspaces/${room.id}`)).body.domain.phase).toBe('reaction.open');
   // F015 open visibility: the player now reads the pending roll/damage and the DM note (was: hidden);
-  // acting is still DM-only (Resolve hit stays hidden and a player resolve is rejected below).
+  // F035: an unassigned player may run the encounter (game.direct); on the Player preset they may not.
   const pipProjection = (await api(pip, `/api/workspaces/${room.id}`)).body;
   const dmProjection = (await api(dm, `/api/workspaces/${room.id}`)).body;
   expect(typeof pipProjection.domain.pendingHit.roll).toBe('number');
@@ -363,8 +363,15 @@ try {
   expect(pipProjection.domain.pendingHit.damage).toBe(dmProjection.domain.pendingHit.damage);
   expect(JSON.stringify(pipProjection)).toContain('PRIVATE_DM_CF_BROWSER_MARKER');
   await openCanvasObject(pip, 'encounter.actions');
-  await expect(pip.getByTestId('canvas-object-editor').getByRole('button', { name:'Resolve hit', exact:true })).toHaveCount(0);
-  expect((await command(pip, 'encounter.resolve')).status).toBe(403);
+  const pipResolveButton = pip.getByTestId('canvas-object-editor').getByRole('button', { name:'Resolve hit', exact:true });
+  await expect(pipResolveButton).toBeVisible();
+  const pipActorId = (await api(pip, `/api/workspaces/${room.id}`)).body.actor.actorId;
+  expect((await command(dm, 'access.assign', { actorId: pipActorId, roleId: 'player' })).status).toBe(200);
+  // The button follows the permission once the new projection arrives; the server refuses the command too.
+  await expect(pipResolveButton).toHaveCount(0);
+  const pipResolve = await command(pip, 'encounter.resolve');
+  expect(pipResolve.status).toBe(403);
+  expect(pipResolve.body.errorCode).toBe('FORBIDDEN');
   expect((await command(dm, 'encounter.pause')).status).toBe(200);
   const pausedAction = await command(pip, 'encounter.shield', { target: 'pip' });
   expect(pausedAction.status).toBe(422);
@@ -379,7 +386,7 @@ try {
   await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
   await pip.reload();
   await expect(pip.locator('.tt-inline-character-list')).toContainText('8/10 HP');
-  mark('Live multiplayer shares DM hit values and note with players (F015 open visibility; was: DM/player privacy) while only the DM resolves; pause/resume and committed HP survive browser reload');
+  mark('Live multiplayer shares DM hit values and note with players (F015 open visibility; was: DM/player privacy) while an unassigned player sees Resolve hit and a player on the Player preset neither sees nor can use it (F035); pause/resume and committed HP survive browser reload');
 
   const outsider = await newPage(actors[3]);
   expect((await api(outsider, `/api/workspaces/${room.id}`)).status).toBe(403);
