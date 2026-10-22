@@ -372,3 +372,6 @@
 .tt-app .tt-canvas-objects__list li > button:first-child { flex: 1 1 auto; min-width: 0; }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 32px; padding: 0; color: var(--tt-muted); }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye[aria-pressed='true'] { color: var(--tt-moss); }
+
+/* A notification's action button (e.g. View rules after new rules went into use). */
+.tt-app .tt-notice > button.tt-notice__action { width: auto; height: 28px; padding: 0 12px; border: 1px solid currentColor; border-radius: 999px; font: inherit; font-weight: 650; white-space: nowrap; cursor: pointer; }
