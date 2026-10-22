@@ -98,7 +98,7 @@ job view ของเส้นทางร่างกฎ (`GET /api/workspaces/
 | คำสั่ง | ผล |
 | --- | --- |
 | `npx vitest run server/providers/deepseek-changes.test.ts` | **21/21** — stream split ที่ 1/3/11 ไบต์, reasoning counters, `finish_reason=length` ยังเป็น repair, timeout หลัง 40 ตัวอักษรมี details ครบ, provider-close + เพดาน 600/4,000, non-SSE fallback |
-| `npm test` | **560 passed / 1 skipped** (81 ไฟล์) |
+| `npm test` | **563 passed / 1 skipped** (82 ไฟล์) |
 | `npm run test:cloudflare` | **125/125** (9 ไฟล์ · room 52, ai 18, model-failure 10, ai-deadline 3) |
 | `npm run typecheck` | 0 |
 | `npm run lint` | 0 error / 103 warning (warning เดิม ไม่มีใหม่) |
@@ -107,7 +107,7 @@ job view ของเส้นทางร่างกฎ (`GET /api/workspaces/
 | `npm run test:cloudflare:browser` (msedge) | **27 checks PASS ติดกัน 2 รอบ** (exit 0) |
 | `node --import tsx scripts/f045-live-probe.mjs --deadline=240000` | **PASS** — dragon draft 76.6s (attempt 1, 9,427 chars, thinking 59,311 chars) · big-source 10,000 chars draft 71.0s (attempt 2) ทั้งคู่ < 240s |
 
-อาร์ติแฟกต์: `test-results/f045-live-2026-10-22T11-46-29-301Z/live-probe.{md,json}` · `test-results/f045-browser3.log` · `test-results/f045-browser4.log`
+อาร์ติแฟกต์: `test-results/f045-live-2026-10-22T11-46-29-301Z/live-probe.{md,json}` · `test-results/m-browser1.log` · `test-results/m-browser2.log` (รันซ้ำหลัง merge `origin/dev` = `237565b` ซึ่งแตะ `useTableChat.tsx`/`table-chat-state.ts`/`table-chat.css` ร่วมกัน)
 
 **หมายเหตุ browser:** ก่อน branch นี้ suite แดงอยู่แล้วที่ check เดียวกัน (`expected 'Draft ready for review'`) — ยืนยันด้วย baseline run บน tree สะอาดที่ stash งานทั้งหมดไว้ (`test-results/f045-browser-baseline.log`) ⇒ สถานะนี้มาจาก F039 (#133) ไม่ใช่ F045 · expectation เดิมรอสถานะชั่วคราวที่เกิดเฉพาะเมื่อ job `completed` มาถึงก่อน auto-apply ปรากฏใน projection (แข่งกันระหว่าง poll 1.2s กับ WebSocket push) ซึ่งไม่เกิดเลยบน Node 22.23.2 + msedge · แก้เฉพาะ expectation ใน `tests/cloudflare-browser.mjs` ให้ตรวจสถานะที่เกิดจริง ("Rules in use") ไม่ได้แตะโค้ดแอป และยังยืนยัน `candidate.status === 'active'` ต่อ
 
