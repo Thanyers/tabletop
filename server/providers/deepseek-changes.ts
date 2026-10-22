@@ -118,6 +118,11 @@ export class RejectedChangeReply extends DomainError {
 export interface DeepSeekChangeProgress {
   receivedChars: number;
   reasoningChars: number;
+  /**
+   * F050: the bounded tail of the thinking received so far, so a waiting card can show what the
+   * model is doing instead of only counting characters. The caller redacts it before storing.
+   */
+  thinkingTail?: string;
 }
 
 /** Provider progress plus the bounded text that is worth keeping as evidence. */
@@ -348,7 +353,11 @@ async function readChangeStream(
           }
         }
         if (chunk.usage !== undefined && chunk.usage !== null) usageRaw = chunk.usage;
-        onProgress?.({ receivedChars: state.receivedChars, reasoningChars: state.reasoningChars });
+        onProgress?.({
+          receivedChars: state.receivedChars,
+          reasoningChars: state.reasoningChars,
+          ...(state.thinkingTail ? { thinkingTail: state.thinkingTail } : {}),
+        });
       }
     }
   } catch (error) {

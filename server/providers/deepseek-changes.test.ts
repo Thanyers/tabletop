@@ -489,6 +489,20 @@ describe('DeepSeekChangeProvider streaming (F045)', () => {
     expect(progress.at(-1)).toMatchObject({ receivedChars: TEACHING_CHANGE.length, reasoningChars: 'considering the lesson'.length });
   });
 
+  it('carries the bounded thinking tail in live progress, so a waiting card can show it (F050)', async () => {
+    const reasoning = `${'step '.repeat(200)}final check`;
+    const progress: DeepSeekChangeProgress[] = [];
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async () => streamResponse(`${sseDelta(undefined, reasoning)}${streamBody(TEACHING_CHANGE)}${sseFinish('stop')}`),
+    });
+    await provider.propose(input(), new AbortController().signal, (sample) => progress.push({ ...sample }));
+    const last = progress.at(-1);
+    expect(last?.reasoningChars).toBe(reasoning.length);
+    expect(last?.thinkingTail).toBe(reasoning.slice(-MAX_JOB_THINKING_TAIL_CHARS));
+    expect(last?.thinkingTail?.length).toBe(MAX_JOB_THINKING_TAIL_CHARS);
+  });
+
   it('parses a stream split at arbitrary chunk boundaries', async () => {
     const text = `${sseDelta(undefined, 'plan the table')}${streamBody(TEACHING_CHANGE, 4)}${sseFinish('stop')}`;
     for (const splitAt of [1, 3, 11]) {
