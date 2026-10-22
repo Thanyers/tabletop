@@ -4,6 +4,8 @@ import { ApiFailure, type ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantReference } from '../shared/table-assistant-contracts';
 import type { TableState } from '../shared/table-contracts';
+import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
+import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
 import { ClarificationAnswers } from './ClarificationAnswers';
@@ -75,6 +77,13 @@ function scopeFor(view: TableView | null): string {
 
 function chatNodeId(scope: string, id: string): string {
   return `chat.${encodeURIComponent(scope)}.${id}`;
+}
+
+/** Under open visibility a card with a server job uses the job's shared id, so everyone moves the same card (F034). */
+function chatCardNodeId(scope: string, card: ChatCard): string {
+  const jobId = card.job?.id ?? card.modelJob?.id;
+  const shared = VISIBILITY_POLICY === 'open' && jobId ? sharedChatCanvasId(jobId) : null;
+  return shared ?? chatNodeId(scope, card.id);
 }
 
 function storageKey(scope: string): string {
@@ -631,7 +640,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
     return displayCards.map((card, index) => ({
-      id: chatNodeId(scope, card.id),
+      id: chatCardNodeId(scope, card),
       title: chatCardTitle(card, table),
       eyebrow: card.kind === 'draft' ? 'Rule draft' : 'AI answer',
       glyph: <Sparkles size={16} />,
