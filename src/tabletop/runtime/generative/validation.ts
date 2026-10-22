@@ -364,8 +364,11 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
             assert(control.options.every(option => actionInputType(action, control.parameter) === valueType(option.value) && (!parameter.choices || parameter.choices.includes(String(option.value)))), 'Select options do not match the action parameter.');
             interactiveType = actionInputType(action, control.parameter);
           } else if (control.kind === 'dice') {
-            // F049: a dice control fills exactly one numeric action parameter; the roll itself stays client-side.
-            assert(action.parameters.some(item => item.id === control.parameter && item.type === 'number'), 'Dice must bind a numeric action parameter.');
+            // F051: dice may bind a number parameter (client-side, visual-only) or a roll parameter
+            // (the server rolls the program's roll spec). The card's own faces/count stay valid but
+            // are not authoritative for a roll parameter.
+            const parameter = action.parameters.find(item => item.id === control.parameter);
+            assert(parameter && (parameter.type === 'number' || parameter.type === 'roll'), 'Dice must bind a number or roll action parameter.');
             const diceIssues = validateDiceSpec(control);
             assert(diceIssues.length === 0, diceIssues[0] ?? 'Dice control limits are invalid.');
             interactiveType = 'number';
