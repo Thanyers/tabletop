@@ -180,9 +180,9 @@ export function TableChat({
           event.preventDefault();
           submit();
         }} />
-      {busy && <span id={`${messageId}-wait`} className="tt-visually-hidden">You can keep typing. Send is available when the current request finishes.</span>}
+      {busy && <span id={`${messageId}-wait`} className="tt-visually-hidden">You can keep typing. Send is available once the pending step on the table (a running command, an action proposal or an unconfirmed request) is resolved.</span>}
       {composerAction}
-      <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend} title={busy ? 'Send is available when the current request finishes' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
+      <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend} title={busy ? 'Send is available once the pending step on the table is resolved' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
     </form>
   </div>;
 }

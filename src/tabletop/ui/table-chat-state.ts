@@ -57,7 +57,8 @@ export interface ChatCard {
   kind: 'draft' | 'answer';
   prompt: string;
   createdAt: number;
-  phase: 'sending' | 'waiting' | 'complete' | 'failed';
+  /** `queued`: a rule request waiting for the table's current rule draft to finish (F038). */
+  phase: 'queued' | 'sending' | 'waiting' | 'complete' | 'failed';
   requestCommandId?: ReturnType<typeof crypto.randomUUID>;
   /** In-memory snapshot used only to retry an uncertain request with its original body. */
   requestView?: WorkspaceView;
@@ -168,4 +169,23 @@ export function draftRefreshPatch(targetScope: string, currentScope: string, err
 /** F025: when a concurrent projection wins the race, wait briefly and reapply instead of failing the draft. */
 export function draftRefreshBackoffMs(attempt: number): number {
   return 150 * (attempt + 1);
+}
+
+/**
+ * F038: a table holds one rule draft at a time and a draft that finishes after the table changed
+ * is discarded, so rule requests run one after another. A draft still refreshing the table counts
+ * as running; the next request must start from the refreshed revision.
+ */
+export function draftInFlight(cards: readonly ChatCard[]): boolean {
+  return cards.some((card) => card.kind === 'draft' && (card.phase === 'sending' || card.phase === 'waiting' || card.checking === true));
+}
+
+/** The oldest queued rule request, once nothing else is drafting. Cards are kept newest first. */
+export function nextQueuedDraft(cards: readonly ChatCard[]): ChatCard | undefined {
+  if (draftInFlight(cards)) return undefined;
+  for (let index = cards.length - 1; index >= 0; index -= 1) {
+    const card = cards[index];
+    if (card?.kind === 'draft' && card.phase === 'queued') return card;
+  }
+  return undefined;
 }

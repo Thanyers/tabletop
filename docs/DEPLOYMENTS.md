@@ -1,18 +1,31 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **21 ตุลาคม 2569 เวลา 22:54 (Asia/Bangkok)** ทั้งสอง environment รายงาน **3.4.0 / 442e074** จาก annotated tag [v3.4.0](https://github.com/Thanyers/tabletop/tree/v3.4.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน; AI เปิดและไม่ได้พักการแก้ไข ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
+ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 15:35 (Asia/Bangkok)** ทั้งสอง environment รายงาน **4.3.0 / 12c40a4** จาก annotated tag [v4.3.0](https://github.com/Thanyers/tabletop/tree/v4.3.0) และใช้ sealed build เดียวกัน Health/readiness/capabilities ผ่าน ผลนี้เป็นการตรวจ ณ เวลาที่ระบุ ไม่ใช่ uptime monitor
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [442e074](https://github.com/Thanyers/tabletop/commit/442e074a743c654dbbb448488b46165936a3c4d9) — PR #102 | commit และ build เดียวกัน |
-| Release | v3.4.0 / 3.4.0 | v3.4.0 / 3.4.0 |
+| Source | [12c40a4](https://github.com/Thanyers/tabletop/commit/12c40a49d15d11a9b024da04859110dd51ca7a6b) — PR #125 | commit และ build เดียวกัน |
+| Release | v4.3.0 / 4.3.0 | v4.3.0 / 4.3.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 4.3.0 (22 ตุลาคม 2569)
+
+Release 4.3.0 (MINOR) ผ่าน pipeline CD001 ([run 39748581327](https://github.com/Thanyers/tabletop/actions/runs/39748581327)) — [PR #125](https://github.com/Thanyers/tabletop/pull/125) จาก `dev` @ `d4b5b47` + `main` (#121, #124) · รวม F035 (สิทธิ์ตาม role), F034-T3 (#120, #122), #121, #124
+
+- Tag `v4.3.0` (annotated, github-actions) → `12c40a4`; build ครั้งเดียว `4.3.0 / 12c40a4` (`built_at` 2026-10-22T08:33:52Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production — ไม่มี schema change
+- Staging: Worker version `bffc4ad5-efde-4919-9d2e-b6d6f9414f2c`, smoke PASS
+- Production: Worker version `68d96b6d-b139-46f1-a247-56471739e5d2`, smoke PASS
+- `/version` หลัง deploy ทั้งสอง environment = `4.3.0 / 12c40a4` (ตรวจซ้ำด้วยมือหลัง run จบ)
+- ยังไม่ได้ตรวจด้วยมือบน staging แบบล็อกอิน (role สองบัญชี, แชท AI) — smoke ไม่ล็อกอินและไม่เรียก AI
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-4.3.0`
+- ไม่ได้บันทึกหัวข้อของ 4.0.0 / 4.2.0 ไว้ที่นี่ (ดู GitHub Actions ของ release นั้น)
 
 ## ผลตรวจ deploy 3.3.2 (21 ตุลาคม 2569)
 

@@ -104,6 +104,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | 2026-10-20 | pre-commit hook ไม่ `--fix` ให้อัตโนมัติ | ไม่แก้ไฟล์ที่ stage แทนคน · คนเห็นและแก้เอง |
 | ก่อนหน้า | ไม่ rollback Worker ไปรุ่นที่ไม่รู้จักห้อง `table` ใช้ `TABLE_READ_ONLY=true` แทน | ดู [TEAM_HANDOFF_TH](docs/TEAM_HANDOFF_TH.md#ส่งรุ่นใหม่และกู้คืน) |
 | 2026-10-20 | CD001: merge release เข้า `main` = deploy staging → production อัตโนมัติ รวม D1 migration | ผู้ใช้เลือกเอง; กันด้วยการรอ CI บน merge commit, ตรวจ config, Time Travel bookmark ก่อน migrate, smoke ทุก environment, หยุดและเปิด issue เมื่อล้ม ไม่ rollback เอง |
+| 2026-10-22 | F038 ผู้ใช้เลือก: คำถามขนานกันได้ คำขอร่างกฎเข้าคิว (client) · server เก็บคำตอบธรรมดาแม้โต๊ะเปลี่ยนระหว่างสร้าง | ร่างกฎใช้ candidate ช่องเดียวและผูก revision จึงขนานจริงไม่ได้ · คำตอบอธิบายโต๊ะตอนที่ถาม ส่วน proposal ยังต้องตรง revision ([F038](docs/features/F038-parallel-requests.md)) |
 
 ## งานที่กำลังทำ
 
