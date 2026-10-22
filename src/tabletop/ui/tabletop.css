@@ -1353,3 +1353,13 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-invite-link__row input { flex: 1 1 220px; min-width: 0; padding: 6px 8px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 8px; font: inherit; font-size: 13px; }
 .tt-invite-link__note { color: var(--tt-muted, #66756f); font-size: 13px; }
 .tt-member-count { margin: 6px 0 0; color: var(--tt-muted, #66756f); font-size: 13px; font-weight: 600; }
+.tt-member-limit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
+.tt-member-limit .tt-member-count { margin: 0; }
+.tt-member-limit__control { display: flex; align-items: center; gap: 6px; color: var(--tt-muted, #66756f); font-size: 13px; }
+.tt-member-limit select { min-height: 28px; padding: 0 6px; border: 1px solid var(--tt-line, #dfe5e2); border-radius: 6px; background: #fff; color: inherit; font: inherit; }
+.tt-member-limit small { flex-basis: 100%; color: var(--tt-muted, #66756f); font-size: 12px; }
+/* A table can offer up to twelve member seats: lay them out as a compact grid of short buttons. */
+.tt-invite-choose--compact { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.tt-invite-choose--compact > .tt-kicker, .tt-invite-choose--compact > p { grid-column: 1 / -1; }
+.tt-invite-choose--compact > button { min-height: 34px; padding: 5px 8px; }
+.tt-invite-choose--compact > button small { display: none; }
