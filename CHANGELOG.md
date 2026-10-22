@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 4.2.1 — 2026-10-22
+
+PATCH: โพสต์อิทวาดเป็นกระดาษจริง, เส้นเชื่อมกลับมาแสดง, assistant บอกสาเหตุที่ล้มเหลวพร้อม code/เวลา, เพดาน 120s/8,192 tokens และ streaming ความคืบหน้าระหว่างรอ · ไม่มี schema/migration/secret ใหม่ · rollback กลับ v4.2.0 ได้
 
 - **Canvas (PATCH):** เส้นเชื่อมแสดงอัตโนมัติเมื่อโต๊ะมีเส้น และจำค่าที่ผู้ใช้เลือก (`localStorage`, ไม่เก็บใน workspace) — แก้อาการ "จุดต่ออยู่ครบแต่เส้นหาย" หลัง reload · โน้ต F037 วาดเป็นกระดาษโพสต์อิทเอง ไม่ถูกครอบด้วยการ์ดหัวข้อ/ปุ่ม Open/พื้นที่ขาวอีก · โน้ตถูก pin ตำแหน่งจากตัวโน้ต ไม่ถูก auto-layout ย้าย
 - **Table assistant (PATCH):** ข้อความล้มเหลวระบุสาเหตุจริงและลงท้ายด้วย `(code …)` ทุกครั้ง (timeout, provider error, billing, interrupted, validation พร้อมเหตุผลสั้น ๆ) · **Worker เก็บรหัสจริงแล้ว** — เดิม catch รวมทุก error เป็น `ASSISTANT_FAILED` ทำให้สาเหตุหายถาวร · job ที่ล้มเหลวมี `failureCode`, `failureReasons`, `durationMs` ให้เทสอ่าน และการ์ดมี `data-request-id` / `data-failure-code` / `data-failure-reasons` / `data-duration-ms` · ไม่มี schema/migration/secret ใหม่
