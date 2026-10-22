@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { WorkspaceView } from './contracts.js';
+import { TABLE_TURN_SEATS, type WorkspaceView } from './contracts.js';
 import type { TableValue } from './table-contracts.js';
 
 const revisionTokenSchema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -19,7 +19,7 @@ export const tableAssistantReferenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('action'), id: boundedIdSchema, label: safeLabelSchema }),
   z.strictObject({ kind: z.literal('record'), collectionId: boundedIdSchema, id: boundedIdSchema, label: safeLabelSchema }),
   z.strictObject({ kind: z.literal('field'), collectionId: boundedIdSchema, id: boundedIdSchema, label: safeLabelSchema }),
-  z.strictObject({ kind: z.literal('turn'), seat: z.enum(['host', 'member-1', 'member-2', 'member-3', 'member-4', 'member-5', 'member-6', 'member-7']), label: safeLabelSchema }),
+  z.strictObject({ kind: z.literal('turn'), seat: z.enum(TABLE_TURN_SEATS), label: safeLabelSchema }),
 ]);
 
 /** Follow-up messages the member can pick instead of typing (sent as a new question). */

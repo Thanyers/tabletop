@@ -258,7 +258,7 @@ resolver ต้อง deterministic และไม่เขียน state ร�
 
 **ผลตรวจจริง (Node v22.23.2):**
 - `npm run typecheck` → exit 0
-- `npm test` → **91 passed | 1 skipped (92)**, **698 passed | 1 skipped (699)**, 74.39s (หลัง merge `dev` ล่าสุด)
+- `npm test` → **92 passed | 1 skipped (93)**, **703 passed | 1 skipped (704)**, 58.24s (หลัง merge `dev` ล่าสุด)
 - `npx vitest run src/tabletop/domain/table-card-meta.test.ts` → 21/21
 - `npx vitest run src/tabletop/ui/canvas-card-meta.test.ts` → 20/20
 - backend agent: `npm run test:cloudflare` → 127/127 (ก่อน UI)

@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` (PR #176) |
+| สถานะ | `done` (PR #176 merge เข้า `dev` @ `6b0175e`) |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | PATCH — เพิ่ม meta tag, ไฟล์ static และ header เท่านั้น ไม่มี schema/binding/secret · rollback ได้ทันที |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F051-T*` |
@@ -67,6 +67,7 @@ T3 แตะ `cloudflare/index.ts` และ `wrangler.jsonc` ซึ่งเป
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-22 | ตอบคำถามเปิด: ภาษาหลักของ landing = อังกฤษ · เปลี่ยนรูปแชร์ · ยื่น sitemap ทำทีหลัง | ผู้ใช้ตัดสินในแชท · งานต่อแยกเป็น [F052](F052-english-landing.md) |
 | 2026-10-22 | กันหน้าในแอปไม่ให้ติด index ด้วย `X-Robots-Tag` ไม่ใช่ `Disallow` ใน robots.txt | crawler ที่ถูก Disallow จะไม่เห็น noindex และยังเก็บ URL ได้ |
 | 2026-10-22 | prerender landing / แยก bundle เป็นงานถัดไป | ทำให้ PR นี้เล็กและ rollback ได้ทันที |
 | 2026-10-22 | T3 ใช้ `not_found_handling: "none"` แทนการเพิ่ม path ของแอปใน `run_worker_first` · asset จริงและ `/` ยังเสิร์ฟจาก asset server ตรง (ใช้ `_headers` เดิม) ส่วน path อื่นตกมาที่ Worker | ไม่ต้องดูแลรายการ path สองที่ · Worker ไม่ต้องรันทุกครั้งที่โหลด JS/รูป · HTML ที่ Worker ส่งได้ security header จาก `secured()` ชุดเดียวกับ `_headers` |
