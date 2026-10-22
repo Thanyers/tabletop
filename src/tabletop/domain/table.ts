@@ -278,6 +278,18 @@ export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: s
     if (program.canvas.views.length === 0) delete program.canvas;
   }
   assert(found, 'RULE_ITEM_NOT_FOUND', 'That rule is no longer on this table.');
+  // Links between views are only hints, so drop links to what was removed instead of blocking.
+  for (const descriptor of program.canvas?.views ?? []) {
+    const related = descriptor.relatedTo;
+    if (!related) continue;
+    if (kind === 'view' && related.views) related.views = related.views.filter(item => item !== id);
+    if (kind === 'collection' && related.collections) related.collections = related.collections.filter(item => item !== id);
+    if (related.views?.length === 0) delete related.views;
+    if (related.collections?.length === 0) delete related.collections;
+    if (!related.views && !related.collections) delete descriptor.relatedTo;
+  }
+  const users = ruleItemUsers(program, kind, id);
+  if (users.length > 0) throw new DomainError('RULE_ITEM_IN_USE', `Remove ${users.join(', ')} first; it still uses this.`);
   try {
     checkProgram(program);
     checkRows(program, records);
@@ -289,6 +301,19 @@ export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: s
   }
   const computedColumns = retainComputedColumns(state.computedColumns, program);
   return { ...structuredClone(state), program, records, computedColumns };
+}
+
+/** Names of the rules that still use an action or collection, so the removal message can say what to remove first. */
+function ruleItemUsers(program: TableProgram, kind: RuleItemKind, id: string): string[] {
+  const views = program.canvas?.views ?? [];
+  const mentions = (value: unknown, key: string) => JSON.stringify(value).includes(`${JSON.stringify(key)}:${JSON.stringify(id)}`);
+  if (kind === 'action') return views.filter(view => mentions(view, 'actionId')).map(view => `the view “${view.title}”`);
+  if (kind !== 'collection') return [];
+  return [
+    ...program.actions.filter(action => action.parameters.some(p => p.collection === id) || (action.creates ?? []).some(create => create.collection === id)).map(action => `the action “${action.title}”`),
+    ...program.invariants.filter(invariant => invariant.collection === id).map(invariant => `the check “${invariant.message}”`),
+    ...views.filter(view => mentions(view, 'collection')).map(view => `the view “${view.title}”`),
+  ];
 }
 
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {

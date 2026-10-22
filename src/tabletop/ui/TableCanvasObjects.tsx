@@ -148,8 +148,8 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
     setRemoveFeedback('');
     setPendingRemoval(null);
     try {
-      const result = await onCommand('evolve.removeItem', { kind: removal.kind, id: removal.id });
-      if (!result) setRemoveFeedback(`${removal.title} could not be removed.`);
+      // A refusal is already shown as the table notice with its reason.
+      await onCommand('evolve.removeItem', { kind: removal.kind, id: removal.id });
     } catch (error) {
       setRemoveFeedback(error instanceof Error && error.message ? error.message : `${removal.title} could not be removed.`);
     }

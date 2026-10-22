@@ -63,7 +63,7 @@ describe('F039 evolve.removeItem', () => {
   it('refuses to remove a collection that an action still uses', () => {
     const state = active();
     if (state.kind !== 'table' || !state.program) throw Error('Expected an active table');
-    expect(() => decideDomain(state, { type: 'evolve.removeItem', payload: { kind: 'collection', id: 'equipment' } }, owner)).toThrow(/still uses it/u);
+    expect(() => decideDomain(state, { type: 'evolve.removeItem', payload: { kind: 'collection', id: 'equipment' } }, owner)).toThrow(/Remove the action/u);
   });
 
   it('removes an action and an unknown id is refused', () => {
