@@ -39,7 +39,7 @@ check ที่ต้องผ่านชื่อ **`local-validation`** · CI
 **สองระดับ (CI005):**
 - PR และ push เข้า `dev` → **เช็คเร็ว** (public files, audit, lint, unit, typecheck+build, Worker tests, bundle) ราว 2–3 นาที · ข้าม browser suites
 - PR เข้า `main` (release/hotfix), push เข้า `main` และกด **Run workflow** เอง → **ครบทุกชุด** รวม browser suites ทั้งสาม · pipeline deploy (CD001) รอชุดเต็มบน merge commit ของ `main` ก่อน deploy เสมอ
-- ข้อแลก: browser regression จะเห็นตอนเปิด release PR · ถ้า PR แตะ UI/canvas/ขั้นตอนเชิญ ให้รัน browser suite ในเครื่อง หรือกด Run workflow บน branch นั้นก่อนขอ merge
+- ข้อแลก: browser regression จะเห็นตอนเปิด release PR · PR เข้า `dev` ไม่ต้องรัน browser suite ในเครื่อง (รันชุดเต็มตอนเตรียม release ตาม [§5](#5-ออก-release)) · อยากเช็คก่อนก็กด Run workflow บน branch นั้นได้
 
 CI รัน `npm run lint` ด้วย: ห้าม `any` ที่เขียนเอง และห้าม `@ts-ignore` (กฎทั้งหมดอยู่ที่ [CONTRIBUTING → Lint](CONTRIBUTING.md#lint)) · pre-commit hook (husky) รัน `check-public-files` + lint ไฟล์ที่ stage ให้ก่อน commit · **ห้ามใช้ `--no-verify` ข้าม hook**
 
@@ -73,7 +73,8 @@ PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใ�
 
 ## 5. ออก release
 
-1. แตก `release/X.Y.Z` จาก `origin/dev` แก้ได้แค่บั๊กและย้ายหัวข้อ `Unreleased` ใน `CHANGELOG.md` เป็น `X.Y.Z`
+1. แตก `release/X.Y.Z` จาก `origin/dev` แก้ได้แค่บั๊กและย้ายหัวข้อ `Unreleased` ใน `CHANGELOG.md` เป็น `X.Y.Z` · ถ้า `main` มี commit ที่ `dev` ไม่มี ให้ merge `origin/main` เข้า release branch ด้วย
+   - **รันครบทุกขั้นของ [`validate.yml`](.github/workflows/validate.yml) ในเครื่องก่อนเปิด release PR** (รวม `demo:auto:run` และ browser suites ทั้งสาม) เพราะ PR เข้า `dev` รันแค่เช็คเร็ว regression จะมาโผล่ตรงนี้ · ใส่ผลไว้ใน PR · PR เข้า `dev` ไม่ต้องรันชุดเต็มในเครื่อง (ผู้ใช้ตัดสินเมื่อ 2026-10-22 เพื่อไม่ให้งานช้า)
 2. **เสนอเลขเวอร์ชันพร้อมเหตุผล** แล้วรอคนเคาะ · ตัดสินด้วยคำถาม "deploy แล้ว rollback ทันทีได้ไหม"
    - **PATCH** แก้บั๊ก/ข้อความ/CSS · **MINOR** ฟีเจอร์ใหม่ หรือ migration ที่เข้ากันได้ย้อนหลัง
    - **MAJOR** rollback ไม่ได้ถ้าไม่ทำอะไรเพิ่ม เช่น migration ย้อนไม่ได้, ต้องเพิ่ม secret/binding/config ก่อน deploy, เปลี่ยน response จน client เก่าพัง
@@ -110,9 +111,8 @@ git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รั
 **merge PR เข้า `dev` เองได้ เมื่อครบทุกข้อ:**
 1. base ของ PR คือ `dev` และ PR ไม่ใช่ draft
 2. check `local-validation` ของ commit ล่าสุดใน PR ผ่าน และ GitHub บอกว่า mergeable (ไม่มี conflict)
-3. ถ้า PR แตะ UI, canvas, แชท, สิทธิ์ หรือขั้นตอนเชิญ ต้องรันครบทุกขั้นของ [`validate.yml`](.github/workflows/validate.yml) ในเครื่องให้ผ่านก่อน (รวม `demo:auto:run` และ browser suites ทั้งสาม) เพราะ CI ของ `dev` ข้าม browser suites (CI005) · ใส่ผลไว้ใน PR
-4. ใช้ `gh pr merge <n> --merge` (merge commit) · **ห้ามใช้ `--admin`** หรือวิธีใดที่ข้าม ruleset
-5. merge เฉพาะ PR ที่ AI เปิดเอง หรือที่ผู้ใช้สั่งให้ merge · หลัง merge แจ้งผู้ใช้พร้อมลิงก์ PR และ merge commit
+3. ใช้ `gh pr merge <n> --merge` (merge commit) · **ห้ามใช้ `--admin`** หรือวิธีใดที่ข้าม ruleset
+4. merge เฉพาะ PR ที่ AI เปิดเอง หรือที่ผู้ใช้สั่งให้ merge · หลัง merge แจ้งผู้ใช้พร้อมลิงก์ PR และ merge commit
 
 **ห้ามเด็ดขาด:**
 - merge PR เข้า `main` (release/hotfix) — คนเท่านั้น
