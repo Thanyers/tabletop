@@ -1,5 +1,6 @@
 # CD001: a merged release/X.Y.Z (or hotfix/X.Y.Z) PR on main deploys itself.
-# Validate passes on the main merge commit → tag vX.Y.Z → build once → staging
+# Validate passes on the main merge commit (CI006: reusing the release PR's full-suite run
+# when the merge commit's tree equals the PR head) → tag vX.Y.Z → build once → staging
 # (D1 migrations + deploy + smoke) → production (same build) → smoke.
 # Any failure stops the pipeline, opens a GitHub issue and never rolls back.
 # Setup and recovery: docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001

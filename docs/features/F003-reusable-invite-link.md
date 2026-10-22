@@ -18,7 +18,7 @@
 - **ปิดเป็นค่าเริ่มต้น** เจ้าของต้องกดเปิดเองทุกโต๊ะ
 - เจ้าของ **ปิดลิงก์** ได้ทันที และ **สร้างลิงก์ใหม่** (ลิงก์เก่าใช้ไม่ได้ทันที)
 - **มีวันหมดอายุ** (ค่าเริ่มต้นตามคำถามเปิดข้อ 2)
-- ยังต้อง **ล็อกอิน Google** ก่อนเข้าร่วม และยังนับเพดานสมาชิก 7 คน
+- ยังต้อง **ล็อกอิน Google** ก่อนเข้าร่วม และนับเพดานสมาชิกของโต๊ะ (Worker สูงสุด 12 คน ตั้งต่ำกว่านั้นได้ด้วย Member limit · Node runtime 7 คน)
 - เจ้าของ **เอาสมาชิกออก** ได้ (ตอนนี้ทำไม่ได้ นอกจากรีเซ็ตทั้งห้อง) → T1 ต้องเสร็จก่อน
 - เก็บ token แค่ hash · rate limit การใช้ลิงก์ · บันทึกทุกการเข้าร่วมในประวัติ · ลิงก์ไม่ติดใน log, analytics หรือ `Referer`
 - รีเซ็ตห้อง (epoch ใหม่) → ลิงก์เดิมใช้ไม่ได้
@@ -45,7 +45,7 @@
 - ลิงก์ใส่ ticket ใน URL fragment (`#invite=...`) จึงไม่ถูกส่งไปเซิร์ฟเวอร์และไม่ติด `Referer` → ใช้หลักเดียวกัน
 - ใช้ลิงก์: `POST /api/invites/redeem {ticket}` ผ่าน Room DO (`/internal/redeem`) · เก็บเฉพาะ hash · rate limit `redeem` 20/นาที/คน (`cloudflare/index.ts`)
 - เพดานสมาชิก `MAX_MEMBERS_PER_WORKSPACE` (`server/limits.ts`) ตรวจทั้ง Node และ Room
-- ที่นั่ง: `Seat` ใน `src/tabletop/shared/contracts.ts` · `table` ใช้ `member-1`…`member-7`
+- ที่นั่ง: `Seat` ใน `src/tabletop/shared/contracts.ts` · `table` ใช้ `TABLE_MEMBER_SEATS` (`member-1`…`member-12` บน Worker; Node runtime ใช้ `member-1`…`member-7`)
 - ไม่มีคำสั่งเอาสมาชิกออก · `MEMBERSHIP_REVOKED` มีอยู่แล้วและ WebSocket ตรวจสิทธิ์ซ้ำทุกครั้งที่ส่ง → คนที่ถูกเอาออกจะหยุดได้รับข้อมูล
 - ดัชนี My tables อยู่ใน D1 และ sync ผ่าน outbox ที่เรียงลำดับ → การเอาออกต้องส่ง outbox ด้วย
 
