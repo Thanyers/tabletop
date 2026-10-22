@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 6.0.0 — 2026-10-22
+
+**MAJOR — rollback ไป 5.1.0 ไม่สะอาด:** F048/F060 (server dice + dice ผูก `roll` parameter) และที่นั่ง `member-8..12` ทำให้รุ่นก่อนปฏิเสธโปรแกรม/ที่นั่งบางแบบ; ถ้าจำเป็นให้แก้ไปข้างหน้าเป็น 6.0.x และอย่าถอยทั้งระบบหลังมีโต๊ะใช้ความสามารถนี้ · ไม่มี D1 migration/secret/binding ใหม่
 
 - **เวลาและที่มาของการ์ด + sort/go-to ใน Objects (F054, MINOR):** ทุกการ์ดมีบรรทัดเล็ก `AI · Mali · 12 Oct → 2h ago` (สร้าง/แก้ล่าสุด/คนที่ทำ) และ Objects panel แสดง meta ต่อแถวพร้อม **Sort** 4 แบบ (`Created · newest` เป็นค่าเริ่มต้น, `Updated · newest`, `Canvas order`, `Created · oldest`) จำค่าต่อโต๊ะ · ปุ่ม crosshair พาไปที่การ์ดและ fit ให้เห็นโดยไม่ขยายการ์ด (desktop คง panel เปิด, mobile ปิด panel แล้วคืน focus) · เวลาเก็บใน `TableState.cardMeta` นอก program (ไม่มี migration) และ backfill จาก revision/ไฟล์/โน้ต/แชทสำหรับห้องเก่า; ค่าที่ไม่มีหลักฐานขึ้น `not recorded` · ผลตรวจ: typecheck 0, unit 703 passed/1 skipped, targeted 41 tests, UI Lab 1280/390/280/320/414 · ยังไม่รัน browser suite ของ repo
 - **คลิกขวาที่การ์ด:** เมนู Hide / Ask about this card in chat / Delete for everyone (ลบเฉพาะการ์ดที่มีสิทธิ์) · คลิกขวาบนข้อความที่เลือกหรือช่องพิมพ์ยังเป็นเมนูปกติของเบราว์เซอร์ (คัดลอกได้)
