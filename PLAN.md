@@ -42,6 +42,7 @@
 | F046 | เก็บตารางที่ยังใช้ได้เมื่อการ์ด canvas ผิดเชิงความหมาย (semantic view salvage) | `review` | [F046](docs/features/F046-semantic-view-salvage.md) |
 | F047 | ลดการปฏิเสธร่างที่เกิดจากชื่อ/เพดานที่ไม่ได้บอก: normalize id, guide จากค่าคงที่เดียว, classifier 4 intent | `review` | [F047](docs/features/F047-generation-reliability.md) |
 | F048 | ลูกเต๋าที่ server ทอยให้เป็น parameter ของ action: `table.roll` + pending roll อายุ 10 นาทีผูก `dataRevision` + ใช้ครั้งเดียว + เก็บหน้าเต๋า/ผลลง event | `review` | [F048](docs/features/F048-roll-parameter.md) |
+| F051 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `doing` | [F051](docs/features/F051-seo-baseline.md) |
 
 ## งาน
 
@@ -104,3 +105,7 @@
 | F035-T4 | UI: หน้าต่าง People เลือก role รายคน + หน้าจัดการ role (เลือกจาก role ตั้งต้น หรือสร้างเองด้วยการติ๊กสิทธิ์) + ซ่อนปุ่มตามสิทธิ์จริง | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `TabletopApp.tsx` (`InviteDialog`), `ui/RoleSettings.tsx` (ใหม่), `ui/*` ที่เช็ค owner | F035-T3 | hotspot `TabletopApp.tsx` |
 | F035-T5 | role ตั้งต้นของ case อื่น: บทเรียน (ครู/ผู้เรียน), เกม encounter (DM/ผู้เล่น), invoice · การกระทำในเกมที่ผูกที่นั่ง (ตอบคำถาม, shield) คงผูกที่นั่งเดิม | `review` | JitrudeeDongdee (Claude) | `feat/F035-role-permissions` | `shared/permissions.ts`, `domain/{teaching,encounter,invoice}.ts` | F035-T2 | |
 | F035-T6 | เทสต์ (subagent) + คู่มือ + CHANGELOG | `review` | JitrudeeDongdee (Claude) + subagent | `feat/F035-role-permissions` | tests, `docs/USER_GUIDE_TH.md`, `CHANGELOG.md` | F035-T4 | ทุกสิทธิ์ต้องมีเทสต์ด้านถูกปฏิเสธ |
+| F051-T1 | meta OG/Twitter/canonical + apple-touch-icon + รูป og:image 1200×630 ใน `public/` | `doing` | lead (AI) | `feat/F051-seo-baseline` | `index.html`, `public/` | — | ไม่แตะ copy ของ landing |
+| F051-T2 | `public/robots.txt` + `public/sitemap.xml` (`/`, `/demo`) | `doing` | lead (AI) | `feat/F051-seo-baseline` | `public/` | — | ห้าม Disallow `/t/` |
+| F051-T3 | Worker คุม HTML route: `X-Robots-Tag: noindex` ให้หน้าในแอป + 404 จริงให้ path ที่ไม่รู้จัก | `doing` | lead (AI) | `feat/F051-seo-baseline` | `cloudflare/index.ts`, `wrangler.jsonc`, `cloudflare/*.test.ts` | — | hotspot `cloudflare/index.ts` |
+| F051-T4 | spec + CHANGELOG + การตัดสินใจใน F051 | `doing` | lead (AI) | `feat/F051-seo-baseline` | `spec.md`, `CHANGELOG.md`, `docs/features/F051-seo-baseline.md` | T1–T3 | |
