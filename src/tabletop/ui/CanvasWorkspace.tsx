@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Background, BackgroundVariant, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
+import { Background, BackgroundVariant, Controls, Handle, MarkerType, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
@@ -32,7 +32,11 @@ interface CanvasNodeBaseData extends Record<string, unknown> {
   /** Point the table chat at this card; absent where there is no table chat. */
   onReference?: (id: string, title: string) => void;
   onSelectNode: (id: string) => void;
+  /** Save the size (and moved corner) after this viewer drags a card edge. */
+  onResize: (id: string, box: CanvasBox) => void;
 }
+
+interface CanvasBox { x: number; y: number; width: number; height: number }
 
 interface PlanCanvasNodeData extends CanvasNodeBaseData {
   kind: 'plan';
@@ -124,6 +128,30 @@ function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean }
 const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
 const hiddenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-hidden:${workspaceKey}`;
 const seenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-seen:${workspaceKey}`;
+const sizeStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-size:${workspaceKey}`;
+type CardSizes = Readonly<Record<string, { width: number; height: number }>>;
+
+/** Card sizes this viewer set by dragging an edge. Kept per table in this browser, like closed cards. */
+function readCardSizes(workspaceKey: string): CardSizes {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(sizeStorageKey(workspaceKey)) ?? '{}');
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+    const sizes: Record<string, { width: number; height: number }> = {};
+    for (const [id, value] of Object.entries(stored as Record<string, unknown>).slice(0, 200)) {
+      const size = value as { width?: unknown; height?: unknown } | null;
+      const width = Number(size?.width);
+      const height = Number(size?.height);
+      if (id.length <= 240 && width >= 200 && width <= 4000 && height >= 100 && height <= 4000) sizes[id] = { width, height };
+    }
+    return sizes;
+  } catch {
+    return {};
+  }
+}
+
+function writeCardSizes(workspaceKey: string, sizes: CardSizes): void {
+  try { window.localStorage.setItem(sizeStorageKey(workspaceKey), JSON.stringify(sizes)); } catch { /* best effort */ }
+}
 
 /**
  * Cards that start closed on a table that has its own views: the raw rules, actions, data tables, people and
@@ -301,7 +329,7 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
   return <header className="tt-canvas-node__head">
     <span className="tt-canvas-node__drag-handle" aria-hidden="true"><GripVertical size={16} /></span>
     <span className={'tt-object-glyph' + (data.kind === 'auxiliary' && data.auxiliary.busy ? ' is-busy' : '')} aria-hidden="true">{(data.kind === 'auxiliary' && data.auxiliary.glyph) || capabilityGlyph(data.capability, data.kind)}</span>
-    <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title">{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
+    <span className="tt-canvas-node__identity"><span className="tt-canvas-node__title" title={data.title}>{data.title}</span>{data.kind === 'auxiliary' && data.auxiliary.subtitle && <span className="tt-canvas-node__subtitle">{data.auxiliary.subtitle}</span>}</span>
     <span className="tt-canvas-node__controls">
       {data.onReference && <button className="tt-canvas-node__open tt-canvas-node__icon nodrag nopan nokey" type="button" aria-label={`Ask about ${data.title} in chat`} title="Ask about or change this card in the chat" onClick={(event) => { event.stopPropagation(); data.onReference?.(data.id, data.title); }}>
         <MessageSquareText size={15} aria-hidden="true" />
@@ -320,6 +348,31 @@ function CanvasObjectHeader({ data }: { data: CanvasNodeData }) {
       </button>
     </span>
   </header>;
+}
+
+/** A card with a size from dragging its edge; without one it keeps its role width and grows with content. */
+function sizedNode(size: { width: number; height: number } | undefined): Partial<CanvasNode> {
+  return size ? { width: size.width, height: size.height, className: 'is-sized' } : { width: undefined, height: undefined, className: undefined };
+}
+
+/** Edges and corners appear once the card is selected; drag them to resize. */
+function CanvasCardResizer({ data, selected }: { data: CanvasNodeData; selected: boolean }) {
+  const start = useRef<CanvasBox | null>(null);
+  return <NodeResizer
+    isVisible={selected}
+    minWidth={260}
+    minHeight={140}
+    lineClassName="tt-canvas-resize-line"
+    handleClassName="tt-canvas-resize-handle"
+    onResizeStart={(_event, box) => { start.current = box; }}
+    onResizeEnd={(_event, box) => {
+      // A click on an edge without dragging keeps the card's natural size.
+      const from = start.current;
+      start.current = null;
+      if (from && Math.abs(from.width - box.width) < 2 && Math.abs(from.height - box.height) < 2) return;
+      data.onResize(data.id, box);
+    }}
+  />;
 }
 
 function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
@@ -343,7 +396,7 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
   }
 
   if (data.kind === 'auxiliary') {
-    return (
+    return (<>
       <article
         className={'tt-canvas-node tt-canvas-node--auxiliary tt-canvas-node--role-auxiliary' + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
@@ -368,14 +421,15 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         <CanvasObjectHeader data={data} />
         <CanvasNodeBody>{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</CanvasNodeBody>
       </article>
-    );
+      <CanvasCardResizer data={data} selected={selected} />
+    </>);
   }
 
   const inputPorts = Object.keys(data.spec.inputs);
   const outputPorts = Object.keys(data.outputs);
   const role = canvasRole(data.capability, data.kind);
 
-  return (
+  return (<>
     <article
       className={'tt-canvas-node tt-canvas-node--' + data.spec.id.replaceAll('.', '-') + ' tt-canvas-node--role-' + role + (selected ? ' is-selected' : '') + (data.opened ? ' is-expanded' : '')}
         data-canvas-object={data.id}
@@ -403,7 +457,9 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
         <CanvasObjectContent view={data.view} node={data.spec} outputs={data.outputs} busy={data.busy} onCommand={data.onCommand} onUpload={data.onUpload} onTableImport={data.onTableImport} onExport={data.onExport} onFocusEvidence={data.onFocusEvidence} focusSourceIds={data.focusSourceIds} localPhysics={data.localPhysics} onLocalPhysicsChange={data.onLocalPhysicsChange} onResetLocalPhysics={data.onResetLocalPhysics} onEditRules={data.onEditRules} preparedDemoArt={data.preparedDemoArt} expanded={data.opened} />
       </CanvasNodeBody>
     </article>
-  );
+    {/* After the card so the edges sit on top of it. */}
+    <CanvasCardResizer data={data} selected={selected} />
+  </>);
 }
 
 const nodeTypes: NodeTypes = { tabletopObject: CanvasObjectNode };
@@ -545,10 +601,12 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const allowedNodeIds = useMemo(() => visibleNodeIds ? new Set(visibleNodeIds) : null, [visibleNodeIds]);
   // Cards this viewer closed. Kept per table in this browser; the Objects panel lists them to bring them back.
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => readHiddenObjects(workspaceKey));
+  const [cardSizes, setCardSizes] = useState<CardSizes>(() => readCardSizes(workspaceKey));
   const hiddenScopeRef = useRef(workspaceKey);
   if (hiddenScopeRef.current !== workspaceKey) {
     hiddenScopeRef.current = workspaceKey;
     setHiddenIds(readHiddenObjects(workspaceKey));
+    setCardSizes(readCardSizes(workspaceKey));
   }
   const listedPlanNodes = useMemo(() => plan.nodes.filter((spec) => spec.visible !== false && (!allowedNodeIds || allowedNodeIds.has(spec.id))), [plan.nodes, allowedNodeIds]);
   const visiblePlanNodes = useMemo(() => listedPlanNodes.filter((spec) => !hiddenIds.has(spec.id)), [listedPlanNodes, hiddenIds]);
@@ -782,6 +840,18 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const referenceInChat = useMemo(() => view.kind !== 'table' || view.domain.kind !== 'table' ? undefined : (id: string, title: string) => {
     referenceCardInChat({ id, title, detail: describeCardForChat(id, title, view) });
   }, [view]);
+  const resizeObject = useCallback((id: string, box: CanvasBox) => {
+    const width = Math.round(box.width);
+    const height = Math.round(box.height);
+    setCardSizes((current) => {
+      const next = { ...current, [id]: { width, height } };
+      writeCardSizes(workspaceKey, next);
+      return next;
+    });
+    // Dragging the left or top edge also moves the card.
+    commitUserPosition(id, { x: box.x, y: box.y });
+  }, [workspaceKey, commitUserPosition]);
+
   const hideObject = useCallback((id: string) => {
     setHiddenIds((current) => {
       const next = new Set(current);
@@ -967,6 +1037,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             ?? defaultCanvasPosition(view.kind, spec);
         })(),
         selected: spec.id === selectedNodeId,
+        ...sizedNode(cardSizes[spec.id]),
         zIndex: activeOpenedId === spec.id ? 20 : spec.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'plan',
@@ -978,6 +1049,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onHide: hideObject,
           onReference: referenceInChat,
           onSelectNode,
+          onResize: resizeObject,
           spec,
           outputs: plan.outputs?.[spec.id] ?? {},
           selected: spec.id === selectedNodeId,
@@ -1014,6 +1086,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 };
         })(),
         selected: object.id === selectedNodeId,
+        ...sizedNode(cardSizes[object.id]),
         zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'auxiliary',
@@ -1025,13 +1098,14 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onHide: hideObject,
           onReference: referenceInChat,
           onSelectNode,
+          onResize: resizeObject,
           selected: object.id === selectedNodeId,
           auxiliary: object,
         },
       }));
       return [...planNodes, ...auxiliaryNodes];
     });
-  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules]);
+  }, [workspaceKey, persistLayout, remoteLayoutEnabled, sharedLayout, preparedDemoArt, visiblePlanNodes, visibleAuxiliaryObjects, plan.outputs, selectedNodeId, activeOpenedId, setNodes, view, busy, onCommand, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, localPhysics, changeLocalPhysics, resetLocalPhysics, toggleOpenObject, onSelectNode, moveCanvasObject, onEditRules, cardSizes, resizeObject]);
 
   useEffect(() => {
     if (!initialViewPendingRef.current || nodes.length === 0 || !nodes.every((node) => node.data.kind === 'auxiliary' || node.data.view.id === view.id && node.data.view.epoch === view.epoch)) return;
@@ -1218,7 +1292,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const finderStateRef = useRef({ objectTitles: [] as { id: string; title: string; hidden: boolean }[], navigateToObject: (_id: string) => {}, hideObject: (_id: string) => {} });
   useEffect(() => registerCanvasObjectFinder((verb, query) => {
     const { objectTitles: objects, navigateToObject: open, hideObject: hide } = finderStateRef.current;
-    const matches = matchCanvasObjects(objects, query);
+    // Chat cards are named after past questions, so they would match the question itself; search the table's own cards.
+    const matches = matchCanvasObjects(objects.filter((object) => !object.id.startsWith('table.chat.') && !object.id.startsWith('chat.')), query);
     if (matches.length === 0) return { handled: false };
     const [first, ...others] = matches;
     if (verb === 'hide') {
