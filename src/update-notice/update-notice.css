@@ -1,8 +1,9 @@
-/* Sits above every experience (table, demo, start page), so it carries its own colours. */
+/* Sits above every experience (table, demo, start page), so it carries its own colours.
+   Placed under the top bar so it covers neither the header controls nor the chat bar at the bottom. */
 .tt-update-notice {
   position: fixed;
   left: 50%;
-  bottom: 20px;
+  top: 76px;
   transform: translateX(-50%);
   z-index: 2147483000;
   display: flex;
@@ -31,6 +32,6 @@
 .tt-update-notice-later { border: 1px solid transparent; background: transparent; color: #667268; }
 .tt-update-notice button:focus-visible { outline: 2px solid #3e6c86; outline-offset: 2px; }
 @media (max-width: 520px) {
-  .tt-update-notice { flex-wrap: wrap; bottom: 12px; width: calc(100vw - 32px); }
+  .tt-update-notice { flex-wrap: wrap; top: 64px; width: calc(100vw - 32px); }
   .tt-update-notice-text { flex-basis: 100%; }
 }

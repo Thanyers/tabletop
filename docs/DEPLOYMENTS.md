@@ -1,18 +1,32 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 17:25 (Asia/Bangkok)** ทั้งสอง environment รายงาน **5.0.0 / e8c2d73** จาก annotated tag [v5.0.0](https://github.com/Thanyers/tabletop/releases/tag/v5.0.0)
+ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 19:59 (Asia/Bangkok)** ทั้งสอง environment รายงาน **5.1.0 / 8a6611e** จาก annotated tag [v5.1.0](https://github.com/Thanyers/tabletop/releases/tag/v5.1.0)
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [e8c2d73](https://github.com/Thanyers/tabletop/commit/e8c2d73e85e0a97e49c9dbd7c41291c3014328f9) — PR #141 | commit และ build เดียวกัน |
-| Release | v5.0.0 / 5.0.0 | v5.0.0 / 5.0.0 |
+| Source | [8a6611e](https://github.com/Thanyers/tabletop/commit/8a6611eadc046102e205303453801023aa3468c2) — PR #152 | commit และ build เดียวกัน |
+| Release | v5.1.0 / 5.1.0 | v5.1.0 / 5.1.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 5.1.0 (22 ตุลาคม 2569)
+
+Release 5.1.0 (MINOR) ผ่าน pipeline CD001 ([run 39782486699](https://github.com/Thanyers/tabletop/actions/runs/39782486699)) — [PR #152](https://github.com/Thanyers/tabletop/pull/152) จาก `dev` @ `8f97859` · รวม #147 (ตั้งค่าเส้นโยงของโต๊ะ), #144 (ปุ่มลูกศร), #146 (ไอคอนย่อ/ปิดการ์ด + Arrange), #148 · ไม่รวม #149 และ #133 (F039) · AI merge release เอง (กฎใหม่ #139) หลังคนเคาะเลข
+
+- แก้ใน release branch: browser suite ยังกดป๊อปอัป Move ที่ #144 เอาออก → ใช้ปุ่มลูกศร (ยกจาก `1b3fdee`) · CI รอบแรกล้มที่ F038 → **บั๊ก server จาก F034-T3**: ร่างกฎที่เสร็จแล้วถูกเขียนทับจน prompt หาย การ์ดคำขอร่างกฎจึงหายหลัง reload → เก็บ prompt ไว้ (`742a002`)
+- ก่อนเปิด PR รัน validate.yml เต็มชุดในเครื่อง (Node 26, Chrome) ผ่าน · หลังแก้ prompt รัน unit/Cloudflare + cloudflare browser แบบ CI (chromium) ผ่าน 2 รอบติด · CI ของ PR (Node 22, เต็มชุด) ผ่าน
+- Validate บน merge commit `main` ผ่าน แล้ว Release deploy เริ่มเอง (12:57 UTC)
+- Tag `v5.1.0` (annotated) → `8a6611e`; build ครั้งเดียว `5.1.0 / 8a6611e` (`built_at` 2026-10-22T12:57:01Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production — ไม่มี schema change
+- Staging: Worker version `878dc0b3-21fe-4cbe-9830-95e5e734d857`, smoke PASS
+- Production: Worker version `694fc695-789a-46e8-9b86-864fb30f2472`, smoke PASS
+- `/version` ทั้งสอง environment = `5.1.0 / 8a6611e` (ตรวจซ้ำด้วยมือ 19:59 น.)
+- `dev` รับ release คืนผ่าน [PR #166](https://github.com/Thanyers/tabletop/pull/166)
 
 ## ผลตรวจ deploy 5.0.0 (22 ตุลาคม 2569)
 
