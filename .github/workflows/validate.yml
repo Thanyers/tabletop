@@ -13,17 +13,78 @@ concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BROWSER_CHANNEL: chromium
+  TABLETOP_ENV: local
+
 jobs:
-  local-validation:
+  # Decides how much this run checks.
+  # CI005: the slow browser suites run only for releases (PRs into main, pushes to main,
+  # hotfixes) and on manual runs. PRs and pushes to dev run the fast checks.
+  # CI006: a release merge on main whose code is identical to its release PR head, which
+  # already passed the full suite as a PR into main, reuses that result instead of running
+  # everything again, so the deploy starts a few seconds after the merge.
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # look up the release PR's earlier run
+    outputs:
+      full_suite: ${{ steps.plan.outputs.full_suite }}
+      reuse: ${{ steps.plan.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Choose checks
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          full=false
+          reuse=false
+          if [ "$EVENT" = workflow_dispatch ] || [ "$BASE_REF" = main ]; then
+            full=true
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            full=true
+            if git rev-parse -q --verify HEAD^2 >/dev/null \
+              && [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse 'HEAD^2^{tree}')" ]; then
+              head="$(git rev-parse HEAD^2)"
+              # The merged PR into main whose head is exactly that commit (a run's own
+              # pull_requests list is emptied once the PR merges, so ask from the commit side).
+              branch="$(gh api "repos/$REPO/commits/$(git rev-parse HEAD)/pulls" \
+                --jq "[.[] | select(.base.ref == \"main\" and .head.sha == \"$head\" and .merged_at != null)][0].head.ref // empty" || true)"
+              run=""
+              if [ -n "$branch" ]; then
+                run="$(gh api "repos/$REPO/actions/workflows/validate.yml/runs?head_sha=$head&event=pull_request&status=success&per_page=20" \
+                  --jq "[.workflow_runs[] | select(.head_branch == \"$branch\")][0].html_url // empty" || true)"
+              fi
+              if [ -n "$run" ]; then
+                full=false
+                reuse=true
+                echo "::notice::Same code as release PR head $head, which passed the full suite: $run"
+              else
+                echo "Merge tree matches $head but no passing full-suite PR run was found; running everything."
+              fi
+            else
+              echo "The merge commit's code differs from its PR head; running everything."
+            fi
+          fi
+          echo "full_suite=$full" >> "$GITHUB_OUTPUT"
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+          echo "full_suite=$full reuse=$reuse"
+
+  fast-checks:
+    needs: plan
+    if: needs.plan.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      BROWSER_CHANNEL: chromium
-      TABLETOP_ENV: local
-      # CI005: the slow browser suites run only for releases (PRs into main, pushes to
-      # main, hotfixes) and on manual runs. PRs and pushes to dev run the fast checks.
-      # The job keeps its name because rulesets require `local-validation` on both branches.
-      FULL_SUITE: ${{ github.event_name == 'workflow_dispatch' || github.base_ref == 'main' || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -53,58 +114,67 @@ jobs:
       - name: Workers, D1 and Durable Object integration tests
         run: npm run test:cloudflare -- --reporter=default --reporter=json --outputFile=test-results/cloudflare-report.json
       - name: Bundle Cloudflare without publishing
-        id: bundle_worker
         env:
           WRANGLER_SEND_METRICS: false
         run: npm run build:cloudflare
       - name: Browser suites skipped for this change
-        if: env.FULL_SUITE != 'true'
+        if: needs.plan.outputs.full_suite != 'true'
         run: echo "::notice::Fast checks only. Browser suites run on the release PR into main, on main, or via Run workflow (workflow_dispatch)."
-      - name: Install test browser
-        id: install_browser
-        if: env.FULL_SUITE == 'true'
-        run: node node_modules/playwright/cli.js install --with-deps chromium
-      - name: Repeatable persona demos and replay report
-        if: env.FULL_SUITE == 'true'
-        run: npm run demo:auto:run
-      - name: Seven-session local browser acceptance
-        if: env.FULL_SUITE == 'true'
-        # CD002: browser suites occasionally race layout/timers on the 2-core runner.
-        # Retry once; the first failure stays in the log and the step fails if both attempts fail.
-        run: npm run test:r1:browser || { echo "::warning::test:r1:browser failed; retrying once"; npm run test:r1:browser; }
-      - name: Account multiplayer and AI browser acceptance on Workers
-        # This independent fixture can report its failures even when Node browser checks fail.
-        if: ${{ !cancelled() && env.FULL_SUITE == 'true' && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
-        run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser failed; retrying once"; npm run test:cloudflare:browser; }
-      - name: Generated scenes, private trials and shared layout acceptance
-        if: ${{ !cancelled() && env.FULL_SUITE == 'true' && steps.bundle_worker.outcome == 'success' && steps.install_browser.outcome == 'success' }}
-        run: npm run test:generative:browser || { echo "::warning::test:generative:browser failed; retrying once"; npm run test:generative:browser; }
       - name: Retain test summaries
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: local-r1-test-summaries
+          name: test-summaries-fast
           path: |
             test-results/unit-report.json
             test-results/cloudflare-report.json
+          retention-days: 7
+          include-hidden-files: false
+          if-no-files-found: ignore
+
+  # CI006: the browser suites run as parallel jobs next to the fast checks instead of one
+  # after another. Each builds what its fixture serves (dist/, worker-build/).
+  # CD002: they occasionally race layout/timers on the 2-core runner, so each retries once;
+  # the first failure stays in the log and the job fails if both attempts fail.
+  browser-node:
+    name: Persona demos and local browser acceptance
+    needs: plan
+    if: needs.plan.outputs.full_suite == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Build
+        env:
+          DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
+        run: npm run build
+      - name: Bundle Cloudflare without publishing
+        # The persona demos serve worker-build/index.js through Miniflare.
+        env:
+          WRANGLER_SEND_METRICS: false
+        run: npm run build:cloudflare
+      - name: Install test browser
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Repeatable persona demos and replay report
+        run: npm run demo:auto:run
+      - name: Seven-session local browser acceptance
+        if: ${{ !cancelled() }}
+        run: npm run test:r1:browser || { echo "::warning::test:r1:browser failed; retrying once"; npm run test:r1:browser; }
+      - name: Retain test summaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-summaries-node
+          path: |
             test-results/tabletop-r1/report.json
             test-results/tabletop-r1/failure-*.png
-            test-results/cloudflare-browser/report.json
-            test-results/cloudflare-browser/public-demo-desktop.png
-            test-results/cloudflare-browser/public-demo-narrow.png
-            test-results/cloudflare-browser/public-welcome-desktop.png
-            test-results/cloudflare-browser/public-welcome-narrow.png
-            test-results/cloudflare-browser/interactive-demo-teaching.png
-            test-results/cloudflare-browser/interactive-demo-encounter.png
-            test-results/cloudflare-browser/interactive-demo-narrow.png
-            test-results/cloudflare-browser/interactive-demo-manual-state.json
-            test-results/cloudflare-browser/canvas-demo-empty.png
-            test-results/cloudflare-browser/canvas-demo-dragged.png
-            test-results/cloudflare-browser/canvas-demo-invoice.png
-            test-results/cloudflare-browser/generic-table-*.png
-            test-results/cloudflare-browser/failure-*.png
-            test-results/generative-canvas/report.json
-            test-results/generative-canvas/*.png
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore
@@ -119,3 +189,110 @@ jobs:
           retention-days: 30
           include-hidden-files: false
           if-no-files-found: ignore
+
+  browser-workers:
+    name: Account multiplayer and AI browser acceptance on Workers
+    needs: plan
+    if: needs.plan.outputs.full_suite == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Build
+        env:
+          DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
+        run: npm run build
+      - name: Bundle Cloudflare without publishing
+        env:
+          WRANGLER_SEND_METRICS: false
+        run: npm run build:cloudflare
+      - name: Install test browser
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Account multiplayer and AI browser acceptance on Workers
+        run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser failed; retrying once"; npm run test:cloudflare:browser; }
+      - name: Retain test summaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-summaries-workers
+          path: |
+            test-results/cloudflare-browser/report.json
+            test-results/cloudflare-browser/public-demo-desktop.png
+            test-results/cloudflare-browser/public-demo-narrow.png
+            test-results/cloudflare-browser/public-welcome-desktop.png
+            test-results/cloudflare-browser/public-welcome-narrow.png
+            test-results/cloudflare-browser/interactive-demo-teaching.png
+            test-results/cloudflare-browser/interactive-demo-encounter.png
+            test-results/cloudflare-browser/interactive-demo-narrow.png
+            test-results/cloudflare-browser/interactive-demo-manual-state.json
+            test-results/cloudflare-browser/canvas-demo-empty.png
+            test-results/cloudflare-browser/canvas-demo-dragged.png
+            test-results/cloudflare-browser/canvas-demo-invoice.png
+            test-results/cloudflare-browser/generic-table-*.png
+            test-results/cloudflare-browser/failure-*.png
+          retention-days: 7
+          include-hidden-files: false
+          if-no-files-found: ignore
+
+  browser-generated:
+    name: Generated scenes, private trials and shared layout acceptance
+    needs: plan
+    if: needs.plan.outputs.full_suite == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Build
+        env:
+          DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
+        run: npm run build
+      - name: Bundle Cloudflare without publishing
+        env:
+          WRANGLER_SEND_METRICS: false
+        run: npm run build:cloudflare
+      - name: Install test browser
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Generated scenes, private trials and shared layout acceptance
+        run: npm run test:generative:browser || { echo "::warning::test:generative:browser failed; retrying once"; npm run test:generative:browser; }
+      - name: Retain test summaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-summaries-generated
+          path: |
+            test-results/generative-canvas/report.json
+            test-results/generative-canvas/*.png
+          retention-days: 7
+          include-hidden-files: false
+          if-no-files-found: ignore
+
+  # The rulesets require a check named `local-validation` on main and dev, so this job keeps
+  # the name and passes only when every job that ran passed (skipped jobs are fine).
+  local-validation:
+    needs: [plan, fast-checks, browser-node, browser-workers, browser-generated]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every job that ran to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad="$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result != "success" and .value.result != "skipped") | .key] | join(", ")')"
+          if [ -n "$bad" ]; then echo "::error::Failed or cancelled: $bad"; exit 1; fi
+          if [ "$(echo "$RESULTS" | jq -r '.plan.result')" != success ]; then echo "::error::plan did not run"; exit 1; fi
