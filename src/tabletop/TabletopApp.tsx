@@ -146,7 +146,6 @@ export default function TabletopApp() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [focusRequestKey, setFocusRequestKey] = useState(0);
-  const [historyFocusKey, setHistoryFocusKey] = useState(0);
   const [openedObjectId, setOpenedObjectId] = useState<string | null>(null);
   const [focusSourceIds, setFocusSourceIds] = useState<string[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -163,8 +162,6 @@ export default function TabletopApp() {
   // How the next change of open table is written to the address bar: the first
   // sync after boot replaces, user navigation pushes, back/forward writes nothing.
   const urlSyncRef = useRef<'replace' | 'push' | 'none'>('replace');
-  // Set by /t/<id>/history: focus the table's history card once that table is on screen.
-  const historyFocusRef = useRef<string | null>(null);
   const projectionSequenceRef = useRef(0);
   const inspectorScrollRef = useRef<HTMLDivElement>(null);
   const noticeTimerRef = useRef<number | undefined>(undefined);
@@ -358,7 +355,6 @@ export default function TabletopApp() {
         } else if (route?.name === 'table') {
           try {
             const opened = await tabletopClient.workspace(route.id);
-            if (route.panel === 'history') historyFocusRef.current = route.id;
             if (alive) setWorkspace(opened);
           } catch (error) {
             if (error instanceof ApiFailure && error.status === 401) throw error;
@@ -395,9 +391,7 @@ export default function TabletopApp() {
     const target = routePath(view ? { name: 'table', id: view.id } : { name: page });
     const mode = urlSyncRef.current;
     urlSyncRef.current = 'push';
-    const current = parseRoute(window.location.pathname);
-    // `/t/<id>/history` already addresses the open table; keep the link as typed.
-    if (mode === 'none' || window.location.pathname === target || (view && current?.name === 'table' && current.id === view.id)) return;
+    if (mode === 'none' || window.location.pathname === target) return;
     // Pushed entries remember the app page before them, so "Your tables" can step back instead of stacking `/`.
     if (mode === 'replace') window.history.replaceState(window.history.state, document.title, target);
     else window.history.pushState({ tabletopFrom: window.location.pathname }, document.title, target);
@@ -407,11 +401,7 @@ export default function TabletopApp() {
     const followHistory = () => {
       const route = parseRoute(window.location.pathname);
       if (route?.name === 'table') {
-        if (route.panel === 'history') historyFocusRef.current = route.id;
-        if (workspaceRef.current?.id === route.id) {
-          setHistoryFocusKey((key) => key + 1);
-          return;
-        }
+        if (workspaceRef.current?.id === route.id) return;
         tabletopClient.workspace(route.id).then((opened) => {
           urlSyncRef.current = 'none';
           setWorkspace(opened);
@@ -806,13 +796,6 @@ export default function TabletopApp() {
     setFocusRequestKey((key) => key + 1);
     if (open) setOpenedObjectId(nodeId);
   }, []);
-
-  const viewId = view?.id;
-  useEffect(() => {
-    if (!viewId || historyFocusRef.current !== viewId) return;
-    historyFocusRef.current = null;
-    requestCanvasFocus('workspace.history');
-  }, [viewId, historyFocusKey, requestCanvasFocus]);
 
   const focusEvidence = useCallback((sourceIds: string[]) => {
     if (!view || view.kind !== 'invoice') return;

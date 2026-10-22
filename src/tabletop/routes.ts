@@ -6,7 +6,7 @@ export type AppRoute =
   | { name: 'tables' }
   | { name: 'new' }
   | { name: 'join' }
-  | { name: 'table'; id: string; panel?: 'history' };
+  | { name: 'table'; id: string };
 
 const tableId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const returnPathKey = 'tabletop.returnPath';
@@ -18,13 +18,13 @@ export function parseRoute(pathname: string): AppRoute | null {
   if (path === '/tables') return { name: 'tables' };
   if (path === '/new') return { name: 'new' };
   if (path === '/join') return { name: 'join' };
-  const match = /^\/t\/([^/]+)(\/history)?$/u.exec(path);
-  if (match && tableId.test(match[1])) return match[2] ? { name: 'table', id: match[1], panel: 'history' } : { name: 'table', id: match[1] };
+  const match = /^\/t\/([^/]+)$/u.exec(path);
+  if (match && tableId.test(match[1])) return { name: 'table', id: match[1] };
   return null;
 }
 
 export function routePath(route: AppRoute): string {
-  if (route.name === 'table') return route.panel ? `/t/${route.id}/${route.panel}` : `/t/${route.id}`;
+  if (route.name === 'table') return `/t/${route.id}`;
   return route.name === 'landing' ? '/' : `/${route.name}`;
 }
 
