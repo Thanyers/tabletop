@@ -1,8 +1,13 @@
 /**
  * F031: compact prompt guide that replaces the 36 KB JSON Schema dump.
  * Hand-written prompt artifact only — the zod schemas stay authoritative.
+ *
+ * F047: the numeric limits are interpolated from `TABLE_LIMITS` and `GENERATIVE_LIMITS`, so the guide
+ * cannot advertise one number while the validator enforces another. `manifestNodes` was the drift
+ * that motivated this: the validator rejected a canvas the guide said nothing about.
  */
-import type { ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
+import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
+import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
 
 /**
  * F049: the exact dice control example embedded in the guide below.
@@ -30,10 +35,35 @@ export const TABLE_DICE_EXAMPLE: ControlsViewDescriptor = {
 };
 const TABLE_DICE_EXAMPLE_JSON = JSON.stringify(TABLE_DICE_EXAMPLE);
 
+const LIMITS = [
+  `collections<=${TABLE_LIMITS.collections}`,
+  `fields<=${TABLE_LIMITS.fieldsPerCollection} per collection`,
+  `actions<=${TABLE_LIMITS.actions}`,
+  `parameters<=${TABLE_LIMITS.parametersPerAction} per action`,
+  `creates<=${TABLE_LIMITS.createsPerAction} per action`,
+  `conditions<=${TABLE_LIMITS.conditionsPerAction} per action`,
+  `effects<=${TABLE_LIMITS.effectsPerAction} per action`,
+  `invariants<=${TABLE_LIMITS.invariants} (fields<=${TABLE_LIMITS.invariantFields} each)`,
+  `turnOrder<=${TABLE_LIMITS.turnOrder} seats`,
+  `evidence<=${TABLE_LIMITS.evidence}`,
+  `assumptions<=${TABLE_LIMITS.assumptions}`,
+  `views<=${GENERATIVE_LIMITS.canvasViews}`,
+  `canvas manifest nodes (2 + collections + actions + views)<=${GENERATIVE_LIMITS.manifestNodes}`,
+  `expression depth<=${GENERATIVE_LIMITS.expressionDepth}`,
+  `expression nodes<=${GENERATIVE_LIMITS.expressionNodes}`,
+  `expression array items<=${GENERATIVE_LIMITS.arrayItems}`,
+  `scene elements<=${GENERATIVE_LIMITS.sceneElements}`,
+  `polygon points 3..${GENERATIVE_LIMITS.scenePoints}`,
+  `controls<=${GENERATIVE_LIMITS.controlsPerView} per view`,
+  `rows<=${TABLE_LIMITS.rowsPerCollection} per collection and <=${TABLE_LIMITS.rowsTotal} total`,
+  'evidence quote<=500',
+  `numbers finite with |n|<=${GENERATIVE_LIMITS.numberMagnitude}`,
+].join('; ');
+
 export const TABLE_SCHEMA_GUIDE = `TABLE-CHANGE COMPACT SCHEMA v1 (hand-written prompt guide; the app's zod validator is authoritative)
 
 BUDGET: max_tokens=32768 for the single reply (reasoning tokens count toward it).
-LIMITS: collections<=6; fields<=12 per collection; actions<=16; parameters<=8 per action; creates<=12 per action; conditions<=24 per action; effects<=24 per action; invariants<=12 (fields<=6 each); turnOrder<=8 seats; evidence<=20; assumptions<=12; views<=12; scene elements<=128; polygon points 3..64; controls<=24 per view; rows<=100 per collection and <=200 total; evidence quote<=500; numbers finite with |n|<=1e9.
+LIMITS: ${LIMITS}.
 ID: /^[a-z][a-z0-9_-]{0,39}$/, never a JS builtin name (constructor, prototype, __proto__, toString, valueOf, hasOwnProperty, ...).
 VALUE: string<=500 | number | boolean | null | string[] (<=32 items, each <=100 chars).
 STRICT: every object below rejects unknown keys and requires exactly the keys listed; "?" marks an optional key. The root has exactly three keys; canvas is INSIDE program.
