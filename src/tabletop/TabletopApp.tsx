@@ -11,6 +11,7 @@ import { ApiFailure, clearInviteFragment, inviteFromFragment, isInviteLink, tabl
 import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
+import { HeaderPeople } from './ui/HeaderPeople';
 import { AccountBadge, AccountSignIn } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
@@ -886,7 +887,7 @@ export default function TabletopApp() {
         </div>
         <div className="tt-topbar__spacer" />
         <div className="tt-connection" data-state={connection} role="status" title="Live connection status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Offline' : 'Reconnecting'}</span></div>
-        {view.kind !== 'invoice' && <button type="button" className="tt-people-button" onClick={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} aria-label={`People at this table, ${view.members.length} connected`}><Users size={16} /><span>{view.members.length}</span></button>}
+        {view.kind !== 'invoice' && <HeaderPeople members={view.members} selfId={view.actor.actorId} store={cursorStore} onOpenPeople={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} />}
         {canInvite && <button type="button" className="tt-button tt-button--quiet tt-invite-button" onClick={openInviteDialog}><Plus size={14} /> Invite</button>}
         <details className="tt-table-options"><summary aria-label="Table options"><MoreHorizontal size={20} /></summary><div className="tt-table-options__body">
           <a href="/demo" target="_blank" rel="noopener"><Play size={15} />Try a demo</a>

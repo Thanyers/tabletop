@@ -76,3 +76,17 @@ export function referenceCardInChat(reference: ChatCardReference): boolean {
 export function chatReferencePrompt(reference: ChatCardReference, message: string): string {
   return `[การ์ด “${reference.title}”] ${message}\n(Card in question: ${reference.detail})`;
 }
+
+/** Centre the canvas on a point in canvas coordinates (e.g. another member's live cursor). */
+let pointFocus: ((x: number, y: number) => void) | null = null;
+
+export function registerCanvasPointFocus(next: (x: number, y: number) => void): () => void {
+  pointFocus = next;
+  return () => { if (pointFocus === next) pointFocus = null; };
+}
+
+export function focusCanvasPoint(x: number, y: number): boolean {
+  if (!pointFocus) return false;
+  pointFocus(x, y);
+  return true;
+}

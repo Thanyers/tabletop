@@ -5,6 +5,21 @@
 
 ## Lessons
 
+### 2026-10-22 — แถบแจ้งเตือนที่ auto-apply กฎมีปุ่มที่ header บังการคลิก
+- **What happened:** หลัง merge #156/#157 การ์ดที่ auto-apply แล้วกลายเป็นแถบ `.tt-notice--success` พร้อมปุ่ม **View rules** · browser suite คลิกปุ่มไม่ผ่าน 30 วินาที Playwright ฟ้องว่า `<a href="/demo">` จาก `header.tt-topbar` intercepts pointer events แล้ว element detached (แถบหมดอายุ) · ผู้ใช้ที่คลิกจริงจะกดไม่ติดใน viewport 1280×720 เช่นกัน
+- **Root cause:** `.tt-topbar` (z-index 30) อยู่เหนือ `.tt-notice` (z-index 26) ใน stacking ของ layout `height:100dvh; overflow:hidden` และแถบถูกวาดในตำแหน่งที่ header ทับจุดคลิก · ปุ่มที่เพิ่งเพิ่มทำให้แถบเป็น interactive ครั้งแรก จึงเพิ่งเจอ
+- **Correct behavior:** อย่า force-click ปิดบั๊ก · ในเทสต์ให้ยืนยันว่าแถบและปุ่มมีอยู่จริง แล้วเปิดการ์ด Rules ผ่านเมนู Objects แทน (`openCanvasObject(owner, 'table.rules')`) พร้อมรายงานเจ้าของ #156 · เวลาจะแก้จริง ให้ยก `.tt-notice` เป็น `position: relative; z-index: 40` (หรือย้ายแถบออกจากพื้นที่ header) แล้วรัน `BROWSER_CHANNEL=msedge npm run test:cloudflare:browser` ให้ผ่าน 2 รอบติด
+
+### 2026-10-22 — browser suite แดงที่ check หนึ่งทั้งที่ branch งานไม่เคยแตะไฟล์นั้น
+- **What happened:** `npm run test:cloudflare:browser` ล้มที่ check เดียวกันติดกัน 2 รอบ (`expected 'Draft ready for review'` ระหว่างทดสอบ AI proposal ของ encounter) ทั้งที่ F045 ไม่ได้แตะ `src/tabletop/ui/AIProposal.tsx` หรือ `tests/cloudflare-browser.mjs` · รัน suite บน tree สะอาด (`git stash -u` → build ใหม่) ก็ล้มที่ check เดียวกัน ⇒ เป็นสถานะของ `dev` ไม่ใช่ regression ของ branch
+- **Root cause:** expectation รอสถานะชั่วคราว "Draft ready for review" ซึ่งเกิดเฉพาะเมื่อ job `completed` มาถึง client ก่อน auto-apply ของ F039 ปรากฏใน projection — เป็นการแข่งกันของเวลา (poll 1.2s vs WebSocket push) ไม่ใช่สัญญาที่แน่นอน · F039 เคยรายงาน 27 PASS บน Node 26.3.1 แต่บน Node 22.23.2 + msedge สถานะนี้ไม่เกิดเลย
+- **Correct behavior:** เมื่อ browser suite แดง ให้รัน baseline ก่อนสรุปว่าเป็นงานเรา: `git stash push -u -m baseline && npm run build && npm run build:cloudflare && BROWSER_CHANNEL=msedge npm run test:cloudflare:browser; git stash pop` · แล้วแก้ expectation ให้ตรวจสถานะที่เกิดจริง (เช่น `dm.locator('.tt-ai-proposal__job strong')` → `Rules in use`) ไม่ใช่ลบ assertion · ห้ามสรุปว่า "flake" ถ้ายังไม่ได้เห็น baseline
+
+### 2026-10-22 — `npm run lint` รันไม่ได้เพราะ node_modules ไม่ครบ (ไม่ใช่โค้ดผิด)
+- **What happened:** ทั้ง Lead และ subagent เจอ `ERR_MODULE_NOT_FOUND: @eslint/js` จาก `eslint.config.js` แล้วเกือบรายงานว่า "lint รันไม่ได้" ทั้งที่ `@eslint/js` อยู่ใน `package.json` แล้ว
+- **Root cause:** checkout นี้มี `node_modules` ไม่ครบ (ติดตั้งบางส่วน) · `npm run typecheck`/`npm test` ยังทำงานเพราะไม่ต้องใช้ ESLint
+- **Correct behavior:** ก่อนข้าม lint ให้เช็ค `Test-Path node_modules/@eslint/js` · ถ้าไม่มี รัน `npm install --no-audit --no-fund` แล้วยืนยัน `git status --short package-lock.json` ต้องว่าง (lock ไม่เปลี่ยน) จากนั้นจึงรัน `npm run lint` และรายงานจำนวน error/warning จริง
+
 ### 2026-10-22 — เอกสารฟีเจอร์บอก "rollback ได้" แต่รุ่นเก่า parse ข้อมูลใหม่ไม่ผ่าน
 - **What happened:** F040 doc เขียนว่า rollback ได้เพราะ "รุ่นเก่าไม่รู้จัก `motion` แต่ยังเปิดโต๊ะได้" ตอนตัด release จึงเกือบออกเป็น 4.5.0 (MINOR)
 - **Root cause:** schema canvas/program เป็น `z.strictObject` — รุ่นเก่าเจอ key ใหม่แล้วปฏิเสธทั้งก้อน (`runtime/index.ts` ไม่แสดง canvas, `table-assistant.ts`/`ai.ts` ตอบ "The active table rules are invalid")

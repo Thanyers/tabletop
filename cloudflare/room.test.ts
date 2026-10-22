@@ -17,6 +17,7 @@ import type { TableAssistantInput, TableAssistantResult } from '../src/tabletop/
 import type { TableAssistantResponse } from './table-assistant.js';
 import { CURSOR_MIN_INTERVAL_MS } from '../src/tabletop/shared/cursor-protocol.js';
 import { ReasonedDomainError } from './model-failure.js';
+import { ModelProviderClosed, ModelRequestTimeout } from '../server/providers/deepseek-changes.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
@@ -31,7 +32,8 @@ vi.mock('./table-assistant.js', async (importOriginal) => {
 const runtime = env as Env;
 const migrationEnv = env as Env & { TEST_MIGRATION: string };
 const ORIGIN = 'https://tabletop.test';
-const MODEL_RECOVERY_DELAY_MS = 240_000;
+// F045: default whole-job deadline 240s plus the 120s recovery grace.
+const MODEL_RECOVERY_DELAY_MS = 360_000;
 const MODEL_TEST_DELAY_MS = 100;
 const MODEL_RACE_DELAY_MS = MODEL_TEST_DELAY_MS * 4;
 const MODEL_WAIT_ATTEMPTS = 50;
@@ -60,6 +62,21 @@ interface TestModelJob {
   clarification?: { question: string; options: string[] };
   autoApply?: 'applied' | 'needs-review';
   autoApplyReasons?: string[];
+  failureCode?: string;
+  /** F045: live counters while the draft runs. */
+  progress?: { receivedChars: number; reasoningChars: number; updatedAt: number };
+  /** F045: the configured whole-job deadline the draft runs under. */
+  limitMs?: number;
+  /** F045: bounded, redacted stop evidence for a failed draft. */
+  failureDetails?: {
+    timedOutBy: 'server' | 'provider';
+    limitMs: number;
+    elapsedMs: number;
+    receivedChars: number;
+    reasoningChars: number;
+    partialContent?: string;
+    thinkingTail?: string;
+  };
 }
 
 interface TestTableAssistantJob {
@@ -2488,6 +2505,119 @@ describe('Cloudflare room Durable Object', () => {
     expect(visible.response.status).toBe(200);
     expect(visible.body.message).toMatch(/shorten them or remove a file/iu);
     expect(JSON.stringify(visible.body)).not.toContain('PRIVATE_PROVIDER_TEXT_SENTINEL');
+  });
+
+  it('exposes the configured draft limit and stored progress on a running model job (F045)', async () => {
+    const owner = newActor('Progress owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const jobId = 'e'.repeat(64);
+    await runInDurableObject(stub, async (instance) => {
+      await instance.repository.reserveModelJob({
+        id: jobId,
+        workspaceId: roomId,
+        epoch: workspace.epoch,
+        actorId: owner.id,
+        commandId: randomUUID(),
+        expectedRevision: workspace.revision,
+        requestHash: 'f'.repeat(64),
+        now: Date.now(),
+      });
+      await instance.repository.updateModelJobProgress(jobId, roomId, workspace.epoch, owner.id,
+        { receivedChars: 1_250, reasoningChars: 4_800, updatedAt: Date.now() });
+    });
+
+    const poll = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(poll.response.status).toBe(202);
+    expect(poll.body).toMatchObject({
+      id: jobId,
+      status: 'running',
+      limitMs: 240_000,
+      progress: { receivedChars: 1_250, reasoningChars: 4_800 },
+    });
+    expect(poll.body.progress?.updatedAt).toEqual(expect.any(Number));
+  });
+
+  it('keeps bounded, identity-redacted failure details when our own deadline stops a draft (F045)', async () => {
+    const owner = newActor('Draft partial owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const partialContent = `{"kind":"table","description":"${owner.name} (${owner.id}) ${'x'.repeat(5_000)}`;
+    const thinkingTail = `considering ${owner.name}: ${'y'.repeat(2_000)}`;
+    vi.mocked(proposeChange).mockRejectedValue(new ModelRequestTimeout({
+      timedOutBy: 'server',
+      limitMs: 240_000,
+      elapsedMs: 240_100,
+      receivedChars: partialContent.length,
+      reasoningChars: thinkingTail.length,
+      partialContent,
+      thinkingTail,
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const queued = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(queued.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('failed');
+    expect(job.data).toMatchObject({
+      failure: 'MODEL_PROVIDER_TIMEOUT',
+      failureDetails: { timedOutBy: 'server', limitMs: 240_000, elapsedMs: 240_100 },
+    });
+    // Nothing raw about a member survives in the stored job.
+    expect(JSON.stringify(job.data)).not.toContain(owner.name);
+    expect(JSON.stringify(job.data)).not.toContain(owner.id);
+
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    expect(visible.body.failureCode).toBe('MODEL_PROVIDER_TIMEOUT');
+    expect(visible.body.message).toContain('Stopped at our 240s limit');
+    expect(visible.body.message).toContain('The partial text is kept below.');
+    const details = visible.body.failureDetails;
+    if (!details) throw new Error('Expected bounded failure details.');
+    expect(details.timedOutBy).toBe('server');
+    expect(details.receivedChars).toBe(partialContent.length);
+    expect(details.partialContent).toBeDefined();
+    expect(details.partialContent?.length).toBeLessThanOrEqual(4_000);
+    expect(details.thinkingTail?.length).toBeLessThanOrEqual(600);
+    expect(details.partialContent).not.toContain(owner.name);
+    expect(details.partialContent).not.toContain(owner.id);
+    expect(details.thinkingTail).not.toContain(owner.name);
+    expect(details.partialContent).toContain('host');
+  });
+
+  it('blames the provider when the stream closed before our deadline (F045)', async () => {
+    const owner = newActor('Provider close owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    vi.mocked(proposeChange).mockRejectedValue(new ModelProviderClosed({
+      timedOutBy: 'provider',
+      limitMs: 240_000,
+      elapsedMs: 12_000,
+      receivedChars: 1_200,
+      reasoningChars: 300,
+      partialContent: '{"kind":"table"',
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('failed');
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    expect(visible.body.failureCode).toBe('MODEL_PROVIDER_REQUEST_FAILED');
+    expect(visible.body.message).toContain('The provider closed the connection after 1,200 characters');
+    expect(visible.body.message).toContain('not our 240s limit');
+    expect(visible.body.failureDetails).toMatchObject({ timedOutBy: 'provider', receivedChars: 1_200 });
   });
 
   it('shows the real validation reasons of a rejected table draft to its requester (F016)', async () => {

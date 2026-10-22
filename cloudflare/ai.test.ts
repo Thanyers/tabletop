@@ -5,7 +5,7 @@ import { createDomain } from '../src/tabletop/domain/index.js';
 import type { ActorContext, CaseKind, ChangeSet, Member, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { proposeChange, type AIProposalRequest } from './ai.js';
-import { measureDeepSeekChangeRequest, type DeepSeekChangeInput } from '../server/providers/deepseek-changes.js';
+import { ModelStreamFailure, measureDeepSeekChangeRequest, type DeepSeekChangeInput, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import type { Env } from './contracts.js';
 
 const testEnv = env as Env;
@@ -141,6 +141,48 @@ function providerFetch(change: ChangeSet | ClarifyReply, inspect?: (userContent:
       usage: { prompt_tokens: 20, completion_tokens: 12, prompt_cache_hit_tokens: 5, prompt_cache_miss_tokens: 15 },
     }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
+}
+
+/** F045: the same provider call, answered as the SSE stream the real endpoint sends. */
+function streamingFetch(
+  content: string,
+  options: { finish?: boolean } = {},
+): typeof fetch {
+  return async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url !== 'https://api.deepseek.com/chat/completions' || init?.method !== 'POST'
+      || init.redirect !== 'manual' || !(init.signal instanceof AbortSignal)) {
+      throw new Error('Unexpected streamed provider request.');
+    }
+    const body: unknown = JSON.parse(typeof init.body === 'string' ? init.body : '');
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new Error('Expected provider JSON object');
+    const object = body as Record<string, unknown>;
+    if (object.model !== 'deepseek-flash' || object.stream !== true
+      || !isRecord(object.stream_options) || object.stream_options.include_usage !== true) {
+      throw new Error('Expected a streamed request with usage.');
+    }
+    const events: string[] = [];
+    for (let index = 0; index < content.length; index += 37) {
+      events.push(`data: ${JSON.stringify({
+        model: 'deepseek-flash',
+        choices: [{ index: 0, delta: { content: content.slice(index, index + 37) } }],
+      })}\n\n`);
+    }
+    if (options.finish !== false) {
+      events.push(`data: ${JSON.stringify({ model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`);
+      events.push(`data: ${JSON.stringify({
+        model: 'deepseek-flash',
+        choices: [],
+        usage: { prompt_tokens: 45, completion_tokens: 80, total_tokens: 125, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 35 },
+      })}\n\n`);
+    }
+    events.push('data: [DONE]\n\n');
+    return new Response(events.join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 describe('Cloudflare AI proposal helper', () => {
@@ -459,5 +501,45 @@ describe('Cloudflare AI proposal helper', () => {
     const missingKeyEnv: Env = { ...testEnv, DEEPSEEK_KEY: undefined };
     await expect(proposeChange(missingKeyEnv, request('teaching'), deniedFetch))
       .rejects.toMatchObject({ code: 'MODEL_NOT_CONFIGURED' });
+  });
+
+  it('forwards increasing stream progress for a table draft and still returns the validated change (F045)', async () => {
+    const input = request('table');
+    const expected = proposal('table');
+    const payload = JSON.stringify(expected);
+    const samples: DeepSeekChangeProgress[] = [];
+    const result = await proposeChange(testEnv, input, streamingFetch(payload), (progress) => {
+      samples.push(progress);
+    });
+
+    expect(result.change).toEqual(expected);
+    expect(samples.length).toBeGreaterThan(2);
+    expect(samples[0]?.receivedChars).toBeGreaterThan(0);
+    expect(samples.at(-1)?.receivedChars).toBe(payload.length);
+    for (let index = 1; index < samples.length; index += 1) {
+      expect(samples[index]!.receivedChars).toBeGreaterThanOrEqual(samples[index - 1]!.receivedChars);
+    }
+    // The counters grow with the stream, not only when it finishes.
+    expect(new Set(samples.map((sample) => sample.receivedChars)).size).toBeGreaterThan(2);
+    expect(samples.every((sample) => sample.reasoningChars === 0)).toBe(true);
+  });
+
+  it('keeps bounded stream details when the provider closes without a finish reason (F045)', async () => {
+    const input = request('table');
+    const partial = '{"kind":"table"';
+    const rejection = await proposeChange(testEnv, input, streamingFetch(partial, { finish: false }))
+      .catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(ModelStreamFailure);
+    expect(rejection).toMatchObject({ code: 'MODEL_PROVIDER_REQUEST_FAILED' });
+    const details = (rejection as ModelStreamFailure).details;
+    expect(details).toMatchObject({
+      timedOutBy: 'provider',
+      limitMs: 240_000,
+      receivedChars: partial.length,
+      reasoningChars: 0,
+      partialContent: partial,
+    });
+    expect(details.elapsedMs).toBeGreaterThanOrEqual(0);
   });
 });
