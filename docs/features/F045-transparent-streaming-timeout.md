@@ -104,12 +104,14 @@ job view ของเส้นทางร่างกฎ (`GET /api/workspaces/
 | `npm run lint` | 0 error / 103 warning (warning เดิม ไม่มีใหม่) |
 | `node scripts/check-public-files.mjs` | 609 ไฟล์ · 0 finding |
 | `npm run build` + `npm run build:cloudflare` | ผ่าน · binding ไม่เปลี่ยน (ไม่ต้องตั้ง var ใหม่; ไม่ตั้ง `AI_TABLE_DEADLINE_MS` = 240s) |
-| `npm run test:cloudflare:browser` (msedge) | **27 checks PASS ติดกัน 2 รอบ** (exit 0) |
+| `npm run test:cloudflare:browser` (msedge) | **27 checks PASS ติดกัน 2 รอบ** (exit 0) ทั้งบน tree หลัง merge `dev` รอบแรกและรอบสุดท้าย (`n-browser6/7.log`) |
 | `node --import tsx scripts/f045-live-probe.mjs --deadline=240000` | **PASS** — dragon draft 76.6s (attempt 1, 9,427 chars, thinking 59,311 chars) · big-source 10,000 chars draft 71.0s (attempt 2) ทั้งคู่ < 240s |
 
-อาร์ติแฟกต์: `test-results/f045-live-2026-10-22T11-46-29-301Z/live-probe.{md,json}` · `test-results/m-browser1.log` · `test-results/m-browser2.log` (รันซ้ำหลัง merge `origin/dev` = `237565b` ซึ่งแตะ `useTableChat.tsx`/`table-chat-state.ts`/`table-chat.css` ร่วมกัน)
+อาร์ติแฟกต์: `test-results/f045-live-2026-10-22T11-46-29-301Z/live-probe.{md,json}` · `test-results/n-browser6.log` · `test-results/n-browser7.log` (tree สุดท้ายหลัง merge `origin/dev` = `6576b15` ซึ่งแตะ `useTableChat.tsx`/`table-chat-state.ts`/`table-chat.css`/`tests/generic-table-browser.mjs` ร่วมกัน)
 
 **หมายเหตุ browser:** ก่อน branch นี้ suite แดงอยู่แล้วที่ check เดียวกัน (`expected 'Draft ready for review'`) — ยืนยันด้วย baseline run บน tree สะอาดที่ stash งานทั้งหมดไว้ (`test-results/f045-browser-baseline.log`) ⇒ สถานะนี้มาจาก F039 (#133) ไม่ใช่ F045 · expectation เดิมรอสถานะชั่วคราวที่เกิดเฉพาะเมื่อ job `completed` มาถึงก่อน auto-apply ปรากฏใน projection (แข่งกันระหว่าง poll 1.2s กับ WebSocket push) ซึ่งไม่เกิดเลยบน Node 22.23.2 + msedge · แก้เฉพาะ expectation ใน `tests/cloudflare-browser.mjs` ให้ตรวจสถานะที่เกิดจริง ("Rules in use") ไม่ได้แตะโค้ดแอป และยังยืนยัน `candidate.status === 'active'` ต่อ
+
+หลัง merge `dev` รอบที่สอง (#156 "กฎที่เพิ่มเองเป็นแถบแจ้งเตือน", #157 "การ์ดผลลัพธ์อยู่เฉพาะเมื่อยังมีอะไรให้ทำ") browser suite แดงเพิ่มที่ `tests/generic-table-browser.mjs` เพราะการ์ดที่ auto-apply แล้วถูกเอาออกจาก canvas — เป็น fixture ที่ #156/#157 ไม่ได้อัปเดต (CI ของ PR เข้า `dev` ไม่รัน browser ตาม CI005) · แก้ fixture ให้ตรวจแถบ "New rules added …" แทนการ์ดที่หายไป (ทดสอบยังยืนยัน `ruleRevision + 1/+2`, `candidate.status === 'active'` และ records ตามเดิม) · และพบข้อบกพร่องจริงของ #156: ปุ่ม **View rules** บนแถบถูก `header.tt-topbar` บังการคลิกใน viewport นี้ (Playwright: "`<a href="/demo">` from `tt-topbar` subtree intercepts pointer events") — fixture เปิดการ์ด Rules ผ่านเมนู Objects แทนการ force-click และรายงานไว้ให้เจ้าของ #156 แก้ stacking
 
 ## ลำดับ
 

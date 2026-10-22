@@ -49,7 +49,8 @@ export interface UseTableChatOptions {
   focusObject: (id: string) => void;
   /** F037: extra composer control (add a note) rendered beside Send. */
   composerAction?: ReactNode;
-  notify: (text: string, tone: 'info' | 'error' | 'success') => void;
+  /** A short notification; the optional action (e.g. View rules) shows as a button on it. */
+  notify: (text: string, tone: 'info' | 'error' | 'success', action?: { label: string; run: () => void }) => void;
   prefill?: { text: string; key: number };
 }
 
@@ -730,8 +731,29 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     setRetryPrefill({ text: card.prompt, key: Date.now() });
   }, [editRules]);
 
+  // Notify once when a result this page watched in progress finishes with nothing left to do.
+  const watchedCardsRef = useRef(new Set<string>());
+  const notifiedCardsRef = useRef(new Set<string>());
+  useEffect(() => {
+    for (const card of cards) {
+      if (!isFinishedResult(card)) {
+        if (card.phase === 'sending' || card.phase === 'waiting' || card.confirming || card.confirmationPending) watchedCardsRef.current.add(card.id);
+        continue;
+      }
+      if (!watchedCardsRef.current.has(card.id) || notifiedCardsRef.current.has(card.id)) continue;
+      notifiedCardsRef.current.add(card.id);
+      const request = card.prompt.split('\n')[0].slice(0, 80);
+      if (card.kind === 'draft') {
+        optionsRef.current.notify(`New rules added: “${request}”`, 'success', { label: 'View rules', run: () => optionsRef.current.focusObject('table.rules') });
+      } else {
+        optionsRef.current.notify(`Done: “${request}”`, 'success', { label: 'Table history', run: () => optionsRef.current.focusObject('workspace.history') });
+      }
+    }
+  }, [cards]);
   const currentLocalState = readPrivateChatState(scope);
-  const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState));
+  // A result stays on the canvas only while it asks for something (answer, review, confirm, retry, an error);
+  // a finished one becomes a notification (below) instead.
+  const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState) && !isFinishedResult(card));
   const operationBusy = externalBusy || confirmBusy;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
@@ -985,4 +1007,11 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     {checkButton}
     {dismissButton}
   </div>;
+}
+
+/** A result with nothing left to do: rules that went into use, or an AI proposal that was confirmed. */
+function isFinishedResult(card: ChatCard): boolean {
+  if (card.pollError || card.requestError || card.error) return false;
+  if (card.kind === 'draft') return card.modelJob?.autoApply === 'applied';
+  return card.job?.result?.kind === 'action-proposal' && card.job.confirmationStatus === 'confirmed' && !card.confirming && !card.confirmationPending;
 }
