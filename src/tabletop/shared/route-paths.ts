@@ -3,7 +3,8 @@
 // (F051) and the browser classify paths the same way.
 
 export type AppRoute =
-  | { name: 'home' }
+  | { name: 'landing' }
+  | { name: 'tables' }
   | { name: 'new' }
   | { name: 'join' }
   | { name: 'table'; id: string };
@@ -13,7 +14,8 @@ const tableId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 /** Returns null for any path the app does not own, so callers fall back to home. */
 export function parseRoute(pathname: string): AppRoute | null {
   const path = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-  if (path === '/' || path === '') return { name: 'home' };
+  if (path === '/' || path === '') return { name: 'landing' };
+  if (path === '/tables') return { name: 'tables' };
   if (path === '/new') return { name: 'new' };
   if (path === '/join') return { name: 'join' };
   const match = /^\/t\/([^/]+)$/u.exec(path);
@@ -22,7 +24,8 @@ export function parseRoute(pathname: string): AppRoute | null {
 }
 
 export function routePath(route: AppRoute): string {
-  return route.name === 'table' ? `/t/${route.id}` : route.name === 'home' ? '/' : `/${route.name}`;
+  if (route.name === 'table') return `/t/${route.id}`;
+  return route.name === 'landing' ? '/' : `/${route.name}`;
 }
 
 /**

@@ -71,4 +71,34 @@ describe('where-is questions and referenced titles', () => {
     expect(next).toContain('(Card in question: view flow_scene)');
     expect(followUpPrompt('ปกติ', 'ต่อเลย')).toBe('ต่อเลย');
   });
+
+  it('several referenced cards: one line each, titles joined, follow-ups keep all of them, long details fit the prompt limit', async () => {
+    const { chatReferencePrompt, followUpPrompt, splitReferencedPrompt } = await import('./canvas-object-finder');
+    const refs = [
+      { id: 'a', title: 'BPMN', detail: 'view flow_scene' },
+      { id: 'b', title: 'Steps', detail: `data table steps ${'f'.repeat(3000)}` },
+      { id: 'c', title: 'Days', detail: 'chart days_chart' },
+    ];
+    const prompt = chatReferencePrompt(refs, 'เทียบให้หน่อย');
+    expect(prompt.startsWith('[การ์ด “BPMN” + “Steps” + “Days”] เทียบให้หน่อย\n(Cards in question:\n1. view flow_scene\n2. data table steps')).toBe(true);
+    expect(prompt.length).toBeLessThanOrEqual(4000);
+    expect(splitReferencedPrompt(prompt)).toEqual({ reference: 'BPMN, Steps, Days', message: 'เทียบให้หน่อย' });
+    const next = followUpPrompt(prompt, 'ต่อเลย');
+    expect(splitReferencedPrompt(next)).toEqual({ reference: 'BPMN, Steps, Days', message: 'ต่อเลย' });
+    expect(next).toContain('3. chart days_chart');
+    expect(chatReferencePrompt([], 'plain')).toBe('plain');
+    expect(chatReferencePrompt(refs[0], 'one')).toBe('[การ์ด “BPMN”] one\n(Card in question: view flow_scene)');
+  });
+
+  it('"Use this message again" gets the cards and the message back from a sent prompt', async () => {
+    const { chatReferencePrompt, parseReferencedPrompt } = await import('./canvas-object-finder');
+    const refs = [{ id: 'a', title: 'BPMN', detail: 'view flow_scene' }, { id: 'b', title: 'Steps', detail: 'data table steps' }];
+    const many = parseReferencedPrompt(chatReferencePrompt(refs, 'ครบไหม'));
+    expect(many.message).toBe('ครบไหม');
+    expect(many.references.map(({ title, detail }) => ({ title, detail }))).toEqual(refs.map(({ title, detail }) => ({ title, detail })));
+    const one = parseReferencedPrompt(chatReferencePrompt(refs[0], 'ยากขึ้น'));
+    expect(one.references.map((item) => item.detail)).toEqual(['view flow_scene']);
+    expect(one.message).toBe('ยากขึ้น');
+    expect(parseReferencedPrompt('ถามเฉย ๆ\nบรรทัดสอง')).toEqual({ references: [], message: 'ถามเฉย ๆ\nบรรทัดสอง' });
+  });
 });
