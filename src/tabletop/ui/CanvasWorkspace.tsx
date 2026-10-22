@@ -8,7 +8,7 @@ import type { WorkbenchProps } from './types';
 import { CanvasObjectContent } from './CanvasObjectContent';
 import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from './CanvasObjectIds';
 import { viewerCan } from '../shared/permissions';
-import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder } from './canvas-object-finder';
+import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder, registerCanvasPointFocus } from './canvas-object-finder';
 import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
 import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
@@ -1209,6 +1209,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     setHiddenIds(new Set());
     writeHiddenObjects(workspaceKey, new Set());
   }, [workspaceKey]);
+  // Header people: centre the view on another member's live cursor, keeping the zoom.
+  useEffect(() => registerCanvasPointFocus((x, y) => {
+    cancelPendingOpenObjectFocus();
+    void flow.setCenter(x, y, { zoom: Math.max(flow.getViewport().zoom, 0.8), duration: canvasMotionDuration(260) });
+  }), [cancelPendingOpenObjectFocus, flow]);
   // Chat commands ("เปิดการ์ด …", "open rules", "ซ่อนการ์ด …") find a card by name.
   const finderStateRef = useRef({ objectTitles: [] as { id: string; title: string; hidden: boolean }[], navigateToObject: (_id: string) => {}, hideObject: (_id: string) => {} });
   useEffect(() => registerCanvasObjectFinder((verb, query) => {
@@ -1501,7 +1506,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           onNodeDragStop={persistPosition}
           onNodeClick={choose}
           onPaneClick={clear}
-          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }); }}
+          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu(contextMenuPosition(event.clientX, event.clientY)); }}
           onMoveEnd={persistViewport}
           nodesDraggable
           nodesConnectable={false}
@@ -1585,4 +1590,14 @@ function describeCardForChat(id: string, title: string, view: WorkspaceView): st
   if (id === 'table.actions') return `the table actions${program ? `: ${program.actions.map((action) => action.title).join(', ')}` : ''}`;
   if (id.startsWith('table.chat.')) return `an earlier chat answer titled “${title}”`;
   return `card “${title}”`;
+}
+
+/** Keep the right-click menu on screen when opened near the right or bottom edge. */
+function contextMenuPosition(x: number, y: number): { x: number; y: number } {
+  const width = 220;
+  const height = 110;
+  return {
+    x: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
+    y: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
+  };
 }

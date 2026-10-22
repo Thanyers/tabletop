@@ -32,6 +32,22 @@ describe('model failure messages (F016)', () => {
     expect(safeModelFailureReasons(new Error('TABLE_ boom'))).toEqual([]);
     expect(safeModelFailureCode(new DomainError('TABLE_SCHEMA', 'bad'))).toBe('MODEL_PROVIDER_OUTPUT_REJECTED');
   });
+
+  it('separates our own deadline from a provider close in the draft message (F045)', () => {
+    const base = { limitMs: 240_000, elapsedMs: 240_010, receivedChars: 1_300, reasoningChars: 8_200 };
+    const ours = modelFailureMessage('MODEL_PROVIDER_TIMEOUT', [], { ...base, timedOutBy: 'server', partialContent: '{"kind"' });
+    expect(ours).toContain('Stopped at our 240s limit');
+    expect(ours).toContain('1,300 characters');
+    expect(ours).toContain('partial text is kept below');
+    const empty = modelFailureMessage('MODEL_PROVIDER_TIMEOUT', [], { ...base, receivedChars: 0, reasoningChars: 0, timedOutBy: 'server' });
+    expect(empty).toContain('not returned any draft text yet');
+    expect(empty).not.toContain('partial text is kept below');
+    const provider = modelFailureMessage('MODEL_PROVIDER_REQUEST_FAILED', [], { ...base, timedOutBy: 'provider', partialContent: '{"kind"' });
+    expect(provider).toContain('provider closed the connection after 1,300 characters');
+    expect(provider).toContain('not our 240s limit');
+    // A plain timeout with no evidence keeps the old wording.
+    expect(modelFailureMessage('MODEL_PROVIDER_TIMEOUT')).toBe('The proposal timed out. Try again.');
+  });
 });
 
 describe('table assistant failure messages', () => {

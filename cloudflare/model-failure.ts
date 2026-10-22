@@ -4,6 +4,7 @@
 // to the actor who asked for it, and the reasons describe that actor's own table.
 import { AuthorityError } from '../server/errors.js';
 import { DomainError } from '../src/tabletop/shared/contracts.js';
+import type { ModelFailureDetails } from '../src/tabletop/shared/model-job-progress.js';
 
 export const MAX_FAILURE_REASONS = 3;
 export const MAX_FAILURE_REASON_CHARS = 240;
@@ -47,7 +48,37 @@ export function cleanReasons(values: unknown): string[] {
 const STRUCTURAL_REASON = /unknown record field|unknown field|cross-collection|join|lookup/iu;
 export const STRUCTURAL_HINT = 'This table cannot join rows across collections yet; keep the data in one collection or attach a CSV file.';
 
-export function modelFailureMessage(failure: unknown, reasons: readonly string[] = []): string {  if (failure === 'SOURCE_REQUIRED') return 'Import a source file before asking for a proposal.';
+function limitSeconds(limitMs: number): string {
+  return `${Math.max(1, Math.round(limitMs / 1000))}s`;
+}
+
+/**
+ * F045: a rule draft that stopped early says whether our own deadline or the provider ended it,
+ * and how far the reply got, so the card can show the partial text instead of a bare timeout.
+ */
+function draftStopMessage(failure: unknown, details: ModelFailureDetails): string | null {
+  if (failure === 'MODEL_PROVIDER_TIMEOUT' && details.timedOutBy === 'server') {
+    const received = details.receivedChars > 0
+      ? ` It had received ${details.receivedChars.toLocaleString('en-US')} characters of the draft.`
+      : ' It had not returned any draft text yet.';
+    return `Stopped at our ${limitSeconds(details.limitMs)} limit for one rule draft.${received}`;
+  }
+  if (failure === 'MODEL_PROVIDER_REQUEST_FAILED' && details.timedOutBy === 'provider') {
+    const received = details.receivedChars > 0
+      ? ` after ${details.receivedChars.toLocaleString('en-US')} characters`
+      : ' before any text arrived';
+    return `The provider closed the connection${received}. That is the provider, not our ${limitSeconds(details.limitMs)} limit.`;
+  }
+  return null;
+}
+
+export function modelFailureMessage(failure: unknown, reasons: readonly string[] = [], details?: ModelFailureDetails | null): string {
+  if (details) {
+    const stopped = draftStopMessage(failure, details);
+    // Only point at a block that exists: a stopped draft may have produced no answer text at all.
+    if (stopped) return details.partialContent ? `${stopped} The partial text is kept below.` : stopped;
+  }
+  if (failure === 'SOURCE_REQUIRED') return 'Import a source file before asking for a proposal.';
   if (failure === 'TABLE_READ_ONLY') return 'This table workspace is currently read-only. The proposal was not applied.';
   if (failure === 'MODEL_PROVIDER_INPUT_TOO_LARGE') return 'The files and request are too large. Shorten them or remove a file, then try again.';
   if (failure === 'MODEL_PROVIDER_OUTPUT_REJECTED' || (typeof failure === 'string' && failure.startsWith('TABLE_'))) {
