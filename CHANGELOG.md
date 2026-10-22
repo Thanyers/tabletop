@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **ตั้งค่าหน้าจอของโต๊ะ:** เมนู … มีหัวข้อ Display ตั้งเส้นโยง Automatic / Show / Hide ให้ทุกคนในโต๊ะ (คำสั่ง `display.set`, สิทธิ์ `table.rename`) · ปุ่ม Connections ในเมนู Objects ใช้ค่าเดียวกัน
+
 ## 5.0.0 — 2026-10-22
 
 MAJOR: แถบแจ้งให้รีเฟรชเมื่อมีเวอร์ชันใหม่ (F042) + วัตถุวิ่งวนใน scene (F040) + แก้เพดาน response ของ assistant (F041) + การ์ดสูงเลื่อนด้วยล้อเมาส์ (#136) · ไม่มี migration/secret/binding/config ใหม่ · **MAJOR เพราะ rollback กลับ v4.4.0 ไม่สะอาด:** schema canvas ของรุ่นเก่าเป็น strict จึงไม่รู้จัก `motion` — โต๊ะที่บันทึกกฎที่มี `motion` แล้ว เมื่อถอยไป 4.4.0 การ์ด canvas ที่สร้างจะไม่แสดง และ assistant/การร่างกฎของโต๊ะนั้นตอบ "The active table rules are invalid" (ข้อมูลไม่หาย กลับมา 5.0.0 แล้วปกติ) · ถ้าต้องถอย ให้แก้ไปข้างหน้าเป็น 5.0.x แทน · แถบรีเฟรชจะเห็นผลตั้งแต่ release ถัดจากรุ่นนี้
