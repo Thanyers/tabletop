@@ -791,12 +791,14 @@ async function verifySharedCardLayout(owner, member, tableId, api) {
     .toBe(JSON.stringify(await nodeTransforms(owner, shared)));
   const beforeMove = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const historyEditor = await openCanvasObject(owner, 'workspace.history');
-  await historyEditor.getByRole('button', { name: 'Move Table history without dragging', exact: true }).click();
+  // 5.1.0: follows #144 (the "Move … without dragging" popup is gone). Clicking the card header
+  // selects it; an arrow key then moves it one grid step and saves it like a drag.
+  await historyEditor.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
   const moveResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
   void moveResponse.catch(() => {});
-  await historyEditor.getByRole('group', { name: 'Move Table history without dragging', exact: true })
-    .getByRole('button', { name: 'Move Table history down', exact: true }).click();
+  await owner.keyboard.press('ArrowDown');
   expect((await moveResponse).status()).toBe(200);
+  await expect(owner.locator('.tt-canvas-visually-hidden[role="status"]')).toHaveText('Table history moved down.');
   const after = (await api(owner, `/api/workspaces/${tableId}`)).body;
   expect(after.domain.canvasLayout.positions['workspace.history']).toMatchObject({
     x: beforeMove.domain.canvasLayout.positions['workspace.history'].x,
@@ -865,7 +867,8 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   owner.on('request', countPrivatePosts);
   await openCanvasObject(owner, 'table.actions');
   const actionNode = owner.getByTestId('canvas-object-editor');
-  await actionNode.getByRole('button', { name: 'Move Actions without dragging', exact: true }).click();
+  // 5.1.0: follows #144; select the card by its header, then move it with an arrow key below.
+  await actionNode.locator('.tt-canvas-node__head .tt-canvas-node__title').click();
 
   let releaseAck;
   const ackGate = new Promise(resolve => { releaseAck = resolve; });
@@ -888,8 +891,7 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   const layoutResponse = owner.waitForResponse(response => isCommandResponse(response, 'canvas.layout'));
   void layoutResponse.catch(() => {});
   try {
-    await actionNode.getByRole('group', { name: 'Move Actions without dragging', exact: true })
-      .getByRole('button', { name: 'Move Actions right', exact: true }).click();
+    await owner.keyboard.press('ArrowRight');
     expect(await Promise.race([serverAccepted, layoutResponse.then(response => response.status())])).toBe(200);
     const accepted = (await api(owner, `/api/workspaces/${tableId}`)).body;
     const acceptedPoint = accepted.domain.canvasLayout.positions['table.actions'];
