@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | MINOR — เพิ่มความสามารถใน canvas descriptor (ไม่มี migration/secret/binding) · rollback กลับรุ่นก่อนได้ (รุ่นเก่าไม่รู้จัก `motion` จึงไม่วาดภาพเคลื่อนไหว แต่ยังเปิดโต๊ะได้) |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F040-T*` |
@@ -40,6 +40,20 @@
 | T1 | contract + zod + evaluator + validation | `npm test -- generative` ผ่าน: schema รับ/ปฏิเสธ motion, evaluator คืนค่า from/to/speed, validation จับ motion บน line/polygon หรือคู่กับ drag |
 | T2 | UI: clock, interpolate, ปุ่มหยุด, reduced motion | browser/unit test เห็นตำแหน่งเปลี่ยนตามเวลาและหยุดเมื่อปิด |
 | T3 | prompt guide + ตัวอย่างรถ 10 เมตร | live/corpus case ที่ขอ "รถวิ่งวน 10 เมตร ปรับความเร็วได้" ออกมาเป็น draft ที่มี motion |
+
+## ผลตรวจ
+
+- `npx vitest run src/tabletop/runtime/generative/motion.test.ts src/tabletop/ui/scene-motion.test.ts` — **8/8**
+  (schema/evaluator/validation, ตำแหน่งวนลูป, ทิศย้อนกลับ, หยุดที่ `to`, ไม่แก้ projection เดิม)
+- `npm test` — **520 passed / 1 skipped** (Node 22.23.2); `npm run test:cloudflare` — **113/113**
+- `npm run typecheck` และ `npm run build` ผ่าน
+- prompt guide/คำสั่งเสียบ MOTION และตัวอย่างรถ 10 เมตรแล้ว — ยังไม่ได้รัน live corpus ยืนยันว่าโมเดลใช้ motion จริง (ต้องมี release บน staging ก่อน)
+- `npm run lint` รันในเครื่องไม่ได้ (ไม่มี `eslint` binary) — CI เป็นผู้รัน
+
+## คำถามเปิด
+
+- live corpus ยังไม่ยืนยันว่าโมเดลเลือกใช้ `motion` แทน step action เมื่อผู้ใช้ขอ "รถวิ่งวน"
+- ตำแหน่งเริ่มต้นของแต่ละ client ต่างกัน (เริ่มที่ `from` ตอน mount) — ยอมรับสำหรับ POC; ถ้าต้องการทุกคนเห็นเฟสเดียวกันต้องใส่ epoch time ภายหลัง
 
 ## การตัดสินใจ
 

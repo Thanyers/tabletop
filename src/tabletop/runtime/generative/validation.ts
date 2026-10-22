@@ -297,7 +297,7 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
         assert(new Set(elementIds).size === elementIds.length, 'Scene element identifiers must be unique.');
         for (const element of view.elements) {
           for (const [key, value] of Object.entries(element)) {
-            if (key === 'id' || key === 'shape' || key === 'fill' || key === 'stroke' || key === 'drag' || key === 'points' || key === 'text') continue;
+            if (key === 'id' || key === 'shape' || key === 'fill' || key === 'stroke' || key === 'drag' || key === 'motion' || key === 'points' || key === 'text') continue;
             validateSceneValue(value, program, records, addIssue);
           }
           if (element.shape === 'polygon') for (const point of element.points) {
@@ -307,6 +307,18 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
             const textIssues = validateGenerativeExpression(element.text, program, undefined, records);
             for (const issue of textIssues) addIssue(issue);
             if (textIssues.length === 0) assert(getGenerativeExpressionType(element.text, program, undefined, records) === 'text', 'Scene text expressions must return text.');
+          }
+          // F040: motion is an object, not a scene value expression, so it is validated here instead.
+          const motion = element.shape === 'rect' || element.shape === 'circle' || element.shape === 'text' ? element.motion : undefined;
+          if (motion) {
+            assert(!element.drag, 'A scene element cannot both drag and move on its own.');
+            validateSceneValue(motion.from, program, records, addIssue);
+            validateSceneValue(motion.to, program, records, addIssue);
+            validateSceneValue(motion.speed, program, records, addIssue);
+            if (typeof motion.from === 'number' && typeof motion.to === 'number') assert(motion.from !== motion.to, 'Scene motion must travel between two different positions.');
+            const staticSpeed = typeof motion.speed === 'number' ? motion.speed
+              : motion.speed.op === 'literal' && typeof motion.speed.value === 'number' ? motion.speed.value : undefined;
+            if (staticSpeed !== undefined) assert(staticSpeed > 0, 'Scene motion speed must be a positive number.');
           }
           if (element.drag) {
             const action = program.actions.find(item => item.id === element.drag?.actionId);

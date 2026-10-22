@@ -117,6 +117,22 @@
   touch-action: none;
 }
 
+/* F040: the frame loop already smooths the position; a CSS transition would smear the loop reset. */
+.tt-generated-scene__shape.is-animated {
+  transition: none;
+}
+
+.tt-generated-scene__motion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tt-generated-scene__motion .tt-canvas-inline__note {
+  margin: 0;
+}
+
 .tt-generated-scene__shape.is-draggable:focus-visible {
   outline: 3px solid var(--tt-blue);
   outline-offset: 3px;

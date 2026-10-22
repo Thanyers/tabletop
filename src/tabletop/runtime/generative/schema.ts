@@ -51,14 +51,22 @@ const bindingSchema = z.discriminatedUnion('kind', [
 ]);
 const inputBindingsSchema = z.record(generativeIdSchema, bindingSchema);
 const dragSchema = z.strictObject({ actionId: generativeIdSchema, xParameter: generativeIdSchema, yParameter: generativeIdSchema.optional(), inputs: inputBindingsSchema });
+const motionSchema = z.strictObject({
+  axis: z.enum(['x', 'y']),
+  from: generativeSceneValueSchema,
+  to: generativeSceneValueSchema,
+  speed: generativeSceneValueSchema,
+  loop: z.boolean().optional(),
+});
 const scenePaint = { fill: generativePaintSchema.optional(), stroke: generativePaintSchema.optional(), strokeWidth: generativeSceneValueSchema.optional() };
 const sceneInteraction = { drag: dragSchema.optional() };
+const movableSceneInteraction = { drag: dragSchema.optional(), motion: motionSchema.optional() };
 export const scenePrimitiveSchema: z.ZodType<ScenePrimitive> = z.discriminatedUnion('shape', [
-  z.strictObject({ id: generativeIdSchema, shape: z.literal('rect'), x: generativeSceneValueSchema, y: generativeSceneValueSchema, width: generativeSceneValueSchema, height: generativeSceneValueSchema, rx: generativeSceneValueSchema.optional(), ...scenePaint, ...sceneInteraction }),
-  z.strictObject({ id: generativeIdSchema, shape: z.literal('circle'), cx: generativeSceneValueSchema, cy: generativeSceneValueSchema, r: generativeSceneValueSchema, ...scenePaint, ...sceneInteraction }),
+  z.strictObject({ id: generativeIdSchema, shape: z.literal('rect'), x: generativeSceneValueSchema, y: generativeSceneValueSchema, width: generativeSceneValueSchema, height: generativeSceneValueSchema, rx: generativeSceneValueSchema.optional(), ...scenePaint, ...movableSceneInteraction }),
+  z.strictObject({ id: generativeIdSchema, shape: z.literal('circle'), cx: generativeSceneValueSchema, cy: generativeSceneValueSchema, r: generativeSceneValueSchema, ...scenePaint, ...movableSceneInteraction }),
   z.strictObject({ id: generativeIdSchema, shape: z.literal('line'), x1: generativeSceneValueSchema, y1: generativeSceneValueSchema, x2: generativeSceneValueSchema, y2: generativeSceneValueSchema, stroke: generativePaintSchema.optional(), strokeWidth: generativeSceneValueSchema.optional(), ...sceneInteraction }),
   z.strictObject({ id: generativeIdSchema, shape: z.literal('polygon'), points: z.array(pointSchema).min(3).max(GENERATIVE_LIMITS.scenePoints), ...scenePaint, ...sceneInteraction }),
-  z.strictObject({ id: generativeIdSchema, shape: z.literal('text'), x: generativeSceneValueSchema, y: generativeSceneValueSchema, text: z.union([safeText, generativeExpressionSchema]), fontSize: generativeSceneValueSchema.optional(), fill: generativePaintSchema.optional(), stroke: generativePaintSchema.optional(), ...sceneInteraction }),
+  z.strictObject({ id: generativeIdSchema, shape: z.literal('text'), x: generativeSceneValueSchema, y: generativeSceneValueSchema, text: z.union([safeText, generativeExpressionSchema]), fontSize: generativeSceneValueSchema.optional(), fill: generativePaintSchema.optional(), stroke: generativePaintSchema.optional(), ...movableSceneInteraction }),
 ]);
 
 const relationsSchema = z.strictObject({ views: z.array(generativeIdSchema).max(GENERATIVE_LIMITS.canvasViews).optional(), collections: z.array(generativeIdSchema).max(6).optional() }).optional();

@@ -20,9 +20,13 @@ const MODEL = 'deepseek-flash';
 const MAX_API_KEY_CHARS = 4096;
 const MAX_PROMPT_CHARS = 4000;
 const MAX_REQUEST_BODY_BYTES = 48 * 1024;
-const MAX_RESPONSE_BYTES = 64 * 1024;
-const MAX_OUTPUT_TOKENS = 8192;
-const MAX_TIMEOUT_MS = 120_000;
+// F041: a raw SSE stream is mostly JSON envelope (~294 bytes per token measured on
+// deepseek-flash), so the old 64 KiB cap cut ordinary Thai answers off after ~200 tokens.
+// Keep a generous envelope guard and bound the decoded answer instead.
+const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+const MAX_CONTENT_CHARS = 256_000;
+const MAX_OUTPUT_TOKENS = 32_768;
+const MAX_TIMEOUT_MS = 180_000;
 const MAX_ACTIVE_STATE_BYTES = 192 * 1024;
 const MAX_CONVERSATION_ENTRIES = 6;
 const MAX_CONVERSATION_BYTES = 16_384;
@@ -398,6 +402,10 @@ async function readProviderStream(
             if (typeof delta.content === 'string' && delta.content.length > 0) content += delta.content;
             if (typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0) {
               reasoningChars += delta.reasoning_content.length;
+            }
+            if (content.length > MAX_CONTENT_CHARS) {
+              void reader.cancel().catch(() => undefined);
+              return fail('MODEL_PROVIDER_RESPONSE_TOO_LARGE', 'The model response exceeds the allowed size.');
             }
           }
         }

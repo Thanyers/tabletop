@@ -114,7 +114,7 @@ function providerFetch(result: unknown, inspect?: (content: string, body: Record
     const parsed: unknown = JSON.parse(text);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Expected provider object.');
     const body = parsed as Record<string, unknown>;
-    if (body.model !== 'deepseek-flash' || body.max_tokens !== 8192 || body.tool_choice !== 'none'
+    if (body.model !== 'deepseek-flash' || body.max_tokens !== 32768 || body.tool_choice !== 'none'
       || body.stream !== true || !isRecord(body.stream_options) || body.stream_options.include_usage !== true
       || body.thinking === undefined || !Array.isArray(body.messages)) throw new Error('Unexpected provider limits.');
     const user = body.messages.find((message) => typeof message === 'object' && message !== null
@@ -165,7 +165,7 @@ describe('Cloudflare table assistant', () => {
     };
     const stateBefore = JSON.stringify(input.workspace.domain);
     const response = await respondToTablePrompt(testEnv, input, providerFetch(raw, (content, body) => {
-      expect(body.max_tokens).toBe(8192);
+      expect(body.max_tokens).toBe(32768);
       expect(new TextEncoder().encode(JSON.stringify(body)).byteLength).toBeLessThanOrEqual(48 * 1024);
       const user = JSON.parse(content) as { kind: string; prompt: string; context: Record<string, unknown> };
       expect(user.kind).toBe('table-assistant');
@@ -195,7 +195,7 @@ describe('Cloudflare table assistant', () => {
     expect(response.usage).toMatchObject({ promptTokens: 45, completionTokens: 80, cacheMissTokens: 35 });
     expect(JSON.stringify(input.workspace.domain)).toBe(stateBefore);
     const bill = await billingRow(input.jobId);
-    expect(bill).toMatchObject({ status: 'settled', max_output_tokens: 8192 });
+    expect(bill).toMatchObject({ status: 'settled', max_output_tokens: 32768 });
     expect(bill?.max_input_tokens).toBeGreaterThan(0);
   });
 
@@ -354,6 +354,22 @@ describe('Cloudflare table assistant', () => {
     }));
     expect(response.result.kind).toBe('explanation');
     expect(seen[0]).toEqual([{ text: 'Borrow only after training.', color: 'yellow' }]);
+  });
+
+  it('accepts a small answer whose SSE envelope exceeds the old 64 KiB response cap (F041)', async () => {
+    const input = await assistantInput();
+    const payload = { kind: 'build-request', text: 'Prepare a form.' };
+    const content = JSON.stringify(payload);
+    const padding = JSON.stringify({ model: 'deepseek-flash', choices: [{ index: 0, delta: { content: '' } }], padding: 'x'.repeat(2_000) });
+    const usage = JSON.stringify({
+      model: 'deepseek-flash', choices: [],
+      usage: { prompt_tokens: 45, completion_tokens: 12, total_tokens: 57, prompt_cache_hit_tokens: 0, prompt_cache_miss_tokens: 45 },
+    });
+    const stream = `${`data: ${padding}\n\n`.repeat(40)}data: ${JSON.stringify({ model: 'deepseek-flash', choices: [{ index: 0, delta: { content }, finish_reason: 'stop' }] })}\n\ndata: ${usage}\n\ndata: [DONE]\n\n`;
+    expect(new TextEncoder().encode(stream).byteLength).toBeGreaterThan(64 * 1024);
+    const fetchStream: typeof fetch = async () => new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const response = await respondToTablePrompt(testEnv, input, fetchStream);
+    expect(response.result).toMatchObject({ kind: 'build-request', text: 'Prepare a form.' });
   });
 
   it('reports incremental provider progress before the final JSON is complete (F037)', async () => {

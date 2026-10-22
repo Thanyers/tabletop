@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Pause, Play } from 'lucide-react';
 import type { ActorContext } from '../shared/contracts';
 import type { GenerativeCanvas, GenerativeScalar, GenerativeViewDescriptor } from '../shared/generative-contracts';
 import type { TableAction, TableParameter, TableRecord, TableState, TableValue } from '../shared/table-contracts';
@@ -6,6 +7,7 @@ import { handleTableCommand } from '../domain/table';
 import { evaluateGenerativeCanvas, type EvaluatedControl, type EvaluatedGenerativeView, type EvaluatedScenePrimitive } from '../runtime/generative/evaluator';
 import type { WorkspaceView } from '../shared/contracts';
 import type { Command } from './types';
+import { applySceneMotion, MOTION_FRAME_MS, sceneHasMotion } from './scene-motion';
 import './generated-canvas.css';
 
 interface LocalActionPreview {
@@ -242,6 +244,46 @@ function ChartView({ projected, expanded }: { projected: Extract<EvaluatedGenera
   </div>;
 }
 
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function' && window.matchMedia(REDUCED_MOTION_QUERY).matches);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(REDUCED_MOTION_QUERY);
+    const update = () => setReduced(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return reduced;
+}
+
+/** F040: seconds since this scene started playing; pauses without losing the position. */
+function useSceneClock(active: boolean): number {
+  const [elapsed, setElapsed] = useState(0);
+  const offset = useRef(0);
+  useEffect(() => {
+    if (!active || typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') return;
+    let frame = 0;
+    let last = 0;
+    const startedAt = performance.now() - offset.current * 1000;
+    const sample = (now: number) => {
+      if (now - last >= MOTION_FRAME_MS) {
+        last = now;
+        const next = (now - startedAt) / 1000;
+        offset.current = next;
+        setElapsed(next);
+      }
+      frame = window.requestAnimationFrame(sample);
+    };
+    frame = window.requestAnimationFrame(sample);
+    return () => window.cancelAnimationFrame(frame);
+  }, [active]);
+  return elapsed;
+}
+
 function SceneView({ projected, actionProjected, descriptor, state, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit }: {
   projected: Extract<EvaluatedGenerativeView, { kind: 'scene' }>;
   actionProjected?: Extract<EvaluatedGenerativeView, { kind: 'scene' }>;
@@ -336,6 +378,10 @@ function SceneView({ projected, actionProjected, descriptor, state, workspaceVie
     keyboardActions.current.delete(element.id);
     if (pending) void onCommit(pending.action, pending.inputs, `scene:${descriptor.id}:${pending.action.id}`);
   };
+  const reducedMotion = useReducedMotion();
+  const hasMotion = sceneHasMotion(projected.elements);
+  const [playing, setPlaying] = useState(true);
+  const seconds = useSceneClock(hasMotion && playing && !reducedMotion);
 
   return <div className="tt-generated-scene-wrap">
     <svg ref={svgRef} className={'tt-generated-scene' + (dragging ? ' is-dragging' : '')} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${descriptor.title} scene`} preserveAspectRatio="xMidYMid meet" onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}>
@@ -343,25 +389,30 @@ function SceneView({ projected, actionProjected, descriptor, state, workspaceVie
       {projected.elements.map(element => {
         const actionElement = actionElements.get(element.id);
         const draggable = Boolean(actionElement?.drag && (!previewOnly || sandboxEnabled) && isEnabled(actionElement.drag.actionId));
-        return <ScenePrimitive key={element.id} element={element} sceneWidth={width} sceneHeight={height} draggable={draggable} onPointerDown={event => { if (actionElement) beginDrag(event, element, actionElement); }} onKeyDown={event => { if (actionElement) moveWithKeyboard(event, element, actionElement); }} onKeyUp={event => finishKeyboardDrag(event, element)} />;
+        const shown = seconds > 0 ? applySceneMotion(element, seconds) : element;
+        return <ScenePrimitive key={element.id} element={shown} sceneWidth={width} sceneHeight={height} draggable={draggable} animated={Boolean('motion' in element && element.motion)} onPointerDown={event => { if (actionElement) beginDrag(event, element, actionElement); }} onKeyDown={event => { if (actionElement) moveWithKeyboard(event, element, actionElement); }} onKeyUp={event => finishKeyboardDrag(event, element)} />;
       })}
     </svg>
     {actionProjected?.elements.some(element => element.drag) && <p className="tt-canvas-inline__note">Drag a marked shape or focus it and use the arrow keys. The table changes when you release.</p>}
+    {hasMotion && (reducedMotion
+      ? <p className="tt-canvas-inline__note" role="status">Motion is paused because this device asks for reduced motion. The table values still update normally.</p>
+      : <div className="tt-generated-scene__motion"><button type="button" className="tt-button tt-button--quiet" aria-pressed={playing} onClick={() => setPlaying(value => !value)}>{playing ? <Pause size={13} /> : <Play size={13} />}{playing ? 'Pause motion' : 'Play motion'}</button><p className="tt-canvas-inline__note">The scene moves on its own and loops. Table values are not changed by the animation.</p></div>)}
   </div>;
 }
 
-function ScenePrimitive({ element, sceneWidth, sceneHeight, draggable, onPointerDown, onKeyDown, onKeyUp }: {
+function ScenePrimitive({ element, sceneWidth, sceneHeight, draggable, animated, onPointerDown, onKeyDown, onKeyUp }: {
   element: EvaluatedScenePrimitive;
   sceneWidth: number;
   sceneHeight: number;
   draggable: boolean;
+  animated: boolean;
   onPointerDown: (event: ReactPointerEvent<SVGElement>) => void;
   onKeyDown: (event: ReactKeyboardEvent<SVGElement>) => void;
   onKeyUp: (event: ReactKeyboardEvent<SVGElement>) => void;
 }) {
   const interactive = draggable && Boolean(element.drag);
   const common = {
-    className: interactive ? 'tt-generated-scene__shape is-draggable' : 'tt-generated-scene__shape',
+    className: 'tt-generated-scene__shape' + (interactive ? ' is-draggable' : '') + (animated ? ' is-animated' : ''),
     fill: 'fill' in element ? element.fill ?? 'none' : undefined,
     stroke: 'stroke' in element ? element.stroke ?? 'none' : undefined,
     strokeWidth: 'strokeWidth' in element ? clamp(element.strokeWidth ?? 1.5, 0, 32) : undefined,
