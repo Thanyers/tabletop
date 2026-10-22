@@ -536,9 +536,10 @@ try {
     return `scenario:${scenario.id}; phase:${phase}. Create a bounded, understandable Canvas for this synthetic fixture.`;
   }
 
-  function draftCardForPrompt(page, prompt) {
-    const draftNode = page.locator('.tt-canvas-node--auxiliary').filter({ hasText: prompt.slice(0, 36) }).first();
-    return draftNode.getByTestId('table-chat-answer');
+  // F039/F050: an auto-applied draft card leaves the canvas and becomes a 15s success notice with
+  // a "View rules" action. Check the notice, not the removed chat card.
+  function appliedNotice(page) {
+    return page.locator('.tt-notice').filter({ hasText: 'New rules added' }).first();
   }
 
   async function askForDraft(owner, tableId, scenario, phase, file, { cancelFirst = false, expectConsent = true } = {}) {
@@ -559,16 +560,15 @@ try {
     expect(applied.domain.candidate?.approval?.actorId).toBe(applied.actor.actorId);
     if (before.domain.program) expect(applied.domain.records).toEqual(before.domain.records);
     else expect(applied.domain.records).toEqual(applied.domain.candidate.change.initialRecords);
-    const draftCard = draftCardForPrompt(owner, prompt);
-    await expect(draftCard).toBeVisible({ timeout: 30_000 });
-    await expect(draftCard).toContainText('The new rules were added to the table. Remove any rule you do not want from the Rules card.', { timeout: 30_000 });
-    await expect(draftCard.getByRole('button', { name: 'Review rules', exact: true })).toHaveCount(0);
-    await expect(draftCard.getByRole('button', { name: 'View rules', exact: true })).toBeEnabled();
+    const draftNotice = appliedNotice(owner);
+    await expect(draftNotice).toBeVisible({ timeout: 15_000 });
+    await expect(draftNotice).toContainText('New rules added');
+    await expect(draftNotice.getByRole('button', { name: 'View rules', exact: true })).toBeEnabled();
     return applied;
   }
 
   async function openAppliedRules(owner, prompt) {
-    await clickVisible(draftCardForPrompt(owner, prompt).getByRole('button', { name: 'View rules', exact: true }));
+    await clickVisible(appliedNotice(owner).getByRole('button', { name: 'View rules', exact: true }));
     const editor = owner.getByTestId('canvas-object-editor');
     await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
     await expect(editor.getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();
