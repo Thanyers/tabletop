@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowUp, LoaderCircle, Paperclip, X } from 'lucide-react';
 import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
 import { VISIBILITY_POLICY } from '../shared/visibility';
@@ -33,6 +33,8 @@ export interface TableChatProps {
   onAttach: (file: File) => Promise<void>;
   /** Resolves true only when the server has acknowledged this request. */
   onSend: (message: string) => Promise<boolean>;
+  /** F037: an extra round control rendered beside the composer (add a note). */
+  composerAction?: ReactNode;
   onMessageChange?: (message: string) => void;
 }
 
@@ -40,7 +42,7 @@ export interface TableChatProps {
 export function TableChat({
   workspaceId, epoch, actorId, mode, sourceFiles, placeholder, aiEnabled, canAttach, busy,
   acceptFiles, historyStatus = 'ready', onRetryHistory, prefill, acknowledged, focusKey = 0,
-  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange,
+  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
   const [grantedKey, setGrantedKey] = useState<string | null>(() => storedConsent({ workspaceId, epoch, actorId }));
@@ -179,6 +181,7 @@ export function TableChat({
           submit();
         }} />
       {busy && <span id={`${messageId}-wait`} className="tt-visually-hidden">You can keep typing. Send is available when the current request finishes.</span>}
+      {composerAction}
       <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend} title={busy ? 'Send is available when the current request finishes' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
     </form>
   </div>;

@@ -20,6 +20,11 @@ const NOTE_COORD = z.number().finite().min(-90_000).max(90_000);
 const noteColor = z.enum(NOTE_COLORS);
 const noteText = z.string().max(MAX_NOTE_TEXT).refine(t => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/u.test(t), 'Use printable text only.');
 const noteId = z.string().regex(/^note_[a-z0-9_-]{6,40}$/u);
+/** F037: notes are resizable; the paper grows but stays bounded so layout stays usable. */
+const noteWidth = z.number().int().min(160).max(480);
+const noteHeight = z.number().int().min(110).max(560);
+const NOTE_DEFAULT_WIDTH = 236;
+const NOTE_DEFAULT_HEIGHT = 172;
 const forbiddenIdentifiers = new Set<string>(GENERATIVE_FORBIDDEN_IDENTIFIERS);
 const id = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/).refine(x => !forbiddenIdentifiers.has(x));
 const text = z.string().min(1).max(500);
@@ -369,16 +374,20 @@ function conditionPass(op: string, l: TableValue, r: TableValue): boolean {
 function handleNoteCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } {
   const notes = state.notes ?? [];
   if (type === 'table.addNote') {
-    const input = parsePayload(z.strictObject({ text: noteText.optional(), color: noteColor.optional(), x: NOTE_COORD, y: NOTE_COORD }), payload);
+    const input = parsePayload(z.strictObject({ text: noteText.optional(), color: noteColor.optional(), x: NOTE_COORD, y: NOTE_COORD, width: noteWidth.optional(), height: noteHeight.optional() }), payload);
     assert(notes.length < MAX_TABLE_NOTES, 'TABLE_LIMIT', `A table can hold at most ${MAX_TABLE_NOTES} notes.`);
     const id = `note_${ctx.hash(canonicalJson([ctx.actorId, ctx.now, input.text ?? '', input.x, input.y])).slice(0, 16)}`;
     assert(!notes.some(note => note.id === id), 'TABLE_DUPLICATE_NOTE', 'That note already exists.');
-    const note = { id, text: input.text ?? '', color: input.color ?? 'yellow' as const, x: input.x, y: input.y, createdBy: ctx.actorId, createdAt: ctx.now, updatedAt: ctx.now };
+    const note = {
+      id, text: input.text ?? '', color: input.color ?? 'yellow' as const, x: input.x, y: input.y,
+      width: input.width ?? NOTE_DEFAULT_WIDTH, height: input.height ?? NOTE_DEFAULT_HEIGHT,
+      createdBy: ctx.actorId, createdAt: ctx.now, updatedAt: ctx.now,
+    };
     return { state: { ...structuredClone(state), notes: [...notes, note] }, label: 'Note added.' };
   }
   if (type === 'table.updateNote') {
-    const input = parsePayload(z.strictObject({ noteId, text: noteText.optional(), color: noteColor.optional() }), payload);
-    assert(input.text !== undefined || input.color !== undefined, 'TABLE_INPUT', 'Change the note text or colour.');
+    const input = parsePayload(z.strictObject({ noteId, text: noteText.optional(), color: noteColor.optional(), width: noteWidth.optional(), height: noteHeight.optional() }), payload);
+    assert(input.text !== undefined || input.color !== undefined || input.width !== undefined || input.height !== undefined, 'TABLE_INPUT', 'Change the note text, colour or size.');
     assert(notes.some(note => note.id === input.noteId), 'TABLE_NOTE', 'Note not found.');
     return {
       state: {
@@ -387,6 +396,8 @@ function handleNoteCommand(state: TableState, type: string, payload: unknown, ct
           ...note,
           ...(input.text === undefined ? {} : { text: input.text }),
           ...(input.color === undefined ? {} : { color: input.color }),
+          ...(input.width === undefined ? {} : { width: input.width }),
+          ...(input.height === undefined ? {} : { height: input.height }),
           updatedAt: ctx.now,
         } : note),
       },

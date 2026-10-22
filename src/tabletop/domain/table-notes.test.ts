@@ -27,6 +27,10 @@ describe('shared canvas notes (F037)', () => {
     state = run(state, 'table.updateNote', { noteId: note.id, text: 'Lend only to trained staff', color: 'rose' }, { ...member, now: 3000 }).state;
     expect(notes(state)[0]).toMatchObject({ text: 'Lend only to trained staff', color: 'rose', updatedAt: 3000 });
 
+    // The paper can be resized; text always wraps inside it on the client.
+    state = run(state, 'table.updateNote', { noteId: note.id, width: 320, height: 240 }).state;
+    expect(notes(state)[0]).toMatchObject({ width: 320, height: 240 });
+
     state = run(state, 'table.moveNote', { noteId: note.id, x: -20, y: 640 }).state;
     expect(notes(state)[0]).toMatchObject({ x: -20, y: 640 });
 
@@ -59,6 +63,8 @@ describe('shared canvas notes (F037)', () => {
     expect(() => handleTableCommand(state, 'table.addNote', { text: 'x'.repeat(501), x: 0, y: 0 }, member)).toThrow();
     expect(() => handleTableCommand(state, 'table.addNote', { text: 'ok', color: 'purple', x: 0, y: 0 }, member)).toThrow();
     expect(() => handleTableCommand(state, 'table.addNote', { text: 'ok', x: 90_001, y: 0 }, member)).toThrow();
+    expect(() => handleTableCommand(state, 'table.addNote', { text: 'ok', x: 0, y: 0, width: 40 }, member)).toThrow();
+    expect(() => handleTableCommand(state, 'table.addNote', { text: 'ok', x: 0, y: 0, height: 900 }, member)).toThrow();
     expect(() => handleTableCommand(state, 'table.updateNote', { noteId: 'note_missing' }, member)).toThrow();
     expect(() => handleTableCommand(state, 'table.removeNote', { noteId: 'note_missing' }, member)).toThrow();
 
