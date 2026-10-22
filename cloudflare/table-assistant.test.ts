@@ -339,6 +339,23 @@ describe('Cloudflare table assistant', () => {
     await expect(respondToTablePrompt(testEnv, forged, failingFetch)).rejects.toMatchObject({ code: 'TABLE_ASSISTANT_FORBIDDEN' });
   });
 
+  it('accepts stored note records and sends only their text and colour (F037 regression)', async () => {
+    const input = await assistantInput();
+    const domain = input.workspace.domain;
+    if (domain.kind !== 'table') throw new Error('Expected a table fixture.');
+    domain.notes = [{
+      id: 'note_ab12cd34', text: 'Borrow only after training.', color: 'yellow',
+      x: 10, y: 20, width: 236, height: 172, createdBy: ownerId, createdAt: 1, updatedAt: 1,
+    }];
+    const seen: unknown[] = [];
+    const response = await respondToTablePrompt(testEnv, input, providerFetch({ kind: 'explanation', text: 'ok', references: [] }, (content) => {
+      const user = JSON.parse(content) as { context?: { notes?: unknown } };
+      seen.push(user.context?.notes);
+    }));
+    expect(response.result.kind).toBe('explanation');
+    expect(seen[0]).toEqual([{ text: 'Borrow only after training.', color: 'yellow' }]);
+  });
+
   it('reports incremental provider progress before the final JSON is complete (F037)', async () => {
     const input = await assistantInput();
     const payload = { kind: 'build-request', text: 'Prepare a form.' };
