@@ -19,7 +19,14 @@ const layoutInput = z.strictObject({
   trash: z.record(z.string().regex(SHARED_CANVAS_ID_PATTERN), z.boolean())
     .refine(trash => Object.keys(trash).length <= 24)
     .optional(),
-}).refine(input => Object.keys(input.positions).length > 0 || Object.keys(input.trash ?? {}).length > 0);
+  /** A card's name for everyone at the table; null or blank goes back to its own name. */
+  titles: z.record(z.string().regex(SHARED_CANVAS_ID_PATTERN), z.string().max(120).nullable())
+    .refine(titles => Object.keys(titles).length <= 24)
+    .optional(),
+}).refine(input => Object.keys(input.positions).length > 0 || Object.keys(input.trash ?? {}).length > 0 || Object.keys(input.titles ?? {}).length > 0);
+
+/** The table keeps at most this many renamed cards; the oldest names are forgotten. */
+export const MAX_CANVAS_TITLES = 300;
 
 /** The table keeps at most this many deleted cards; the oldest are forgotten (they come back on the canvas). */
 export const MAX_TRASHED_CANVAS_OBJECTS = 300;
@@ -65,12 +72,26 @@ export function handleCanvasLayout(state: TableState, payload: unknown, ctx: Act
       restored += 1;
     }
   }
+  const titles = { ...(state.canvasLayout?.titles ?? {}) };
+  let renamed = 0;
+  for (const [id, raw] of Object.entries(input.titles ?? {})) {
+    assert(isAllowed(id), 'CANVAS_NODE_UNAVAILABLE', 'Only active shared objects can be renamed.');
+    // Chat cards are anyone's to tidy; the table's own cards are named by the owner.
+    hasRole(ctx, isSharedChatCanvasId(id) ? ['owner', 'participant'] : ['owner']);
+    const title = (raw ?? '').replace(/\s+/gu, ' ').trim();
+    delete titles[id];
+    if (title) titles[id] = title;
+    renamed += 1;
+  }
+  const keptTitles = Object.entries(titles).filter(([id]) => isAllowed(id)).slice(-MAX_CANVAS_TITLES);
   const keptTrash = Object.entries(trashed).filter(([id]) => isAllowed(id)).slice(-MAX_TRASHED_CANVAS_OBJECTS);
   const layout: NonNullable<TableState['canvasLayout']> = { revision: revision + 1, positions };
   if (keptTrash.length > 0) layout.trashed = Object.fromEntries(keptTrash);
+  if (keptTitles.length > 0) layout.titles = Object.fromEntries(keptTitles);
   const label = deleted > 0 ? `Deleted ${deleted === 1 ? 'a card' : `${deleted} cards`} (restore from Objects)`
     : restored > 0 ? `Restored ${restored === 1 ? 'a card' : `${restored} cards`}`
-      : 'Arranged table objects';
+      : renamed > 0 ? `Renamed ${renamed === 1 ? 'a card' : `${renamed} cards`}`
+        : 'Arranged table objects';
   return { state: { ...state, canvasLayout: layout }, label };
 }
 
@@ -97,10 +118,16 @@ export function projectCanvasLayout(state: TableState, policy: VisibilityPolicy 
     revision: state.canvasLayout.revision,
     positions: Object.fromEntries(Object.entries(state.canvasLayout.positions).filter(([id]) => allowed.has(id) || (policy === 'open' && isSharedChatCanvasId(id)))),
     ...trashedProjection(state.canvasLayout.trashed, (id) => allowed.has(id) || (policy === 'open' && isSharedChatCanvasId(id))),
+    ...titlesProjection(state.canvasLayout.titles, (id) => allowed.has(id) || (policy === 'open' && isSharedChatCanvasId(id))),
   };
 }
 
 function trashedProjection(trashed: Record<string, { by: string; at: number }> | undefined, allowed: (id: string) => boolean) {
   const kept = Object.entries(trashed ?? {}).filter(([id]) => allowed(id));
   return kept.length > 0 ? { trashed: Object.fromEntries(kept) } : {};
+}
+
+function titlesProjection(titles: Record<string, string> | undefined, allowed: (id: string) => boolean) {
+  const kept = Object.entries(titles ?? {}).filter(([id]) => allowed(id));
+  return kept.length > 0 ? { titles: Object.fromEntries(kept) } : {};
 }
