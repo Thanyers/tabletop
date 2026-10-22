@@ -52,6 +52,10 @@ PRIM (every primitive also has id, optional fill?/stroke?:PAINT, optional drag?)
   rect{shape:"rect",x,y,width,height,rx?} | circle{shape:"circle",cx,cy,r} | line{shape:"line",x1,y1,x2,y2}
   | polygon{shape:"polygon",points:[{x,y} 3..64]} | text{shape:"text",x,y,text:string|EXPR,fontSize?}
   Geometry values are number or EXPR (raw, never {expression:...}); PAINT = "none" or "#" + 3..8 hex digits.
+MOTION (optional on rect/circle/text only; never together with drag):
+  {axis:"x"|"y",from:number|EXPR,to:number|EXPR,speed:number|EXPR,loop?:boolean}
+  The host animates the axis from from to to at speed scene units per second and resets at to (loop default true);
+  geometry on that axis is ignored while motion is present. speed must be >0. Use it for a car that keeps driving a track.
 DRAG{actionId,xParameter,yParameter?,inputs:BINDINGS}
 CONTROL (each: id,label,actionId,inputs:BINDINGS) =
   button{kind:"button"} | form{kind:"form"} | slider{kind:"slider",parameter,min,max,step?,value?:EXPR}
