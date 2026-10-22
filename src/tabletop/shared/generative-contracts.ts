@@ -84,7 +84,7 @@ export type ControlDescriptor =
   | ({ id: string; kind: 'toggle'; label: string; parameter: string; value?: GenerativeExpression } & BoundTableAction)
   | ({ id: string; kind: 'select'; label: string; parameter: string; options: { label: string; value: string | number | boolean }[]; value?: GenerativeExpression } & BoundTableAction)
   /**
-   * F049/F050: visual dice. Bound to a `number` parameter it rolls {count}d{faces}+modifier on the
+   * F049/F051: visual dice. Bound to a `number` parameter it rolls {count}d{faces}+modifier on the
    * client and is visual-only. Bound to a `roll` parameter it shows the program's roll spec and the
    * server roll; the control's own faces/count must stay valid but are never authoritative.
    */

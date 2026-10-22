@@ -364,7 +364,7 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
             assert(control.options.every(option => actionInputType(action, control.parameter) === valueType(option.value) && (!parameter.choices || parameter.choices.includes(String(option.value)))), 'Select options do not match the action parameter.');
             interactiveType = actionInputType(action, control.parameter);
           } else if (control.kind === 'dice') {
-            // F050: dice may bind a number parameter (client-side, visual-only) or a roll parameter
+            // F051: dice may bind a number parameter (client-side, visual-only) or a roll parameter
             // (the server rolls the program's roll spec). The card's own faces/count stay valid but
             // are not authoritative for a roll parameter.
             const parameter = action.parameters.find(item => item.id === control.parameter);

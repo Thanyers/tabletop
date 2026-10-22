@@ -95,7 +95,7 @@ export function rollCombatChange(sourceId?: string): TableChange {
 }
 
 /**
- * F050: the same server-roll attack, exposed as a visual dice card bound to the `roll` parameter.
+ * F051: the same server-roll attack, exposed as a visual dice card bound to the `roll` parameter.
  * The dice control deliberately declares 1d6 while the roll spec is 2d6 + 3, so a test can prove
  * the card renders the program's spec and never authorises its own faces/count.
  */
