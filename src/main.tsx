@@ -10,10 +10,11 @@ import '@fontsource/noto-sans-thai/400.css';
 import '@fontsource/noto-sans-thai/500.css';
 import '@fontsource/noto-sans-thai/700.css';
 import '@xyflow/react/dist/style.css';
+import { UpdateNotice } from './update-notice/UpdateNotice';
 const Experience = lazy(() => {
   const path = location.pathname;
   if (path === '/demo' || path === '/demo/') return import('./tabletop/demo/InteractiveDemo');
   if (path === '/demo/replay' || path === '/demo/replay/') return import('./tabletop/demo/PublicDemo');
   return new URLSearchParams(location.search).get('legacy-demo') === '1' ? import('./LegacyEntry') : import('./tabletop/TabletopApp');
 });
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><Suspense fallback={<main role="status" aria-live="polite" style={{fontFamily:'Manrope, Noto Sans Thai, sans-serif',padding:40,color:'#243548'}}><strong>tabletop.</strong><p>กำลังเปิดโต๊ะทำงาน</p></main>}><Experience/></Suspense></React.StrictMode>);
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><Suspense fallback={<main role="status" aria-live="polite" style={{fontFamily:'Manrope, Noto Sans Thai, sans-serif',padding:40,color:'#243548'}}><strong>tabletop.</strong><p>กำลังเปิดโต๊ะทำงาน</p></main>}><Experience/></Suspense><UpdateNotice/></React.StrictMode>);
