@@ -72,18 +72,18 @@ function isUncertain(error: unknown): boolean {
 }
 
 /** The card keeps counting while the answer is in flight, so a slow request never looks frozen. */
-function ElapsedSince({ startedAt, kind }: { startedAt: number; kind: ChatCard['kind'] }) {
+function ElapsedLabel({ startedAt, kind }: { startedAt: number; kind: ChatCard['kind'] }) {
   const [seconds, setSeconds] = useState(() => Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
   useEffect(() => {
     const timer = window.setInterval(() => setSeconds(Math.max(0, Math.round((Date.now() - startedAt) / 1000))), 1000);
     return () => window.clearInterval(timer);
   }, [startedAt]);
   const limit = kind === 'draft' ? 180 : 120;
-  return <p className="tt-chat-card__elapsed" aria-live="off">
+  return <span className="tt-chat-card__elapsed" aria-live="off">
     <span className="tt-chat-card__elapsed-time">{seconds}s</span>
-    <span>of the {limit}s limit · the table stays usable while it works.</span>
-    {seconds >= limit && <strong> Waiting for the final status…</strong>}
-  </p>;
+    <span> / {limit}s</span>
+    {seconds >= limit && <strong> · waiting for the final status…</strong>}
+  </span>;
 }
 
 function scopeFor(view: TableView | null): string {
@@ -720,8 +720,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     : null;
   if (card.phase === 'sending' || card.phase === 'waiting') {
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
-      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span></p>
-      <ElapsedSince startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} />
+      <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{card.kind === 'draft' ? card.phase === 'sending' ? 'Sending your rule request…' : 'Preparing a rule draft…' : card.phase === 'sending' ? 'Sending your question…' : 'Preparing an answer…'}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} /></p>
       {card.pollError && <p className="tt-chat-card__error" role="status">Status check: {card.pollError}</p>}
       {checkButton}{dismissButton}
     </div>;
