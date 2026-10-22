@@ -1255,9 +1255,10 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
     expectedPromptContains: ownerPrompt, forbiddenTexts: [...forbidden, firstPrompt, firstText, followup],
   };
   const ownerCalls = getProviderCalls();
-  // F034-T3: another member's card is titled "<asker>: <prompt>".
-  const memberCardForOwner = owner.getByRole('article', { name: `${profile.actor.name}: ${firstPrompt}`, exact: true });
+  // F038: another member's card is titled with the prompt; the asker's name is a muted subtitle under it.
+  const memberCardForOwner = owner.getByRole('article', { name: firstPrompt, exact: true });
   await expect(memberCardForOwner).toBeVisible();
+  await expect(memberCardForOwner.locator('.tt-canvas-node__subtitle')).toHaveText(profile.actor.name);
   await expect(memberCardForOwner.getByTestId('table-chat-answer')).toContainText(firstText);
   await expect(memberCardForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${profile.actor.name}`);
   // The owner consented for a rule draft on this table epoch; one grant also covers questions.
@@ -1270,10 +1271,12 @@ async function verifyParticipantConversation({ owner, member, tableId, source, a
   });
   // The member sees the owner's card too, labelled with the owner as the asker.
   await member.reload();
-  const ownerCardForMember = member.getByRole('article', { name: `${ownerProfile.actor.name}: ${ownerPrompt}`, exact: true });
+  const ownerCardForMember = member.getByRole('article', { name: ownerPrompt, exact: true });
+  await expect(ownerCardForMember.locator('.tt-canvas-node__subtitle')).toHaveText(ownerProfile.actor.name);
   await expect(ownerCardForMember.getByTestId('table-chat-answer')).toContainText(ownerReply.result.text);
   await expect(ownerCardForMember.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${ownerProfile.actor.name}`);
   await expect(member.getByRole('article', { name: firstPrompt, exact: true }).locator('.tt-chat-card__asker')).toHaveCount(0);
+  await expect(member.getByRole('article', { name: firstPrompt, exact: true }).locator('.tt-canvas-node__subtitle')).toHaveCount(0);
 
   const providerCallsBeforeArchive = getProviderCalls();
   const archived = await seedConversationPage({ page: member, tableId, profile: afterFollowup, api, setAssistantReply });
@@ -1647,7 +1650,8 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   // asker can confirm it (no Confirm button on the owner's screen).
   await owner.reload();
   await expect(owner.locator('.tt-canvas-panel')).toBeVisible();
-  const memberProposalForOwner = owner.getByRole('article', { name: `${memberName}: ${memberPrompt}`, exact: true });
+  const memberProposalForOwner = owner.getByRole('article', { name: memberPrompt, exact: true });
+  await expect(memberProposalForOwner.locator('.tt-canvas-node__subtitle')).toHaveText(memberName);
   await expect(memberProposalForOwner.getByTestId('table-chat-answer')).toContainText(memberProposal.result.text);
   await expect(memberProposalForOwner.locator('.tt-chat-card__asker')).toHaveText(`Asked by ${memberName}`);
   await expect(memberProposalForOwner).toContainText(`Only ${memberName} can confirm this proposal.`);
@@ -1694,6 +1698,121 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   expect(ownerAfterReload.domain.program.description).toContain('A revised scoring rule');
   expect(ownerAfterReload.domain.records.boats.map((row) => row.values.score)).toEqual([5, 5]);
   mark('Generic table: generated program rename survives AI rule edit and both reloads; role, turn and live scores persist');
+
+  await verifyParallelRequests({ owner, member, tableId: room.id, api, setTableReply, setAssistantReply, getProviderCalls, mark });
+}
+
+// Evidence screenshot of the page with one canvas card opened in view.
+async function snapshotCard(page, card, path) {
+  try {
+    // Open the card so the canvas brings it into view; a closed off-screen node renders blank.
+    const nodeId = await card.evaluate(element => element.closest('.react-flow__node')?.getAttribute('data-id'));
+    if (nodeId) await expect(await openCanvasObject(page, nodeId)).toBeInViewport({ ratio: 0.5 });
+  } catch { /* evidence only: fall through to the page as it is */ }
+  await page.screenshot({ path });
+}
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+
+// F038: while a rule draft is still generating, the owner can queue a second rule request and ask a
+// question; the joined member sees both running cards live, named after the owner, without reloading.
+async function verifyParallelRequests({ owner, member, tableId, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
+  const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
+  const ownerName = before.actor.name;
+  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
+  const draftChange = (description) => {
+    const program = structuredClone(before.domain.program);
+    program.description = description;
+    return { kind: 'table', program, initialRecords: {} };
+  };
+  // Prompts stay under the 48-character card title limit and match the owner's builder/question routing.
+  const firstPrompt = 'Add a column for boat colour.';
+  const secondPrompt = 'Add another column for crew size.';
+  const questionPrompt = 'What is each boat score right now?';
+  const questionText = 'Red and blue both have five points.';
+  const chat = owner.getByTestId('table-chat-bar');
+  const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
+  const send = chat.getByRole('button', { name: 'Send message', exact: true });
+  const ownCard = (text) => owner.getByRole('article', { name: new RegExp(`^${escapeRegExp(text)}$`, 'u') }).first();
+  const memberCard = (text) => member.getByRole('article', { name: text, exact: true }).first();
+  const modelPosts = [];
+  const countModelPosts = request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === `/api/workspaces/${tableId}/model`) modelPosts.push(request.postDataJSON());
+  };
+  owner.on('request', countModelPosts);
+  let releaseFirst = () => {};
+  const gate = new Promise(resolve => { releaseFirst = resolve; });
+  try {
+    const callsBefore = getProviderCalls();
+    setTableReply({ change: draftChange('F038 first queued-draft check.'), gate, expectedSources });
+    await prompt.fill(firstPrompt);
+    await send.click();
+    // The provider received the first draft and is held by the gate.
+    await expect.poll(() => getProviderCalls(), { timeout: 20_000 }).toBe(callsBefore + 1);
+    const firstCard = ownCard(firstPrompt).getByTestId('table-chat-answer');
+    await expect(firstCard).toHaveAttribute('data-phase', 'waiting', { timeout: 20_000 });
+    await expect(firstCard).toContainText('Preparing a rule draft…');
+    // The member sees the owner's running draft live, named after the owner.
+    await expect(memberCard(firstPrompt).getByTestId('table-chat-answer')).toContainText(`${ownerName} is preparing a rule draft…`, { timeout: 20_000 });
+    await expect(memberCard(firstPrompt).locator('.tt-canvas-node__subtitle')).toHaveText(ownerName);
+    await expect(ownCard(firstPrompt).locator('.tt-canvas-node__subtitle')).toHaveCount(0);
+    await snapshotCard(member, memberCard(firstPrompt), 'test-results/f038-member-card.png');
+
+    // (a) A second rule request queues instead of being blocked.
+    await prompt.fill(secondPrompt);
+    await expect(send).toBeEnabled();
+    await send.click();
+    const secondNode = ownCard(secondPrompt);
+    const secondCard = secondNode.getByTestId('table-chat-answer');
+    await expect(secondCard).toHaveAttribute('data-phase', 'queued');
+    await expect(secondCard).toContainText('Queued.');
+    await expect(secondCard.getByRole('button', { name: 'Cancel this request', exact: true })).toBeVisible();
+    // The open editor hides the eyebrow, so the queued state is read from the card itself.
+    expect(modelPosts.map(body => body.prompt)).toEqual([firstPrompt]);
+
+    // (b) A question runs in parallel with the held draft.
+    await prompt.fill(questionPrompt);
+    await expect(send).toBeEnabled();
+    let releaseQuestion = () => {};
+    const questionGate = new Promise(resolve => { releaseQuestion = resolve; });
+    try {
+      setAssistantReply({ result: { kind: 'explanation', text: questionText, references: [] }, gate: questionGate, expectedRole: 'owner', expectedPromptContains: questionPrompt });
+      const questionResponse = owner.waitForResponse(response => new URL(response.url()).pathname === `/api/workspaces/${tableId}/assistant` && response.request().method() === 'POST');
+      void questionResponse.catch(() => {});
+      await send.click();
+      await expect(ownCard(questionPrompt).getByTestId('table-chat-answer')).toHaveAttribute('data-phase', /^(sending|waiting)$/u);
+      // The member sees the owner's running question live, named after the owner.
+      const memberQuestion = memberCard(questionPrompt).getByTestId('table-chat-answer');
+      await expect(memberQuestion).toContainText(`${ownerName} is waiting for an answer…`, { timeout: 20_000 });
+      releaseQuestion();
+      expect([200, 202]).toContain((await questionResponse).status());
+      await expect(ownCard(questionPrompt).getByTestId('table-chat-answer')).toContainText(questionText, { timeout: 20_000 });
+      await expect(memberQuestion).toContainText(questionText, { timeout: 20_000 });
+    } finally {
+      releaseQuestion();
+    }
+    // The first draft is still held and the second still queued.
+    await expect(firstCard).toHaveAttribute('data-phase', 'waiting');
+    await expect(secondCard).toHaveAttribute('data-phase', 'queued');
+    expect(modelPosts).toHaveLength(1);
+
+    // Release the first draft: it completes, then the queued draft starts on its own and completes.
+    setTableReply({ change: draftChange('F038 second queued-draft check.'), expectedSources });
+    releaseFirst();
+    await expect(firstCard).not.toHaveAttribute('data-phase', /^(sending|waiting)$/u, { timeout: 20_000 });
+    await expect(memberCard(firstPrompt).getByTestId('table-chat-answer')).not.toContainText('is preparing a rule draft', { timeout: 20_000 });
+    await expect(secondCard).toContainText('A rule draft is ready. Review it before anyone uses it.', { timeout: 30_000 });
+    await expect(secondCard).not.toHaveAttribute('data-phase', 'queued');
+    expect(modelPosts.map(body => body.prompt)).toEqual([firstPrompt, secondPrompt]);
+    await expect.poll(async () => JSON.stringify((await api(owner, `/api/workspaces/${tableId}`)).body.domain.candidate ?? null), { timeout: 20_000 })
+      .toContain('F038 second queued-draft check.');
+    await expect(memberCard(secondPrompt).getByTestId('table-chat-answer')).not.toContainText('is preparing a rule draft', { timeout: 20_000 });
+    await snapshotCard(member, memberCard(firstPrompt), 'test-results/f038-member-card-finished.png');
+  } finally {
+    releaseFirst();
+    owner.off('request', countModelPosts);
+  }
+  mark('Generic table chat (F038): a second rule request queues behind a generating draft and starts after it; a question is answered meanwhile; the member sees the running cards live');
 }
 
 export async function verifyGenericTableBrowser({ actors, newPage, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
