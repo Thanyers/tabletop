@@ -38,16 +38,12 @@
 | F040 | Scene motion: วัตถุวิ่งวนจาก `from` ถึง `to` อัตโนมัติ ความเร็วจาก parameter + ปุ่มหยุด/reduced motion | `done` (5.0.0) | [F040](docs/features/F040-scene-motion.md) |
 | F041 | เพดาน response ของ table assistant: กัน raw SSE 16 MiB แต่จำกัดคำตอบที่ถอดแล้ว 256K ตัวอักษร, output 32K, timeout 180s | `done` (5.0.0) | [F041](docs/features/F041-assistant-response-cap.md) |
 | F044 | Scene motion hardening: fresh-build ต้องได้ scene, browser proof ของลูป/Pause, diagnostics ของ view ที่ถูกตัด, ตัดสินใจ shared phase และวัดเพดานจริงก่อนขยาย | `todo` | [F044](docs/features/F044-scene-motion-hardening.md) |
-| F045 | เห็นความคืบหน้าระหว่างรอ (thinking/answer) + streaming เส้นทางร่างกฎ + เก็บ partial เมื่อ timeout + แยก "ตัดที่เพดานเรา" จาก "ผู้ให้บริการหยุด" | `review` (T1 done, T2–T5 review) | [F045](docs/features/F045-transparent-streaming-timeout.md) |
+| F045 | เห็นความคืบหน้าระหว่างรอ (thinking/answer) + streaming เส้นทางร่างกฎ + เก็บ partial เมื่อ timeout + แยก "ตัดที่เพดานเรา" จาก "ผู้ให้บริการหยุด" | `doing` (T1–T5 merge เข้า `dev` แล้ว #155 · T6 รอ release) | [F045](docs/features/F045-transparent-streaming-timeout.md) |
 
 ## งาน
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F045-T2 | Draft SSE streaming + progress | `review` | lead (AI) | `feat/F045-streaming-timeout` | `server/providers/deepseek-changes.ts`, `cloudflare/ai.ts`, `shared/model-job-progress.ts` | — | provider unit 21/21 · non-SSE fallback ยังผ่าน |
-| F045-T3 | Room/client เก็บและแสดง progress ของร่างกฎ | `review` | lead (AI) + backend-dev + frontend-dev | `feat/F045-streaming-timeout` | `cloudflare/{room,room-repository}.ts`, `client.ts`, `ui/useTableChat.tsx`, `ui/table-chat-state.ts` | F045-T2 | CF 125/125 · browser 27/27 ×2 |
-| F045-T4 | Partial output + failure details เมื่อ timeout | `review` | lead (AI) + backend-dev | `feat/F045-streaming-timeout` | provider/ai/room/model-failure, UI | F045-T3 | redact ก่อนแล้วจึงตัด 4,000/600 |
-| F045-T5 | Deadline config 240s (max 300) + recovery/poll alignment | `review` | lead (AI) | `feat/F045-streaming-timeout` | `cloudflare/{ai,ai-deadline,room}.ts`, provider, UI, tests | F045-T4 | live: dragon 76.6s, big-source 71.0s (<240s) |
 | F027-T1 | reject บอกเหตุผลเชิงโครงสร้าง: เติม hint "join ข้าม collection ยังไม่รองรับ" เมื่อ reason ชี้ cross-record/cross-collection | `review` | ทีม Tabletop | `feat/F026-F027-reliability` | `cloudflare/model-failure.ts`, tests | — | unit ผ่าน ([F027](docs/features/F027-structural-reject-hint.md)) |
 | F031-T1 | thinking generation + output caps 32K + deadline 120s + compact schema guide + parse diagnostics | `review` | ทีม Tabletop | `feat/F031-thinking-generation` | `server/providers/deepseek-changes.ts`, `cloudflare/{ai,billing,room}.ts`, `server/providers/table-schema-guide.ts`, `ui/*`, tests | — | เกณฑ์: matched ≥18/20, first-attempt ≥50%, 0 length-truncation ([F031](docs/features/F031-thinking-generation.md)) |
 | F029-T1 | golden corpus 10 โจทย์ + วัด draft/clarify/reject rate (manual, ไม่ผูก CI) | `review` | ทีม Tabletop | `feat/F029-success-corpus` | `tests/corpus/table-prompts.json`, `server/corpus-success-rate.test.ts` | — | baseline 9/10 ([F029](docs/features/F029-golden-corpus.md)) |

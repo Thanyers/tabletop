@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — T1 merge เข้า `dev` แล้ว · T2–T5 บน `feat/F045-streaming-timeout` พร้อมหลักฐานด้านล่าง |
+| สถานะ | T1–T5 merge เข้า `dev` แล้ว ([PR #155](https://github.com/Thanyers/tabletop/pull/155) @ `79749ab`) · T6 (receipt บน production) รอ release |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | MINOR — เปลี่ยนสัญญา progress/failure ของ job และเปิด streaming ของเส้นทางร่างกฎ |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F045-T*` |
