@@ -709,7 +709,12 @@ async function shareInviteLink(owner) {
 async function turnOnInviteLink(owner) {
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/7 members');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/12 members');
+  // The member limit is a table setting: lowering it narrows the count, Maximum restores twelve.
+  await dialog.getByLabel('Member limit').selectOption('5');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/5 members');
+  await dialog.getByLabel('Member limit').selectOption('max');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('0/12 members');
   const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
   await panel.getByLabel('Expires after').selectOption('7');
   const created = owner.waitForResponse((response) => response.url().endsWith('/invite-link') && response.request().method() === 'POST');
@@ -724,7 +729,7 @@ async function turnOnInviteLink(owner) {
 async function turnOffInviteLink(owner) {
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
-  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/7 members');
+  await expect(dialog.getByLabel('Seats in use')).toHaveText('1/12 members');
   const panel = dialog.getByRole('region', { name: 'INVITE LINK' });
   await panel.getByRole('button', { name: 'Turn off link', exact: true }).click();
   await expect(panel.getByRole('button', { name: 'Turn on invite link', exact: true })).toBeVisible();

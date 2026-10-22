@@ -1,11 +1,14 @@
 /**
  * F031: compact prompt guide that replaces the 36 KB JSON Schema dump.
  * Hand-written prompt artifact only — the zod schemas stay authoritative.
+ * Seat counts come from the shared seat list so the guide cannot drift from the validator.
  */
+import { MAX_TABLE_MEMBER_SEATS, TABLE_TURN_SEATS } from '../../src/tabletop/shared/contracts.js';
+
 export const TABLE_SCHEMA_GUIDE = `TABLE-CHANGE COMPACT SCHEMA v1 (hand-written prompt guide; the app's zod validator is authoritative)
 
 BUDGET: max_tokens=32768 for the single reply (reasoning tokens count toward it).
-LIMITS: collections<=6; fields<=12 per collection; actions<=16; parameters<=8 per action; creates<=12 per action; conditions<=24 per action; effects<=24 per action; invariants<=12 (fields<=6 each); turnOrder<=8 seats; evidence<=20; assumptions<=12; views<=12; scene elements<=128; polygon points 3..64; controls<=24 per view; rows<=100 per collection and <=200 total; evidence quote<=500; numbers finite with |n|<=1e9.
+LIMITS: collections<=6; fields<=12 per collection; actions<=16; parameters<=8 per action; creates<=12 per action; conditions<=24 per action; effects<=24 per action; invariants<=12 (fields<=6 each); turnOrder<=${TABLE_TURN_SEATS.length} seats; evidence<=20; assumptions<=12; views<=12; scene elements<=128; polygon points 3..64; controls<=24 per view; rows<=100 per collection and <=200 total; evidence quote<=500; numbers finite with |n|<=1e9.
 ID: /^[a-z][a-z0-9_-]{0,39}$/, never a JS builtin name (constructor, prototype, __proto__, toString, valueOf, hasOwnProperty, ...).
 VALUE: string<=500 | number | boolean | null | string[] (<=32 items, each <=100 chars).
 STRICT: every object below rejects unknown keys and requires exactly the keys listed; "?" marks an optional key. The root has exactly three keys; canvas is INSIDE program.
@@ -26,7 +29,7 @@ INVARIANT{id,collection,fields:[FIELD_ID 1..6],message}
 EVIDENCE{sourceId:string<=100,quote:string<=500}
 ROW{id,values:{FIELD_ID:VALUE}}
 RECORDS: {COLLECTION_ID:[ROW<=100]}
-TURNORDER: ("host"|"member-1"|...|"member-7")[<=8]
+TURNORDER: ("host"|"member-1"|...|"member-${MAX_TABLE_MEMBER_SEATS}")[<=${TABLE_TURN_SEATS.length}]
 
 OPERAND (ONLY in condition.left/right, effect.value and create.values; never a raw AST):
   {literal:VALUE} | {input:PARAM_ID} | {record:PARAM_ID,field:FIELD_ID} | {system:"actor"|"seat"|"turn"} | {expression:EXPR}

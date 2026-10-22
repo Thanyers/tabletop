@@ -1,7 +1,7 @@
 import { VISIBILITY_POLICY } from '../src/tabletop/shared/visibility.js';
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
-import type { CommandAck, Seat, WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { isSeat, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
@@ -193,11 +193,6 @@ function parseCreateInput(value: unknown): CreateInput {
   return { id: value.id, kind: value.kind, ...(typeof value.title === 'string' ? { title: value.title } : {}) };
 }
 
-function isInviteSeat(value: unknown): value is Seat {
-  return value === 'learner-1' || value === 'learner-2' || value === 'mira' || value === 'pip'
-    || value === 'member-1' || value === 'member-2' || value === 'member-3' || value === 'member-4'
-    || value === 'member-5' || value === 'member-6' || value === 'member-7';
-}
 
 function parseRedeemInput(value: unknown): RedeemInput {
   if (!isRecord(value) || typeof value.ticket !== 'string' || !INVITE_TOKEN_PATTERN.test(value.ticket)
@@ -624,7 +619,7 @@ export class Room extends DurableObject<Env> {
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
         const body = await readJson(request);
-        if (!isRecord(body) || !isInviteSeat(body.seat)
+        if (!isRecord(body) || !isSeat(body.seat)
             || (body.replaceOutstanding !== undefined && typeof body.replaceOutstanding !== 'boolean')
             || Object.keys(body).some((key) => key !== 'seat' && key !== 'replaceOutstanding')) {
           throw new AuthorityError('INVALID_REQUEST');
