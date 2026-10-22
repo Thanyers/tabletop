@@ -275,7 +275,8 @@ function providerBody(prompt: string, context: AssistantContext): string {
       { role: 'system', content: systemPrompt() },
       { role: 'user', content: JSON.stringify({ kind: 'table-assistant', prompt, context }) },
     ],
-    stream: false,
+    stream: true,
+    stream_options: { include_usage: true },
     max_tokens: MAX_OUTPUT_TOKENS,
     response_format: { type: 'json_object' },
     thinking: { type: 'disabled' },
@@ -329,6 +330,92 @@ function parseUsage(value: unknown): BillingUsage {
     ...(parsed.data.completion_tokens_details?.reasoning_tokens === undefined
       ? {} : { reasoningTokens: parsed.data.completion_tokens_details.reasoning_tokens }),
   };
+}
+
+export interface TableAssistantProgress {
+  receivedChars: number;
+  reasoningChars: number;
+}
+
+/** Read the provider SSE stream so the job can report progress before the JSON is complete. */
+async function readProviderStream(
+  response: Response,
+  signal: AbortSignal,
+  timedOut: () => boolean,
+  onProgress?: (progress: TableAssistantProgress) => void,
+): Promise<{ content: string; usage: BillingUsage; finishReason: string | null }> {
+  if (!response.body) return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8', { fatal: false, ignoreBOM: false });
+  let buffer = '';
+  let rawBytes = 0;
+  let content = '';
+  let reasoningChars = 0;
+  let usageRaw: unknown = null;
+  let finishReason: string | null = null;
+  let done = false;
+  try {
+    while (!done) {
+      if (signal.aborted) {
+        return fail(timedOut() ? 'MODEL_PROVIDER_TIMEOUT' : 'MODEL_PROVIDER_ABORTED',
+          timedOut() ? 'The model request timed out.' : 'The model request was cancelled.');
+      }
+      const part = await reader.read();
+      if (part.done) break;
+      rawBytes += part.value.byteLength;
+      if (rawBytes > MAX_RESPONSE_BYTES) {
+        void reader.cancel().catch(() => undefined);
+        return fail('MODEL_PROVIDER_RESPONSE_TOO_LARGE', 'The model response exceeds the allowed size.');
+      }
+      buffer += decoder.decode(part.value, { stream: true });
+      let newline = buffer.indexOf('\n');
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).replace(/\r$/u, '');
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf('\n');
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') { done = true; break; }
+        if (!data) continue;
+        let chunk: unknown;
+        try { chunk = JSON.parse(data) as unknown; }
+        catch { return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.'); }
+        if (!isObject(chunk)) return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+        if (chunk.model !== undefined && chunk.model !== MODEL) {
+          return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+        }
+        if (Array.isArray(chunk.choices) && chunk.choices.length > 0) {
+          const choice = chunk.choices[0];
+          if (!isObject(choice)) return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+          if (typeof choice.finish_reason === 'string') finishReason = choice.finish_reason;
+          if (isObject(choice.delta)) {
+            const delta = choice.delta;
+            if (typeof delta.content === 'string' && delta.content.length > 0) content += delta.content;
+            if (typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0) {
+              reasoningChars += delta.reasoning_content.length;
+            }
+          }
+        }
+        if (chunk.usage !== undefined && chunk.usage !== null) usageRaw = chunk.usage;
+        onProgress?.({ receivedChars: content.length, reasoningChars });
+      }
+    }
+  } catch (error) {
+    void reader.cancel().catch(() => undefined);
+    if (error instanceof DomainError) throw error;
+    if (timedOut()) return fail('MODEL_PROVIDER_TIMEOUT', 'The model request timed out.');
+    return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+  } finally {
+    reader.releaseLock();
+  }
+  if (usageRaw === null) return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model returned no usage record.');
+  const usage = parseUsage(usageRaw);
+  if (finishReason === 'length') {
+    return fail('MODEL_PROVIDER_OUTPUT_TRUNCATED', 'The model ran out of output tokens before finishing.');
+  }
+  if (finishReason !== 'stop' || content.length === 0) return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+  if (usage.completionTokens > MAX_OUTPUT_TOKENS) return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+  return { content, usage, finishReason };
 }
 
 async function readBoundedBody(response: Response, signal: AbortSignal): Promise<string> {
@@ -385,7 +472,7 @@ async function waitForAbort<T>(promise: Promise<T>, signal: AbortSignal): Promis
   });
 }
 
-async function callProvider(apiKey: string, body: string, fetchImpl: typeof fetch): Promise<{ content: string; usage: BillingUsage }> {
+async function callProvider(apiKey: string, body: string, fetchImpl: typeof fetch, onProgress?: (progress: TableAssistantProgress) => void): Promise<{ content: string; usage: BillingUsage }> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, MAX_TIMEOUT_MS);
@@ -394,7 +481,7 @@ async function callProvider(apiKey: string, body: string, fetchImpl: typeof fetc
     try {
       const operation = fetchImpl(DEEPSEEK_ENDPOINT, {
         method: 'POST',
-        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', accept: 'application/json' },
+        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', accept: 'text/event-stream, application/json' },
         body,
         redirect: 'manual',
         signal: controller.signal,
@@ -412,31 +499,36 @@ async function callProvider(apiKey: string, body: string, fetchImpl: typeof fetc
       void response.body?.cancel().catch(() => undefined);
       return fail('MODEL_PROVIDER_HTTP_ERROR', 'The model request was not accepted.');
     }
-    const responseText = await readBoundedBody(response, controller.signal);
-    if (timedOut) return fail('MODEL_PROVIDER_TIMEOUT', 'The model request timed out.');
-    let raw: unknown;
-    try { raw = JSON.parse(responseText) as unknown; }
-    catch { return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.'); }
-    if (!isObject(raw) || raw.model !== MODEL || !Array.isArray(raw.choices) || raw.choices.length !== 1) {
-      return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+    const contentType = response.headers.get('content-type') ?? '';
+    if (!contentType.includes('text/event-stream')) {
+      // Non-streaming fallback; also what an older/mocked provider returns.
+      const responseText = await readBoundedBody(response, controller.signal);
+      if (timedOut) return fail('MODEL_PROVIDER_TIMEOUT', 'The model request timed out.');
+      let raw: unknown;
+      try { raw = JSON.parse(responseText) as unknown; }
+      catch { return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.'); }
+      if (!isObject(raw) || raw.model !== MODEL || !Array.isArray(raw.choices) || raw.choices.length !== 1) {
+        return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+      }
+      const choice = raw.choices[0];
+      if (!isObject(choice) || !isObject(choice.message)
+        || choice.message.role !== 'assistant' || typeof choice.message.content !== 'string' || choice.message.tool_calls !== undefined) {
+        return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+      }
+      if (choice.finish_reason === 'length') {
+        return fail('MODEL_PROVIDER_OUTPUT_TRUNCATED', 'The model ran out of output tokens before finishing.');
+      }
+      if (choice.finish_reason !== 'stop') {
+        return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+      }
+      const usage = parseUsage(raw.usage);
+      if (usage.completionTokens > MAX_OUTPUT_TOKENS) {
+        return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
+      }
+      return { content: choice.message.content, usage };
     }
-    const choice = raw.choices[0];
-    if (!isObject(choice) || !isObject(choice.message)
-      || choice.message.role !== 'assistant' || typeof choice.message.content !== 'string' || choice.message.tool_calls !== undefined) {
-      return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
-    }
-    // Thinking models spend completion tokens before the JSON starts; a cut-off answer must stay distinguishable.
-    if (choice.finish_reason === 'length') {
-      return fail('MODEL_PROVIDER_OUTPUT_TRUNCATED', 'The model ran out of output tokens before finishing.');
-    }
-    if (choice.finish_reason !== 'stop') {
-      return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
-    }
-    const usage = parseUsage(raw.usage);
-    if (usage.completionTokens > MAX_OUTPUT_TOKENS) {
-      return fail('MODEL_PROVIDER_RESPONSE_INVALID', 'The model response is invalid.');
-    }
-    return { content: choice.message.content, usage };
+    const streamed = await readProviderStream(response, controller.signal, () => timedOut, onProgress);
+    return { content: streamed.content, usage: streamed.usage };
   } finally {
     clearTimeout(timer);
   }
@@ -619,6 +711,7 @@ export async function respondToTablePrompt(
   env: Env,
   input: TableAssistantInput,
   fetchImpl: typeof fetch = fetch.bind(globalThis),
+  onProgress?: (progress: TableAssistantProgress) => void,
 ): Promise<TableAssistantResponse> {
   validateInput(input);
   if (!env.DEEPSEEK_KEY || env.DEEPSEEK_KEY.length > MAX_API_KEY_CHARS || /\s/u.test(env.DEEPSEEK_KEY)) {
@@ -661,7 +754,7 @@ export async function respondToTablePrompt(
   await reserveAIUsage(env, binding, new TextEncoder().encode(body).byteLength + 1000, MAX_OUTPUT_TOKENS);
   let providerReply: { content: string; usage: BillingUsage };
   try {
-    providerReply = await callProvider(env.DEEPSEEK_KEY, body, fetchImpl);
+    providerReply = await callProvider(env.DEEPSEEK_KEY, body, fetchImpl, onProgress);
   } catch (error) {
     await markAIUsageUncertain(env, binding);
     if (error instanceof DomainError) throw error;

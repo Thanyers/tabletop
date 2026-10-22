@@ -274,14 +274,28 @@ function tableAssistantJobViewFor(job: RoomModelJob): TableAssistantJob {
         : {}),
     };
   }
-  if (job.status === 'running') return {
-    id: job.id,
-    createdAt: job.createdAt,
-    prompt,
-    status: 'running',
-    expectedRevision,
-    expectedEpoch: job.epoch,
-  };
+  if (job.status === 'running') {
+    const progress = job.data.progress;
+    const live = isRecord(progress)
+      && Number.isSafeInteger(progress.receivedChars) && (progress.receivedChars as number) >= 0 && (progress.receivedChars as number) <= 1_000_000
+      && Number.isSafeInteger(progress.reasoningChars) && (progress.reasoningChars as number) >= 0 && (progress.reasoningChars as number) <= 1_000_000
+      && Number.isSafeInteger(progress.updatedAt) && (progress.updatedAt as number) >= 0
+      ? {
+        receivedChars: progress.receivedChars as number,
+        reasoningChars: progress.reasoningChars as number,
+        updatedAt: progress.updatedAt as number,
+      }
+      : null;
+    return {
+      id: job.id,
+      createdAt: job.createdAt,
+      prompt,
+      status: 'running',
+      expectedRevision,
+      expectedEpoch: job.epoch,
+      ...(live ? { progress: live } : {}),
+    };
+  }
   const parsed = tableAssistantResultSchema.safeParse(job.data.result);
   if (!parsed.success) throw new AuthorityError('INTERNAL_ERROR');
   return {
@@ -1084,6 +1098,17 @@ export class Room extends DurableObject<Env> {
       const job = await this.repository.getModelJob(input.jobId, input.actorId, input.workspaceId, input.expectedEpoch);
       if (!job || job.status !== 'running' || job.data.kind !== 'table-assistant') return;
 
+      let lastProgressWrite = 0;
+      const onProgress = (progress: { receivedChars: number; reasoningChars: number }) => {
+        const now = Date.now();
+        if (now - lastProgressWrite < 900) return;
+        lastProgressWrite = now;
+        void this.repository.updateTableAssistantProgress(
+          input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
+          { ...progress, updatedAt: now },
+        ).catch(() => undefined);
+      };
+
       const response = await respondToTablePrompt(this.env, {
         workspace: authorized.workspace,
         actorId: input.actorId,
@@ -1093,7 +1118,7 @@ export class Room extends DurableObject<Env> {
         consent: true,
         conversation: input.conversation,
         conversationOmittedCount: input.conversationOmittedCount,
-      });
+      }, undefined, onProgress);
       if (response.jobId !== input.jobId) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
       const result = tableAssistantResultSchema.safeParse(response.result);
       if (!result.success) throw new AuthorityError('TABLE_ASSISTANT_OUTPUT_REJECTED');

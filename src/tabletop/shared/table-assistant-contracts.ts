@@ -82,6 +82,12 @@ export const tableAssistantJobSchema = z.strictObject({
   failureCode: z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/u).optional(),
   /** Sanitized validation reasons (max 3) when the assistant's answer was rejected. */
   failureReasons: z.array(z.string().min(1).max(240)).max(3).optional(),
+  /** Live provider progress for a running job, refreshed about once a second. */
+  progress: z.strictObject({
+    receivedChars: z.number().int().nonnegative().max(1_000_000),
+    reasoningChars: z.number().int().nonnegative().max(1_000_000),
+    updatedAt: z.number().int().nonnegative().safe(),
+  }).optional(),
   /** How long the job ran before failing; a ~180s value points at the provider deadline. */
   durationMs: z.number().int().nonnegative().max(3_600_000).optional(),
   result: tableAssistantResultSchema.optional(),
