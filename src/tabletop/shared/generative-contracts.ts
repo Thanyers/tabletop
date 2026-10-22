@@ -82,7 +82,9 @@ export type ControlDescriptor =
   | ({ id: string; kind: 'form'; label: string } & BoundTableAction)
   | ({ id: string; kind: 'slider'; label: string; parameter: string; min: number; max: number; step?: number; value?: GenerativeExpression } & BoundTableAction)
   | ({ id: string; kind: 'toggle'; label: string; parameter: string; value?: GenerativeExpression } & BoundTableAction)
-  | ({ id: string; kind: 'select'; label: string; parameter: string; options: { label: string; value: string | number | boolean }[]; value?: GenerativeExpression } & BoundTableAction);
+  | ({ id: string; kind: 'select'; label: string; parameter: string; options: { label: string; value: string | number | boolean }[]; value?: GenerativeExpression } & BoundTableAction)
+  /** F049: visual dice. The client rolls {count}d{faces}+modifier and fills one numeric action parameter; no server roll in v1. */
+  | ({ id: string; kind: 'dice'; label: string; parameter: string; faces: number; count: number; modifier?: number } & BoundTableAction);
 export interface ControlsViewDescriptor extends ViewRelations { id: string; kind: 'controls'; title: string; controls: ControlDescriptor[] }
 export type GenerativeViewDescriptor = SceneViewDescriptor | ChartViewDescriptor | MetricViewDescriptor | ControlsViewDescriptor;
 export interface GenerativeCanvas { version: 1; views: GenerativeViewDescriptor[] }

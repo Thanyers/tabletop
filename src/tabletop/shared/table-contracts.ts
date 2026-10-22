@@ -42,6 +42,8 @@ export interface TableState extends DomainBase {
     positions: Record<string, { x: number; y: number; pinned?: boolean }>;
     /** Soft-deleted cards: gone from everyone's canvas, listed under Deleted in Objects until restored. Oldest first. */
     trashed?: Record<string, { by: string; at: number }>;
+    /** Card names set at this table; they replace the card's own title on every member's canvas. */
+    titles?: Record<string, string>;
   };
   /** Display-only computed columns; definitions live in state, not in the program (F017). */
   computedColumns?: ComputedColumn[];

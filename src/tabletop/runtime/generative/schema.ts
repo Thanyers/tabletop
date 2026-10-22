@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, GENERATIVE_LIMITS, type ControlDescriptor, type GenerativeCanvas, type GenerativeExpression, type GenerativeViewDescriptor, type ScenePrimitive } from '../../shared/generative-contracts';
+import { DICE_LIMITS } from '../../shared/dice';
 import type { TableValue } from '../../shared/table-contracts';
 
 const forbiddenIdentifiers = new Set<string>(GENERATIVE_FORBIDDEN_IDENTIFIERS);
@@ -77,6 +78,8 @@ export const controlDescriptorSchema: z.ZodType<ControlDescriptor> = z.discrimin
   z.strictObject({ ...controlBase, kind: z.literal('slider'), parameter: generativeIdSchema, min: z.number().finite().min(-GENERATIVE_LIMITS.numberMagnitude).max(GENERATIVE_LIMITS.numberMagnitude), max: z.number().finite().min(-GENERATIVE_LIMITS.numberMagnitude).max(GENERATIVE_LIMITS.numberMagnitude), step: z.number().finite().positive().max(GENERATIVE_LIMITS.numberMagnitude).optional(), value: generativeExpressionSchema.optional() }),
   z.strictObject({ ...controlBase, kind: z.literal('toggle'), parameter: generativeIdSchema, value: generativeExpressionSchema.optional() }),
   z.strictObject({ ...controlBase, kind: z.literal('select'), parameter: generativeIdSchema, options: z.array(z.strictObject({ label: safeText, value: z.union([z.string().max(500), z.number().finite(), z.boolean()]) })).min(1).max(32), value: generativeExpressionSchema.optional() }),
+  // F049: dice is additive; programs written before it existed still parse because they never use this branch.
+  z.strictObject({ ...controlBase, kind: z.literal('dice'), parameter: generativeIdSchema, faces: z.number().int().min(DICE_LIMITS.minFaces).max(DICE_LIMITS.maxFaces), count: z.number().int().min(DICE_LIMITS.minCount).max(DICE_LIMITS.maxCount), modifier: z.number().int().min(-DICE_LIMITS.maxModifier).max(DICE_LIMITS.maxModifier).optional() }),
 ]);
 export const generativeViewDescriptorSchema: z.ZodType<GenerativeViewDescriptor> = z.discriminatedUnion('kind', [
   z.strictObject({ id: generativeIdSchema, kind: z.literal('scene'), title: safeText, width: z.number().finite().positive().max(4096), height: z.number().finite().positive().max(4096), elements: z.array(scenePrimitiveSchema).max(GENERATIVE_LIMITS.sceneElements), relatedTo: relationsSchema }),
