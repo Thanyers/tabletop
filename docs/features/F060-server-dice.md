@@ -1,15 +1,15 @@
-# F051 — การ์ดลูกเต๋าใช้ผลทอยจาก server เมื่อผูกกับ parameter ชนิด `roll`
+# F060 — การ์ดลูกเต๋าใช้ผลทอยจาก server เมื่อผูกกับ parameter ชนิด `roll`
 
 | | |
 | --- | --- |
-| สถานะ | `review` (เสร็จในเครื่อง, branch `feat/F051-server-dice` — ยังไม่ push/merge) |
+| สถานะ | `review` (เสร็จในเครื่อง, branch `feat/F060-server-dice` — ยังไม่ push/merge) |
 | เจ้าของฟีเจอร์ | lead (AI) — งานนี้ทำโดย subagent `dice-server` |
-| เวอร์ชันที่คาด | **MAJOR — rollback ไม่สะอาด**: สัญญา JSON และ zod ไม่เปลี่ยน (control `kind:"dice"` มีอยู่แล้วใน F049) แต่รุ่นก่อน F051 จะปฏิเสธโปรแกรมที่เอา dice ไปผูก `roll` ตอนประเมิน canvas (`Dice must bind a numeric action parameter.`) ทำให้ `table.act` ของโต๊ะนั้นล้มด้วย `TABLE_GENERATIVE` จนกว่าจะแก้โปรแกรม · ไม่มี SQL migration/secret/binding |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F051` |
+| เวอร์ชันที่คาด | **MAJOR — rollback ไม่สะอาด**: สัญญา JSON และ zod ไม่เปลี่ยน (control `kind:"dice"` มีอยู่แล้วใน F049) แต่รุ่นก่อน F060 จะปฏิเสธโปรแกรมที่เอา dice ไปผูก `roll` ตอนประเมิน canvas (`Dice must bind a numeric action parameter.`) ทำให้ `table.act` ของโต๊ะนั้นล้มด้วย `TABLE_GENERATIVE` จนกว่าจะแก้โปรแกรม · ไม่มี SQL migration/secret/binding |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F060` |
 
 ## ทำไม
 
-F048 ให้ server เป็นเจ้าของผลทอย (`table.roll` → pending roll → `table.act` ใช้ผลนั้นครั้งเดียว) และ F049 ให้การ์ดลูกเต๋าแบบภาพที่สุ่มฝั่ง client ได้ แต่สองอย่างยังไม่เชื่อมกัน: การ์ด dice ผูกได้เฉพาะ parameter ชนิด `number` และสุ่มเองบนเครื่อง ผู้ใช้ที่เห็นการ์ดลูกเต๋าจึงได้ผลทอยที่ server ไม่รับรอง แม้ action นั้นจะมี `roll` parameter ที่ server พร้อมทอยให้อยู่แล้ว · F051 ปิดช่องนี้: ถ้า dice ผูกกับ `roll` parameter การ์ดจะใช้ `table.roll` เส้นเดียวกับ `RollParameterControl` และแสดงผลที่ server ส่งกลับมา
+F048 ให้ server เป็นเจ้าของผลทอย (`table.roll` → pending roll → `table.act` ใช้ผลนั้นครั้งเดียว) และ F049 ให้การ์ดลูกเต๋าแบบภาพที่สุ่มฝั่ง client ได้ แต่สองอย่างยังไม่เชื่อมกัน: การ์ด dice ผูกได้เฉพาะ parameter ชนิด `number` และสุ่มเองบนเครื่อง ผู้ใช้ที่เห็นการ์ดลูกเต๋าจึงได้ผลทอยที่ server ไม่รับรอง แม้ action นั้นจะมี `roll` parameter ที่ server พร้อมทอยให้อยู่แล้ว · F060 ปิดช่องนี้: ถ้า dice ผูกกับ `roll` parameter การ์ดจะใช้ `table.roll` เส้นเดียวกับ `RollParameterControl` และแสดงผลที่ server ส่งกลับมา
 
 ## สิ่งที่ผู้ใช้จะเห็น
 
@@ -37,10 +37,10 @@ F048 ให้ server เป็นเจ้าของผลทอย (`table.r
 
 ## ข้อเท็จจริงจากโค้ด (ตรวจ 2026-10-22)
 
-- `src/tabletop/runtime/generative/validation.ts` — branch `control.kind === 'dice'` เดิมบังคับ `item.type === 'number'`; F051 เปลี่ยนเป็นยอมรับ `number` หรือ `roll` และยังเรียก `validateDiceSpec(control)` ทุกกรณี · `assertControlBinding` มีกฎ F048 อยู่แล้วว่า `roll` parameter จับคู่กับ control ที่ประกาศชนิด `number` ได้
+- `src/tabletop/runtime/generative/validation.ts` — branch `control.kind === 'dice'` เดิมบังคับ `item.type === 'number'`; F060 เปลี่ยนเป็นยอมรับ `number` หรือ `roll` และยังเรียก `validateDiceSpec(control)` ทุกกรณี · `assertControlBinding` มีกฎ F048 อยู่แล้วว่า `roll` parameter จับคู่กับ control ที่ประกาศชนิด `number` ได้
 - `src/tabletop/runtime/generative/schema.ts` — zod ของ dice ไม่รู้จักชนิด parameter จึงไม่ต้องแก้ (faces/count/modifier ยังถูกตรวจที่เดิม)
 - `src/tabletop/shared/roll.ts` — เพิ่ม `rollNotation()` ใช้ร่วมกันระหว่าง `RollParameterControl` และการ์ด dice (แสดง `2d6 + 3`)
-- `src/tabletop/ui/GeneratedCanvasObjects.tsx` — `DiceControl` เดิมรวม logic client ไว้ทั้งหมด; F051 แยก `ServerDiceControl` (ใช้ `useServerRoll`, เรียก `onRoll`, แสดง `values`/`total` จาก `RollResult`) กับ `ClientDiceControl` (โค้ด F049 เดิม) และให้ `diceRollMode()` เป็นตัวตัดสินเส้นทาง · `disabledReason()` เดิมห้าม control ที่ไม่ใช่ form บน action ที่มี `roll`; F051 ยกเว้น dice ที่ผูก `roll` parameter ตัวนั้น
+- `src/tabletop/ui/GeneratedCanvasObjects.tsx` — `DiceControl` เดิมรวม logic client ไว้ทั้งหมด; F060 แยก `ServerDiceControl` (ใช้ `useServerRoll`, เรียก `onRoll`, แสดง `values`/`total` จาก `RollResult`) กับ `ClientDiceControl` (โค้ด F049 เดิม) และให้ `diceRollMode()` เป็นตัวตัดสินเส้นทาง · `disabledReason()` เดิมห้าม control ที่ไม่ใช่ form บน action ที่มี `roll`; F060 ยกเว้น dice ที่ผูก `roll` parameter ตัวนั้น
 - `src/tabletop/ui/roll-store.ts` — `useServerRoll(view, actionId, parameterId)` คืนผลทอยล่าสุดและคืน `null` เมื่อ `dataRevision` เปลี่ยน; `TabletopApp.runCommand` บันทึกผลจาก ack ของ `table.roll` ลง store นี้
 - `src/tabletop/domain/table.ts` — `table.act` ปฏิเสธค่าของ `roll` parameter (`TABLE_ROLL_CLIENT_VALUE`) และกิน pending roll ครั้งเดียวโดยตรวจ revision/expiry; ไม่ต้องแก้
 - `server/providers/table-schema-guide.ts` — guide ของ drafter ระบุว่า dice ผูก `number` หรือ `roll` ได้ และบน `roll` ให้ server ทอย spec ของ parameter
@@ -49,10 +49,10 @@ F048 ให้ server เป็นเจ้าของผลทอย (`table.r
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
-| F051-T1 | validation + shared notation | `validateGenerativeProgram` ยอมรับ dice+roll, ยังปฏิเสธ parameter หาย/ชนิดผิดและ faces/count นอกช่วง · `rollNotation` ใช้ร่วมสอง control |
-| F051-T2 | UI แยกเส้นทาง server/client | dice+roll เรียก `onRoll` (`table.roll`) และแสดง faces/total จาก roll-store; dice+number เหมือน F049; ไม่เขียน draft ในเส้นทาง roll |
-| F051-T3 | test | render test เห็นค่าจาก `recordServerRoll` และไม่มี marker client path · domain test ว่า action ใช้ pending roll ที่ออกให้ · ชุดเดิมผ่านทั้งหมด |
-| F051-T4 | เอกสาร | F051 + PLAN (`review`) + CHANGELOG ใต้ `Unreleased` + spec.md ระบุ number dice ยัง client-side/visual-only และ hidden roll ยังไม่ทำ |
+| F060-T1 | validation + shared notation | `validateGenerativeProgram` ยอมรับ dice+roll, ยังปฏิเสธ parameter หาย/ชนิดผิดและ faces/count นอกช่วง · `rollNotation` ใช้ร่วมสอง control |
+| F060-T2 | UI แยกเส้นทาง server/client | dice+roll เรียก `onRoll` (`table.roll`) และแสดง faces/total จาก roll-store; dice+number เหมือน F049; ไม่เขียน draft ในเส้นทาง roll |
+| F060-T3 | test | render test เห็นค่าจาก `recordServerRoll` และไม่มี marker client path · domain test ว่า action ใช้ pending roll ที่ออกให้ · ชุดเดิมผ่านทั้งหมด |
+| F060-T4 | เอกสาร | F060 + PLAN (`review`) + CHANGELOG ใต้ `Unreleased` + spec.md ระบุ number dice ยัง client-side/visual-only และ hidden roll ยังไม่ทำ |
 
 ## ผลตรวจ
 
