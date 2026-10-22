@@ -48,9 +48,9 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F052-T1 | `cardMeta` model + schema + stamp ตอน activation/command + prune/cap | `doing` | lead (AI) | `feat/F052-object-metadata-and-focus` | `shared/table-contracts.ts`, `domain/table-card-meta.ts` (ใหม่), `domain/table.ts`, `domain/evolution.ts`, tests | — | v1; ไม่มี migration |
-| F052-T2 | backfill resolver + projection tests | `todo` | lead (AI) | 〃 | `domain/table-card-meta.ts`, `domain/projections.ts`, tests | T1 | private participant ต้องเห็น meta |
-| F052-T3 | panel meta rows + sort + persistence | `todo` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS, tests | T1, T2 | คง panel เดิม 320px |
+| F052-T1 | `cardMeta` model + schema + stamp ตอน activation/command + prune/cap | `review` | lead (AI) | `feat/F052-object-metadata-and-focus` | `shared/table-contracts.ts`, `domain/table-card-meta.ts` (ใหม่), `domain/table.ts`, `domain/evolution.ts`, tests | — | unit 21 ผ่าน + typecheck |
+| F052-T2 | backfill resolver + projection tests | `review` | lead (AI) | 〃 | `domain/table-card-meta.ts`, `domain/projections.ts`, tests | T1 | legacy backfill + private projection ผ่าน |
+| F052-T3 | panel meta rows + sort + persistence | `doing` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS, tests | T1, T2 | คง panel เดิม 320px |
 | F052-T4 | ปุ่มไปที่การ์ด + safe-area fit + reduced motion | `todo` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS | T3 | ไม่ขยายการ์ด |
 | F052-T5 | meta line บนการ์ด plan/aux/note/chat + clock + a11y | `todo` | lead (AI) | 〃 | `CanvasWorkspace.tsx`, `NoteCard.tsx`, `useTableChat.tsx`, CSS | T1 | relative time 60s |
 | F052-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | testids เดิมต้องไม่พัง |

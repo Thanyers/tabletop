@@ -4,6 +4,7 @@ import type { TableAction, TableChange, TableField, TableOperand, TableProgram, 
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
 import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
 import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
+import { liveCanvasCardIds, pruneCardMeta, touchCardMeta } from './table-card-meta';
 import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
@@ -649,7 +650,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     }
     const sha256 = ctx.hash(input.text), sourceId = `source_${sha256.slice(0, 32)}`;
     assert(!state.sources.some(s => s.id === sourceId), 'TABLE_DUPLICATE_SOURCE', 'This source is already on the table.');
-    return { state: { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate }, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
+    const next: TableState = { ...structuredClone(state), sources: [...state.sources, { ...input, id: sourceId, sha256, createdAt: ctx.now }], dataRevision: state.dataRevision + 1, candidate: ctx.role === 'owner' ? null : state.candidate };
+    // F052: a file added by a person stamps the Files card; the simulator never writes timestamps.
+    next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return { state: next, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
   }
   if (type === 'table.removeSource') {
     requirePermission(ctx, 'files.remove', ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
@@ -657,7 +661,10 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     assert(!state.program?.evidence.some(e => e.sourceId === input.sourceId)
       && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
       'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it with the room.');
-    return { state: { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null }, label: 'Unused source removed.' };
+    const next: TableState = { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null };
+    // F052: removing a file moves the Files card's update time, but never invents a creation time.
+    if (state.cardMeta) next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return { state: next, label: 'Unused source removed.' };
   }
   if (type === 'table.setComputedColumns') {
     requirePermission(ctx, 'data.columns', ['owner']);
