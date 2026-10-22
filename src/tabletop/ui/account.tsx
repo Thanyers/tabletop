@@ -1,9 +1,11 @@
-import { AlertCircle, ArrowRight, ChevronDown, LogOut, RefreshCw, ShieldCheck, X } from 'lucide-react';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { AlertCircle, ArrowRight, ChevronDown, Languages, LayoutGrid, LogOut, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { useContext, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { AdminWorkspace, AdminWorkspacePage, AuthStatus, GoogleAuthUser } from '../client';
 import './account.css';
-import { useLandingCopy } from './landing-copy';
+import { cursorColor } from '../shared/cursor-protocol';
+import { initials } from './initials';
+import { LandingLanguageSwitchContext, useLandingCopy } from './landing-copy';
 import { PublicWelcome } from './PublicWelcome';
 
 type GoogleAuthStatus = Extract<AuthStatus, { mode: 'google' }>;
@@ -58,11 +60,53 @@ function SignInPanel({ status, notice, hasPendingInvite, checking, onRetry, onDi
 }
 
 /** The public landing for someone already signed in: same story, with a way back to their tables instead of sign-in. */
-export function SignedInWelcome({ user, onOpenTables, onStart }: { user: GoogleAuthUser | null; onOpenTables: () => void; onStart: () => void }) {
+export function SignedInWelcome({ user, busy, onOpenTables, onStart, onSignOut, onLoadAdminWorkspaces }: { user: GoogleAuthUser | null; busy: boolean; onOpenTables: () => void; onStart: () => void; onSignOut: () => void; onLoadAdminWorkspaces?: (after?: string) => Promise<AdminWorkspacePage> }) {
   const openTables = (event: MouseEvent<HTMLAnchorElement>) => { event.preventDefault(); onOpenTables(); };
-  return <PublicWelcome headerAction={<TablesLink className="tt-public-welcome__signin" size={14} onClick={openTables} />} closingAction={<TablesLink className="tt-account-gate__google" size={16} onClick={openTables} />}>
+  const headerAction = <>
+    <TablesLink className="tt-public-welcome__signin tt-public-welcome__tables-link" size={14} onClick={openTables} />
+    {user && <ProfileMenu user={user} busy={busy} onOpenTables={onOpenTables} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} />}
+  </>;
+  return <PublicWelcome headerAction={headerAction} closingAction={<TablesLink className="tt-account-gate__google" size={16} onClick={openTables} />}>
     <WelcomePanel name={user?.name ?? null} onOpenTables={openTables} onStart={onStart} />
   </PublicWelcome>;
+}
+
+/** A round initials button in the landing header; opens the account menu (tables, language, admin, sign out). */
+function ProfileMenu({ user, busy, onOpenTables, onSignOut, onLoadAdminWorkspaces }: { user: GoogleAuthUser; busy: boolean; onOpenTables: () => void; onSignOut: () => void; onLoadAdminWorkspaces?: (after?: string) => Promise<AdminWorkspacePage> }) {
+  const copy = useLandingCopy();
+  const switchLanguage = useContext(LandingLanguageSwitchContext);
+  const [open, setOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setOpen(false); triggerRef.current?.focus(); } };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('pointerdown', closeOutside); document.removeEventListener('keydown', closeOnEscape); };
+  }, [open]);
+
+  const choose = (action: () => void) => () => { setOpen(false); action(); };
+  return <div className="tt-profile" ref={rootRef}>
+    <button ref={triggerRef} type="button" className="tt-profile__trigger" aria-label={`${copy.profile.menu}: ${user.name}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+      <span className="tt-profile__avatar" style={{ ['--tt-avatar-color' as string]: cursorColor(user.id) }} aria-hidden="true">{initials(user.name)}</span>
+    </button>
+    {open && <div className="tt-profile__menu" role="menu" aria-label={copy.profile.menu}>
+      <div className="tt-profile__identity">
+        <span className="tt-profile__avatar" style={{ ['--tt-avatar-color' as string]: cursorColor(user.id) }} aria-hidden="true">{initials(user.name)}</span>
+        <span><strong>{user.name}</strong>{user.email && <small>{user.email}</small>}</span>
+      </div>
+      <button role="menuitem" type="button" onClick={choose(onOpenTables)}><LayoutGrid size={15} aria-hidden="true" />{copy.profile.yourTables}</button>
+      <button role="menuitem" type="button" onClick={choose(switchLanguage)}><Languages size={15} aria-hidden="true" />{copy.profile.language}</button>
+      {user.isAdmin && onLoadAdminWorkspaces && <button role="menuitem" type="button" onClick={choose(() => setAdminOpen(true))}><ShieldCheck size={15} aria-hidden="true" />{copy.profile.admin}</button>}
+      <hr />
+      <button role="menuitem" type="button" className="tt-profile__signout" disabled={busy} onClick={choose(onSignOut)}><LogOut size={15} aria-hidden="true" />{busy ? copy.profile.signingOut : copy.profile.signOut}</button>
+    </div>}
+    {adminOpen && onLoadAdminWorkspaces && <AdminMetadataDialog onLoad={onLoadAdminWorkspaces} onClose={() => setAdminOpen(false)} />}
+  </div>;
 }
 
 function TablesLink({ className, size, onClick }: { className: string; size: number; onClick: (event: MouseEvent<HTMLAnchorElement>) => void }) {

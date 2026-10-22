@@ -248,3 +248,23 @@
 .tt-public-welcome[lang="th"] :is(h1, h2, h3) { letter-spacing: 0; line-height: 1.4; }
 .tt-public-welcome[lang="th"] .tt-public-welcome__hero h1 { font-size: clamp(2rem, 3.8vw, 3.125rem); }
 .tt-public-welcome[lang="th"] :is(.tt-public-welcome__eyebrow, .tt-account-gate__eyebrow, .tt-public-welcome__capability-label) { letter-spacing: .02em; }
+
+/* Signed-in header: initials avatar opens the account menu. */
+.tt-profile { position: relative; }
+.tt-profile__trigger { display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; padding: 0; border: 1px solid var(--tt-line, #d9d4c4); border-radius: 50%; background: var(--tt-card-surface, #fffdf7); cursor: pointer; }
+.tt-profile__trigger:hover, .tt-profile__trigger[aria-expanded="true"] { border-color: var(--tt-moss, #356e5d); }
+.tt-profile__avatar { display: inline-grid; flex: none; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--tt-avatar-color, #356e5d); color: #fff; font: 750 0.6875rem/1 Manrope, 'Noto Sans Thai', system-ui, sans-serif; letter-spacing: .02em; }
+.tt-profile__menu { position: absolute; top: calc(100% + 0.5rem); right: 0; z-index: 30; display: grid; gap: 0.125rem; width: min(17rem, calc(100vw - 2rem)); padding: 0.375rem; border: 1px solid var(--tt-line, #d9d4c4); border-radius: 0.875rem; background: var(--tt-card-surface, #fffdf7); box-shadow: 0 0.75rem 2.25rem #303d3a24; }
+.tt-profile__identity { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.5rem 0.625rem; border-bottom: 1px solid var(--tt-line, #d9d4c4); margin-bottom: 0.25rem; }
+.tt-profile__identity > span:last-child { display: grid; min-width: 0; }
+.tt-profile__identity strong { overflow: hidden; color: var(--tt-ink, #303d3a); font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
+.tt-profile__identity small { overflow: hidden; color: var(--tt-muted, #667268); font-size: 0.6875rem; text-overflow: ellipsis; white-space: nowrap; }
+.tt-profile__menu > button { display: flex; min-height: 2.5rem; align-items: center; gap: 0.625rem; padding: 0 0.625rem; border: 0; border-radius: 0.5rem; color: var(--tt-ink, #303d3a); background: transparent; font: 600 0.75rem/1.2 Manrope, 'Noto Sans Thai', system-ui, sans-serif; text-align: left; cursor: pointer; }
+.tt-profile__menu > button:hover { background: var(--tt-cream-2, #eeeee2); }
+.tt-profile__menu > button svg { color: var(--tt-muted, #667268); }
+.tt-profile__menu hr { width: 100%; height: 1px; margin: 0.25rem 0; border: 0; background: var(--tt-line, #d9d4c4); }
+.tt-profile__signout { color: #9a3b2e !important; }
+.tt-profile__signout svg { color: currentColor !important; }
+@media (max-width: 700px) {
+  .tt-public-welcome__tables-link { display: none; }
+}

@@ -1,6 +1,6 @@
 import { ArrowUpRight, BookOpen, FileText, Languages, UsersRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import { LandingLanguageContext, landingCopy, readLandingLanguage, saveLandingLanguage, type LandingLanguage } from './landing-copy';
+import { LandingLanguageContext, LandingLanguageSwitchContext, landingCopy, readLandingLanguage, saveLandingLanguage, type LandingLanguage } from './landing-copy';
 import storyGif from '../../../docs/showcase/tabletop-story.gif';
 import storyPoster from '../../../docs/showcase/tabletop-story-poster.png';
 import physicsImage from '../../../docs/showcase/physics.png';
@@ -58,7 +58,7 @@ export function PublicWelcome({ children, headerAction, closingAction }: { child
 
   const copy = landingCopy[language];
 
-  return <LandingLanguageContext.Provider value={language}><main className="tt-account-gate tt-public-welcome" lang={language}>
+  return <LandingLanguageContext.Provider value={language}><LandingLanguageSwitchContext.Provider value={switchLanguage}><main className="tt-account-gate tt-public-welcome" lang={language}>
     <header className="tt-public-welcome__header">
       <a className="tt-brand tt-public-welcome__brand" href="/" aria-label="Tabletop home">
         <span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span>
@@ -175,5 +175,5 @@ export function PublicWelcome({ children, headerAction, closingAction }: { child
         <span>{copy.footer}</span>
       </footer>
     </div>
-  </main></LandingLanguageContext.Provider>;
+  </main></LandingLanguageSwitchContext.Provider></LandingLanguageContext.Provider>;
 }

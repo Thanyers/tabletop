@@ -862,7 +862,7 @@ export default function TabletopApp() {
     onStartEmpty={() => void createWorkspace('table')}
     onBack={leaveStartPage}
   />;
-  if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} onOpenTables={openTablesPage} onStart={openStartPage} />;
+  if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} busy={busy !== null} onOpenTables={openTablesPage} onStart={openStartPage} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />;
   if (!view) return <WorkspaceChooser session={session} account={headerAccount} onHome={openLandingPage} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;

@@ -86,6 +86,7 @@ const th = {
     inviteHelp: 'ลิงก์คำเชิญใช้ได้ครั้งเดียวและมีวันหมดอายุ ใครเปิดลิงก์ขณะที่ยังใช้ได้จะได้ที่นั่งที่กำหนดไว้ ลิงก์ไม่ได้ผูกกับอีเมลใดล่วงหน้า และระบบตรวจสิทธิ์เข้าโต๊ะหลังเข้าสู่ระบบ',
     demo: 'เดโมอัตโนมัติ', demoHint: 'เปิดในแท็บใหม่', demoLabel: 'เดโมอัตโนมัติ (เปิดในแท็บใหม่)',
   },
+  profile: { menu: 'เมนูบัญชี', yourTables: 'โต๊ะของฉัน', admin: 'ข้อมูลโต๊ะทั้งหมด (ผู้ดูแลระบบ)', language: 'Language: English', signOut: 'ออกจากระบบ', signingOut: 'กำลังออกจากระบบ…' },
   welcome: {
     eyebrow: 'เข้าสู่ระบบแล้ว',
     title: (name: string | null) => name ? `ยินดีต้อนรับกลับ ${name}` : 'ยินดีต้อนรับกลับ',
@@ -161,6 +162,7 @@ const en: LandingCopy = {
     inviteHelp: 'Invitation links are single-use and expire. They grant a designated seat to whoever opens the link while it is valid; it is not tied to a preselected email. Table access is checked after sign-in.',
     demo: 'Auto demo', demoHint: 'opens in a new tab', demoLabel: 'Auto demo (opens in a new tab)',
   },
+  profile: { menu: 'Account menu', yourTables: 'Your tables', admin: 'All table metadata (admin)', language: 'ภาษา: ไทย', signOut: 'Sign out', signingOut: 'Signing out…' },
   welcome: {
     eyebrow: 'SIGNED IN',
     title: (name: string | null) => name ? `Welcome back, ${name}` : 'Welcome back',
@@ -172,6 +174,8 @@ const en: LandingCopy = {
 export const landingCopy: Record<LandingLanguage, LandingCopy> = { th, en };
 
 export const LandingLanguageContext = createContext<LandingLanguage>('en');
+/** Switches the landing language; provided by `PublicWelcome` so menus inside it can offer the same toggle. */
+export const LandingLanguageSwitchContext = createContext<() => void>(() => undefined);
 
 export function useLandingCopy(): LandingCopy {
   return landingCopy[useContext(LandingLanguageContext)];

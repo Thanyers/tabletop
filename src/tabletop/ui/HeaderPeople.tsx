@@ -3,16 +3,12 @@ import { Users } from 'lucide-react';
 import type { Member } from '../shared/contracts';
 import { cursorColor } from '../shared/cursor-protocol';
 import { focusCanvasPoint } from './canvas-object-finder';
+import { initials } from './initials';
 import type { CursorStore } from './live-cursors';
 
 /** Same idle window as the canvas overlay: an older cursor is treated as away. */
 const LIVE_MS = 10_000;
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/u).filter(Boolean);
-  const letters = parts.length > 1 ? [parts[0], parts[parts.length - 1]] : parts;
-  return letters.map((part) => Array.from(part)[0] ?? '').join('').toLocaleUpperCase() || '?';
-}
 
 function Avatar({ member }: { member: Member }) {
   return <span className="tt-header-avatar" style={{ ['--tt-avatar-color' as string]: cursorColor(member.actorId) }} aria-hidden="true">{initials(member.name)}</span>;
