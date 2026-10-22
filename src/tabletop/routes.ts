@@ -2,10 +2,11 @@
 // the server still authorizes membership on every request.
 
 export type AppRoute =
-  | { name: 'home' }
+  | { name: 'landing' }
+  | { name: 'tables' }
   | { name: 'new' }
   | { name: 'join' }
-  | { name: 'table'; id: string };
+  | { name: 'table'; id: string; panel?: 'history' };
 
 const tableId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const returnPathKey = 'tabletop.returnPath';
@@ -13,16 +14,18 @@ const returnPathKey = 'tabletop.returnPath';
 /** Returns null for any path the app does not own, so callers fall back to home. */
 export function parseRoute(pathname: string): AppRoute | null {
   const path = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-  if (path === '/' || path === '') return { name: 'home' };
+  if (path === '/' || path === '') return { name: 'landing' };
+  if (path === '/tables') return { name: 'tables' };
   if (path === '/new') return { name: 'new' };
   if (path === '/join') return { name: 'join' };
-  const match = /^\/t\/([^/]+)$/u.exec(path);
-  if (match && tableId.test(match[1])) return { name: 'table', id: match[1] };
+  const match = /^\/t\/([^/]+)(\/history)?$/u.exec(path);
+  if (match && tableId.test(match[1])) return match[2] ? { name: 'table', id: match[1], panel: 'history' } : { name: 'table', id: match[1] };
   return null;
 }
 
 export function routePath(route: AppRoute): string {
-  return route.name === 'table' ? `/t/${route.id}` : route.name === 'home' ? '/' : `/${route.name}`;
+  if (route.name === 'table') return route.panel ? `/t/${route.id}/${route.panel}` : `/t/${route.id}`;
+  return route.name === 'landing' ? '/' : `/${route.name}`;
 }
 
 /**

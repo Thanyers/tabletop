@@ -8,7 +8,7 @@ import './public-welcome.css';
 
 const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
 
-export function PublicWelcome({ children }: { children: ReactNode }) {
+export function PublicWelcome({ children, headerAction }: { children: ReactNode; headerAction?: ReactNode }) {
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia(reducedMotionQuery).matches);
   const [playStory, setPlayStory] = useState(() => !(typeof window !== 'undefined' && window.matchMedia(reducedMotionQuery).matches));
   const [replay, setReplay] = useState(0);
@@ -43,7 +43,7 @@ export function PublicWelcome({ children }: { children: ReactNode }) {
         <span>tabletop<span>.</span></span>
       </a>
       <span className="tt-public-welcome__header-note">A place for work, learning, and play</span>
-      <a className="tt-public-welcome__signin" href="#sign-in">Sign in <ArrowUpRight size={14} aria-hidden="true" /></a>
+      {headerAction ?? <a className="tt-public-welcome__signin" href="#sign-in">Sign in <ArrowUpRight size={14} aria-hidden="true" /></a>}
     </header>
 
     <div className="tt-public-welcome__content">
