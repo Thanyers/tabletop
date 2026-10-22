@@ -32,9 +32,11 @@
 | F035 | Role permission ตั้งค่าได้ต่อโต๊ะและต่อคน: role ตั้งต้นตาม case + สร้างเอง · ค่าเริ่มต้น = เท่าเจ้าของยกเว้นลบ/รีเซ็ตโต๊ะ | `doing` | [F035](docs/features/F035-role-permissions.md) |
 | F036 | ปลดเพดานเงินของ AI: ไม่จำกัดงบ แต่ยังบันทึกและ settle การใช้จริงทุกงาน (POC) | `review` | lead (AI) | `fix/F036-uncapped-budget` | `cloudflare/{billing,ai,index}.ts`, `vitest.cloudflare.config.ts`, tests | — | ไม่มี schema/binding/secret · CF 102, unit 476 |
 | F037 | Comment card แบบ post-it บน canvas: สร้างจากปุ่มข้างแชท/แชท ลากย้าย แก้ข้อความ เปลี่ยนสี ลบ และเห็นร่วมกัน | `doing` | lead (AI) | `feat/F037-note-cards` | `shared/table-contracts.ts`, `domain/table.ts`, `runtime/index.ts`, `ui/*`, tests | — | เก็บนอก program (ไม่มี migration) · backend + unit 6 ผ่าน · UI ยังไม่ทำ |
-| F038 | ถามขนานกันได้ระหว่างที่การ์ดอื่นทำงาน + คำขอร่างกฎเข้าคิวต่อจากร่างที่กำลังทำ | `review` | [F038](docs/features/F038-parallel-requests.md) |
-| F040 | Scene motion: วัตถุวิ่งวนจาก `from` ถึง `to` อัตโนมัติ ความเร็วจาก parameter + ปุ่มหยุด/reduced motion | `review` | [F040](docs/features/F040-scene-motion.md) |
-| F041 | เพดาน response ของ table assistant: กัน raw SSE 16 MiB แต่จำกัดคำตอบที่ถอดแล้ว 256K ตัวอักษร, output 32K, timeout 180s | `review` | [F041](docs/features/F041-assistant-response-cap.md) |
+| F042 | แจ้งคนที่เปิดหน้าอยู่ให้รีเฟรชเมื่อ release ใหม่ขึ้น staging/production | `review` | [F042](docs/features/F042-update-notice.md) |
+| F038 | ถามขนานกันได้ระหว่างที่การ์ดอื่นทำงาน + คำขอร่างกฎเข้าคิวต่อจากร่างที่กำลังทำ | `done` (4.4.0) | [F038](docs/features/F038-parallel-requests.md) |
+| F040 | Scene motion: วัตถุวิ่งวนจาก `from` ถึง `to` อัตโนมัติ ความเร็วจาก parameter + ปุ่มหยุด/reduced motion | `done` (5.0.0) | [F040](docs/features/F040-scene-motion.md) |
+| F041 | เพดาน response ของ table assistant: กัน raw SSE 16 MiB แต่จำกัดคำตอบที่ถอดแล้ว 256K ตัวอักษร, output 32K, timeout 180s | `done` (5.0.0) | [F041](docs/features/F041-assistant-response-cap.md) |
+| F044 | Scene motion hardening: fresh-build ต้องได้ scene, browser proof ของลูป/Pause, diagnostics ของ view ที่ถูกตัด, ตัดสินใจ shared phase และวัดเพดานจริงก่อนขยาย | `todo` | [F044](docs/features/F044-scene-motion-hardening.md) |
 
 ## งาน
 
