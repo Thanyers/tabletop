@@ -12,9 +12,9 @@ export function readLandingLanguage(): LandingLanguage {
     const stored = window.localStorage.getItem(languageKey);
     if (stored === 'th' || stored === 'en') return stored;
   } catch {
-    // Storage can be blocked; Thai matches index.html and the default audience.
+    // Storage can be blocked; the page then opens in the default language.
   }
-  return 'th';
+  return 'en';
 }
 
 export function saveLandingLanguage(language: LandingLanguage): void {
@@ -171,7 +171,7 @@ const en: LandingCopy = {
 
 export const landingCopy: Record<LandingLanguage, LandingCopy> = { th, en };
 
-export const LandingLanguageContext = createContext<LandingLanguage>('th');
+export const LandingLanguageContext = createContext<LandingLanguage>('en');
 
 export function useLandingCopy(): LandingCopy {
   return landingCopy[useContext(LandingLanguageContext)];
