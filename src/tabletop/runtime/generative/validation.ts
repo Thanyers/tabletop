@@ -1,5 +1,6 @@
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, GENERATIVE_LIMITS, type ControlInputBinding, type GenerativeExpression } from '../../shared/generative-contracts';
 import type { TableAction, TableField, TableProgram, TableRecord, TableValue } from '../../shared/table-contracts';
+import { validateDiceSpec } from '../../shared/dice';
 
 export type GenerativeStaticType = 'number' | 'text' | 'boolean' | 'list' | 'null' | 'rows' | 'unknown';
 type ScopeBinding = { kind: 'row'; collection: string } | { kind: 'value'; type: GenerativeStaticType };
@@ -355,6 +356,12 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
             assert(parameter && parameter.type !== 'record', 'Select must bind a scalar action parameter.');
             assert(control.options.every(option => actionInputType(action, control.parameter) === valueType(option.value) && (!parameter.choices || parameter.choices.includes(String(option.value)))), 'Select options do not match the action parameter.');
             interactiveType = actionInputType(action, control.parameter);
+          } else if (control.kind === 'dice') {
+            // F049: a dice control fills exactly one numeric action parameter; the roll itself stays client-side.
+            assert(action.parameters.some(item => item.id === control.parameter && item.type === 'number'), 'Dice must bind a numeric action parameter.');
+            const diceIssues = validateDiceSpec(control);
+            assert(diceIssues.length === 0, diceIssues[0] ?? 'Dice control limits are invalid.');
+            interactiveType = 'number';
           }
           const interactiveParameters: Record<string, GenerativeStaticType> = control.kind === 'form'
             ? Object.fromEntries(Object.entries(control.inputs).filter(([, binding]) => binding.kind === 'control').map(([parameter]) => [parameter, actionInputType(action, parameter)]))
