@@ -1418,8 +1418,11 @@ export class Room extends DurableObject<Env> {
       if (candidate?.status === 'active') return { autoApply: 'applied' };
       const reasons = (candidate?.simulation?.checks ?? []).filter((check) => !check.passed).map((check) => check.message).slice(0, 6);
       return { autoApply: 'needs-review', ...(reasons.length ? { autoApplyReasons: reasons } : {}) };
-    } catch {
-      return { autoApply: 'needs-review' };
+    } catch (error) {
+      // A draft that existing records break (a new unique rule, a stricter field) fails while it is
+      // previewed, before any check result is stored, so the reason comes from the domain error.
+      const reasons = error instanceof AuthorityError && (error.status === 409 || error.status === 422) ? cleanReasons([error.message]) : [];
+      return { autoApply: 'needs-review', ...(reasons.length ? { autoApplyReasons: reasons } : {}) };
     }
   }
 

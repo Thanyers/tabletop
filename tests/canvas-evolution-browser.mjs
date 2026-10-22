@@ -58,6 +58,7 @@ export async function runCanvasEvolutionBrowser({ origin, actors, workspaceId, p
   }
 
   async function requestChange(page, prompt) {
+    const before = await read(page);
     const bar = page.getByTestId('table-chat-bar');
     const composer = bar.getByRole('textbox', { name: 'Message', exact: true });
     await composer.fill(prompt);
@@ -76,22 +77,22 @@ export async function runCanvasEvolutionBrowser({ origin, actors, workspaceId, p
     await expect.poll(() => page.evaluate(async ({ workspaceId: roomId, id }) => {
       const response = await fetch(`/api/workspaces/${roomId}/model/${id}`);
       return response.json();
-    }, { workspaceId, id: acceptedJob.id }), { timeout: POLL_TIMEOUT_MS, intervals: [POLL_MS, 1000] }).toMatchObject({ status: 'completed' });
-    await expect.poll(async () => (await read(page)).domain.candidate?.status, { timeout: 10_000 }).toBe('draft');
-    return read(page);
+    }, { workspaceId, id: acceptedJob.id }), { timeout: POLL_TIMEOUT_MS, intervals: [POLL_MS, 1000] }).toMatchObject({ status: 'completed', autoApply: 'applied' });
+    // F039: the Room runs every review check and puts the asker's draft into use on its own.
+    await expect.poll(async () => (await read(page)).domain.candidate?.status, { timeout: 10_000 }).toBe('active');
+    const applied = await read(page);
+    expect(applied.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
+    return { applied, before };
   }
 
-  async function applyChange(page, expectedRuleRevision) {
+  async function viewAppliedChange(page, expectedRuleRevision) {
     const editor = await openObject(page, 'table.rules');
-    const apply = editor.getByRole('button', { name: 'Apply to table', exact: true });
-    await expect(apply).toBeVisible({ timeout: 10_000 });
-    await expect(apply).toBeEnabled();
-    await apply.click();
-    await expect.poll(async () => {
-      const current = await read(page);
-      return current.domain.candidate?.status === 'active' && current.domain.ruleRevision > expectedRuleRevision;
-    }, { timeout: POLL_TIMEOUT_MS, intervals: [POLL_MS, 1000] }).toBe(true);
-    return read(page);
+    await expect(editor.getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(editor.getByRole('button', { name: 'Apply to table', exact: true })).toHaveCount(0);
+    const current = await read(page);
+    expect(current.domain.candidate?.status).toBe('active');
+    expect(current.domain.ruleRevision).toBe(expectedRuleRevision);
+    return current;
   }
 
   function descriptorParts(program) {
@@ -140,9 +141,8 @@ export async function runCanvasEvolutionBrowser({ origin, actors, workspaceId, p
 
     const firstPrompt = 'Add a usable invoice form with customer and amount inputs, plus a no-input Add sample button that inserts one fictional invoice. Keep the existing mark paid and mark unpaid actions.';
     const draft = await requestChange(ownerPage, firstPrompt);
-    expect(draft.domain.candidate.change.initialRecords).toEqual({});
-    const firstRuleRevision = draft.domain.ruleRevision;
-    current = await applyChange(ownerPage, firstRuleRevision);
+    expect(draft.applied.domain.candidate.change.initialRecords).toEqual({});
+    current = await viewAppliedChange(ownerPage, draft.before.domain.ruleRevision + 1);
     const generated = descriptorParts(current.domain.program);
     expect(current.domain.records.invoices).toEqual([]);
     mark('owner applies a create action, zero-row form, and sample-data button');
@@ -215,9 +215,8 @@ export async function runCanvasEvolutionBrowser({ origin, actors, workspaceId, p
     const recordsBeforeEdit = structuredClone(current.domain.records.invoices);
     const secondPrompt = 'Add a summary card showing the total unpaid amount. Add a review_notes collection with a required text field label defaulting to Pending review, and add a required invoices field reference defaulting to LOCAL. Preserve the current invoice rows, form, sample button, and payment actions.';
     const secondDraft = await requestChange(ownerPage, secondPrompt);
-    expect(secondDraft.domain.candidate.change.initialRecords).toEqual({});
-    const secondRuleRevision = secondDraft.domain.ruleRevision;
-    current = await applyChange(ownerPage, secondRuleRevision);
+    expect(secondDraft.applied.domain.candidate.change.initialRecords).toEqual({});
+    current = await viewAppliedChange(ownerPage, secondDraft.before.domain.ruleRevision + 1);
     expect(current.domain.records.invoices.map(row => row.id)).toEqual(recordsBeforeEdit.map(row => row.id));
     expect(current.domain.records.invoices.map(row => row.values.paid)).toEqual(recordsBeforeEdit.map(row => row.values.paid));
     expect(current.domain.records.invoices.every(row => row.values.reference === 'LOCAL')).toBe(true);

@@ -532,14 +532,19 @@ try {
   await dm.getByLabel('Send this request and current rules or parameters to AI.', { exact: true }).check();
   await askAI.click();
   await expect(dm.getByText('Draft ready for review', { exact: true })).toBeVisible({ timeout: 15_000 });
+  // F039: the draft passes every review check and goes into use on its own as a new rule revision.
+  await expect(dm.getByText('The new rules are in use.', { exact: true })).toBeVisible({ timeout: 15_000 });
   const proposed = (await api(dm, `/api/workspaces/${room.id}`)).body;
-  expect(proposed.domain.candidate.status).toBe('draft');
-  expect(proposed.domain.rule).toEqual({ allyTarget: false, apCost: 0, oncePerTurn: false });
+  expect(proposed.domain.candidate.status).toBe('active');
+  expect(proposed.domain.candidate.approval?.actorId).toBe(proposed.actor.actorId);
+  expect(proposed.domain.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
   expect(proposed.domain.candidate.change.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
+  expect(proposed.domain.revisions.at(-1)?.revision).toBe(proposed.domain.ruleRevision);
   expect(providerCalls).toBe(1);
+  await expect.poll(async () => (await api(pip, `/api/workspaces/${room.id}`)).body.domain.rule).toEqual({ allyTarget: true, apCost: 1, oncePerTurn: true });
   await expect(pip.getByLabel('What would you like to change?', { exact: true })).toHaveCount(0);
   await expect(pip.getByTestId('canvas-object-dock').getByTestId('open-canvas-workspace.ai')).toHaveCount(0);
-  mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; creates a draft without activating it');
+  mark('Ask AI uses explicit consent, one mocked provider call and the durable ledger; the draft passes every check and goes into use on its own (F039)');
 
   const logoutResponse = pip.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
   await setTableOptionsOpen(pip, true);
