@@ -251,7 +251,7 @@ resolver ต้อง deterministic และไม่เขียน state ร�
 | T3 | review | panel row สองบรรทัด + sort 4 แบบ + localStorage; unit sort/label 20 tests |
 | T4 | review | ปุ่ม `go-to-canvas-*`: desktop panel เปิดค้าง + safe-area fit; mobile ปิด panel + fit การ์ดเป้าหมาย + คืน focus |
 | T5 | review | meta บนหัวการ์ด plan/aux, เวลาในโน้ต, เวลาแชทจาก `card.createdAt`; clock 60s ตัวเดียว |
-| T6 | todo | ยังไม่ได้รัน browser suite ของ repo (`tests/*-browser.mjs`); ใช้ UI Lab/Chrome ตรวจแทน |
+| T6 | deferred | ตาม CI005 browser suite ของ repo รันตอน release PR; PR นี้ใช้ UI Lab/Chrome ตรวจ flow (1280/390/280/320/414) |
 | T7 | doing | เอกสาร + PLAN + spec + CHANGELOG; commit/push pending |
 
 **Commits:** `b4fb4df` (plan + previews) · `1d9893e` (backend data layer) · UI commit ตามหลังเอกสารนี้

@@ -53,7 +53,7 @@
 | F052-T3 | panel meta rows + sort + persistence | `review` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS, tests | T1, T2 | unit 20/20, UI Lab 320/280 |
 | F052-T4 | ปุ่มไปที่การ์ด + safe-area fit + reduced motion | `review` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS | T3 | desktop/mobile UI Lab ผ่าน |
 | F052-T5 | meta line บนการ์ด plan/aux/note/chat + clock + a11y | `review` | lead (AI) | 〃 | `CanvasWorkspace.tsx`, `NoteCard.tsx`, `useTableChat.tsx`, CSS | T1 | relative time 60s |
-| F052-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | ยังไม่รัน suite ของ repo |
+| F052-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | ตาม CI005 รันตอน release PR; PR นี้ใช้ UI Lab |
 | F052-T7 | spec/PLAN/verification docs | `doing` | lead (AI) | 〃 | `spec.md`, docs | T1–T6 | อัปเดตแล้ว เหลือ PR |
 | F052-T8 | AI origin provenance (auto/reviewed/pasted/rollback) | `todo` | — | — | `shared/contracts.ts`, `domain/evolution.ts`, `cloudflare/room.ts` | v1 | เลื่อนหลัง v1 |
 | F046-T1 | semantic view salvage + link cleanup ใน domain (ไม่แตะ provider ที่ F045 ถือ) | `review` | lead (AI) | `feat/F046-view-salvage` | `src/tabletop/domain/table.ts`, `table-canvas-salvage.test.ts`, เอกสาร | — | ไม่เปลี่ยนสัญญา JSON/จำนวนครั้งที่เรียกโมเดล |
