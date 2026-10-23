@@ -393,6 +393,16 @@ try {
   await expect(dm).toHaveURL(`${origin}/`);
   await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
   mark('Signed-in `/` shows the landing page with Your tables (header link and button to /tables) and no sign-in; Back from /tables returns to it');
+  // F071: the landing header avatar opens the account menu; Escape closes it and returns focus.
+  const landingProfile = dm.getByRole('button', { name: 'Account menu: DM', exact: true });
+  await landingProfile.click();
+  const landingMenu = dm.getByRole('menu', { name: 'Account menu', exact: true });
+  await expect(landingMenu.getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible();
+  await expect(landingMenu.getByRole('menuitem', { name: 'Your tables', exact: true })).toBeVisible();
+  await dm.keyboard.press('Escape');
+  await expect(landingMenu).toHaveCount(0);
+  await expect(landingProfile).toBeFocused();
+  mark('Signed-in landing header shows an avatar that opens the account menu (Your tables, Sign out) and closes with Escape');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   await dm.getByRole('button', { name: 'Start a new table', exact: true }).click();
   await expect(dm).toHaveURL(`${origin}/new`);
@@ -692,6 +702,13 @@ try {
   await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
   await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
   mark('Signed-in `/` survives reload as the landing page; /tables lists the last-opened table first and neither page auto-opens a table, even after reload');
+  // F071: the /tables header shows only the avatar; sign out lives inside its menu.
+  const chooserHeader = dm.locator('.tt-chooser__top');
+  await expect(chooserHeader.getByRole('button', { name: /Sign out/ })).toHaveCount(0);
+  await chooserHeader.getByRole('button', { name: 'Account menu: DM', exact: true }).click();
+  await expect(dm.getByRole('menu', { name: 'Account menu', exact: true }).getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible();
+  await dm.keyboard.press('Escape');
+  mark('The /tables header shows a profile avatar instead of a sign-out button; Sign out is inside its menu');
   await tableList.getByRole('button', { name: /Dragon bridge/ }).click();
   await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();

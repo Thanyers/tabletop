@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-23 — ขยายงาน compute/Rules ไปไล่ scene/camera หลัง merge
+- **What happened:** หลังงานหลักผ่าน PR validation และรวม dev แล้ว ใช้เวลาตรวจ generated-scene drag failure ในชุดรวมต่อจนผู้ใช้ทักว่านอกเรื่อง
+- **Root cause:** ถือว่าต้องแก้ทุก failure หลัง merge ทั้งที่ขอบเขตผู้ใช้คือ reusable compute/Rules และความพร้อมบนเว็บยังแยกจากสถานะ release
+- **Correct behavior:** แยก failure ที่เกิดจากงานตนและ failure ส่วนอื่นก่อนลงมือ เก็บเทสต์ capability ที่งานตนเปลี่ยนให้ถูก รายงาน CI ส่วนอื่นตรงตามผลจริง และหยุดการแก้ runtime นอกขอบเขตเมื่อผู้ใช้ย้ำขอบเขต อย่าทำให้คำว่า feature ยังไม่ release กลายเป็นข้ออ้างเปิดงานแก้ส่วนอื่น
+
+### 2026-10-23 — เพิ่ม compute capability แต่ browser ยังตรวจจำนวนและชื่อช่องว่างเดิม
+- **What happened:** full CI หลัง #208 ล้มที่ Rules capability summary เพราะคาด 8 capabilities แต่ของจริงมี 9 และชื่อ gap ของ stored relations เปลี่ยนแล้ว
+- **Root cause:** เพิ่มรายการ compute และแก้ copy หลัง browser suite ในเครื่องรอบก่อนหน้า แต่ไม่ได้ปรับ assertion สองจุดตามกัน
+- **Correct behavior:** เทียบจำนวนบน UI กับ `/api/capabilities` และยืนยันรายการใหม่ `compute` กับข้อความ Reusable calculations โดยตรง พร้อมตรวจ gap ที่ยังมีจริง รัน browser suite หลังเปลี่ยน catalog/copy ที่ใช้ใน Rules ก่อน merge
+
 ### 2026-10-23 — มาตรวัด AI context ไม่รวม capability ที่ backend เติม
 - **What happened:** หลังรวม F067 กับ reusable compute เทสต์ payload equality ใน CI ได้ 2,338 bytes แต่ UI helper นับ 2,236 bytes
 - **Root cause:** ทั้งสองใช้ตัวสร้างส่วนโต๊ะร่วมกันแล้ว แต่ backend เติม `computeCapabilities` ภายหลังโดย UI ไม่ได้รับข้อมูลชุดนี้

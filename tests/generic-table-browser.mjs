@@ -1651,9 +1651,12 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   // F019: the rules card explains what the table can and cannot do.
   const capabilityRules = await openCanvasObject(owner, 'table.rules');
   await capabilityRules.getByText('What this table can do', { exact: true }).click();
-  await expect(capabilityRules.getByText(/8 capabilities · 5 known gaps/u)).toBeVisible();
-  await capabilityRules.getByText(/Known gaps \(5\)/u).click();
-  await expect(capabilityRules.getByText(/Joins and rollups across collections/u)).toBeVisible();
+  const capabilities = (await api(owner, '/api/capabilities')).body.table;
+  expect(capabilities.supported).toContain('compute');
+  await expect(capabilityRules.getByText(new RegExp(`${capabilities.supported.length} capabilities · ${capabilities.gaps.length} known gaps`, 'u'))).toBeVisible();
+  await expect(capabilityRules.getByText('Reusable calculations', { exact: true })).toBeVisible();
+  await capabilityRules.getByText(`Known gaps (${capabilities.gaps.length})`, { exact: true }).click();
+  await expect(capabilityRules.getByText('Stored relations between collections', { exact: true })).toBeVisible();
   const generatedTableTitle = 'River Race: Active Canvas';
   await owner.getByRole('button', { name: 'Rename table', exact: true }).click();
   const renameInput = owner.getByLabel('Table name', { exact: true });
