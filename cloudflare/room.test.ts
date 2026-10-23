@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Room } from './room.js';
-import { UPDATED_AT_HEADER, type Env } from './contracts.js';
+import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { csrfForToken } from './auth.js';
 import { canonicalJson, hashValue, sha256 } from '../server/codec.js';
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
@@ -411,13 +411,14 @@ function migrationStatements(raw: string, appendFailure = false): string[] {
 }
 
 describe('Cloudflare room Durable Object', () => {
-  it('reports the last committed command time on the internal view for the table list (F053)', async () => {
+  it('reports the last committed command time and editor on the internal view for the table list (F053)', async () => {
     const owner = newActor('Updated-at owner');
     await saveActor(owner);
     const { stub, workspace } = await createRoom(owner, 'teaching');
     const before = await call<WorkspaceView>(stub, '/internal/view', owner);
     expect(before.response.status).toBe(200);
     expect(Number(before.response.headers.get(UPDATED_AT_HEADER))).toBe(before.body.createdAt);
+    expect(before.response.headers.get(UPDATED_BY_HEADER)).toBeNull();
     const sent = Date.now();
     const update = await issueCommand(stub, workspace, owner, 'teaching.setParameters', { force: 12, mass: 2, time: 2 });
     expect(update.response.status).toBe(200);
@@ -425,6 +426,7 @@ describe('Cloudflare room Durable Object', () => {
     const updatedAt = Number(after.response.headers.get(UPDATED_AT_HEADER));
     expect(updatedAt).toBeGreaterThanOrEqual(sent - 1_000);
     expect(updatedAt).toBeGreaterThanOrEqual(after.body.createdAt);
+    expect(decodeURIComponent(after.response.headers.get(UPDATED_BY_HEADER) ?? '')).toBe(owner.name);
   });
 
   beforeEach(async () => {

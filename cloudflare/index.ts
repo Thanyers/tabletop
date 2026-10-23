@@ -5,7 +5,7 @@ import { BUILD_INFO_FILE, parseBuildInfo } from '../server/build-info.js';
 import { isPagePath, servePage } from './pages.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { accountForSession, authenticateRequest, authStatus, finishGoogle, limit, logout, primary, publicOrigin, requireMutation, requireOrigin, startGoogle } from './auth.js';
-import { GOOGLE_CALLBACK_PATH, UPDATED_AT_HEADER, type DirectoryReference, type Env } from './contracts.js';
+import { GOOGLE_CALLBACK_PATH, UPDATED_AT_HEADER, UPDATED_BY_HEADER, type DirectoryReference, type Env } from './contracts.js';
 import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
 import { displayWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { tableCapabilitySummary } from '../src/tabletop/shared/table-capabilities.js';
@@ -53,6 +53,12 @@ function internalRequest(original: Request, path: string, data?: unknown): Reque
   });
 }
 
+/** Percent-decoded header text; a malformed value is treated as absent rather than failing the list. */
+function decodeHeader(value: string | null): string | undefined {
+  if (!value) return undefined;
+  try { return decodeURIComponent(value); } catch { return undefined; }
+}
+
 async function sessionView(request: Request, env: Env): Promise<Response> {
   const session = await authenticateRequest(request, env);
   const refs = await primary(env).prepare(`SELECT room_id,epoch FROM room_members WHERE user_id = ? AND active = 1 ORDER BY room_id LIMIT 100`)
@@ -64,14 +70,18 @@ async function sessionView(request: Request, env: Env): Promise<Response> {
       const response = await room(env, room_id).fetch(internalRequest(request, '/internal/view'));
       if (response.status === 403 || response.status === 404) return null;
       if (!response.ok) throw new AuthorityError(response.status === 401 ? 'SESSION_EXPIRED' : 'DATABASE_UNAVAILABLE');
-      const updatedAt = Number(response.headers.get(UPDATED_AT_HEADER));
-      return { view: await response.json<WorkspaceView>(), updatedAt };
+      return {
+        view: await response.json<WorkspaceView>(),
+        updatedAt: Number(response.headers.get(UPDATED_AT_HEADER)),
+        updatedBy: decodeHeader(response.headers.get(UPDATED_BY_HEADER)),
+      };
     }));
     for (const entry of views) if (entry) {
       const { view } = entry;
       const programTitle = view.kind === 'table' && view.domain.kind === 'table' ? view.domain.program?.title : undefined;
-      const updatedAt = Number.isSafeInteger(entry.updatedAt) && entry.updatedAt > 0 ? entry.updatedAt : view.createdAt;
-      workspaces.push({ id: view.id, title: displayWorkspaceTitle(view.kind, view.title, programTitle), kind: view.kind, role: view.actor.role, updatedAt });
+      const createdAt = Number.isSafeInteger(view.createdAt) && view.createdAt > 0 ? view.createdAt : undefined;
+      const updatedAt = Number.isSafeInteger(entry.updatedAt) && entry.updatedAt > 0 ? entry.updatedAt : createdAt;
+      workspaces.push({ id: view.id, title: displayWorkspaceTitle(view.kind, view.title, programTitle), kind: view.kind, role: view.actor.role, createdAt, updatedAt, updatedBy: entry.updatedBy });
     }
   }
   return Response.json({ csrfToken: session.csrfToken, actorId: session.record.actorId, name: session.record.name,

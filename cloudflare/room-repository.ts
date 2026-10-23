@@ -493,7 +493,13 @@ export class RoomRepository implements WorkspaceRepository {
       workspace.id, workspace.epoch, actorId,
     )[0];
     if (!member || !isRole(member.role)) return [];
-    return [{ id: workspace.id, title: workspace.title, kind: workspace.kind, role: member.role }];
+    const change = this.lastChange(workspace.id, workspace.epoch);
+    return [{
+      id: workspace.id, title: workspace.title, kind: workspace.kind, role: member.role,
+      createdAt: workspace.createdAt,
+      updatedAt: change?.at ?? workspace.createdAt,
+      ...(change?.actorName ? { updatedBy: change.actorName } : {}),
+    }];
   }
 
   async createWorkspace(creation: WorkspaceCreation, _now: number): Promise<void> {
@@ -527,13 +533,23 @@ export class RoomRepository implements WorkspaceRepository {
     return this.workspaceSync(workspaceId);
   }
 
-  /** Time of the latest committed command in the current epoch, or null before the first one (F053). */
-  lastActivityAt(workspaceId: string, epoch: number): number | null {
-    const row = this.rows<{ last_at: SqlStorageValue }>(
-      'SELECT MAX(created_at) AS last_at FROM room_events WHERE workspace_id = ? AND epoch = ?',
+  /** The newest committed command in this epoch and who sent it, or null before the first one (F053). */
+  lastChange(workspaceId: string, epoch: number): { at: number; actorId: string; actorName: string | null } | null {
+    const row = this.rows<{ last_at: SqlStorageValue; actor_id: SqlStorageValue; actor_name: SqlStorageValue | null }>(
+      `SELECT e.created_at AS last_at, e.actor_id AS actor_id, m.actor_name AS actor_name
+         FROM room_events e
+         LEFT JOIN room_memberships m
+           ON m.workspace_id = e.workspace_id AND m.epoch = e.epoch AND m.actor_id = e.actor_id
+        WHERE e.workspace_id = ? AND e.epoch = ?
+        ORDER BY e.created_at DESC, e.workspace_sequence DESC LIMIT 1`,
       workspaceId, epoch,
     )[0];
-    return row?.last_at === null || row?.last_at === undefined ? null : readNumber(row.last_at, 'last_at');
+    if (!row) return null;
+    return {
+      at: readNumber(row.last_at, 'last_at'),
+      actorId: readString(row.actor_id, 'actor_id'),
+      actorName: row.actor_name === null ? null : readString(row.actor_name, 'actor_name'),
+    };
   }
 
   async getMember(workspaceId: string, actorId: string): Promise<StoredMember | null> {

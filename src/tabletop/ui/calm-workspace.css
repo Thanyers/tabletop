@@ -443,12 +443,17 @@
 .tt-chooser .tt-table-search { display: flex; flex: 0 1 240px; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid var(--tt-line); border-radius: 9px; color: var(--tt-muted); background: var(--tt-paper); }
 .tt-chooser .tt-table-search:focus-within { border-color: var(--tt-moss, #356e5d); }
 .tt-chooser .tt-table-search input { flex: 1; min-width: 0; border: 0; outline: 0; color: var(--tt-ink); background: transparent; font: inherit; font-size: 13px; }
-.tt-chooser .tt-existing-tables__updated { flex: none; color: var(--tt-muted); font-size: 12px; white-space: nowrap; }
+.tt-chooser .tt-existing-tables__times { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--tt-muted); font-size: 12px; line-height: 1.3; text-align: right; white-space: nowrap; }
+.tt-chooser .tt-existing-tables__updated { display: flex; flex-direction: column; align-items: flex-end; }
+.tt-chooser .tt-existing-tables__updated b { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; color: var(--tt-ink); font-weight: 600; }
+.tt-chooser .tt-existing-tables__created { color: var(--tt-muted); font-size: 11px; }
 .tt-chooser .tt-existing-tables__empty { margin: 4px 0 0; color: var(--tt-muted); font-size: 13px; }
 @media (max-width: 520px) {
   .tt-chooser .tt-table-search { flex-basis: 100%; }
   .tt-chooser .tt-existing-tables > button { flex-wrap: wrap; }
-  .tt-chooser .tt-existing-tables__updated { order: 3; width: 100%; padding-left: 43px; }
+  .tt-chooser .tt-existing-tables__times { order: 3; width: 100%; align-items: flex-start; padding-left: 43px; text-align: left; }
+  .tt-chooser .tt-existing-tables__updated { align-items: flex-start; }
+  .tt-chooser .tt-existing-tables__updated b { max-width: none; }
 }
 
 /* Shift+click group: a dashed ring on each picked card; right-click acts on all of them. */
@@ -477,5 +482,3 @@
 .tt-chooser .tt-table-filters__clear { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-moss, #356e5d); font: inherit; font-size: 13px; cursor: pointer; }
 .tt-chooser .tt-table-filters__clear:hover { background: var(--tt-canvas); }
 .tt-chooser .tt-table-filters__count { margin-left: auto; color: var(--tt-muted); font-size: 12px; }
-.tt-chooser .tt-existing-tables__updated { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.3; }
-.tt-chooser .tt-existing-tables__updated b { color: var(--tt-ink); font-weight: 600; }
