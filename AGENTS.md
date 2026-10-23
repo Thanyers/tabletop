@@ -70,13 +70,11 @@ gh pr create --draft --base dev --head feat/<ID>-<ชื่อ> --title "<ID>: .
 # แก้ → ตรวจ → อัปเดต spec.md + PLAN.md → gh pr ready
 ```
 
-**บรรทัด changelog ใส่เป็นไฟล์ใหม่ใน [`changelog.d/`](changelog.d/README.md) (`<ID>-<ชื่อ>.md`) ห้ามแก้ `CHANGELOG.md` ใน PR งาน** เพื่อไม่ให้ PR ขนานชนกัน (CI008)
-
-PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใช้เห็นอะไร ผลตรวจ (คำสั่ง + จำนวนที่ผ่าน + รุ่น Node) ข้อจำกัด และสิ่งที่ operator ต้องทำก่อน deploy (ถ้ามี) · จากนั้น **AI merge เข้า `dev` เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) (คนจะ review หรือ merge เองก็ได้)
+changelog ใส่ใน `changelog.d/` · PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใช้เห็นอะไร ผลตรวจ (คำสั่ง + จำนวนที่ผ่าน + รุ่น Node) ข้อจำกัด และสิ่งที่ operator ต้องทำก่อน deploy (ถ้ามี) · จากนั้น **AI merge เข้า `dev` เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) (คนจะ review หรือ merge เองก็ได้)
 
 ## 5. ออก release
 
-ออก release เมื่อผู้ใช้สั่ง เช่น “release” หรือ “ขึ้น prod” เท่านั้น ก่อนเริ่ม **อ่านและทำครบ [ขั้น release](docs/AGENT_OPERATIONS.md#5-ออก-release)** รวมเลขเวอร์ชัน, CHANGELOG, CI ชุดเต็ม, tag/deploy และนำ main กลับ dev · หัวข้อ release ที่ตัดแล้วห้ามแทรกบรรทัดเพิ่ม ของใหม่ลง `changelog.d/` · ตัดหัวข้อด้วย `npx tsx server/changelog.ts cut X.Y.Z --summary "…"`
+ออก release เมื่อผู้ใช้สั่ง เช่น “release” หรือ “ขึ้น prod” เท่านั้น ก่อนเริ่ม **อ่านและทำครบ [ขั้น release](docs/AGENT_OPERATIONS.md#5-ออก-release)** รวมเลขเวอร์ชัน, CHANGELOG, CI ชุดเต็ม, tag/deploy และนำ main กลับ dev · หัวข้อ release ที่ตัดแล้วห้ามแทรกบรรทัดเพิ่ม ของใหม่ลง `changelog.d/`
 
 ## 6. Deploy (อัตโนมัติหลัง merge release)
 
