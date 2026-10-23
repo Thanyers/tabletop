@@ -74,6 +74,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F066-T12 | แก้ Replace ที่มีฟอร์มอ้างแถวเดิม และคำถาม library แบบมีเงื่อนไข | `doing` | Codex | `fix/F066-import-and-capability` | table import contract/domain/UI/tests; cloudflare/table-assistant + tests; F066 verification docs | — | production9: PD008 เปลี่ยนIDจนfixed controlsอ้างแถวหาย; PD035 conditionalThaiไม่เข้าcapability answer; ต้องred/greenและdeploy PATCH/เทสซ้ำ |
 | F066-T11 | แก้ actual hosted runner และกัน failure retry loop ก่อน release | `review` | Codex | `fix/F066-hosted-runtime-repair` / #252 | runner/Room getter/orchestrator + focused tests | — | candidate lazylookup+no sameinput retry; CF runner/Room68 + orchestrator6, typecheck/lintผ่าน; freshhostedPy42→82ผ่าน รอห้องเก่าretestหลังpipeline |
 | F066-T10 | แก้เฉพาะเคส generated-scene drag ที่บล็อก release ตามอนุมัติผู้ใช้ | `review` | Codex | `fix/F066-hosted-runtime-repair` / #252 | tests/generative-canvas-browser.mjs | — | clock75msก่อนdown; forced stale modeแดง/defaultเขียว; full4rooms8callsผ่าน; คงassertionsเดิม ไม่มีproduction scene/camera edits |
 | F066-T9 | รักษา default ช่องใหม่และแก้ deployment acceptance fixtures | `review` | Codex | `fix/F066-deploy-acceptance` | domain/table.ts + regression, browser fixtures, verification docs | — | PR #244; domain25/25, typecheck/lint, generative4rooms/8calls/0errors, Workers35checks/37calls/0errors; independent review ไม่มี P1/P2 |

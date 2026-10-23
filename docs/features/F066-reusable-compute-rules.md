@@ -30,6 +30,7 @@
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
+| F066-T12 | ซ่อม linked-row Replace และ conditional library questions หลัง production9 | จับคู่ identity แบบผู้ใช้ยืนยัน รักษา row IDs/controls เมื่อเรียงใหม่; ambiguous/missing rejectแบบatomic; PD035 exact promptตอบcapabilityจริง; PATCHผ่านCI/deploy/actualretest |
 | F066-T1 | contracts, persistent definitions/runs และ revision links | reload/reconnect, isolation, stale result และ permission tests |
 | F066-T2 | isolated runner, generation/invocation และการคำนวณซ้ำ | ใช้โปรแกรมเดิมกับข้อมูลสองชุดโดยไม่เรียก AI ซ้ำ; failure ไม่ทำลายผลเดิม |
 | F066-T3 | Rules card, Advanced, per-rule chat references | อ่านแบบ no-code, keyboard/mobile, specific reference ผ่าน server context |
@@ -41,6 +42,8 @@
 | F066-T7 | ตรวจ JavaScript/Python และทดสอบหลัง release 8 | ยืนยันรุ่นจริง, actual/evidence และ PASS/FAIL/BLOCKED รายเคส; ไม่อ้าง readiness จาก capability flag อย่างเดียว |
 
 ## การตัดสินใจ
+
+- F066-T12: Replace ที่มีฟอร์มอ้างแถวแบบ fixed ต้องมีการจับคู่รายการเดิมด้วยฟิลด์ที่ผู้ใช้เห็นและยืนยัน ไม่ใช้ลำดับแถวและไม่เดา identity เงียบ ๆ backend ตรวจค่าไม่ซ้ำ/ครบและ validate ผลทั้งหมดก่อนเขียน; raw data กับ revision ต้องไม่เปลี่ยนเมื่อจับคู่กำกวม/ขาดรายการที่ถูกอ้าง คำถาม capability แบบมีเงื่อนไขและคำสั่งห้ามติดตั้งเพิ่มต้องตอบจาก runtime profile โดยไม่ตีความคำว่าเพิ่มในข้อห้ามว่าให้สร้างฟีเจอร์
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
