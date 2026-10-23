@@ -69,7 +69,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F066-T7 | ตรวจ release 8 และรัน post-deploy acceptance ตามชุดเตรียม | `doing` | Codex | `docs/F066-release8-acceptance` | acceptance report, ignored evidence, feature/spec | — | ใช้ห้อง QA สมมติ; ไม่แก้ runtime/config หรือ deploy ในงานตรวจ |
+| F066-T7 | ตรวจ release 8 และรัน post-deploy acceptance ตามชุดเตรียม | `review` | Codex | `docs/F066-release8-acceptance` / #231 | acceptance report, ignored evidence, feature/spec | — | 7 PASS/4 FAIL/36 BLOCKED/1 SKIPPED_SCOPE; JS/Pythonยังปิด, หลักฐานสมมติ; ไม่แก้ runtime/config หรือสั่ง deploy |
 | F070-T1 | สถานะเลือกแล้วของชิป + เส้น follow-up + ตำแหน่งการ์ดลูก (client, localStorage) | `review` | lead (AI) | `feat/F070-choice-trail` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, `ui/table-chat.css`, `ui/CanvasWorkspace.tsx`, tests | — | ไม่แตะ server/contract · ไม่มี migration |
 | F066-T6 | เตรียมเคสทดสอบหลัง deploy พร้อมข้อมูลสมมติและผลอ้างอิง | `review` | Codex | `docs/F066-post-deploy-tests` / #223 | docs test pack, fixture data, read-only pack checker, spec/docs index | — | 48 เคส/8 กลุ่ม/P0 12, fixtures 15, offline golden checks 38 ผ่าน; acceptance 48 NOT_RUN รอผู้ใช้สั่งหลัง deploy |
 | F066-T1..T4 | reusable compute runtime, persistent links และ Rules UX | `review` | Codex | `feat/F066-reusable-compute-rules` / #208 | compute/schema/domain/authority/Room, Rules/ref/import UI, tests/docs | — | unit 818 + CF 170, Python 4, real AI/reuse/browser 8; browser regression 32 + generative 8 ผ่าน; ไม่มี SQL migration/ไม่ deploy |
