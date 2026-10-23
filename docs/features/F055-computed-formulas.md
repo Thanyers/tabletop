@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` — local validation |
+| สถานะ | `review` — [PR #203](https://github.com/Thanyers/tabletop/pull/203) |
 | เป้าหมาย | ตารางที่ "ใส่สูตรครั้งเดียว แล้วเปลี่ยน data ได้เรื่อย ๆ" แบบ Excel: สูตรถูกเก็บใน state ของห้อง, server/worker เป็นคนคำนวณทุก projection, ทุก session เห็นเลขชุดเดียวกัน |
 | ต่อยอดจาก | F017 computed columns (เดิมเป็น display-only binary arithmetic) |
 
