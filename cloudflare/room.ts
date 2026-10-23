@@ -15,7 +15,7 @@ import { createIdentityReplacements, redactString, respondToTablePrompt, type Id
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
-import { headWithin, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { externalHost, headWithin, parseModelJobResearch, safeExternalUrl, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, MAX_SOURCE_AUTHORITY, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
@@ -98,6 +98,8 @@ interface PublicModelJob {
   limitMs?: number;
   /** F045: bounded, redacted evidence of how far a failed draft got. */
   failureDetails?: ModelFailureDetails;
+  /** F064 slice B: what the draft searched and which sources it used (display only, no evidence). */
+  research?: ModelJobResearch;
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -366,6 +368,7 @@ function modelJobStatusView(job: RoomModelJob, limitMs: number): PublicModelJob 
     // F045: the card needs the same limit the job runs under, not a client-side guess.
     return { id: job.id, status: 'running', limitMs, ...(progress ? { progress } : {}) };
   }
+  const research = parseModelJobResearch(job.data.research);
   return {
     id: job.id,
     status: 'completed',
@@ -373,6 +376,8 @@ function modelJobStatusView(job: RoomModelJob, limitMs: number): PublicModelJob 
     ...(publicClarification(job.data.clarification) ?? {}),
     ...(job.data.autoApply === 'applied' || job.data.autoApply === 'needs-review' ? { autoApply: job.data.autoApply } : {}),
     ...(Array.isArray(job.data.autoApplyReasons) ? { autoApplyReasons: job.data.autoApplyReasons.filter((item): item is string => typeof item === 'string').slice(0, 6) } : {}),
+    // F064 slice B: the editor may still be unknown; the card renders it only when present.
+    ...(research ? { research } : {}),
   };
 }
 
@@ -431,6 +436,34 @@ function boundedSearchProgress(
     resultsCount,
     ...(topTitle ? { topTitle } : {}),
   };
+}
+
+/**
+ * F064 slice B: the sources a finished card may list, redacted then clamped like the live search
+ * line. A URL that is not plain http(s) after redaction is dropped; `null` replacements drop it all.
+ */
+function boundedResearch(
+  research: ModelJobResearch | undefined,
+  replacements: IdentityReplacement[] | null,
+): ModelJobResearch | undefined {
+  if (!research || replacements === null) return undefined;
+  const sources: ModelJobResearch['sources'] = [];
+  for (const source of research.sources) {
+    if (sources.length >= MAX_JOB_RESEARCH_SOURCES) break;
+    const url = safeExternalUrl(redactString(source.url, replacements));
+    if (!url) continue;
+    const title = headWithin(redactString(source.title, replacements), MAX_JOB_RESEARCH_TITLE_CHARS).trim();
+    const date = typeof source.date === 'string' ? headWithin(source.date, MAX_JOB_RESEARCH_DATE_CHARS) : '';
+    const authority = Number.isSafeInteger(source.authority)
+      ? Math.min(Math.max(source.authority, 0), MAX_SOURCE_AUTHORITY) : 0;
+    sources.push({ title: title || externalHost(url), url, date: date || null, authority });
+  }
+  if (sources.length === 0) return undefined;
+  const queries = research.queries
+    .slice(0, MAX_JOB_RESEARCH_QUERIES)
+    .map((query) => headWithin(redactString(query, replacements), MAX_JOB_SEARCH_QUERY_CHARS).trim())
+    .filter((query) => query.length > 0);
+  return { queries, sources };
 }
 
 function publicClarification(value: unknown): { clarification: { question: string; options: string[] } } | null {
@@ -1468,10 +1501,20 @@ export class Room extends DurableObject<Env> {
       if (!job || job.status !== 'running') return;
       requireWorkspaceWritable(this.env, authorized.workspace.kind);
 
+      // F064 slice B: the sources this draft used, redacted and bounded once, then stored with the
+      // job so every member opening the card sees the same list.
+      const researchMeta = boundedResearch(
+        'research' in proposal ? proposal.research : undefined, progressReplacements,
+      );
+
       if ('clarification' in proposal) {
         // Nothing to commit: the owner answers in the chat and asks again.
         await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
-          input.actorId, 'completed', { ...initialData, clarification: proposal.clarification });
+          input.actorId, 'completed', {
+            ...initialData,
+            clarification: proposal.clarification,
+            ...(researchMeta ? { research: researchMeta } : {}),
+          });
         return;
       }
 
@@ -1488,7 +1531,7 @@ export class Room extends DurableObject<Env> {
         expectedRevision: envelope.expectedRevision,
         expectedEpoch: envelope.expectedEpoch,
       });
-      const committingData = { ...initialData, proposalHash };
+      const committingData = { ...initialData, proposalHash, ...(researchMeta ? { research: researchMeta } : {}) };
       if (!await this.repository.beginModelJobCommit(
         input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, committingData,
       )) return;

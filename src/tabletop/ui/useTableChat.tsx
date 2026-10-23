@@ -9,10 +9,12 @@ import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
 import { MAX_CHAT_CARD_REFERENCES, chatReferencePrompt, followUpPrompt, parseReferencedPrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
+import { tableDraftBytes } from '../shared/table-draft-input';
+import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchLine, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchLine, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -811,6 +813,13 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }));
   }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
+  // F067: the table's share of a rule request, measured with the server's own request builder.
+  const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft') ? tableDraftBytes(table.domain, '') : null, [table]);
+  const aiContext = draftBaseBytes === null ? undefined : {
+    // The message adds its JSON-escaped length; quotes are already counted in the empty prompt.
+    used: draftBaseBytes + new TextEncoder().encode(JSON.stringify(composerMessage)).byteLength - 2,
+    limit: TABLE_AI_INPUT_BYTES,
+  };
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
   const owner = viewerCan(table, 'rules.draft');
   const modeCanAsk = mode === 'draft' || assistantAvailable;
@@ -851,6 +860,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onRemoveCardReference={(id) => setCardReferences((current) => current.filter((item) => item.id !== id))}
     onClearCardReferences={() => setCardReferences([])}
     composerAction={options.composerAction}
+    aiContext={aiContext}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
@@ -1002,9 +1012,20 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
   }
   if (card.kind === 'draft') {
     const reviewReasons = card.modelJob?.autoApply === 'needs-review' ? card.modelJob.autoApplyReasons ?? [] : [];
+    // F064 slice B: the web sources this draft used, collapsed so the card stays small.
+    const sources = draftSources(card.modelJob?.research);
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       {card.modelJob?.autoApply === 'needs-review' && !card.pollError && <p className="tt-chat-card__hint">These rules were not added automatically because a check did not pass{reviewReasons.length ? `: ${reviewReasons.join(' ')}` : '.'}</p>}
       <p><Sparkles size={14} /> {card.pollError ? 'The rule draft is ready, but the table could not refresh.' : 'A rule draft is ready. Review it before anyone uses it.'}</p>
+      {sources.length > 0 && <details className="tt-chat-card__sources" data-testid="draft-sources">
+        <summary>{draftSourcesLabel(sources.length)}</summary>
+        <ul>
+          {sources.map((source) => <li key={source.url}>
+            <a href={source.url} target="_blank" rel="noopener">{source.title}</a>
+            <span>{[source.dateLabel, `authority ${source.authority}`].filter(Boolean).join(' · ')}</span>
+          </li>)}
+        </ul>
+      </details>}
       {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
       {card.pollError && <><p className="tt-chat-card__error" role="alert">{card.pollError}</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly || card.checking} onClick={onRetryRefresh}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Retry table refresh</button></>}
       <div className="tt-card-cta"><button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}</div>

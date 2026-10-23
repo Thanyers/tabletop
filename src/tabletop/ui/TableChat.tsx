@@ -44,6 +44,8 @@ export interface TableChatProps {
   onSend: (message: string) => Promise<boolean>;
   /** F037: an extra round control rendered beside the composer (add a note). */
   composerAction?: ReactNode;
+  /** F067: bytes a rule request would carry for this table, shown while the next message is a rule request. */
+  aiContext?: { used: number; limit: number };
   onMessageChange?: (message: string) => void;
   /** A card the next message is about, shown as a chip above the box. */
   /** Cards the next message is about; each chip can be removed on its own. */
@@ -56,7 +58,7 @@ export interface TableChatProps {
 export function TableChat({
   workspaceId, epoch, actorId, mode, sourceFiles, placeholder, aiEnabled, canAttach, busy,
   acceptFiles, historyStatus = 'ready', onRetryHistory, prefill, acknowledged, focusKey = 0,
-  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction,
+  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction, aiContext,
   cardReferences = [], onRemoveCardReference, onClearCardReferences,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
@@ -224,5 +226,20 @@ export function TableChat({
       {composerAction}
       <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend} title={busy ? 'Send is available once the pending step on the table is resolved' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
     </form>
+    {mode === 'draft' && aiContext && <AiContextMeter {...aiContext} />}
   </div>;
+}
+
+/** "AI context 41 / 128 KiB": how much of a rule request this table already fills (F067). */
+function AiContextMeter({ used, limit }: { used: number; limit: number }) {
+  const kib = (bytes: number) => Math.max(1, Math.round(bytes / 1024));
+  const ratio = used / limit;
+  const level = ratio > 1 ? 'over' : ratio > 0.8 ? 'high' : 'ok';
+  return <p className="tt-table-chat-bar__context" data-level={level} data-testid="ai-context-meter"
+    title="Your message, files the rules do not cite yet, the rules and every row go to the AI with each rule request. Files the rules already cite go by name only.">
+    <span className="tt-table-chat-bar__context-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }} /></span>
+    AI context {kib(used)} / {kib(limit)} KiB
+    {level === 'over' && <b> · too large to send. Remove a file or some rows.</b>}
+    {level === 'high' && <b> · almost full</b>}
+  </p>;
 }

@@ -23,6 +23,32 @@ export const MAX_JOB_SEARCH_TITLE_CHARS = 120;
 export const MAX_JOB_SEARCH_TEXT_CHARS = MAX_JOB_SEARCH_QUERY_CHARS + MAX_JOB_SEARCH_TITLE_CHARS;
 /** F064: a search answers with at most 50 rows and keeps at most 10; this is the stored ceiling. */
 export const MAX_JOB_SEARCH_RESULTS = 100;
+/** F064 slice B: sources kept on a finished draft, matching the research step's own ceiling. */
+export const MAX_JOB_RESEARCH_SOURCES = 6;
+/** F064 slice B: search queries kept with the sources, for history and later evidence work. */
+export const MAX_JOB_RESEARCH_QUERIES = 4;
+/** F064 slice B: a source title is display text, redacted and clamped like any provider text. */
+export const MAX_JOB_RESEARCH_TITLE_CHARS = 200;
+/** F064 slice B: long enough for real URLs, short enough that a job row cannot be inflated. */
+export const MAX_JOB_RESEARCH_URL_CHARS = 500;
+/** F064 slice B: an ISO date from the provider; anything longer is not a date. */
+export const MAX_JOB_RESEARCH_DATE_CHARS = 40;
+/** F064: DeepSeek reports authority 0-4, where 4 is an official source. */
+export const MAX_SOURCE_AUTHORITY = 4;
+
+/** F064 slice B: one web source the draft used. `url` is always http(s) after validation. */
+export interface ModelJobResearchSource {
+  title: string;
+  url: string;
+  date: string | null;
+  authority: number;
+}
+
+/** F064 slice B: what the research step searched and which sources the draft kept. Display only. */
+export interface ModelJobResearch {
+  queries: string[];
+  sources: ModelJobResearchSource[];
+}
 
 /**
  * F064: what the research step is doing right now. The query and top title come from the model and
@@ -126,6 +152,60 @@ export function parseModelJobSearchProgress(value: unknown): ModelJobSearchProgr
     resultsCount: count,
     ...(topTitle ? { topTitle } : {}),
   };
+}
+
+/**
+ * F064 slice B: the only URLs a card may turn into a link. Everything else (javascript:, data:,
+ * credentials, dotless hosts) is dropped, so a stored job row can never inject a scheme.
+ */
+export function safeExternalUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_JOB_RESEARCH_URL_CHARS) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  if (!parsed.hostname.includes('.')) return null;
+  if (parsed.username || parsed.password) return null;
+  return parsed.toString();
+}
+
+/** F064 slice B: a readable host for a source that arrived without a title. */
+export function externalHost(value: string): string {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/** F064 slice B: rebuild stored research, dropping anything out of bounds or unsafe to link. */
+export function parseModelJobResearch(value: unknown): ModelJobResearch | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const rawSources = Array.isArray(record.sources) ? record.sources : [];
+  const sources: ModelJobResearchSource[] = [];
+  for (const entry of rawSources) {
+    if (sources.length >= MAX_JOB_RESEARCH_SOURCES) break;
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+    const source = entry as Record<string, unknown>;
+    const url = safeExternalUrl(source.url);
+    if (!url) continue;
+    const authority = source.authority;
+    if (typeof authority !== 'number' || !Number.isSafeInteger(authority)
+        || authority < 0 || authority > MAX_SOURCE_AUTHORITY) continue;
+    const title = boundedText(source.title, MAX_JOB_RESEARCH_TITLE_CHARS) ?? externalHost(url);
+    const date = typeof source.date === 'string' ? headWithin(source.date, MAX_JOB_RESEARCH_DATE_CHARS) : '';
+    sources.push({ title, url, date: date || null, authority });
+  }
+  if (!sources.length) return undefined;
+  const queries = (Array.isArray(record.queries) ? record.queries : [])
+    .map((query) => boundedText(query, MAX_JOB_SEARCH_QUERY_CHARS))
+    .filter((query): query is string => Boolean(query))
+    .slice(0, MAX_JOB_RESEARCH_QUERIES);
+  return { queries, sources };
 }
 
 /** Rebuild a stored progress record, dropping anything an older or hostile row could carry. */

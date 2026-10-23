@@ -82,6 +82,8 @@ interface TestModelJob {
     partialContent?: string;
     thinkingTail?: string;
   };
+  /** F064 slice B: the web sources a finished draft used, or absent when it never searched. */
+  research?: { queries: string[]; sources: { title: string; url: string; date: string | null; authority: number }[] };
 }
 
 interface TestTableAssistantJob {
@@ -2864,6 +2866,88 @@ describe('Cloudflare room Durable Object', () => {
     expect(afterTick?.search).toMatchObject({ phase: 'done', resultsCount: 3 });
     releasePlainTick();
     await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+  });
+
+  it('shows the redacted web sources of a completed draft and drops links that are not http(s) (F064)', async () => {
+    const owner = newActor('Sources owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: emptyWorkspace } = await createRoom(owner, 'table');
+    const imported = await issueCommand(stub, emptyWorkspace, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    expect(imported.response.status).toBe(200);
+    const workspace = (imported.body as CommandAck).workspace;
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
+      ...modelResult(request),
+      research: {
+        queries: [`VAT ${owner.name}`, 'WHO BMI'],
+        sources: [
+          { title: `ประกาศ ${owner.name} (${owner.id})`, url: `https://example.go.th/${owner.id}?q=vat`, date: '2026-07-26T16:00:00+00:00', authority: 4 },
+          { title: 'unsafe', url: 'javascript:alert(1)', date: null, authority: 3 },
+          { title: '', url: 'https://noise.example/a', date: null, authority: 2 },
+        ],
+      },
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('completed');
+
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    const research = visible.body.research;
+    if (!research) throw new Error('Expected the sources this draft used.');
+    // `javascript:` is dropped, and a title that redacts to nothing falls back to the host.
+    expect(research.sources).toHaveLength(2);
+    expect(research.sources[0]?.url).toMatch(/^https:\/\/example\.go\.th\//u);
+    expect(research.sources[1]?.title).toBe('noise.example');
+    expect(research.sources[0]?.date).toBe('2026-07-26T16:00:00+00:00');
+    for (const source of research.sources) {
+      expect(source.url.startsWith('https://')).toBe(true);
+      expect(source.authority).toBeGreaterThanOrEqual(0);
+      expect(source.authority).toBeLessThanOrEqual(4);
+      expect(source.title).not.toContain(owner.name);
+      expect(source.url).not.toContain(owner.id);
+    }
+    // Nothing raw about a member survives inside the stored or served research.
+    expect(JSON.stringify(visible.body.research)).not.toContain(owner.name);
+    expect(JSON.stringify(visible.body.research)).not.toContain(owner.id);
+    expect(JSON.stringify(job.data.research)).not.toContain(owner.name);
+    expect(JSON.stringify(job.data.research)).not.toContain(owner.id);
+  });
+
+  it('omits the research block for a completed draft that never searched (F064)', async () => {
+    const owner = newActor('No research owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: emptyWorkspace } = await createRoom(owner, 'table');
+    const imported = await issueCommand(stub, emptyWorkspace, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    expect(imported.response.status).toBe(200);
+    const workspace = (imported.body as CommandAck).workspace;
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => modelResult(request));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    // Adding an optional field must stay invisible for drafts that did not use the web.
+    expect(visible.body).not.toHaveProperty('research');
   });
 
   it('keeps bounded, identity-redacted failure details when our own deadline stops a draft (F045)', async () => {

@@ -1,5 +1,5 @@
 import { MAX_TABLE_MEMBER_SEATS, type CommandAck, type CommandEnvelope, type SessionView, type WorkspaceView } from './shared/contracts';
-import type { ModelFailureDetails, ModelJobProgress } from './shared/model-job-progress';
+import type { ModelFailureDetails, ModelJobProgress, ModelJobResearch } from './shared/model-job-progress';
 import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
 import { parseCursorRelay, type CursorRelay } from './shared/cursor-protocol';
 
@@ -56,6 +56,8 @@ export interface ModelJob {
   limitMs?: number;
   /** F045: why a failed draft stopped early and how much of the reply it had received. */
   failureDetails?: ModelFailureDetails;
+  /** F064 slice B: what the draft searched and which sources it used (display only). */
+  research?: ModelJobResearch;
 }
 
 export interface TabletopCapabilities {
