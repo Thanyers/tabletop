@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails, type ModelJobSearchProgress } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails, type ModelJobSearchProgress } from '../shared/model-job-progress';
 import {
-  canApplyWorkspaceRefresh, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
-  draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard,
+  canApplyWorkspaceRefresh, DRAFT_SOURCE_TITLE_CHARS, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
+  draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, formatSourceDate, historyCard,
   LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
 } from './table-chat-state';
 
@@ -261,6 +261,48 @@ describe('live search line while a draft runs (F064)', () => {
     expect(line).not.toContain('  ');
     expect(line).not.toContain('\n');
     expect(line?.length).toBeLessThanOrEqual(LIVE_SEARCH_QUERY_CHARS + '🔎 กำลังค้น: '.length);
+  });
+});
+
+describe('web sources on a finished draft card (F064)', () => {
+  const source = (patch: Partial<{ title: string; url: string; date: string | null; authority: number }> = {}) =>
+    ({ title: 'ประกาศ VAT', url: 'https://example.go.th/x', date: '2026-07-26T16:00:00+00:00', authority: 4, ...patch });
+
+  it('returns nothing when the draft never searched', () => {
+    expect(draftSources(undefined)).toEqual([]);
+    expect(draftSources({ queries: [], sources: [] })).toEqual([]);
+  });
+
+  it('shows a real link, a readable date and the authority', () => {
+    const items = draftSources({ queries: ['VAT'], sources: [source()] });
+    expect(items).toEqual([{ title: 'ประกาศ VAT', url: 'https://example.go.th/x', dateLabel: '26 Jul 2026', authority: 4 }]);
+    expect(draftSourcesLabel(items.length)).toBe('Sources (1)');
+  });
+
+  it('drops links that are not plain http(s) and bounds the list', () => {
+    const items = draftSources({
+      queries: [],
+      sources: [
+        source({ url: 'javascript:alert(1)' }),
+        source({ url: 'data:text/html,<b>x</b>' }),
+        ...Array.from({ length: MAX_JOB_RESEARCH_SOURCES + 3 }, (_, index) =>
+          source({ title: `S${index}`, url: `https://example${index}.go.th/x` })),
+      ],
+    });
+    expect(items).toHaveLength(MAX_JOB_RESEARCH_SOURCES);
+    for (const item of items) expect(item.url.startsWith('https://')).toBe(true);
+  });
+
+  it('falls back to the host, ignores an unusable date and bounds a long title', () => {
+    const items = draftSources({
+      queries: [],
+      sources: [source({ title: '', date: 'not-a-date' }), source({ title: 'T'.repeat(DRAFT_SOURCE_TITLE_CHARS * 2) })],
+    });
+    expect(items[0]?.title).toBe('example.go.th');
+    expect(items[0]?.dateLabel).toBe('');
+    expect(items[1]?.title.length).toBeLessThanOrEqual(DRAFT_SOURCE_TITLE_CHARS);
+    expect(formatSourceDate(null)).toBe('');
+    expect(formatSourceDate('soon')).toBe('');
   });
 });
 

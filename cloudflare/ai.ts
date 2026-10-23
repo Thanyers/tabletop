@@ -6,10 +6,10 @@ import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpe
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
-import { runResearch } from '../server/providers/deepseek-research.js';
+import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
+import { runResearch, type ResearchOutcome } from '../server/providers/deepseek-research.js';
+import { MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { tableDraftInput } from '../src/tabletop/shared/table-draft-input.js';
-import type { ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
@@ -127,8 +127,8 @@ export interface AIProposalRequest {
 
 /** Table requests may return a question for the owner instead of a draft (F012). */
 export type AIProposalResult =
-  | { change: ChangeSet; jobId: string; usage: DeepSeekUsage }
-  | { clarification: TableClarification; jobId: string; usage: DeepSeekUsage };
+  | { change: ChangeSet; jobId: string; usage: DeepSeekUsage; research?: ModelJobResearch }
+  | { clarification: TableClarification; jobId: string; usage: DeepSeekUsage; research?: ModelJobResearch };
 
 type BillingBinding = BillingRequestBinding;
 export type AIBillingBinding = BillingBinding;
@@ -388,6 +388,19 @@ export function searchChangeProgress(event: ModelJobSearchProgress): DeepSeekCha
 }
 
 /**
+ * F064 slice B: the research the draft may show on its card. Only display metadata leaves the
+ * provider call: no brief, no summary text, and nothing that could be mistaken for table evidence.
+ */
+export function researchSummary(outcome: Pick<ResearchOutcome, 'queries' | 'sources'>): ModelJobResearch | undefined {
+  if (outcome.sources.length === 0) return undefined;
+  return {
+    queries: outcome.queries.slice(0, MAX_JOB_RESEARCH_QUERIES),
+    sources: outcome.sources.slice(0, MAX_JOB_RESEARCH_SOURCES)
+      .map(({ title, url, date, authority }) => ({ title, url, date: date ?? null, authority })),
+  };
+}
+
+/**
  * Returns a validated proposal only. The room authority must recheck its current session,
  * membership, epoch, and revision before committing `change` as evolve.propose.
  */
@@ -407,6 +420,8 @@ export async function proposeChange(
   // must never block a draft, so research is best-effort and bounded. A caller-injected fetch is a
   // test double, so research stays off there and tests never reach the network.
   let researchBlock: { brief: string; sources: { id: string; title: string; url: string; date: string | null; authority: number; summary: string }[] } | undefined;
+  // F064 slice B: the same run also yields the sources the finished card may list.
+  let researchMetadata: ModelJobResearch | undefined;
   if (prepared.kind === 'table' && fetchImpl === undefined && env.TABLE_WEB_SEARCH !== 'off') {
     try {
       const research = await runResearch(request.prompt, {
@@ -415,6 +430,7 @@ export async function proposeChange(
         timeoutMs: 30_000,
         onProgress: (event) => onProgress?.(searchChangeProgress(event)),
       });
+      researchMetadata = researchSummary(research);
       if (research.sources.length > 0) {
         researchBlock = {
           brief: research.brief,
@@ -478,7 +494,10 @@ export async function proposeChange(
     fail('AI_PROPOSAL_ALREADY_DISPATCHED', 'This proposal request has already been dispatched or is uncertain.');
   }
   if (prepared.kind === 'table' && prepared.providerInput.kind === 'table' && tableProviderInput) {
-    return proposeGeneratedTable(env, request, tableProviderInput, binding, fetchImpl, onProgress);
+    const result = await proposeGeneratedTable(env, request, tableProviderInput, binding, fetchImpl, onProgress);
+    // F064 slice B: a draft that used the web carries its sources; a clarification may too, so the
+    // member can see what the question was grounded in.
+    return researchMetadata ? { ...result, research: researchMetadata } : result;
   }
 
   let change: ChangeSet;
