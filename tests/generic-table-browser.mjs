@@ -241,7 +241,7 @@ async function addSource(page, tableId, source, api, method = 'chat', { aiDisabl
     await disabledComposer.fill('Keep this message ready while AI is off.');
     await expect(disabledComposer).toHaveValue('Keep this message ready while AI is off.');
     await expect(disabledChat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
-    await expect(disabledChat.getByRole('button', { name: 'Attach a file', exact: true })).toBeEnabled();
+    await expect(disabledChat.getByRole('button', { name: 'Add to this table', exact: true })).toBeEnabled();
     if (failHistory) await expect(disabledChat.getByRole('alert')).toContainText('Table conversation history could not be loaded.');
   }
   const sourceCountBefore = (await api(page, `/api/workspaces/${tableId}`)).body.domain.sources.length;
@@ -797,7 +797,7 @@ async function joinAndCheckSharedFiles(newPage, api, actor, inviteUrl, tableId, 
   await expect(page.getByRole('button', { name: `Remove ${filename}`, exact: true })).toHaveCount(0);
   const chat = page.getByTestId('table-chat-bar');
   await expect(chat).toBeVisible();
-  await expect(chat.getByRole('button', { name: 'Attach a file', exact: true })).toBeEnabled();
+  await expect(chat.getByRole('button', { name: 'Add to this table', exact: true })).toBeEnabled();
   await expect(chat.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
   await openCanvasObject(page, 'table.rules');
   await expect(page.getByTestId('canvas-object-editor').getByRole('region', { name: 'Current active rules', exact: true })).toBeVisible();

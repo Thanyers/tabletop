@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ImagePlus, LoaderCircle, StickyNote, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { CanvasCardMeta, NoteColor, TableNote } from '../shared/table-contracts';
 import type { WorkspaceView } from '../shared/contracts';
 import type { Command } from './types';
@@ -172,68 +172,39 @@ function nextNoteSpot(notes: readonly TableNote[]): { x: number; y: number } {
   return { x: rightmost ? rightmost + 48 : 640, y: top };
 }
 
-/** F073: round button beside the note button; resizes a picture in the browser, uploads it, then pins it as a card. */
-export function NewImageButton({ view, readOnly, onCommand, upload, onError }: {
-  view: WorkspaceView;
-  readOnly: boolean;
-  onCommand: Command;
-  upload: (image: Blob) => Promise<string>;
-  onError: (message: string) => void;
-}) {
+/** F076: why a text note cannot be added right now, or nothing when it can. */
+export function noteLimitReason(view: WorkspaceView): string | undefined {
   const notes = view.domain.kind === 'table' ? view.domain.notes ?? [] : [];
-  const atLimit = notes.filter((note) => note.imageId).length >= MAX_TABLE_IMAGES;
-  const [working, setWorking] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const add = async (file: File) => {
-    if (!acceptedImageFile(file)) { onError('Use a JPEG, PNG or WebP image.'); return; }
-    setWorking(true);
-    try {
-      const prepared = await prepareCanvasImage(file);
-      const imageId = await upload(prepared.blob);
-      await onCommand('table.addNote', { ...nextNoteSpot(notes), ...imageCardSize(prepared.width, prepared.height), imageId });
-    } catch (error) {
-      onError(error instanceof Error ? error.message : 'The image could not be added.');
-    } finally {
-      setWorking(false);
-    }
-  };
-  return <>
-    <button
-      type="button"
-      className="tt-note-add"
-      aria-label={atLimit ? 'Image limit reached' : 'Add an image'}
-      title={atLimit ? `This table already has ${MAX_TABLE_IMAGES} images` : 'Add an image'}
-      aria-busy={working || undefined}
-      disabled={readOnly || atLimit || working}
-      onClick={() => inputRef.current?.click()}
-    >
-      {working ? <LoaderCircle size={18} className="tt-spin" aria-hidden="true" /> : <ImagePlus size={18} aria-hidden="true" />}
-    </button>
-    <input ref={inputRef} type="file" hidden accept="image/jpeg,image/png,image/webp" aria-label="Choose an image to add" onChange={(event) => {
-      const file = event.currentTarget.files?.[0];
-      event.currentTarget.value = '';
-      if (file) void add(file);
-    }} />
-  </>;
+  return notes.filter((note) => !note.imageId).length >= 20 ? 'This table already has 20 notes' : undefined;
 }
 
-/** Round button that sits beside the chat composer and drops a note on the canvas. */
-export function NewNoteButton({ view, readOnly, onCommand }: { view: WorkspaceView; readOnly: boolean; onCommand: Command }) {
+/** F076: pictures this table can still take. */
+export function imagesLeft(view: WorkspaceView): number {
   const notes = view.domain.kind === 'table' ? view.domain.notes ?? [] : [];
-  // F073: pictures have their own allowance; only text notes count here.
-  const atLimit = notes.filter((note) => !note.imageId).length >= 20;
-  const place = () => {
-    if (readOnly || atLimit) return;
-    void onCommand('table.addNote', nextNoteSpot(notes));
-  };
-  return <button
-    type="button"
-    className="tt-note-add"
-    aria-label={atLimit ? 'Note limit reached' : 'Add note'}
-    title={atLimit ? 'This table already has 20 notes' : 'New note'}
-    disabled={readOnly || atLimit}
-    onClick={place}
-  >
-    <StickyNote size={18} aria-hidden="true" />
-  </button>;
+  return Math.max(0, MAX_TABLE_IMAGES - notes.filter((note) => note.imageId).length);
+}
+
+/** F037: drop an empty sticky note right of the existing ones. */
+export function addNote(view: WorkspaceView, onCommand: Command): void {
+  if (noteLimitReason(view)) return;
+  void onCommand('table.addNote', nextNoteSpot(view.domain.kind === 'table' ? view.domain.notes ?? [] : []));
+}
+
+/**
+ * F073/F076: resize each picture in the browser, upload it, then pin it as an image card; the caption goes on
+ * every card. Cards sit side by side so a batch never lands on one spot.
+ */
+export async function pinImages(view: WorkspaceView, files: readonly File[], caption: string, onCommand: Command, upload: (image: Blob) => Promise<string>): Promise<void> {
+  const notes = view.domain.kind === 'table' ? view.domain.notes ?? [] : [];
+  const spot = nextNoteSpot(notes);
+  let x = spot.x;
+  for (const file of files) {
+    if (!acceptedImageFile(file)) throw new Error('Use a JPEG, PNG or WebP image.');
+    const prepared = await prepareCanvasImage(file);
+    const imageId = await upload(prepared.blob);
+    const size = imageCardSize(prepared.width, prepared.height);
+    const pinned = await onCommand('table.addNote', { x, y: spot.y, ...size, imageId, ...(caption ? { text: caption.slice(0, MAX_NOTE_TEXT) } : {}) });
+    if (!pinned) throw new Error('The image could not be pinned. It is still in the chat box.');
+    x += size.width + 32;
+  }
 }

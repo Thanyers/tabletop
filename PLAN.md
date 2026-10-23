@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F074 | กำหนด license ของ Tabletop เป็น AGPL-3.0-only | `review` | [F074](docs/features/F074-agpl-license.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
@@ -74,6 +75,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
 | F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |
 | F074-T1 | เพิ่ม AGPL v3, README และ package metadata | `review` | Codex | `docs/F074-agpl-license` / #238 | `LICENSE`, `README.md`, `package.json`, `package-lock.json`, `docs/features/F074-agpl-license.md`, `changelog.d/F074-agpl-license.md`, `spec.md`, `PLAN.md` | — | GNU text/metadata 5 checks, changelog 7 fragments ผ่าน; ไม่ออก release เว็บ; dependency คง license เดิม |
 | F073-T1 | `room_images` + `/images` route + `imageId` บน note + การ์ดรูป + ปุ่มอัปโหลด | `review` | lead (AI) | `feat/F073-image-cards` | `domain/table.ts`, `shared/table-contracts.ts`, `cloudflare/{index,room,room-repository}.ts`, `ui/NoteCard.tsx`, `ui/note-card.css`, `client.ts`, tests | — | ตาราง DO ใหม่แบบเพิ่มอย่างเดียว (ผู้ใช้อนุมัติ 2026-10-23) |
