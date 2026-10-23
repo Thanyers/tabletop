@@ -24,11 +24,8 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-<<<<<<< HEAD
 | F064 | ค้นเว็บเองเมื่อโจทย์ต้องใช้ข้อเท็จจริงภายนอก (native research ก่อนร่าง) | `review` | [F064](docs/features/F064-web-search.md) |
-=======
 | F064 | โหลดกติกา dev ล่าสุดอัตโนมัติเมื่อเริ่มงานในสี่ harness | `review` | [F064](docs/features/F064-agent-startup-hooks.md) |
->>>>>>> origin/dev
 | F063 | เริ่มงานจาก dev ล่าสุดและอ่านกติกากลางข้าม harness | `review` | [F063](docs/features/F063-shared-agent-startup.md) |
 | F061 | Landing page ตามคุณค่าและเรื่องเล่า README | `review` | [F061](docs/features/F061-readme-landing.md) |
 | F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
