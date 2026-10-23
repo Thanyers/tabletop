@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowUp, AtSign, LoaderCircle, Paperclip, X } from 'lucide-react';
+import { ArrowUp, AtSign, LoaderCircle, Plus, X } from 'lucide-react';
 import { runCanvasObjectCommand, type ChatCardReference } from './canvas-object-finder';
 import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
 import { VISIBILITY_POLICY } from '../shared/visibility';
@@ -205,7 +205,7 @@ export function TableChat({
     </div>}
     <form className="tt-table-chat-bar__box" onSubmit={(event) => { event.preventDefault(); submit(); }}>
       {canAttach && <>
-        <button type="button" className="tt-table-chat-bar__icon" aria-label="Attach a file" disabled={controlsBusy} onClick={() => fileRef.current?.click()}><Paperclip size={17} /></button>
+        <button type="button" className="tt-table-chat-bar__icon" aria-label="Attach a file" title="Attach a file" disabled={controlsBusy} onClick={() => fileRef.current?.click()}><Plus size={18} aria-hidden="true" /></button>
         <input ref={fileRef} type="file" hidden accept={acceptFiles} aria-label="Choose a file to attach" onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
