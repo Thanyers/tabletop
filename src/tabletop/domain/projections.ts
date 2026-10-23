@@ -8,11 +8,20 @@ import type { TableState } from '../shared/table-contracts';
 /** F055: the authority computes every computed column for the reader; the result is projection-only. */
 function attachComputedValues(state: TableState): void {
   delete state.computedValues;
-  if (!state.computedColumns?.length) return;
+  const programColumns = state.program?.computedColumns ?? [];
+  const programIds = new Set(programColumns.map(column => column.id));
+  const columns = [...programColumns, ...(state.computedColumns ?? []).filter(column => !programIds.has(column.id))];
+  if (!columns.length) return;
+  state.computedColumns = columns;
   const values: NonNullable<TableState['computedValues']>['values'] = {};
   for (const [collectionId, records] of Object.entries(state.records)) {
     const rows: Record<string, Record<string, number | null>> = {};
-    for (const record of records) rows[record.id] = computeRecordValues(state.computedColumns, collectionId, record.values);
+    for (const record of records) {
+      rows[record.id] = computeRecordValues(columns, collectionId, record.values);
+      for (const column of programColumns) {
+        if (column.collection === collectionId) delete record.values[column.id];
+      }
+    }
     if (Object.keys(rows).length > 0) values[collectionId] = rows;
   }
   if (Object.keys(values).length > 0) state.computedValues = { revision: state.dataRevision, values };

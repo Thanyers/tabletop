@@ -131,6 +131,11 @@ jobs:
       - name: Isolated JavaScript and Python Container API integration
         if: needs.plan.outputs.full_suite == 'true'
         run: node scripts/compute-cloudflare-local.mjs
+      - name: Controlled compute acceptance with disposable local authority
+        if: needs.plan.outputs.full_suite == 'true'
+        run: |
+          docker build --tag tabletop-compute:1 compute
+          node --import tsx scripts/compute-acceptance-local.mjs > test-results/compute-controlled.log 2>&1 || { tail -80 test-results/compute-controlled.log; exit 1; }
       - name: Browser suites skipped for this change
         if: needs.plan.outputs.full_suite != 'true'
         run: echo "::notice::Fast checks only. Browser suites run after the merge into dev, on the release PR into main, on main, or via Run workflow (workflow_dispatch)."
@@ -144,6 +149,7 @@ jobs:
             test-results/cloudflare-report.json
             test-results/compute-cloudflare/result.json
             test-results/compute-cloudflare/runtime.log
+            test-results/post-deploy/compute-controlled-local/results.json
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore

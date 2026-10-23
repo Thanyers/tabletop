@@ -70,7 +70,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F066-T8 | เปิด hosted JS/Python แก้ CSV derived field และคำถาม library แล้ว deploy/ทดสอบซ้ำ | `doing` | Codex | `fix/F066-hosted-compute` | deployment config/workflows, compute runner, domain/provider regressions, acceptance docs | — | ผู้ใช้อนุญาต deploy; หลายบัญชีคง BLOCKED; ไม่แตะ scene/camera |
+| F066-T8 | เปิด hosted JS/Python แก้ CSV derived field และคำถาม library แล้ว deploy/ทดสอบซ้ำ | `review` | Codex | `fix/F066-hosted-compute` | deployment config/workflows, compute runner, domain/provider regressions, acceptance docs | — | candidate unit845/CF177 + real Linux engines + local faults7ผ่าน; Paidเปิดแล้ว รอpipeline/hostedretest หลายบัญชีBLOCKED; ไม่แตะ scene/camera |
 | F066-T7 | ตรวจ release 8 และรัน post-deploy acceptance ตามชุดเตรียม | `review` | Codex | `docs/F066-release8-acceptance` / #231 | acceptance report, ignored evidence, feature/spec | — | 7 PASS/4 FAIL/36 BLOCKED/1 SKIPPED_SCOPE; JS/Pythonยังปิด, หลักฐานสมมติ; ไม่แก้ runtime/config หรือสั่ง deploy |
 | F072-T1 | เปลี่ยนไอคอนปุ่ม Attach a file | `review` | lead (AI) | `feat/F072-attach-plus-icon` | `ui/TableChat.tsx` | — | ไอคอนอย่างเดียว |
 | F070-T1 | สถานะเลือกแล้วของชิป + เส้น follow-up + ตำแหน่งการ์ดลูก (client, localStorage) | `review` | lead (AI) | `feat/F070-choice-trail` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, `ui/table-chat.css`, `ui/CanvasWorkspace.tsx`, tests | — | ไม่แตะ server/contract · ไม่มี migration |

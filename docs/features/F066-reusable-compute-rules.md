@@ -55,6 +55,14 @@
 
 รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)
 
+### F066-T8 — เปิด runtime และแก้ผลไม่ผ่าน (กำลังดำเนินการ)
+
+ผู้ใช้อนุญาต deploy และให้คงหลายบัญชีเป็น BLOCKED เปิด Workers Paid ผ่าน checkout ตามการยืนยันของผู้ใช้แล้ว API Containers อ่านได้ แต่ยังไม่มี container application ก่อน deploy
+
+Node 22.23.2: deployment profile/smoke regression **8/8** ผ่าน; Python image dry-run build ผ่าน ไม่ deploy จากเครื่อง ชุดเต็ม CI [run 39932319011](https://github.com/Thanyers/tabletop/actions/runs/39932319011) fast-checks ผ่านพร้อม Linux Worker Loader/Container API **2 checks / 4 executions**: JavaScript 10→42 และ Python ใช้ pandas/numpy/scipy/openpyxl/dateutil 10→42 ไม่มี credentials ใน fixture ผลนี้เป็น emulator ไม่ใช่ hosted acceptance รอบก่อนจับ `Invalid container instance type` จาก `basic` จึงเปลี่ยนเป็น `standard-1` แล้วผ่าน
+
+การแก้ PD005 และ PD035 กับการตรวจ candidate/hosted ยังดำเนินอยู่; รายงาน release 8 ด้านล่างเป็นผลก่อนแก้ ไม่แก้ย้อนหลังเป็น PASS
+
 ### F066-T7 — ผลหลัง deploy 8.0.0
 
 [รายงานรายเคส](../testing/f066-post-deploy/RELEASE8_RESULTS_TH.md): production/staging ตอน preflight ตรง **8.0.0 / 89a604e** แต่ `runtimes: []`, `pythonLibraries: []` จึงยังไม่พร้อมทั้ง JavaScript/Python ตาม scope ที่ผู้ใช้ขอตรวจ ประเมิน 48 เคสเป็น **7 PASS / 4 FAIL / 36 BLOCKED / 1 SKIPPED_SCOPE**; 29 เคสติด engine ไม่ได้เริ่ม execution ไม่มีการนับผลสูตรเดิมแทน generated compute

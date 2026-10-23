@@ -23,13 +23,15 @@ export interface TableProgram {
   /** Composite unique constraints checked after every action, atomically. */
   invariants: TableInvariant[]; turnOrder: string[];
   evidence: { sourceId: string; quote: string }[]; assumptions: string[];
+  /** Optional same-row derived fields. Definitions live in the rules; results remain projection-only. */
+  computedColumns?: ComputedColumn[];
   /** Optional local canvas descriptions; omitted by existing version 1 programs. */
   canvas?: GenerativeCanvas;
   /** F066: reusable server-executed modules, versioned with the table rules. */
   compute?: TableComputeProgram;
 }
 export interface TableChange { kind: 'table'; program: TableProgram; initialRecords: Record<string, TableRecord[]> }
-/** Row-relative arithmetic over stored fields (F017). Kept out of the program schema so old writers still read the table. */
+/** Row-relative bounded arithmetic over stored fields (F017). */
 export type ComputedComparison = 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte';
 export type ComputedExpression =
   | { op: 'field'; field: string }
@@ -71,7 +73,10 @@ export interface TableState extends DomainBase {
     /** Card names set at this table; they replace the card's own title on every member's canvas. */
     titles?: Record<string, string>;
   };
-  /** Display-only computed columns; definitions live in state, not in the program (F017). */
+  /**
+   * Computed-column definitions projected for display. Persisted state keeps only legacy/manual definitions here;
+   * projections merge them with canonical rule-owned definitions from program.computedColumns.
+   */
   computedColumns?: ComputedColumn[];
   /**
    * F055: values computed by the server authority for every computed column, keyed

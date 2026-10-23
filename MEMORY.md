@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — Docker สำเร็จแต่ Container API ปฏิเสธ instance
+- **What happened:** build image และ Node/Docker integration ผ่าน แต่ Linux Workers Container API smoke ของ F066-T8 รัน Python ไม่ได้: `Invalid container instance type` ก่อนเริ่ม process
+- **Root cause:** ใช้ `instance: 'basic'` จากรายการขนาดทั่วไปโดยไม่ได้รันผ่าน Durable Object API ของเวอร์ชันที่ล็อกไว้ ซึ่งรับชุดชื่อไม่เหมือนกัน
+- **Correct behavior:** ใช้ `standard-1` ที่ API รองรับและรัน `node scripts/compute-cloudflare-local.mjs` ใน full CI บน Linux ก่อน deploy; แยกผล Docker, Workers emulator, capability และ hosted execution เสมอ ห้ามยก flag/build image เป็นหลักฐาน Python พร้อมใช้
+
 ### 2026-10-23 — การคลิกใน QA ต้องตรวจค่าหลัง action ที่ล้มเหลว
 - **What happened:** ตอนเก็บหลักฐานคำถามเพิ่ม การเลือก checkbox บนการ์ดที่อยู่นอกมุมมองคืน error แต่มีตัวเลือกอื่นถูกเลือก เมื่อเก็บ snapshot พบว่าเช็กลิสต์กับคำตอบเองถูกส่งร่วมกัน จึงบันทึกรอบนั้นเป็น multi-answer ตามจริง ไม่อ้างว่าเลือกเฉพาะคำตอบเอง
 - **Root cause:** ถือว่า action ที่ error ไม่เปลี่ยน UI และตรวจเพียงตัวเลือกเป้าหมาย หลัง layout ของการ์ดขยับ

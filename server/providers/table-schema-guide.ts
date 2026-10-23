@@ -9,6 +9,7 @@
  */
 import { MAX_TABLE_MEMBER_SEATS } from '../../src/tabletop/shared/contracts.js';
 import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
+import { MAX_COMPUTED_COLUMNS } from '../../src/tabletop/shared/computed-columns.js';
 import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
 import { COMPUTE_GENERATION_POLICY } from '../../src/tabletop/shared/compute-runtime-profiles.js';
 
@@ -50,6 +51,7 @@ const LIMITS = [
   `turnOrder<=${TABLE_LIMITS.turnOrder} seats`,
   `evidence<=${TABLE_LIMITS.evidence}`,
   `assumptions<=${TABLE_LIMITS.assumptions}`,
+  `computedColumns<=${MAX_COMPUTED_COLUMNS}`,
   `views<=${GENERATIVE_LIMITS.canvasViews}`,
   `canvas manifest nodes (2 + collections + actions + views)<=${GENERATIVE_LIMITS.manifestNodes}`,
   `expression depth<=${GENERATIVE_LIMITS.expressionDepth}`,
@@ -72,10 +74,19 @@ VALUE: string<=500 | number | boolean | null | string[] (<=32 items, each <=100 
 STRICT: every object below rejects unknown keys and requires exactly the keys listed; "?" marks an optional key. The root has exactly three keys; canvas is INSIDE program.
 
 ROOT{kind:"table",program,initialRecords}
-PROGRAM{version:1,title:<=100 chars,description,collections,actions,invariants,turnOrder,evidence,assumptions,canvas?,compute?}
+PROGRAM{version:1,title:<=100 chars,description,collections,actions,invariants,turnOrder,evidence,assumptions,computedColumns?,canvas?,compute?}
 COLLECTION{id,title,fields}
 FIELD{id,label,type:text|number|boolean|list,required:boolean,min?,max?,choices?,default?}
   Only number fields take min/max (min<=max); only text fields take choices (1..32 strings, each<=100); default must satisfy type, choices and bounds.
+COMPUTED_COLUMN{id,collection,label,expression:COMPUTED_EXPR}
+COMPUTED_EXPR = {op:"field",field:STORED_FIELD_ID} | {op:"literal",value:number} | {op:"text",value:string}
+  | {op:add|subtract|multiply|divide|min|max|and|or,left:COMPUTED_EXPR,right:COMPUTED_EXPR}
+  | {op:negate|ceil|floor|abs,value:COMPUTED_EXPR} | {op:"round",value:COMPUTED_EXPR,digits:0..6}
+  | {op:"compare",compare:eq|neq|lt|lte|gt|gte,left:COMPUTED_EXPR,right:COMPUTED_EXPR}
+  | {op:"if",condition:COMPUTED_EXPR,then:COMPUTED_EXPR,else:COMPUTED_EXPR}
+  A computed column must return a number and may read only stored fields in the same collection. Its id cannot match a stored field id or another computed-column id, so formulas cannot depend on each other or form cycles.
+  Example: {id:"total",collection:"sales",label:"Total",expression:{op:"multiply",left:{op:"field",field:"quantity"},right:{op:"field",field:"unit_price"}}}.
+  For an edit that converts one stored field into a computed field, remove only that FIELD and upsert a same-id, same-collection COMPUTED_COLUMN in the same change. The host preserves every row and saved value, and permits promotion only when every saved value equals the formula. Validate the complete candidate: update any action, invariant, formula or canvas view that referred to the old stored field in the same change; a retained invalid reference is rejected. Other fields and values must remain unchanged.
 ACTION{id,title,description,roles,parameters,conditions,effects,creates?,requireTurn:boolean,advanceTurn:boolean}
   roles = ("owner"|"participant")[1..2]; an action must set a field, create a row, or advanceTurn; requireTurn/advanceTurn need a non-empty turnOrder.
 PARAM{id,label,type:text|number|boolean|record|roll,collection?,min?,max?,choices?,roll?}
@@ -113,7 +124,7 @@ EXPR (typed data-only AST; used inside {expression}, view values, control values
   args/values = EXPR[1..200]. ARITY: add/subtract/multiply/divide/remainder/power exactly 2; abs/sqrt/sin/cos/tan/asin/acos/atan/floor/ceil/round exactly 1; min/max >=2.
   EXPR literal list arrays may hold up to 200 items.
 
-DERIVED: totals/shares/balances from rows go in a METRIC or CHART EXPR so they follow row changes.
+DERIVED: a value calculated independently for each row (such as quantity × unit price) goes in PROGRAM.computedColumns, not in a required stored FIELD. It is calculated on read and is not supplied in imported rows. Use a METRIC or CHART EXPR for aggregates across rows.
   A CHART value runs per row as "row"; aggregates over other collections may filter on it.
   A no-input button saving fixed rows needs a condition refusing a 2nd press.
 

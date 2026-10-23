@@ -31,13 +31,19 @@ F017 เก็บสูตรได้แค่ `field + field/number` และ
 
 | ชั้น | ไฟล์ | บทบาท |
 | --- | --- | --- |
-| เก็บสูตร | `src/tabletop/shared/table-contracts.ts` (`TableState.computedColumns`) | อยู่ใน state ของห้อง (Durable Object / authority) ไม่ใช่ client storage |
+| เก็บสูตร | `src/tabletop/shared/table-contracts.ts` (`TableState.computedColumns`, `TableProgram.computedColumns`) | สูตรที่เพิ่มเองอยู่ใน state; สูตรจากกฎ/AI อยู่กับ program และรุ่นกฎ ตาม F066-T8 ไม่ใช่ client storage |
 | parse/format | `src/tabletop/shared/computed-formula.ts` | แปลงข้อความเป็น AST + แปลงกลับเป็นข้อความสำหรับแก้ไข |
 | ตรวจ/evaluate | `src/tabletop/shared/computed-columns.ts` | type-check + ประเมินแบบ bounded AST |
 | คำนวณจริง | `src/tabletop/domain/projections.ts` (`projectDomain`) | ทุก projection ของ table (open/private) เติม `computedValues` — เรียกจาก `authorizeSession` ของ authority จึงใช้ทั้ง Cloudflare Room DO และ Node server |
 | UI | `src/tabletop/ui/TableCanvasObjects.tsx` | ช่องสูตร + แสดงค่าจาก `computedValues` (fallback คำนวณ local เฉพาะเมื่อไม่มีค่า) |
 
 `computedValues` เป็น **projection-only**: ไม่ถูกเขียนลง room state จึงไม่กระทบ revision/CAS และไม่ต้อง migration; คำนวณใหม่ทุกครั้งที่ส่ง view
+
+### F066-T8: สูตรจากกฎและการเติมไฟล์ทีหลัง
+
+AI ระบุสูตรแบบ numeric bounded AST ใน `TableProgram.computedColumns` ได้ จึงสร้างตารางว่างที่รับเฉพาะข้อมูลจริง แล้วคำนวณ `quantity × unit_price` หลังนำเข้า CSV โดยไม่กำหนดยอดรวมเป็น required input สูตรเหล่านี้เปลี่ยนผ่าน **Rules → Calculated fields → Change this rule**; ตัวแก้สูตรในตารางแยกจากสูตรที่เพิ่มเอง เพื่อไม่ให้การบันทึกสร้างคอลัมน์ซ้ำหรือแก้กฎนอก revision
+
+การเปลี่ยน raw field เดิมเป็นสูตรใช้ ID/collection เดิม ตรวจ candidate ทั้งก้อน และเก็บค่าที่มีอยู่ไว้ได้เฉพาะเมื่อค่าทั้งหมดตรงกับสูตร มิฉะนั้นปฏิเสธโดยไม่เปลี่ยนข้อมูล การอ่าน projection ใช้ผลสูตร และไม่ส่งค่าที่เก็บไว้เดิมเป็น raw input หากข้อมูลเปลี่ยนจนค่าที่เก็บไว้ไม่ตรงสูตรปัจจุบัน การย้อนกลับไปใช้ field แบบเก็บค่าจะถูกปฏิเสธพร้อมเหตุผล ไม่เขียนทับค่าประวัติหรือแสดงค่าเก่าว่าสด ดูผลทดสอบและข้อจำกัด release/rollback ใน [F066](F066-reusable-compute-rules.md)
 
 ## ผลตรวจ (local, ล่าสุด)
 
