@@ -34,6 +34,7 @@
 | F066-T2 | isolated runner, generation/invocation และการคำนวณซ้ำ | ใช้โปรแกรมเดิมกับข้อมูลสองชุดโดยไม่เรียก AI ซ้ำ; failure ไม่ทำลายผลเดิม |
 | F066-T3 | Rules card, Advanced, per-rule chat references | อ่านแบบ no-code, keyboard/mobile, specific reference ผ่าน server context |
 | F066-T4 | integration, browser proof, independent review, เอกสาร | typecheck/lint/unit/Worker/build และ acceptance ที่เกี่ยวข้องผ่านจริง |
+| F066-T5 | ติดตาม regression บน CI หลัง merge | scene drag ระหว่าง pending focus ต้องได้พิกัดที่ผู้ใช้ลากจริง; ชุด browser บน CI ผ่าน |
 
 ## การตัดสินใจ
 
