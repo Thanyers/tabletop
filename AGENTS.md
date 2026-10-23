@@ -74,7 +74,7 @@ changelog ใส่ใน `changelog.d/` · PR ต้องมี: เปลี�
 
 ## 5. ออก release
 
-ออก release เมื่อผู้ใช้สั่ง เช่น “release” หรือ “ขึ้น prod” เท่านั้น ก่อนเริ่ม **อ่านและทำครบ [ขั้น release](docs/AGENT_OPERATIONS.md#5-ออก-release)** รวมเลขเวอร์ชัน, CHANGELOG, CI ชุดเต็ม, tag/deploy และนำ main กลับ dev · หัวข้อ release ที่ตัดแล้วห้ามแทรกบรรทัดเพิ่ม ของใหม่ลง `changelog.d/`
+ออก release เมื่อผู้ใช้สั่ง เช่น “release” หรือ “ขึ้น prod” เท่านั้น ก่อนเริ่ม **อ่านและทำครบ [ขั้น release](docs/AGENT_OPERATIONS.md#5-ออก-release)** รวมเลขเวอร์ชัน, CHANGELOG, CI ชุดเต็ม, tag/deploy, นำ main กลับ dev และอัปเดตหน้า Release Notes · หัวข้อ release ที่ตัดแล้วห้ามแทรกบรรทัดเพิ่ม ของใหม่ลง `changelog.d/`
 
 ## 6. Deploy (อัตโนมัติหลัง merge release)
 
