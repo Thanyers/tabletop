@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEv
 import { AlertCircle, Database, FilePlus2, Pencil, Play, Trash2, Users } from 'lucide-react';
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
 import type { ComputedColumn } from '../shared/table-contracts';
-import { computeRecordRow } from '../shared/computed-columns';
+import { computeRecordRow, MAX_COMPUTED_COLUMNS } from '../shared/computed-columns';
 import { formatComputedExpression, parseComputedFormula } from '../shared/computed-formula';
 import { TABLE_CAPABILITIES, TABLE_CAPABILITY_LIMITS } from '../shared/table-capabilities';
 import type { ActorContext, WorkspaceView } from '../shared/contracts';
@@ -518,7 +518,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   </div>;
 }
 
-interface ComputedDraft { label: string; formula: string }
+interface ComputedDraft { id?: string; label: string; formula: string }
 
 function TableComputedColumns({ collection, state, busy, onCommand }: {
   collection: TableCollection;
@@ -527,7 +527,12 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
   onCommand: WorkbenchProps['onCommand'];
 }) {
   const numericFields = collection.fields.filter((field) => field.type === 'number');
-  const existing = (state.computedColumns ?? []).filter((column) => column.collection === collection.id);
+  const programColumnIds = new Set((state.program?.computedColumns ?? []).map((column) => column.id));
+  const programColumns = (state.program?.computedColumns ?? []).filter((column) => column.collection === collection.id);
+  const legacyColumns = (state.computedColumns ?? []).filter((column) => !programColumnIds.has(column.id));
+  const existing = legacyColumns.filter((column) => column.collection === collection.id);
+  const otherCollectionColumns = legacyColumns.filter((column) => column.collection !== collection.id);
+  const availableColumns = Math.max(0, MAX_COMPUTED_COLUMNS - programColumnIds.size - otherCollectionColumns.length);
   const [open, setOpen] = useState(false);
   const [drafts, setDrafts] = useState<ComputedDraft[]>([]);
   const [pending, setPending] = useState(false);
@@ -537,38 +542,61 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
   useEffect(() => { if (open) sectionRef.current?.scrollIntoView({ block: 'nearest' }); }, [open]);
   const defaultFormula = numericFields[0] ? `${numericFields[0].id} + 0` : '0';
   const start = () => {
-    setDrafts(existing.map((column) => ({ label: column.label, formula: formatComputedExpression(column.expression) })));
+    setDrafts(existing.map((column) => ({ id: column.id, label: column.label, formula: formatComputedExpression(column.expression) })));
     setMessage(''); setOpen(true);
   };
   const update = (index: number, patch: Partial<ComputedDraft>) => setDrafts((current) => current.map((item, at) => at === index ? { ...item, ...patch } : item));
   const save = async () => {
-    const columns: ComputedColumn[] = [];
+    if (drafts.length > availableColumns) {
+      setMessage(`This table has room for ${availableColumns} computed column${availableColumns === 1 ? '' : 's'} you can edit here.`);
+      return;
+    }
+    const columns: ComputedColumn[] = [...otherCollectionColumns];
+    const usedIds = new Set([
+      ...programColumnIds,
+      ...otherCollectionColumns.map((column) => column.id),
+      ...drafts.flatMap((draft) => draft.id ? [draft.id] : []),
+    ]);
     for (const [index, draft] of drafts.entries()) {
       const parsed = parseComputedFormula(draft.formula, collection.fields.map((field) => ({ id: field.id, type: field.type })));
       if (!parsed.ok) { setMessage(`Formula ${index + 1}: ${parsed.error}`); return; }
-      columns.push({ id: `calc${index + 1}`, collection: collection.id, label: draft.label.trim() || `Calculated ${index + 1}`, expression: parsed.expression });
+      let id = draft.id;
+      if (!id) {
+        let suffix = 1;
+        while (usedIds.has(`calc${suffix}`)) suffix += 1;
+        id = `calc${suffix}`;
+      }
+      usedIds.add(id);
+      columns.push({ id, collection: collection.id, label: draft.label.trim() || `Calculated ${index + 1}`, expression: parsed.expression });
     }
     setPending(true); setMessage('');
     try {
       const result = await onCommand('table.setComputedColumns', { columns });
-      if (result) { setMessage(`Saved ${columns.length} computed column${columns.length === 1 ? '' : 's'}.`); setOpen(false); }
+      if (result) { setMessage(`Saved ${drafts.length} computed column${drafts.length === 1 ? '' : 's'} for ${collection.title}.`); setOpen(false); }
       else setMessage('The computed columns were rejected. Check the formula and its fields.');
     } finally { setPending(false); }
   };
   if (collection.fields.length === 0) return null;
+  const visibleColumnCount = programColumns.length + existing.length;
   return <section ref={sectionRef} className="tt-table-computed" aria-label={`Computed columns for ${collection.title}`}>
-    {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={start}>{existing.length ? `Computed columns (${existing.length})` : 'Add computed column'}</button> : <>
+    {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={start}>{visibleColumnCount ? `Computed columns (${visibleColumnCount})` : 'Add computed column'}</button> : <>
       <div className="tt-table-computed__head"><strong>Computed columns</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => setOpen(false)}>Close</button></div>
-      {drafts.length === 0 && <p className="tt-table-inline-hint">No computed columns yet.</p>}
-      {drafts.map((draft, index) => <div className="tt-table-computed__row" key={index}>
+      {programColumns.length > 0 && <section className="tt-table-readonly-inline" aria-label="Rule-owned formulas">
+        <p className="tt-table-inline-hint"><strong>These formulas are part of your rules.</strong> Open the Rules card, then Calculated fields → Change this rule to edit them.</p>
+        {programColumns.map((column) => <div className="tt-table-computed__row" key={column.id}>
+          <strong>{column.label}</strong><code>{formatComputedExpression(column.expression)}</code>
+        </div>)}
+      </section>}
+      {drafts.length === 0 && <p className="tt-table-inline-hint">You have not added any extra computed columns here.</p>}
+      {drafts.map((draft, index) => <div className="tt-table-computed__row" key={draft.id ?? `new-${index}`}>
         <label>Label<input value={draft.label} maxLength={40} placeholder={`Calculated ${index + 1}`} onChange={(event) => update(index, { label: event.target.value })} /></label>
         <label>Formula<input value={draft.formula} placeholder={defaultFormula} spellCheck={false} autoComplete="off" onChange={(event) => update(index, { formula: event.target.value })} /></label>
         <button type="button" className="tt-button tt-button--quiet" disabled={pending} onClick={() => setDrafts((current) => current.filter((_, at) => at !== index))}>Remove</button>
       </div>)}
       <p className="tt-table-inline-hint">Fields: {collection.fields.map((field) => `${field.id} (${field.type})`).join(' · ')}<br />Functions: IF, CEIL, FLOOR, ABS, ROUND, MIN, MAX, AND, OR. Example: IF(goods_total &gt;= 5000, 0, IF(zone = &quot;BKK&quot;, 35, 45) + IF(weight_kg &gt; 3, CEIL(weight_kg - 3) * 10, 0))</p>
       <div className="tt-table-computed__actions">
-        <button type="button" className="tt-button tt-button--quiet" disabled={pending || drafts.length >= 6} onClick={() => setDrafts((current) => [...current, { label: '', formula: defaultFormula }])}>Add row</button>
-        <button type="button" className="tt-button tt-button--primary" disabled={pending || busy !== null} onClick={() => void save()}>{pending ? 'Saving…' : 'Save computed columns'}</button>
+        <button type="button" className="tt-button tt-button--quiet" disabled={pending || drafts.length >= availableColumns} onClick={() => setDrafts((current) => [...current, { label: '', formula: defaultFormula }])}>Add row</button>
+        <button type="button" className="tt-button tt-button--primary" disabled={pending || busy !== null || drafts.length > availableColumns} onClick={() => void save()}>{pending ? 'Saving…' : 'Save computed columns'}</button>
       </div>
       {message && <p className="tt-table-inline-hint" role="status">{message}</p>}
     </>}

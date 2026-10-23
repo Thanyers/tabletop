@@ -1,5 +1,6 @@
 // CD001: helpers for .github/workflows/release-deploy.yml. Pure functions are unit-tested;
 // the CLI at the bottom is what the workflow runs (`npx tsx server/release-deploy.ts …`).
+import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
 const PLACEHOLDER_ID = /^0{8}-0{4}-0{4}-0{4}-0{12}$/u;
@@ -46,7 +47,7 @@ export function databaseName(raw: string): string {
 export interface SmokeResult { path: string; ok: boolean; detail: string }
 
 /** Read-only checks after a deploy. Never creates rooms, sends commands or calls AI. */
-export async function smoke(origin: string, version: string, sha: string, fetcher: typeof fetch = fetch): Promise<SmokeResult[]> {
+export async function smoke(origin: string, version: string, sha: string, fetcher: typeof fetch = fetch, requireCompute = false): Promise<SmokeResult[]> {
   const results: SmokeResult[] = [];
   const get = async (path: string) => fetcher(new URL(path, origin), { redirect: 'manual', headers: { 'cache-control': 'no-cache' } });
   for (const path of ['/healthz', '/readyz']) {
@@ -55,8 +56,22 @@ export async function smoke(origin: string, version: string, sha: string, fetche
   }
   const capabilities = await get('/api/capabilities');
   let capabilitiesJson = false;
-  try { capabilitiesJson = typeof await capabilities.json() === 'object'; } catch { /* not JSON */ }
+  let compute: { profile?: unknown; runtimes?: unknown; pythonLibraries?: unknown } | undefined;
+  try {
+    const payload = await capabilities.json() as { compute?: typeof compute } | null;
+    capabilitiesJson = typeof payload === 'object' && payload !== null;
+    compute = payload?.compute;
+  } catch { /* not JSON */ }
   results.push({ path: '/api/capabilities', ok: capabilities.status === 200 && capabilitiesJson, detail: `HTTP ${capabilities.status}${capabilitiesJson ? '' : ', not JSON'}` });
+  if (requireCompute) {
+    const expected = computeRuntimeCapabilities({ javascript: true, python: true });
+    const runtimes = compute?.runtimes;
+    const libraries = compute?.pythonLibraries;
+    const ok = compute?.profile === expected.profile
+      && Array.isArray(runtimes) && expected.runtimes.every(runtime => runtimes.includes(runtime))
+      && Array.isArray(libraries) && expected.pythonLibraries.every(library => libraries.includes(library));
+    results.push({ path: '/api/capabilities.compute', ok, detail: ok ? `JavaScript/Python profile ${expected.profile} enabled (execution tested separately)` : 'Required JavaScript/Python profile is not fully enabled.' });
+  }
   const versionResponse = await get('/version');
   let served: { version?: unknown; sha?: unknown } = {};
   try { served = await versionResponse.json() as typeof served; } catch { /* not JSON */ }
@@ -97,7 +112,7 @@ async function main(argv: string[]): Promise<number> {
     // Workers propagate within seconds; retry the whole set for up to ~2 minutes.
     let last: SmokeResult[] = [];
     for (let attempt = 1; attempt <= 12; attempt += 1) {
-      try { last = await smoke(origin, version, sha); } catch (error) { last = [{ path: '*', ok: false, detail: String(error) }]; }
+      try { last = await smoke(origin, version, sha, fetch, args.includes('--compute')); } catch (error) { last = [{ path: '*', ok: false, detail: String(error) }]; }
       if (last.every(result => result.ok)) break;
       await new Promise(resolve => setTimeout(resolve, 10_000));
     }

@@ -6,6 +6,7 @@ import { evaluateGenerativeCanvas } from '../../src/tabletop/runtime/generative/
 import { validateGenerativeProgram } from '../../src/tabletop/runtime/generative/validation.js';
 import { GENERATIVE_LIMITS } from '../../src/tabletop/shared/generative-contracts.js';
 import { TABLE_DICE_EXAMPLE, TABLE_SCHEMA_GUIDE } from './table-schema-guide.js';
+import { MAX_COMPUTED_COLUMNS } from '../../src/tabletop/shared/computed-columns.js';
 
 const heroBinding = { kind: 'record' as const, collection: 'heroes', recordId: 'hero-1' };
 
@@ -63,6 +64,17 @@ describe('F049 dice prompt guide', () => {
     expect(TABLE_SCHEMA_GUIDE).toContain('dice{kind:"dice",parameter,faces:2..100,count:1..10');
     expect(TABLE_SCHEMA_GUIDE).toContain('DICE: dice must bind one number PARAM or one roll PARAM');
     expect(TABLE_SCHEMA_GUIDE).toContain(JSON.stringify(TABLE_DICE_EXAMPLE));
+  });
+
+  it('documents derived fields and the safe required-field promotion rule', () => {
+    expect(TABLE_SCHEMA_GUIDE).toContain(`computedColumns<=${MAX_COMPUTED_COLUMNS}`);
+    expect(TABLE_SCHEMA_GUIDE).toContain('PROGRAM{version:1,title:<=100 chars,description,collections,actions,invariants,turnOrder,evidence,assumptions,computedColumns?,canvas?,compute?}');
+    expect(TABLE_SCHEMA_GUIDE).toContain('remove only that FIELD and upsert a same-id, same-collection COMPUTED_COLUMN');
+    expect(TABLE_SCHEMA_GUIDE).toContain('every saved value equals the formula');
+    expect(TABLE_SCHEMA_GUIDE).toContain('update any action, invariant, formula or canvas view that referred to the old stored field in the same change');
+    expect(TABLE_SCHEMA_GUIDE).toContain('a retained invalid reference is rejected');
+    expect(TABLE_SCHEMA_GUIDE).toContain('cannot depend on each other or form cycles');
+    expect(TABLE_SCHEMA_GUIDE).toContain('not supplied in imported rows');
   });
 
   it('accepts a program built from the exact example plus a form on the same action', () => {
