@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **F064/F050 แก้บรรทัดล้น/ถูกตัดในการ์ดแคบ:** `liveSearchParts()` แยก query กับ `· เจอ N` เป็นคนละ span ⇒ คำว่า "เจอ N" ไม่ถูก ellipsis ตัดที่ 320px อีก (สตริงรวมยังเหมือนเดิมผ่าน `liveSearchLine()`) · `.tt-chat-card__thinking` ของ F050 ได้ `justify-self: stretch` กัน nowrap content ดันการ์ดเกินจอ · synthetic local scripts (`generic-table-local`, `canvas-evolution-local`) ปิด `TABLE_WEB_SEARCH` เฉพาะโหมดไม่มี real AI ให้ตรงกับ browser fixtures (dev ปิดใน `tests/*-browser.mjs` แล้ว) · ไม่มี migration/secret/binding; rollback = revert branch
+
 - **วิธีคำนวณที่เก็บไว้ใช้ซ้ำ (F066):** AI เตรียมสูตร, JavaScript หรือ Python/pandas ตาม runtime ที่เปิดจริง แล้วคำนวณซ้ำจากข้อมูลใหม่โดยไม่เรียก AI; typed ports เชื่อม metric/กราฟ/ตารางและ module อื่น มีรุ่น ประวัติ ผู้รัน ที่มา และการตรวจผลเก่า เก็บในห้องเดิมและกู้คิวหลังกลับมาเปิดได้ · Rules อ่านเป็นชื่อ/วัตถุประสงค์ก่อน พร้อม Ask / Change this rule รายข้อและ Advanced; import แถว CSV/Excel เลือก append หรือยืนยัน replace ได้ · ไม่มี SQL migration; ก่อน release ต้องเตรียม Worker Loader และเปิด Python container ตาม [runtime contract](docs/REUSABLE_COMPUTE.md) ผล hosted Python ยังไม่ยืนยัน
 
 - **หน้าแรกสองภาษา English / ไทย (F069, MINOR):** ปุ่ม `English` / `ไทย` ที่หัวหน้าสลับทั้งหน้ารวมกล่องเข้าสู่ระบบและ welcome back · ค่าเริ่มต้นอังกฤษ จำค่าใน localStorage และ `<html lang>` เปลี่ยนตาม · ข้อความทั้งหมดอยู่ที่ `src/tabletop/ui/landing-copy.ts` · หัวข้อไทยไม่ใช้ letter-spacing ติดลบ · meta/SEO ใน `index.html` ยังเป็นอังกฤษ (URL เดียว ไม่มี hreflang) · แทน draft #180 · client อย่างเดียว ไม่มี migration/secret/binding; rollback = revert

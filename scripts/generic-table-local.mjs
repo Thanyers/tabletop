@@ -58,7 +58,9 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     compatibilityDate: '2026-10-18', compatibilityFlags: ['nodejs_compat'],
     d1Databases: ['DB'], durableObjects: { ROOMS: { className: 'Room', useSQLite: true }, BILLING: { className: 'Billing', useSQLite: true } },
     bindings: { PUBLIC_ORIGIN: origin, GOOGLE_OAUTH_CLIENT_ID: 'synthetic-client', GOOGLE_OAUTH_CLIENT_SECRET: 'synthetic-secret',
-      DEEPSEEK_KEY: real ? env.DEEPSEEK_KEY : 'synthetic-provider-key', AI_MONTHLY_BUDGET_MICRO_USD: '200000', AI_DAILY_BUDGET_MICRO_USD: '200000' },
+      DEEPSEEK_KEY: real ? env.DEEPSEEK_KEY : 'synthetic-provider-key', AI_MONTHLY_BUDGET_MICRO_USD: '200000', AI_DAILY_BUDGET_MICRO_USD: '200000',
+      // F064: one scripted draft call per request in synthetic mode; a real run keeps research on.
+      ...(real ? {} : { TABLE_WEB_SEARCH: 'off' }) },
     outboundService: async request => {
       if (request.url !== 'https://api.deepseek.com/chat/completions') throw Error('External endpoint blocked by fixture');
       if (++providerCalls > providerRequestCap) return Response.json({error:'Local acceptance request cap reached'}, {status:429});

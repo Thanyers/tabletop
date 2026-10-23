@@ -136,6 +136,9 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     bindings: {
       PUBLIC_ORIGIN: origin, GOOGLE_OAUTH_CLIENT_ID: 'synthetic-client', GOOGLE_OAUTH_CLIENT_SECRET: 'synthetic-secret',
       DEEPSEEK_KEY: real ? providerEnv.DEEPSEEK_KEY : 'synthetic-provider-key',
+      // F064: the synthetic provider answers one scripted draft call, so the research step is off
+      // there; a real run keeps it on because that is what it is accepting.
+      ...(real ? {} : { TABLE_WEB_SEARCH: 'off' }),
       AI_MONTHLY_BUDGET_MICRO_USD: '200000', AI_DAILY_BUDGET_MICRO_USD: '200000',
     },
     outboundService: async request => {
