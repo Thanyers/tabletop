@@ -35,6 +35,7 @@
 | F066-T3 | Rules card, Advanced, per-rule chat references | อ่านแบบ no-code, keyboard/mobile, specific reference ผ่าน server context |
 | F066-T4 | integration, browser proof, independent review, เอกสาร | typecheck/lint/unit/Worker/build และ acceptance ที่เกี่ยวข้องผ่านจริง |
 | F066-T5 | เทสต์ Rules capability หลังเพิ่ม compute | UI แสดงจำนวนตรงกับ endpoint และมี reusable calculations พร้อม gap ที่ยังมีจริง |
+| F066-T6 | เตรียม post-deploy acceptance หลายกรณี | มี prompt/ขั้นตอน/input/expected/evidence และผลตั้งต้น NOT_RUN; ไม่รันทดสอบ hosted ในงานเตรียม |
 
 ## การตัดสินใจ
 
@@ -50,6 +51,14 @@
 ## ผลตรวจ
 
 รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)
+
+### F066-T6 — เตรียมทดสอบหลัง deploy
+
+[ชุดทดสอบพร้อมใช้](../testing/f066-post-deploy/README_TH.md) มี 48 เคส / 8 กลุ่ม / P0 12 เคส, CSV สมมติ 15 ไฟล์, ผลอ้างอิง และแบบบันทึกผลทุกเคสเป็น **NOT_RUN** ครอบคลุม chat, JavaScript/Python และ libraries, การเชื่อม input/output, rerun/continuity, Rules/ref/Advanced, type/error, สิทธิ์/หลายคน และเคสเดิม ผู้ใช้จะสั่งเริ่มทดสอบหลัง release/deploy อีกครั้ง; งานนี้ไม่เปลี่ยน runtime และไม่ทดสอบ hosted
+
+ตรวจการเตรียมด้วย Node **22.23.2**: `node scripts/check-f066-post-deploy-pack.mjs` ผ่าน **48 case definitions / 15 fixtures / 38 golden arithmetic checks**, ยืนยัน template **48 NOT_RUN**, **0 network requests**; `npx eslint scripts/check-f066-post-deploy-pack.mjs`, `node scripts/check-public-files.mjs` และ `git diff --check` ผ่าน ตัวตรวจอ่านไฟล์อย่างเดียว ไม่ถือเป็นผล acceptance ของแอป เคส fault/timing แยก local/staging และกรณี engine/legacy route ที่ไม่อยู่ใน intended scope ต้องลง SKIPPED_SCOPE พร้อมเหตุผล
+
+### หลักฐาน runtime ก่อนงานเตรียม T6
 
 หลัง #208 รวมเข้า `dev@2f741d7` ชุด PR validation ผ่าน แต่ full CI พบ Workers fixture ยังตรวจ capability count/copy เดิม และ generated-scene drag ได้พิกัดไม่ตรงเป้า แก้เฉพาะ capability assertions ที่สัมพันธ์กับฟีเจอร์นี้ใน F066-T5 / #220: capability unit 3/3, scoped lint และ Cloudflare browser 33 checks / 37 synthetic provider calls / 0 browser errors ผ่าน ผู้ใช้ให้หยุดการไล่ scene/camera นอกขอบเขตและคืนโค้ดทดลองแล้ว จึงไม่อ้างว่า full CI รอบนั้นผ่านทั้งหมด ฟีเจอร์ยังไม่ได้ release และ hosted Python ยังต้อง provision ตาม runtime contract
 
