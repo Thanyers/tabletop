@@ -35,6 +35,7 @@
 | F066-T3 | Rules card, Advanced, per-rule chat references | อ่านแบบ no-code, keyboard/mobile, specific reference ผ่าน server context |
 | F066-T4 | integration, browser proof, independent review, เอกสาร | typecheck/lint/unit/Worker/build และ acceptance ที่เกี่ยวข้องผ่านจริง |
 | F066-T5 | เทสต์ Rules capability หลังเพิ่ม compute | UI แสดงจำนวนตรงกับ endpoint และมี reusable calculations พร้อม gap ที่ยังมีจริง |
+| F066-T6 | เตรียม post-deploy acceptance หลายกรณี | มี prompt/ขั้นตอน/input/expected/evidence และผลตั้งต้น NOT_RUN; ไม่รันทดสอบ hosted ในงานเตรียม |
 
 ## การตัดสินใจ
 
