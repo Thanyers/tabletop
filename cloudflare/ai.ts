@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
-import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { aiTableChangeIssues, tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
 import { MAX_REQUEST_INPUT_TOKENS, TABLE_AI_INPUT_BYTES } from '../src/tabletop/shared/ai-request-limits.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
@@ -499,7 +499,7 @@ export async function proposeChange(
       const result = await provider.propose(prepared.providerInput, new AbortController().signal);
       change = validateChange(workspace.kind, 'change' in result ? result.change : null);
       if (workspace.domain.kind === 'table' && change.kind === 'table'
-          && tableChangeIssues(workspace.domain, change).length > 0) {
+          && aiTableChangeIssues(workspace.domain, change).length > 0) {
         fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The model returned table rules that do not fit the current sources and active records.');
       }
       usage = result.usage;
@@ -590,7 +590,9 @@ async function proposeGeneratedTable(
     if (usage.reasoningTokens !== undefined) total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens;
     if (clarification) return { clarification, jobId: initialBinding.id, usage: total };
     if (change?.kind === 'table' && request.workspace.domain.kind === 'table') {
-      issues = tableChangeIssues(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
+      // F068: the minimal fallback has no repair left, so a table that activates beats rejecting its sample button.
+      const check = attempt === MAX_ATTEMPTS ? tableChangeIssues : aiTableChangeIssues;
+      issues = check(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
       if (!issues.length) return { change, jobId: initialBinding.id, usage: total };
       previousOutput = JSON.stringify(change).slice(0, 18_000);
     }

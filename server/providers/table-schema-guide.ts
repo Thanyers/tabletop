@@ -62,7 +62,7 @@ const LIMITS = [
   `numbers finite with |n|<=${GENERATIVE_LIMITS.numberMagnitude}`,
 ].join('; ');
 
-export const TABLE_SCHEMA_GUIDE = `TABLE-CHANGE COMPACT SCHEMA v1 (hand-written prompt guide; the app's zod validator is authoritative)
+export const TABLE_SCHEMA_GUIDE = `TABLE-CHANGE COMPACT SCHEMA v1 (the app's validator is authoritative)
 
 BUDGET: max_tokens=32768 for the single reply (reasoning tokens count toward it).
 LIMITS: ${LIMITS}.
@@ -81,10 +81,9 @@ PARAM{id,label,type:text|number|boolean|record|roll,collection?,min?,max?,choice
   record params MUST have collection; only number params take min/max; only text params take choices.
   ROLL{groups:[{count:1..10,faces:2..100}] 1..4,modifier?:integer -1000..1000}
   A roll param carries exactly one roll spec (no collection/min/max/choices); total dice across groups <=20.
-  The SERVER rolls it: a player presses the roll button, the server returns the dice, and the action input
-  for that parameter is NOT sent by the client. A roll behaves as a number in OPERAND {input:ROLL_ID};
-  at most ONE roll param per action. Both sides of a condition/effect still type-check against that number.
-  ATTACK EXAMPLE (one roll param; monsters.damage_taken must be a number field; damage feeds it additively):
+  The SERVER rolls it when a player presses roll; the client never sends that input. It is a number in
+  OPERAND {input:ROLL_ID} (conditions/effects type-check against a number); at most ONE roll param per action.
+  ATTACK EXAMPLE (damage_taken is a number field):
   ACTION{id:"attack",title:"Attack",description:"Roll damage against one monster",roles:["owner","participant"],
     parameters:[{id:"target",label:"Target",type:"record",collection:"monsters"},
                 {id:"damage",label:"Damage roll",type:"roll",roll:{groups:[{count:2,faces:6}],modifier:3}}],
@@ -113,6 +112,10 @@ EXPR (typed data-only AST; used inside {expression}, view values, control values
   args/values = EXPR[1..200]. ARITY: add/subtract/multiply/divide/remainder/power exactly 2; abs/sqrt/sin/cos/tan/asin/acos/atan/floor/ceil/round exactly 1; min/max >=2.
   EXPR literal list arrays may hold up to 200 items.
 
+DERIVED: totals/shares/balances from rows go in a METRIC or CHART EXPR so they follow row changes.
+  A CHART value runs per row as "row"; aggregates over other collections may filter on it.
+  A no-input button saving fixed rows needs a condition refusing a 2nd press.
+
 CANVAS{version:1,views:VIEW[<=12]}
 VIEW = SCENE | CHART | METRIC | CONTROLS; every view is {id,kind,title,relatedTo?{views?:ID[<=12],collections?:ID[<=6]}}.
 SCENE{id,kind:"scene",title,width:number>0<=4096,height:number>0<=4096,elements:PRIM[<=128]}
@@ -125,8 +128,8 @@ PRIM (every primitive also has id, optional fill?/stroke?:PAINT, optional drag?)
   Geometry values are number or EXPR (raw, never {expression:...}); PAINT = "none" or "#" + 3..8 hex digits.
 MOTION (optional on rect/circle/text only; never together with drag):
   {axis:"x"|"y",from:number|EXPR,to:number|EXPR,speed:number|EXPR,loop?:boolean}
-  The host animates the axis from from to to at speed scene units per second and resets at to (loop default true);
-  geometry on that axis is ignored while motion is present. speed must be >0. Use it for a car that keeps driving a track.
+  The host moves that axis from "from" to "to" at speed scene units/s and resets at "to" (loop default true);
+  that axis's geometry is ignored while moving; speed>0.
 DRAG{actionId,xParameter,yParameter?,inputs:BINDINGS}
 CONTROL (each: id,label,actionId,inputs:BINDINGS) =
   button{kind:"button"} | form{kind:"form"} | slider{kind:"slider",parameter,min,max,step?,value?:EXPR}
