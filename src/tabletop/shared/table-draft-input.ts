@@ -6,7 +6,12 @@ import type { ComputeRuntimeCapabilities } from './compute-runtime-profiles';
 /** Read by the model next to each omitted file, so the system prompt stays within its size budget. */
 export const IMPORTED_SOURCE_NOTE = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 
-export interface TableDraftSource { id: string; filename: string; text: string }
+export interface TableDraftSource {
+  id: string; filename: string; text: string;
+  /** F064 C: web sources are only citable after a person verified them. */
+  origin?: 'web';
+  status?: 'provided' | 'verified' | 'rejected';
+}
 export interface TableDraftState {
   sources: readonly TableDraftSource[];
   program: TableProgram | null;
@@ -36,11 +41,13 @@ export function tableDraftInput(
   computeCapabilities?: ComputeRuntimeCapabilities,
 ): TableDraftInput {
   const cited = new Set((state.program?.evidence ?? []).map((item) => item.sourceId));
-  const imported = state.sources.filter((source) => cited.has(source.id));
+  // F064 C: only verified web sources are citable, so provided/rejected ones never reach the model.
+  const citable = state.sources.filter((source) => source.origin !== 'web' || source.status === 'verified');
+  const imported = citable.filter((source) => cited.has(source.id));
   return {
     kind: 'table',
     prompt,
-    sources: state.sources.filter((source) => !cited.has(source.id)).map(({ id, filename, text }) => ({ id, filename, text })),
+    sources: citable.filter((source) => !cited.has(source.id)).map(({ id, filename, text }) => ({ id, filename, text })),
     ...(imported.length ? { importedSources: imported.map(({ id, filename }) => ({ id, filename, note: IMPORTED_SOURCE_NOTE })) } : {}),
     program: structuredClone(state.program),
     records: structuredClone(state.records),

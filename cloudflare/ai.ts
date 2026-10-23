@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
-import { aiTableChangeIssues, tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { aiTableChangeIssues, tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
 import { MAX_REQUEST_INPUT_TOKENS, TABLE_AI_INPUT_BYTES } from '../src/tabletop/shared/ai-request-limits.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
@@ -8,7 +8,7 @@ import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepse
 import type { ModelInput } from '../server/model.js';
 import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch, type ResearchOutcome } from '../server/providers/deepseek-research.js';
-import { MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_SOURCE_AUTHORITY, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { tableDraftInput } from '../src/tabletop/shared/table-draft-input.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
@@ -93,7 +93,13 @@ const tableDomainSchema = z.object({
     filename: z.string().min(1).max(120),
     text: z.string().min(1).max(TABLE_FILE_BYTES),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
-  })).max(4),
+    // F064 C: web sources carry their provenance and review status; files leave these absent.
+    origin: z.literal('web').optional(),
+    status: z.enum(['provided', 'verified', 'rejected']).optional(),
+    url: z.string().max(MAX_JOB_RESEARCH_URL_CHARS).optional(),
+    publishedAt: z.string().max(MAX_JOB_RESEARCH_DATE_CHARS).nullable().optional(),
+    authority: z.number().int().min(0).max(MAX_SOURCE_AUTHORITY).optional(),
+  })).max(MAX_TABLE_SOURCES),
   program: tableProgramSchema.nullable(),
   records: tableRecordsSchema,
   turn: z.string().max(40).nullable(),
@@ -389,15 +395,18 @@ export function searchChangeProgress(event: ModelJobSearchProgress): DeepSeekCha
 }
 
 /**
- * F064 slice B: the research the draft may show on its card. Only display metadata leaves the
- * provider call: no brief, no summary text, and nothing that could be mistaken for table evidence.
+ * F064 slice B/C: the research a finished card may show and offer as table sources. The summary is
+ * kept only because a verified web source cites it; the brief never leaves the provider call.
  */
 export function researchSummary(outcome: Pick<ResearchOutcome, 'queries' | 'sources'>): ModelJobResearch | undefined {
   if (outcome.sources.length === 0) return undefined;
   return {
     queries: outcome.queries.slice(0, MAX_JOB_RESEARCH_QUERIES),
     sources: outcome.sources.slice(0, MAX_JOB_RESEARCH_SOURCES)
-      .map(({ title, url, date, authority }) => ({ title, url, date: date ?? null, authority })),
+      .map(({ title, url, date, authority, summary }) => ({
+        title, url, date: date ?? null, authority,
+        ...(summary ? { summary: summary.slice(0, MAX_JOB_RESEARCH_SUMMARY_CHARS) } : {}),
+      })),
   };
 }
 

@@ -9,7 +9,17 @@ export type TableValue = string | number | boolean | null | string[];
 export interface TableField { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'list'; required: boolean; min?: number; max?: number; choices?: string[]; default?: TableValue }
 export interface TableCollection { id: string; title: string; fields: TableField[] }
 export interface TableRecord { id: string; values: Record<string, TableValue> }
-export interface TableSource { id: string; filename: string; text: string; sha256: string; createdAt: number }
+/** F064 C: only web sources carry a review status; imported files keep the implicit trust they always had. */
+export type TableSourceStatus = 'provided' | 'verified' | 'rejected';
+export interface TableSource {
+  id: string; filename: string; text: string; sha256: string; createdAt: number;
+  /** F064 C: absent means a file the room imported. */
+  origin?: 'web';
+  /** F064 C: set for web sources only; `text` is the citable part (title + summary). */
+  status?: TableSourceStatus;
+  /** F064 C: provenance shown on the source card; never citable by itself. */
+  url?: string; publishedAt?: string | null; authority?: number;
+}
 /** F048: a `roll` parameter is filled by the authority, never by the client. It behaves as a number. */
 export interface TableParameter { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'record' | 'roll'; collection?: string; min?: number; max?: number; choices?: string[]; roll?: RollSpec }
 export type TableOperand = { literal: TableValue } | { input: string } | { record: string; field: string } | { system: 'actor' | 'seat' | 'turn' } | { expression: GenerativeExpression };
