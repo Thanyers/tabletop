@@ -5,6 +5,22 @@
 
 ## Lessons
 
+### 2026-10-23 — คำถามอ้างกฎถูกค้นหาการ์ดรับไปก่อนส่ง
+- **What happened:** Askรายกฎล้างข้อความแต่ไม่มีassistant job; exactคำถามลงท้ายตรงไหนเปิดRulesแทน
+- **Root cause:** TableChat.submitเรียกcanvas object finderก่อนonSend และfinderตี WHERE_TH+aliasกฎเป็นnavigationโดยไม่ดูselected references; ไม่ใช่หลักฐานว่าproviderค้างหรือการทดสอบหลายแท็บเป็นสาเหตุ
+- **Correct behavior:** ให้references/explicit Changeมีpriorityเหนือlocalnavigation ตรวจrenderedsubmit/onSendกับfinderจริงและfreshassistantGET ไม่ใช้composerclearเป็นหลักฐานว่าserverรับงาน; เก็บordinaryunreferencedopenrulesให้ทำงานเดิม
+
+### 2026-10-23 — Cloudflare Containers prepare ตอบ internal error ชั่วคราว
+- **What happened:** full validation ของ dev ผ่าน แต่ staging deploy หลังอัปโหลด image ล้มด้วย Cloudflare internal error
+- **Root cause:** ยังไม่ยืนยันสาเหตุภายในบริการ; ไม่มีหลักฐานว่าเกิดจาก source/config ของ candidate
+- **Correct behavior:** เก็บ run/attempt/ขั้นที่ล้ม แล้ว retry เฉพาะ failed deploy ด้วย SHA เดิมก่อนแก้ dependencies; run 39970589793 attempt2 ผ่านและ /version เป็น16de683 ปิด auto failure issue255หลังตรวจผลจริง ไม่เรียก attempt1 ว่าPASS
+
+### 2026-10-23 — ฟอร์มบน canvas แสดงพรีวิวก่อน commit
+- **What happened:** QA กรอกคิวกาแฟแล้วเห็นยอดพรีวิว3/5/8 แต่วัด GET ที่มีหนึ่งคำสั่งสำเร็จ จนเกือบสรุปว่าบันทึกหาย
+- **Root cause:** form simulation เปลี่ยนภาพเมื่อกรอกข้อมูล และปุ่มที่ถูก clip นอกมุมมองอาจไม่ได้รับ click; ไม่มี positive acknowledgement ของทุก submit
+- **Correct behavior:** ใช้ Objects เปิดและจัดการ์ดให้เห็นปุ่มจริง ตรวจ Applying→idle/Done และ fresh authority readback ทีละคำสั่งก่อนทำต่อ; พรีวิว/คลิกที่ไม่เกิดผลไม่ใช่หลักฐานว่า server รับคำสั่ง แล้วค่อยพิจารณา persistence defect จาก accepted response ที่สูญหาย
+
+
 ### 2026-10-23 — Replace เปลี่ยน row IDs ที่กฎยังอ้าง
 - **What happened:** preview CSV ถูกต้องแต่ Replace ของโต๊ะคะแนนล้มเมื่อ controls อ้าง ID เก่า; รอบแก้แรกยังปิด Append และครอบคลุมเฉพาะ canvas
 - **Root cause:** สร้าง ID ใหม่ทุกแถวโดยไม่รักษา identity ของรายการ และใช้ guard ร่วมสองโหมดโดยไม่ครอบ action expressions
