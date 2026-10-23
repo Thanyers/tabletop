@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { CLARIFY_LANGUAGE_ISSUE, clarifyMatchesRequestLanguage } from './clarify-language.js';
 import { TABLE_SCHEMA_GUIDE } from './table-schema-guide.js';
 import { encounterRuleSchema, physicsParamsSchema } from '../../src/tabletop/domain/index.js';
-import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_AI_INPUT_BYTES, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
+import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
+import { MAX_CHANGE_REQUEST_BYTES, TABLE_AI_INPUT_BYTES, TABLE_REQUEST_TOKEN_MARGIN } from '../../src/tabletop/shared/ai-request-limits.js';
 import { normalizeGeneratedTableChange } from '../../src/tabletop/domain/id-normalization.js';
 import { applyTablePatch, isTablePatch, tablePatchSchema } from '../../src/tabletop/domain/table-patch.js';
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type ChangeSet } from '../../src/tabletop/shared/contracts.js';
@@ -23,9 +24,7 @@ const ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const MODEL = 'deepseek-flash';
 const MAX_KEY_CHARS = 4096;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
-// F066: the table input plus room for the system prompt (< 20,000 characters, tested) and the JSON envelope.
-export const MAX_CHANGE_REQUEST_BYTES = TABLE_AI_INPUT_BYTES + 32 * 1024;
-export const TABLE_REQUEST_TOKEN_MARGIN = 1_000;
+export { MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN };
 const MAX_REPAIR_ISSUES = 4;
 const MAX_REPAIR_ISSUE_CHARS = 1_000;
 const MAX_UNION_DIAGNOSTIC_BRANCHES = 2;
@@ -568,7 +567,7 @@ function systemPrompt(kind: 'teaching' | 'encounter' | 'table', editing = false)
     'Math add/subtract/multiply/divide/remainder/power each require EXACTLY TWO args, including add. Nest binary expressions for three or more terms, or use aggregate sum. abs/sqrt/sin/cos/tan/asin/acos/atan/floor/ceil/round take exactly one arg; min/max take at least two.',
     'Every control/drag inputs map must cover ALL action parameters. Example action parameters item(record),x(number),y(number): x slider inputs {"item":{"kind":"record","collection":"items","recordId":"item-1"},"x":{"kind":"control"},"y":{"kind":"expression","value":{"op":"recordField","collection":"items","recordId":"item-1","field":"y"}}}; a two-axis drag uses kind control for BOTH x and y. Controls do not automatically supply omitted parameters.',
     'For a record parameter, {"input":"first"} resolves to that selected row id; compare distinct selected rows with {"input":"first"} neq {"input":"second"}. A field lookup such as {"record":"first","field":"name"} must use a field declared in that parameter collection; the record key must name one of the action\'s record parameters, and an effect\'s record must also be such a parameter. The row id is metadata, never an implicit field.',
-    'For a data app that needs new rows, define an action with a creates descriptor for its target collection and use ordinary typed parameters for form inputs. Add a controls view with a form descriptor whose inputs bind every parameter to {"kind":"control"}; this works even when the target collection has zero rows. If the user asks for mock/sample rows on an empty table, also offer a no-input action whose creates values are literals and bind it to a button. A proposal only defines these actions: do not claim rows were inserted before a user submits the form or sample button.',
+    'For a data app that needs new rows, define an action with a creates descriptor for its target collection and use ordinary typed parameters for form inputs. Add a controls view with a form descriptor whose inputs bind every parameter to {"kind":"control"}; this works even when the target collection has zero rows. If the user asks for mock/sample rows on an empty table, also offer a no-input button whose literal creates run only while the collection is empty. A proposal only defines these actions: do not claim rows were inserted before a user submits the form or sample button.',
     'An action must read the row actually selected by its record parameter. Within an expression use {"op":"selectedField","parameter":"item","field":"amount"} for the selected item. A recordField with a fixed recordId is appropriate only when the rule intentionally reads that fixed row; it must not substitute for a selected row when another player or item is chosen. For a numeric increment, prefer an effect {"record":"item","field":"amount","op":"add","value":{"input":"delta"}}; for a decrement use add with the negated input. Before returning, trace the action for at least two distinct selected rows and consecutive turns: unrelated rows stay unchanged and required totals remain conserved.',
     'Invariants express composite uniqueness only; never use them for numeric ranges or other validation. Put numeric bounds on the field min and max. Conditions are all ANDed.',
     'The system actor is an opaque account id; the system seat is host or member-N; the system turn is the current seat. Never compare actor to seat. requireTurn checks that the acting seat equals the current turn. advanceTurn cycles through turnOrder; use an empty turnOrder when actions have no turn order.',

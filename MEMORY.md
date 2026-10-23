@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — F066 merge แล้ว Worker บูตไม่ขึ้น ทั้งที่ unit test และ CI ผ่าน
+- **What happened:** หลัง #212 merge emulator ล้มตอน start ด้วย `Uncaught ReferenceError: TABLE_AI_INPUT_BYTES is not defined` · `test:cloudflare` 158/158 และ CI เขียว
+- **Root cause:** ค่าคงที่ระดับ module (`MAX_CHANGE_REQUEST_BYTES = TABLE_AI_INPUT_BYTES + …` ใน provider, `MAX_INPUT_TOKENS` ใน billing) อ่าน export จาก `domain/table.ts` ซึ่งอยู่ในวงจร import ของ bundle Worker จึงยังไม่ถูกตั้ง · vitest โหลด module คนละลำดับ และ CI ของ PR เข้า `dev` ไม่บูต Worker (ชุด browser ถูก skip)
+- **Correct behavior:** ค่าคงที่ที่ module อื่นอ่านตอนโหลด ให้อยู่ใน leaf module ที่ไม่ import อะไร (เช่น `src/tabletop/shared/ai-request-limits.ts`) · หลังแก้ไฟล์ใต้ `cloudflare/` หรือ `server/providers/` ให้บูต Worker จริงก่อนเปิด PR: `npm run dev:cloudflare` แล้วรอเห็น `Ready on http://127.0.0.1:8787` (หรือดู terminal ของ emulator ที่รันอยู่ว่า reload แล้วไม่มี `✘ [ERROR]`)
+
 ### 2026-10-23 — DSH plugin นอก linked profile หา SDK ไม่พบ และ hook context อาจตัดกติกาท้ายไฟล์
 - **What happened:** absolute module จาก home patch import `@deepseek-ai/dsh-llm` แบบ bare ไม่สำเร็จ; AGENTS เดิมยาวเกินงบ additionalContext ของ Claude
 - **Root cause:** module นอก linked package ไม่ร่วม peer resolution ของ profile และ Claude ส่ง context เกิน 10,000 ตัวอักษรเป็น preview

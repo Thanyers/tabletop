@@ -9,6 +9,8 @@ import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
 import { MAX_CHAT_CARD_REFERENCES, chatReferencePrompt, followUpPrompt, parseReferencedPrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
+import { tableDraftBytes } from '../shared/table-draft-input';
+import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
@@ -802,6 +804,13 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }));
   }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
+  // F067: the table's share of a rule request, measured with the server's own request builder.
+  const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft') ? tableDraftBytes(table.domain, '') : null, [table]);
+  const aiContext = draftBaseBytes === null ? undefined : {
+    // The message adds its JSON-escaped length; quotes are already counted in the empty prompt.
+    used: draftBaseBytes + new TextEncoder().encode(JSON.stringify(composerMessage)).byteLength - 2,
+    limit: TABLE_AI_INPUT_BYTES,
+  };
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
   const owner = viewerCan(table, 'rules.draft');
   const modeCanAsk = mode === 'draft' || assistantAvailable;
@@ -842,6 +851,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onRemoveCardReference={(id) => setCardReferences((current) => current.filter((item) => item.id !== id))}
     onClearCardReferences={() => setCardReferences([])}
     composerAction={options.composerAction}
+    aiContext={aiContext}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }

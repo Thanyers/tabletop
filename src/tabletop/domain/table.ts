@@ -15,12 +15,8 @@ import type { ComputedColumn, ComputedExpression } from '../shared/table-contrac
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
-/**
- * F066: the table part of one AI rule request (prompt, files, rules, rows, turn, notes as JSON). It is the whole
- * file allowance plus the same again for the current rules and rows, so a table that accepted its files can
- * still be drafted. The request around it (system prompt, envelope) and the billing reservation derive from it.
- */
-export const TABLE_AI_INPUT_BYTES = 128 * 1024;
+// F066: kept in a leaf module so Worker startup can never read it before it is set.
+export { TABLE_AI_INPUT_BYTES } from '../shared/ai-request-limits';
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
 export const MAX_TABLE_NOTES = 20;
 export const MAX_NOTE_TEXT = 500;
@@ -484,6 +480,32 @@ function ruleItemUsers(program: TableProgram, kind: RuleItemKind, id: string): s
 
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
+}
+
+const fixedOperand = (operand: TableOperand): boolean => 'literal' in operand || ('expression' in operand && operand.expression.op === 'literal');
+
+/**
+ * F068: an action with no inputs and no conditions whose rows are all typed-in values makes the same rows on
+ * every press, and numbers the model worked out from records go stale. Only actions a draft adds or changes are
+ * checked, so an older table that already has one can still be edited, rolled back, or trimmed.
+ */
+export function repeatableFixedCreateIssues(program: TableProgram, previous: TableProgram | null): string[] {
+  const unchanged = (action: TableAction) => previous?.actions.some(old => old.id === action.id && canonicalJson(old) === canonicalJson(action)) ?? false;
+  return program.actions
+    .filter(action => action.parameters.length === 0 && action.conditions.length === 0 && (action.creates?.length ?? 0) > 0
+      && (action.creates ?? []).every(create => Object.values(create.values).every(fixedOperand)) && !unchanged(action))
+    .map(action => {
+      const collection = action.creates?.[0]?.collection ?? 'the collection';
+      return `“${action.title}” has no inputs or conditions and creates the same fixed rows on every press, so a second press duplicates them. `
+        + `Add a condition that blocks a second run, for example {"left":{"expression":{"op":"aggregate","source":{"op":"collection","id":"${collection}"},"fn":"count"}},"op":"eq","right":{"literal":0},"message":"Already added."}. `
+        + 'If the numbers come from current records (totals, shares, balances), compute them with {"expression":...} or show them in a metric or chart instead of typing them in.';
+    });
+}
+
+/** F068: what an AI draft must pass. Manual proposals and rollbacks keep using `tableChangeIssues`. */
+export function aiTableChangeIssues(state: TableState, change: TableChange): string[] {
+  const issues = tableChangeIssues(state, change);
+  return issues.length > 0 ? issues : repeatableFixedCreateIssues(change.program, state.program);
 }
 function isGenerativeArray(value: GenerativeOutput): value is readonly GenerativeScalar[] { return Array.isArray(value); }
 /** The longest seat id any runtime can hand out; probing it bounds output that embeds the seat. */

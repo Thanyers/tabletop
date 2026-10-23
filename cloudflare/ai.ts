@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
-import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_AI_INPUT_BYTES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { aiTableChangeIssues, tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { MAX_REQUEST_INPUT_TOKENS, TABLE_AI_INPUT_BYTES } from '../src/tabletop/shared/ai-request-limits.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
@@ -8,6 +9,7 @@ import type { ModelInput } from '../server/model.js';
 import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch, type ResearchOutcome } from '../server/providers/deepseek-research.js';
 import { MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { tableDraftInput } from '../src/tabletop/shared/table-draft-input.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
@@ -21,7 +23,7 @@ const MAX_TABLE_INPUT_BYTES = TABLE_AI_INPUT_BYTES;
 const PROVIDER_OVERHEAD_BYTES = 8_000;
 const MAX_STANDARD_PROVIDER_INPUT_TOKENS = 56_000;
 // A request is measured in bytes and one byte is at most one token, so the reservation covers the largest request.
-const MAX_PROVIDER_INPUT_TOKENS = MAX_CHANGE_REQUEST_BYTES + TABLE_REQUEST_TOKEN_MARGIN;
+const MAX_PROVIDER_INPUT_TOKENS = MAX_REQUEST_INPUT_TOKENS;
 const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
 const CHANGE_MAX_OUTPUT_TOKENS = 512;
 const TABLE_MAX_OUTPUT_TOKENS = 32_768;
@@ -228,20 +230,7 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current table state is invalid.');
     const sourceBytes = parsed.data.sources.reduce((total, source) => total + new TextEncoder().encode(source.text).byteLength, 0);
     if (sourceBytes > TABLE_TOTAL_SOURCE_BYTES) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The table sources exceed the allowed proposal size.');
-    // Files the active rules already cite were imported earlier: their rows are in records and their quotes are
-    // checked against the stored text, so only their names travel. A large table can keep growing this way.
-    const cited = new Set((parsed.data.program?.evidence ?? []).map((item) => item.sourceId));
-    const imported = parsed.data.sources.filter((source) => cited.has(source.id));
-    const providerInput: DeepSeekChangeInput = {
-      kind: 'table',
-      prompt,
-      sources: parsed.data.sources.filter((source) => !cited.has(source.id)).map(({ id, filename, text }) => ({ id, filename, text })),
-      ...(imported.length ? { importedSources: imported.map(({ id, filename }) => ({ id, filename, note: IMPORTED_SOURCE_NOTE })) } : {}),
-      program: structuredClone(parsed.data.program),
-      records: structuredClone(parsed.data.records),
-      turn: parsed.data.turn,
-      ...(parsed.data.notes?.length ? { notes: parsed.data.notes.map(({ text, color }) => ({ text, color })) } : {}),
-    };
+    const providerInput: DeepSeekChangeInput = tableDraftInput(parsed.data, prompt);
     return {
       kind: 'table',
       providerInput,
@@ -261,9 +250,6 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     maximumInputBytes: MAX_CHANGE_INPUT_BYTES,
   };
 }
-
-/** Read by the model next to each omitted file, so the system prompt stays within its size budget. */
-const IMPORTED_SOURCE_NOTE = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 
 function mapUsage(usage: DeepSeekUsage): BillingUsage {
   return {
@@ -532,7 +518,7 @@ export async function proposeChange(
       const result = await provider.propose(prepared.providerInput, new AbortController().signal);
       change = validateChange(workspace.kind, 'change' in result ? result.change : null);
       if (workspace.domain.kind === 'table' && change.kind === 'table'
-          && tableChangeIssues(workspace.domain, change).length > 0) {
+          && aiTableChangeIssues(workspace.domain, change).length > 0) {
         fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The model returned table rules that do not fit the current sources and active records.');
       }
       usage = result.usage;
@@ -623,7 +609,9 @@ async function proposeGeneratedTable(
     if (usage.reasoningTokens !== undefined) total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens;
     if (clarification) return { clarification, jobId: initialBinding.id, usage: total };
     if (change?.kind === 'table' && request.workspace.domain.kind === 'table') {
-      issues = tableChangeIssues(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
+      // F068: the minimal fallback has no repair left, so a table that activates beats rejecting its sample button.
+      const check = attempt === MAX_ATTEMPTS ? tableChangeIssues : aiTableChangeIssues;
+      issues = check(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
       if (!issues.length) return { change, jobId: initialBinding.id, usage: total };
       previousOutput = JSON.stringify(change).slice(0, 18_000);
     }

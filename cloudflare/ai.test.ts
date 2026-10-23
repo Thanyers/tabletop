@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { tableDraftBytes } from '../src/tabletop/shared/table-draft-input.js';
 import { runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createDomain } from '../src/tabletop/domain/index.js';
@@ -301,9 +302,13 @@ describe('Cloudflare AI proposal helper', () => {
     table.sources.push({ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n', sha256: 'b'.repeat(64), createdAt: 1 });
     expect(change.program.evidence.some((item) => item.sourceId === 'source_fixture')).toBe(true);
     let sent: { sources: Array<{ id: string; text: string }>; importedSources?: Array<{ id: string; filename: string }> } | undefined;
+    let sentBytes = 0;
     await proposeChange(testEnv, input, providerFetch({ ...change, initialRecords: {} }, (content) => {
       sent ??= JSON.parse(content) as typeof sent;
+      sentBytes ||= new TextEncoder().encode(content).byteLength;
     })).catch((error: unknown) => { if (!sent) throw error; });
+    // F067: the "AI context" the table shows is exactly what the provider receives.
+    expect(sentBytes).toBe(tableDraftBytes(table, input.prompt));
     expect(sent?.sources).toEqual([{ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n' }]);
     expect(sent?.importedSources).toMatchObject([{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename }]);
     expect(sent?.importedSources?.[0]).toHaveProperty('note');
@@ -383,6 +388,27 @@ describe('Cloudflare AI proposal helper', () => {
       .exec<{ status: string }>('SELECT status FROM billing_jobs WHERE workspace_id = ?', input.workspace.id).toArray());
     expect(rows).toHaveLength(2);
     expect(rows.every(row => row.status === 'settled')).toBe(true);
+  });
+
+  it('sends a no-input action that types in the same rows back for repair (F068)', async () => {
+    const input = request('table');
+    const bad = equipmentChange('source_fixture');
+    bad.program.actions.push({
+      id: 'add_spare', title: 'Add spare', description: 'Add a spare item.', roles: ['owner'], parameters: [], conditions: [], effects: [],
+      creates: [{ collection: 'equipment', values: { name: { literal: 'Spare' }, available: { literal: true }, borrower: { literal: null } } }],
+      requireTurn: false, advanceTurn: false,
+    });
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+      const sent = JSON.parse(data.messages[1].content);
+      calls++;
+      if (calls === 2) expect(sent.repair.issues.join(' ')).toContain('“Add spare” has no inputs or conditions');
+      return providerFetch(calls === 1 ? bad : proposal('table'))(url, init);
+    };
+    const result = await proposeChange(testEnv, input, fetchImpl);
+    expect(calls).toBe(2);
+    expect(result.change).toEqual(proposal('table'));
   });
 
   it('returns a table clarification after one settled attempt without validating rules (F012)', async () => {

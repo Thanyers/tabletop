@@ -195,10 +195,10 @@ Node **22.23.2** · branch `feat/F064-sources-card`
 | คำสั่ง | ผล |
 | --- | --- |
 | `npx vitest run src/tabletop/ui/table-chat-state.test.ts` | **31/31** — เพิ่ม 4 เคสของ `draftSources`/`formatSourceDate` |
-| `npm run test:cloudflare` | **163/163** (10 ไฟล์) — เพิ่ม mapping test ใน `ai.test.ts` และ worker test 2 เคส (view ที่ redact/ตัด `javascript:`/ไม่มี key เมื่อไม่ค้น) |
-| `npm test` | **764 passed / 1 skipped** |
+| `npm run test:cloudflare` | **164/164** (10 ไฟล์) — เพิ่ม mapping test ใน `ai.test.ts` และ worker test 2 เคส (view ที่ redact/ตัด `javascript:`/ไม่มี key เมื่อไม่ค้น) |
+| `npm test` | **770 passed / 1 skipped** |
 | `npm run build` | ผ่าน |
-| `npm run lint` | 0 error / 105 warning |
+| `npm run lint` | 0 error / 106 warning |
 | `node scripts/check-public-files.mjs` | 0 finding |
 
 **ui-gate บน harness ที่ใช้ `table-chat.css` + tokens จริง** (`test-results/f064-sources-harness.html`, collapsed + open): **16/16 measured checks ผ่าน** · overflow 280/320/414 = 0, contrast (light/dark), axe, touch targets, clipped/overlap, mobile-first, RTL ผ่าน · SKIP = DTCG token pairs (โปรเจกต์ใช้ CSS tokens ไม่ใช่ DTCG) + focus trap (ไม่มี dialog) · ภาพ: `docs/previews/f064-sources-{320,414}.jpg`
