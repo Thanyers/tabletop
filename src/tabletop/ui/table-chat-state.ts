@@ -1,6 +1,6 @@
 import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, parseModelJobResearch, tailWithin, type ModelFailureDetails, type ModelJobResearch, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, parseModelJobResearch, tailWithin, type ModelFailureDetails, type ModelJobResearch, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
 import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
@@ -356,6 +356,39 @@ export interface DraftSource {
   dateLabel: string;
   /** 0-4, where 4 is an official source. */
   authority: number;
+  /** F064 slice C: the bounded evidence text a verified web source would carry; '' when absent. */
+  summary: string;
+}
+
+/** F064 slice C: a source from a finished draft that can become a table source (non-empty summary). */
+export interface AddableWebSource {
+  title: string;
+  url: string;
+  date: string | null;
+  authority: number;
+  summary: string;
+}
+
+/**
+ * F064 slice C: the sources a finished draft may offer as table evidence. The summary is the
+ * citable text, so a source without one cannot be added; parseModelJobResearch re-validates the
+ * URL and bounds every field before this list reaches the command.
+ */
+export function addableWebSources(research: ModelJobResearch | undefined): AddableWebSource[] {
+  const parsed = parseModelJobResearch(research);
+  if (!parsed) return [];
+  return parsed.sources
+    .map((source) => ({ source, summary: (source.summary ?? '').trim() }))
+    // A normalized URL can gain one trailing slash; the command schema still caps it at 500.
+    .filter((entry) => entry.summary.length > 0 && entry.source.url.length <= MAX_JOB_RESEARCH_URL_CHARS)
+    .slice(0, MAX_JOB_RESEARCH_SOURCES)
+    .map(({ source, summary }) => ({
+      title: source.title,
+      url: source.url,
+      date: source.date,
+      authority: source.authority,
+      summary: headWithin(summary, MAX_JOB_RESEARCH_SUMMARY_CHARS),
+    }));
 }
 
 /** F064 slice B: `26 Jul 2026`, or nothing when the provider gave no usable date. */
@@ -383,6 +416,7 @@ export function draftSources(research: ModelJobResearch | undefined): DraftSourc
     url: source.url,
     dateLabel: formatSourceDate(source.date),
     authority: source.authority,
+    summary: headWithin(source.summary ?? '', MAX_JOB_RESEARCH_SUMMARY_CHARS),
   }));
 }
 

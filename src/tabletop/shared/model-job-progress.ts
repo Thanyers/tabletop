@@ -35,6 +35,8 @@ export const MAX_JOB_RESEARCH_URL_CHARS = 500;
 export const MAX_JOB_RESEARCH_DATE_CHARS = 40;
 /** F064: DeepSeek reports authority 0-4, where 4 is an official source. */
 export const MAX_SOURCE_AUTHORITY = 4;
+/** F064 slice C: the provider summary kept as the citable text of a web source. */
+export const MAX_JOB_RESEARCH_SUMMARY_CHARS = 800;
 
 /** F064 slice B: one web source the draft used. `url` is always http(s) after validation. */
 export interface ModelJobResearchSource {
@@ -42,6 +44,8 @@ export interface ModelJobResearchSource {
   url: string;
   date: string | null;
   authority: number;
+  /** F064 slice C: the evidence text a verified source would carry (title + summary). */
+  summary?: string;
 }
 
 /** F064 slice B: what the research step searched and which sources the draft kept. Display only. */
@@ -198,7 +202,9 @@ export function parseModelJobResearch(value: unknown): ModelJobResearch | undefi
         || authority < 0 || authority > MAX_SOURCE_AUTHORITY) continue;
     const title = boundedText(source.title, MAX_JOB_RESEARCH_TITLE_CHARS) ?? externalHost(url);
     const date = typeof source.date === 'string' ? headWithin(source.date, MAX_JOB_RESEARCH_DATE_CHARS) : '';
-    sources.push({ title, url, date: date || null, authority });
+    // F064 C: the summary is the citable text of a web source, so it is bounded with the rest.
+    const summary = boundedText(source.summary, MAX_JOB_RESEARCH_SUMMARY_CHARS);
+    sources.push({ title, url, date: date || null, authority, ...(summary ? { summary } : {}) });
   }
   if (!sources.length) return undefined;
   const queries = (Array.isArray(record.queries) ? record.queries : [])

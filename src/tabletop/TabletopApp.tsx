@@ -18,7 +18,7 @@ import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
 import { NewImageButton, NewNoteButton } from './ui/NoteCard';
-import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope } from './ui/table-chat-state';
+import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
@@ -649,6 +649,19 @@ export default function TabletopApp() {
     } finally { setBusy(null); }
   }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
+  // F064 slice C: the sources stay `provided` until the owner reviews them; the callback owns the
+  // notice, so the chat card only disables its button while the command runs.
+  const addWebSources = useCallback(async (targetView: WorkspaceView, sources: AddableWebSource[]): Promise<void> => {
+    if (sources.length === 0) return;
+    try {
+      const latest = await runCommand('table.addWebSources', { sources });
+      if (!latest) return;
+      showNotice(`${sources.length} web source${sources.length === 1 ? '' : 's'} added to ${targetView.title}. Verify each one before asking AI to use it in a rule change.`, 'success');
+    } catch (error) {
+      showNotice(errorText(error), 'error');
+    }
+  }, [runCommand, showNotice]);
+
   const requestAI = useCallback((targetView: WorkspaceView, prompt: string, sourceId: string | undefined, commandId: string): Promise<ModelJob> => {
     if (targetView.kind === 'table' && capabilities.tableReadOnly) return Promise.reject(new ApiFailure('AI proposals for shared tables are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('AI proposals are not enabled for this workspace.', 403));
@@ -855,6 +868,8 @@ export default function TabletopApp() {
     historyRefreshKey: assistantActivity,
     confirm: confirmTableAssistantAction,
     attach: importTableFile,
+    webEvidence: capabilities.webEvidence === true,
+    addWebSources,
     focusObject: requestCanvasFocus,
     notify: showNotice,
     prefill: aiPrefill,

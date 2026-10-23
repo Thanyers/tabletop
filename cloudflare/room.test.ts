@@ -2800,6 +2800,41 @@ describe('Cloudflare room Durable Object', () => {
     await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
   });
 
+  it('adds a draft\'s web sources as provided, redacted, and keeps their text out of the event log (F064 C)', async () => {
+    const owner = newActor('Web evidence owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const accepted = await issueCommand(stub, workspace, owner, 'table.addWebSources', {
+      sources: [
+        {
+          title: `ประกาศโดย ${owner.name}`,
+          url: 'https://example.go.th/vat',
+          summary: `อัตรา VAT 7% ถึง 30 ก.ย. 2570 (${owner.id})`,
+          date: '2026-07-26T16:00:00+00:00',
+          authority: 4,
+        },
+        { title: 'unsafe', url: 'javascript:alert(1)', summary: 'not a link', date: null, authority: 1 },
+      ],
+    });
+    expect(accepted.response.status).toBe(200);
+    if (!('ok' in accepted.body) || !accepted.body.ok || accepted.body.workspace.domain.kind !== 'table') {
+      throw new Error('WEB_EVIDENCE_COMMAND_FAILED');
+    }
+    const sources = accepted.body.workspace.domain.sources;
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({ origin: 'web', status: 'provided', url: 'https://example.go.th/vat', authority: 4 });
+    expect(sources[0].text).toContain('อัตรา VAT 7% ถึง 30 ก.ย. 2570');
+    // The worker redacts member names and ids before the source is stored.
+    expect(JSON.stringify(sources[0])).not.toContain(owner.name);
+    expect(JSON.stringify(sources[0])).not.toContain(owner.id);
+
+    const eventRows = await inspectRoom<{ event_data: SqlStorageValue }>(stub,
+      "SELECT event_data FROM room_events WHERE event_type = 'table.addWebSources'");
+    expect(eventRows).toHaveLength(1);
+    expect(String(eventRows[0]?.event_data)).toContain('sourceId');
+    expect(String(eventRows[0]?.event_data)).not.toContain('อัตรา VAT');
+  });
+
   it('streams a bounded, identity-redacted search line and keeps it for the whole draft (F064)', async () => {
     const owner = newActor('Live search owner');
     await saveActor(owner);
