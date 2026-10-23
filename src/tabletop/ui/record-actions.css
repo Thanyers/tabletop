@@ -141,3 +141,6 @@
 .tt-app .tt-table-rule-remove:hover, .tt-app .tt-table-rule-remove:focus-visible { border-color: #a8483a; color: #a8483a; }
 .tt-app .tt-table-remove-confirm { display: grid; gap: var(--tt-space-2); padding: var(--tt-space-3); border: 1px solid #a8483a; border-radius: var(--tt-radius-medium); }
 .tt-app .tt-table-remove-confirm p { margin: 0; }
+
+/* F075: the last press of a control and the row it changed. */
+.tt-table-action__done { display: block; margin: 0; padding: 6px 9px; border-radius: 8px; background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 88%); color: var(--tt-ink, #303d3a); font-size: 12.5px; line-height: 1.45; }

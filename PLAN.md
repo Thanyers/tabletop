@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
 | F072 | ปุ่มแนบไฟล์ในแชทใช้ไอคอน + แทนคลิป | `review` | [F072](docs/features/F072-attach-plus-icon.md) |
 | F070 | ตัวเลือกใต้คำตอบ AI ที่เลือกแล้วเปลี่ยนสี + เส้นจากการ์ดคำถามไปการ์ดขั้นถัดไป | `review` | [F070](docs/features/F070-choice-trail.md) |
@@ -72,6 +73,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |
 | F073-T1 | `room_images` + `/images` route + `imageId` บน note + การ์ดรูป + ปุ่มอัปโหลด | `review` | lead (AI) | `feat/F073-image-cards` | `domain/table.ts`, `shared/table-contracts.ts`, `cloudflare/{index,room,room-repository}.ts`, `ui/NoteCard.tsx`, `ui/note-card.css`, `client.ts`, tests | — | ตาราง DO ใหม่แบบเพิ่มอย่างเดียว (ผู้ใช้อนุมัติ 2026-10-23) |
 | F066-T7 | ตรวจ release 8 และรัน post-deploy acceptance ตามชุดเตรียม | `review` | Codex | `docs/F066-release8-acceptance` / #231 | acceptance report, ignored evidence, feature/spec | — | 7 PASS/4 FAIL/36 BLOCKED/1 SKIPPED_SCOPE; JS/Pythonยังปิด, หลักฐานสมมติ; ไม่แก้ runtime/config หรือสั่ง deploy |
 | F072-T1 | เปลี่ยนไอคอนปุ่ม Attach a file | `review` | lead (AI) | `feat/F072-attach-plus-icon` | `ui/TableChat.tsx` | — | ไอคอนอย่างเดียว |
