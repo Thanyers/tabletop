@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **หน้าแรกสองภาษา English / ไทย (F066, MINOR):** ปุ่ม `English` / `ไทย` ที่หัวหน้าสลับทั้งหน้ารวมกล่องเข้าสู่ระบบและ welcome back · ค่าเริ่มต้นอังกฤษ จำค่าใน localStorage และ `<html lang>` เปลี่ยนตาม · ข้อความทั้งหมดอยู่ที่ `src/tabletop/ui/landing-copy.ts` · หัวข้อไทยไม่ใช้ letter-spacing ติดลบ · meta/SEO ใน `index.html` ยังเป็นอังกฤษ (URL เดียว ไม่มี hreflang) · แทน draft #180 · client อย่างเดียว ไม่มี migration/secret/binding; rollback = revert
 - **CI: เทสต์บนเบราว์เซอร์หลัง merge เข้า dev (CI007):** push เข้า `dev` รันชุดเต็มโดยไม่บล็อกการ merge · ถ้าล้มจะเปิด/อัปเดต issue ให้เห็นทันที ไม่ต้องรอไปเจอตอน release
 - **Objects panel: ปุ่มเครื่องมือเรียงเป็นคอลัมน์เดียว และคลิกชื่อการ์ดเพื่อพาไปหาการ์ด (F054-T9):** ทุกแถวจอง 4 ช่องเท่ากัน (star / rename / eye / delete) โดยช่องที่ไม่มีสิทธิ์แสดงเป็นช่องว่าง ไอคอนจึงตรงกันทุกแถวไม่ว่าจะชื่อสั้นหรือยาว · เอาปุ่ม go-to ออก เพราะคลิกที่ชื่อการ์ดเปิดการ์ดและ fit กล้องให้แล้ว (aria-label บอกชัดว่า Open and go to) · ลบโค้ด pending-locate ที่ไม่ใช้แล้ว · ไม่มี migration/secret/binding; rollback = revert branch
 

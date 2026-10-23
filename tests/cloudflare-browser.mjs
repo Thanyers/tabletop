@@ -211,6 +211,37 @@ try {
   expect((await api(anonymous, '/api/session')).status).toBe(401);
   mark('Public welcome explains the concept on desktop/mobile, preserves the Google/demo entry points and keeps anonymous users outside the Canvas');
 
+  // F066: English by default; the English / ไทย toggle switches the whole landing including the sign-in box, sets <html lang> and survives reload.
+  const languages = anonymous.getByRole('group', { name: 'Language' });
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(languages.getByRole('button', { name: 'English', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await languages.getByRole('button', { name: 'ไทย', exact: true }).focus();
+  await anonymous.keyboard.press('Enter');
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText('เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน');
+  await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toHaveAttribute('href', '/api/auth/google/start');
+  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
+  await expect(anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'ไทย', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
+  await anonymous.reload();
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText('เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน');
+  await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeVisible();
+  await anonymous.screenshot({ path: join(output, 'public-welcome-desktop-th.png'), fullPage: true });
+  await anonymous.setViewportSize({ width: 375, height: 812 });
+  expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await anonymous.getByRole('link', { name: 'เข้าสู่ระบบ', exact: true }).click();
+  await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeInViewport();
+  await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-th.png'), fullPage: true });
+  await anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(anonymous.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
+  await anonymous.evaluate(() => window.scrollTo(0, 0));
+  await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-en-375.png'), fullPage: true });
+  await anonymous.setViewportSize({ width: 1440, height: 1000 });
+  expect(providerCalls).toBe(0);
+  mark('Landing language toggle (F066): English default, ไทย switches <html lang>, h1 and the Google sign-in, survives reload, fits 375px, English restores');
+
   const failedSignIn = await newPage(null, `${origin}/?auth_error=google_login_failed`);
   await expect(failedSignIn.getByRole('alert')).toContainText('Google sign-in did not complete.');
   await expect(failedSignIn.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
@@ -335,6 +366,11 @@ try {
   for (const link of await dm.getByRole('link', { name: 'Your tables', exact: true }).all()) await expect(link).toHaveAttribute('href', '/tables');
   await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
   await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
+  await dm.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'ไทย', exact: true }).click();
+  await expect(dm.getByRole('heading', { name: 'ยินดีต้อนรับกลับ DM', exact: true })).toBeVisible();
+  await expect(dm.getByRole('link', { name: 'โต๊ะของฉัน', exact: true })).toHaveCount(2);
+  await dm.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
   await dm.locator('.tt-public-welcome header').getByRole('link', { name: 'Your tables', exact: true }).click();
   await expect(dm).toHaveURL(`${origin}/tables`);
   await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();

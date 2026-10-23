@@ -17,7 +17,7 @@
   min-height: 4.5rem;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin: 0 auto;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--tt-line, #d9d4c4);
@@ -50,6 +50,33 @@
   text-decoration: none;
   white-space: nowrap;
 }
+
+/* Language toggle (F066): two pressed-state buttons, each labelled in its own language. */
+.tt-public-welcome .tt-public-welcome__language {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  padding: 0.125rem;
+  border: 1px solid var(--tt-line, #d9d4c4);
+  border-radius: 0.75rem;
+}
+
+.tt-public-welcome .tt-public-welcome__language button {
+  min-width: 2.75rem;
+  min-height: 2.5rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 0.625rem;
+  color: var(--tt-ink, #303d3a);
+  background: transparent;
+  font: 600 0.75rem/1 Manrope, 'Noto Sans Thai', system-ui, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tt-public-welcome .tt-public-welcome__language button:hover { background: var(--tt-green-2, #e8f0e4); }
+.tt-public-welcome .tt-public-welcome__language button[aria-pressed="true"] { color: var(--tt-card-surface, #fffdf7); background: var(--tt-moss, #356e5d); }
 
 .tt-public-welcome .tt-public-welcome__signin:hover { border-color: var(--tt-moss, #356e5d); background: var(--tt-green-2, #e8f0e4); }
 
@@ -283,7 +310,9 @@
 @media (min-width: 560px) {
   .tt-public-welcome .tt-public-welcome__content { padding-inline: 1.5rem; }
   .tt-public-welcome .tt-public-welcome__header { padding-inline: 1.5rem; }
+  .tt-public-welcome .tt-public-welcome__header { gap: 0.75rem; }
   .tt-public-welcome .tt-public-welcome__header-note { display: inline; margin-left: auto; }
+  .tt-public-welcome .tt-public-welcome__language { margin-left: 0; }
   .tt-public-welcome .tt-public-welcome__why { grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 2rem; }
   .tt-public-welcome .tt-public-welcome__thesis { margin-top: 1.5rem; }
   .tt-public-welcome .tt-public-welcome__hero-actions { align-items: center; flex-direction: row; flex-wrap: wrap; }
@@ -313,6 +342,13 @@
   .tt-public-welcome .tt-public-welcome__start { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: clamp(2rem, 5vw, 4.5rem); padding: clamp(3rem, 6vw, 4.5rem) 0; }
   .tt-public-welcome .tt-public-welcome__start-slot { width: 100%; }
 }
+
+/* Thai stacks vowels and tone marks above and below the line: no negative tracking, taller lines (F066). */
+.tt-public-welcome[lang="th"] :is(h1, h2, h3) { letter-spacing: 0; line-height: 1.45; }
+.tt-public-welcome[lang="th"] .tt-public-welcome__hero h1 { max-width: 18ch; line-height: 1.3; }
+.tt-public-welcome[lang="th"] :is(.tt-public-welcome__eyebrow, .tt-public-welcome__thesis span) { letter-spacing: 0.02em; }
+.tt-public-welcome[lang="th"] .tt-account-gate__eyebrow { letter-spacing: 0.02em; }
+.tt-public-welcome[lang="th"] .tt-public-welcome__start-copy h2 { line-height: 1.35; }
 
 @media (prefers-reduced-motion: reduce) {
   .tt-public-welcome *,
