@@ -45,7 +45,11 @@ export type ComputedExpression =
 export interface ComputedColumn { id: string; collection: string; label: string; expression: ComputedExpression }
 /** F037: a shared canvas note. Kept out of the program so it survives rule edits and stays a plain note. */
 export type NoteColor = 'yellow' | 'rose' | 'sky' | 'mint' | 'lavender' | 'sand';
-export interface TableNote { id: string; text: string; color: NoteColor; x: number; y: number; width: number; height: number; createdBy: string; createdAt: number; updatedAt: number }
+export interface TableNote {
+  id: string; text: string; color: NoteColor; x: number; y: number; width: number; height: number; createdBy: string; createdAt: number; updatedAt: number;
+  /** F073: an image card shows this uploaded picture, with `text` as its caption. */
+  imageId?: string;
+}
 /** F054: who a canvas card came from. `ai` means an AI-drafted program applied by a person, not "the AI wrote this alone". */
 export type CanvasCardOrigin = 'ai' | 'human' | 'system' | 'demo';
 /**
