@@ -4,11 +4,11 @@ import { routeConnections, type RoutedConnection, type RoutingRect } from './edg
 
 const rect = (id: string, x: number, y: number, width: number, height: number): RoutingRect => ({ id, x, y, width, height });
 
-function assertClearOfUnrelatedCards(route: RoutedConnection, rects: readonly RoutingRect[], clearance = 22): void {
+function assertClearOfUnrelatedCards(route: RoutedConnection, rects: readonly RoutingRect[], clearance = 22, crossable: readonly string[] = []): void {
   expect(route.hidden).toBe(false);
   expect(route.points.length).toBeGreaterThanOrEqual(2);
   const blockers = rects
-    .filter((item) => item.id !== route.source && item.id !== route.target)
+    .filter((item) => item.id !== route.source && item.id !== route.target && !crossable.includes(item.id))
     .map((item) => ({
       left: item.x - clearance,
       top: item.y - clearance,
@@ -217,5 +217,86 @@ describe('routeConnections', () => {
     ];
     const links = [{ id: 'data-overview', source: 'source', target: 'target', label: 'Overview' }];
     expect(routeConnections(rects, links)).toEqual(routeConnections(rects, links));
+  });
+
+  it('passes beneath a paper note only when the caller declares it crossable', () => {
+    const rects = [
+      rect('source', 0, 40, 100, 90),
+      rect('target', 500, 40, 100, 90),
+      rect('note', 200, 0, 140, 140),
+    ];
+    const link = [{ id: 'under-note', source: 'source', target: 'target' }];
+
+    const blocked = routeConnections(rects, link)[0]!;
+    expect(blocked.hidden).toBe(false);
+    expect(blocked.points.length).toBeGreaterThan(2);
+    assertClearOfUnrelatedCards(blocked, rects);
+
+    const crossable = routeConnections(rects, link, { crossableIds: ['note'] })[0]!;
+    expect(crossable.hidden).toBe(false);
+    expect(crossable.points).toHaveLength(2);
+    expect(crossable.points[0]).toEqual({ x: 100, y: 85 });
+    expect(crossable.points[1]).toEqual({ x: 500, y: 85 });
+    assertClearOfUnrelatedCards(crossable, rects, 22, ['note']);
+    // Everything except the declared note still blocks.
+    const withThirdCard = [...rects, rect('wall', 300, 120, 120, 140)];
+    const guarded = routeConnections(withThirdCard, link, { crossableIds: ['note'] })[0]!;
+    expect(guarded.hidden).toBe(false);
+    assertClearOfUnrelatedCards(guarded, withThirdCard, 22, ['note']);
+  });
+
+  it('opens a bridge in the lower line where two routes cross', () => {
+    const rects = [
+      rect('left', 0, 0, 100, 100),
+      rect('right', 600, 0, 100, 100),
+      rect('top', 250, -200, 100, 100),
+      rect('bottom', 250, 300, 100, 100),
+    ];
+    const links = [
+      { id: 'horizontal', source: 'left', target: 'right' },
+      { id: 'vertical', source: 'top', target: 'bottom' },
+    ];
+    const [horizontal, vertical] = routeConnections(rects, links);
+
+    expect(horizontal!.hidden).toBe(false);
+    expect(vertical!.hidden).toBe(false);
+    expect(horizontal!.bridges).toBe(0);
+    expect(horizontal!.crossesOver).toBe(true);
+    expect(vertical!.bridges).toBe(1);
+    expect(vertical!.crossesOver).toBe(false);
+    // The lower line is drawn as two strokes with a visible break at the crossing.
+    expect(horizontal!.path.match(/\bM\b/g)).toHaveLength(1);
+    expect(vertical!.path.match(/\bM\b/g)).toHaveLength(2);
+    // The geometry callers rely on is untouched by the drawing break.
+    expect(vertical!.points[0]).toEqual({ x: 300, y: -100 });
+    expect(vertical!.points.at(-1)).toEqual({ x: 300, y: 300 });
+    expect(routeConnections(rects, links)).toEqual([horizontal, vertical]);
+  });
+
+  it('spreads several lines that share one card face instead of stacking them', () => {
+    const rects = [
+      rect('source', 0, 0, 100, 300),
+      rect('first', 500, 40, 100, 100),
+      rect('second', 500, 160, 100, 100),
+    ];
+    const links = [
+      { id: 'a', source: 'source', target: 'first' },
+      { id: 'b', source: 'source', target: 'second' },
+    ];
+    const [first, second] = routeConnections(rects, links, { portSpacing: 9 });
+
+    expect(first!.sourceSide).toBe('right');
+    expect(second!.sourceSide).toBe('right');
+    expect(first!.points[0]!.x).toBe(100);
+    expect(second!.points[0]!.x).toBe(100);
+    const spread = Math.abs(first!.points[0]!.y - second!.points[0]!.y);
+    expect(spread).toBeCloseTo(9, 6);
+    expect((first!.points[0]!.y + second!.points[0]!.y) / 2).toBeCloseTo(150, 6);
+    assertClearOfUnrelatedCards(first!, rects);
+    assertClearOfUnrelatedCards(second!, rects);
+
+    // One line keeps the face midpoint, so existing layouts do not shift.
+    const [alone] = routeConnections(rects, [{ id: 'only', source: 'source', target: 'first' }]);
+    expect(alone!.points[0]).toEqual({ x: 100, y: 150 });
   });
 });

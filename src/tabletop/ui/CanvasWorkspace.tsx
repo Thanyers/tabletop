@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Background, BackgroundVariant, Controls, Handle, MarkerType, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
+import { Background, BackgroundVariant, Controls, Handle, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type EdgeTypes, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, Focus, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2, Star, Pencil, Search } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
@@ -20,6 +20,13 @@ import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNod
 import './canvas-visual-flow.css';
 import { LiveCursors, useLiveCursorSender } from './live-cursors';
 import { CURSOR_SEND_INTERVAL_MS } from '../shared/cursor-protocol';
+import CanvasEdgeView, { type CanvasEdgeData } from '../../components/CanvasEdge';
+import { routeConnections, type RoutingLink, type RoutingRect } from '../../state/edge-routing';
+
+/** Lines around the cards, drawn by the obstacle-aware router instead of the default curve. */
+const canvasEdgeTypes: EdgeTypes = { canvasConnection: CanvasEdgeView };
+/** The canvas paper shows through the mask under each line. */
+const CANVAS_EDGE_HALO = '#eeeee2';
 
 export { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds };
 
@@ -76,7 +83,7 @@ interface AuxiliaryCanvasNodeData extends CanvasNodeBaseData {
 
 type CanvasNodeData = PlanCanvasNodeData | AuxiliaryCanvasNodeData;
 type CanvasNode = Node<CanvasNodeData, 'tabletopObject'>;
-type CanvasEdge = Edge<{ relationshipLabel: string }>;
+type CanvasEdge = Edge<Record<string, unknown>>;
 
 export interface CanvasAuxiliaryObject {
   id: string;
@@ -1589,7 +1596,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     requestOpenObjectFocus(focusNodeId, false, false);
   }, [focusNodeId, focusRequestKey, nodes, flow, view.kind, layoutReadyKey, workspaceKey, requestOpenObjectFocus]);
 
-  const edges = useMemo(() => {
+  const connections = useMemo(() => {
     const projected: Array<{
       id: string;
       source: string;
@@ -1599,7 +1606,6 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       valueType: string;
       depth: number;
     }> = [];
-    const isRevisionPulse = revisionNotice !== null;
     const walk = (binding: Binding, source: string, sourcePort: string, depth: number, path: Set<string>) => {
       if (path.has(binding.id)) return;
       const nextPath = new Set(path).add(binding.id);
@@ -1622,12 +1628,63 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     for (const binding of plan.bindings) {
       if (visibleIds.has(binding.from.node)) walk(binding, binding.from.node, binding.from.port, 0, new Set());
     }
-    return dedupeVisibleCanvasConnections(projected).map((connection): CanvasEdge => {
+    return dedupeVisibleCanvasConnections(projected);
+  }, [plan.bindings, visibleIds]);
+
+  // Lines keep clear of every card on the canvas except paper notes, which sit on
+  // top of them. The router also spreads shared ports and bridges crossings so a
+  // busy table stays readable.
+  const edges = useMemo(() => {
+    const isRevisionPulse = revisionNotice !== null;
+    const rects: RoutingRect[] = [];
+    const crossable: string[] = [];
+    for (const node of nodes) {
+      rects.push({
+        id: node.id,
+        x: Math.round(node.position.x),
+        y: Math.round(node.position.y),
+        width: node.measured?.width ?? node.width ?? cardSizes[node.id]?.width ?? 360,
+        height: node.measured?.height ?? node.height ?? cardSizes[node.id]?.height ?? 260,
+      });
+      if (isCanvasNoteId(node.id)) crossable.push(node.id);
+    }
+    const links: RoutingLink[] = connections.map((connection) => ({ id: connection.id, source: connection.source, target: connection.target }));
+    const routes = new Map(routeConnections(rects, links, {
+      clearance: 18,
+      cornerRadius: 12,
+      crossableIds: crossable,
+      portSpacing: 12,
+      laneSpacing: 16,
+    }).map((route) => [route.id, route]));
+
+    return connections.map((connection): CanvasEdge => {
       const targetRole = canvasRole(planNodesById.get(connection.target)?.capability ?? '', 'plan');
       const markerColor = roleColor(targetRole);
       const sourceTitle = planNodesById.get(connection.source)?.title ?? connection.source;
       const targetTitle = planNodesById.get(connection.target)?.title ?? connection.target;
       const label = relationshipLabel(connection.valueType);
+      const ariaLabel = `${sourceTitle} feeds ${targetTitle} with ${label}${connection.depth > 0 ? ` through ${connection.depth} intermediate plan step${connection.depth === 1 ? '' : 's'}` : ''}. Type: ${connection.valueType}.`;
+      const route = routes.get(connection.id);
+      if (route && !route.hidden && route.path) {
+        const data: CanvasEdgeData = {
+          route,
+          relationshipLabel: label,
+          color: markerColor,
+          haloColor: CANVAS_EDGE_HALO,
+          strokeWidth: 2.2,
+          moving: isRevisionPulse,
+        };
+        return {
+          id: connection.id,
+          source: connection.source,
+          target: connection.target,
+          type: 'canvasConnection',
+          zIndex: route.bridges ? 0 : 1,
+          ariaLabel,
+          data,
+        };
+      }
+      // Never drop a connection: if no clear route exists, fall back to the default curve.
       return {
         id: connection.id,
         source: connection.source,
@@ -1636,13 +1693,12 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         targetHandle: connection.targetHandle,
         type: 'smoothstep',
         animated: isRevisionPulse,
-        ariaLabel: `${sourceTitle} feeds ${targetTitle} with ${label}${connection.depth > 0 ? ` through ${connection.depth} intermediate plan step${connection.depth === 1 ? '' : 's'}` : ''}. Type: ${connection.valueType}.`,
+        ariaLabel,
         data: { relationshipLabel: label },
-        markerEnd: { type: MarkerType.ArrowClosed, color: markerColor },
         style: { stroke: markerColor, strokeWidth: 2.2 },
       };
     });
-  }, [plan.bindings, planNodesById, revisionNotice, visibleIds]);
+  }, [cardSizes, connections, nodes, planNodesById, revisionNotice]);
 
   // Right-click on the empty canvas: arrange every card again from scratch, as on first load.
   // targets: the cards a right-click on a card acts on; absent for a right-click on the empty canvas.
@@ -2068,6 +2124,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           nodes={nodes}
           edges={visibleEdges}
           nodeTypes={nodeTypes}
+          edgeTypes={canvasEdgeTypes}
           onNodesChange={handleNodesChange}
           onMoveStart={handleCanvasMoveStart}
           onNodeDragStart={handleNodeDragStart}
