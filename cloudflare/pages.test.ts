@@ -32,6 +32,9 @@ const fetchPage = (path: string, init?: RequestInit) => {
 
 function expectSecurityHeaders(response: Response): void {
   expect(response.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
+  // F072: the only third-party origins are the Cloudflare Web Analytics beacon and its collector.
+  expect(response.headers.get('Content-Security-Policy')).toContain("script-src 'self' https://static.cloudflareinsights.com;");
+  expect(response.headers.get('Content-Security-Policy')).toContain("connect-src 'self' https://cloudflareinsights.com;");
   expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
   expect(response.headers.get('X-Frame-Options')).toBe('DENY');
   expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');

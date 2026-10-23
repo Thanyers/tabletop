@@ -192,7 +192,7 @@ function secured(response: Response, request: Request): Response {
   output.headers.set('Referrer-Policy', 'no-referrer');
   output.headers.set('X-Frame-Options', 'DENY');
   output.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  output.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+  output.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
   if (request.url.startsWith('https:')) output.headers.set('Strict-Transport-Security', 'max-age=31536000');
   if (new URL(request.url).pathname.startsWith('/api/')) output.headers.set('Cache-Control', 'no-store');
   return output;

@@ -2,6 +2,7 @@ import { AlertCircle, ArrowRight, ChevronDown, LogOut, RefreshCw, ShieldCheck, X
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { AdminWorkspace, AdminWorkspacePage, AuthStatus, GoogleAuthUser } from '../client';
+import { loadAnalytics } from '../../analytics';
 import './account.css';
 import { PublicWelcome } from './PublicWelcome';
 
@@ -16,6 +17,8 @@ export function AccountSignIn({ status, notice, hasPendingInvite, checking, onRe
   onRetry: () => void;
   onDismissNotice: () => void;
 }) {
+  // F072: only signed-out visitors on `/` are measured; loadAnalytics checks the path and host itself.
+  useEffect(() => { loadAnalytics(); }, []);
   return <PublicWelcome>{(copy) => <section id="sign-in" className="tt-public-welcome__auth" aria-labelledby="tt-public-welcome-auth-title">
     <span className="tt-account-gate__eyebrow"><ShieldCheck size={14} /> {copy.auth.eyebrow}</span>
     <h2 id="tt-public-welcome-auth-title">{copy.auth.title}</h2>
