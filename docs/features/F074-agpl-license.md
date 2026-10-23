@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` |
+| สถานะ | `done` — PR #238 merge เข้า dev แล้ว |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | ไม่ออก release เว็บในงานนี้ — เพิ่ม license ของ repository |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F074-T1` |
+| งานในกระดาน | นำแถว F074 ออกจาก [PLAN.md](../../PLAN.md) หลัง merge; หลักฐานอยู่ใน PR #238 และด้านล่าง |
 
 ## ทำไม
 
@@ -61,3 +61,11 @@
 - ตรวจรายการอิสระใน spec/PLAN จาก merge parents และ Markdown links ผ่าน; ไม่พบ conflict markers หรือ unmerged paths
 - Node `22.23.2`: public scan **797 files / 0 findings**, changelog **10 fragments ผ่าน**, `git diff --cached --check` ผ่านหลังรวม dev ล่าสุด
 - CI ก่อน sync (`b82b27c`): `local-validation` ผ่าน, unit **827 passed / 5 skipped**, Workers **170 passed**; หลัง sync ต้องใช้ check ของ commit ใหม่ก่อน merge
+
+### ผล merge และ deploy staging
+
+- [PR #238](https://github.com/Thanyers/tabletop/pull/238) merge เข้า `dev` เมื่อ 2026-10-23 เวลา 16:36:52 (Asia/Bangkok) ที่ `7b2837664ae74f458c19c0f09bb04984da22f896`
+- CI ของ head `3e035e6` และ [run หลัง merge](https://github.com/Thanyers/tabletop/actions/runs/39933143323) ผ่าน `local-validation`; หลัง merge browser suites ทั้งสามและ deploy staging/smoke ผ่าน
+- Node `22.23.2`: unit/local SQL **849 passed / 5 skipped**, Workers integration **177 passed**, ไม่มี failed tests
+- อ่าน `/version` เมื่อ 16:53 (Asia/Bangkok): staging `0.0.0-dev / 7b28376`; production `8.0.0 / 89a604e`; รายละเอียดใน [DEPLOYMENTS](../DEPLOYMENTS.md#ผลตรวจ-staging-หลัง-merge-license-23-ตุลาคม-2569)
+- อ่าน `LICENSE` กลับจาก `dev` ได้ blob ตรงกับไฟล์ที่ตรวจ ไม่ออก release production
