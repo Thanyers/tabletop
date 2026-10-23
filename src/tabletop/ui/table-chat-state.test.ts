@@ -47,6 +47,18 @@ describe('private table chat recovery state', () => {
     expect(tableChatMode('participant', true, true, request('Make this rule easier'))).toBe('ask');
   });
 
+  it('keeps Thai behavior questions in Ask without swallowing explicit rule edits', () => {
+    const request = (prompt: string) => ({ prompt, hasCreateAction: false, referencedRule: true });
+    const behaviorQuestion = 'กฎนี้รับอะไรและเปลี่ยนผลตรงไหน';
+
+    expect(tableChatMode('owner', true, false, request(behaviorQuestion))).toBe('ask');
+    expect(tableChatMode('owner', true, false, request('สูตรนี้คำนวณส่วนลดอย่างไร'))).toBe('ask');
+    expect(tableChatMode('owner', true, false, request('ช่วยเปลี่ยนกฎนี้ให้ใช้ส่วนลด 20%'))).toBe('draft');
+    expect(tableChatMode('owner', true, false, request('ช่วยปรับสูตรนี้ให้คำนวณตามส่วนลด 20% อย่างไร'))).toBe('draft');
+    // Clicking Change this rule explicitly selects the draft route regardless of question wording.
+    expect(tableChatMode('owner', true, true, request(behaviorQuestion))).toBe('draft');
+  });
+
   it('returns an active table to assistant mode when explicit rule editing is cancelled', () => {
     expect(tableChatMode('owner', true, true)).toBe('draft');
     expect(tableChatMode('owner', true, false)).toBe('ask');

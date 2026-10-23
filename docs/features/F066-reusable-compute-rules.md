@@ -30,7 +30,7 @@
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
-| F066-T12 | ซ่อม linked-row Replace และ conditional library questions หลัง production9 | จับคู่ identity แบบผู้ใช้ยืนยัน รักษา row IDs/controls เมื่อเรียงใหม่; ambiguous/missing rejectแบบatomic; PD035 exact promptตอบcapabilityจริง; PATCHผ่านCI/deploy/actualretest |
+| F066-T12 | ซ่อม linked-row Replace, conditional library questions และ Ask รายกฎหลัง production9 | จับคู่ identity แบบผู้ใช้ยืนยัน รักษา row IDs/controls เมื่อเรียงใหม่; ambiguous/missing rejectแบบatomic; PD035 exact promptตอบcapabilityจริง; PD027 behavior questionยังเป็นAsk/คำสั่งแก้ยังเป็นdraft; PATCHผ่านCI/deploy/actualretest |
 | F066-T1 | contracts, persistent definitions/runs และ revision links | reload/reconnect, isolation, stale result และ permission tests |
 | F066-T2 | isolated runner, generation/invocation และการคำนวณซ้ำ | ใช้โปรแกรมเดิมกับข้อมูลสองชุดโดยไม่เรียก AI ซ้ำ; failure ไม่ทำลายผลเดิม |
 | F066-T3 | Rules card, Advanced, per-rule chat references | อ่านแบบ no-code, keyboard/mobile, specific reference ผ่าน server context |
@@ -43,7 +43,7 @@
 
 ## การตัดสินใจ
 
-- F066-T12: Replace ที่มีฟอร์มอ้างแถวแบบ fixed ต้องมีการจับคู่รายการเดิมด้วยฟิลด์ที่ผู้ใช้เห็นและยืนยัน ไม่ใช้ลำดับแถวและไม่เดา identity เงียบ ๆ backend ตรวจค่าไม่ซ้ำ/ครบและ validate ผลทั้งหมดก่อนเขียน; raw data กับ revision ต้องไม่เปลี่ยนเมื่อจับคู่กำกวม/ขาดรายการที่ถูกอ้าง คำถาม capability แบบมีเงื่อนไขและคำสั่งห้ามติดตั้งเพิ่มต้องตอบจาก runtime profile โดยไม่ตีความคำว่าเพิ่มในข้อห้ามว่าให้สร้างฟีเจอร์
+- F066-T12: Replace ที่มีฟอร์มอ้างแถวแบบ fixed ต้องมีการจับคู่รายการเดิมด้วยฟิลด์ที่ผู้ใช้เห็นและยืนยัน ไม่ใช้ลำดับแถวและไม่เดา identity เงียบ ๆ backend ตรวจค่าไม่ซ้ำ/ครบและ validate ผลทั้งหมดก่อนเขียน; raw data กับ revision ต้องไม่เปลี่ยนเมื่อจับคู่กำกวม/ขาดรายการที่ถูกอ้าง คำถาม capability แบบมีเงื่อนไขและคำสั่งห้ามติดตั้งเพิ่มต้องตอบจาก runtime profile โดยไม่ตีความคำว่าเพิ่มในข้อห้ามว่าให้สร้างฟีเจอร์; Ask ของกฎที่ถามว่ารับอะไรหรือผลเปลี่ยนตรงไหนต้องคงเป็นคำถาม ส่วน Change this rule และคำสั่งแก้จริงต้องคงเป็น draft; prompt ของโต๊ะที่ไม่มีไฟล์ต้องย้ำ evidence ว่างและไม่ให้ตัวอย่างชื่อ source สมมติ โดยคง validator ปฏิเสธ citation ที่ไม่มีจริง
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
@@ -56,6 +56,11 @@
 | 2026-10-23 | ผู้ใช้ย้ำขอบเขตเฉพาะ compute/Rules; หยุดการไล่ scene/camera และคืนโค้ดทดลองทั้งหมด | แยกสถานะยังไม่ release ออกจาก browser failure ของส่วนอื่น ไม่ขยายงานของผู้ใช้ตามทุก failure ในชุดรวม |
 
 ## ผลตรวจ
+
+### F066-T12 — candidate หลังพบปัญหาบน production9
+
+Node22.23.2: unit901passed/5skipped, Workers197/197, import35/35, routing55/55, capability28/28, provider24/24; typecheck/build/Worker dry-runผ่าน lint0errors111warnings Rendered importer280/320/390/414pxไม่มีpage/paneloverflowหรือปุ่มทับกันและตรวจpayload Append/Replaceจริง Fullui-gateยัง15PASS/1FAIL/4SKIPจากRulesbuttonsนอกimporter ไม่อ้างall-PASS Independentreviewพบ3P2(Appendguard/action-onlyrefs/คำสั่งหลังห้ามติดตั้ง) มีred→greenและrereviewไม่เหลือP1/P2 PATCHและactualproductionretestยังpending หลายบัญชี8เคส/humanreadbackBLOCKED
+
 
 รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)
 

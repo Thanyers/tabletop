@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-23 — Replace เปลี่ยน row IDs ที่กฎยังอ้าง
+- **What happened:** preview CSV ถูกต้องแต่ Replace ของโต๊ะคะแนนล้มเมื่อ controls อ้าง ID เก่า; รอบแก้แรกยังปิด Append และครอบคลุมเฉพาะ canvas
+- **Root cause:** สร้าง ID ใหม่ทุกแถวโดยไม่รักษา identity ของรายการ และใช้ guard ร่วมสองโหมดโดยไม่ครอบ action expressions
+- **Correct behavior:** ให้ผู้ใช้เห็นและยืนยันฟิลด์จับคู่ ตรวจ unique/nonempty ทั้งสองชุด สแกน fixed references ทั้ง program และ validate ก่อน commit; ต้องมี regression เรียงแถวใหม่, action-only/no-canvas, missing/duplicate แบบ atomic และ rendered Append ก่อนยืนยัน Replace
+
+### 2026-10-23 — ตัวอย่าง prompt อ้าง source สมมติบนโต๊ะไม่มีไฟล์
+- **What happened:** ร่าง SciPy และ DAG บน production ถูก citation validator ปฏิเสธเพราะ source ไม่มีจริง; การชี้แจงให้ evidence ว่างช่วยให้ SciPy สร้างต่อได้ แต่ยังไม่พิสูจน์ว่า prompt เป็นสาเหตุเดียว
+- **Root cause:** prompt ทั่วไปบอกให้ evidence ว่างเมื่อไม่มีไฟล์ แต่ตัวอย่างท้ายข้อความยังมี source placeholder และ sample rows
+- **Correct behavior:** ส่ง source-free guidance ตาม sources/importedSources จริง ใช้ตัวอย่าง evidence ว่าง/initialRecords ว่าง และเก็บ validator ปฏิเสธ citation ที่ไม่มีจริง; ทดสอบ prompt branch พร้อม actual retry หลัง deploy แยกจากรอบที่ล้ม
+
 ### 2026-10-23 — พิกัดเทสต์ลากหมดอายุระหว่าง pending focus
 - **What happened:** CI scene dragไม่ถึง40/20แม้localผ่าน; forcedwindowยืนยันpointermoveโดนlightแต่focusfitก่อนdownทำให้downพลาด/0actions/ค่าคง20,10
 - **Root cause:** เทสต์วัดgetScreenCTMก่อนpointerdownแต่ปล่อยfocus90msทำงานระหว่างคำสั่งbrowser ทำให้พิกัดscreenเก่าไม่ตรงฉาก
