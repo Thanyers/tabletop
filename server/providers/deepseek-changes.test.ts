@@ -155,7 +155,8 @@ describe('DeepSeekChangeProvider', () => {
     const messages = body?.messages as Array<{ role: string; content: string }>;
     expect(messages[0]?.content).toContain('TABLE-CHANGE COMPACT SCHEMA v1');
     expect(messages[0]?.content).not.toContain('"$schema"');
-    expect(messages[0]?.content.length).toBeLessThan(20_000);
+    // F064 adds one research-grounding line (~150 chars); the guard still catches unbounded growth.
+    expect(messages[0]?.content.length).toBeLessThan(20_500);
     expect(messages[0]?.content).toContain('contains');
     expect(messages[0]?.content).toContain('exact existing source id');
     expect(messages[0]?.content).toContain('compare distinct selected rows with {"input":"first"} neq {"input":"second"}');
