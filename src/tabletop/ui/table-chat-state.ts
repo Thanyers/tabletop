@@ -15,12 +15,17 @@ export interface TableChatRequestContext {
 
 const CARD_CHANGE = /\b(?:harder|easier|more|less|remove|rename|add|make|change|edit|extend)\b|ยาก|ง่าย|ลด|ลบ|เปลี่ยน|เอาออก|เพิ่ม|ปรับ|แก้/iu;
 const QUESTION_LEAD = /^(?:(?:how many|how much|what|which|why|when|who|where|explain|summari[sz]e)\b|อธิบาย|สรุป|ทำไม|มี.{0,32}กี่|กี่)/iu;
+const RULE_BEHAVIOR_QUESTION = /(?:กฎ|สูตร|โมดูล)(?:นี้|นั้น)?[\s\S]{0,80}(?:(?:รับ|ใช้|อ่าน|คำนวณ|คืนค่า|ทำงาน|ส่งผล|เปลี่ยนผล|ทำ)[\s\S]{0,24}(?:อะไร|ไหน|ตรงไหน|อย่างไร|ยังไง|เท่าไร|เท่าไหร่)|(?:ตรงไหน|อย่างไร|ยังไง|เท่าไร|เท่าไหร่))[?？]?$/iu;
+const RULE_EDIT_LEAD = /^(?:(?:please|could you|can you)\s+)?(?:change|edit|make|set|add|remove|extend)\b|^(?:(?:ช่วย|กรุณา)\s*)?(?:เปลี่ยน|แก้|ปรับ|เพิ่ม|ลด|ลบ|เอาออก)/iu;
 
 export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: boolean, explicitDraft: boolean, request?: TableChatRequestContext): 'draft' | 'ask' {
   if (role !== 'owner') return 'ask';
   if (!hasActiveProgram || explicitDraft) return 'draft';
   if (!request) return 'ask';
   const prompt = request.prompt.trim();
+  // Some Thai behavior questions mention a change the rule makes, but still ask for an
+  // explanation. Keep explicit edit requests (and the Change this rule flow) authoritative.
+  if (request.referencedRule && RULE_BEHAVIOR_QUESTION.test(prompt) && !RULE_EDIT_LEAD.test(prompt)) return 'ask';
   // A requested change about one exact rule is a draft, unless it is phrased as a question.
   if (request.referencedRule && CARD_CHANGE.test(prompt) && !QUESTION_LEAD.test(prompt)) return 'draft';
   // Keep the original behavior for general canvas cards such as a collection or chart.

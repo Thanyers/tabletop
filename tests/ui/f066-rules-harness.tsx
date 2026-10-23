@@ -68,6 +68,12 @@ const program: TableProgram = {
   }],
   invariants: [{ id: 'unique_item', collection: 'orders', fields: ['item'], message: 'Each order needs a name.' }],
   turnOrder: [], evidence: [], assumptions: [], computedColumns: [ruleOwnedColumn], compute: { version: 1, modules: [module] },
+  canvas: { version: 1, views: [{
+    id: 'fixed_order_actions', kind: 'controls', title: 'Order actions', controls: [
+      { id: 'tea_action', kind: 'button', label: 'Mark Tea paid', actionId: 'mark_paid', inputs: { order: { kind: 'record', collection: 'orders', recordId: 'order-1' } } },
+      { id: 'bread_action', kind: 'button', label: 'Mark Bread paid', actionId: 'mark_paid', inputs: { order: { kind: 'record', collection: 'orders', recordId: 'order-2' } } },
+    ],
+  }] },
 };
 
 const initialState: TableState = {

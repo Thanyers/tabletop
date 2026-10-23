@@ -33,9 +33,9 @@ const MAX_ACTIVE_STATE_BYTES = 192 * 1024;
 const MAX_CONVERSATION_ENTRIES = 6;
 const MAX_CONVERSATION_BYTES = 16_384;
 const COMPUTE_CAPABILITY_REFERENCE = /\b(?:library|libraries|package|packages|module|modules|runtime|runtimes|engine|engines|javascript|ecmascript|python|polars|pandas|geopandas|numpy|scipy|openpyxl|dateutil)\b|(?:ไลบรารี|แพ็กเกจ|โมดูล|รันไทม์|สภาพแวดล้อม)/iu;
-const COMPUTE_CAPABILITY_QUESTION = /\b(?:available|installed|supported|enabled)\b|\b(?:do|does)\b.{0,100}\b(?:have|support|enable)\b|\b(?:is|are)\b.{0,100}\b(?:available|installed|supported|enabled)\b|\b(?:can|could)\s+(?:i|we|you|this system|the system|this workspace|the workspace)\s+(?:use|run|replace)\b|(?:ทำได้จริง|มี.*(?:ให้ใช้|อยู่แล้ว|ไหม|หรือไม่)|ติดตั้ง.*(?:แล้ว|อยู่|ไหม|หรือไม่)|รองรับ.*(?:ไหม|หรือไม่)|(?:ใช้|รัน).*?(?:ได้ไหม|ได้หรือไม่|ได้จริง))/iu;
+const COMPUTE_CAPABILITY_QUESTION = /\b(?:available|installed|supported|enabled)\b|\b(?:do|does)\b.{0,100}\b(?:have|support|enable)\b|\b(?:is|are)\b.{0,100}\b(?:available|installed|supported|enabled)\b|\b(?:can|could)\s+(?:i|we|you|this system|the system|this workspace|the workspace)\s+(?:use|run|replace)\b|(?:(?:ถ้า|หาก)(?:เครื่อง|ระบบ|สภาพแวดล้อม)(?:นี้)?(?:ยัง)?ไม่มี(?:ให้บอก|[.!?;。]|$)|ทำได้จริง|มี.*(?:ให้ใช้|อยู่แล้ว|ไหม|หรือไม่)|ติดตั้ง.*(?:แล้ว|อยู่|ไหม|หรือไม่)|รองรับ.*(?:ไหม|หรือไม่)|(?:ใช้|รัน).*?(?:ได้ไหม|ได้หรือไม่|ได้จริง))/iu;
 const POSITIVE_BUILD_INTENT = /\b(?:create|build|draft|prepare|edit|add|make|generate|implement|change|update)\b|(?:สร้าง|ร่าง|แก้|เพิ่ม|เปลี่ยน|จัดทำ)|(?:ช่วย|ขอให้|อยากให้|กรุณา)\s*(?:สร้าง|ร่าง|แก้|เพิ่ม|เปลี่ยน|ทำ|จัดทำ)/iu;
-const NEGATED_BUILD_CLAUSE = /\b(?:do not|don't|no need to|not asking(?: you)? to)\b[^.!?;\n]*|(?:ไม่ต้อง|ไม่ให้|อย่า)[^.!?;。\n]*/giu;
+const NEGATED_BUILD_CLAUSE = /\b(?:do not|don't|no need to|not asking(?: you)? to)\b[^.!?;\n]*|(?:ไม่ต้อง|ไม่ให้|อย่า)[^.!?;。\n]*|ห้าม\s*ติดตั้ง(?:\s*เพิ่ม)?(?:\s*ระหว่าง(?:การ)?รัน)?/giu;
 const NO_PROVIDER_USAGE: BillingUsage = {
   promptTokens: 0,
   completionTokens: 0,

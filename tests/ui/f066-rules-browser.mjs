@@ -103,24 +103,65 @@ try {
   const importSection = page.getByRole('region', { name: 'Import rows into Orders' });
   await importSection.getByRole('button', { name: 'Import rows' }).click();
   await importSection.getByLabel('Or paste CSV').fill('item,quantity,paid\nTea,6,no\nJam,2,yes');
+  const appendButton = importSection.getByRole('button', { name: 'Add 2 rows' });
+  assert.equal(await appendButton.isEnabled(), true, 'ordinary Append remains available when existing canvas controls reference rows');
+  await appendButton.click();
+  await importSection.getByRole('status').filter({ hasText: 'Import failed' }).waitFor();
+  const appendCall = await page.evaluate(() => window.__f066Commands?.findLast(({ type }) => type === 'table.importRows'));
+  assert.deepEqual(appendCall, { type: 'table.importRows', payload: { collection: 'orders', mode: 'append', rows: [{ item: 'Tea', quantity: 6, paid: false }, { item: 'Jam', quantity: 2, paid: true }] } }, 'Append never submits a replacement identity field');
   await importSection.getByLabel(/Replace all 2 current rows/u).check();
   const replaceButton = importSection.getByRole('button', { name: 'Replace 2 rows with 2' });
   assert.equal(await replaceButton.isDisabled(), true, 'replace stays disabled until separately confirmed');
+  const identitySelect = importSection.getByLabel('Keep linked rows matched by');
+  await identitySelect.waitFor();
+  assert.equal(await identitySelect.inputValue(), 'item', 'the only unique required text field is visibly suggested');
+  await importSection.getByText(/replacement is missing the identity value for a row referenced by the rules/u).waitFor();
+  assert.equal(await replaceButton.isDisabled(), true, 'a replacement missing a linked row cannot be confirmed');
+  await importSection.getByLabel('Or paste CSV').fill('item,quantity,paid\nTea,6,no\nBread,2,yes');
+  await importSection.getByText(/Matching by Item keeps the IDs of 2 matching rows/u).waitFor();
+  assert.equal(await identitySelect.inputValue(), 'item', 'the selected match field remains visible before confirmation');
+  await importSection.screenshot({ path: resolve('test-results/f066-import-identity.png') });
   await importSection.getByLabel(/Yes, replace all 2 existing rows/u).check();
   await replaceButton.click();
   await importSection.getByRole('status').filter({ hasText: 'Import failed' }).waitFor();
   const replaceCall = await page.evaluate(() => window.__f066Commands?.findLast(({ type }) => type === 'table.importRows'));
-  assert.deepEqual(replaceCall, { type: 'table.importRows', payload: { collection: 'orders', mode: 'replace', rows: [{ item: 'Tea', quantity: 6, paid: false }, { item: 'Jam', quantity: 2, paid: true }] } });
+  assert.deepEqual(replaceCall, { type: 'table.importRows', payload: { collection: 'orders', mode: 'replace', identityField: 'item', rows: [{ item: 'Tea', quantity: 6, paid: false }, { item: 'Bread', quantity: 2, paid: true }] } });
   assert.equal(await page.getByRole('button', { name: 'Import rows' }).count(), 0, 'calculation-owned table does not expose direct import');
   assert.match(await page.getByRole('status').last().innerText(), /filled by a calculation/u);
 
   const widths = [];
   for (const width of [280, 320, 390, 414]) {
     await page.setViewportSize({ width, height: 844 });
-    widths.push(await page.evaluate(() => ({
+    const pageWidth = await page.evaluate(() => ({
       viewport: window.innerWidth,
       document: document.documentElement.scrollWidth,
-    })));
+    }));
+    const importerLayout = await importSection.evaluate((section) => {
+      const identity = section.querySelector('.tt-table-import__identity');
+      const warning = section.querySelector('.tt-table-import__replace-warning');
+      const confirmation = section.querySelector('.tt-table-import__confirm');
+      const button = section.querySelector('button.tt-button--primary');
+      if (!identity || !warning || !confirmation || !button) throw new Error('Identity replacement panel is incomplete.');
+      const rect = (element) => {
+        const { left, right, top, bottom } = element.getBoundingClientRect();
+        return { left, right, top, bottom };
+      };
+      return {
+        identityClientWidth: identity.clientWidth,
+        identityScrollWidth: identity.scrollWidth,
+        section: rect(section),
+        identity: rect(identity),
+        warning: rect(warning),
+        confirmation: rect(confirmation),
+        button: rect(button),
+      };
+    });
+    assert.ok(importerLayout.identityScrollWidth <= importerLayout.identityClientWidth, `identity panel does not overflow at ${width}px`);
+    assert.ok(importerLayout.identity.left >= importerLayout.section.left && importerLayout.identity.right <= importerLayout.section.right, `identity panel stays within importer at ${width}px`);
+    assert.ok(importerLayout.identity.bottom <= importerLayout.warning.top, `identity panel clears replacement warning at ${width}px`);
+    assert.ok(importerLayout.warning.bottom <= importerLayout.confirmation.top, `warning clears confirmation at ${width}px`);
+    assert.ok(importerLayout.confirmation.bottom <= importerLayout.button.top, `confirmation clears Replace button at ${width}px`);
+    widths.push({ ...pageWidth, importer: importerLayout });
   }
   assert.ok(widths.every((item) => item.document <= item.viewport), `no page overflow at mobile widths: ${JSON.stringify(widths)}`);
   assert.deepEqual(failures, [], `browser console errors: ${failures.join('; ')}`);
@@ -128,7 +169,7 @@ try {
   await page.setViewportSize({ width: 414, height: 844 });
   await page.getByRole('heading', { name: 'Weekend market' }).waitFor();
   await page.screenshot({ path: resolve('test-results/f066-rules-mobile.png'), fullPage: true });
-  console.log(JSON.stringify({ interactions: 'PASS', mobileWidths: widths, screenshots: ['test-results/f066-rules-desktop.png', 'test-results/f066-rules-mobile.png', 'test-results/f066-computed-editor.png'], noPageErrors: true }, null, 2));
+  console.log(JSON.stringify({ interactions: 'PASS', mobileWidths: widths, screenshots: ['test-results/f066-rules-desktop.png', 'test-results/f066-rules-mobile.png', 'test-results/f066-computed-editor.png', 'test-results/f066-import-identity.png'], noPageErrors: true }, null, 2));
 } finally {
   await browser.close();
 }
