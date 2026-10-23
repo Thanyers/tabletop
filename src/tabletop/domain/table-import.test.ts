@@ -4,6 +4,7 @@ import type { ActorContext, DomainState } from '../shared/contracts';
 import { applyTableChange, createTableState, handleTableCommand, parseBoundedTableChange } from './table';
 import { decideDomain } from './index';
 import { projectDomain } from './projections';
+import { evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 
 function inventoryChange(): unknown {
   return {
@@ -53,6 +54,80 @@ function activateChange(state: DomainState, change: unknown): DomainState {
 
 function active() {
   return applyTableChange(createTableState(), parseBoundedTableChange(inventoryChange()));
+}
+
+function scoresChange(records = [
+  { id: 'p1', values: { player: 'Ada', score: 8 } },
+  { id: 'p2', values: { player: 'Bo', score: 2 } },
+]): unknown {
+  return {
+    kind: 'table',
+    program: {
+      version: 1,
+      title: 'Scores',
+      description: 'Track player scores.',
+      collections: [{ id: 'scores', title: 'Scores', fields: [
+        { id: 'player', label: 'Player', type: 'text', required: true },
+        { id: 'score', label: 'Score', type: 'number', required: true },
+      ] }],
+      actions: [{
+        id: 'award_point', title: 'Award a point', description: 'Add one point to a player.', roles: ['owner'],
+        parameters: [{ id: 'player', label: 'Player', type: 'record', collection: 'scores' }],
+        conditions: [], effects: [{ record: 'player', field: 'score', op: 'add', value: { literal: 1 } }],
+        requireTurn: false, advanceTurn: false,
+      }],
+      invariants: [], turnOrder: [], evidence: [], assumptions: [],
+      compute: { version: 1, modules: [{
+        id: 'totals', name: 'Totals', description: 'Calculate a score total.', runtime: 'javascript', version: 1,
+        source: 'export default function compute() { return { total: 10 }; }', inputs: [],
+        outputs: [{ id: 'total', label: 'Total', type: 'number' }],
+      }] },
+      canvas: { version: 1, views: [
+        { id: 'score_sum', kind: 'metric', title: 'Score sum', value: {
+          op: 'aggregate', source: { op: 'collection', id: 'scores' }, fn: 'sum', as: 'score',
+          value: { op: 'field', record: 'score', field: 'score' },
+        } },
+        { id: 'computed_total', kind: 'metric', title: 'Computed total', value: { op: 'computeResult', moduleId: 'totals', outputId: 'total' } },
+        { id: 'score_controls', kind: 'controls', title: 'Score controls', controls: [
+          { id: 'ada_award', kind: 'button', label: 'Award Ada', actionId: 'award_point', inputs: { player: { kind: 'record', collection: 'scores', recordId: 'p1' } } },
+          { id: 'bo_award', kind: 'button', label: 'Award Bo', actionId: 'award_point', inputs: { player: { kind: 'record', collection: 'scores', recordId: 'p2' } } },
+        ] },
+      ] },
+    },
+    initialRecords: { scores: records },
+  };
+}
+
+function activeScores(records?: Parameters<typeof scoresChange>[0]) {
+  const state = applyTableChange(createTableState(), parseBoundedTableChange(scoresChange(records)));
+  if (state.kind !== 'table') throw new Error('Expected an active scores table.');
+  return state;
+}
+
+function completeScoreTotal(state: ReturnType<typeof activeScores>) {
+  const runId = '11111111-1111-4111-8111-111111111111';
+  let next = handleTableCommand(state, 'table.compute.run', { moduleId: 'totals', runId }, actorContext())!.state;
+  next = handleTableCommand(next, 'table.compute.update', {
+    runId, status: 'running', inputHash: 'a'.repeat(64), sourceIds: [], inputProvenance: [],
+    dataRevision: state.dataRevision, ruleRevision: state.ruleRevision, runtimeProfile: 'tabletop-compute-1',
+  }, actorContext())!.state;
+  return handleTableCommand(next, 'table.compute.update', {
+    runId, status: 'succeeded', outputs: [{ outputId: 'total', value: 10 }],
+  }, actorContext())!.state;
+}
+
+function expectAtomicTableInputFailure(state: ReturnType<typeof activeScores>, payload: unknown, message: string) {
+  const before = structuredClone(state);
+  let caught: unknown;
+  try {
+    handleTableCommand(state, 'table.importRows', payload, actorContext());
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toMatchObject({ code: 'TABLE_INPUT' });
+  expect(caught).toBeInstanceOf(Error);
+  expect((caught as Error).message).toContain(message);
+  expect(state).toEqual(before);
 }
 
 function salesChange(
@@ -130,6 +205,127 @@ function salesTotalMetric(value: unknown): unknown {
 }
 
 describe('table.importRows', () => {
+  it('preserves fixed action-expression references even without a canvas', () => {
+    const state = activeScores();
+    if (!state.program) throw new Error('Expected an active scores program.');
+    delete state.program.canvas;
+    state.program.actions[0]!.effects[0]!.value = { expression: { op: 'recordField', collection: 'scores', recordId: 'p1', field: 'score' } };
+    expectAtomicTableInputFailure(state, {
+      collection: 'scores', mode: 'replace', rows: [{ player: 'Bo', score: 7 }, { player: 'Ada', score: 12 }],
+    }, 'Choose an identity field');
+    expectAtomicTableInputFailure(state, {
+      collection: 'scores', mode: 'replace', identityField: 'player', rows: [{ player: 'Bo', score: 7 }],
+    }, 'missing one or more rows referenced');
+    const replaced = handleTableCommand(state, 'table.importRows', {
+      collection: 'scores', mode: 'replace', identityField: 'player',
+      rows: [{ player: 'Bo', score: 7 }, { player: 'Ada', score: 12 }],
+    }, actorContext())!.state;
+    expect(replaced.records.scores.map(row => [row.id, row.values.player])).toEqual([['p2', 'Bo'], ['p1', 'Ada']]);
+    const acted = handleTableCommand(replaced, 'table.act', { actionId: 'award_point', inputs: { player: 'p2' } }, actorContext())!.state;
+    expect(acted.records.scores.find(row => row.id === 'p2')?.values.score).toBe(19);
+  });
+
+  it('replaces linked rows by the selected identity, preserving controls and invalidating old compute results', () => {
+    const state = completeScoreTotal(activeScores());
+    const beforeDataRevision = state.dataRevision;
+    const beforeActionRevision = state.actionRevision;
+    const result = handleTableCommand(state, 'table.importRows', {
+      collection: 'scores', mode: 'replace', identityField: 'player',
+      rows: [{ player: 'Bo', score: 7 }, { player: 'Ada', score: 12 }],
+    }, actorContext())!;
+    if (result.state.kind !== 'table') throw new Error('Expected a table after replacement.');
+    const replaced = result.state;
+
+    expect(replaced.records.scores.map(row => [row.values.player, row.id, row.values.score])).toEqual([
+      ['Bo', 'p2', 7], ['Ada', 'p1', 12],
+    ]);
+    expect(replaced.dataRevision).toBe(beforeDataRevision + 1);
+    expect(replaced.actionRevision).toBe(beforeActionRevision + 1);
+    expect(replaced.computeRuns?.[0]).toMatchObject({ status: 'succeeded', dataRevision: beforeDataRevision });
+
+    const program = replaced.program;
+    if (!program?.canvas) throw new Error('Expected the scores canvas.');
+    const views = evaluateGenerativeCanvas(program.canvas, {
+      program, records: replaced.records, computeRuns: replaced.computeRuns,
+      dataRevision: replaced.dataRevision, ruleRevision: replaced.ruleRevision,
+      actor: 'actor-1', turn: replaced.turn,
+    });
+    expect(views.find(view => view.id === 'score_sum')).toMatchObject({ value: 19 });
+    expect(views.find(view => view.id === 'computed_total')).toMatchObject({ value: null });
+
+    const control = program.canvas.views.find(view => view.kind === 'controls')?.controls.find(item => item.id === 'ada_award');
+    const playerBinding = control?.inputs.player;
+    expect(playerBinding).toMatchObject({ kind: 'record', collection: 'scores', recordId: 'p1' });
+    if (playerBinding?.kind !== 'record') throw new Error('Expected a fixed player binding.');
+    const acted = handleTableCommand(replaced, 'table.act', {
+      actionId: 'award_point', inputs: { player: playerBinding.recordId },
+    }, actorContext())!;
+    if (acted.state.kind !== 'table') throw new Error('Expected a table after the linked action.');
+    expect(acted.state.records.scores.find(row => row.id === 'p1')?.values).toMatchObject({ player: 'Ada', score: 13 });
+    expect(acted.state.records.scores.find(row => row.id === 'p2')?.values).toMatchObject({ player: 'Bo', score: 7 });
+  });
+
+  it('keeps ordinary replacement behavior when the canvas has no fixed row references', () => {
+    const state = structuredClone(activeScores());
+    if (!state.program?.canvas) throw new Error('Expected the scores canvas.');
+    state.program.canvas.views = state.program.canvas.views.filter(view => view.kind !== 'controls');
+    const oldIds = state.records.scores.map(row => row.id);
+
+    const result = handleTableCommand(state, 'table.importRows', {
+      collection: 'scores', mode: 'replace',
+      rows: [{ player: 'Bo', score: 7 }, { player: 'Ada', score: 12 }],
+    }, actorContext())!;
+
+    expect(result.state.records.scores.map(row => row.values)).toEqual([
+      { player: 'Bo', score: 7 }, { player: 'Ada', score: 12 },
+    ]);
+    expect(result.state.records.scores.every(row => !oldIds.includes(row.id))).toBe(true);
+    expect(result.state.dataRevision).toBe(state.dataRevision + 1);
+  });
+
+  it('rejects a linked replacement when an old client omits identity matching', () => {
+    expectAtomicTableInputFailure(activeScores(), {
+      collection: 'scores', mode: 'replace', rows: [{ player: 'Ada', score: 12 }, { player: 'Bo', score: 7 }],
+    }, 'Choose an identity field');
+  });
+
+  it('rejects duplicate current identity values atomically', () => {
+    const state = activeScores([
+      { id: 'p1', values: { player: 'Ada', score: 8 } },
+      { id: 'p2', values: { player: 'Ada', score: 2 } },
+    ]);
+    expectAtomicTableInputFailure(state, {
+      collection: 'scores', mode: 'replace', identityField: 'player', rows: [{ player: 'Ada', score: 19 }],
+    }, 'Current rows have duplicate values');
+  });
+
+  it('rejects duplicate imported identity values atomically', () => {
+    expectAtomicTableInputFailure(activeScores(), {
+      collection: 'scores', mode: 'replace', identityField: 'player',
+      rows: [{ player: 'Ada', score: 11 }, { player: 'Ada', score: 12 }],
+    }, 'Imported rows have duplicate values');
+  });
+
+  it('rejects a missing imported identity value atomically', () => {
+    expectAtomicTableInputFailure(activeScores(), {
+      collection: 'scores', mode: 'replace', identityField: 'player',
+      rows: [{ player: '', score: 11 }, { player: 'Bo', score: 7 }],
+    }, 'nonempty identity value');
+  });
+
+  it('rejects replacement when a fixed canvas row is absent from the identity matches', () => {
+    expectAtomicTableInputFailure(activeScores(), {
+      collection: 'scores', mode: 'replace', identityField: 'player', rows: [{ player: 'Bo', score: 7 }],
+    }, 'missing one or more rows referenced by the active rules');
+  });
+
+  it('rejects an unsupported identity field atomically', () => {
+    expectAtomicTableInputFailure(activeScores(), {
+      collection: 'scores', mode: 'replace', identityField: 'score',
+      rows: [{ player: 'Ada', score: 12 }, { player: 'Bo', score: 7 }],
+    }, 'Choose a scalar text field');
+  });
+
   it('accepts saved formulas as passive table rules but rejects tables with no rules', () => {
     const formulaOnly = salesChange(true) as { program: { actions: unknown[] } };
     formulaOnly.program.actions = [];

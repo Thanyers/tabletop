@@ -15,6 +15,7 @@ import { MAX_COMPUTED_COLUMNS, computedColumnProblems, computedProgramColumnProb
 import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
 import { computeInputBindingSchema, computeProgramProblems, computeRunRecordSchema, tableComputeProgramSchema, validateComputeOutputs, isComputeTableValue, COMPUTE_LIMITS, type ComputeRunRecord, type ComputeRuntimeProfile } from '../shared/table-compute';
 import { MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_SOURCE_AUTHORITY } from '../shared/model-job-progress';
+import { fixedProgramRecordIds, matchRowsByIdentity } from '../shared/row-identity';
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
@@ -1123,11 +1124,15 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     requirePermission(ctx, 'data.import', ['owner']);
     const input = parsePayload(z.strictObject({
       collection: id,
+      identityField: id.optional(),
       mode: z.enum(['append', 'replace']).optional(),
       rows: z.array(z.record(z.string().min(1).max(100), value)).max(100),
     }).superRefine((request, context) => {
       if ((request.mode ?? 'append') === 'append' && request.rows.length === 0) {
         context.addIssue({ code: 'custom', path: ['rows'], message: 'Add at least one row when appending.' });
+      }
+      if ((request.mode ?? 'append') === 'append' && request.identityField) {
+        context.addIssue({ code: 'custom', path: ['identityField'], message: 'Identity matching is only available when replacing rows.' });
       }
     }), payload);
     const program = state.program;
@@ -1136,11 +1141,25 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     assert(collection, 'TABLE_SCHEMA', 'Choose an existing collection.');
     assert(!program.compute?.modules.some(module => module.outputs.some(output => output.collectionId === collection.id)),
       'TABLE_INPUT', 'Import rows into a raw collection, not a derived compute output.');
+    const replacing = input.mode === 'replace';
+    const oldRows = state.records[collection.id] ?? [];
+    let identityFieldId: string | undefined;
+    if (input.identityField) {
+      const field = collection.fields.find(item => item.id === input.identityField);
+      assert(field?.type === 'text', 'TABLE_INPUT', 'Choose a scalar text field to match rows. No rows were imported.');
+      identityFieldId = field.id;
+    }
+    const fixedRecordIds = replacing ? fixedProgramRecordIds(program, collection.id) : [];
+    assert(!replacing || fixedRecordIds.length === 0 || identityFieldId !== undefined,
+      'TABLE_INPUT', 'This replacement would remove rows referenced by the active rules. Choose an identity field to keep linked rows attached. No rows were imported.');
     const nextActionRevision = (state.actionRevision ?? 0) + 1;
     assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
     const next = structuredClone(state);
-    const existing = input.mode === 'replace' ? [] : next.records[collection.id] ?? [];
+    const existing = replacing ? [] : next.records[collection.id] ?? [];
     const created: TableRecord[] = [];
+    const usedRecordIds = new Set(existing.map(row => row.id));
+    const oldRecordIds = new Set(oldRows.map(row => row.id));
+    const valuesRows: Record<string, TableValue>[] = [];
     input.rows.forEach((raw, index) => {
       const rowNumber = index + 1;
       for (const key of Object.keys(raw)) {
@@ -1151,23 +1170,49 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
         const supplied = raw[field.id];
         if (supplied === undefined || supplied === null) {
           if (field.default !== undefined) values[field.id] = structuredClone(field.default);
-          else if (field.required) throw new DomainError('TABLE_INPUT', `Row ${rowNumber}: ${field.label} is required.`);
+          else if (field.required) throw new DomainError('TABLE_INPUT', identityFieldId === field.id
+            ? `Row ${rowNumber}: ${field.label} needs a nonempty identity value to match rows.`
+            : `Row ${rowNumber}: ${field.label} is required.`);
           else values[field.id] = null;
           continue;
         }
-        assert(validValue(field, supplied), 'TABLE_INPUT', `Row ${rowNumber}: ${field.label} is invalid.`);
+        assert(validValue(field, supplied), 'TABLE_INPUT', identityFieldId === field.id
+          ? `Row ${rowNumber}: ${field.label} needs a nonempty identity value to match rows.`
+          : `Row ${rowNumber}: ${field.label} is invalid.`);
         values[field.id] = structuredClone(supplied);
+      }
+      valuesRows.push(values);
+    });
+    const identityMatch = replacing && identityFieldId
+      ? matchRowsByIdentity(oldRows, valuesRows, identityFieldId)
+      : undefined;
+    if (identityMatch && !identityMatch.ok) throw new DomainError('TABLE_INPUT', `${identityMatch.message} No rows were imported.`);
+    if (fixedRecordIds.length > 0 && identityMatch?.ok) {
+      const retainedIds = new Set(identityMatch.matchedRecordIds);
+      assert(fixedRecordIds.every(recordId => retainedIds.has(recordId)), 'TABLE_INPUT',
+        'The replacement is missing one or more rows referenced by the active rules. Include each referenced identity value or change the rules first. No rows were imported.');
+    }
+    valuesRows.forEach((values, index) => {
+      const matchedRecordId = identityMatch?.ok ? identityMatch.recordIds[index] : undefined;
+      if (matchedRecordId) {
+        assert(!usedRecordIds.has(matchedRecordId), 'TABLE_INPUT', 'A matched record identifier collision prevented this import. No rows were imported.');
+        usedRecordIds.add(matchedRecordId);
+        created.push({ id: matchedRecordId, values });
+        return;
       }
       const digest = ctx.hash(canonicalJson(['importRows', collection.id, index, values])).toLowerCase();
       const suffix = digest.replace(/[^a-z0-9_-]/g, '').slice(0, TABLE_RECORD_ID_HASH_LENGTH) || 'x';
       const recordId = `${TABLE_RECORD_ID_PREFIX}${nextActionRevision}_${String(index).padStart(TABLE_RECORD_ORDINAL_WIDTH, '0')}_${suffix}`;
       assert(id.safeParse(recordId).success, 'TABLE_LIMIT', 'A bounded record identifier could not be generated.');
-      assert(!existing.some(row => row.id === recordId) && !created.some(row => row.id === recordId), 'TABLE_INPUT', 'A generated record identifier collision prevented this import. No rows were imported.');
+      assert(!oldRecordIds.has(recordId) && !usedRecordIds.has(recordId), 'TABLE_INPUT', 'A generated record identifier collision prevented this import. No rows were imported.');
+      usedRecordIds.add(recordId);
       created.push({ id: recordId, values });
     });
     next.records[collection.id] = input.mode === 'replace' ? created : [...existing, ...created];
     // Validate the whole table once, so a limit or unique violation imports nothing.
     checkRows(program, next.records);
+    const referenceIssues = validateGenerativeProgram(program, next.records);
+    assert(referenceIssues.length === 0, 'TABLE_INPUT', referenceIssues[0] ?? 'The replacement would leave an invalid rule reference. No rows were imported.');
     validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn }, state.computeRuns, state);
     next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
     next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-100);

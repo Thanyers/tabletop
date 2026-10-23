@@ -166,6 +166,10 @@
 .tt-app .tt-table-import__mode legend { padding-inline: var(--tt-space-1); color: var(--tt-ink); font-size: 13px; font-weight: 650; }
 .tt-app .tt-table-import__mode label,
 .tt-app .tt-table-import__confirm { display: flex; align-items: flex-start; gap: var(--tt-space-2); color: var(--tt-ink); font-size: 13px; line-height: 1.45; }
+.tt-app .tt-table-import__identity { display: grid; gap: var(--tt-space-2); min-width: 0; padding: var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium); background: var(--tt-paper); }
+.tt-app .tt-table-import__identity label { display: grid; gap: var(--tt-space-1); color: var(--tt-ink); font-size: 13px; font-weight: 600; }
+.tt-app .tt-table-import__identity select { min-width: 0; max-width: 100%; }
+.tt-app .tt-table-import__identity p { margin: 0; }
 .tt-app .tt-table-import__mode input,
 .tt-app .tt-table-import__confirm input { flex: 0 0 auto; margin-top: 2px; accent-color: var(--tt-moss); }
 .tt-app .tt-table-import__replace-warning { margin: 0; padding: var(--tt-space-2) var(--tt-space-3); border-inline-start: 3px solid var(--tt-amber); background: var(--tt-ochre-2); color: var(--tt-ink); font-size: 13px; line-height: 1.45; }

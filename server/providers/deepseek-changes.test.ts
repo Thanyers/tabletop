@@ -34,6 +34,24 @@ function input(): DeepSeekChangeInput {
 }
 
 describe('DeepSeekChangeProvider', () => {
+  it('gives source-free compute drafts no fabricated citation example', async () => {
+    let system = '';
+    const provider = new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async (_url, options) => {
+        system = (JSON.parse(String(options?.body)) as { messages: Array<{ content: string }> }).messages[0]?.content ?? '';
+        return response(JSON.stringify({ kind: 'clarify', question: 'Which sales fields should be used?', options: ['Quantity and price', 'Amount only', 'I will attach a file'] }));
+      },
+    });
+    await provider.propose({ kind: 'table', prompt: 'Calculate sales using JavaScript.', sources: [], program: null, turn: null }, new AbortController().signal);
+    expect(system).toContain('This request has no source files');
+    expect(system).toContain('Collections, records, runtime libraries and research links are not table source files');
+    expect(system).not.toContain('source_id_from_input');
+    const example = JSON.parse(system.slice(system.indexOf('{"kind":"table","program"', system.indexOf('Small shape example'))));
+    expect(example.program.evidence).toEqual([]);
+    expect(example.initialRecords).toEqual({});
+  });
+
   it('sends bounded no-thinking JSON requests and validates teaching and encounter changes', async () => {
     let endpoint = '';
     let init: RequestInit | undefined;

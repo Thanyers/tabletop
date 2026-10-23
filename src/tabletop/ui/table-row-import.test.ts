@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TableField } from '../shared/table-contracts';
+import { requiredTextIdentityCandidates } from '../shared/row-identity';
 import { autoMapping, buildImportRows, cellValue, parseCsv, worksheetToCsvTable } from './table-row-import';
 
 const fields: TableField[] = [
@@ -73,5 +74,21 @@ describe('buildImportRows', () => {
     expect(preview.invalid).toHaveLength(1);
     expect(preview.invalid[0]).toMatchObject({ row: 2 });
     expect(preview.ignoredHeaders).toEqual(['Unknown']);
+  });
+});
+
+describe('requiredTextIdentityCandidates', () => {
+  it('suggests only a mapped required text field with unique nonempty values on both sides', () => {
+    const existing = [
+      { id: 'p1', values: { sku: 'A', qty: 1 } },
+      { id: 'p2', values: { sku: 'B', qty: 2 } },
+    ];
+    const imported = [{ sku: 'B', qty: 7 }, { sku: 'A', qty: 12 }];
+
+    expect(requiredTextIdentityCandidates(fields, existing, imported, new Set(['sku', 'qty'])).map(field => field.id)).toEqual(['sku']);
+    expect(requiredTextIdentityCandidates(fields, existing, [{ sku: 'A', qty: 1 }, { sku: 'A', qty: 2 }], new Set(['sku'])))
+      .toEqual([]);
+    expect(requiredTextIdentityCandidates(fields, existing, imported, new Set(['qty'])))
+      .toEqual([]);
   });
 });

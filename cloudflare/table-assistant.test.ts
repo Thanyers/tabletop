@@ -152,6 +152,30 @@ async function billingRow(jobId: string): Promise<{ status: string; max_input_to
 }
 
 describe('Cloudflare table assistant', () => {
+  it('answers the exact conditional PD035 request without invoking a provider or changing the table', async () => {
+    const input = await assistantInput(createWorkspace(), {
+      prompt: 'อยากใช้ Polars ที่นี่ ถ้าเครื่องไม่มีให้บอกข้อจำกัดและใช้ engine/library ที่มีทำยอดขายแบบเดียวกัน ห้ามติดตั้งเพิ่มระหว่างรัน',
+    });
+    const before = JSON.stringify(input.workspace.domain);
+    let providerCalls = 0;
+    const provider: typeof fetch = (url, init) => {
+      providerCalls += 1;
+      return providerFetch({ kind: 'explanation', text: 'Polars is installed and ready.', references: [] })(url, init);
+    };
+
+    const response = await respondToTablePrompt({ ...testEnv, TABLE_COMPUTE_PYTHON: 'enabled' }, input, provider);
+
+    expect(providerCalls).toBe(0);
+    expect(response.result.kind).toBe('explanation');
+    if (response.result.kind !== 'explanation') throw new Error('Expected a capability explanation.');
+    expect(response.result.text).toContain('ไม่รองรับ Polars');
+    expect(response.result.text).toContain('pandas 2.3.3');
+    expect(response.result.references).toEqual([]);
+    expect(response.usage).toEqual({ promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 });
+    expect(JSON.stringify(input.workspace.domain)).toBe(before);
+    expect(await billingRow(input.jobId)).toBeUndefined();
+  });
+
   it('answers PD035 library availability from enabled compute capabilities without a draft or data change', async () => {
     const input = await assistantInput(createWorkspace(), {
       prompt: 'ถ้าฉันขอให้ใช้ Polars แทน pandas บนระบบนี้ ทำได้จริงไหม มี library นี้ให้ใช้อยู่แล้วหรือไม่ ขอคำตอบตามความสามารถที่เปิดจริง ไม่ต้องสร้างร่างหรือแก้ข้อมูล',
@@ -189,6 +213,8 @@ describe('Cloudflare table assistant', () => {
     'Create a dashboard using the available pandas package.',
     'ใช้ Python ที่มีอยู่แล้ว สร้างตารางยอดขายให้หน่อย',
     'Is Polars supported? Build a dashboard with it.',
+    'อยากใช้ Polars ถ้าระบบไม่มีให้ใช้ pandas สร้างตารางยอดขาย ห้ามติดตั้งเพิ่มระหว่างรัน',
+    'Polars ถ้าระบบไม่มีให้บอกข้อจำกัด ห้ามติดตั้งเพิ่มระหว่างรัน ช่วยสร้างตารางยอดขายด้วย pandas',
   ])('does not intercept a positive request to build with a library: %s', async (prompt) => {
     const input = await assistantInput(createWorkspace(), { prompt });
     let providerCalls = 0;
@@ -203,8 +229,13 @@ describe('Cloudflare table assistant', () => {
     expect(providerCalls).toBe(1);
   });
 
-  it('leaves table availability questions for the table assistant', async () => {
-    const input = await assistantInput(createWorkspace(), { prompt: 'Which records are available in this system?' });
+  it.each([
+    'Which records are available in this system?',
+    'โมดูลนี้ถ้าไม่มี input ยอดขาย จะคำนวณอะไร',
+    'โมดูลนี้ถ้าระบบไม่มี input ยอดขาย จะคำนวณอะไร',
+    'If the module has no sales input, what does it calculate?',
+  ])('leaves table and missing-input questions for the table assistant: %s', async (prompt) => {
+    const input = await assistantInput(createWorkspace(), { prompt });
     let providerCalls = 0;
     const provider: typeof fetch = (url, init) => {
       providerCalls += 1;
