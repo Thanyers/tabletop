@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | ไม่ออก release เว็บในงานนี้ — เพิ่ม license ของ repository |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F074-T1` |
@@ -41,3 +41,13 @@
 ## ก่อน deploy
 
 ผู้ที่แจกจ่าย build หรือเปิดบริการต้องให้ผู้ใช้เข้าถึง Corresponding Source ตามเงื่อนไขข้อ 6/13 รวมไฟล์ build/install ที่จำเป็นของรุ่นที่ใช้งานจริง เก็บ notice ของ dependency ตาม license เดิม และไม่รวม secret หรือข้อมูลผู้ใช้ใน source package งานนี้ไม่ยืนยันการเข้าถึง source จากหน้าเว็บที่ deploy อยู่
+
+## ผลตรวจ (2026-10-23)
+
+- Node `22.23.2`: ตรวจ LICENSE SHA-256 เท่าต้นฉบับ GNU ที่ดาวน์โหลดจาก `https://www.gnu.org/licenses/agpl-3.0.txt` เป็น `0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0`
+- `node -e` ตรวจ integrity/metadata/README รวม **5 checks ผ่าน**
+- `npx tsx server/changelog.ts check`: **7 fragments ผ่าน**
+- `node scripts/check-public-files.mjs`: **781 files / 0 findings** ก่อนเพิ่มผลตรวจ; รันซ้ำก่อน commit
+- `git diff --check`: ผ่าน
+- Local runtime/browser/unit suites: **SKIPPED** เพราะแก้เอกสารและ license metadata เท่านั้น; PR ยังต้องผ่าน `local-validation` ของ commit ล่าสุด
+- PR: [#238](https://github.com/Thanyers/tabletop/pull/238)
