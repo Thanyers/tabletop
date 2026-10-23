@@ -8,14 +8,14 @@ import type { ComputeRuntimeCapabilities } from '../shared/compute-runtime-profi
 import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
-import { TableChat } from './TableChat';
+import { TableChat, type ComposerTools } from './TableChat';
 import { MAX_CHAT_CARD_REFERENCES, chatReferencePrompt, followUpPrompt, parseReferencedPrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
 import { tableDraftBytes } from '../shared/table-draft-input';
 import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchLine, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { addableWebSources, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, parseChatFollowUps, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -51,8 +51,12 @@ export interface UseTableChatOptions {
   confirm: (view: TableView, job: TableAssistantJob, commandId: CommandId) => Promise<void>;
   attach: (view: WorkspaceView, file: File) => Promise<WorkspaceView>;
   focusObject: (id: string) => void;
-  /** F037: extra composer control (add a note) rendered beside Send. */
-  composerAction?: ReactNode;
+  /** F064 slice C: the server can store researched web sources and review them. */
+  webEvidence?: boolean;
+  /** F064 slice C: offer the finished draft's researched sources as provided table sources. */
+  addWebSources?: (view: WorkspaceView, sources: ReturnType<typeof addableWebSources>) => Promise<void>;
+  /** F076: note and picture tools for the composer's + menu. */
+  composerTools?: ComposerTools;
   /** A short notification; the optional action (e.g. View rules) shows as a button on it. */
   notify: (text: string, tone: 'info' | 'error' | 'success', action?: { label: string; run: () => void }) => void;
   prefill?: { text: string; key: number };
@@ -61,6 +65,8 @@ export interface UseTableChatOptions {
 interface PrivateChatLocalState {
   dismissed: string[];
   cardIdsByJob: Record<string, string>;
+  /** F070: which card each follow-up came from, keyed by the follow-up card id. Private to this browser. */
+  followUps: Record<string, ChatFollowUp>;
 }
 
 function isTableView(view: WorkspaceView | null): view is TableView {
@@ -125,13 +131,13 @@ function storageKey(scope: string): string {
 }
 
 function readPrivateChatState(scope: string): PrivateChatLocalState {
-  if (!scope || typeof window === 'undefined') return { dismissed: [], cardIdsByJob: {} };
+  if (!scope || typeof window === 'undefined') return { dismissed: [], cardIdsByJob: {}, followUps: {} };
   try {
     const raw = window.localStorage.getItem(storageKey(scope));
-    if (!raw) return { dismissed: [], cardIdsByJob: {} };
+    if (!raw) return { dismissed: [], cardIdsByJob: {}, followUps: {} };
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { dismissed: [], cardIdsByJob: {} };
-    const candidate = parsed as { dismissed?: unknown; cardIdsByJob?: unknown };
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { dismissed: [], cardIdsByJob: {}, followUps: {} };
+    const candidate = parsed as { dismissed?: unknown; cardIdsByJob?: unknown; followUps?: unknown };
     const dismissed = Array.isArray(candidate.dismissed) ? candidate.dismissed.filter((id): id is string => typeof id === 'string').slice(-LOCAL_CARD_IDS) : [];
     const cardIdsByJob: Record<string, string> = {};
     if (typeof candidate.cardIdsByJob === 'object' && candidate.cardIdsByJob !== null && !Array.isArray(candidate.cardIdsByJob)) {
@@ -139,9 +145,9 @@ function readPrivateChatState(scope: string): PrivateChatLocalState {
         if (typeof cardId === 'string' && jobId.length <= 160 && cardId.length <= 240) cardIdsByJob[jobId] = cardId;
       }
     }
-    return { dismissed, cardIdsByJob: Object.fromEntries(Object.entries(cardIdsByJob).slice(-LOCAL_CARD_IDS)) };
+    return { dismissed, cardIdsByJob: Object.fromEntries(Object.entries(cardIdsByJob).slice(-LOCAL_CARD_IDS)), followUps: parseChatFollowUps(candidate.followUps, LOCAL_CARD_IDS) };
   } catch {
-    return { dismissed: [], cardIdsByJob: {} };
+    return { dismissed: [], cardIdsByJob: {}, followUps: {} };
   }
 }
 
@@ -151,6 +157,7 @@ function writePrivateChatState(scope: string, state: PrivateChatLocalState): voi
     window.localStorage.setItem(storageKey(scope), JSON.stringify({
       dismissed: state.dismissed.slice(-LOCAL_CARD_IDS),
       cardIdsByJob: Object.fromEntries(Object.entries(state.cardIdsByJob).slice(-LOCAL_CARD_IDS)),
+      followUps: Object.fromEntries(Object.entries(state.followUps).slice(-LOCAL_CARD_IDS)),
     }));
   } catch { /* Local closed state is a convenience; server history remains authoritative. */ }
 }
@@ -158,6 +165,15 @@ function writePrivateChatState(scope: string, state: PrivateChatLocalState): voi
 function rememberJobCard(scope: string, jobId: string, cardId: string): void {
   const local = readPrivateChatState(scope);
   writePrivateChatState(scope, { ...local, cardIdsByJob: { ...local.cardIdsByJob, [jobId]: cardId } });
+}
+
+function shortTitle(title: string): string {
+  return title.length > 48 ? `${title.slice(0, 47)}…` : title;
+}
+
+function rememberFollowUp(scope: string, cardId: string, link: ChatFollowUp): void {
+  const local = readPrivateChatState(scope);
+  writePrivateChatState(scope, { ...local, followUps: { ...local.followUps, [cardId]: link } });
 }
 
 function isDismissed(card: ChatCard, state: PrivateChatLocalState): boolean {
@@ -584,7 +600,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }
   }, [acceptAnswer, acceptDraft, patchCard]);
 
-  const send = useCallback(async (prompt: string, forcedMode?: 'draft'): Promise<boolean> => {
+  const send = useCallback(async (prompt: string, forcedMode?: 'draft', origin?: ChatFollowUp): Promise<boolean> => {
     const current = viewRef.current;
     const targetScope = scopeRef.current;
     const selectedMode = forcedMode ?? modeRef.current;
@@ -602,6 +618,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       phase: queue ? 'queued' : 'sending',
       requestCommandId: queue ? undefined : commandId,
     };
+    // F070: remember where a picked option leads before the card renders, so its line and chosen chip appear together.
+    if (origin) rememberFollowUp(targetScope, card.id, origin);
     updateCards(targetScope, (items) => [card, ...items]);
     optionsRef.current.focusObject(chatNodeId(targetScope, card.id));
     if (queue) return true;
@@ -781,27 +799,41 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   // a finished one becomes a notification (below) instead.
   const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState) && !isFinishedResult(card));
   const operationBusy = externalBusy || confirmBusy;
+  const followUps = currentLocalState.followUps;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
-    return displayCards.map((card, index) => ({
+    const byId = new Map(displayCards.map((card) => [card.id, card]));
+    return displayCards.map((card, index) => {
+      const chosen = new Map([...chosenFollowUps(card.id, displayCards, followUps)].map(([option, childId]) => [option, chatCardNodeId(scope, byId.get(childId)!)]));
+      const link = followUps[card.id];
+      const parent = link ? byId.get(link.parentCardId) : undefined;
+      // Siblings from the same card stack in the order they were picked (oldest first).
+      const siblings = link ? displayCards.filter((item) => followUps[item.id]?.parentCardId === link.parentCardId).reverse() : [];
+      return {
       id: chatCardNodeId(scope, card),
       title: chatCardTitle(card),
       // Another member's card names the asker in a muted line under the title (open visibility, F034).
-      subtitle: askerOf(card, table) ?? undefined,
-      eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : 'AI answer',
+      // F070: a follow-up names the card it came from, so a trail reads as steps.
+      subtitle: [askerOf(card, table), parent ? `Next step after “${shortTitle(chatCardTitle(parent))}”` : null].filter(Boolean).join(' · ') || undefined,
+      // F070: a card opened from a picked option reads as the next step of the card it came from.
+      eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : parent ? 'Next step · AI answer' : 'AI answer',
       glyph: <Sparkles size={16} />,
       busy: card.phase === 'sending' || card.phase === 'waiting',
       // F054: a chat answer is dated by this browser's clock (no command stamps it) and names the asker.
       at: card.createdAt,
       actorId: card.job?.askedBy ?? card.modelJob?.askedBy,
       position: { x: 760, y: 40 + index * 300 },
+      linkedFrom: parent && link ? { id: chatCardNodeId(scope, parent), label: link.option, order: Math.max(0, siblings.findIndex((item) => item.id === card.id)) } : undefined,
       content: <ChatCardContent
         card={card}
+        chosen={chosen}
         view={table}
         readOnly={readOnly}
+        webEvidence={options.webEvidence === true}
         retryDisabled={!aiEnabled || readOnly || (card.kind === 'answer' && !assistantAvailable)}
         busy={operationBusy}
         onOpenObject={options.focusObject}
+        onAddWebSources={options.addWebSources}
         onConfirm={() => void confirmCard(card)}
         onRetry={() => void retrySameRequest(card)}
         onCheck={() => void checkStatus(card)}
@@ -810,10 +842,11 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         onAnswerQuestion={(answer) => void answerQuestion(card, answer)}
         onDismiss={() => dismiss(card)}
         onBuild={() => prepareFromCard(card)}
-        onSuggest={(message) => void send(followUpPrompt(card.prompt, message))}
+        onSuggest={(message) => void send(followUpPrompt(card.prompt, message), undefined, { parentCardId: card.id, option: message })}
       />,
-    }));
-  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
+      };
+    });
+  }, [table, displayCards, followUps, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, options.addWebSources, options.webEvidence, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
   // F067: the table's share of a rule request, measured with the server's own request builder.
   const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft')
@@ -862,7 +895,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     cardReferences={cardReferences}
     onRemoveCardReference={(id) => setCardReferences((current) => current.filter((item) => item.id !== id))}
     onClearCardReferences={() => setCardReferences([])}
-    composerAction={options.composerAction}
+    composerTools={options.composerTools}
     aiContext={aiContext}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
@@ -883,13 +916,19 @@ function askerOf(card: ChatCard, view: TableView): string | null {
   return view.members.find((member) => member.actorId === askedBy)?.name ?? 'Another member';
 }
 
-function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild, onSuggest }: {
+function ChatCardContent({ card, chosen, view, readOnly, webEvidence, retryDisabled, busy, onOpenObject, onAddWebSources, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild, onSuggest }: {
   card: ChatCard;
+  /** F070: options already picked under this card, mapped to the canvas card each one opened. */
+  chosen: ReadonlyMap<string, string>;
   view: TableView;
   readOnly: boolean;
+  /** F064 slice C: the server stores web sources; the button is hidden when it cannot. */
+  webEvidence: boolean;
   retryDisabled: boolean;
   busy: boolean;
   onOpenObject: (id: string) => void;
+  /** F064 slice C: add the draft's researched sources; the app shows the result notice. */
+  onAddWebSources?: (view: WorkspaceView, sources: ReturnType<typeof addableWebSources>) => Promise<void>;
   onConfirm: () => void;
   onRetry: () => void;
   onCheck: () => void;
@@ -928,11 +967,15 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     const liveThinkingTail = card.kind === 'draft' ? card.modelJob?.progress?.thinkingTail : undefined;
     const liveThinking = liveThinkingTail ? liveThinkingLine(liveThinkingTail) : null;
     // F064: the research step runs before the draft, and its closing line stays while it drafts.
-    const liveSearch = card.kind === 'draft' ? liveSearchLine(card.modelJob?.progress?.search) : null;
+    const liveSearch = card.kind === 'draft' ? liveSearchParts(card.modelJob?.progress?.search) : null;
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
       <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingText}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} limitMs={card.kind === 'draft' ? card.modelJob?.limitMs : undefined} chars={progress?.receivedChars} reasoningChars={progress?.reasoningChars} /></p>
       {liveSearch && <div className="tt-chat-card__search" data-testid="draft-live-search" data-search-phase={card.modelJob?.progress?.search?.phase}>
-        <p className="tt-chat-card__search-line" aria-live="off">{liveSearch}</p>
+        <p className="tt-chat-card__search-line" aria-live="off">
+          <span className="tt-chat-card__search-text">{liveSearch.icon} {liveSearch.text}</span>
+          {liveSearch.query !== undefined && <span className="tt-chat-card__search-query">{liveSearch.query}</span>}
+          {liveSearch.found !== undefined && <span className="tt-chat-card__search-count">· เจอ {liveSearch.found}</span>}
+        </p>
       </div>}
       {liveThinking && <div className="tt-chat-card__thinking" data-testid="draft-live-thinking" data-thinking-chars={progress?.reasoningChars}>
         <p className="tt-chat-card__thinking-line" aria-live="off">{liveThinking}</p>
@@ -1017,6 +1060,10 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     const reviewReasons = card.modelJob?.autoApply === 'needs-review' ? card.modelJob.autoApplyReasons ?? [] : [];
     // F064 slice B: the web sources this draft used, collapsed so the card stays small.
     const sources = draftSources(card.modelJob?.research);
+    // F064 slice C: only a source with a summary can become table evidence; owners and members
+    // who may add files can then verify it on the Files card.
+    const addableSources = webEvidence ? addableWebSources(card.modelJob?.research) : [];
+    const canAddSources = addableSources.length > 0 && viewerCan(view, 'files.add') && !readOnly;
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       {card.modelJob?.autoApply === 'needs-review' && !card.pollError && <p className="tt-chat-card__hint">These rules were not added automatically because a check did not pass{reviewReasons.length ? `: ${reviewReasons.join(' ')}` : '.'}</p>}
       <p><Sparkles size={14} /> {card.pollError ? 'The rule draft is ready, but the table could not refresh.' : 'A rule draft is ready. Review it before anyone uses it.'}</p>
@@ -1031,7 +1078,7 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       </details>}
       {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
       {card.pollError && <><p className="tt-chat-card__error" role="alert">{card.pollError}</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly || card.checking} onClick={onRetryRefresh}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Retry table refresh</button></>}
-      <div className="tt-card-cta"><button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}</div>
+      <div className="tt-card-cta">{canAddSources && <button type="button" className="tt-button tt-button--quiet" data-testid="draft-add-sources" disabled={busy || card.checking} onClick={() => void onAddWebSources?.(view, addableSources)}>Add to table sources</button>}<button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}</div>
     </div>;
   }
   const job = card.job;
@@ -1049,7 +1096,13 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       {askerLine}
       <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
       {result.kind === 'build-request' && viewerCan(view, 'rules.draft') && !foreign && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
-      {suggestions.length > 0 && !foreign && <div className="tt-chat-card__suggestions" role="group" aria-label="Suggested replies">{suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={readOnly || busy} onClick={() => onSuggest(suggestion)}><CornerDownRight size={13} aria-hidden="true" />{suggestion}</button>)}</div>}
+      {suggestions.length > 0 && !foreign && <div className="tt-chat-card__suggestions" role="group" aria-label="Suggested replies">{suggestions.map((suggestion) => {
+        const opened = chosen.get(suggestion);
+        // F070: a picked option shows as chosen and leads to its answer instead of asking again.
+        return opened
+          ? <button type="button" key={suggestion} className="is-chosen" aria-pressed="true" title="Chosen: go to its answer" onClick={() => onOpenObject(opened)}><Check size={13} aria-hidden="true" />{suggestion}<span className="tt-chat-card__chosen-tag">Chosen</span></button>
+          : <button type="button" key={suggestion} aria-pressed="false" disabled={readOnly || busy} onClick={() => onSuggest(suggestion)}><CornerDownRight size={13} aria-hidden="true" />{suggestion}</button>;
+      })}</div>}
       {references.length > 0 && <div className="tt-chat-card__references">{references.map((reference, index) => <button type="button" key={`${reference.kind}-${index}`} onClick={() => onOpenObject(objectForReference(reference))}>{reference.label}</button>)}</div>}
       {dismissButton}
     </div>;

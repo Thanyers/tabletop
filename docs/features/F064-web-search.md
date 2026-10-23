@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — T1–T4 merge แล้ว (#207) · สไลซ์ A merge แล้ว (#211) · สไลซ์ B เปิด draft PR [#214](https://github.com/Thanyers/tabletop/pull/214) |
+| สถานะ | `review` — T1–T4 merge (#207) · สไลซ์ A merge (#211) · สไลซ์ B merge (#214) · สไลซ์ C ลงโค้ดแล้ว (PR [#247](https://github.com/Thanyers/tabletop/pull/247)) |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | MINOR — ใช้ `DEEPSEEK_KEY` เดิม ไม่มี secret/binding/migration ใหม่ |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F064-T*` |
@@ -25,7 +25,7 @@
 
 **รวม:** search adapter (normalize/rank/citation matching) · research tool loop แบบ bounded · ช่อง `research` ใน input ของ drafter + บรรทัดกำกับใน system prompt · env `TABLE_WEB_SEARCH=off` ปิดได้
 
-**ไม่รวม:** ให้ผลค้นเว็บกลายเป็น `program.evidence` (evidence ต้องอ้าง source ที่มีในโต๊ะ; ต้องออกแบบการ import source ก่อน) · เปิด tool calling ในสตรีมร่างหลัก (research เป็นขั้นก่อนร่าง) · การแก้ไข/ลบแหล่งที่แสดงบนการ์ด (สไลซ์ B แสดงอย่างเดียว)
+**ไม่รวม:** ให้ผลค้นเว็บกลายเป็น `program.evidence` (evidence ต้องอ้าง source ที่มีในโต๊ะ — ออกแบบไว้แล้วที่ [สไลซ์ C](F064-slice-c-web-evidence.md) แต่ยังไม่ลงโค้ด) · เปิด tool calling ในสตรีมร่างหลัก (research เป็นขั้นก่อนร่าง) · การแก้ไข/ลบแหล่งที่แสดงบนการ์ด (สไลซ์ B แสดงอย่างเดียว)
 
 ## ข้อเท็จจริงจากโค้ด (2026-10-23, `origin/dev` `c5c8803`)
 
@@ -118,10 +118,20 @@ Node **22.23.2** · branch `feat/F064-search-visibility`
 ### ความเสี่ยง / ข้อจำกัดสไลซ์ A
 
 - **ยังไม่ยืนยันด้วย browser suite แบบ end-to-end**: provider, worker และ client line มี unit/worker test ครบ และมี harness render จริงแล้ว แต่ยังไม่มี fixture ที่ stream event ค้นผ่านเบราว์เซอร์ทั้งเส้น
-- **การ์ดแคบมาก (320px)**: บรรทัดเดียวจึงตัดท้ายด้วย `…` ได้ เช่น query ไทยยาวจะเห็น `…2569` โดย `· เจอ N` ถูกตัด (ที่ 414px เห็นครบ); บรรทัดปิด `✓ ใช้ N แหล่ง` สั้นจึงเห็นครบเสมอ — ตัวเลข"N ที่ใช้จริง" จึงไม่หาย
+- **การ์ดแคบมาก (320px)**: แก้แล้วใน follow-up 2026-10-23 — บรรทัดแยกเป็น span, ellipsis เฉพาะ query และ `· เจอ N` ถูกตรึงไว้ (`flex: none`) จึงเห็น count เสมอ
 - **ข้อความจากผู้ให้บริการ**: query มาจากโมเดลและ title มาจากเว็บสาธารณะ → redact ก่อนเก็บเหมือน thinking tail
 - **ค่าใช้จ่ายต่อ tick**: job row โตขึ้น ≤300 ตัวอักษรต่อครั้งที่เขียน (ไม่เกิน 1 ครั้ง/900 ms) และถูกเขียนทับด้วยผลลัพธ์เมื่อจบ
-- **ข้อสังเกต (ไม่แก้ในสไลซ์นี้):** บรรทัด `liveThinkingLine` ของ F050 เป็น grid item ใน `.tt-chat-card--working` ที่ `justify-items:center` จึงมีโอกาสถูกจัดขนาดตาม content (nowrap) แบบเดียวกับที่พบในสไลซ์นี้; สไลซ์นี้แก้เฉพาะ element ของตนด้วย `justify-self: stretch` — F050 ควรได้ `justify-self: stretch` เพิ่มถ้าพบข้อความยาวล้นในการ์ดแคบ
+- **F050 ได้รับการแก้แบบเดียวกันแล้ว** ใน follow-up นี้: `.tt-chat-card__thinking` มี `justify-self: stretch` — บรรทัด thinking ที่ยาวจะไม่ดันการ์ดอีก
+
+### Follow-up 2026-10-23 (branch `fix/F064-followups`)
+
+| เรื่อง | สิ่งที่แก้ |
+| --- | --- |
+| `· เจอ N` ถูกตัดที่ 320px | `liveSearchParts()` แยก `{icon, text, query, found}`; JSX แยก span `.tt-chat-card__search-query` (ellipsis) กับ `.tt-chat-card__search-count` (`flex: none`) — `liveSearchLine()` ยังคืนสตริงเดิมเพื่อ test/a11y |
+| F050 latent overflow | `.tt-chat-card__thinking { justify-self: stretch; }` — grid item ที่ถูก `justify-items:center` ไม่ถูกจัดขนาดตาม nowrap content |
+| browser fixture นับ provider call เกิน | dev แก้ `TABLE_WEB_SEARCH: 'off'` ใน `tests/*-browser.mjs` แล้ว (มาจาก F066); follow-up เติมให้ `scripts/{generic-table-local,canvas-evolution-local}.mjs` ในโหมด synthetic เท่านั้น (โหมด `--real-ai` ยังเปิด research) |
+
+ผลตรวจ (Node 22.23.2): unit **819 passed / 5 skipped** (113 ไฟล์), `test:cloudflare` **170/170**, `build` ผ่าน, `lint` 0 error / 107 warning, public scan 0 finding, ui-gate harness **15/16** (เหลือ "No emoji" ตาม copy `🔎`/`✓` ที่ handoff กำหนด) · เพิ่ม unit 2 เคสของ `liveSearchParts` และอัปเดตภาพ `docs/previews/f064-search-line-{320,414}.jpg` ให้เห็น count ครบที่การ์ดแคบ
 
 
 ## ผลตรวจ
@@ -211,3 +221,56 @@ Node **22.23.2** · branch `feat/F064-sources-card`
 - **authority/date ไม่ได้ตรวจเนื้อหา**: เป็นค่าที่ผู้ให้บริการรายงาน ใช้บอกคุณภาพแหล่งเท่านั้น
 - **แหล่งที่แสดงไม่ใช่หลักฐานของโต๊ะ**: ยังอ้างใน `program.evidence` ไม่ได้และลบ/แก้ไม่ได้ในสไลซ์นี้
 - **ขนาด job row**: โตขึ้นไม่เกิน 6 แหล่ง (ไม่กี่ KB) ครั้งเดียวตอนจบ และถูกเขียนทับเมื่อ job ถูกเก็บกวาดตามรอบเดิม
+
+## สไลซ์ C — ผลค้นเป็นหลักฐานของโต๊ะ (ลงโค้ดแล้ว 2026-10-23)
+
+เอกสารออกแบบ/ทางเลือก/ความเสี่ยง: [F064-slice-c-web-evidence.md](F064-slice-c-web-evidence.md) · สรุปที่ลงจริง:
+
+### สิ่งที่ผู้ใช้เห็น
+
+1. การ์ดร่างที่ใช้ research มีปุ่ม **Add to table sources** (คนที่มี `files.add`) — เพิ่มแหล่งที่ร่างนั้นใช้เป็น source ของโต๊ะ
+2. source ใหม่เป็นสถานะ **Provided** บนการ์ด Files พร้อมไตเติล/ลิงก์/วันที่/authority; **owner** เห็นปุ่ม **Verify / Reject**
+3. **Verified** เท่านั้นที่ถูกส่งให้ AI ในคำขอถัดไปและอ้างใน `program.evidence` ได้; Provided/Rejected ไม่ถึงโมเดลและอ้างไม่ได้
+4. source ที่ Rejected ยังอยู่บนโต๊ะ (เห็นป้าย Rejected) และลบได้ด้วยคำสั่งเดิมถ้าไม่มี revision อ้าง
+
+### สัญญาที่เปลี่ยน
+
+- `TableSource` เพิ่ม optional `origin:'web'`, `status:'provided'|'verified'|'rejected'`, `url`, `publishedAt`, `authority` — ไฟล์ที่ import เดิมไม่มีฟิลด์เหล่านี้และทำงานเหมือนเดิม
+- `text` ของ web source = `title + "\n" + summary` (≤200 + ≤800) ⇒ กติกา evidence เดิม `text.includes(quote)` บังคับ quote ให้มาจากไตเติล/summary ไม่ใช่ URL
+- คำสั่งใหม่: `table.addWebSources { sources }` (`files.add`, worker redact `title/url/summary` ก่อน, dedupe ด้วย URL, เพดานเดิม 4 แหล่ง/32 KiB/64 KiB) และ `table.reviewWebSource { sourceId, status }` (owner, first review only)
+- กติกา evidence: ไม่มี source ที่ cite ได้ (ไฟล์ หรือ web ที่ verified) ⇒ evidence ต้องว่าง; มี ⇒ ต้องมีอย่างน้อย 1 และ quote ต้องอยู่ใน `source.text` + web source ต้อง verified
+- `tableDraftInput` กรอง web source ที่ไม่ใช่ verified ออก; system prompt เปลี่ยนเป็น "cite only exact quotes from a supplied source text" (ยังใต้ 20,500 ตัวอักษร)
+- capability `webEvidence` (Worker true เว้นแต่ `TABLE_WEB_EVIDENCE=off`) คุมการแสดงปุ่ม; คำสั่งถูกปฏิเสธเมื่อ switch off; event log เก็บเฉพาะ `sourceId/filename/sha256`
+
+### การตัดสินใจ (เจ้าของผลิตภัณฑ์ยืนยัน 2026-10-23)
+
+| เรื่อง | ค่าที่ใช้ |
+| --- | --- |
+| ใคร verify ได้ | **owner เท่านั้น** (ตามแบบ invoice `reviewSource`) |
+| เพดาน source | **4 แหล่งเดิม** (ไฟล์ + web รวมกัน) |
+| source ที่ reject | **เก็บไว้ให้เห็น** แต่ตัดจาก AI input และอ้างไม่ได้ |
+| ร่างเดิมหลัง verify | **ต้องขอร่างใหม่** — ร่างก่อน verify ไม่ถูกแก้ย้อนหลัง |
+
+### ผลตรวจสไลซ์ C
+
+Node **22.23.2** · branch `feat/F064-web-evidence`
+
+| คำสั่ง | ผล |
+| --- | --- |
+| `npx vitest run src/tabletop/domain/table-web-sources.test.ts src/tabletop/shared/table-draft-input.test.ts` | **12/12** (domain 6 + draft input 6) |
+| `npm run test:cloudflare` | **189/189** (13 ไฟล์) — `web-evidence.test.ts` 4 เคส + room test 1 เคส (redact, event ไม่มีข้อความ) |
+| `npm test` | **886 passed / 5 skipped** (122 ไฟล์) |
+| `npm run build` | ผ่าน |
+| `npm run lint` | 0 error / 111 warning (ไม่มี warning ใหม่ในไฟล์ที่แตะ) |
+| `node scripts/check-public-files.mjs` | 0 finding |
+| `ui-gate` บน harness (Files card + draft CTA, 375/900) | **15/16** — overflow 280/320/414 = 0, state-aware WCAG, touch targets, clipped content, mobile-first, RTL ผ่าน; เหลือ axe color-contrast 3 node ที่เป็นข้อความ muted เดิมของ `tabletop.css` ไม่ใช่ element ใหม่ (badge/ปุ่มวัดได้ 5.43–5.94:1) |
+
+ภาพ: `docs/previews/f064-web-evidence-{375,900}.jpg`
+
+### ความเสี่ยง / ข้อจำกัดสไลซ์ C
+
+- **ไม่มี auto-verify**: แหล่งใหม่ต้องมี owner กดทุกครั้ง; draft ที่ยังไม่ verify จะไม่มี citation จากเว็บ
+- **first review only**: verified → rejected ไม่ได้ (กันหลักฐานหาย); ถ้าต้องถอนต้องลบ source ซึ่งติด guard เดิมเมื่อ revision อ้าง
+- **ไม่มี expiry**: เก็บ snapshot ณ วันค้น ไม่ตามเว็บจริง
+- **ยังไม่รัน browser flow end-to-end** (add → verify → cite): ครอบด้วย domain/worker/unit + render harness
+- **Node guest runtime ไม่เปิด `webEvidence`**: ปุ่มซ่อน (Worker เท่านั้น)

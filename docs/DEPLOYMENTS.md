@@ -1,18 +1,54 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 เวลา 00:00 (Asia/Bangkok)** ทั้งสอง environment รายงาน **6.0.0 / 195b84c** จาก annotated tag [v6.0.0](https://github.com/Thanyers/tabletop/releases/tag/v6.0.0)
+ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 เวลา 16:53 (Asia/Bangkok)**: production รายงาน **8.0.0 / 89a604e** จาก annotated tag [v8.0.0](https://github.com/Thanyers/tabletop/releases/tag/v8.0.0); staging รายงาน **0.0.0-dev / 7b28376** จากการ merge [PR #238](https://github.com/Thanyers/tabletop/pull/238)
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [195b84c](https://github.com/Thanyers/tabletop/commit/195b84c89fdc162f9c3bc93e984379d858e72c45) — PR #191 | commit และ build เดียวกัน |
-| Release | v6.0.0 / 6.0.0 | v6.0.0 / 6.0.0 |
+| Source | [89a604e](https://github.com/Thanyers/tabletop/commit/89a604e0f308c715349e58d35f479d84e535ffe3) — PR #224 | [7b28376](https://github.com/Thanyers/tabletop/commit/7b2837664ae74f458c19c0f09bb04984da22f896) — PR #238 |
+| Release | v8.0.0 / 8.0.0 | dev / 0.0.0-dev |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
-/demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+/demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## ผลตรวจ staging หลัง merge license (23 ตุลาคม 2569)
+
+- [PR #238](https://github.com/Thanyers/tabletop/pull/238) merge เข้า `dev` ที่ `7b28376` หลัง `local-validation` ของ head `3e035e6` ผ่าน และ GitHub รายงาน mergeable ไม่มี code conflict
+- [Run 39933143323](https://github.com/Thanyers/tabletop/actions/runs/39933143323) ของ merge commit ผ่านทุก job ที่รัน รวม fast checks, browser suites ทั้งสาม, `local-validation`, deploy staging และ smoke check; `report-dev-failure` เป็น **SKIPPED**
+- Node **22.23.2**: unit/local SQL **849 passed / 5 skipped / 0 failed**, Workers integration **177 passed / 0 failed**
+- `/version` ของ staging อ่านกลับได้ `0.0.0-dev / 7b28376`, `built_at: 2026-10-23T09:52:26Z`; production อ่านกลับได้ `8.0.0 / 89a604e`, `built_at: 2026-10-23T07:42:56Z`
+- อ่าน `LICENSE` กลับจาก `dev` ได้ blob `be3f7b28e564e7dd05eaf59d64adba1a4065ac0e` ตรงกับไฟล์ที่ตรวจ การ deploy นี้ไม่ใช่การตรวจ source offer จากหน้าเว็บ และไม่ได้ออก release production
+- snapshot นี้ผูกกับ run/เวลาตรวจข้างต้น; merge ที่ใหม่กว่าติดตามผลจาก run ของ commit นั้น
+
+## ผลตรวจ deploy 8.0.0 (23 ตุลาคม 2569)
+
+Release 8.0.0 (**MAJOR**) ผ่าน pipeline CD001 ([run 39919542374](https://github.com/Thanyers/tabletop/actions/runs/39919542374)) — [PR #224](https://github.com/Thanyers/tabletop/pull/224) จาก `dev` @ `910b0a3` · ออกตามหลัง 7.0.0 ทันทีเพราะ 7.0.0 ตัดจาก `dev` @ `a731a84` (#204) จึงไม่มีงานที่ merge หลังจากนั้น (#205–#220) · เหตุผล MAJOR: F066 เพิ่ม contract `compute` ที่บันทึกใน state ของห้อง ซึ่ง build 7.0.0 อ่านไม่ได้ → **ห้าม rollback ทั้งระบบหลังมีห้องบันทึก compute** (ก่อนหน้านั้น deploy `v7.0.0` กลับได้) · ไม่มี D1 migration
+
+- CI ของ PR #224 รอบสุดท้ายผ่านทุก job (Node 22.23.2): fast-checks 3m8s, generated 3m34s, Workers 8m24s, persona 9m49s, `local-validation` PASS · รอบแรก Workers ล้มเพราะ merge เอา fixture ของ main (#194) มาปนกับ mock ของ dev (`MODEL_PROVIDER_HTTP_ERROR`) และ generated ล้มแบบ flaky (`exerciseAction:933`) → คงชุดเทสต์ของ dev ทั้งชุด (`c932bda`) แล้วผ่าน
+- Validate บน merge commit **16 วินาที** — CI006 ใช้ผลชุดเต็มของ PR ซ้ำ (tree ของ merge commit ตรงกับ head)
+- Tag `v8.0.0` (annotated) → `89a604e`; build ครั้งเดียว `8.0.0 / 89a604e` (`built_at` 2026-10-23T07:42:56Z)
+- D1: `no pending D1 migrations` ทั้ง staging และ production
+- Staging: Worker version `97d1d29a-41f8-4fb9-b616-99d2df7c8646`, smoke PASS
+- Production: Worker version `90b81e2a-d7f6-429c-96e7-a98e37396a28`, smoke PASS
+- `/version` ทั้งสอง environment = `8.0.0 / 89a604e` (ตรวจซ้ำด้วยมือ 14:45 น.)
+- ข้อจำกัดที่ยังเปิด: binding `worker_loaders` (`COMPUTE_LOADER`) และ `TABLE_COMPUTE_PYTHON` ยังไม่อยู่ใน `WRANGLER_CONFIG_*` — capability JavaScript/Python compute รายงานปิดจนกว่า operator จะเติม config ตาม [REUSABLE_COMPUTE](REUSABLE_COMPUTE.md) (ระบบไม่ crash เพราะ gate ด้วย capability)
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-8.0.0`
+
+## ผลตรวจ deploy 7.0.0 (23 ตุลาคม 2569)
+
+Release 7.0.0 (**MAJOR**) ผ่าน pipeline CD001 ([run 39916314413](https://github.com/Thanyers/tabletop/actions/runs/39916314413)) — [PR #206](https://github.com/Thanyers/tabletop/pull/206) จาก `dev` @ `a731a84` · ไม่รวม #180/#219 (หน้าแรกสองภาษา) · เหตุผล MAJOR: F055 เก็บสูตรคำนวณแบบใหม่ใน state รุ่น 6.0.0 อ่านแล้ว crash → **ห้าม rollback ทั้งระบบ แก้ไปข้างหน้าเป็น 7.0.x**
+
+- CI ของ PR ล้ม 2 ชุด (Workers `requestProposal:479`, generated `exerciseAction:901`) · สาเหตุ: #194 ตั้งใจไม่ส่งเนื้อหาไฟล์ที่กฎอ้างแล้ว (`importedSources`) แต่ mock provider ในเทสต์ยังคาด `input.sources` ครบ → แก้เทสต์อย่างเดียว `18fddb2` · ตัดออกด้วย bisect: Node 26/22, #192/#193, #196–#198, #201, #203/#204 · ยืนยันด้วย full suite บน runner จริง (run 39914232300) ผ่านรอบแรก
+- Validate บน merge commit **1 นาที** — CI006 ใช้ผลชุดเต็มของ PR ซ้ำได้จริงครั้งแรก (ข้ามทุก job)
+- Tag `v7.0.0` (annotated) → `c250a60`; build ครั้งเดียว `7.0.0 / c250a60` (`built_at` 2026-10-23T07:13:38Z)
+- D1: `no pending D1 migrations` ทั้ง staging และ production
+- Staging: Worker version `8d632dcb-3d60-407d-804e-b76791fa352f`, smoke PASS
+- Production: Worker version `9982c969-7ddd-483f-a62a-d6fe4961bfc3`, smoke PASS
+- `/version` ทั้งสอง environment = `7.0.0 / c250a60` (ตรวจซ้ำด้วยมือ 14:21 น.)
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-7.0.0` · เทสต์ใน dev แก้เรื่อง #194 ไว้ละเอียดกว่าแล้ว จึงใช้ของ dev
 
 ## ผลตรวจ deploy 6.0.0 (22 ตุลาคม 2569)
 

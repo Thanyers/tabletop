@@ -17,7 +17,7 @@ export function resolveTableRuleReferences(prompt: string, state: TableState): s
     if (kind === 'check') label = program?.invariants.find(item => item.id === id)?.message;
     if (kind === 'table') label = program?.collections.find(item => item.id === id)?.title;
     if (kind === 'view') label = program?.canvas?.views.find(item => item.id === id)?.title;
-    if (kind === 'formula') label = state.computedColumns?.find(item => item.id === id)?.label;
+    if (kind === 'formula') label = program?.computedColumns?.find(item => item.id === id)?.label ?? state.computedColumns?.find(item => item.id === id)?.label;
     if (kind === 'compute') label = program?.compute?.modules.find(item => item.id === id)?.name;
     if (!label) throw new DomainError('TABLE_REFERENCE', 'A referenced rule has changed or was removed. Select it again from Rules.');
     // The current program is already sent separately. Identify the exact item without duplicating its code into the prompt.

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails, type ModelJobSearchProgress } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails, type ModelJobSearchProgress } from '../shared/model-job-progress';
 import {
-  canApplyWorkspaceRefresh, DRAFT_SOURCE_TITLE_CHARS, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
+  addableWebSources, canApplyWorkspaceRefresh, DRAFT_SOURCE_TITLE_CHARS, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
   draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, formatSourceDate, historyCard,
-  LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
+  LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveSearchParts, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
 } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
@@ -263,6 +263,16 @@ describe('live search line while a draft runs (F064)', () => {
     expect(liveSearchLine(search({ phase: 'done', resultsCount: 3 }))).toBe('✓ ใช้ 3 แหล่ง');
   });
 
+  it('splits the line so only the query can be ellipsised and the count always shows', () => {
+    expect(liveSearchParts(search({ phase: 'reading', resultsCount: 4 })))
+      .toEqual({ icon: '🔎', text: 'กำลังค้น:', query: 'VAT ไทย 2569', found: 4 });
+    expect(liveSearchParts(search()))
+      .toEqual({ icon: '🔎', text: 'กำลังค้น:', query: 'VAT ไทย 2569' });
+    expect(liveSearchParts(search({ phase: 'done', resultsCount: 3 })))
+      .toEqual({ icon: '✓', text: 'ใช้ 3 แหล่ง' });
+    expect(liveSearchParts(undefined)).toBeNull();
+  });
+
   it('re-bounds the query and collapses whitespace, so an oversized row cannot widen the card', () => {
     const line = liveSearchLine(search({ query: `${'  very\nlong  '}${'q'.repeat(MAX_JOB_SEARCH_QUERY_CHARS * 2)}` }));
     expect(line).not.toBeNull();
@@ -273,8 +283,8 @@ describe('live search line while a draft runs (F064)', () => {
 });
 
 describe('web sources on a finished draft card (F064)', () => {
-  const source = (patch: Partial<{ title: string; url: string; date: string | null; authority: number }> = {}) =>
-    ({ title: 'ประกาศ VAT', url: 'https://example.go.th/x', date: '2026-07-26T16:00:00+00:00', authority: 4, ...patch });
+  const source = (patch: Partial<{ title: string; url: string; date: string | null; authority: number; summary: string }> = {}) =>
+    ({ title: 'ประกาศ VAT', url: 'https://example.go.th/x', date: '2026-07-26T16:00:00+00:00', authority: 4, summary: 'VAT is 7% in Thailand.', ...patch });
 
   it('returns nothing when the draft never searched', () => {
     expect(draftSources(undefined)).toEqual([]);
@@ -283,7 +293,7 @@ describe('web sources on a finished draft card (F064)', () => {
 
   it('shows a real link, a readable date and the authority', () => {
     const items = draftSources({ queries: ['VAT'], sources: [source()] });
-    expect(items).toEqual([{ title: 'ประกาศ VAT', url: 'https://example.go.th/x', dateLabel: '26 Jul 2026', authority: 4 }]);
+    expect(items).toEqual([{ title: 'ประกาศ VAT', url: 'https://example.go.th/x', dateLabel: '26 Jul 2026', authority: 4, summary: 'VAT is 7% in Thailand.' }]);
     expect(draftSourcesLabel(items.length)).toBe('Sources (1)');
   });
 
@@ -311,6 +321,35 @@ describe('web sources on a finished draft card (F064)', () => {
     expect(items[1]?.title.length).toBeLessThanOrEqual(DRAFT_SOURCE_TITLE_CHARS);
     expect(formatSourceDate(null)).toBe('');
     expect(formatSourceDate('soon')).toBe('');
+  });
+
+  it('carries a bounded summary on the draft card and leaves it empty when absent', () => {
+    const [bounded] = draftSources({ queries: [], sources: [source({ summary: 's'.repeat(MAX_JOB_RESEARCH_SUMMARY_CHARS + 50) })] });
+    const [absent] = draftSources({ queries: [], sources: [source({ summary: '' })] });
+    expect(bounded?.summary).toHaveLength(MAX_JOB_RESEARCH_SUMMARY_CHARS);
+    expect(absent?.summary).toBe('');
+  });
+
+  it('offers only sources with a citable summary, keeping the date and authority', () => {
+    const items = addableWebSources({
+      queries: [],
+      sources: [source({ title: 'No citable text', summary: '' }), source({ title: 'Citable', summary: 'Keep this.' })],
+    });
+    expect(items).toEqual([{ title: 'Citable', url: 'https://example.go.th/x', date: '2026-07-26T16:00:00+00:00', authority: 4, summary: 'Keep this.' }]);
+  });
+
+  it('caps and trims the sources the card may add', () => {
+    const items = addableWebSources({
+      queries: [],
+      sources: [
+        source({ title: 'Padded', summary: '  Keep this.  ' }),
+        ...Array.from({ length: MAX_JOB_RESEARCH_SOURCES + 3 }, (_, index) =>
+          source({ title: `S${index}`, url: `https://example${index}.go.th/x`, summary: `summary ${index}` })),
+      ],
+    });
+    expect(items).toHaveLength(MAX_JOB_RESEARCH_SOURCES);
+    expect(items[0]?.summary).toBe('Keep this.');
+    for (const item of items) expect(item.url.startsWith('https://')).toBe(true);
   });
 });
 

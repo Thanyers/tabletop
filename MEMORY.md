@@ -5,6 +5,50 @@
 
 ## Lessons
 
+### 2026-10-23 — พิกัดเทสต์ลากหมดอายุระหว่าง pending focus
+- **What happened:** CI scene dragไม่ถึง40/20แม้localผ่าน; forcedwindowยืนยันpointermoveโดนlightแต่focusfitก่อนdownทำให้downพลาด/0actions/ค่าคง20,10
+- **Root cause:** เทสต์วัดgetScreenCTMก่อนpointerdownแต่ปล่อยfocus90msทำงานระหว่างคำสั่งbrowser ทำให้พิกัดscreenเก่าไม่ตรงฉาก
+- **Correct behavior:** ใช้clockควบคุมpendingwindowก่อนrealdownและยืนยันevent-timehit/viewport; คงexactcoordinates/actioncount/independentshadow/cameraassertions และเก็บforcedredmodeเพื่อยืนยันrace ห้ามลดassertionsหรือแก้productioncameraจากสมมติฐาน
+
+### 2026-10-23 — unavailable inputถูกautoqueueซ้ำทุกalarm
+- **What happened:** actualstagingPythonสะสม22failedrunsของinputเดิมจนUIbusyและraweditชนrevision
+- **Root cause:** orchestratorยกเว้นCOMPUTE_UNAVAILABLEจากfailedSameInputหลังจบdrain จึงqueueใหม่เมื่อมีscheduleรอบถัดไป
+- **Correct behavior:** failureของinputHash/moduleversion/profile/data/rulerevisionเดิมต้องterminalสำหรับautorun; retryผ่านexplicitRunหรือinput/versionใหม่ และเพิ่มregressionเรียกscheduleหลายรอบแล้วยังมีหนึ่งrun
+
+### 2026-10-23 — guard ย้อนสูตรทำให้ optional default ถูกข้าม
+- **What happened:** ช่อง optional ใหม่ที่มี default ไม่เติมค่าให้แถวเดิมหลังเพิ่ม formula rollback guard
+- **Root cause:** ใช้ validValue กับ undefined เพื่อข้ามแถวก่อนเติม default ทั้งที่ optional ยอมรับ undefined ได้
+- **Correct behavior:** แยกสูตรที่คืนเป็น stored fieldเพื่อตรวจ historical equality แล้ว continue; ช่องใหม่ปกติต้องเติม declared default ทุกแถวและมี regression ของ optional/default บนข้อมูลเดิม
+
+### 2026-10-23 — เพิ่ม assistant capability แต่ลืม strict mock ของ browser
+- **What happened:** F066-T8 unit ผ่าน แต่ Workers browser ถาม Available rule แล้วได้ `MODEL_PROVIDER_HTTP_ERROR` เพราะ synthetic outbound fixture ปฏิเสธ request
+- **Root cause:** เพิ่ม `computeCapabilities` ใน assistant context และปรับ unit assertion แล้ว แต่ `tests/cloudflare-browser.mjs` ยังตรวจ key set เดิม จึงกลายเป็น error ของ provider จำลอง
+- **Correct behavior:** เมื่อแก้ provider payload ให้ค้น strict key assertions ใน unit และ browser fixtures พร้อมกัน เพิ่ม key และตรวจค่า capability จริงของ fixture โดยคง redaction/privacy assertions เดิม แล้วรัน Workers browser ก่อนอ้างว่าชุดรวมผ่าน
+### 2026-10-23 — เปลี่ยนข้อความตัวเลือกใน UI แล้ว browser suite บน dev ล้ม staging เลยค้าง
+
+- **what happened:** F075 เปลี่ยนข้อความ option ของช่อง "Choose a record" ผ่าน unit/CI เร็วของ PR แต่ `test:generative:browser` บน push เข้า `dev` ล้มที่ `toHaveText('0 · team-south')` (ได้ `"0"`) → ชุดเต็มไม่ผ่าน staging ไม่ deploy commit ต่อ ๆ ไป
+- **root cause:** PR เข้า dev รันแค่เช็คเร็ว (ไม่มี browser suite) และผมเช็คแค่ว่าเทสต์มีข้อความเดิมอยู่ไหม โดยคิดเองว่าค่าสองแถวยังซ้ำกันตอนถึงบรรทัดนั้น ไม่ได้รันจริง
+- **correct behavior:** แก้ข้อความที่ผู้ใช้เห็นเมื่อไหร่ ให้ `grep -rn "<ข้อความเดิม>" tests/*.mjs` แล้วรัน suite ที่เจอในเครื่องก่อน merge: `npm run build && npm run build:cloudflare && BROWSER_CHANNEL=chrome npm run test:generative:browser` (หรือ suite ที่เกี่ยว)
+
+### 2026-10-23 — Docker สำเร็จแต่ Container API ปฏิเสธ instance
+- **What happened:** build image และ Node/Docker integration ผ่าน แต่ Linux Workers Container API smoke ของ F066-T8 รัน Python ไม่ได้: `Invalid container instance type` ก่อนเริ่ม process
+- **Root cause:** ใช้ `instance: 'basic'` จากรายการขนาดทั่วไปโดยไม่ได้รันผ่าน Durable Object API ของเวอร์ชันที่ล็อกไว้ ซึ่งรับชุดชื่อไม่เหมือนกัน
+- **Correct behavior:** ใช้ `standard-1` ที่ API รองรับและรัน `node scripts/compute-cloudflare-local.mjs` ใน full CI บน Linux ก่อน deploy; แยกผล Docker, Workers emulator, capability และ hosted execution เสมอ ห้ามยก flag/build image เป็นหลักฐาน Python พร้อมใช้
+
+### 2026-10-23 — การคลิกใน QA ต้องตรวจค่าหลัง action ที่ล้มเหลว
+- **What happened:** ตอนเก็บหลักฐานคำถามเพิ่ม การเลือก checkbox บนการ์ดที่อยู่นอกมุมมองคืน error แต่มีตัวเลือกอื่นถูกเลือก เมื่อเก็บ snapshot พบว่าเช็กลิสต์กับคำตอบเองถูกส่งร่วมกัน จึงบันทึกรอบนั้นเป็น multi-answer ตามจริง ไม่อ้างว่าเลือกเฉพาะคำตอบเอง
+- **Root cause:** ถือว่า action ที่ error ไม่เปลี่ยน UI และตรวจเพียงตัวเลือกเป้าหมาย หลัง layout ของการ์ดขยับ
+- **Correct behavior:** ใช้ Objects เปิดการ์ดให้อยู่ในมุมมองก่อนเลือก; หลัง action ที่ error อ่านค่าของทุก checkbox ใหม่ เก็บ snapshot ของคำตอบ/ทุกค่าที่เลือกก่อน Submit และแยกหลักฐานก่อน/หลัง command ไม่ใช้ snapshot สถานะสุดท้ายแทนลำดับการทำงาน
+
+### 2026-10-23 — staging deploy ที่ใช้ `workflow_run` ไม่ทำงานเพราะไฟล์ไม่อยู่บน default branch
+- **What happened:** CD002 (#230) เพิ่ม `.github/workflows/staging-deploy.yml` แบบ `on: workflow_run` ของ Validate บน `dev` แต่ merge แล้วไม่มี run เลย และ `gh workflow run` ตอบ 404 "workflow … not found on the default branch"
+- **Root cause:** GitHub เรียก workflow ที่ trigger ด้วย `workflow_run` (และ `workflow_dispatch`) จากไฟล์บน **default branch** เท่านั้น ซึ่งของ repo นี้คือ `main` · ไฟล์ใหม่ที่อยู่แค่ใน `dev` จึงไม่ถูกเรียกจนกว่าจะออก release
+- **Correct behavior:** งานที่ต้องเริ่มจาก push เข้า `dev` ให้ใส่เป็น job ใน workflow ที่ trigger ด้วย `push` (เช่น `deploy-staging` ใน `validate.yml` ที่ `needs: local-validation`) · ก่อนพึ่ง `workflow_run`/`workflow_dispatch` ตรวจ `gh repo view --json defaultBranchRef` และยืนยันว่าไฟล์อยู่บน branch นั้นแล้ว
+### 2026-10-23 — dropdown บน Windows เป็นกล่องดำขยายค้าง เพราะเมนู `<select>` ถูกวาดโดยหน้าต่าง OS
+- **What happened:** ผู้ใช้กด `Sort` บน `/tables` แล้วมีกล่องดำโผล่และขยายจน browser ค้าง · เกิดกับ dropdown ทุกตัว · เครื่องที่ตั้ง display scaling 125%
+- **Root cause:** ที่ scaling ≠ 100% Chromium ส่งเมนู `<select>` ให้หน้าต่าง OS แยกวาด ไม่ได้วาดในหน้า · วัดได้ว่า `select:matches(':open')` เป็น true แต่ `<option>` มี rect 0×0 และภาพที่ renderer วาดไม่มีเมนู ขณะที่ 100% เมนูอยู่ในหน้าและไม่มีอาการ
+- **Correct behavior:** ให้ `@supports (appearance: base-select)` เปิด customizable select ใน `src/tabletop/ui/tabletop.css` (เมนูถูกวาดในหน้าเสมอ) และ **อย่า** ใส่ `min-inline-size: max-content` ให้ select ทั้งแอป — `min-width` ชนะ `max-width: 100%` ทำให้ select ใน card แคบล้น (วัดได้ 277.7 px ใน card 150 px) · ตรวจซ้ำด้วย harness ที่ `deviceScaleFactor` 1.25 และดู rect ของ `<option>` ว่าไม่เป็น 0
+
 ### 2026-10-23 — ขยายงาน compute/Rules ไปไล่ scene/camera หลัง merge
 - **What happened:** หลังงานหลักผ่าน PR validation และรวม dev แล้ว ใช้เวลาตรวจ generated-scene drag failure ในชุดรวมต่อจนผู้ใช้ทักว่านอกเรื่อง
 - **Root cause:** ถือว่าต้องแก้ทุก failure หลัง merge ทั้งที่ขอบเขตผู้ใช้คือ reusable compute/Rules และความพร้อมบนเว็บยังแยกจากสถานะ release

@@ -13,7 +13,7 @@ import { DEFAULT_CANVAS_AUXILIARY_IDS, defaultCanvasAuxiliaryObjectIds } from '.
 import { viewerCan } from '../shared/permissions';
 import { matchCanvasObjects, referenceCardInChat, registerCanvasObjectFinder, registerCanvasPointFocus } from './canvas-object-finder';
 import { isSharedCanvasId } from '../shared/canvas-layout-ids';
-import { dedupeVisibleCanvasConnections, isCanvasNoteId, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
+import { dedupeVisibleCanvasConnections, followUpConnections, followUpPosition, isCanvasNoteId, type CanvasFollowUpLink, readConnectionsPreference, resolveConnectionsVisible, writeConnectionsPreference } from './canvas-flow';
 import { NoteCard } from './NoteCard';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasPoint, type CanvasLayoutNode } from './canvas-layout';
 import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNodeIds } from './canvas-layout-scope';
@@ -102,6 +102,8 @@ export interface CanvasAuxiliaryObject {
   glyph?: ReactNode;
   /** True while the object waits on work it cannot show yet; animates the header glyph. */
   busy?: boolean;
+  /** F070: the card this one opened from (a picked option); draws a labelled line and seats it beside that card. */
+  linkedFrom?: CanvasFollowUpLink;
 }
 
 interface SavedCanvasLayout {
@@ -408,6 +410,11 @@ function relationshipLabel(valueType: string) {
     ?? valueType.replace(/\[\]$/, '').replace(/V\d+$/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 }
 
+/** F070: the AI answer accent, so a choice trail reads apart from data lines. */
+const FOLLOW_UP_EDGE_COLOR = '#7860bd';
+const FOLLOW_UP_SOURCE_HANDLE = 'follow-up-out';
+const FOLLOW_UP_TARGET_HANDLE = 'follow-up-in';
+
 function roleColor(role: CanvasRole) {
   if (role === 'source') return '#315eb0';
   if (role === 'rules') return '#946626';
@@ -583,6 +590,9 @@ function CanvasObjectNode({ data, selected }: NodeProps<CanvasNode>) {
           }
         }}
       >
+        {/* F070: hidden anchors so a choice trail can attach to chat cards; the router draws the visible path. */}
+        <Handle type="target" position={Position.Left} id={FOLLOW_UP_TARGET_HANDLE} className="tt-follow-up-handle" />
+        <Handle type="source" position={Position.Right} id={FOLLOW_UP_SOURCE_HANDLE} className="tt-follow-up-handle" />
         <CanvasObjectHeader data={data} />
         <CanvasNodeBody>{data.auxiliary.renderContent?.(data.opened) ?? data.auxiliary.content}</CanvasNodeBody>
       </article>
@@ -1386,6 +1396,15 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         },
       }));
       const maxY = visiblePlanNodes.reduce((maximum, spec) => Math.max(maximum, (previousPositions.get(spec.id) ?? workspacePositionsRef.current[spec.id] ?? defaultCanvasPosition(view.kind, spec)).y), 0);
+      // F070: seat a follow-up beside its source card, under the follow-ups of that card already placed.
+      const placedRect = (id: string) => {
+        const point = previousPositions.get(id) ?? workspacePositionsRef.current[id];
+        if (!point) return undefined;
+        return { x: point.x, y: point.y, width: cardSizes[id]?.width ?? 400, height: cardSizes[id]?.height ?? 640 };
+      };
+      const placeFollowUp = (id: string, parentId: string) => followUpPosition(placedRect(parentId), visibleAuxiliaryObjects
+        .filter((other) => other.id !== id && other.linkedFrom?.id === parentId)
+        .flatMap((other) => placedRect(other.id) ?? []));
       const auxiliaryNodes = visibleAuxiliaryObjects.map((object, index): CanvasNode => ({
         id: object.id,
         type: 'tabletopObject',
@@ -1400,6 +1419,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
           return (isNewWorkspace && !isShared ? storedLayout?.positions[object.id] : undefined)
             ?? previousPositions.get(object.id)
             ?? (!isShared ? workspacePositionsRef.current[object.id] : undefined)
+            ?? (object.linkedFrom ? placeFollowUp(object.id, object.linkedFrom.id) : undefined)
             ?? object.position ?? { x: 40, y: maxY + 340 + index * 360 };
         })(),
         selected: object.id === selectedNodeId || multiIds.has(object.id),
@@ -1549,6 +1569,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     }
     return dedupeVisibleCanvasConnections(projected);
   }, [plan.bindings, visibleIds]);
+  const followUps = useMemo(() => followUpConnections(visibleAuxiliaryObjects, visibleIds), [visibleAuxiliaryObjects, visibleIds]);
 
   // Lines keep clear of every card on the canvas except paper notes, which sit on
   // top of them. The router also spreads shared ports and bridges crossings so a
@@ -1567,7 +1588,10 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       });
       if (isCanvasNoteId(node.id)) crossable.push(node.id);
     }
-    const links: RoutingLink[] = connections.map((connection) => ({ id: connection.id, source: connection.source, target: connection.target }));
+    const links: RoutingLink[] = [
+      ...connections.map((connection) => ({ id: connection.id, source: connection.source, target: connection.target })),
+      ...followUps.map((link) => ({ id: link.id, source: link.source, target: link.target, label: link.label })),
+    ];
     const routes = new Map(routeConnections(rects, links, {
       clearance: 18,
       cornerRadius: 12,
@@ -1576,7 +1600,19 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       laneSpacing: 16,
     }).map((route) => [route.id, route]));
 
-    return connections.map((connection): CanvasEdge => {
+    const auxiliaryTitles = new Map(visibleAuxiliaryObjects.map((object) => [object.id, object.title]));
+    // F070: a picked option's line; it has no ports, so it is drawn only when the router finds a clear path.
+    const followUpEdges = followUps.flatMap((link): CanvasEdge[] => {
+      const route = routes.get(link.id);
+      if (!route || route.hidden || !route.path) return [];
+      const data: CanvasEdgeData = { route, color: FOLLOW_UP_EDGE_COLOR, haloColor: CANVAS_EDGE_HALO, strokeWidth: 2, moving: false };
+      return [{
+        id: link.id, source: link.source, sourceHandle: FOLLOW_UP_SOURCE_HANDLE, target: link.target, targetHandle: FOLLOW_UP_TARGET_HANDLE, type: 'canvasConnection', zIndex: 1,
+        ariaLabel: `${auxiliaryTitles.get(link.source) ?? 'Answer'} led to ${auxiliaryTitles.get(link.target) ?? 'a follow-up'} after choosing “${link.label}”.`,
+        data,
+      }];
+    });
+    return [...followUpEdges, ...connections.map((connection): CanvasEdge => {
       const targetRole = canvasRole(planNodesById.get(connection.target)?.capability ?? '', 'plan');
       const markerColor = roleColor(targetRole);
       const sourceTitle = planNodesById.get(connection.source)?.title ?? connection.source;
@@ -1616,8 +1652,8 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         data: { relationshipLabel: label },
         style: { stroke: markerColor, strokeWidth: 2.2 },
       };
-    });
-  }, [cardSizes, connections, nodes, planNodesById, revisionNotice]);
+    })];
+  }, [cardSizes, connections, followUps, nodes, planNodesById, revisionNotice, visibleAuxiliaryObjects]);
 
   // Right-click on the empty canvas: arrange every card again from scratch, as on first load.
   // targets: the cards a right-click on a card acts on; absent for a right-click on the empty canvas.
@@ -1737,8 +1773,13 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         if (pinnedNodeIdsRef.current.has(node.id) || explicitAuxiliaryPositions.has(node.id) || isCanvasNoteId(node.id)) fixedIds.add(node.id);
       }
     } else {
+      // F070: a follow-up card keeps the seat beside its source card instead of being re-flowed.
+      const followUpIds = new Set(visibleAuxiliaryObjects.filter((object) => object.linkedFrom).map((object) => object.id));
       for (const node of layoutNodes) {
-        if (addedIds.has(node.id)) continue;
+        if (addedIds.has(node.id)) {
+          if (followUpIds.has(node.id)) fixedIds.add(node.id);
+          continue;
+        }
         if ((changedSizes.has(node.id) && !pinnedNodeIdsRef.current.has(node.id)) || resizeDisplacedIds.has(node.id)) {
           preferredPositions[node.id] = node.position!;
           continue;

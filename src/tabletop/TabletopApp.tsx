@@ -14,11 +14,11 @@ import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { HeaderPeople } from './ui/HeaderPeople';
-import { AccountBadge, AccountSignIn, SignedInWelcome } from './ui/account';
+import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
-import { NewNoteButton } from './ui/NoteCard';
-import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope } from './ui/table-chat-state';
+import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
+import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
@@ -649,6 +649,19 @@ export default function TabletopApp() {
     } finally { setBusy(null); }
   }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
 
+  // F064 slice C: the sources stay `provided` until the owner reviews them; the callback owns the
+  // notice, so the chat card only disables its button while the command runs.
+  const addWebSources = useCallback(async (targetView: WorkspaceView, sources: AddableWebSource[]): Promise<void> => {
+    if (sources.length === 0) return;
+    try {
+      const latest = await runCommand('table.addWebSources', { sources });
+      if (!latest) return;
+      showNotice(`${sources.length} web source${sources.length === 1 ? '' : 's'} added to ${targetView.title}. Verify each one before asking AI to use it in a rule change.`, 'success');
+    } catch (error) {
+      showNotice(errorText(error), 'error');
+    }
+  }, [runCommand, showNotice]);
+
   const requestAI = useCallback((targetView: WorkspaceView, prompt: string, sourceId: string | undefined, commandId: string): Promise<ModelJob> => {
     if (targetView.kind === 'table' && capabilities.tableReadOnly) return Promise.reject(new ApiFailure('AI proposals for shared tables are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('AI proposals are not enabled for this workspace.', 403));
@@ -855,12 +868,20 @@ export default function TabletopApp() {
     historyRefreshKey: assistantActivity,
     confirm: confirmTableAssistantAction,
     attach: importTableFile,
+    webEvidence: capabilities.webEvidence === true,
+    addWebSources,
     focusObject: requestCanvasFocus,
     notify: showNotice,
     prefill: aiPrefill,
-    composerAction: view && isTableWorkspaceView(view)
-      ? <NewNoteButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand} />
-      : undefined,
+    // F076: notes and pictures live in the composer's + menu; pictures wait in the composer until sent.
+    composerTools: view && isTableWorkspaceView(view) && capabilities.tableReadOnly !== true ? {
+      onAddNote: () => addNote(view, runCommand),
+      noteDisabledReason: noteLimitReason(view),
+      ...(capabilities.images ? {
+        onPinImages: (images: readonly File[], caption: string) => pinImages(view, images, caption, runCommand, (image) => tabletopClient.uploadCanvasImage(view, image)),
+        imagesLeft: imagesLeft(view),
+      } : {}),
+    } : undefined,
   });
 
   if (starting) return <LoadingScreen />;
@@ -868,7 +889,7 @@ export default function TabletopApp() {
   if (!session) return <FailureScreen onRetry={retryBootstrap} notice={notice} />;
   const headerAccount = accountForHeader(authStatus, session);
   if (!view && page === 'new') return <StartPage
-    header={<ChooserHeader session={session} account={headerAccount} busy={busy} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} onHome={openLandingPage} />}
+    header={<ChooserHeader session={session} account={headerAccount} busy={busy} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} onHome={openLandingPage} onOpenTables={openTablesPage} />}
     notice={<NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />}
     busy={busy !== null}
     tableReadOnly={capabilities.tableReadOnly === true}
@@ -878,7 +899,7 @@ export default function TabletopApp() {
     onStartEmpty={() => void createWorkspace('table')}
     onBack={leaveStartPage}
   />;
-  if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} onOpenTables={openTablesPage} onStart={openStartPage} />;
+  if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} busy={busy === 'auth.logout'} onOpenTables={openTablesPage} onStart={openStartPage} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />;
   if (!view) return <WorkspaceChooser session={session} account={headerAccount} onHome={openLandingPage} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -1003,8 +1024,8 @@ function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'inf
   return <main className="tt-failure"><span className="tt-dialog__mark"><CircleAlert size={18} /></span><p className="tt-kicker">TABLETOP</p><h1>The table could not be opened</h1><p>{notice?.text ?? 'Check your connection and try again.'}</p><button type="button" className="tt-button tt-button--primary" onClick={onRetry}><RefreshCw size={14} /> Try again</button></main>;
 }
 
-function ChooserHeader({ session, account, busy, onSignOut, onLoadAdminWorkspaces, onHome }: { session: SessionView; account: GoogleAuthUser | null; busy: string | null; onSignOut: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; onHome?: () => void }) {
-  return <header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop home" onClick={(event) => { event.preventDefault(); onHome?.(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>;
+function ChooserHeader({ session, account, busy, onSignOut, onLoadAdminWorkspaces, onHome, onOpenTables }: { session: SessionView; account: GoogleAuthUser | null; busy: string | null; onSignOut: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; onHome?: () => void; onOpenTables?: () => void }) {
+  return <header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop home" onClick={(event) => { event.preventDefault(); onHome?.(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountMenu user={account} busy={busy === 'auth.logout'} onOpenTables={onOpenTables} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>;
 }
 
 function NoticeBanner({ notice, onDismiss }: { notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismiss: () => void }) {
@@ -1033,7 +1054,7 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
       {session.workspaces.length > 0 && <div className="tt-existing-tables">
         <div className="tt-existing-tables__head">
           <h2>Pick up where you left off</h2>
-          {session.workspaces.length > 1 && <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>}
+          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>
         </div>
         {session.workspaces.length > 1 && <div className="tt-table-filters" role="group" aria-label="Filter tables">
           <label><span>Sort</span><select value={filter.sort} onChange={(event) => changeSort(event.target.value as TableSort)}>
@@ -1060,11 +1081,9 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
         </div>}
         {visibleWorkspaces.map((workspace) => {
           const updatedAt = workspace.updatedAt;
-          const createdAt = workspace.createdAt;
           return <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span>
-            {(updatedAt !== undefined || createdAt !== undefined) && <span className="tt-existing-tables__times">
+            {updatedAt !== undefined && <span className="tt-existing-tables__times">
               {updatedAt !== undefined && <time className="tt-existing-tables__updated" dateTime={new Date(updatedAt).toISOString()} title={`Last changed ${new Date(updatedAt).toLocaleString()}`}><b>{workspace.updatedBy ? `Updated by ${workspace.updatedBy}` : 'Updated'}</b><span>{listDate(updatedAt, now)} · {relativeTime(updatedAt, now)}</span></time>}
-              {createdAt !== undefined && <time className="tt-existing-tables__created" dateTime={new Date(createdAt).toISOString()} title={`Created ${new Date(createdAt).toLocaleString()}`}>Created {listDate(createdAt, now)}</time>}
             </span>}
             <ArrowRight size={16} />
           </button>;

@@ -1,5 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowUp, AtSign, LoaderCircle, Paperclip, X } from 'lucide-react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, } from 'react';
+import { ArrowUp, AtSign, ImagePlus, LoaderCircle, Paperclip, Plus, StickyNote, X } from 'lucide-react';
 import { runCanvasObjectCommand, type ChatCardReference } from './canvas-object-finder';
 import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
 import { VISIBILITY_POLICY } from '../shared/visibility';
@@ -15,6 +15,20 @@ function referenceGroupLabel(references: readonly ChatCardReference[]): string {
   if (hasRules) return references.length === 1 ? 'rule' : 'rules';
   return references.length === 1 ? 'card' : 'cards';
 }
+
+/** F076: what the + menu can add besides a table file. */
+export interface ComposerTools {
+  /** Drops a sticky note on the canvas; absent when notes cannot be added. */
+  onAddNote?: () => void;
+  noteDisabledReason?: string;
+  /** Pins the waiting pictures as image cards, the typed message as their caption. */
+  onPinImages?: (images: readonly File[], caption: string) => Promise<void>;
+  /** Pictures that can still be added to this table. */
+  imagesLeft?: number;
+}
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_WAITING_IMAGES = 4;
 
 export interface TableChatProps {
   workspaceId: string;
@@ -42,8 +56,8 @@ export interface TableChatProps {
   onAttach: (file: File) => Promise<void>;
   /** Resolves true only when the server has acknowledged this request. */
   onSend: (message: string) => Promise<boolean>;
-  /** F037: an extra round control rendered beside the composer (add a note). */
-  composerAction?: ReactNode;
+  /** F076: the + menu's note and picture tools; pictures wait in the composer until sent. */
+  composerTools?: ComposerTools;
   /** F067: bytes a rule request would carry for this table, shown while the next message is a rule request. */
   aiContext?: { used: number; limit: number };
   onMessageChange?: (message: string) => void;
@@ -58,7 +72,7 @@ export interface TableChatProps {
 export function TableChat({
   workspaceId, epoch, actorId, mode, sourceFiles, placeholder, aiEnabled, canAttach, busy,
   acceptFiles, historyStatus = 'ready', onRetryHistory, prefill, acknowledged, focusKey = 0,
-  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction, aiContext,
+  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerTools, aiContext,
   cardReferences = [], onRemoveCardReference, onClearCardReferences,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
@@ -72,6 +86,12 @@ export function TableChat({
   const [objectNotice, setObjectNotice] = useState('');
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // F076: pictures chosen but not yet pinned; they stay here so the person can drop them or add a caption first.
+  const [waitingImages, setWaitingImages] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [pinning, setPinning] = useState(false);
   const messageRef = useRef(message);
   messageRef.current = message;
   useEffect(() => { onMessageChange?.(message); }, [message, onMessageChange]);
@@ -83,8 +103,66 @@ export function TableChat({
   const scopeKey = consentKey(scope);
   const trimmed = message.trim();
   const historyBlocked = mode === 'ask' && historyStatus !== 'ready';
-  const controlsBusy = busy || sending || attaching;
-  const canSend = aiEnabled && !controlsBusy && !historyBlocked && trimmed.length >= 3;
+  const controlsBusy = busy || sending || attaching || pinning;
+  const pinningImages = waitingImages.length > 0;
+  const canSend = pinningImages ? !controlsBusy : aiEnabled && !controlsBusy && !historyBlocked && trimmed.length >= 3;
+  const imagesLeft = Math.max(0, (composerTools?.imagesLeft ?? MAX_WAITING_IMAGES) - waitingImages.length);
+  const canAddImages = Boolean(composerTools?.onPinImages) && imagesLeft > 0 && waitingImages.length < MAX_WAITING_IMAGES;
+  const hasMenu = canAttach || Boolean(composerTools?.onAddNote) || Boolean(composerTools?.onPinImages);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: PointerEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', close);
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', close); };
+  }, [menuOpen]);
+
+  const waitingRef = useRef(waitingImages);
+  waitingRef.current = waitingImages;
+  useEffect(() => () => { for (const image of waitingRef.current) URL.revokeObjectURL(image.url); }, []);
+
+  const queueImages = (files: readonly File[]) => {
+    const accepted = files.filter((file) => IMAGE_TYPES.includes(file.type));
+    if (accepted.length < files.length) setAttachmentError('Use a JPEG, PNG or WebP image.');
+    else setAttachmentError('');
+    const room = Math.min(imagesLeft, MAX_WAITING_IMAGES - waitingImages.length);
+    if (accepted.length > room) setAttachmentError(room > 0 ? `You can add ${room} more image${room === 1 ? '' : 's'} here.` : 'This table cannot take more images.');
+    const next = accepted.slice(0, Math.max(0, room)).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }));
+    if (next.length) setWaitingImages((current) => [...current, ...next]);
+    fieldRef.current?.focus();
+  };
+
+  const dropImage = (id: string) => {
+    setWaitingImages((current) => current.filter((image) => {
+      if (image.id === id) URL.revokeObjectURL(image.url);
+      return image.id !== id;
+    }));
+    fieldRef.current?.focus();
+  };
+
+  const pinImages = async () => {
+    const pin = composerTools?.onPinImages;
+    if (!pin || sendLock.current || controlsBusy) return;
+    sendLock.current = true;
+    setPinning(true);
+    setSendError('');
+    const pinned = waitingImages;
+    try {
+      await pin(pinned.map((image) => image.file), trimmed);
+      for (const image of pinned) URL.revokeObjectURL(image.url);
+      setWaitingImages((current) => current.filter((image) => !pinned.includes(image)));
+      setMessage('');
+    } catch (error) {
+      setSendError(error instanceof Error && error.message ? error.message : 'The images could not be added. They are still here.');
+    } finally {
+      sendLock.current = false;
+      setPinning(false);
+      fieldRef.current?.focus();
+    }
+  };
 
   useEffect(() => {
     setGrantedKey(storedConsent(scope));
@@ -139,6 +217,8 @@ export function TableChat({
   };
 
   const submit = () => {
+    // F076: with pictures waiting, Send pins them (the message becomes their caption); nothing goes to the AI.
+    if (pinningImages) { void pinImages(); return; }
     if (trimmed.length > 0 && !controlsBusy) {
       const command = runCanvasObjectCommand(trimmed);
       if (command.handled) {
@@ -203,28 +283,50 @@ export function TableChat({
         : `Your message is about the selected ${referenceGroupLabel(cardReferences)}. Add another with a chat button on the canvas.`}</small>
       {cardReferences.length > 1 && <button type="button" className="tt-table-chat-bar__reference-clear" aria-label="Stop referencing all selected items" onClick={() => { onClearCardReferences?.(); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>}
     </div>}
+    {waitingImages.length > 0 && <div className="tt-table-chat-bar__images" data-testid="chat-waiting-images">
+      <ul aria-label="Images waiting to be pinned">
+        {waitingImages.map((image) => <li key={image.id}>
+          <img src={image.url} alt={image.file.name} />
+          <button type="button" aria-label={`Remove ${image.file.name}`} disabled={pinning} onClick={() => dropImage(image.id)}><X size={12} aria-hidden="true" /></button>
+        </li>)}
+      </ul>
+      <small>{pinning ? 'Pinning…' : 'Type a caption if you like, then send to pin. Remove one to change your mind.'}</small>
+    </div>}
     <form className="tt-table-chat-bar__box" onSubmit={(event) => { event.preventDefault(); submit(); }}>
-      {canAttach && <>
-        <button type="button" className="tt-table-chat-bar__icon" aria-label="Attach a file" disabled={controlsBusy} onClick={() => fileRef.current?.click()}><Paperclip size={17} /></button>
-        <input ref={fileRef} type="file" hidden accept={acceptFiles} aria-label="Choose a file to attach" onChange={(event) => {
+      {hasMenu && <div className="tt-table-chat-bar__add" ref={menuRef}>
+        <button type="button" className="tt-table-chat-bar__icon" aria-label="Add to this table" title="Add a file, note or image" aria-haspopup="menu" aria-expanded={menuOpen} disabled={controlsBusy} onClick={() => setMenuOpen((open) => !open)}><Plus size={18} aria-hidden="true" /></button>
+        {menuOpen && <div className="tt-table-chat-bar__menu" role="menu" aria-label="Add to this table">
+          {canAttach && <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); fileRef.current?.click(); }}><Paperclip size={15} aria-hidden="true" /><span>Attach a file<small>{composerTools?.onPinImages ? 'CSV, JSON, text or an image' : 'CSV, JSON or text'}</small></span></button>}
+          {composerTools?.onAddNote && <button type="button" role="menuitem" disabled={Boolean(composerTools.noteDisabledReason)} title={composerTools.noteDisabledReason} onClick={() => { setMenuOpen(false); composerTools.onAddNote?.(); }}><StickyNote size={15} aria-hidden="true" /><span>Add a note<small>{composerTools.noteDisabledReason ?? 'A sticky note on the canvas'}</small></span></button>}
+          {composerTools?.onPinImages && <button type="button" role="menuitem" disabled={!canAddImages} onClick={() => { setMenuOpen(false); imageRef.current?.click(); }}><ImagePlus size={15} aria-hidden="true" /><span>Add an image<small>{canAddImages ? 'Shows here first; send to pin it' : 'This table cannot take more images'}</small></span></button>}
+        </div>}
+        {canAttach && <input ref={fileRef} type="file" hidden accept={composerTools?.onPinImages ? `${acceptFiles ?? ''},${IMAGE_TYPES.join(',')}` : acceptFiles} aria-label="Choose a file to attach" onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
-          if (file) void attach(file);
-        }} />
-      </>}
+          if (!file) return;
+          // F076: a picture picked through Attach waits in the composer like one from Add an image.
+          if (composerTools?.onPinImages && IMAGE_TYPES.includes(file.type)) queueImages([file]);
+          else void attach(file);
+        }} />}
+        {composerTools?.onPinImages && <input ref={imageRef} type="file" hidden multiple accept={IMAGE_TYPES.join(',')} aria-label="Choose images to add" onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])];
+          event.currentTarget.value = '';
+          if (files.length) queueImages(files);
+        }} />}
+      </div>}
       {explicitRuleEdit && <button type="button" className="tt-table-chat-bar__cancel-edit" aria-label="Cancel rule edit" title="Cancel rule edit" disabled={controlsBusy} onClick={cancelRuleEdit}><X size={16} /></button>}
       <label className="tt-visually-hidden" htmlFor={messageId}>Message</label>
       {/* F021: keep the box editable while a draft or answer is pending so the next message can be written; send stays gated by canSend. */}
-      <textarea id={messageId} ref={fieldRef} rows={1} value={message} maxLength={MAX_MESSAGE_CHARS} placeholder={placeholder} aria-describedby={busy ? `${messageId}-wait` : undefined}
+      <textarea id={messageId} ref={fieldRef} rows={1} value={message} maxLength={MAX_MESSAGE_CHARS} placeholder={pinningImages ? 'Add a caption (optional), then send to pin' : placeholder} aria-describedby={pinningImages ? `${messageId}-images` : busy ? `${messageId}-wait` : undefined}
         onChange={(event) => { setMessage(event.target.value); setAsking(false); setSendError(''); }}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
           event.preventDefault();
           submit();
         }} />
+      {pinningImages && <span className="tt-visually-hidden" id={`${messageId}-images`}>Send pins the images on the canvas; the message becomes their caption.</span>}
       {busy && <span id={`${messageId}-wait`} className="tt-visually-hidden">You can keep typing. Send is available once the pending step on the table (a running command, an action proposal or an unconfirmed request) is resolved.</span>}
-      {composerAction}
-      <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend} title={busy ? 'Send is available once the pending step on the table is resolved' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
+      <button type="submit" className="tt-table-chat-bar__send" aria-label={pinningImages ? 'Pin images' : 'Send message'} disabled={!canSend} title={busy ? 'Send is available once the pending step on the table is resolved' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
     </form>
     {mode === 'draft' && aiContext && <AiContextMeter {...aiContext} />}
   </div>;

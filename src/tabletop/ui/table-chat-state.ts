@@ -1,6 +1,6 @@
 import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, parseModelJobResearch, tailWithin, type ModelFailureDetails, type ModelJobResearch, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, parseModelJobResearch, tailWithin, type ModelFailureDetails, type ModelJobResearch, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
 import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
@@ -305,18 +305,44 @@ export function liveThinkingLine(tail: string | undefined, maxChars = LIVE_THINK
 export const LIVE_SEARCH_QUERY_CHARS = 160;
 
 /**
- * F064: one line saying what the research step is doing: what it searches, what it found, and then
- * what the draft actually used. Re-bounded here as well, so a hostile or older job row cannot grow
- * the card. Returns null when there is nothing worth showing (no search, or no query text yet).
+ * F064: the pieces of that line, so the card can ellipsise only the query. On a 320px card the
+ * "· เจอ N" count would otherwise be the first thing cut, and it is the half users watch.
  */
-export function liveSearchLine(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): string | null {
+export interface LiveSearchParts {
+  /** The glyph the agreed copy uses (`🔎` while working, `✓` when finished). */
+  icon: string;
+  /** Copy around the query: `กำลังค้น:` while working, `ใช้ 3 แหล่ง` when finished. */
+  text: string;
+  /** The bounded query, only while searching or reading. */
+  query?: string;
+  /** How many results the adapter kept, only while reading. */
+  found?: number;
+}
+
+/**
+ * F064: split the live search line so the found count can never be ellipsised away.
+ * Re-bounded here as well, so an older or hostile job row cannot grow the card.
+ */
+export function liveSearchParts(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): LiveSearchParts | null {
   if (!search) return null;
-  if (search.phase === 'done') return `✓ ใช้ ${search.resultsCount} แหล่ง`;
+  if (search.phase === 'done') return { icon: '✓', text: `ใช้ ${search.resultsCount} แหล่ง` };
   const query = headWithin(search.query.replace(/\s+/gu, ' ').trim(), maxQueryChars).trim();
   if (!query) return null;
   return search.phase === 'reading'
-    ? `🔎 กำลังค้น: ${query} · เจอ ${search.resultsCount}`
-    : `🔎 กำลังค้น: ${query}`;
+    ? { icon: '🔎', text: 'กำลังค้น:', query, found: search.resultsCount }
+    : { icon: '🔎', text: 'กำลังค้น:', query };
+}
+
+/**
+ * F064: one line saying what the research step is doing: what it searches, what it found, and then
+ * what the draft actually used. Returns null when there is nothing worth showing.
+ */
+export function liveSearchLine(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): string | null {
+  const parts = liveSearchParts(search, maxQueryChars);
+  if (!parts) return null;
+  if (parts.query === undefined) return `${parts.icon} ${parts.text}`;
+  const tail = parts.found === undefined ? '' : ` · เจอ ${parts.found}`;
+  return `${parts.icon} ${parts.text} ${parts.query}${tail}`;
 }
 
 /** F064 slice B: how much of a source title the card shows before the row wraps. */
@@ -330,6 +356,39 @@ export interface DraftSource {
   dateLabel: string;
   /** 0-4, where 4 is an official source. */
   authority: number;
+  /** F064 slice C: the bounded evidence text a verified web source would carry; '' when absent. */
+  summary: string;
+}
+
+/** F064 slice C: a source from a finished draft that can become a table source (non-empty summary). */
+export interface AddableWebSource {
+  title: string;
+  url: string;
+  date: string | null;
+  authority: number;
+  summary: string;
+}
+
+/**
+ * F064 slice C: the sources a finished draft may offer as table evidence. The summary is the
+ * citable text, so a source without one cannot be added; parseModelJobResearch re-validates the
+ * URL and bounds every field before this list reaches the command.
+ */
+export function addableWebSources(research: ModelJobResearch | undefined): AddableWebSource[] {
+  const parsed = parseModelJobResearch(research);
+  if (!parsed) return [];
+  return parsed.sources
+    .map((source) => ({ source, summary: (source.summary ?? '').trim() }))
+    // A normalized URL can gain one trailing slash; the command schema still caps it at 500.
+    .filter((entry) => entry.summary.length > 0 && entry.source.url.length <= MAX_JOB_RESEARCH_URL_CHARS)
+    .slice(0, MAX_JOB_RESEARCH_SOURCES)
+    .map(({ source, summary }) => ({
+      title: source.title,
+      url: source.url,
+      date: source.date,
+      authority: source.authority,
+      summary: headWithin(summary, MAX_JOB_RESEARCH_SUMMARY_CHARS),
+    }));
 }
 
 /** F064 slice B: `26 Jul 2026`, or nothing when the provider gave no usable date. */
@@ -357,5 +416,40 @@ export function draftSources(research: ModelJobResearch | undefined): DraftSourc
     url: source.url,
     dateLabel: formatSourceDate(source.date),
     authority: source.authority,
+    summary: headWithin(source.summary ?? '', MAX_JOB_RESEARCH_SUMMARY_CHARS),
   }));
+}
+
+/** F070: a chat card that came from picking one option under another chat card. */
+export interface ChatFollowUp { parentCardId: string; option: string }
+
+const FOLLOW_UP_ID_CHARS = 240;
+const FOLLOW_UP_OPTION_CHARS = 120;
+
+/** F070: keep only well-formed links from this browser's private state; the newest `limit` survive. */
+export function parseChatFollowUps(value: unknown, limit: number): Record<string, ChatFollowUp> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  const links: Array<[string, ChatFollowUp]> = [];
+  for (const [childId, link] of Object.entries(value)) {
+    if (typeof link !== 'object' || link === null) continue;
+    const { parentCardId, option } = link as { parentCardId?: unknown; option?: unknown };
+    if (typeof parentCardId !== 'string' || typeof option !== 'string') continue;
+    if (!childId || childId.length > FOLLOW_UP_ID_CHARS || !parentCardId || parentCardId.length > FOLLOW_UP_ID_CHARS || parentCardId === childId) continue;
+    if (!option.trim() || option.length > FOLLOW_UP_OPTION_CHARS) continue;
+    links.push([childId, { parentCardId, option }]);
+  }
+  return Object.fromEntries(links.slice(-limit));
+}
+
+/**
+ * F070: the options already picked under `parentId`, each mapped to the follow-up card it opened.
+ * A link whose follow-up card is gone (dismissed, another table) does not count, so the option can be picked again.
+ */
+export function chosenFollowUps(parentId: string, cards: readonly Pick<ChatCard, 'id'>[], followUps: Readonly<Record<string, ChatFollowUp>>): Map<string, string> {
+  const present = new Set(cards.map((card) => card.id));
+  const chosen = new Map<string, string>();
+  for (const [childId, link] of Object.entries(followUps)) {
+    if (link.parentCardId === parentId && present.has(childId) && !chosen.has(link.option)) chosen.set(link.option, childId);
+  }
+  return chosen;
 }

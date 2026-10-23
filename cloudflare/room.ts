@@ -1,3 +1,4 @@
+import { MAX_IMAGE_BYTES, MAX_TABLE_IMAGES, sniffImageType } from '../src/tabletop/shared/canvas-images.js';
 import { VISIBILITY_POLICY } from '../src/tabletop/shared/visibility.js';
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
@@ -15,9 +16,10 @@ import { createIdentityReplacements, redactString, respondToTablePrompt, type Id
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
-import { externalHost, headWithin, parseModelJobResearch, safeExternalUrl, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, MAX_SOURCE_AUTHORITY, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { externalHost, headWithin, parseModelJobResearch, safeExternalUrl, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, MAX_SOURCE_AUTHORITY, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
+import { prepareWebEvidenceCommand } from './web-evidence.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
 import {
   tableAssistantConfirmationSchema,
@@ -148,13 +150,26 @@ function hasExcessiveDepth(value: unknown, depth = 0): boolean {
 async function readJson(request: Request, maxBytes = MAX_JSON_BODY_BYTES): Promise<unknown> {
   const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
   if (contentType !== 'application/json') throw new AuthorityError('CONTENT_TYPE_REQUIRED');
+  const bytes = await readBodyBytes(request, maxBytes, 'INVALID_JSON');
+  let value: unknown;
+  try {
+    value = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)) as unknown;
+  } catch {
+    throw new AuthorityError('INVALID_JSON');
+  }
+  if (hasExcessiveDepth(value)) throw new AuthorityError('INVALID_REQUEST');
+  return value;
+}
+
+/** Reads a request body without ever buffering more than `maxBytes`. */
+async function readBodyBytes(request: Request, maxBytes: number, emptyCode: string): Promise<Uint8Array> {
   const statedLength = request.headers.get('content-length');
   if (statedLength !== null) {
     const length = Number(statedLength);
     if (!Number.isSafeInteger(length) || length < 0) throw new AuthorityError('INVALID_REQUEST');
     if (length > maxBytes) throw new AuthorityError('BODY_TOO_LARGE');
   }
-  if (!request.body) throw new AuthorityError('INVALID_JSON');
+  if (!request.body) throw new AuthorityError(emptyCode);
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -178,14 +193,22 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BODY_BYTES): Promi
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  let value: unknown;
-  try {
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)) as unknown;
-  } catch {
-    throw new AuthorityError('INVALID_JSON');
-  }
-  if (hasExcessiveDepth(value)) throw new AuthorityError('INVALID_REQUEST');
-  return value;
+  return bytes;
+}
+
+/** F073: ids of the pictures cards on this table currently show. */
+function pinnedImageIds(workspace: WorkspaceView): Set<string> {
+  const domain = workspace.domain;
+  return new Set(domain.kind === 'table' ? (domain.notes ?? []).flatMap((note) => note.imageId ? [note.imageId] : []) : []);
+}
+
+async function canvasImageId(workspaceId: string, bytes: Uint8Array): Promise<string> {
+  const prefix = new TextEncoder().encode(`tabletop-image-v1:${workspaceId}:`);
+  const joined = new Uint8Array(prefix.byteLength + bytes.byteLength);
+  joined.set(prefix, 0);
+  joined.set(bytes, prefix.byteLength);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', joined));
+  return `img_${[...digest.subarray(0, 16)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function parseCreateInput(value: unknown): CreateInput {
@@ -456,7 +479,13 @@ function boundedResearch(
     const date = typeof source.date === 'string' ? headWithin(source.date, MAX_JOB_RESEARCH_DATE_CHARS) : '';
     const authority = Number.isSafeInteger(source.authority)
       ? Math.min(Math.max(source.authority, 0), MAX_SOURCE_AUTHORITY) : 0;
-    sources.push({ title: title || externalHost(url), url, date: date || null, authority });
+    // F064 C: the summary becomes the citable text of a web source, so it travels redacted too.
+    const summary = source.summary
+      ? headWithin(redactString(source.summary, replacements), MAX_JOB_RESEARCH_SUMMARY_CHARS).trim() : '';
+    sources.push({
+      title: title || externalHost(url), url, date: date || null, authority,
+      ...(summary ? { summary } : {}),
+    });
   }
   if (sources.length === 0) return undefined;
   const queries = research.queries
@@ -501,7 +530,7 @@ export class Room extends DurableObject<Env> {
       onWorkspaceChanged: () => this.scheduleOutboxDrain(),
       computeRunner: createCloudflareComputeRunner({
         loader: env.COMPUTE_LOADER,
-        ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? { container: this.ctx.container } : {}),
+        ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? { getContainer: () => this.ctx.container } : {}),
       }),
       scheduleBackground: task => this.ctx.waitUntil(task),
       onComputeWorkScheduled: () => this.ctx.waitUntil(
@@ -509,6 +538,47 @@ export class Room extends DurableObject<Env> {
       ),
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+  }
+
+  /**
+   * F073: POST stores one picture for a card (members who may pin notes); GET returns it to members.
+   * The bytes are checked by content, never by the declared type, and are served so a browser cannot reinterpret them.
+   */
+  private async canvasImage(request: Request, workspaceId: string, imageId: string | undefined, requestId: string): Promise<Response> {
+    if (this.roomId === null || workspaceId !== this.roomId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+    const authorized = await this.authorize(request, workspaceId);
+    if (authorized.workspace.kind !== 'table') throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+    if (request.method === 'POST' && imageId === undefined) {
+      requireMutation(request, this.env, authorized.session);
+      requireWorkspaceWritable(this.env, authorized.workspace.kind);
+      if (authorized.context.role !== 'owner' && authorized.context.role !== 'participant') throw new AuthorityError('ROLE_FORBIDDEN');
+      const bytes = await readBodyBytes(request, MAX_IMAGE_BYTES, 'INVALID_REQUEST');
+      const mime = sniffImageType(bytes);
+      if (!mime) throw new AuthorityError('UNSUPPORTED_IMAGE', 'Use a JPEG, PNG or WebP image.', 415);
+      const id = await canvasImageId(workspaceId, bytes);
+      await this.repository.storeCanvasImage({
+        workspaceId, epoch: authorized.context.epoch, id, mime, bytes, actorId: authorized.context.actorId,
+        now: Date.now(), pinnedIds: pinnedImageIds(authorized.workspace), limit: MAX_TABLE_IMAGES,
+      });
+      return json(201, { imageId: id }, { 'x-request-id': requestId });
+    }
+    if (request.method === 'GET' && imageId !== undefined) {
+      const image = this.repository.readCanvasImage(workspaceId, authorized.context.epoch, imageId);
+      // A picture no card shows any more stays visible only to the person who uploaded it.
+      if (!image || (!pinnedImageIds(authorized.workspace).has(imageId) && image.createdBy !== authorized.context.actorId)) {
+        throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+      }
+      return new Response(image.bytes, { status: 200, headers: {
+        'content-type': image.mime,
+        'content-length': String(image.bytes.byteLength),
+        'content-disposition': 'inline',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; sandbox",
+        'cross-origin-resource-policy': 'same-origin',
+        'x-request-id': requestId,
+      } });
+    }
+    throw new AuthorityError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
   }
 
   async authorize(request: Request, workspaceId?: string): Promise<AuthorizedWorkspace> {
@@ -614,6 +684,8 @@ export class Room extends DurableObject<Env> {
             : workspace.domainState.kind === 'encounter' && workspace.domainState.paused ? 'paused' : 'active',
         }, { 'x-request-id': requestId });
       }
+      const imageRoute = /^\/api\/workspaces\/([0-9a-f-]{36})\/images(?:\/(img_[0-9a-f]{32}))?$/u.exec(url.pathname);
+      if (imageRoute) return await this.canvasImage(request, imageRoute[1]!, imageRoute[2], requestId);
       const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|invite-link|members\/remove|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu.exec(url.pathname);
       if (!route || this.roomId === null || route[1] !== this.roomId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
       const workspaceId = route[1];
@@ -644,7 +716,9 @@ export class Room extends DurableObject<Env> {
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
         const envelope = await readJson(request, MAX_COMMAND_BODY_BYTES);
-        const result = await this.authority.execute(authorized.session, envelope, workspaceId);
+        const prepared = prepareWebEvidenceCommand(this.env, authorized.workspace, envelope);
+        if (!prepared.ok) throw new AuthorityError(prepared.code);
+        const result = await this.authority.execute(authorized.session, prepared.envelope, workspaceId);
         this.scheduleDirectorySync();
         return json(200, result, { 'x-request-id': requestId });
       }

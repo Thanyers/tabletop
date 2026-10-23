@@ -14,7 +14,12 @@ import {
   loanAmortizationChange,
 } from '../src/tabletop/testing/generative-scenarios.ts';
 
-const output = resolve('test-results/generative-canvas');
+const output = resolve(process.env.F066_GENERATIVE_OUTPUT ?? 'test-results/generative-canvas');
+const requestedScenario = process.env.F066_GENERATIVE_SCENARIO;
+const focusSchedule = process.env.F066_SCENE_FOCUS_SCHEDULE ?? 'pending-through-down';
+if (!['pending-through-down', 'fit-before-down'].includes(focusSchedule)) {
+  throw new Error(`Unknown F066 scene focus schedule: ${focusSchedule}`);
+}
 const importedSourceNote = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 for (const required of ['dist/index.html', 'worker-build/index.js']) {
   if (!existsSync(required)) throw new Error(`Build output is missing: ${required}. Build the app and Cloudflare worker before running this harness.`);
@@ -36,6 +41,8 @@ const providerDiagnostics = [];
 const tableActRequests = [];
 let providerCalls = 0;
 let lastUiDiagnostics = null;
+let sceneDragDiagnostics = null;
+let sceneDragPage = null;
 let browser;
 const pages = [];
 const actorsById = new Map();
@@ -228,12 +235,14 @@ try {
     await db.batch(statements.map((sql) => db.prepare(sql)));
   }
 
-  const cases = [
+  const allCases = [
     { id: 'cafe', file: null, action: 'button' },
     { id: 'shadow', file: sourceFixtures.shadow, action: 'scene-drag' },
     { id: 'water', file: null, action: 'slider' },
     { id: 'novel', file: sourceFixtures.novel, action: 'button' },
   ];
+  const cases = requestedScenario ? allCases.filter((scenario) => scenario.id === requestedScenario) : allCases;
+  if (requestedScenario && cases.length !== 1) throw new Error(`Unknown F066_GENERATIVE_SCENARIO: ${requestedScenario}`);
   const actors = cases.flatMap(({ id }) => [
     { id: randomUUID(), name: `${id} Owner`, token: randomBytes(32).toString('base64url'), role: 'owner' },
     { id: randomUUID(), name: `${id} Member One`, token: randomBytes(32).toString('base64url'), role: 'member-1' },
@@ -260,6 +269,7 @@ try {
     }]);
     const page = await context.newPage();
     pages.push(page);
+    if (actor?.name === 'shadow Owner') await page.clock.install();
     page.on('pageerror', (error) => browserErrors.push(error.message));
     page.on('request', (request) => {
       const requestUrl = new URL(request.url());
@@ -331,15 +341,30 @@ try {
     return editor;
   }
 
-  async function requestCanvasObjectFocusImmediately(page, id) {
-    const editor = page.getByTestId('canvas-object-editor');
+  async function prepareCanvasObjectFocus(page, id) {
     const dock = await openObjects(page);
     const button = dock.getByTestId(`open-canvas-${id}`);
     await expect(button).toBeVisible();
-    await button.click();
-    await expect(editor).toHaveAttribute('data-canvas-object', id);
-    await expect(editor).toBeVisible();
-    return editor;
+    const box = await button.boundingBox();
+    expect(box).toBeTruthy();
+    await page.evaluate((objectId) => {
+      window.__f066FocusClick = null;
+      document.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target?.closest(`[data-testid="open-canvas-${objectId}"]`)) return;
+        window.__f066FocusClick = {
+          at: performance.now(),
+          targetTag: target.tagName,
+          targetTestId: target.closest('[data-testid]')?.getAttribute('data-testid') ?? null,
+        };
+      }, true);
+    }, id);
+    return {
+      trigger: async () => {
+        await page.clock.pauseAt(new Date());
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      },
+    };
   }
 
   async function readCanvasViewport(page) {
@@ -888,6 +913,7 @@ try {
       return updated;
     }
     if (scenario.action === 'scene-drag') {
+      sceneDragPage = owner;
       const beforeValues = active.domain.records.lights[0].values;
       const tableActCount = tableActRequests.length;
       const sceneId = 'table.view.light-shadow-scene';
@@ -901,10 +927,13 @@ try {
       expect(zoomedViewport.zoom).toBeLessThan(viewportBeforeZoom.zoom);
       await expect(light).toBeVisible();
 
-      // Re-request focus on the already-open scene, so its size stays fixed while
-      // the canvas has a pending focus request when the real pointer gesture begins.
-      await requestCanvasObjectFocusImmediately(owner, sceneId);
+      // Prepare a real Objects-menu click, but calculate the drag from the current
+      // camera before that click starts the 90 ms focus request.
+      const focusAction = await prepareCanvasObjectFocus(owner, sceneId);
       const viewportBeforeGesture = await readCanvasViewport(owner);
+      expect(Math.abs(viewportBeforeGesture.zoom - zoomedViewport.zoom)).toBeLessThan(0.01);
+      expect(Math.abs(viewportBeforeGesture.x - zoomedViewport.x)).toBeLessThan(1);
+      expect(Math.abs(viewportBeforeGesture.y - zoomedViewport.y)).toBeLessThan(1);
       const points = await light.evaluate((element) => {
         const svg = element.ownerSVGElement;
         const matrix = svg.getScreenCTM();
@@ -917,16 +946,108 @@ try {
         return { start: screen(Number(circle.getAttribute('cx')), Number(circle.getAttribute('cy'))), target: screen(40, 20) };
       });
       const drag = pageMouse(owner);
+      await focusAction.trigger();
+      await owner.evaluate(() => {
+        window.__f066ScenePointerMove = null;
+        window.__f066ScenePointerDown = null;
+        const readViewport = () => {
+          const viewport = document.querySelector('.react-flow__viewport');
+          const transform = viewport ? getComputedStyle(viewport).transform : 'none';
+          const matrix = transform === 'none' ? new DOMMatrixReadOnly() : new DOMMatrixReadOnly(transform);
+          return { x: matrix.m41, y: matrix.m42, zoom: matrix.a };
+        };
+        document.addEventListener('pointermove', (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          const lightTarget = target?.closest('.tt-generated-scene__shape[aria-label="Move light-source"]');
+          if (!lightTarget || window.__f066ScenePointerMove) return;
+          window.__f066ScenePointerMove = {
+            at: performance.now(),
+            clientX: event.clientX,
+            clientY: event.clientY,
+            targetIsLight: true,
+            viewport: readViewport(),
+          };
+        }, true);
+        document.addEventListener('pointerdown', (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          const scene = target?.closest('svg.tt-generated-scene');
+          const svgMatrix = scene?.getScreenCTM();
+          window.__f066ScenePointerDown = {
+            at: performance.now(),
+            clientX: event.clientX,
+            clientY: event.clientY,
+            targetTag: target?.tagName ?? null,
+            targetClass: typeof target?.className === 'string' ? target.className : target?.className?.baseVal ?? null,
+            targetIsLight: Boolean(target?.closest('.tt-generated-scene__shape[aria-label="Move light-source"]')),
+            viewport: readViewport(),
+            sceneMatrix: svgMatrix ? { a: svgMatrix.a, d: svgMatrix.d, e: svgMatrix.e, f: svgMatrix.f } : null,
+          };
+        }, true);
+      });
+      // Keep the real focus sampler pending: advance virtual time below its
+      // 90 ms threshold, then deliver the real pointer move/down without a DOM read.
+      await owner.clock.runFor(75);
       await drag.move(points.start.x, points.start.y);
-      const hitTarget = await owner.evaluate(({ x, y }) => {
-        const hit = document.elementFromPoint(x, y);
-        return Boolean(hit?.closest('.tt-generated-scene__shape[aria-label="Move light-source"]'));
-      }, points.start);
-      expect(hitTarget).toBe(true);
+      sceneDragDiagnostics = {
+        schedule: focusSchedule,
+        tableId,
+        points,
+        focusRequestedAfterPointCalculation: true,
+        focusClockAdvancedBeforePointerDownMs: 75,
+        viewportBeforeFocusRequest: zoomedViewport,
+        viewportBeforeGesture: viewportBeforeGesture,
+      };
+      // This mode deliberately lets focus move the camera after pointer movement
+      // reaches the pre-focus screen point, recreating a real stale-coordinate race.
+      if (focusSchedule === 'fit-before-down') {
+        const movedToLight = await owner.evaluate(() => window.__f066ScenePointerMove);
+        sceneDragDiagnostics.pointerMoveBeforeFocus = movedToLight;
+        expect(movedToLight?.targetIsLight).toBe(true);
+        // Release fake time before pointer-down to reproduce the original
+        // scheduling window in which focus completes against the old point.
+        await owner.clock.resume();
+        await owner.waitForTimeout(150);
+      }
+      const viewportBeforeDown = focusSchedule === 'fit-before-down'
+        ? await readCanvasViewport(owner)
+        : (await owner.evaluate(() => window.__f066ScenePointerMove))?.viewport;
+      sceneDragDiagnostics.viewportBeforeDown = viewportBeforeDown;
+      if (focusSchedule === 'fit-before-down') {
+        expect(Math.abs(viewportBeforeDown.zoom - viewportBeforeGesture.zoom)).toBeGreaterThan(0.01);
+      }
       await drag.down();
       await drag.move(points.target.x, points.target.y, { steps: 8 });
       await drag.up();
       const viewportAtRelease = await readCanvasViewport(owner);
+      const { focusClick, pointerMove, pointerDown } = await owner.evaluate(() => ({
+        focusClick: window.__f066FocusClick,
+        pointerMove: window.__f066ScenePointerMove,
+        pointerDown: window.__f066ScenePointerDown,
+      }));
+      await owner.clock.resume();
+      await owner.waitForTimeout(150);
+      const viewportAfterFocusWindow = await readCanvasViewport(owner);
+      sceneDragDiagnostics.focusClick = focusClick;
+      sceneDragDiagnostics.pointerMove = pointerMove;
+      sceneDragDiagnostics.pointerDown = pointerDown;
+      sceneDragDiagnostics.viewportAtRelease = viewportAtRelease;
+      sceneDragDiagnostics.viewportAfterFocusWindow = viewportAfterFocusWindow;
+      sceneDragDiagnostics.tableActRequestsAfterGesture = tableActRequests.length;
+      sceneDragDiagnostics.lightValuesAfterGesture = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.records.lights[0].values;
+      expect(focusClick?.targetTestId).toBe(`open-canvas-${sceneId}`);
+      expect(pointerMove?.targetIsLight).toBe(true);
+      expect(pointerDown?.targetIsLight).toBe(true);
+      const focusToPointerDownMs = pointerDown.at - focusClick.at;
+      sceneDragDiagnostics.focusToPointerDownMs = focusToPointerDownMs;
+      if (focusSchedule === 'pending-through-down') {
+        expect(focusToPointerDownMs).toBeLessThan(90);
+      } else {
+        expect(focusToPointerDownMs).toBeGreaterThanOrEqual(90);
+      }
+      expect(Math.abs(pointerDown.viewport.zoom - viewportBeforeGesture.zoom)).toBeLessThan(0.01);
+      expect(Math.abs(viewportAfterFocusWindow.zoom - viewportBeforeDown.zoom)).toBeLessThan(0.01);
+      expect(Math.abs(viewportAfterFocusWindow.x - viewportBeforeDown.x)).toBeLessThan(1);
+      expect(Math.abs(viewportAfterFocusWindow.y - viewportBeforeDown.y)).toBeLessThan(1);
       await expect.poll(async () => {
         const value = (await api(owner, `/api/workspaces/${tableId}`)).body.domain.records.lights[0].values;
         return Math.abs(value.light_x - 40) <= 0.001 && Math.abs(value.light_y - 20) <= 0.001 ? value : null;
@@ -991,6 +1112,7 @@ try {
       expect(tableActRequests).toHaveLength(requestsBeforeForm);
       const submit = form.getByRole('button', { name: 'Choose a team and amount', exact: true });
       await expect(submit).toBeEnabled();
+      await expect(team).toHaveValue('team-south');
       await expect(team.locator('option[value="team-south"]')).toHaveText('0 · team-south');
 
       const responsePromise = responseAfter(owner, (response) => isCommandResponse(response, 'table.act'));
@@ -1183,21 +1305,42 @@ try {
   for (let index = 0; index < cases.length; index += 1) await runCase(cases[index], index);
   expect(blockedExternal).toEqual([]);
   expect(browserErrors).toEqual([]);
-  expect(providerCalls).toBe(8);
-  mark('All four fresh local rooms completed; generated views and rules made eight intercepted synthetic provider calls with no browser errors or external network requests');
+  expect(providerCalls).toBe(cases.length * 2);
+  mark(`All ${cases.length} selected fresh local room(s) completed; generated views and rules made ${providerCalls} intercepted synthetic provider calls with no browser errors or external network requests`);
   await writeFile(join(output, 'report.json'), JSON.stringify({
     status: 'PASS', checks, providerCalls, providerResponses, providerDiagnostics, browserErrors, blockedExternal,
+    sceneDragDiagnostics,
+    scenarioFilter: requestedScenario ?? null,
+    sceneFocusSchedule: focusSchedule,
     runtime: 'Disposable local Miniflare Workers, D1 and SQLite Durable Objects; no production endpoint or database.',
     login: 'Synthetic fixture accounts and sessions; no OAuth provider was contacted.',
     ai: 'Explicit fixture outputs from src/tabletop/testing/generative-scenarios.ts plus one synthetic loan view; every DeepSeek URL was intercepted locally.',
     generatedAt: new Date().toISOString(),
   }, null, 2));
 } catch (error) {
+  if (sceneDragDiagnostics?.tableId && sceneDragPage && !sceneDragPage.isClosed()) {
+    try {
+      sceneDragDiagnostics.serverReadAfterFailure = await sceneDragPage.evaluate(async (tableId) => {
+        const response = await fetch(`/api/workspaces/${tableId}`);
+        const payload = await response.json();
+        return {
+          status: response.status,
+          lightValues: payload?.domain?.records?.lights?.[0]?.values ?? null,
+        };
+      }, sceneDragDiagnostics.tableId);
+      sceneDragDiagnostics.tableActRequestsAtFailure = tableActRequests.length;
+    } catch (diagnosticError) {
+      sceneDragDiagnostics.failureReadError = String(diagnosticError);
+    }
+  }
   for (let index = 0; index < pages.length; index += 1) {
     if (!pages[index].isClosed()) await pages[index].screenshot({ path: join(output, `failure-${index}.png`), fullPage: true }).catch(() => {});
   }
   await writeFile(join(output, 'report.json'), JSON.stringify({
     status: 'FAIL', checks, providerCalls, providerResponses, providerDiagnostics, browserErrors, blockedExternal, lastUiDiagnostics,
+    sceneDragDiagnostics,
+    scenarioFilter: requestedScenario ?? null,
+    sceneFocusSchedule: focusSchedule,
     failure: String(error),
     runtime: 'Disposable local Miniflare Workers, D1 and SQLite Durable Objects; no production endpoint or database.',
     login: 'Synthetic fixture accounts and sessions; no OAuth provider was contacted.',

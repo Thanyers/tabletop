@@ -145,20 +145,18 @@
 .tt-note:focus-within .tt-note__grip { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .tt-note__grip { transition: none; } }
 
-/* Round add-note button that sits beside the chat composer. */
-.tt-note-add {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border: 1px solid #d9d4c4;
-  border-radius: 50%;
-  background: #faf8f0;
-  color: #356e5d;
-  box-shadow: 0 2px 0 #d8d4c480;
-  cursor: pointer;
+
+/* F073: an image card is a note whose body is a picture with a short caption under it. */
+.tt-note--image { padding: 12px 12px 30px; }
+.tt-note__image {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #ffffffcc;
+  box-shadow: inset 0 0 0 1px #303d3a1f;
+  pointer-events: none;
+  user-select: none;
 }
-.tt-note-add:hover { background: #f1f4ea; }
-.tt-note-add:disabled { opacity: .45; cursor: not-allowed; }
-.tt-note-add:focus-visible { outline: 2px solid #356e5d; outline-offset: 2px; }
+.tt-note__caption { flex: none; height: 2.9em; margin-top: 8px; font-size: 12.5px; }

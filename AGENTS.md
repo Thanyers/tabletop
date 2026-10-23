@@ -70,15 +70,15 @@ gh pr create --draft --base dev --head feat/<ID>-<ชื่อ> --title "<ID>: .
 # แก้ → ตรวจ → อัปเดต spec.md + PLAN.md → gh pr ready
 ```
 
-PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใช้เห็นอะไร ผลตรวจ (คำสั่ง + จำนวนที่ผ่าน + รุ่น Node) ข้อจำกัด และสิ่งที่ operator ต้องทำก่อน deploy (ถ้ามี) · จากนั้น **AI merge เข้า `dev` เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) (คนจะ review หรือ merge เองก็ได้)
+changelog ใส่ใน `changelog.d/` · PR ต้องมี: เปลี่ยน behavior อะไร ผู้ใช้เห็นอะไร ผลตรวจ (คำสั่ง + จำนวนที่ผ่าน + รุ่น Node) ข้อจำกัด และสิ่งที่ operator ต้องทำก่อน deploy (ถ้ามี) · จากนั้น **AI merge เข้า `dev` เองได้** ตามเงื่อนไขใน [§8](#8-ขอบเขตของ-ai) (คนจะ review หรือ merge เองก็ได้)
 
 ## 5. ออก release
 
-ออก release เมื่อผู้ใช้สั่ง เช่น “release” หรือ “ขึ้น prod” เท่านั้น ก่อนเริ่ม **อ่านและทำครบ [ขั้น release](docs/AGENT_OPERATIONS.md#5-ออก-release)** รวมเลขเวอร์ชัน, CHANGELOG, CI ชุดเต็ม, tag/deploy และนำ main กลับ dev · หัวข้อ release ที่ตัดแล้วห้ามแทรกบรรทัดเพิ่ม ของใหม่ลง Unreleased
+ออก release เมื่อผู้ใช้สั่ง เช่น “release” หรือ “ขึ้น prod” เท่านั้น ก่อนเริ่ม **อ่านและทำครบ [ขั้น release](docs/AGENT_OPERATIONS.md#5-ออก-release)** รวมเลขเวอร์ชัน, CHANGELOG, CI ชุดเต็ม, tag/deploy, นำ main กลับ dev และอัปเดตหน้า Release Notes · หัวข้อ release ที่ตัดแล้วห้ามแทรกบรรทัดเพิ่ม ของใหม่ลง `changelog.d/`
 
 ## 6. Deploy (อัตโนมัติหลัง merge release)
 
-ก่อนติดตาม deploy หรือกู้จากความล้มเหลว **อ่าน [ขั้น deploy](docs/AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)** · ใช้ pipeline หลัง merge release/hotfix เข้า main เท่านั้น ห้าม deploy จากเครื่อง · ติดตามจนจบแล้วรายงานรุ่น/หลักฐานจริง · สถานะปัจจุบันอยู่ใน [DEPLOYMENTS](docs/DEPLOYMENTS.md)
+ก่อนติดตาม deploy หรือกู้จากความล้มเหลว **อ่าน [ขั้น deploy](docs/AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)** · merge เข้า dev → staging · release/hotfix เข้า main → prod · ห้าม deploy จากเครื่อง · ติดตามจนจบแล้วรายงานรุ่น/หลักฐานจริง · สถานะปัจจุบันอยู่ใน [DEPLOYMENTS](docs/DEPLOYMENTS.md)
 
 ## 7. Hotfix
 
@@ -106,7 +106,7 @@ git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รั
 **ห้ามเด็ดขาด:**
 - merge เข้า `main` จาก branch อื่นที่ไม่ใช่ `release/*` / `hotfix/*`
 - push ตรงเข้า `main` / `dev` หรือ force push
-- deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · การ deploy เกิดจาก pipeline หลัง merge release เท่านั้น
+- deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · deploy เกิดจาก pipeline เท่านั้น
 - แก้ `release-deploy.yml` ให้ข้ามการรอ check, ข้าม smoke หรือ deploy จาก branch อื่นนอกจาก `main`
 - ลบหรือย้าย tag ที่ push แล้ว (รุ่นพังให้ออกรุ่นใหม่)
 - hardcode เลขเวอร์ชันไว้ที่อื่นนอกจาก git tag · ข้ามเลข หรือใช้เลขที่เคย tag แล้ว

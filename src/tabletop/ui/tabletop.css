@@ -32,6 +32,28 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-app input, .tt-app select, .tt-app textarea { max-width: 100%; color: var(--tt-ink); font: inherit; }
 .tt-app input:focus-visible, .tt-app select:focus-visible, .tt-app textarea:focus-visible { outline: 2px solid #315eb0; outline-offset: 2px; }
 
+/* F073 — an open <select> menu must be painted by the page, not by an OS popup window.
+   On Windows at display scaling above 100% the native <select> menu is a separate OS window;
+   that window is what paints the growing black box and stops the tab responding (report
+   2026-10-23, 125% scaling, every dropdown). Chromium's customizable select keeps the option
+   list inside the page at every scale. Browsers without it ignore this block and keep the
+   native control and menu. */
+@supports (appearance: base-select) {
+  .tt-app select, .tt-chooser select, .tt-account-gate select, .tt-loading select, .tt-failure select { appearance: base-select; }
+  /* The chevron the rest of the app draws, in place of the user-agent triangle. */
+  .tt-app select::picker-icon, .tt-chooser select::picker-icon, .tt-account-gate select::picker-icon, .tt-loading select::picker-icon, .tt-failure select::picker-icon { content: ''; width: 7px; height: 7px; margin-left: 6px; transform: translateY(-2px) rotate(45deg); border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; opacity: .75; }
+  /* The list: paper, quiet line, soft lift — the same furniture as the app's other menus. */
+  .tt-app select::picker(select), .tt-chooser select::picker(select), .tt-account-gate select::picker(select), .tt-loading select::picker(select), .tt-failure select::picker(select) { appearance: base-select; max-height: min(320px, 52vh); overflow: auto; padding: 4px; border: 1px solid var(--tt-line, #dfe6e5); border-radius: 10px; background: #fff; color: var(--tt-ink, #243548); box-shadow: 0 14px 34px #24354824; font: inherit; }
+  .tt-app select option, .tt-chooser select option, .tt-account-gate select option, .tt-loading select option, .tt-failure select option { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font: inherit; }
+  .tt-app select option:hover, .tt-chooser select option:hover, .tt-account-gate select option:hover, .tt-loading select option:hover, .tt-failure select option:hover,
+  .tt-app select option:focus-visible, .tt-chooser select option:focus-visible, .tt-account-gate select option:focus-visible, .tt-loading select option:focus-visible, .tt-failure select option:focus-visible { background: var(--tt-canvas, #f2f4f5); outline: 0; }
+  .tt-app select option:checked, .tt-chooser select option:checked, .tt-account-gate select option:checked, .tt-loading select option:checked, .tt-failure select option:checked { color: var(--tt-moss, #24796b); font-weight: 600; }
+  .tt-app select option::checkmark, .tt-chooser select option::checkmark, .tt-account-gate select option::checkmark, .tt-loading select option::checkmark, .tt-failure select option::checkmark { order: -1; color: var(--tt-moss, #24796b); }
+  /* The closed control sizes to the selected option once the page owns the menu; the table
+     filters must keep the width of their widest option so a change does not reflow the row. */
+  .tt-chooser .tt-table-filters select { min-inline-size: max-content; }
+}
+
 .tt-topbar {
   z-index: 30;
   display: flex;
@@ -125,6 +147,7 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-flow-wrap .react-flow__controls-button svg { max-width: 12px; max-height: 12px; }
 .tt-flow-wrap .react-flow__attribution { display: none; }
 .tt-flow-wrap .react-flow__handle { width: 7px; height: 7px; border: 1px solid #fff; border-radius: 50%; background: #6eaa9b; opacity: .85; pointer-events: none; }
+.tt-flow-wrap .react-flow__handle.tt-follow-up-handle { opacity: 0; }
 .tt-flow-wrap .react-flow__edge-path { stroke-linecap: round; }
 .tt-flow-wrap .react-flow__edge-textbg { fill: #f5f8f7; }
 .tt-flow-wrap .react-flow__edge-text { font-family: 'IBM Plex Mono', monospace; }
@@ -317,6 +340,7 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-button--primary:hover:not(:disabled) { border-color: #1c675b; background: #1c675b; }
 .tt-button--quiet { color: #5b706d !important; background: #f8faf8; }
 .tt-button--danger { border-color: #a8483a; color: #fff !important; background: #a8483a; }
+.tt-button--danger:hover:not(:disabled) { border-color: #8f3b2f; background: #8f3b2f; }
 .tt-text-button { display: inline-flex; align-items: center; gap: 5px; padding: 4px; border: 0; color: #51776f !important; background: transparent; font-size: 9px !important; font-weight: 700 !important; }
 .tt-text-button:hover { color: #315eb0 !important; }
 .tt-icon-button { display: grid; flex: 0 0 auto; place-items: center; width: 30px; height: 30px; border: 1px solid #dce5e1; border-radius: 5px; color: #557d73 !important; background: #fff; }
@@ -935,13 +959,23 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-table-source-card { min-width: 0; padding: 9px; border: 1px solid #e0e8e3; border-radius: 6px; background: #fff; }
 .tt-table-source-card__head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .tt-table-source-card__head > svg { flex: 0 0 auto; color: #739588; }
-.tt-table-source-card__head > span { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.tt-table-source-card__head > span:not(.tt-table-source-status) { display: grid; flex: 1; min-width: 0; gap: 3px; }
 .tt-table-source-card__head strong { overflow: hidden; color: #3e574f; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.tt-table-source-card__head small, .tt-table-source-card__citation { color: #82918a; font-size: 10px; }
+.tt-table-source-card__head small, .tt-table-source-card__citation { color: #5d6f68; font-size: 10px; }
 .tt-table-source-card__citation { display: block; margin: 6px 0 0 23px; color: #946626; }
 .tt-table-source-card details { margin: 8px 0 0 23px; border-top: 1px solid #edf0ed; }
 .tt-table-source-card summary { padding-top: 7px; color: #4d7466; font-size: 11px; cursor: pointer; }
 .tt-table-source-card pre { max-height: 200px; overflow: auto; margin: 7px 0 0; padding: 8px; border-radius: 4px; color: #44544f; background: #f4f7f4; font: 10px/1.5 var(--tt-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tt-table-source-status { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 1px 6px; border: 1px solid var(--tt-line); border-radius: 999px; color: var(--tt-muted); font-size: 10px; font-weight: 700; line-height: 1.6; letter-spacing: .02em; }
+.tt-table-source-status--provided { border-color: color-mix(in srgb, var(--tt-amber) 35%, var(--tt-line)); color: color-mix(in srgb, var(--tt-amber), var(--tt-ink) 20%); background: color-mix(in srgb, var(--tt-amber) 5%, var(--tt-paper)); }
+.tt-table-source-status--verified { border-color: color-mix(in srgb, var(--tt-moss) 35%, var(--tt-line)); color: color-mix(in srgb, var(--tt-moss), var(--tt-ink) 20%); background: color-mix(in srgb, var(--tt-moss) 5%, var(--tt-paper)); }
+.tt-table-source-status--rejected { border-color: color-mix(in srgb, var(--tt-red) 35%, var(--tt-line)); color: color-mix(in srgb, var(--tt-red), var(--tt-ink) 20%); background: color-mix(in srgb, var(--tt-red) 5%, var(--tt-paper)); }
+.tt-table-source-card__origin { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin: 6px 0 0 23px; color: #5d6f68; font-size: 10px; line-height: 1.5; }
+.tt-table-source-card__origin a { display: inline-flex; align-items: center; min-height: 24px; color: var(--tt-moss); text-decoration: underline; text-underline-offset: 2px; }
+.tt-table-source-card__origin a:hover { color: color-mix(in srgb, var(--tt-moss), var(--tt-ink) 20%); }
+.tt-table-source-card__origin a:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 2px; }
+.tt-table-source-card__origin span { overflow-wrap: anywhere; }
+.tt-table-source-card__review { display: flex; flex-wrap: wrap; gap: 6px; margin: 7px 0 0 23px; }
 .tt-table-limit-note { margin: 0; padding: 9px; border: 1px solid #eadfc7; border-radius: 5px; color: #826b44; background: #fbf8f0; font-size: 11px; }
 .tt-table-error { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: #a4483b; font-size: 11px; line-height: 1.45; }
 .tt-table-error svg { flex: 0 0 auto; }

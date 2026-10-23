@@ -16,6 +16,8 @@ export interface Env {
   AI_TABLE_DEADLINE_MS?: string;
   /** F064: set to `off` to draft without the native web-research step. */
   TABLE_WEB_SEARCH?: string;
+  /** F064 C: set to `off` to keep web sources display-only (no add/verify commands, no citations). */
+  TABLE_WEB_EVIDENCE?: string;
   TABLE_READ_ONLY?: string;
   /** F066: WorkerLoader module binding used for isolated generated JavaScript. */
   COMPUTE_LOADER?: WorkerLoader;

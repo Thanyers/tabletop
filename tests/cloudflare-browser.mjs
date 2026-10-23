@@ -69,7 +69,9 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     if (input.kind === 'table-assistant') {
       if (!tableAssistantReply) throw new Error('Unexpected table assistant request without an armed synthetic response.');
       expect(Object.keys(input).sort()).toEqual(['context', 'kind', 'prompt']);
-      expect(Object.keys(input.context).sort()).toEqual(['conversation', 'notes', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(Object.keys(input.context).sort()).toEqual(['computeCapabilities', 'conversation', 'notes', 'program', 'records', 'role', 'seat', 'turn']);
+      // This synthetic Worker intentionally has no engine bindings.
+      expect(input.context.computeCapabilities).toEqual({ profile: 'tabletop-compute-1', runtimes: [], pythonLibraries: [] });
       expect(Array.isArray(input.context.notes)).toBe(true);
       expect(input.context.notes.length).toBeLessThanOrEqual(20);
       expect(Array.isArray(input.context.conversation)).toBe(true);
@@ -204,8 +206,9 @@ try {
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(1);
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
-  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
-  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
+  // Signed out there is no sign-in box (Google is the only way in); the hero's demo link is the demo entry point.
+  await expect(anonymous.getByRole('link', { name: /^See the prepared demo/ })).toHaveAttribute('href', '/demo');
+  await expect(anonymous.getByRole('link', { name: /^See the prepared demo/ })).toHaveAttribute('target', '_blank');
   await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
   await expect(anonymous.locator('.tt-canvas-panel')).toHaveCount(0);
   const conceptImage = anonymous.locator('.tt-public-welcome__story-frame img');
@@ -217,9 +220,11 @@ try {
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 390, height: 844 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await anonymous.getByRole('link', { name: 'Sign in', exact: true }).click();
+  // Google is the only sign-in: the header button goes straight to Google and there is no sign-in box below.
+  await anonymous.evaluate(() => window.scrollTo(0, 0));
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeInViewport();
-  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await expect(anonymous.locator('.tt-public-welcome__auth')).toHaveCount(0);
+  await expect(anonymous.getByRole('link', { name: /^Start with your own work/ })).toHaveAttribute('href', '/api/auth/google/start');
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 1440, height: 1000 });
   expect((await api(anonymous, '/api/session')).status).toBe(401);
@@ -244,7 +249,7 @@ try {
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop-th.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 375, height: 812 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await anonymous.getByRole('link', { name: 'เข้าสู่ระบบ', exact: true }).click();
+  await anonymous.evaluate(() => window.scrollTo(0, 0));
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeInViewport();
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-th.png'), fullPage: true });
   await anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
@@ -261,7 +266,10 @@ try {
   await expect(failedSignIn.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
   await failedSignIn.getByRole('button', { name: 'Dismiss message', exact: true }).click();
   await expect(failedSignIn.getByRole('alert')).toHaveCount(0);
+  // "Check again" sits next to the error line (there is no sign-in box any more), so reopen the failed sign-in to try it.
+  await failedSignIn.goto(`${origin}/?auth_error=google_login_failed`);
   await failedSignIn.getByRole('button', { name: 'Already signed in? Check again', exact: true }).click();
+  await expect(failedSignIn.getByRole('alert')).toHaveCount(0);
   await expect(failedSignIn.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
   expect(providerCalls).toBe(0);
   await failedSignIn.context().close();
@@ -393,6 +401,16 @@ try {
   await expect(dm).toHaveURL(`${origin}/`);
   await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
   mark('Signed-in `/` shows the landing page with Your tables (header link and button to /tables) and no sign-in; Back from /tables returns to it');
+  // F071: the landing header avatar opens the account menu; Escape closes it and returns focus.
+  const landingProfile = dm.getByRole('button', { name: 'Account menu: DM', exact: true });
+  await landingProfile.click();
+  const landingMenu = dm.getByRole('menu', { name: 'Account menu', exact: true });
+  await expect(landingMenu.getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible();
+  await expect(landingMenu.getByRole('menuitem', { name: 'Your tables', exact: true })).toBeVisible();
+  await dm.keyboard.press('Escape');
+  await expect(landingMenu).toHaveCount(0);
+  await expect(landingProfile).toBeFocused();
+  mark('Signed-in landing header shows an avatar that opens the account menu (Your tables, Sign out) and closes with Escape');
   const created = dm.waitForResponse(response => response.url().endsWith('/api/workspaces') && response.request().method() === 'POST');
   await dm.getByRole('button', { name: 'Start a new table', exact: true }).click();
   await expect(dm).toHaveURL(`${origin}/new`);
@@ -692,6 +710,13 @@ try {
   await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();
   await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
   mark('Signed-in `/` survives reload as the landing page; /tables lists the last-opened table first and neither page auto-opens a table, even after reload');
+  // F071: the /tables header shows only the avatar; sign out lives inside its menu.
+  const chooserHeader = dm.locator('.tt-chooser__top');
+  await expect(chooserHeader.getByRole('button', { name: /Sign out/ })).toHaveCount(0);
+  await chooserHeader.getByRole('button', { name: 'Account menu: DM', exact: true }).click();
+  await expect(dm.getByRole('menu', { name: 'Account menu', exact: true }).getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible();
+  await dm.keyboard.press('Escape');
+  mark('The /tables header shows a profile avatar instead of a sign-out button; Sign out is inside its menu');
   await tableList.getByRole('button', { name: /Dragon bridge/ }).click();
   await expect(dm).toHaveURL(`${origin}/t/${room.id}`);
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();

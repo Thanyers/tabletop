@@ -80,6 +80,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
   ]),
   table: new Set([
     'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.roll', 'table.setComputedColumns', 'table.compute.run', 'canvas.layout',
+    'table.addWebSources', 'table.reviewWebSource',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
     'evolve.autoApply', 'evolve.removeItem',
@@ -976,6 +977,15 @@ export class CommandAuthority {
       const source = decision.state.sources.find((item) => !previousSources.some((prior) => prior.id === item.id));
       eventPayload = source
         ? { sourceId: source.id, filename: source.filename, sha256: source.sha256 }
+        : { redacted: true };
+    }
+    if (envelope.type === 'table.addWebSources'
+        && workspace.domainState.kind === 'table' && decision.state.kind === 'table') {
+      // F064 C: web source text never reaches the event log, only what identifies each source.
+      const previousSources = workspace.domainState.sources;
+      const added = decision.state.sources.filter((item) => !previousSources.some((prior) => prior.id === item.id));
+      eventPayload = added.length > 0
+        ? { sources: added.map((source) => ({ sourceId: source.id, filename: source.filename, sha256: source.sha256 })) }
         : { redacted: true };
     }
     // F048: record the exact dice and the parameter they filled with the command event, so the
