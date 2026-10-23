@@ -75,6 +75,7 @@
 | F054-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | ตาม CI005 รันตอน release PR; PR นี้ใช้ UI Lab |
 | F054-T7 | spec/PLAN/verification docs | `doing` | lead (AI) | 〃 | `spec.md`, docs | T1–T6 | อัปเดตแล้ว เหลือ PR |
 | F054-T8 | AI origin provenance (auto/reviewed/pasted/rollback) | `todo` | — | — | `shared/contracts.ts`, `domain/evolution.ts`, `cloudflare/room.ts` | v1 | เลื่อนหลัง v1 |
+| F054-T9 | Objects panel: ปุ่มเครื่องมือเรียงเป็นคอลัมน์เดียว + เอา locate ออก ให้คลิกชื่อการ์ดพาไปหาการ์ด | `doing` | lead (AI) | `feat/objects-panel-tools` | `src/tabletop/ui/CanvasWorkspace.tsx`, `calm-workspace.css` | F054-T4 | typecheck/unit/build; PR ยังไม่เปิด |
 | F046-T1 | semantic view salvage + link cleanup ใน domain (ไม่แตะ provider ที่ F045 ถือ) | `review` | lead (AI) | `feat/F046-view-salvage` | `src/tabletop/domain/table.ts`, `table-canvas-salvage.test.ts`, เอกสาร | — | ไม่เปลี่ยนสัญญา JSON/จำนวนครั้งที่เรียกโมเดล |
 | F047-T1 | normalize id ที่โมเดลตั้ง + เขียน reference ใหม่ทั้ง program/records/views | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/id-normalization.ts` (ใหม่), `server/providers/deepseek-changes.ts` | — | ชื่อชนกัน = ยกเลิกทั้งก้อน |
 | F047-T2 | `TABLE_LIMITS` เป็นแหล่งเดียว + guide interpolate + drift test | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/table.ts`, `server/providers/table-schema-guide.ts` (+ test) | — | ปิดช่อง manifestNodes/depth |
