@@ -8,7 +8,8 @@
 check ที่ต้องผ่านชื่อ **`local-validation`** · CI ไม่มีขั้น deploy และใช้แต่ credential จำลอง
 
 **สองระดับ (CI005):**
-- PR และ push เข้า `dev` → **เช็คเร็ว** (public files, audit, lint, unit, typecheck+build, Worker tests, bundle) ราว 2–3 นาที · ข้าม browser suites
+- PR เข้า `dev` → **เช็คเร็ว** (public files, audit, lint, unit, typecheck+build, Worker tests, bundle) ราว 2–3 นาที · ข้าม browser suites
+- **หลัง merge เข้า `dev` (CI007):** push เข้า `dev` รันชุดเต็มรวม browser suites · ruleset บังคับแค่ PR จึง **ไม่บล็อกการ merge** · ถ้าล้มจริง (ไม่นับ run ที่ถูกยกเลิกเพราะมี merge ใหม่) job `report-dev-failure` เปิด issue "dev: browser suites failing after merge" หรือ comment ใน issue เดิม · แก้บน `dev` ก่อนตัด release
 - PR เข้า `main` (release/hotfix), push เข้า `main` และกด **Run workflow** เอง → **ครบทุกชุด** รวม browser suites ทั้งสาม · pipeline deploy (CD001) รอ `local-validation` ของ merge commit บน `main` ก่อน deploy เสมอ
 - **ไม่รันซ้ำบน `main` (CI006):** ถ้าโค้ดของ merge commit (git tree) เหมือน head ของ release PR ทุกไฟล์ และ PR นั้นผ่านชุดเต็มมาแล้ว job `plan` จะใช้ผลเดิม ข้ามทุก job แล้วให้ `local-validation` ผ่านทันที → deploy เริ่มในไม่กี่วินาที · ถ้า `main` มี commit ที่ release branch ไม่มี (tree ไม่ตรง) หรือหา run ของ PR ไม่เจอ จะรันครบทุกชุดเหมือนเดิม จึงต้อง merge `origin/main` เข้า release branch ก่อนเปิด PR (§5 ข้อ 1)
 - **รันขนานกัน (CI006):** เช็คเร็ว + browser suite 3 job (demo+r1, Workers, generated) รันพร้อมกัน แต่ละ job build เอง · `local-validation` เป็น job สุดท้ายที่ผ่านเมื่อทุก job ที่รันผ่าน (ชื่อเดิมเพราะ ruleset บังคับ)
