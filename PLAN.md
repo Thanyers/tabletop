@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F070 | ตัวเลือกใต้คำตอบ AI ที่เลือกแล้วเปลี่ยนสี + เส้นจากการ์ดคำถามไปการ์ดขั้นถัดไป | `review` | [F070](docs/features/F070-choice-trail.md) |
 | F066 | วิธีคำนวณที่เก็บไว้ใช้ซ้ำ, execution/session lineage และ Rules แบบ no-code + Advanced + per-rule reference | `review` | [F066](docs/features/F066-reusable-compute-rules.md) |
 | F069 | หน้าแรกสองภาษา English / ไทย (แทน #180) | `review` | [F069](docs/features/F069-landing-bilingual.md) |
 | F068 | ร่างกฎจาก AI ห้ามมีปุ่มไม่มี input/เงื่อนไขที่สร้างแถวตัวเลขตายตัว (กดซ้ำแล้วซ้ำ) + แนะนำให้ค่าที่คำนวณได้เป็นสูตร | `review` | [F068](docs/features/F068-fixed-seed-rows.md) |
@@ -69,6 +70,7 @@
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F066-T7 | ตรวจ release 8 และรัน post-deploy acceptance ตามชุดเตรียม | `doing` | Codex | `docs/F066-release8-acceptance` | acceptance report, ignored evidence, feature/spec | — | ใช้ห้อง QA สมมติ; ไม่แก้ runtime/config หรือ deploy ในงานตรวจ |
+| F070-T1 | สถานะเลือกแล้วของชิป + เส้น follow-up + ตำแหน่งการ์ดลูก (client, localStorage) | `review` | lead (AI) | `feat/F070-choice-trail` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, `ui/table-chat.css`, `ui/CanvasWorkspace.tsx`, tests | — | ไม่แตะ server/contract · ไม่มี migration |
 | F066-T6 | เตรียมเคสทดสอบหลัง deploy พร้อมข้อมูลสมมติและผลอ้างอิง | `review` | Codex | `docs/F066-post-deploy-tests` / #223 | docs test pack, fixture data, read-only pack checker, spec/docs index | — | 48 เคส/8 กลุ่ม/P0 12, fixtures 15, offline golden checks 38 ผ่าน; acceptance 48 NOT_RUN รอผู้ใช้สั่งหลัง deploy |
 | F066-T1..T4 | reusable compute runtime, persistent links และ Rules UX | `review` | Codex | `feat/F066-reusable-compute-rules` / #208 | compute/schema/domain/authority/Room, Rules/ref/import UI, tests/docs | — | unit 818 + CF 170, Python 4, real AI/reuse/browser 8; browser regression 32 + generative 8 ผ่าน; ไม่มี SQL migration/ไม่ deploy |
 | F066-T5 | ปรับเทสต์ Rules ให้ตรงกับ reusable compute capability | `review` | Codex | `fix/F066-scene-drag-focus` / #220 | `tests/generic-table-browser.mjs`, `shared/table-capabilities.test.ts`, docs | — | capability unit 3 + Cloudflare browser 33 ผ่าน; ผู้ใช้ให้หยุดงาน scene/camera นอกขอบเขตและคืน diagnostics แล้ว |

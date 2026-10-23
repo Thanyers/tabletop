@@ -57,3 +57,35 @@ export function dedupeVisibleCanvasConnections<T extends VisibleCanvasConnection
     return true;
   });
 }
+
+/** F070: a chat card that opened from picking an option on another chat card. */
+export interface CanvasFollowUpLink { id: string; label: string; order: number }
+
+export interface CanvasFollowUpConnection { id: string; source: string; target: string; label: string }
+
+/** F070: one line from each asking card to every visible card its picked options opened. */
+export function followUpConnections(objects: readonly { id: string; linkedFrom?: CanvasFollowUpLink }[], visibleIds: ReadonlySet<string>): CanvasFollowUpConnection[] {
+  const connections: CanvasFollowUpConnection[] = [];
+  for (const object of objects) {
+    const link = object.linkedFrom;
+    if (!link || link.id === object.id || !visibleIds.has(link.id) || !visibleIds.has(object.id)) continue;
+    connections.push({ id: `follow-up.${link.id}->${object.id}`, source: link.id, target: object.id, label: link.label });
+  }
+  return connections;
+}
+
+const FOLLOW_UP_GAP_X = 144;
+const FOLLOW_UP_GAP_Y = 40;
+
+export interface CanvasRect { x: number; y: number; width: number; height: number }
+
+/**
+ * F070: a new follow-up card starts to the right of the card it came from, below any follow-up of that card
+ * already on the canvas, so branches stack instead of overlapping.
+ */
+export function followUpPosition(parent: CanvasRect | undefined, siblings: readonly CanvasRect[]): { x: number; y: number } | undefined {
+  if (!parent) return undefined;
+  const x = parent.x + parent.width + FOLLOW_UP_GAP_X;
+  const lowest = siblings.reduce((bottom, sibling) => Math.max(bottom, sibling.y + sibling.height + FOLLOW_UP_GAP_Y), Number.NEGATIVE_INFINITY);
+  return { x, y: Number.isFinite(lowest) ? Math.max(parent.y, lowest) : parent.y };
+}
