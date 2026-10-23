@@ -485,7 +485,7 @@ export function tableChangeIssues(state: TableState, change: TableChange): strin
 const fixedOperand = (operand: TableOperand): boolean => 'literal' in operand || ('expression' in operand && operand.expression.op === 'literal');
 
 /**
- * F067: an action with no inputs and no conditions whose rows are all typed-in values makes the same rows on
+ * F068: an action with no inputs and no conditions whose rows are all typed-in values makes the same rows on
  * every press, and numbers the model worked out from records go stale. Only actions a draft adds or changes are
  * checked, so an older table that already has one can still be edited, rolled back, or trimmed.
  */
@@ -502,7 +502,7 @@ export function repeatableFixedCreateIssues(program: TableProgram, previous: Tab
     });
 }
 
-/** F067: what an AI draft must pass. Manual proposals and rollbacks keep using `tableChangeIssues`. */
+/** F068: what an AI draft must pass. Manual proposals and rollbacks keep using `tableChangeIssues`. */
 export function aiTableChangeIssues(state: TableState, change: TableChange): string[] {
   const issues = tableChangeIssues(state, change);
   return issues.length > 0 ? issues : repeatableFixedCreateIssues(change.program, state.program);

@@ -5,7 +5,7 @@ import type { TableAction, TableChange, TableCondition, TableProgram } from '../
 import { evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
 import { aiTableChangeIssues, applyTableChange, createTableState, handleTableCommand, repeatableFixedCreateIssues, tableChangeIssues } from './table';
 
-// F067: a neutral shared-expenses table; nothing here names a demo scenario.
+// F068: a neutral shared-expenses table; nothing here names a demo scenario.
 const ctx: ActorContext = {
   actorId: 'actor-1', name: 'Owner', role: 'owner', workspaceId: 'workspace-1', epoch: 1, now: 1_800_000_000_000,
   hash: value => createHash('sha256').update(JSON.stringify(value)).digest('hex'),
@@ -65,7 +65,7 @@ const rows = {
 };
 const create = (actions: TableAction[]): TableChange => ({ kind: 'table', program: program(actions), initialRecords: rows });
 
-describe('F067 fixed rows from AI drafts', () => {
+describe('F068 fixed rows from AI drafts', () => {
   it('rejects a new no-input action that types in the same rows on every press, naming a guard', () => {
     const issues = aiTableChangeIssues(createTableState(), create([seedAction()]));
     expect(issues).toHaveLength(1);

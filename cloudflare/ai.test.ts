@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { tableDraftBytes } from '../src/tabletop/shared/table-draft-input.js';
 import { runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createDomain } from '../src/tabletop/domain/index.js';
@@ -300,9 +301,13 @@ describe('Cloudflare AI proposal helper', () => {
     table.sources.push({ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n', sha256: 'b'.repeat(64), createdAt: 1 });
     expect(change.program.evidence.some((item) => item.sourceId === 'source_fixture')).toBe(true);
     let sent: { sources: Array<{ id: string; text: string }>; importedSources?: Array<{ id: string; filename: string }> } | undefined;
+    let sentBytes = 0;
     await proposeChange(testEnv, input, providerFetch({ ...change, initialRecords: {} }, (content) => {
       sent ??= JSON.parse(content) as typeof sent;
+      sentBytes ||= new TextEncoder().encode(content).byteLength;
     })).catch((error: unknown) => { if (!sent) throw error; });
+    // F067: the "AI context" the table shows is exactly what the provider receives.
+    expect(sentBytes).toBe(tableDraftBytes(table, input.prompt));
     expect(sent?.sources).toEqual([{ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n' }]);
     expect(sent?.importedSources).toMatchObject([{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename }]);
     expect(sent?.importedSources?.[0]).toHaveProperty('note');
@@ -384,7 +389,7 @@ describe('Cloudflare AI proposal helper', () => {
     expect(rows.every(row => row.status === 'settled')).toBe(true);
   });
 
-  it('sends a no-input action that types in the same rows back for repair (F067)', async () => {
+  it('sends a no-input action that types in the same rows back for repair (F068)', async () => {
     const input = request('table');
     const bad = equipmentChange('source_fixture');
     bad.program.actions.push({
