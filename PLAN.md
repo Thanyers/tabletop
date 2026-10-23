@@ -27,6 +27,7 @@
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
 | F072 | ปุ่มแนบไฟล์ในแชทใช้ไอคอน + แทนคลิป | `review` | [F072](docs/features/F072-attach-plus-icon.md) |
 | F070 | ตัวเลือกใต้คำตอบ AI ที่เลือกแล้วเปลี่ยนสี + เส้นจากการ์ดคำถามไปการ์ดขั้นถัดไป | `review` | [F070](docs/features/F070-choice-trail.md) |
+| F073 | เมนู `<select>` ถูกวาดในหน้าแทนหน้าต่าง OS (แก้ dropdown กล่องดำบน Windows ที่ scaling มากกว่า 100%) | `review` | [F073](docs/features/F073-select-menu-in-page.md) |
 | F066 | วิธีคำนวณที่เก็บไว้ใช้ซ้ำ, execution/session lineage และ Rules แบบ no-code + Advanced + per-rule reference | `review` | [F066](docs/features/F066-reusable-compute-rules.md) |
 | F069 | หน้าแรกสองภาษา English / ไทย (แทน #180) | `review` | [F069](docs/features/F069-landing-bilingual.md) |
 | F068 | ร่างกฎจาก AI ห้ามมีปุ่มไม่มี input/เงื่อนไขที่สร้างแถวตัวเลขตายตัว (กดซ้ำแล้วซ้ำ) + แนะนำให้ค่าที่คำนวณได้เป็นสูตร | `review` | [F068](docs/features/F068-fixed-seed-rows.md) |
