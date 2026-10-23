@@ -116,3 +116,9 @@ node tests/ui/f066-rules-browser.mjs
 ```
 
 UI-gate ต้องใช้ skill ที่ติดตั้งในเครื่องและรันกับ `tests/ui/f066-rules.html --full` ส่วน real-provider proof ใช้ `TABLETOP_CREDENTIAL_FILE` ที่ไม่อยู่ใน Git แล้ว `node --import tsx scripts/compute-live-local.mjs`; จากนั้นรัน `scripts/compute-runtime-local.mjs` แบบเดียวกัน ไม่มีการ deploy
+
+### F066-T9 — ค่าเริ่มต้นและ deployment acceptance
+
+ช่องใหม่ที่ optional และมี default ต้องเติมค่าให้แถวเดิมเหมือนเดิม; แยก guard ย้อนสูตรที่ต้องรักษาค่าประวัติและห้าม default กลบค่าที่ไม่ตรง มี red→green regression ของ discount=10 และ domain tests 25/25 ผ่าน รวม required/default/rollback; typecheck/scoped lint ผ่านบน Node22.23.2 และ independent review ไม่มี P1/P2
+
+ปรับ dropdown fixture ตาม F075 โดยตรวจ selected record ID ด้วย และ strict assistant mock ให้รับ computeCapabilities พร้อมตรวจ disabled engine profile ของ fixture คง privacy assertions ทั้งหมด Local browser ก่อน sync dev ล่าสุด: generative 4 rooms/8 synthetic calls/0 errors; Workers 35 checks/37 synthetic calls/0 errors ผลนี้ไม่ใช่ hosted acceptance

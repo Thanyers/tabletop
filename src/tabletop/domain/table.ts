@@ -14,9 +14,12 @@ import { IMAGE_ID_PATTERN, MAX_TABLE_IMAGES } from '../shared/canvas-images';
 import { MAX_COMPUTED_COLUMNS, computedColumnProblems, computedProgramColumnProblems, evaluateComputedColumn, retainComputedColumns } from '../shared/computed-columns';
 import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
 import { computeInputBindingSchema, computeProgramProblems, computeRunRecordSchema, tableComputeProgramSchema, validateComputeOutputs, isComputeTableValue, COMPUTE_LIMITS, type ComputeRunRecord, type ComputeRuntimeProfile } from '../shared/table-compute';
+import { MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_SOURCE_AUTHORITY } from '../shared/model-job-progress';
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
+/** F064 C: source slots per table, imported files and web sources together. */
+export const MAX_TABLE_SOURCES = 4;
 // F066: kept in a leaf module so Worker startup can never read it before it is set.
 export { TABLE_AI_INPUT_BYTES } from '../shared/ai-request-limits';
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
@@ -289,6 +292,38 @@ export function parseBoundedTableChange(value: unknown): TableChange {
   }
 }
 const sourceInput = z.strictObject({ filename: z.string().min(1).max(120).regex(/^[^/\\\p{Cc}]+\.(csv|json|txt|md)$/iu), text: z.string().min(1).max(TABLE_FILE_BYTES) });
+/** F064 C: a member offers the sources a draft used; the worker redacts them before this schema runs. */
+const webSourceInput = z.strictObject({
+  title: z.string().min(1).max(MAX_JOB_RESEARCH_TITLE_CHARS),
+  url: z.string().min(1).max(MAX_JOB_RESEARCH_URL_CHARS),
+  summary: z.string().min(1).max(MAX_JOB_RESEARCH_SUMMARY_CHARS),
+  date: z.string().max(MAX_JOB_RESEARCH_DATE_CHARS).nullable(),
+  authority: z.number().int().min(0).max(MAX_SOURCE_AUTHORITY),
+});
+const addWebSourcesInput = z.strictObject({ sources: z.array(webSourceInput).min(1).max(MAX_JOB_RESEARCH_SOURCES) });
+/** F064 C: the owner's first review decision; the source must still be provided. */
+const reviewWebSourceInput = z.strictObject({ sourceId: z.string().min(1).max(100), status: z.enum(['verified', 'rejected']) });
+
+/** F064 C: a web source URL is provenance and a link, so it must be a plain http(s) address. */
+function normalizeWebSourceUrl(raw: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  if (!parsed.hostname.includes('.')) return null;
+  if (parsed.username || parsed.password) return null;
+  parsed.hash = '';
+  return parsed.toString();
+}
+
+/** F064 C: a readable file-like name; the citable text is the title plus the summary, not the URL. */
+function webSourceFilename(url: string, index: number): string {
+  const host = new URL(url).hostname.toLowerCase().replace(/[^a-z0-9.-]/gu, '').slice(0, 60);
+  return `web-${host || 'source'}-${index}.md`;
+}
 const runInput = z.strictObject({ actionId: id, inputs: z.record(id, value) });
 /** F048: the client names the roll it wants; the server supplies every die. */
 const rollInput = z.strictObject({ actionId: id, parameterId: id });
@@ -447,10 +482,17 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
       assert(next.version >= previous.version && (previousBehavior === nextBehavior || next.version > previous.version), 'TABLE_COMPUTE_VERSION', 'Increment the version of ' + previous.name + ' when its code or port bindings change.');
     }
   }
-  if (state.sources.length === 0) assert(change.program.evidence.length === 0, 'TABLE_EVIDENCE', 'Prompt-only tables cannot cite a source that is not on the table.');
+  // F064 C: a web source that is only provided (or rejected) is not citable, so such a table behaves
+  // like a prompt-only table until someone verifies a source.
+  const citableSources = state.sources.filter((source) => source.origin !== 'web' || source.status === 'verified');
+  if (citableSources.length === 0) assert(change.program.evidence.length === 0, 'TABLE_EVIDENCE', 'Prompt-only tables cannot cite a source that is not on the table.');
   else {
     assert(change.program.evidence.length > 0, 'TABLE_EVIDENCE', 'Cite at least one uploaded source.');
-    for (const evidence of change.program.evidence) assert(state.sources.some(s => s.id === evidence.sourceId && s.text.includes(evidence.quote)), 'TABLE_EVIDENCE', 'A cited quotation is missing from the source.');
+    for (const evidence of change.program.evidence) {
+      const source = state.sources.find((item) => item.id === evidence.sourceId);
+      assert(source && source.text.includes(evidence.quote), 'TABLE_EVIDENCE', 'A cited quotation is missing from the source.');
+      assert(source.origin !== 'web' || source.status === 'verified', 'TABLE_EVIDENCE', 'A web source must be verified before rules can cite it.');
+    }
   }
   if (state.program) {
     assert(Object.keys(change.initialRecords).length === 0, 'TABLE_PRESERVE_DATA', 'A rule edit must preserve current records; initialRecords must be empty.');
@@ -961,7 +1003,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     requirePermission(ctx, 'files.add', ['owner', 'participant']);
     const input = parsePayload(sourceInput, payload);
     assert(bytes(input.text) <= TABLE_FILE_BYTES && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/u.test(input.text), 'TABLE_FILE', 'Choose a UTF-8 text file up to 32 KiB.');
-    assert(state.sources.length < 4 && state.sources.reduce((n, s) => n + bytes(s.text), bytes(input.text)) <= TABLE_TOTAL_SOURCE_BYTES, 'TABLE_LIMIT', 'Use at most four files and 64 KiB of source text.');
+    assert(state.sources.length < MAX_TABLE_SOURCES && state.sources.reduce((n, s) => n + bytes(s.text), bytes(input.text)) <= TABLE_TOTAL_SOURCE_BYTES, 'TABLE_LIMIT', 'Use at most four files and 64 KiB of source text.');
     if (/\.json$/iu.test(input.filename)) {
       let parsed: unknown; try { parsed = JSON.parse(input.text) } catch { throw new DomainError('TABLE_FILE', 'This JSON file is not valid.'); }
       assert(parsed && typeof parsed === 'object', 'TABLE_FILE', 'JSON must contain an object or an array.');
@@ -972,6 +1014,71 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     // F054: a file added by a person stamps the Files card; the simulator never writes timestamps.
     next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
     return { state: next, label: `Source added: ${input.filename}. Review it before asking AI to propose a table.` };
+  }
+  if (type === 'table.addWebSources') {
+    // F064 C: a member turns the sources a draft already showed into table sources. They start as
+    // `provided`: nothing may cite them until the owner verifies them.
+    requirePermission(ctx, 'files.add', ['owner', 'participant']);
+    const input = parsePayload(addWebSourcesInput, payload);
+    assert(state.sources.length < MAX_TABLE_SOURCES, 'TABLE_LIMIT', 'Use at most four sources and 64 KiB of source text.');
+    const next: TableState = structuredClone(state);
+    const knownUrls = new Set(next.sources.filter((source) => source.origin === 'web').map((source) => source.url));
+    let added = 0;
+    for (const source of input.sources) {
+      if (next.sources.length >= MAX_TABLE_SOURCES) break;
+      const url = normalizeWebSourceUrl(source.url);
+      assert(url, 'TABLE_FILE', 'A web source URL must be a plain http(s) address.');
+      if (knownUrls.has(url)) continue;
+      const title = source.title.replace(/\s+/gu, ' ').trim().slice(0, MAX_JOB_RESEARCH_TITLE_CHARS);
+      const summary = source.summary.replace(/\s+/gu, ' ').trim().slice(0, MAX_JOB_RESEARCH_SUMMARY_CHARS);
+      assert(title.length > 0 && summary.length > 0, 'TABLE_FILE', 'A web source needs a title and its summary text.');
+      // Only the title and summary are citable; URL, date and authority stay provenance.
+      const text = `${title}\n${summary}`;
+      const sourceBytes = bytes(text);
+      assert(sourceBytes <= TABLE_FILE_BYTES, 'TABLE_FILE', 'A web source is larger than one 32 KiB file.');
+      assert(next.sources.reduce((n, item) => n + bytes(item.text), sourceBytes) <= TABLE_TOTAL_SOURCE_BYTES, 'TABLE_LIMIT', 'The 64 KiB source limit has been reached.');
+      const sha256 = ctx.hash(text);
+      const id = `source_${sha256.slice(0, 32)}`;
+      if (next.sources.some((item) => item.id === id)) continue;
+      knownUrls.add(url);
+      next.sources.push({
+        id, filename: webSourceFilename(url, next.sources.length + 1), text, sha256, createdAt: ctx.now,
+        origin: 'web', status: 'provided', url,
+        publishedAt: source.date ?? null, authority: source.authority,
+      });
+      added += 1;
+    }
+    // Adding sources that are already on the table is a no-op, not an error: the card can be clicked twice.
+    if (added === 0) return { state, label: 'These web sources are already on the table.' };
+    next.dataRevision = state.dataRevision + 1;
+    next.candidate = ctx.role === 'owner' ? null : state.candidate;
+    next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return { state: next, label: `Added ${added} web source${added === 1 ? '' : 's'} as provided. Verify each one before asking AI to use it.` };
+  }
+  if (type === 'table.reviewWebSource') {
+    // F064 C: the same first-review rule as invoice evidence, but table sources stay with the room.
+    assert(ctx.role === 'owner', 'FORBIDDEN', 'Only the table owner can review a web source.');
+    const input = parsePayload(reviewWebSourceInput, payload);
+    const source = state.sources.find((item) => item.id === input.sourceId);
+    assert(source && source.origin === 'web', 'TABLE_FILE', 'Web source not found.');
+    assert(source.status === 'provided', 'TABLE_SOURCE_REVIEWED', 'Only a provided web source can receive its first review decision.');
+    const cited = state.program?.evidence.some((item) => item.sourceId === source.id) === true
+      || state.revisions.some((revision) => revision.snapshot.kind === 'table'
+        && revision.snapshot.program.evidence.some((item) => item.sourceId === source.id));
+    assert(input.status !== 'rejected' || !cited, 'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it verified with the room.');
+    const next = structuredClone(state);
+    const target = next.sources.find((item) => item.id === source.id);
+    if (!target) throw new DomainError('TABLE_FILE', 'Web source not found.');
+    target.status = input.status;
+    next.dataRevision = state.dataRevision + 1;
+    next.candidate = null;
+    next.cardMeta = pruneCardMeta(touchCardMeta(state.cardMeta, 'table.sources', ctx.now, ctx.actorId, 'human'), liveCanvasCardIds(next));
+    return {
+      state: next,
+      label: input.status === 'verified'
+        ? 'Web source verified. Rules can cite its title and summary.'
+        : 'Web source rejected. It cannot be cited.',
+    };
   }
   if (type === 'table.removeSource') {
     requirePermission(ctx, 'files.remove', ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);

@@ -22,6 +22,7 @@ import { RuleChatActions } from './RuleChatActions';
 import { hasLinkedComputeOutput, LinkedComputeOutputs, TableComputeModuleCard } from './TableComputeModuleCard';
 import { serverRollFor, useServerRollsTick } from './roll-store';
 import { describeProgramDiff, diffProgram, ruleBadge, type ProgramDiff, type RuleBadge } from './rules-summary';
+import { webSourceMeta, webSourceStatusLabel } from './table-source-view';
 import './record-actions.css';
 import './rules-card.css';
 
@@ -117,15 +118,20 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
       </div> : <p className="tt-table-limit-note">{state.sources.length >= MAX_SOURCE_FILES ? 'All four source file slots are in use.' : totalBytes >= MAX_SOURCE_BYTES ? 'The 64 KiB source limit has been reached.' : 'Files cannot be added here.'}</p>}
     </>}
     {error && <p className="tt-table-error" role="alert"><AlertCircle size={14} />{error}</p>}
-    {state.sources.length === 0 ? !expanded && <p className="tt-canvas-inline__empty">{readOnly ? 'No files yet.' : 'Add a file or describe the table you want.'}</p> : <ul className="tt-table-source-list" aria-label="Table source files">{state.sources.map((source) => <SourceCard key={source.id} source={source} expanded={expanded} canRemove={viewerCan(view, 'files.remove') && !readOnly && !referencedSourceIds.has(source.id)} readOnly={readOnly} referenced={referencedSourceIds.has(source.id)} busy={busy !== null} onRemove={() => void onCommand('table.removeSource', { sourceId: source.id })} />)}</ul>}
+    {state.sources.length === 0 ? !expanded && <p className="tt-canvas-inline__empty">{readOnly ? 'No files yet.' : 'Add a file or describe the table you want.'}</p> : <ul className="tt-table-source-list" aria-label="Table source files">{state.sources.map((source) => <SourceCard key={source.id} source={source} view={view} expanded={expanded} canRemove={viewerCan(view, 'files.remove') && !readOnly && !referencedSourceIds.has(source.id)} readOnly={readOnly} referenced={referencedSourceIds.has(source.id)} busy={busy !== null} onRemove={() => void onCommand('table.removeSource', { sourceId: source.id })} onCommand={onCommand} />)}</ul>}
   </div>;
 }
 
-function SourceCard({ source, expanded, canRemove, readOnly, referenced, busy, onRemove }: { source: TableSource; expanded: boolean; canRemove: boolean; readOnly: boolean; referenced: boolean; busy: boolean; onRemove: () => void }) {
+function SourceCard({ source, view, expanded, canRemove, readOnly, referenced, busy, onRemove, onCommand }: { source: TableSource; view: WorkspaceView; expanded: boolean; canRemove: boolean; readOnly: boolean; referenced: boolean; busy: boolean; onRemove: () => void; onCommand: WorkbenchProps['onCommand'] }) {
+  const web = source.origin === 'web';
+  const meta = web ? webSourceMeta(source) : null;
+  const canReview = web && source.status === 'provided' && view.actor.role === 'owner' && !readOnly && !busy;
   return <li className="tt-table-source-card">
-    <div className="tt-table-source-card__head"><Database size={15} aria-hidden="true" /><span><strong>{source.filename}</strong><small>{(new TextEncoder().encode(source.text).byteLength / 1024).toFixed(1)} KiB · added {new Date(source.createdAt).toLocaleString()}</small></span>{canRemove && <button type="button" className="tt-icon-button" aria-label={`Remove ${source.filename}`} disabled={busy} onClick={onRemove}><Trash2 size={14} /></button>}</div>
+    <div className="tt-table-source-card__head"><Database size={15} aria-hidden="true" /><span><strong>{source.filename}</strong><small>{(new TextEncoder().encode(source.text).byteLength / 1024).toFixed(1)} KiB · added {new Date(source.createdAt).toLocaleString()}</small></span>{web && <span className={`tt-table-source-status tt-table-source-status--${source.status ?? 'provided'}`} data-testid="source-web-status">{webSourceStatusLabel(source.status)}</span>}{canRemove && <button type="button" className="tt-icon-button" aria-label={`Remove ${source.filename}`} disabled={busy} onClick={onRemove}><Trash2 size={14} /></button>}</div>
+    {meta && <p className="tt-table-source-card__origin">{meta.href ? <a href={meta.href} target="_blank" rel="noopener">{meta.host || 'Web source'}</a> : <span>{meta.host || 'Web source'}</span>}{meta.dateLabel && <span>{meta.dateLabel}</span>}{meta.authorityLabel && <span>{meta.authorityLabel}</span>}</p>}
+    {canReview && <div className="tt-table-source-card__review"><button type="button" className="tt-button tt-button--quiet" data-testid="source-verify" disabled={busy} onClick={() => void onCommand('table.reviewWebSource', { sourceId: source.id, status: 'verified' })}>Verify</button><button type="button" className="tt-button tt-button--danger" data-testid="source-reject" disabled={busy} onClick={() => void onCommand('table.reviewWebSource', { sourceId: source.id, status: 'rejected' })}>Reject</button></div>}
     {expanded && <details><summary>Review source text</summary><pre>{source.text}</pre></details>}
-    {!canRemove && <small className="tt-table-source-card__citation">{referenced ? 'Used by an active or retained rule set · keep with this table' : readOnly ? 'Source editing is temporarily paused.' : 'Only the table owner can remove this file.'}</small>}
+    {!canRemove && <small className="tt-table-source-card__citation">{referenced ? 'Used by an active or retained rule set · keep with this table' : readOnly ? 'Source editing is temporarily paused.' : web ? 'Only the table owner can remove this web source.' : 'Only the table owner can remove this file.'}</small>}
   </li>;
 }
 

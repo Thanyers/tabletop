@@ -74,6 +74,8 @@ export interface TabletopCapabilities {
   compute?: ComputeRuntimeCapabilities;
   /** F073: the server stores pictures for image cards (Worker); the Node guest runtime does not. */
   images?: boolean;
+  /** F064 C: add/verify web sources and cite them as table evidence (Worker, unless switched off). */
+  webEvidence?: boolean;
   model: { enabled: boolean; reason: string };
 }
 
@@ -227,7 +229,7 @@ export class TabletopClient {
       tableAssistant: { available: false, reason: unavailableAssistantReason },
       model: { enabled: false, reason: 'AI proposals are not configured on this local server.' },
     };
-    const body = await readResponse<{ uploads?: unknown; images?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; compute?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    const body = await readResponse<{ uploads?: unknown; images?: unknown; webEvidence?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; compute?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
     const tableAssistant = body.tableAssistant;
     const validTableAssistant = tableAssistant === undefined || (
       typeof tableAssistant === 'object'
@@ -245,6 +247,7 @@ export class TabletopClient {
       ...(typeof body.tableReadOnly === 'boolean' ? { tableReadOnly: body.tableReadOnly } : {}),
       ...(body.inviteLinks === true ? { inviteLinks: true } : {}),
       ...(body.images === true ? { images: true } : {}),
+      ...(body.webEvidence === true ? { webEvidence: true } : {}),
       ...(typeof body.memberSeats === 'number' && Number.isInteger(body.memberSeats) && body.memberSeats >= 1
         ? { memberSeats: Math.min(body.memberSeats, MAX_TABLE_MEMBER_SEATS) } : {}),
       tableAssistant: assistantCapability
