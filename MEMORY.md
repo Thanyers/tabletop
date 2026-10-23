@@ -5,6 +5,20 @@
 
 ## Lessons
 
+### 2026-10-23 — มาตรวัด AI context ไม่รวม capability ที่ backend เติม
+- **What happened:** หลังรวม F067 กับ reusable compute เทสต์ payload equality ใน CI ได้ 2,338 bytes แต่ UI helper นับ 2,236 bytes
+- **Root cause:** ทั้งสองใช้ตัวสร้างส่วนโต๊ะร่วมกันแล้ว แต่ backend เติม `computeCapabilities` ภายหลังโดย UI ไม่ได้รับข้อมูลชุดนี้
+- **Correct behavior:** ส่ง capability ที่เปิดจริงผ่าน endpoint ใช้ตัวสร้าง payload เดียวกันทั้ง provider และมาตรวัด รวม metadata ที่รู้ก่อนส่ง และคงเทสต์เทียบ bytes จริงไว้; research/repair ที่รู้ภายหลังให้ระบุขอบเขตและตรวจเพดานที่ backend หลัง merge งานที่แตะ contract เดียวกันต้องรันชุด Cloudflare อีกครั้งก่อน push
+
+### 2026-10-23 — Browser harness ใช้ assets เก่าแล้ว build ลบไฟล์ระหว่างทดสอบ
+- **What happened:** browser suite นำทางเข้าห้องใหม่แล้วได้ HTTP response failure หลัง suite เริ่มผ่านหลายข้อ
+- **Root cause:** สั่ง Vite build ระหว่าง Miniflare harness ยังทำงาน; asset manifest ของ process เดิมชี้ไฟล์ที่ build ใหม่ลบไป
+- **Correct behavior:** รอ browser processes จบก่อนสร้าง `dist/worker-build` ใหม่ จากนั้นเริ่ม harness ใหม่กับ build ชุดเดียวที่คงที่จนจบ รัน browser suites ขนานกันได้เฉพาะเมื่อทุก suite อ่าน artifacts อย่างเดียว
+
+### 2026-10-23 — Compute ผ่าน runner/unit แต่เส้นทางห้องจริงไม่เริ่มงาน
+- **What happened:** โปรแกรมจาก AI รันใน container โดยตรงได้ แต่ authority ไม่จัดคิวหรือจบด้วย failure ก่อนเรียก runner
+- **Root cause:** ช่วงแรกผูก durable job กับ HTTP session และส่งค่า CSRF ที่ hash แล้วเข้า raw-value comparison อีกครั้ง; mocks ไม่ตรวจ authentication จริง อีก race คือ schedule ทิ้ง wakeup ที่มาตอน drain กำลังจบ
+- **Correct behavior:** ตรวจ session ตอนรับคำขอ; งานที่รับแล้วใช้ actor/membership/permission/epoch ที่ตรวจใหม่ก่อนรันและก่อน commit ตาม [durable-job policy](docs/REUSABLE_COMPUTE.md) ไม่เก็บ token ใน run ทดสอบผ่าน HTTP authority จริงรวม restart/alarm และเก็บ dirty flag เพื่อ drain อีกครั้งเมื่อมีสถานะเปลี่ยนระหว่างงานกำลังรัน หากใช้ raw-value hash helper ใน request path ต้องส่ง raw token ไม่ใช่ hash
 ### 2026-10-23 — F066 merge แล้ว Worker บูตไม่ขึ้น ทั้งที่ unit test และ CI ผ่าน
 - **What happened:** หลัง #212 merge emulator ล้มตอน start ด้วย `Uncaught ReferenceError: TABLE_AI_INPUT_BYTES is not defined` · `test:cloudflare` 158/158 และ CI เขียว
 - **Root cause:** ค่าคงที่ระดับ module (`MAX_CHANGE_REQUEST_BYTES = TABLE_AI_INPUT_BYTES + …` ใน provider, `MAX_INPUT_TOKENS` ใน billing) อ่าน export จาก `domain/table.ts` ซึ่งอยู่ในวงจร import ของ bundle Worker จึงยังไม่ถูกตั้ง · vitest โหลด module คนละลำดับ และ CI ของ PR เข้า `dev` ไม่บูต Worker (ชุด browser ถูก skip)

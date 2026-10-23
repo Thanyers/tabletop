@@ -10,6 +10,7 @@
 import { MAX_TABLE_MEMBER_SEATS } from '../../src/tabletop/shared/contracts.js';
 import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
 import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
+import { COMPUTE_GENERATION_POLICY } from '../../src/tabletop/shared/compute-runtime-profiles.js';
 
 /**
  * F049: the exact dice control example embedded in the guide below.
@@ -71,7 +72,7 @@ VALUE: string<=500 | number | boolean | null | string[] (<=32 items, each <=100 
 STRICT: every object below rejects unknown keys and requires exactly the keys listed; "?" marks an optional key. The root has exactly three keys; canvas is INSIDE program.
 
 ROOT{kind:"table",program,initialRecords}
-PROGRAM{version:1,title:<=100 chars,description,collections,actions,invariants,turnOrder,evidence,assumptions,canvas?}
+PROGRAM{version:1,title:<=100 chars,description,collections,actions,invariants,turnOrder,evidence,assumptions,canvas?,compute?}
 COLLECTION{id,title,fields}
 FIELD{id,label,type:text|number|boolean|list,required:boolean,min?,max?,choices?,default?}
   Only number fields take min/max (min<=max); only text fields take choices (1..32 strings, each<=100); default must satisfy type, choices and bounds.
@@ -143,3 +144,22 @@ DICE: dice must bind one number PARAM or one roll PARAM (faces/count whole numbe
   shows those faces and total, and the action sends no value.
   EXAMPLE (one controls view; the same action also has a form on another view covering every input):
   ${TABLE_DICE_EXAMPLE_JSON}`;
+
+export const TABLE_COMPUTE_SCHEMA_GUIDE = `${COMPUTE_GENERATION_POLICY}
+
+COMPUTE (optional inside PROGRAM): {version:1,modules:MODULE[<=12]}
+MODULE{id,name,description,runtime:"javascript"|"python",version:positive integer,source:string<=24576,inputs:INPUT_PORT[<=8],outputs:OUTPUT_PORT[1..8]}
+INPUT_PORT{id,label,type:"text"|"number"|"boolean"|"text-list"|"table",binding:INPUT_BINDING}
+INPUT_BINDING = {kind:"literal",value:scalar} | {kind:"collection",collectionId:COLLECTION_ID}
+  | {kind:"source",sourceId:SOURCE_ID} | {kind:"result",moduleId:MODULE_ID,outputId:OUTPUT_ID}
+  | {kind:"actor",property:"role"|"seat"} | {kind:"provenance",property:"dataRevision"|"sourceIds"}
+OUTPUT_PORT{id,label,type:"text"|"number"|"boolean"|"text-list"|"table",columns?:COLUMN[],collectionId?:COLLECTION_ID}
+COLUMN{id,label,type:"text"|"number"|"boolean"|"list"}
+Only table outputs declare columns (required) and an optional existing collectionId (its fields must exactly match).
+A collection binding passes {columns:[COLUMN],rows:[{FIELD_ID:VALUE}]} as inputs.PORT_ID. Source binding passes UTF-8 text.
+Literal bindings are scalar. Result bindings must match the upstream declared output type. Dependencies must be acyclic.
+Generated code returns {OUTPUT_ID: scalar or {columns:[COLUMN],rows:[{FIELD_ID:VALUE}]}}; use exact declared IDs and types.
+The host runs modules after activation or bound input changes and validates outputs. Linked collection cards display derived output without overwriting source rows.
+For a metric or scalar expression, use {op:"computeResult",moduleId:MODULE_ID,outputId:OUTPUT_ID}. This reads a current validated text/number/boolean output; a pending or stale result is null. Bind table consumers to the declared collectionId or a result input port. Do not bake a sample result into a literal.
+Program actions may be [] when at least one compute module is present. Collections remain required; declared output collections start empty.
+Keep compute code, definitions and connections when editing unrelated parts of an existing table.`;

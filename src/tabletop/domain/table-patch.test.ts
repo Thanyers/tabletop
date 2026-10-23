@@ -17,6 +17,18 @@ const merged = (value: Omit<TablePatch, 'kind'>) => {
 const view = { id: 'heatmap', kind: 'scene', title: 'Heatmap', width: 200, height: 100, elements: [{ id: 'cell', shape: 'rect', x: 0, y: 0, width: 10, height: 10, fill: '#40c463' }] };
 
 describe('table patch (F065)', () => {
+  it('adds, preserves, edits and removes reusable modules through the same validated patch path', () => {
+    const module = { id: 'double', name: 'Double a number', description: 'Multiply a number by two.', version: 1, runtime: 'javascript', source: 'export default inputs => ({total:inputs.amount*2});', inputs: [{ id: 'amount', label: 'Amount', type: 'number', binding: { kind: 'literal', value: 7 } }], outputs: [{ id: 'total', label: 'Total', type: 'number' }] };
+    const first = merged({ upsert: { computeModules: [module] } });
+    expect(first.compute?.modules[0].id).toBe('double');
+    const unrelated = applyTablePatch(first, patch({ set: { title: 'New title' } }));
+    if ('issues' in unrelated) throw new Error('Expected a merged patch');
+    expect(tableChangeSchema.parse(unrelated.change).program.compute).toEqual(first.compute);
+    const removed = applyTablePatch(first, patch({ remove: { computeModules: ['double'] } }));
+    if ('issues' in removed) throw new Error('Expected a merged patch');
+    expect(tableChangeSchema.parse(removed.change).program.compute?.modules).toEqual([]);
+  });
+
   it('adds a view and keeps every other part of the program as it was', () => {
     const program = merged({ upsert: { views: [view] } });
     expect(program.canvas?.views.map((item) => item.id)).toEqual([...(current.canvas?.views ?? []).map((item) => item.id), 'heatmap']);

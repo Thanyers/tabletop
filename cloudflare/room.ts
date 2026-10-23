@@ -3,6 +3,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
 import { isSeat, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
+import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
 import { exportInvoice } from '../server/exports.js';
@@ -31,6 +32,8 @@ import {
 import { decideDomain } from '../src/tabletop/domain/index.js';
 import { CURSOR_MIN_INTERVAL_MS, cursorRelay, parseCursorInput, type CursorInput } from '../src/tabletop/shared/cursor-protocol.js';
 import { cleanReasons, modelFailureMessage, safeAssistantFailureCode, safeModelFailureCode, safeModelFailureReasons, tableAssistantFailureMessage } from './model-failure.js';
+import { resolveTableRuleReferences } from '../src/tabletop/shared/table-rule-reference.js';
+import { COMPUTE_EXECUTION_TIMEOUT_MS } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
@@ -496,6 +499,14 @@ export class Room extends DurableObject<Env> {
       workspaceIdFactory: () => this.requireBoundRoomId(),
       workspaceExpiresAt: ROOM_EXPIRES_AT,
       onWorkspaceChanged: () => this.scheduleOutboxDrain(),
+      computeRunner: createCloudflareComputeRunner({
+        loader: env.COMPUTE_LOADER,
+        ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? { container: this.ctx.container } : {}),
+      }),
+      scheduleBackground: task => this.ctx.waitUntil(task),
+      onComputeWorkScheduled: () => this.ctx.waitUntil(
+        this.scheduleAlarmAt(Date.now() + COMPUTE_EXECUTION_TIMEOUT_MS + RETRY_DELAY_MS).catch(() => undefined),
+      ),
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -696,7 +707,10 @@ export class Room extends DurableObject<Env> {
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
         // F035: drafting rules (incl. AI drafts) needs the rules.draft permission.
         if (!authorized.context.permissions?.has('rules.draft')) throw new AuthorityError('ROLE_FORBIDDEN');
-        const input = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const parsedInput = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const input = authorized.workspace.domain.kind === 'table'
+          ? { ...parsedInput, prompt: resolveTableRuleReferences(parsedInput.prompt, authorized.workspace.domain) }
+          : parsedInput;
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({
           commandId: input.commandId,
@@ -827,7 +841,8 @@ export class Room extends DurableObject<Env> {
         }
         // F035: asking the table AI needs the ai.ask permission.
         if (!authorized.context.permissions?.has('ai.ask')) throw new AuthorityError('ROLE_FORBIDDEN');
-        const input = parseTableAssistantRequest(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const parsedInput = parseTableAssistantRequest(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const input = { ...parsedInput, prompt: resolveTableRuleReferences(parsedInput.prompt, authorized.workspace.domain) };
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({
           commandId: input.commandId,
@@ -1091,6 +1106,7 @@ export class Room extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     try {
+      if (this.repository.roomId) await this.authority.resumeTableCompute(this.repository.roomId);
       await this.recoverStaleModelJobs();
       await this.syncDirectory();
       await this.drainOutbox();

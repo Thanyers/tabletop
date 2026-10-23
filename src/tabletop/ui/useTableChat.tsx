@@ -4,6 +4,7 @@ import { ApiFailure, type ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantReference } from '../shared/table-assistant-contracts';
 import type { TableState } from '../shared/table-contracts';
+import type { ComputeRuntimeCapabilities } from '../shared/compute-runtime-profiles';
 import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
@@ -34,6 +35,7 @@ export interface UseTableChatOptions {
   view: WorkspaceView | null;
   aiEnabled: boolean;
   assistantAvailable?: boolean;
+  computeCapabilities?: ComputeRuntimeCapabilities;
   readOnly: boolean;
   busy?: boolean;
   requestDraft: (view: WorkspaceView, prompt: string, commandId: CommandId) => Promise<ModelJob>;
@@ -205,7 +207,7 @@ function actorHasTurn(view: TableView, requireTurn: boolean): boolean {
 }
 
 /** Owners can draft a table from text alone; every active answer remains private to the current actor. */
-export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; cards: CanvasAuxiliaryObject[]; editRules: () => void; cancelEditRules: () => void } {
+export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; cards: CanvasAuxiliaryObject[]; editRules: (prompt?: string) => void; cancelEditRules: () => void } {
   const { view, aiEnabled, readOnly } = options;
   const table = isTableView(view) ? view : null;
   const scope = scopeFor(table);
@@ -237,12 +239,19 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const [acknowledgedRetry, setAcknowledgedRetry] = useState<{ prompt: string; key: string }>();
   const [retryPrefill, setRetryPrefill] = useState<{ text: string; key: number }>();
   const [composerMessage, setComposerMessage] = useState('');
-  // Cards the person pointed the chat at; the next message is about all of them (more context for the AI).
+  // Cards and exact rules the person pointed the chat at; the next message is about all of them.
   const [cardReferences, setCardReferences] = useState<ChatCardReference[]>([]);
   const cardReferencesRef = useRef(cardReferences);
   cardReferencesRef.current = cardReferences;
   const [referenceFocusKey, setReferenceFocusKey] = useState(0);
   useEffect(() => onChatCardReference((reference) => {
+    // Ask on a rule is an explicit return to question mode; Change then calls editRules()
+    // synchronously after this callback and enters draft mode for that exact rule.
+    if (reference.rule) {
+      explicitDraftScopeRef.current = null;
+      explicitDraftEntryRef.current = null;
+      setExplicitDraftScope(null);
+    }
     // Pointing at another card adds it; pointing at one already listed keeps the list as it is.
     setCardReferences((current) => current.some((item) => item.id === reference.id)
       ? current
@@ -337,7 +346,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   const cards = useMemo(() => cardState.scope === scope ? cardState.cards : [], [cardState, scope]);
   const mode = table ? tableChatMode(viewerCan(table, 'rules.draft') ? 'owner' : 'participant', Boolean(table.domain.program), explicitDraftScope === scope, {
     prompt: composerMessage,
-    referencedCard: cardReferences.length > 0,
+    referencedCard: cardReferences.some((reference) => !reference.rule),
+    referencedRule: cardReferences.some((reference) => Boolean(reference.rule)),
     hasCreateAction: table.domain.program?.actions.some(action => Boolean(action.creates?.length)) ?? false,
   }) : 'ask';
   const modeRef = useRef(mode);
@@ -712,7 +722,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
 
   const retryHistory = useCallback(() => { void loadHistory(scope); }, [loadHistory, scope]);
 
-  const editRules = useCallback(() => {
+  const editRules = useCallback((prompt?: string) => {
     const current = viewRef.current;
     if (!current || !viewerCan(current, 'rules.draft') || optionsRef.current.readOnly || !current.domain.program) return;
     explicitDraftScopeRef.current = scopeRef.current;
@@ -722,6 +732,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       ruleRevision: current.domain.ruleRevision,
       candidateId: current.domain.candidate?.id ?? null,
     };
+    if (prompt) setRetryPrefill({ text: prompt.slice(0, 1200), key: Date.now() });
     setFocusKey((key) => key + 1);
   }, []);
 
@@ -805,7 +816,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
   // F067: the table's share of a rule request, measured with the server's own request builder.
-  const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft') ? tableDraftBytes(table.domain, '') : null, [table]);
+  const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft')
+    ? tableDraftBytes(table.domain, '', options.computeCapabilities) : null, [table, options.computeCapabilities]);
   const aiContext = draftBaseBytes === null ? undefined : {
     // The message adds its JSON-escaped length; quotes are already counted in the empty prompt.
     used: draftBaseBytes + new TextEncoder().encode(JSON.stringify(composerMessage)).byteLength - 2,

@@ -7,6 +7,7 @@ import { handleEvolutionCommand } from './evolution';
 import { handleDisplayCommand } from './display';
 import { createTableState, handleTableCommand } from './table';
 import { handleCanvasLayout } from './canvas-layout';
+import { stampTableDataProvenance } from './table-data-provenance';
 
 export function createDomain(kind: CaseKind, ctx: ActorContext): DomainState {
   if (kind === 'table') return createTableState();
@@ -34,9 +35,15 @@ export function decideDomain(state: DomainState, command: DomainCommand, ctx: Ac
   if (state.kind === 'invoice') decision = handleInvoiceCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'teaching') decision = handleTeachingCommand(state, command.type, command.payload, ctx);
   if (state.kind === 'encounter') decision = handleEncounterCommand(state, command.type, command.payload, ctx);
-  if (decision) return decision;
+  if (decision) {
+    if (state.kind === 'table' && decision.state.kind === 'table') decision.state = stampTableDataProvenance(state, decision.state, command.type, ctx);
+    return decision;
+  }
   const evolution = handleEvolutionCommand(state, command.type, command.payload, ctx);
-  if (evolution) return evolution;
+  if (evolution) {
+    if (state.kind === 'table' && evolution.state.kind === 'table') evolution.state = stampTableDataProvenance(state, evolution.state, command.type, ctx);
+    return evolution;
+  }
   throw new DomainError('UNKNOWN_COMMAND', `Command ${command.type} is not supported by the ${state.kind} domain.`);
 }
 

@@ -1,5 +1,6 @@
 import { GENERATIVE_LIMITS, type ControlDescriptor, type ControlInputBinding, type GenerativeCanvas, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar, type SceneMotion, type ScenePrimitive } from '../../shared/generative-contracts';
 import type { TableAction, TableProgram, TableRecord, TableValue } from '../../shared/table-contracts';
+import { computeDerivedCollections, currentComputeRun, isComputeTableValue, validateComputeOutputs, type ComputeRunRecord, type ComputeTableValue } from '../../shared/table-compute';
 import { expressionWithinBounds, validateGenerativeProgram } from './validation';
 
 interface RowSet { readonly kind: 'rows'; readonly collection: string; readonly rows: readonly TableRecord[] }
@@ -14,6 +15,12 @@ export interface GenerativeEvaluationContext {
   seat?: string;
   turn: string | null;
   variables?: Readonly<Record<string, GenerativeRuntimeBinding>>;
+  computeRuns?: readonly ComputeRunRecord[];
+  derivedCollections?: ReadonlyMap<string, ComputeTableValue>;
+  dataRevision?: number;
+  ruleRevision?: number;
+  /** Domain validators may probe schemas before an upstream derived result exists. */
+  allowPendingDerivedCollections?: boolean;
 }
 export interface GenerativeEvaluationOptions { fuel?: number }
 export type GenerativeExpressionSession = (expression: GenerativeExpression) => GenerativeOutput;
@@ -64,9 +71,30 @@ function rowSet(value: RuntimeValue): RowSet {
   return value;
 }
 function fieldValue(record: TableRecord, field: string): TableValue { return record.values[field] ?? null; }
-function recordSet(context: GenerativeEvaluationContext, collection: string): RowSet {
+function derivedCollection(context: GenerativeEvaluationContext, collection: string): ComputeTableValue | undefined {
+  const value = context.derivedCollections?.get(collection);
+  if (value) return value;
+  const program = context.program.compute;
+  if (!program || context.dataRevision === undefined || context.ruleRevision === undefined || !context.computeRuns) return undefined;
+  return computeDerivedCollections(program, context.computeRuns, context.dataRevision, context.ruleRevision).get(collection);
+}
+function recordsForCollection(context: GenerativeEvaluationContext, collection: string): readonly TableRecord[] {
+  const hasWriter = context.program.compute?.modules.some(module =>
+    module.outputs.some(output => output.collectionId === collection)) ?? false;
+  if (hasWriter) {
+    const table = derivedCollection(context, collection);
+    if (!table || !isComputeTableValue(table)) {
+      if (context.allowPendingDerivedCollections) return [];
+      fail('The derived collection has no current successful compute result.');
+    }
+    return table.rows.map((values, index) => ({ id: `derived_${collection}_${index}`, values: structuredClone(values) }));
+  }
   const rows = context.records[collection];
   if (!rows) fail('A collection expression refers to missing table records.');
+  return rows;
+}
+function recordSet(context: GenerativeEvaluationContext, collection: string): RowSet {
+  const rows = recordsForCollection(context, collection);
   if (rows.length > GENERATIVE_LIMITS.arrayItems) fail('A collection expression exceeded the row limit.');
   return { kind: 'rows', collection, rows };
 }
@@ -76,6 +104,8 @@ function selectedRecord(context: GenerativeEvaluationContext, parameter: string)
   if (!actionParameter?.collection) fail('Selected record expression refers to an invalid action parameter.');
   const id = context.inputs?.[parameter];
   if (typeof id !== 'string') fail('Selected record input must be an identifier.');
+  const hasWriter = context.program.compute?.modules.some(module => module.outputs.some(output => output.collectionId === actionParameter.collection)) ?? false;
+  if (hasWriter) fail('Actions cannot select rows from a derived compute collection.');
   const record = context.records[actionParameter.collection]?.find(item => item.id === id);
   if (!record) fail('Selected record was not found.');
   return record;
@@ -105,7 +135,7 @@ function evaluate(expression: GenerativeExpression, context: GenerativeEvaluatio
     }
     case 'selectedField': return fieldValue(selectedRecord(context, expression.parameter), expression.field);
     case 'recordField': {
-      const record = context.records[expression.collection]?.find(item => item.id === expression.recordId);
+      const record = recordsForCollection(context, expression.collection).find(item => item.id === expression.recordId);
       if (!record) fail('Expression record was not found.');
       return fieldValue(record, expression.field);
     }
@@ -121,6 +151,25 @@ function evaluate(expression: GenerativeExpression, context: GenerativeEvaluatio
       return fieldValue(record, expression.field);
     }
     case 'collection': return recordSet(context, expression.id);
+    case 'computeResult': {
+      const program = context.program.compute;
+      const module = program?.modules.find(item => item.id === expression.moduleId);
+      const output = module?.outputs.find(item => item.id === expression.outputId);
+      const latestRun = program && context.computeRuns && context.dataRevision !== undefined && context.ruleRevision !== undefined
+        ? currentComputeRun(program, expression.moduleId, context.computeRuns, context.dataRevision, context.ruleRevision)
+        : undefined;
+      if (!module || !output || !latestRun || output.type === 'table' || output.type === 'text-list') return null;
+      try {
+        const validated = validateComputeOutputs(module, {
+          outputs: Object.fromEntries((latestRun.outputs ?? []).map(item => [item.outputId, item.value])),
+        });
+        const value = validated.outputs[expression.outputId];
+        return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null
+          ? value : null;
+      } catch {
+        return null;
+      }
+    }
     case 'if': return asBoolean(evaluate(expression.test, context, scope, spend, depth + 1))
       ? evaluate(expression.then, context, scope, spend, depth + 1)
       : evaluate(expression.otherwise, context, scope, spend, depth + 1);

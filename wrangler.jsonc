@@ -6,6 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
+  "worker_loaders": [{ "binding": "COMPUTE_LOADER" }],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

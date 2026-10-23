@@ -2,6 +2,27 @@ import type { TableField, TableValue } from '../shared/table-contracts';
 
 export interface CsvTable { headers: string[]; rows: string[][] }
 
+/** Converts the selected first worksheet to the same bounded text cells as CSV import. */
+export function worksheetToCsvTable(sheet: readonly (readonly unknown[])[]): CsvTable {
+  const [headerRow = [], ...body] = sheet;
+  const headers = headerRow.map(cellText).map((value) => value.trim());
+  const rows = body
+    .filter((row) => row.some((value) => cellText(value).trim().length > 0))
+    .map((row) => headers.map((_, index) => cellText(row[index])));
+  return { headers, rows };
+}
+
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  }
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  if (typeof value === 'boolean') return String(value);
+  return '';
+}
+
 /** RFC 4180 style parser: quotes, escaped quotes, commas and newlines inside quotes, CRLF, BOM. */
 export function parseCsv(text: string): CsvTable {
   const source = text.replace(/^\uFEFF/u, '');

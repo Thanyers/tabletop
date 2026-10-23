@@ -15,6 +15,7 @@ import { MAX_HTTP_REQUESTS_PER_MINUTE } from './limits.js';
 import { gameChange, rollCombatChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { ROLL_LIMITS } from '../src/tabletop/shared/roll.js';
 import { rollTotal } from '../src/tabletop/domain/roll.js';
+import type { ComputeRunner } from '../src/tabletop/shared/table-compute.js';
 
 interface TestSession {
   cookie: string;
@@ -1329,7 +1330,7 @@ describe('F035 role permissions at the authority', () => {
   it('stops a role manager from granting permissions they do not hold', async () => {
     const { base, owner, workspaceId, members: [manager, target] } = await tableWithMembers(2);
     const saved = await command(base, owner, await currentView(base, owner, workspaceId), 'access.saveRole', {
-      name: 'Role keeper', permissions: ['roles.manage', 'rules.draft', 'files.add', 'table.act', 'ai.ask'],
+      name: 'Role keeper', permissions: ['roles.manage', 'rules.draft', 'files.add', 'data.compute', 'table.act', 'ai.ask'],
     });
     expect(saved.response.status, JSON.stringify(saved.body)).toBe(200);
     const roleId = (saved.body as CommandAck).workspace.domain.access?.roles[0]?.id;
@@ -1420,5 +1421,128 @@ describe('F035 role permissions at the authority', () => {
     const lessonDisplay = await command(base, owner, lesson, 'display.set', { connections: true });
     expect(lessonDisplay.response.status, JSON.stringify(lessonDisplay.body)).toBe(200);
     expect((lessonDisplay.body as CommandAck).workspace.domain.display).toEqual({ connections: true });
+  });
+});
+
+describe('F066 compute command boundary', () => {
+  it('completes an accepted generated compute job after its HTTP session is revoked', async () => {
+    let signalRunnerStarted: (() => void) | undefined;
+    let releaseRunner: (() => void) | undefined;
+    let runnerInvocations = 0;
+    const runnerStarted = new Promise<void>(resolveStarted => { signalRunnerStarted = resolveStarted; });
+    const runnerGate = new Promise<void>(resolveRunner => { releaseRunner = resolveRunner; });
+    const computeRunner: ComputeRunner = {
+      async run() {
+        runnerInvocations += 1;
+        if (runnerInvocations === 2) {
+          signalRunnerStarted?.();
+          await runnerGate;
+        }
+        return { outputs: { total: 7 } };
+      },
+    };
+    const server = await startServer({
+      environment: 'local',
+      host: '127.0.0.1',
+      port: 0,
+      dataDir: ':memory:',
+      computeRunner,
+    });
+    running.push(server);
+    const base = `http://127.0.0.1:${server.port}`;
+    try {
+      const owner = await createSession(base, 'Compute owner');
+      const workspace = await createWorkspace(base, owner, 'table');
+      const stored = await server.repository.getWorkspace(workspace.id);
+      if (!stored || stored.domainState.kind !== 'table') throw new Error('Expected a stored table workspace.');
+      const state = structuredClone(stored.domainState);
+      const program = gameChange('').program;
+      program.compute = {
+        version: 1,
+        modules: [{
+          id: 'session_total',
+          name: 'Session total',
+          description: 'Return a fixed test value.',
+          runtime: 'javascript',
+          version: 1,
+          source: 'export default function compute(inputs) { return { total: inputs.value.value }; }',
+          inputs: [{ id: 'value', label: 'Value', type: 'number', binding: { kind: 'literal', value: 7 } }],
+          outputs: [{ id: 'total', label: 'Total', type: 'number' }],
+        }],
+      };
+      state.program = program;
+      state.ruleRevision = 1;
+      await server.database.query(
+        'UPDATE workspaces SET domain_state = $2::jsonb, state_hash = $3 WHERE id = $1',
+        [workspace.id, JSON.stringify(state), hashValue(state)],
+      );
+
+      const requestSocket = new Socket();
+      const request = new IncomingMessage(requestSocket);
+      request.headers.cookie = owner.cookie;
+      const authenticated = await server.authority.authenticate(request);
+      requestSocket.destroy();
+      await currentView(base, owner, workspace.id);
+      let refreshed = await server.repository.getWorkspace(workspace.id);
+      const initialDeadline = Date.now() + 2_000;
+      while (refreshed?.domainState.kind !== 'table'
+          || !refreshed.domainState.computeRuns?.some(run => run.status === 'succeeded')) {
+        if (Date.now() >= initialDeadline) break;
+        await new Promise(resolveWait => setTimeout(resolveWait, 10));
+        refreshed = await server.repository.getWorkspace(workspace.id);
+      }
+      expect(refreshed?.domainState.kind === 'table' ? refreshed.domainState.computeRuns : []).toMatchObject([
+        expect.objectContaining({ status: 'succeeded', outputs: [{ outputId: 'total', value: 7 }] }),
+      ]);
+
+      const accepted = await command(base, owner, await currentView(base, owner, workspace.id), 'table.compute.run', {
+        moduleId: 'session_total',
+      });
+      expect(accepted.response.status, JSON.stringify(accepted.body)).toBe(200);
+      await runnerStarted;
+      await server.database.query('UPDATE sessions SET revoked_at = $2 WHERE token_hash = $1', [
+        authenticated.record.tokenHash,
+        Date.now(),
+      ]);
+      expect((await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: owner })).response.status).toBe(401);
+      releaseRunner?.();
+
+      refreshed = await server.repository.getWorkspace(workspace.id);
+      const deadline = Date.now() + 2_000;
+      while (!refreshed?.domainState.kind || refreshed.domainState.kind !== 'table'
+          || !refreshed.domainState.computeRuns?.some(run => run.runId === accepted.envelope.commandId && run.status === 'succeeded')) {
+        if (Date.now() >= deadline) break;
+        await new Promise(resolveWait => setTimeout(resolveWait, 10));
+        refreshed = await server.repository.getWorkspace(workspace.id);
+      }
+      const acceptedRun = refreshed?.domainState.kind === 'table'
+        ? refreshed.domainState.computeRuns?.find(run => run.runId === accepted.envelope.commandId)
+        : undefined;
+      expect(acceptedRun).toMatchObject({ status: 'succeeded', outputs: [{ outputId: 'total', value: 7 }] });
+    } finally {
+      releaseRunner?.();
+      await closeServer(server);
+    }
+  });
+
+  it('rejects client queue/update commands and browser-selected run identifiers', async () => {
+    const { base } = await openServer();
+    const owner = await createSession(base, 'Compute owner');
+    const workspace = await createWorkspace(base, owner, 'table');
+    const participantSession = await createSession(base, 'Compute participant');
+    const participant = await redeem(base, participantSession, (await invite(base, owner, workspace.id, 'member-1')).ticket);
+
+    for (const [type, payload] of [
+      ['table.compute.queue', { moduleId: 'totals', runId: randomUUID() }],
+      ['table.compute.update', { runId: randomUUID(), status: 'succeeded', outputs: [{ outputId: 'total', value: 999 }] }],
+    ] as const) {
+      const forged = await command(base, participant.session, await currentView(base, participant.session, workspace.id), type, payload);
+      expect([forged.response.status, (forged.body as ApiError).errorCode]).toEqual([400, 'COMMAND_NOT_ALLOWED']);
+    }
+
+    const injectedRunId = await command(base, owner, await currentView(base, owner, workspace.id), 'table.compute.run', {
+      moduleId: 'totals', runId: randomUUID(),
+    });
+    expect([injectedRunId.response.status, (injectedRunId.body as ApiError).errorCode]).toEqual([403, 'INVALID_COMMAND_PAYLOAD']);
   });
 });

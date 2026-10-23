@@ -443,7 +443,7 @@ function autoApplyCandidate(state: DomainState, payload: unknown, ctx: ActorCont
   return { state: active, label: `Rules applied automatically as rule revision ${active.ruleRevision}.` };
 }
 
-const removeItemSchema = z.strictObject({ kind: z.enum(['action', 'invariant', 'view', 'collection']), id: z.string().min(1).max(80) });
+const removeItemSchema = z.strictObject({ kind: z.enum(['action', 'invariant', 'view', 'collection', 'compute']), id: z.string().min(1).max(80) });
 
 /** F039: take one rule out of the active table program as a new rule revision, so history can restore it. */
 function removeRuleItem(state: DomainState, payload: unknown, ctx: ActorContext): { state: DomainState; label: string } {

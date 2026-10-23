@@ -14,6 +14,7 @@ import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
 import { ReasonedDomainError } from './model-failure.js';
+import { computeRuntimeCapabilities, type ComputeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
@@ -189,7 +190,7 @@ function actorAndRole(request: AIProposalRequest): void {
   }
 }
 
-function prepareInput(request: AIProposalRequest): PreparedInput {
+function prepareInput(request: AIProposalRequest, computeCapabilities: ComputeRuntimeCapabilities): PreparedInput {
   const { workspace, prompt } = request;
   if (workspace.domain.kind === 'invoice') {
     const state = invoiceDomainSchema.safeParse(workspace.domain);
@@ -230,7 +231,7 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current table state is invalid.');
     const sourceBytes = parsed.data.sources.reduce((total, source) => total + new TextEncoder().encode(source.text).byteLength, 0);
     if (sourceBytes > TABLE_TOTAL_SOURCE_BYTES) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The table sources exceed the allowed proposal size.');
-    const providerInput: DeepSeekChangeInput = tableDraftInput(parsed.data, prompt);
+    const providerInput: DeepSeekChangeInput = tableDraftInput(parsed.data, prompt, computeCapabilities);
     return {
       kind: 'table',
       providerInput,
@@ -415,7 +416,11 @@ export async function proposeChange(
   const request = parsed.data;
   billingConfigured(env);
   actorAndRole(request);
-  const prepared = prepareInput(request);
+  const computeCapabilities = computeRuntimeCapabilities({
+    javascript: Boolean(env.COMPUTE_LOADER),
+    python: env.TABLE_COMPUTE_PYTHON === 'enabled',
+  });
+  const prepared = prepareInput(request, computeCapabilities);
   // F064: the drafter decides for itself whether this request needs the web. A search fault
   // must never block a draft, so research is best-effort and bounded. A caller-injected fetch is a
   // test double, so research stays off there and tests never reach the network.
@@ -442,7 +447,7 @@ export async function proposeChange(
     }
   }
   const tableProviderInput = prepared.kind === 'table' && prepared.providerInput.kind === 'table'
-    ? (researchBlock ? { ...prepared.providerInput, research: researchBlock } : prepared.providerInput)
+    ? { ...prepared.providerInput, ...(researchBlock ? { research: researchBlock } : {}) }
     : null;
   const providerBytes = new TextEncoder().encode(canonical(tableProviderInput ?? prepared.providerInput)).byteLength;
   if (providerBytes > prepared.maximumInputBytes) {

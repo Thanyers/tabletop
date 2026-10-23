@@ -4,11 +4,13 @@ import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'c
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Room } from './room.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
-import { csrfForToken } from './auth.js';
+import { authenticateRequest, csrfForToken } from './auth.js';
 import { canonicalJson, hashValue, sha256 } from '../server/codec.js';
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import type { ComputeRunRecord } from '../src/tabletop/shared/table-compute.js';
 import { equipmentChange, rollCombatChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { rollTotal } from '../src/tabletop/domain/roll.js';
+import { evaluateGenerativeCanvas } from '../src/tabletop/runtime/generative/evaluator.js';
 import type { PendingDirectoryChange } from './room-repository.js';
 import { proposeChange } from './ai.js';
 import type { AIProposalRequest, AIProposalResult } from './ai.js';
@@ -42,6 +44,8 @@ const MODEL_WAIT_INTERVAL_MS = 10;
 const SOCKET_PROJECTION_TIMEOUT_MS = 1_000;
 const ASSISTANT_WAIT_ATTEMPTS = 50;
 const ASSISTANT_WAIT_INTERVAL_MS = 10;
+const COMPUTE_WAIT_ATTEMPTS = 100;
+const COMPUTE_WAIT_INTERVAL_MS = 25;
 
 interface TestActor {
   id: string;
@@ -186,7 +190,7 @@ async function waitForTableAssistantJob(
   throw new Error('TABLE_ASSISTANT_JOB_DID_NOT_FINISH');
 }
 
-async function createActiveEquipmentTable(owner: TestActor) {
+async function createActiveEquipmentTable(owner: TestActor, includeCompute = false) {
   const { roomId, stub, workspace: created } = await createRoom(owner, 'table');
   const imported = await issueCommand(stub, created, owner, 'table.import', {
     filename: tableScenarioSources.equipment.filename,
@@ -197,9 +201,32 @@ async function createActiveEquipmentTable(owner: TestActor) {
   }
   const sourceId = imported.body.workspace.domain.sources[0]?.id;
   if (!sourceId) throw new Error('TABLE_ASSISTANT_TEST_SOURCE_MISSING');
+  const change = equipmentChange(sourceId);
+  if (includeCompute) {
+    change.program.compute = {
+      version: 1,
+      modules: [{
+        id: 'available_count',
+        name: 'Available equipment count',
+        description: 'Count equipment that can still be borrowed.',
+        runtime: 'javascript',
+        version: 1,
+        source: 'export default function compute(inputs) { return { count: inputs.items.rows.filter((row) => row.available).length }; }',
+        inputs: [
+          { id: 'items', label: 'Equipment', type: 'table', binding: { kind: 'collection', collectionId: 'equipment' } },
+          { id: 'seat', label: 'Current seat', type: 'text', binding: { kind: 'actor', property: 'seat' } },
+        ],
+        outputs: [{ id: 'count', label: 'Available count', type: 'number' }],
+      }],
+    };
+    change.program.canvas = {
+      version: 1,
+      views: [{ id: 'available_count_metric', kind: 'metric', title: 'Available equipment', value: { op: 'computeResult', moduleId: 'available_count', outputId: 'count' } }],
+    };
+  }
   let current = imported.body.workspace;
   for (const [type, payload] of [
-    ['evolve.propose', { change: equipmentChange(sourceId) }],
+    ['evolve.propose', { change }],
     ['evolve.simulate', {}],
     ['evolve.validate', {}],
     ['evolve.approve', {}],
@@ -210,6 +237,30 @@ async function createActiveEquipmentTable(owner: TestActor) {
     current = result.body.workspace;
   }
   return { roomId, stub, workspace: current };
+}
+
+async function waitForCurrentComputeRun(stub: DurableObjectStub<Room>, workspaceId: string, actorId?: string): Promise<{
+  state: import('../src/tabletop/shared/table-contracts.js').TableState;
+  run: ComputeRunRecord;
+}> {
+  let lastState: import('../src/tabletop/shared/table-contracts.js').TableState | null = null;
+  for (let attempt = 0; attempt < COMPUTE_WAIT_ATTEMPTS; attempt += 1) {
+    const current = await runInDurableObject(stub, async instance => {
+      const workspace = await instance.repository.getWorkspace(workspaceId);
+      if (!workspace || workspace.domainState.kind !== 'table') return null;
+      const state = workspace.domainState;
+      const run = state.computeRuns?.find(item => item.status === 'succeeded'
+        && item.dataRevision === state.dataRevision && item.ruleRevision === state.ruleRevision
+        && (actorId === undefined || item.actorId === actorId));
+      return run ? { state, run } : null;
+    });
+    if (current) return current;
+    const stored = await runInDurableObject(stub, instance => instance.repository.getWorkspace(workspaceId));
+    lastState = stored?.domainState.kind === 'table' ? stored.domainState : null;
+    await new Promise<void>(resolve => setTimeout(resolve, COMPUTE_WAIT_INTERVAL_MS));
+  }
+  const runs = lastState?.computeRuns?.map(run => ({ status: run.status, errorCode: run.errorCode })) ?? [];
+  throw new Error(`TABLE_COMPUTE_RUN_DID_NOT_FINISH: modules=${lastState?.program?.compute?.modules.length ?? 0}; runs=${JSON.stringify(runs)}`);
 }
 
 function modelResult(request: AIProposalRequest): AIProposalResult {
@@ -435,6 +486,109 @@ describe('Cloudflare room Durable Object', () => {
   beforeEach(async () => {
     vi.mocked(proposeChange).mockReset();
     vi.mocked(respondToTablePrompt).mockReset();
+  });
+
+  it('keeps accepted actor-bound compute through session revocation and hides its result after member removal', async () => {
+    const owner = newActor('Compute room owner');
+    await saveActor(owner);
+    const { roomId, stub } = await createActiveEquipmentTable(owner, true);
+    const first = await waitForCurrentComputeRun(stub, roomId);
+    expect(first.run).toMatchObject({
+      moduleId: 'available_count', status: 'succeeded', actorId: owner.id,
+      outputs: [{ outputId: 'count', value: 2 }],
+    });
+
+    const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(current.response.status).toBe(200);
+    const borrowed = await issueCommand(stub, current.body, owner, 'table.act', {
+      actionId: 'borrow', inputs: { item: 'camera' },
+    });
+    expect(borrowed.response.status).toBe(200);
+    if (!('ok' in borrowed.body) || !borrowed.body.ok) throw new Error('COMPUTE_ROOM_ACTION_FAILED');
+
+    const refreshed = await waitForCurrentComputeRun(stub, roomId);
+    expect(refreshed.run).toMatchObject({
+      moduleId: 'available_count', status: 'succeeded', actorId: owner.id,
+      outputs: [{ outputId: 'count', value: 1 }],
+    });
+    expect(refreshed.run.inputHash).not.toBe(first.run.inputHash);
+    expect(refreshed.state.computeRuns?.filter(run => run.moduleId === 'available_count')).toHaveLength(2);
+    expect(refreshed.state.records.equipment?.find(row => row.id === 'camera')?.values.available).toBe(false);
+
+    const program = refreshed.state.program;
+    if (!program?.canvas) throw new Error('COMPUTE_ROOM_CARD_MISSING');
+    const card = evaluateGenerativeCanvas(program.canvas, {
+      program,
+      records: refreshed.state.records,
+      computeRuns: refreshed.state.computeRuns,
+      dataRevision: refreshed.state.dataRevision,
+      ruleRevision: refreshed.state.ruleRevision,
+      actor: owner.id,
+      turn: refreshed.state.turn,
+    }).find(view => view.id === 'available_count_metric');
+    expect(card).toMatchObject({ kind: 'metric', value: 1 });
+
+    const persisted = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(persisted.response.status).toBe(200);
+    if (persisted.body.domain.kind !== 'table') throw new Error('COMPUTE_ROOM_VIEW_MISSING');
+    expect(persisted.body.domain.computeRuns?.[0]).toMatchObject({
+      status: 'succeeded', outputs: [{ outputId: 'count', value: 1 }],
+    });
+
+    const participant = newActor('Compute participant');
+    await saveActor(participant);
+    const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-1' }, mutation: true,
+    });
+    expect(invitation.response.status).toBe(201);
+    const joined = await call<WorkspaceView>(stub, '/internal/redeem', participant, {
+      method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(joined.response.status).toBe(200);
+    const acceptedSession = await authenticateRequest(new Request(ORIGIN, { headers: headers(participant) }), runtime);
+    const participantRun = await issueCommand(stub, joined.body, participant, 'table.compute.run', { moduleId: 'available_count' });
+    expect(participantRun.response.status).toBe(200);
+    const acceptedRunId = participantRun.envelope.commandId;
+    await runtime.DB.prepare('UPDATE web_sessions SET revoked_at = ? WHERE token_hash = ?')
+      .bind(Date.now(), acceptedSession.record.tokenHash).run();
+    const revokedSessionRead = await call<PublicError>(stub, `/api/workspaces/${roomId}`, participant);
+    expect(revokedSessionRead.response.status).toBe(401);
+    expect(revokedSessionRead.body.errorCode).toBe('SESSION_EXPIRED');
+    await runDurableObjectAlarm(stub);
+    const participantCurrentRun = await waitForCurrentComputeRun(stub, roomId, participant.id);
+    expect(participantCurrentRun.run).toMatchObject({
+      runId: acceptedRunId, status: 'succeeded', actorId: participant.id, seat: 'member-1',
+      dataRevision: participantCurrentRun.state.dataRevision,
+    });
+
+    const dataRevisionBeforeRemoval = participantCurrentRun.state.dataRevision;
+    const removed = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}/members/remove`, owner, {
+      method: 'POST', body: { actorId: participant.id }, mutation: true,
+    });
+    expect(removed.response.status).toBe(200);
+    const afterRemoval = await runInDurableObject(stub, async instance => {
+      const workspace = await instance.repository.getWorkspace(roomId);
+      if (!workspace || workspace.domainState.kind !== 'table') throw new Error('COMPUTE_ROOM_INVALIDATION_MISSING');
+      return workspace.domainState;
+    });
+    expect(afterRemoval.dataRevision).toBe(dataRevisionBeforeRemoval + 1);
+    expect(afterRemoval.computeRuns?.find(run => run.runId === participantCurrentRun.run.runId)).toMatchObject({
+      status: 'succeeded', dataRevision: dataRevisionBeforeRemoval,
+    });
+    const removedView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    if (removedView.body.domain.kind !== 'table' || !removedView.body.domain.program?.canvas) {
+      throw new Error('COMPUTE_ROOM_INVALIDATED_CARD_MISSING');
+    }
+    const invalidatedCard = evaluateGenerativeCanvas(removedView.body.domain.program.canvas, {
+      program: removedView.body.domain.program,
+      records: removedView.body.domain.records,
+      computeRuns: removedView.body.domain.computeRuns,
+      dataRevision: removedView.body.domain.dataRevision,
+      ruleRevision: removedView.body.domain.ruleRevision,
+      actor: owner.id,
+      turn: removedView.body.domain.turn,
+    }).find(view => view.id === 'available_count_metric');
+    expect(invalidatedCard).toMatchObject({ kind: 'metric', value: null });
   });
 
   it('rebuilds the D1 room-kind constraint without losing room or membership rows and rolls back a failed batch', async () => {

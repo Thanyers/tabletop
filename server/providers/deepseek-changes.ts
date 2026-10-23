@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CLARIFY_LANGUAGE_ISSUE, clarifyMatchesRequestLanguage } from './clarify-language.js';
-import { TABLE_SCHEMA_GUIDE } from './table-schema-guide.js';
+import { TABLE_SCHEMA_GUIDE, TABLE_COMPUTE_SCHEMA_GUIDE } from './table-schema-guide.js';
+import type { ComputeRuntimeCapabilities } from '../../src/tabletop/shared/compute-runtime-profiles.js';
 import { encounterRuleSchema, physicsParamsSchema } from '../../src/tabletop/domain/index.js';
 import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
 import { MAX_CHANGE_REQUEST_BYTES, TABLE_AI_INPUT_BYTES, TABLE_REQUEST_TOKEN_MARGIN } from '../../src/tabletop/shared/ai-request-limits.js';
@@ -68,6 +69,11 @@ const inputSchema = z.discriminatedUnion('kind', [
     records: tableRecordsSchema.optional(),
     /** F037: shared notes act as supporting knowledge for the draft. */
     notes: z.array(z.strictObject({ text: z.string().max(500), color: z.string().max(20) })).max(20).optional(),
+    computeCapabilities: z.strictObject({
+      profile: z.literal('tabletop-compute-1'),
+      runtimes: z.array(z.enum(['javascript', 'python'])).max(2),
+      pythonLibraries: z.array(z.string().max(100)).max(12),
+    }).optional(),
     /** F064: bounded web research gathered before the draft. Provenance/grounding only, never program.evidence. */
     research: z.strictObject({
       brief: z.string().max(1_200),
@@ -87,7 +93,7 @@ const inputSchema = z.discriminatedUnion('kind', [
 export type DeepSeekChangeInput =
   | { kind: 'teaching'; prompt: string; parameters: { force: number; mass: number; time: number } }
   | { kind: 'encounter'; prompt: string; rule: { allyTarget: boolean; apCost: 0 | 1; oncePerTurn: boolean } }
-  | { kind: 'table'; prompt: string; sources: { id: string; filename: string; text: string }[]; importedSources?: { id: string; filename: string; note: string }[]; program: TableProgram | null; turn: string | null; records?: Record<string, TableRecord[]>; notes?: { text: string; color: string }[]; research?: { brief: string; sources: { id: string; title: string; url: string; date: string | null; authority: number; summary: string }[] }; repair?: { attempt: number; issues: string[]; previousOutput?: string } };
+  | { kind: 'table'; prompt: string; sources: { id: string; filename: string; text: string }[]; importedSources?: { id: string; filename: string; note: string }[]; program: TableProgram | null; turn: string | null; records?: Record<string, TableRecord[]>; notes?: { text: string; color: string }[]; computeCapabilities?: ComputeRuntimeCapabilities; research?: { brief: string; sources: { id: string; title: string; url: string; date: string | null; authority: number; summary: string }[] }; repair?: { attempt: number; issues: string[]; previousOutput?: string } };
 
 export interface DeepSeekChangeUsage {
   promptTokens: number;
@@ -526,7 +532,7 @@ function changeFrom(content: string, kind: DeepSeekChangeInput['kind'], usage: D
   return parsed.data;
 }
 
-function systemPrompt(kind: 'teaching' | 'encounter' | 'table', editing = false): string {
+function systemPrompt(kind: 'teaching' | 'encounter' | 'table', editing = false, computeEnabled = false): string {
   if (kind === 'teaching') {
     return [
       'Suggest one draft change to the shared physics lesson parameters using only the supplied current parameters and request.',
@@ -551,11 +557,12 @@ function systemPrompt(kind: 'teaching' | 'encounter' | 'table', editing = false)
     'If repair is present, never ask a clarifying question: fix the listed issues and return the smallest complete table instead.',
     'Return exactly one JSON object conforming to this compact schema guide, with no markdown or extra fields:',
     TABLE_CHANGE_JSON_SCHEMA,
+    ...(computeEnabled ? [TABLE_COMPUTE_SCHEMA_GUIDE] : []),
     'Field rules the schema cannot express: only number fields may have min or max (and min <= max); only text fields may have choices. Never put min/max on text, boolean or list fields (use choices or an invariant instead).',
     editing
-      ? 'Return {"kind":"table-patch","set":{"title"?,"description"?,"turnOrder"?},"upsert":{"collections"?:[...],"actions"?:[...],"invariants"?:[...],"views"?:[...]},"remove":{"collections"?:[ids],"actions"?:[ids],"invariants"?:[ids],"views"?:[ids]},"addEvidence"?:[{"sourceId","quote"}],"addAssumptions"?:[...]}. Every key is optional; include only what changes. Each upsert item is one complete collection, action, invariant or canvas view in the schema shape below; an existing id is replaced whole (send all of its fields), a new id is appended. Views go to program.canvas.views. A complete {"kind":"table",...} root is still accepted but slower; prefer the patch.'
+      ? 'Return {"kind":"table-patch","set":{"title"?,"description"?,"turnOrder"?},"upsert":{"collections"?:[...],"actions"?:[...],"invariants"?:[...],"views"?:[...],"computeModules"?:[...]},"remove":{"collections"?:[ids],"actions"?:[ids],"invariants"?:[ids],"views"?:[ids],"computeModules"?:[ids]},"addEvidence"?:[{"sourceId","quote"}],"addAssumptions"?:[...]}. Every key is optional; include only what changes. Each upsert item is one complete collection, action, invariant or canvas view in the schema shape below; an existing id is replaced whole (send all of its fields), a new id is appended. Views go to program.canvas.views; computeModules go to program.compute.modules. Preserve unchanged module source, IDs and versions. A complete {"kind":"table",...} root is still accepted but slower; prefer the patch.'
       : 'The root has exactly three keys: {"kind":"table","program":{...,"canvas":{"version":1,"views":[...]}},"initialRecords":{...}}. Put canvas INSIDE program, never beside program. All required program keys must be present.',
-    'Use the bounded data-only language in the schema. Action condition left/right, effect value, and creates[].values entries use OPERANDS: {"literal":3}, {"input":"amount"}, {"record":"item","field":"amount"}, {"system":"seat"}, or {"expression":AST}. They never take a raw AST. A create descriptor is {"collection":"invoices","values":{"invoice_no":{"input":"invoice_no"},"amount":{"input":"amount"}}}; the host assigns its bounded record id. Example subtract an action input: {"expression":{"op":"math","fn":"multiply","args":[{"op":"literal","value":-1},{"op":"input","id":"amount"}]}}. Inside views or that expression wrapper use the typed AST directly. Never JavaScript, eval, HTML, URLs, external assets or code strings. Compose math, comparisons, conditionals, aggregate/map/filter/reduce to implement the requested behavior instead of selecting a scenario template.',
+    'Use the bounded data-only language in the schema. Action condition left/right, effect value, and creates[].values entries use OPERANDS: {"literal":3}, {"input":"amount"}, {"record":"item","field":"amount"}, {"system":"seat"}, or {"expression":AST}. They never take a raw AST. A create descriptor is {"collection":"invoices","values":{"invoice_no":{"input":"invoice_no"},"amount":{"input":"amount"}}}; the host assigns its bounded record id. Example subtract an action input: {"expression":{"op":"math","fn":"multiply","args":[{"op":"literal","value":-1},{"op":"input","id":"amount"}]}}. Inside views or that expression wrapper use the typed AST directly. Generated code is allowed ONLY inside program.compute.modules[].source, or upsert.computeModules[].source during an edit, under the isolated compute contract below. All other expression and view positions remain data-only: never embed JavaScript, eval, HTML, URLs or executable code strings there. Compose math, comparisons, conditionals, aggregate/map/filter/reduce to implement the requested behavior instead of selecting a scenario template.',
     'For visual or simulation requests include program.canvas {version:1,views:[...]}. Use scene, chart, metric and controls descriptors linked to the SAME records and actions. Supply relatedTo connections. Keep a clear central scene and nearby controls/results; the host computes card geometry. Controls and draggable scene shapes bind a declared action and ALL its parameters. Numeric controls should have a value expression reading their committed value. Charts and metrics must derive real quantities. Use bounded step/time actions for user-driven simulations; for automatic looping motion use the MOTION descriptor (the host animates it on the wall clock). No network or randomness.',
     'Continuous motion: give rect, circle or text scene elements a motion {axis,from,to,speed,loop?}. The host moves that axis from from to to at speed scene units per second and resets at to. speed may be an expression such as {"op":"math","fn":"multiply","args":[{"op":"recordField","collection":"settings","recordId":"settings_1","field":"speed_mps"},{"op":"literal","value":72}]} so a slider that writes speed_mps changes the speed. Example: a 10 m, 720 px track with the car body rect at y=300, from=40, to=760 and the same motion on every car part. Never combine motion with drag and never use it on line or polygon.',
     'When the request describes a physical object moving (a car on a track, a ball, a pendulum), you MUST include at least one scene view that draws the object and its surroundings and use MOTION for the movement. Do not replace the moving scene with metrics or controls only; metrics and controls may sit next to it.',
@@ -596,7 +603,7 @@ function serializeChangeRequest(input: DeepSeekChangeInput): SerializedChangeReq
   const body = JSON.stringify({
     model: MODEL,
     messages: [
-      { role: 'system', content: systemPrompt(bounded.value.kind, bounded.value.kind === 'table' && bounded.value.program !== null) },
+      { role: 'system', content: systemPrompt(bounded.value.kind, bounded.value.kind === 'table' && bounded.value.program !== null, bounded.value.kind === 'table' && ((bounded.value.computeCapabilities?.runtimes.length ?? 0) > 0 || (bounded.value.program?.compute?.modules.length ?? 0) > 0)) },
       { role: 'user', content: bounded.json },
     ],
     stream: true,

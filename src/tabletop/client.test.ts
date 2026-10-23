@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TabletopClient } from './client';
 import type { WorkspaceView } from './shared/contracts';
+import { computeRuntimeCapabilities } from './shared/compute-runtime-profiles';
 
 function response(body: unknown, status = 200): Response {
   return new Response(body === null ? null : JSON.stringify(body), {
@@ -64,6 +65,19 @@ describe('TabletopClient access boundaries', () => {
     const client = new TabletopClient();
 
     await expect(client.capabilities()).resolves.toEqual({ uploads: true, tableReadOnly: true, tableAssistant: { available: true }, model: { enabled: true, reason: '' } });
+  });
+
+  it('reads validated runtime capabilities when the Worker publishes them', async () => {
+    const compute = computeRuntimeCapabilities({ javascript: true, python: true });
+    const fetchMock = vi.fn().mockResolvedValueOnce(response({ uploads: false, compute, model: { enabled: true, reason: '' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new TabletopClient();
+
+    await expect(client.capabilities()).resolves.toMatchObject({ compute });
+
+    const invalid = { ...compute, pythonLibraries: ['unavailable-package'] };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ uploads: false, compute: invalid, model: { enabled: true, reason: '' } })));
+    await expect(client.capabilities()).rejects.toMatchObject({ status: 502 });
   });
 
   it('honors an explicit unavailable table assistant reason and rejects malformed capability values', async () => {

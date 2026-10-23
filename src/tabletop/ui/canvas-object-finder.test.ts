@@ -36,6 +36,30 @@ describe('chat card references', () => {
     expect(ask('ทำไมข้อ 2 ผิด', true)).toBe('ask');
     expect(ask('เพิ่มระดับความยาก', false)).toBe('ask');
   });
+
+  it('keeps a specific rule reference through chat serialization and follow-ups', async () => {
+    const { chatReferencePrompt, followUpPrompt, parseReferencedPrompt, splitReferencedPrompt } = await import('./canvas-object-finder');
+    const reference = {
+      id: 'rule:action:approve_order',
+      title: 'Rule · Approve order',
+      detail: 'action approve_order',
+      rule: { kind: 'action' as const, id: 'approve_order' },
+    };
+    const prompt = chatReferencePrompt(reference, 'Make this easier to understand');
+
+    expect(prompt).toContain('[[table-rule:action:approve_order]]');
+    expect(prompt).toContain('[การ์ด “Rule · Approve order”] Make this easier to understand');
+    expect(splitReferencedPrompt(prompt)).toEqual({ reference: 'Rule · Approve order', message: 'Make this easier to understand' });
+    expect(parseReferencedPrompt(prompt)).toEqual({
+      references: [reference],
+      message: 'Make this easier to understand',
+    });
+    const next = followUpPrompt(prompt, 'Use simpler words');
+    expect(parseReferencedPrompt(next)).toMatchObject({
+      references: [reference],
+      message: 'Use simpler words',
+    });
+  });
 });
 
 describe('where-is questions and referenced titles', () => {

@@ -9,6 +9,7 @@ import { proposeChange, researchSummary, searchChangeProgress, type AIProposalRe
 import { MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelStreamFailure, measureDeepSeekChangeRequest, type DeepSeekChangeInput, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import type { Env } from './contracts.js';
+import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 const testEnv = env as Env;
 
@@ -241,11 +242,15 @@ describe('Cloudflare AI proposal helper', () => {
     const input = request('table');
     const table = input.workspace.domain;
     if (table.kind !== 'table') throw new Error('Expected table fixture.');
+    const computeCapabilities = computeRuntimeCapabilities({
+      javascript: Boolean(testEnv.COMPUTE_LOADER),
+      python: testEnv.TABLE_COMPUTE_PYTHON === 'enabled',
+    });
     const measuredInput: DeepSeekChangeInput = {
       kind: 'table', prompt: input.prompt,
       sources: table.sources.map(({ id, filename, text }) => ({ id, filename, text })),
       program: table.program, turn: table.turn,
-      records: table.records,
+      records: table.records, computeCapabilities,
     };
     const requestBytes = measureDeepSeekChangeRequest(measuredInput);
     let observed = '';
@@ -264,7 +269,7 @@ describe('Cloudflare AI proposal helper', () => {
         sources: [{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
         program: null,
         turn: null,
-        records: {},
+        records: {}, computeCapabilities,
       });
     }));
     expect(result.change).toEqual(proposal('table'));
@@ -308,7 +313,11 @@ describe('Cloudflare AI proposal helper', () => {
       sentBytes ||= new TextEncoder().encode(content).byteLength;
     })).catch((error: unknown) => { if (!sent) throw error; });
     // F067: the "AI context" the table shows is exactly what the provider receives.
-    expect(sentBytes).toBe(tableDraftBytes(table, input.prompt));
+    const computeCapabilities = computeRuntimeCapabilities({
+      javascript: Boolean(testEnv.COMPUTE_LOADER),
+      python: testEnv.TABLE_COMPUTE_PYTHON === 'enabled',
+    });
+    expect(sentBytes).toBe(tableDraftBytes(table, input.prompt, computeCapabilities));
     expect(sent?.sources).toEqual([{ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n' }]);
     expect(sent?.importedSources).toMatchObject([{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename }]);
     expect(sent?.importedSources?.[0]).toHaveProperty('note');
