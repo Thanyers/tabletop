@@ -140,8 +140,10 @@
 .tt-app .tt-chat-card__partial--thinking > pre { max-height: 160px; color: var(--tt-muted); font-size: 11px; line-height: 16px; }
 
 /* F050: the live thinking line while a rule draft runs. One ellipsised line at any width, so a long
-   reasoning tail can never push the card's buttons off-screen at 320px; the full bound stays in the details. */
-.tt-app .tt-chat-card__thinking { display: grid; gap: 4px; min-width: 0; margin-top: var(--tt-space-2); }
+   reasoning tail can never push the card's buttons off-screen at 320px; the full bound stays in the details.
+   A working card centres its grid items, so the row must stretch explicitly or a nowrap tail sizes it
+   to content and overflows the card (the same trap F064 found). */
+.tt-app .tt-chat-card__thinking { display: grid; gap: 4px; min-width: 0; margin-top: var(--tt-space-2); justify-self: stretch; }
 .tt-app .tt-chat-card .tt-chat-card__thinking-line {
   display: block; min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
   border-radius: 0 var(--tt-radius-medium, 10px) var(--tt-radius-medium, 10px) 0;
@@ -164,12 +166,16 @@
    centres its grid items, so the row must stretch explicitly or a nowrap query sizes it to content. */
 .tt-app .tt-chat-card__search { justify-self: stretch; margin-top: var(--tt-space-2); min-width: 0; }
 .tt-app .tt-chat-card .tt-chat-card__search-line {
-  display: block; min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
+  display: flex; gap: 4px; align-items: baseline;
+  min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
   border-radius: 0 var(--tt-radius-medium, 10px) var(--tt-radius-medium, 10px) 0;
   background: var(--tt-paper); color: var(--tt-muted);
   font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 16px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden;
 }
+/* Only the query gives way when the card is narrow: the "· เจอ N" count must always stay readable. */
+.tt-app .tt-chat-card__search-text, .tt-app .tt-chat-card__search-count { flex: none; }
+.tt-app .tt-chat-card__search-query { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Once research is done the line stops moving and reports what the draft actually used. */
 .tt-app .tt-chat-card__search[data-search-phase='done'] .tt-chat-card__search-line { color: var(--tt-moss); }
 

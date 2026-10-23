@@ -4,7 +4,7 @@ import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_SEARCH
 import {
   canApplyWorkspaceRefresh, DRAFT_SOURCE_TITLE_CHARS, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
   draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, formatSourceDate, historyCard,
-  LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
+  LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveSearchParts, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
 } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
@@ -261,6 +261,16 @@ describe('live search line while a draft runs (F064)', () => {
 
   it('ends on what the draft actually used instead of repeating the query', () => {
     expect(liveSearchLine(search({ phase: 'done', resultsCount: 3 }))).toBe('✓ ใช้ 3 แหล่ง');
+  });
+
+  it('splits the line so only the query can be ellipsised and the count always shows', () => {
+    expect(liveSearchParts(search({ phase: 'reading', resultsCount: 4 })))
+      .toEqual({ icon: '🔎', text: 'กำลังค้น:', query: 'VAT ไทย 2569', found: 4 });
+    expect(liveSearchParts(search()))
+      .toEqual({ icon: '🔎', text: 'กำลังค้น:', query: 'VAT ไทย 2569' });
+    expect(liveSearchParts(search({ phase: 'done', resultsCount: 3 })))
+      .toEqual({ icon: '✓', text: 'ใช้ 3 แหล่ง' });
+    expect(liveSearchParts(undefined)).toBeNull();
   });
 
   it('re-bounds the query and collapses whitespace, so an oversized row cannot widen the card', () => {

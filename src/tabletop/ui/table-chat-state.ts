@@ -305,18 +305,44 @@ export function liveThinkingLine(tail: string | undefined, maxChars = LIVE_THINK
 export const LIVE_SEARCH_QUERY_CHARS = 160;
 
 /**
- * F064: one line saying what the research step is doing: what it searches, what it found, and then
- * what the draft actually used. Re-bounded here as well, so a hostile or older job row cannot grow
- * the card. Returns null when there is nothing worth showing (no search, or no query text yet).
+ * F064: the pieces of that line, so the card can ellipsise only the query. On a 320px card the
+ * "· เจอ N" count would otherwise be the first thing cut, and it is the half users watch.
  */
-export function liveSearchLine(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): string | null {
+export interface LiveSearchParts {
+  /** The glyph the agreed copy uses (`🔎` while working, `✓` when finished). */
+  icon: string;
+  /** Copy around the query: `กำลังค้น:` while working, `ใช้ 3 แหล่ง` when finished. */
+  text: string;
+  /** The bounded query, only while searching or reading. */
+  query?: string;
+  /** How many results the adapter kept, only while reading. */
+  found?: number;
+}
+
+/**
+ * F064: split the live search line so the found count can never be ellipsised away.
+ * Re-bounded here as well, so an older or hostile job row cannot grow the card.
+ */
+export function liveSearchParts(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): LiveSearchParts | null {
   if (!search) return null;
-  if (search.phase === 'done') return `✓ ใช้ ${search.resultsCount} แหล่ง`;
+  if (search.phase === 'done') return { icon: '✓', text: `ใช้ ${search.resultsCount} แหล่ง` };
   const query = headWithin(search.query.replace(/\s+/gu, ' ').trim(), maxQueryChars).trim();
   if (!query) return null;
   return search.phase === 'reading'
-    ? `🔎 กำลังค้น: ${query} · เจอ ${search.resultsCount}`
-    : `🔎 กำลังค้น: ${query}`;
+    ? { icon: '🔎', text: 'กำลังค้น:', query, found: search.resultsCount }
+    : { icon: '🔎', text: 'กำลังค้น:', query };
+}
+
+/**
+ * F064: one line saying what the research step is doing: what it searches, what it found, and then
+ * what the draft actually used. Returns null when there is nothing worth showing.
+ */
+export function liveSearchLine(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): string | null {
+  const parts = liveSearchParts(search, maxQueryChars);
+  if (!parts) return null;
+  if (parts.query === undefined) return `${parts.icon} ${parts.text}`;
+  const tail = parts.found === undefined ? '' : ` · เจอ ${parts.found}`;
+  return `${parts.icon} ${parts.text} ${parts.query}${tail}`;
 }
 
 /** F064 slice B: how much of a source title the card shows before the row wraps. */

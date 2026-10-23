@@ -1,0 +1,30 @@
+{
+  "usage": "Controlled fixtures only for explicitly scoped local/staging QA rooms. These are module sources, not complete proposals; use the current Advanced schema, own QA IDs/ports and monotonically increasing version. Never apply to an existing business room.",
+  "javascript": {
+    "throw-error": "export default function compute(inputs) { throw new Error(\"QA controlled failure\"); }",
+    "wrong-output-type": "export default function compute(inputs) { return { total: \"wrong type\" }; }",
+    "non-finite-number": "export default function compute(inputs) { return { total: Infinity }; }",
+    "fresh-counter": "let counter = 0; export default function compute(inputs) { counter += 1; return { counter }; }"
+  },
+  "python": {
+    "fresh-counter": "counter = 0\ndef compute(inputs):\n    global counter\n    counter += 1\n    return {\"counter\": counter}"
+  },
+  "declaredOutputs": {
+    "throw-error": {
+      "id": "total",
+      "type": "number"
+    },
+    "wrong-output-type": {
+      "id": "total",
+      "type": "number"
+    },
+    "non-finite-number": {
+      "id": "total",
+      "type": "number"
+    },
+    "fresh-counter": {
+      "id": "counter",
+      "type": "number"
+    }
+  }
+}

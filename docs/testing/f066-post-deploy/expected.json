@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "units": {
+    "money": "THB",
+    "moneyRounding": "positive amounts: half up to 2 decimals; verify in integer satang",
+    "tolerance": 0.000001
+  },
+  "sales": {
+    "initial": {
+      "gross": 225,
+      "rows": 2,
+      "quantity": 8,
+      "meanLineAmount": 112.5,
+      "byBranch": {
+        "North": 75,
+        "South": 150
+      },
+      "discount10": 202.5,
+      "taxedAfterDiscount10": 216.68
+    },
+    "replaced": {
+      "gross": 405,
+      "rows": 2,
+      "quantity": 13,
+      "meanLineAmount": 202.5,
+      "byBranch": {
+        "North": 105,
+        "South": 300
+      },
+      "discount10": 364.5,
+      "taxedAfterDiscount10": 390.02
+    },
+    "latest": {
+      "gross": 435,
+      "rows": 2
+    },
+    "appendedToInitial": {
+      "gross": 265,
+      "rows": 3
+    },
+    "empty": {
+      "gross": 0,
+      "rows": 0,
+      "quantity": 0,
+      "meanLineAmount": null
+    }
+  },
+  "clean": {
+    "sourceRows": 6,
+    "keptRows": 3,
+    "gross": 300,
+    "byBranch": {
+      "North": 200,
+      "South": 100
+    },
+    "sortedBranches": [
+      "North",
+      "South"
+    ],
+    "percent": {
+      "North": 66.67,
+      "South": 33.33
+    }
+  },
+  "game": {
+    "initialTopTwo": 13,
+    "replacedTopTwo": 19
+  },
+  "numpy": {
+    "count": 4,
+    "sum": 20,
+    "mean": 5,
+    "populationVariance": 5,
+    "populationStd": 2.23606797749979
+  },
+  "scipy": {
+    "slope": 2,
+    "intercept": 1,
+    "predictionAt5": 11
+  },
+  "dates": {
+    "initial": [
+      "2026-10-01",
+      "2026-10-03",
+      "2026-10-08"
+    ],
+    "replaced": [
+      "2026-10-01",
+      "2026-10-03",
+      "2026-10-09"
+    ],
+    "initialSpanDays": 7,
+    "replacedSpanDays": 8
+  },
+  "joined": {
+    "lines": [
+      100,
+      75,
+      80
+    ],
+    "gross": 255
+  },
+  "legacy": {
+    "invoiceTotal": 155,
+    "invoiceRows": [
+      52.5,
+      62.5,
+      40
+    ],
+    "teachingSharedPosition": 4,
+    "teachingLocalPosition": 10,
+    "encounterHp": 8,
+    "encounterApAfterShield": 1,
+    "encounterApNextTurn": 2,
+    "cafeMinutes": [
+      3,
+      8
+    ],
+    "waterRemaining": 65,
+    "waterDelivered": 35
+  }
+}

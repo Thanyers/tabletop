@@ -102,6 +102,8 @@ jobs:
         run: node scripts/check-public-files.mjs
       - name: Install locked dependencies
         run: npm ci --ignore-scripts
+      - name: Check changelog fragments (CI008)
+        run: npx tsx server/changelog.ts check
       - name: Check dependency advisories
         run: npm audit --audit-level=high
       - name: Lint

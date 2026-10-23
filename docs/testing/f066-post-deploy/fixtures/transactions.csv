@@ -1,0 +1,7 @@
+transaction_id,branch,quantity,unit_price,status,date
+t1, north ,2,50, PAID ,2026-10-01
+t2,North,1,100,paid,2026-10-02
+t2,North,1,100,paid,2026-10-02
+t3,South,3,20,unpaid,2026-10-03
+t4, south ,4,25,paid,2026-10-04
+t5,North,0,50,cancelled,2026-10-05

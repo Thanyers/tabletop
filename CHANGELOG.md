@@ -1,10 +1,17 @@
 # Changelog
 
+<!-- PR งานไม่แก้ไฟล์นี้: เพิ่มไฟล์ใน changelog.d/ แทน · ตอน release ใช้ `npx tsx server/changelog.ts cut X.Y.Z --summary "…"` (CI008) -->
+
 ## Unreleased
 
-- **ตัวเลือกใต้คำตอบ AI ที่เลือกแล้วเห็นชัด และมีเส้นต่อไปขั้นถัดไป (F070, MINOR):** กดชิปตัวเลือกแล้วชิปเป็น `Chosen` (สีม่วง + ✓) กดซ้ำจะพาไปการ์ดคำตอบแทนการส่งซ้ำ · การ์ดคำตอบที่เกิดจากตัวเลือกวางทางขวาของการ์ดคำถาม มีเส้นสีม่วงเชื่อม และบรรทัด "Next step after “…”" · เลือกหลายตัวเลือกได้เป็นหลายกิ่งเรียงลงมา · เก็บใน localStorage ของคนกด (สมาชิกคนอื่นยังไม่เห็น) · client อย่างเดียว ไม่มี migration/secret/binding; rollback = revert
+- **F064/F050 แก้บรรทัดล้น/ถูกตัดในการ์ดแคบ:** `liveSearchParts()` แยก query กับ `· เจอ N` เป็นคนละ span ⇒ คำว่า "เจอ N" ไม่ถูก ellipsis ตัดที่ 320px อีก (สตริงรวมยังเหมือนเดิมผ่าน `liveSearchLine()`) · `.tt-chat-card__thinking` ของ F050 ได้ `justify-self: stretch` กัน nowrap content ดันการ์ดเกินจอ · synthetic local scripts (`generic-table-local`, `canvas-evolution-local`) ปิด `TABLE_WEB_SEARCH` เฉพาะโหมดไม่มี real AI ให้ตรงกับ browser fixtures (dev ปิดใน `tests/*-browser.mjs` แล้ว) · ไม่มี migration/secret/binding; rollback = revert branch
 
 - **เมนูบัญชีเป็นวงกลมโปรไฟล์ (F071):** ล็อกอินแล้ว header ของ `/`, `/tables` และ `/new` แสดงวงกลมอักษรย่อ (สีเดียวกับ cursor) แทนชื่อ/อีเมลและปุ่ม Sign out · กดแล้วเปิดเมนู Your tables, ข้อมูลโต๊ะทั้งหมด (admin) และ Sign out · บน landing ข้อความตามภาษาที่เลือก
+
+## 8.0.0 — 2026-10-23
+
+**MAJOR — rollback ไป 7.0.0 ไม่สะอาด:** F066 เพิ่ม contract `compute` ในกฎของโต๊ะ พร้อม `computeRuns`/`dataProvenance` ที่บันทึกใน state ของห้อง และประมวลผลด้วย runtime ใหม่ (`worker_loaders` binding `COMPUTE_LOADER`; Python เป็น opt-in) · หลังห้องบันทึก `compute` แล้วต้องใช้ writer ที่อ่าน contract นี้ได้ ซึ่ง build 7.0.0 ไม่มี — ต้องหยุดเขียนก่อนกู้ด้วย build เก่า ตาม [runtime contract](docs/REUSABLE_COMPUTE.md) · ไม่มี SQL migration; binding เป็นขีดความสามารถที่ปิดได้ (capability อ่านจาก binding จริง) จึง deploy ได้แม้ยังไม่เปิด · รวมชุดที่ 7.0.0 ไม่มี: F064 web search, F065 table-patch, F066 reusable compute, F067 AI context meter, F068 fixed-seed rows, F069 bilingual landing และ #220 ปรับเทสต์ Rules ให้ตรง compute
+
 - **วิธีคำนวณที่เก็บไว้ใช้ซ้ำ (F066):** AI เตรียมสูตร, JavaScript หรือ Python/pandas ตาม runtime ที่เปิดจริง แล้วคำนวณซ้ำจากข้อมูลใหม่โดยไม่เรียก AI; typed ports เชื่อม metric/กราฟ/ตารางและ module อื่น มีรุ่น ประวัติ ผู้รัน ที่มา และการตรวจผลเก่า เก็บในห้องเดิมและกู้คิวหลังกลับมาเปิดได้ · Rules อ่านเป็นชื่อ/วัตถุประสงค์ก่อน พร้อม Ask / Change this rule รายข้อและ Advanced; import แถว CSV/Excel เลือก append หรือยืนยัน replace ได้ · ไม่มี SQL migration; ก่อน release ต้องเตรียม Worker Loader และเปิด Python container ตาม [runtime contract](docs/REUSABLE_COMPUTE.md) ผล hosted Python ยังไม่ยืนยัน
 
 - **หน้าแรกสองภาษา English / ไทย (F069, MINOR):** ปุ่ม `English` / `ไทย` ที่หัวหน้าสลับทั้งหน้ารวมกล่องเข้าสู่ระบบและ welcome back · ค่าเริ่มต้นอังกฤษ จำค่าใน localStorage และ `<html lang>` เปลี่ยนตาม · ข้อความทั้งหมดอยู่ที่ `src/tabletop/ui/landing-copy.ts` · หัวข้อไทยไม่ใช้ letter-spacing ติดลบ · meta/SEO ใน `index.html` ยังเป็นอังกฤษ (URL เดียว ไม่มี hreflang) · แทน draft #180 · client อย่างเดียว ไม่มี migration/secret/binding; rollback = revert

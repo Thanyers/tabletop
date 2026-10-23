@@ -118,10 +118,20 @@ Node **22.23.2** · branch `feat/F064-search-visibility`
 ### ความเสี่ยง / ข้อจำกัดสไลซ์ A
 
 - **ยังไม่ยืนยันด้วย browser suite แบบ end-to-end**: provider, worker และ client line มี unit/worker test ครบ และมี harness render จริงแล้ว แต่ยังไม่มี fixture ที่ stream event ค้นผ่านเบราว์เซอร์ทั้งเส้น
-- **การ์ดแคบมาก (320px)**: บรรทัดเดียวจึงตัดท้ายด้วย `…` ได้ เช่น query ไทยยาวจะเห็น `…2569` โดย `· เจอ N` ถูกตัด (ที่ 414px เห็นครบ); บรรทัดปิด `✓ ใช้ N แหล่ง` สั้นจึงเห็นครบเสมอ — ตัวเลข"N ที่ใช้จริง" จึงไม่หาย
+- **การ์ดแคบมาก (320px)**: แก้แล้วใน follow-up 2026-10-23 — บรรทัดแยกเป็น span, ellipsis เฉพาะ query และ `· เจอ N` ถูกตรึงไว้ (`flex: none`) จึงเห็น count เสมอ
 - **ข้อความจากผู้ให้บริการ**: query มาจากโมเดลและ title มาจากเว็บสาธารณะ → redact ก่อนเก็บเหมือน thinking tail
 - **ค่าใช้จ่ายต่อ tick**: job row โตขึ้น ≤300 ตัวอักษรต่อครั้งที่เขียน (ไม่เกิน 1 ครั้ง/900 ms) และถูกเขียนทับด้วยผลลัพธ์เมื่อจบ
-- **ข้อสังเกต (ไม่แก้ในสไลซ์นี้):** บรรทัด `liveThinkingLine` ของ F050 เป็น grid item ใน `.tt-chat-card--working` ที่ `justify-items:center` จึงมีโอกาสถูกจัดขนาดตาม content (nowrap) แบบเดียวกับที่พบในสไลซ์นี้; สไลซ์นี้แก้เฉพาะ element ของตนด้วย `justify-self: stretch` — F050 ควรได้ `justify-self: stretch` เพิ่มถ้าพบข้อความยาวล้นในการ์ดแคบ
+- **F050 ได้รับการแก้แบบเดียวกันแล้ว** ใน follow-up นี้: `.tt-chat-card__thinking` มี `justify-self: stretch` — บรรทัด thinking ที่ยาวจะไม่ดันการ์ดอีก
+
+### Follow-up 2026-10-23 (branch `fix/F064-followups`)
+
+| เรื่อง | สิ่งที่แก้ |
+| --- | --- |
+| `· เจอ N` ถูกตัดที่ 320px | `liveSearchParts()` แยก `{icon, text, query, found}`; JSX แยก span `.tt-chat-card__search-query` (ellipsis) กับ `.tt-chat-card__search-count` (`flex: none`) — `liveSearchLine()` ยังคืนสตริงเดิมเพื่อ test/a11y |
+| F050 latent overflow | `.tt-chat-card__thinking { justify-self: stretch; }` — grid item ที่ถูก `justify-items:center` ไม่ถูกจัดขนาดตาม nowrap content |
+| browser fixture นับ provider call เกิน | dev แก้ `TABLE_WEB_SEARCH: 'off'` ใน `tests/*-browser.mjs` แล้ว (มาจาก F066); follow-up เติมให้ `scripts/{generic-table-local,canvas-evolution-local}.mjs` ในโหมด synthetic เท่านั้น (โหมด `--real-ai` ยังเปิด research) |
+
+ผลตรวจ (Node 22.23.2): unit **819 passed / 5 skipped** (113 ไฟล์), `test:cloudflare` **170/170**, `build` ผ่าน, `lint` 0 error / 107 warning, public scan 0 finding, ui-gate harness **15/16** (เหลือ "No emoji" ตาม copy `🔎`/`✓` ที่ handoff กำหนด) · เพิ่ม unit 2 เคสของ `liveSearchParts` และอัปเดตภาพ `docs/previews/f064-search-line-{320,414}.jpg` ให้เห็น count ครบที่การ์ดแคบ
 
 
 ## ผลตรวจ
