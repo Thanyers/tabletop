@@ -1,0 +1,113 @@
+/*
+ * Rules card · what rules exist, how each one works, and what it applies to.
+ * One reading order for every rule: name → When → Then → Applies to.
+ * No nested boxes, badges or captions around a single rule; a hairline separates them.
+ */
+.tt-app .tt-table-rules { display: grid; gap: var(--tt-space-3); }
+
+/* Counts read as one sentence, not three tiles. */
+.tt-app .tt-table-rules .tt-table-program { display: grid; gap: var(--tt-space-3); }
+.tt-app .tt-table-rules .tt-table-program__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tt-space-1) var(--tt-space-4);
+  margin: 0;
+  padding: 0;
+  color: var(--tt-muted);
+  font-size: var(--tt-type-small);
+}
+.tt-app .tt-table-rules .tt-table-program__summary > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--tt-space-1);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.tt-app .tt-table-rules .tt-table-program__summary strong { color: var(--tt-ink); font-size: var(--tt-type-body); font-weight: 650; }
+.tt-app .tt-table-rules .tt-table-program__description { margin: 0; color: var(--tt-muted); font-size: 13px; line-height: 1.55; }
+
+/* One rule = a name, then the same three rows. */
+.tt-app .tt-table-rules .tt-table-program__group {
+  display: grid;
+  gap: var(--tt-space-2);
+  padding: var(--tt-space-3) 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--tt-line), transparent 55%);
+  border-radius: 0;
+  background: none;
+}
+.tt-app .tt-table-rules .tt-table-program__group:first-of-type { border-top: 0; padding-top: var(--tt-space-1); }
+.tt-app .tt-table-rules .tt-rule-head { display: flex; align-items: center; gap: var(--tt-space-2); min-width: 0; }
+.tt-app .tt-table-rules .tt-rule-head h4 { margin: 0; color: var(--tt-ink); font-size: 15px; font-weight: 650; line-height: 1.35; }
+.tt-app .tt-table-rules .tt-rule-head .tt-table-rule-remove { margin-inline-start: auto; }
+.tt-app .tt-table-rules .tt-rule-description { margin: 0; color: var(--tt-muted); font-size: 13px; line-height: 1.5; }
+.tt-app .tt-table-rules .tt-rule-badge { font-size: 11px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
+.tt-app .tt-table-rules .tt-rule-badge--new { color: var(--tt-moss); }
+.tt-app .tt-table-rules .tt-rule-badge--changed { color: var(--tt-amber); }
+.tt-app .tt-table-rules .tt-rule-badge--removed { color: var(--tt-red); }
+
+/* When / Then / Applies to: one label column, one value column. */
+.tt-app .tt-table-rules .tt-rule-anatomy { display: grid; gap: var(--tt-space-2); margin: 0; }
+.tt-app .tt-table-rules .tt-rule-anatomy > div {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: var(--tt-space-2);
+  align-items: start;
+}
+.tt-app .tt-table-rules .tt-rule-anatomy dt { padding-top: 1px; color: var(--tt-muted); font-size: var(--tt-type-small); font-weight: 600; line-height: 1.5; }
+.tt-app .tt-table-rules .tt-rule-anatomy dd { margin: 0; color: var(--tt-ink); font-size: 13px; line-height: 1.5; }
+.tt-app .tt-table-rules .tt-rule-plain { margin: 0; color: var(--tt-muted); font-size: 13px; }
+.tt-app .tt-table-rules .tt-rule-applies { color: var(--tt-ink); }
+.tt-app .tt-table-rules .tt-rule-meta { margin: 0; color: var(--tt-muted); font-size: var(--tt-type-small); }
+
+.tt-app .tt-table-rules .tt-table-rule-list,
+.tt-app .tt-table-rules .tt-table-effect-list {
+  display: grid;
+  gap: var(--tt-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tt-app .tt-table-rules .tt-table-rule-list li { display: grid; gap: 1px; }
+.tt-app .tt-table-rules .tt-table-rule-list strong { color: var(--tt-ink); font-size: 13px; font-weight: 600; }
+.tt-app .tt-table-rules .tt-table-rule-list span { color: var(--tt-muted); font-size: var(--tt-type-small); line-height: 1.45; }
+.tt-app .tt-table-rules .tt-table-effect-list li { color: var(--tt-ink); font-size: 13px; }
+
+/* Data checks: the sentence first, the place it is enforced second. */
+.tt-app .tt-table-rules .tt-table-check-list { display: grid; gap: var(--tt-space-2); margin: 0; padding: 0 0 var(--tt-space-2); list-style: none; }
+.tt-app .tt-table-rules .tt-table-check-list li { display: flex; align-items: center; gap: var(--tt-space-2); }
+.tt-app .tt-table-rules .tt-table-check-list__body { display: grid; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.tt-app .tt-table-rules .tt-table-check-list__body strong { color: var(--tt-ink); font-size: 13px; font-weight: 600; }
+
+/* Fields: label on the left, the shape of the value on the right. */
+.tt-app .tt-table-rules .tt-table-field-list { display: grid; gap: var(--tt-space-1); margin: 0; padding: 0 0 var(--tt-space-2); list-style: none; }
+.tt-app .tt-table-rules .tt-table-field-list li { display: grid; grid-template-columns: minmax(96px, 140px) minmax(0, 1fr); gap: var(--tt-space-2); }
+.tt-app .tt-table-rules .tt-table-field-list strong { font-size: 13px; font-weight: 600; }
+.tt-app .tt-table-rules .tt-table-field-list span { color: var(--tt-muted); font-size: var(--tt-type-small); }
+
+.tt-app .tt-table-rules .tt-table-view-list { display: grid; gap: var(--tt-space-1); margin: 0; padding: 0 0 var(--tt-space-2); list-style: none; }
+.tt-app .tt-table-rules .tt-table-view-list li { display: flex; align-items: center; gap: var(--tt-space-2); }
+.tt-app .tt-table-rules .tt-table-view-list li > span { display: grid; flex: 1 1 auto; }
+
+/* A proposal is one soft block, not a second card inside the card. */
+.tt-app .tt-table-rules .tt-table-proposal {
+  display: grid;
+  gap: var(--tt-space-2);
+  padding: var(--tt-space-3);
+  border: 0;
+  border-radius: var(--tt-radius-medium);
+  background: color-mix(in srgb, var(--tt-green-2), transparent 35%);
+}
+.tt-app .tt-table-rules .tt-table-proposal > .tt-kicker { color: var(--tt-moss); }
+.tt-app .tt-table-rules .tt-table-proposal > h3 { margin: 0; color: var(--tt-ink); font-size: var(--tt-type-title); font-weight: 650; }
+.tt-app .tt-table-rules .tt-table-proposal__changes { margin: 0; color: var(--tt-moss); font-size: 13px; font-weight: 600; }
+
+.tt-app .tt-table-rules .tt-table-assumptions {
+  padding: var(--tt-space-3);
+  border: 0;
+  border-radius: var(--tt-radius-medium);
+  background: var(--tt-ochre-2);
+}
+.tt-app .tt-table-rules .tt-table-assumptions h4 { margin: 0 0 var(--tt-space-1); color: var(--tt-amber); font-size: 13px; font-weight: 650; }

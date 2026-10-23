@@ -50,3 +50,11 @@ Build/typecheck, lint ไฟล์ที่แก้, public-file scan, หน�
 - รายงานและภาพอยู่ใน `test-results/landing/`; ภาพจริงของหน้าแรกฉบับสุดท้ายอยู่ใน `homepage-browser/landing-hero.png` และ `landing-full.png`
 
 ยังไม่ merge หรือ deploy งานนี้ และไม่มีการเรียก AI จริงหรือเขียนข้อมูล production
+
+## รวมเอกสารและกติกา conflict (2026-10-23)
+
+รวม `origin/dev` @ `52e4b9a` เข้าสาขางาน แก้ conflict ใน `CHANGELOG.md`, `PLAN.md`, `spec.md` โดยเก็บรายการของทั้งสองฝั่งครบและเรียงตามเวลา commit (หน้าแรก 09:41 ก่อน Rules 09:37, Asia/Bangkok) หน้าแรกทั้ง component/CSS/SVG ไม่เปลี่ยนจาก candidate เดิม
+
+ผู้ใช้ขอให้ทำวิธีนี้เป็นกติกาประจำโปรเจกต์ จึงเพิ่ม [Markdown merge conflicts](../../AGENTS.md#markdown-merge-conflicts) เป็นแหล่งเดียวและชี้จาก `CLAUDE.md`/`PLAN.md` กรณีเพิ่มรายการอิสระให้ resolve/commit/push ต่อเอง; ข้อความที่ขัดกันจริงให้ตรวจแหล่งเจ้าของเรื่องก่อนตัดสิน
+
+ตรวจหลังรวมบน Node 22.23.2: `npm run typecheck` ผ่าน, `npm test` 710 passed / 1 skipped, public-file scan 657 files ไม่พบ finding และ `git diff --check` ผ่าน ผลนี้ไม่ยกเลิก FAIL/SKIP ของ browser/UI gate ที่บันทึกไว้ข้างบน

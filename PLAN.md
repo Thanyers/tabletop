@@ -7,7 +7,7 @@
 
 1. **ก่อนหยิบงาน:** ดูตารางด้านล่าง แล้วรัน `gh pr list -R Thanyers/tabletop --state open` ว่าไม่มี PR ที่ชื่อขึ้นต้นด้วย ID เดียวกัน
 2. **จองงาน:** แตก branch จาก `dev` (`feat/<ID>-<ชื่อสั้น>`) แก้แถวของงานนั้นในไฟล์นี้ (สถานะ `doing`, ผู้รับผิดชอบ, branch) แล้ว **เปิด draft PR ทันที** ชื่อ PR ขึ้นต้นด้วย ID เช่น `F001-T4: ...` · draft PR คือการจองที่ทุกคนเห็น
-3. **แก้เฉพาะแถวของตัวเอง** อย่าจัดรูปแบบหรือเรียงตารางใหม่ จะได้ไม่ชนกับคนอื่น
+3. **แก้เฉพาะแถวของตัวเอง** อย่าจัดรูปแบบหรือเรียงตารางใหม่ จะได้ไม่ชนกับคนอื่น ยกเว้นบล็อกที่ต้องรวมจาก merge/rebase ให้ทำตาม [กติกา Markdown merge conflicts](AGENTS.md#markdown-merge-conflicts)
 4. **ดูคอลัมน์ "พื้นที่ที่แตะ":** ถ้างานที่ `doing` อยู่แตะไฟล์เดียวกับงานที่จะหยิบ ให้รอ หรือคุยกันก่อน · งานที่มี "ต้องรอ" ห้ามเริ่มจนงานนั้น `done`
 5. **จบงาน:** PR พร้อม review → เปลี่ยนสถานะเป็น `review` · merge แล้ว (คนหรือ AI) → `done` (แก้ใน PR ถัดไปของคุณได้)
 6. งานใหม่ที่ยังไม่มีใครจอง ให้เพิ่มไว้ใน feature doc ก่อน แล้วค่อยเพิ่มแถวที่นี่
@@ -51,12 +51,14 @@
 | F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `review` | [F050](docs/features/F050-live-thinking.md) |
 | F054 | เวลา+ที่มาของการ์ดบน Objects panel + sort by created/updated + ปุ่มพาไปหาการ์ด โดยคง panel เดิม | `review` | [F054](docs/features/F054-object-metadata-and-focus.md) |
 | F060 | การ์ด dice ที่ผูก `roll` parameter ใช้ `table.roll` ของ server: แสดงหน้าเต๋า/ผลรวมจาก roll-store, ไม่เขียน shared draft และไม่ใช้ client RNG · dice ที่ผูก `number` ยัง client-side/visual-only · ไม่เปลี่ยน wire contract | `review` | [F053](docs/features/F060-server-dice.md) |
+| F061 | การ์ด Rules อ่านเป็น When → Then → Applies to + เส้น canvas อ้อมการ์ดทุกใบยกเว้น post-it, แยกเลนไม่ทับกัน และเปิดช่องที่จุดตัดให้เห็นว่าอันไหนอยู่บน | `review` | [F061](docs/features/F061-rules-card-canvas-lines.md) |
 
 ## งาน
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F061-T1 | ปรับหน้าแรกเฉพาะเนื้อหา ภาพ และ layout | `review` | Codex | `feat/F061-readme-landing` / #197 | `ui/PublicWelcome.tsx`, `ui/public-welcome.css`, ภาพ landing, `docs/features/F061-readme-landing.md`, `spec.md`, `CHANGELOG.md` | — | รักษา account/route/demo เดิม; ไม่รวม draft #180 |
+| F061-T1 | การ์ด Rules โครง When/Then/Applies to + routing เส้นแบบอ้อมการ์ด, แยกเลน, bridge ที่จุดตัด | `review` | lead (AI) | `feat/F061-rules-card-and-lines` | `src/tabletop/ui/TableCanvasObjects.tsx`, `src/tabletop/ui/rules-summary.ts` (ใหม่), `src/tabletop/ui/rules-card.css` (ใหม่), `src/tabletop/ui/CanvasWorkspace.tsx`, `src/tabletop/ui/calm-workspace.css`, `src/state/edge-routing.ts`, `src/components/CanvasEdge.tsx`, `spec.md`, `CHANGELOG.md` | — | unit 721 · r1 browser 7 · cloudflare browser 32 |
 | F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F054-T1 | `cardMeta` model + schema + stamp ตอน activation/command + prune/cap | `review` | lead (AI) | `feat/F054-object-metadata-and-focus` | `shared/table-contracts.ts`, `domain/table-card-meta.ts` (ใหม่), `domain/table.ts`, `domain/evolution.ts`, tests | — | unit 21 ผ่าน + typecheck |
 | F054-T2 | backfill resolver + projection tests | `review` | lead (AI) | 〃 | `domain/table-card-meta.ts`, `domain/projections.ts`, tests | T1 | legacy backfill + private projection ผ่าน |

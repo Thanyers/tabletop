@@ -38,6 +38,10 @@ export interface RoutedConnection extends RoutingLink {
   labelY: number | null;
   labelBounds: RoutingBounds | null;
   hidden: boolean;
+  /** Breaks this route opens so a line crossing over it stays readable. */
+  bridges?: number;
+  /** True when this route runs on the upper layer, where two lines cross. */
+  crossesOver?: boolean;
   reason?: 'missing-endpoint' | 'invalid-geometry' | 'overlapping-endpoints' | 'no-route';
 }
 
@@ -52,6 +56,35 @@ export interface EdgeRoutingOptions {
   labelGap?: number;
   /** Optional conservative card bounds, such as the union of current and target animation bounds. */
   obstacleBounds?: readonly RoutingRect[];
+  /**
+   * Cards a line may pass under, such as a paper note lying on the canvas.
+   * They stay valid endpoints but stop blocking routes.
+   */
+  crossableIds?: readonly string[];
+  /**
+   * Half-width of the break left in the lower line at a crossing, in canvas units.
+   * The break is what makes an over/under crossing readable. 0 disables bridges.
+   * Defaults to 7.
+   */
+  crossingGap?: number;
+  /**
+   * Extra cost per canvas unit where a route would run along a line already
+   * routed in this batch. Keeps parallel connections in separate lanes instead
+   * of drawing one on top of the other. Defaults to 0.6.
+   */
+  separationCost?: number;
+  /**
+   * Distance between the anchor points of two lines that share a card face, in
+   * canvas units. Keeps a fan-out readable instead of stacking every line on the
+   * face midpoint. 0 disables the offsets. Defaults to 9.
+   */
+  portSpacing?: number;
+  /**
+   * Distance between the routing lanes offered in the free space between cards,
+   * in canvas units. Lanes are what let several lines run side by side instead of
+   * on top of each other. Defaults to 14.
+   */
+  laneSpacing?: number;
 }
 
 const SIDES: readonly RoutingSide[] = ['right', 'bottom', 'left', 'top'];
@@ -71,6 +104,8 @@ interface PreparedRect extends RoutingRect {
 interface Obstacle extends PreparedRect {
   left: number;
   top: number;
+  /** A crossable card is drawn on top of the lines: routes may pass beneath it. */
+  crossable: boolean;
 }
 
 interface SideEndpoint {
@@ -105,12 +140,53 @@ interface CandidateRoute {
   cost: number;
 }
 
+/** Straight runs already taken in this batch, keyed by their lane coordinate. */
+interface LaneOccupancy {
+  horizontal: Map<number, Array<[number, number]>>;
+  vertical: Map<number, Array<[number, number]>>;
+}
+
+interface ResolvedRoute {
+  index: number;
+  source: string;
+  target: string;
+  points: RoutingPoint[];
+  sourceSide: RoutingSide;
+  targetSide: RoutingSide;
+  labelPlacement: { x: number; y: number; bounds: RoutingBounds } | null;
+  cuts: RouteCut[];
+  bridges: number;
+  crossesOver: boolean;
+}
+
+/** A bridge break on one segment of a route: the middle of the crossing plus its half-width. */
+interface RouteCut {
+  segment: number;
+  position: number;
+  halfWidth: number;
+}
+
 const DEFAULTS = {
   clearance: 22,
   cornerRadius: 8,
   bendPenalty: 28,
   labelGap: 8,
+  crossingGap: 7,
+  separationCost: 0.6,
+  portSpacing: 9,
+  laneSpacing: 14,
 } as const;
+
+type RoutingSettings = {
+  clearance: number;
+  cornerRadius: number;
+  bendPenalty: number;
+  labelGap: number;
+  crossingGap: number;
+  separationCost: number;
+  portSpacing: number;
+  laneSpacing: number;
+};
 
 /**
  * Route each directed connection around padded card bounds on a sparse
@@ -125,12 +201,17 @@ export function routeConnections(
   links: readonly RoutingLink[],
   options: EdgeRoutingOptions = {},
 ): RoutedConnection[] {
-  const settings = {
+  const settings: RoutingSettings = {
     clearance: finiteNonNegative(options.clearance, DEFAULTS.clearance),
     cornerRadius: finiteNonNegative(options.cornerRadius, DEFAULTS.cornerRadius),
     bendPenalty: finiteNonNegative(options.bendPenalty, DEFAULTS.bendPenalty),
     labelGap: finiteNonNegative(options.labelGap, DEFAULTS.labelGap),
+    crossingGap: finiteNonNegative(options.crossingGap, DEFAULTS.crossingGap),
+    separationCost: finiteNonNegative(options.separationCost, DEFAULTS.separationCost),
+    portSpacing: finiteNonNegative(options.portSpacing, DEFAULTS.portSpacing),
+    laneSpacing: finiteNonNegative(options.laneSpacing, DEFAULTS.laneSpacing),
   };
+  const crossableIds = new Set(options.crossableIds ?? []);
   const rectMap = new Map<string, PreparedRect>();
   let invalidGeometry = false;
   for (const rect of rects) {
@@ -183,24 +264,40 @@ export function routeConnections(
     if (!routingBounds.has(id)) routingBounds.set(id, envelope);
   }
 
-  const obstacles = [...routingBounds.values()].map((rect) => expandRect(rect, settings.clearance));
-  const grid = buildGrid([...rectMap.values()], obstacles);
+  const obstacles = [...routingBounds.values()].map((rect) => expandRect(rect, settings.clearance, crossableIds.has(rect.id)));
   const labelBounds: RoutingBounds[] = [];
-  const labelObstacles = [...routingBounds.values()].map((rect) => expandRect(rect, settings.labelGap));
+  // Labels stay clear of every card, including the notes a line may pass under:
+  // paper may cover a line, but never the words printed on it.
+  const labelObstacles = [...routingBounds.values()].map((rect) => expandRect(rect, settings.labelGap, false));
 
   // Stable ordering makes label placement repeatable if a caller changes its
   // edge array order while retaining the same IDs.
   routable.sort((left, right) => left.link.id.localeCompare(right.link.id) || left.index - right.index);
 
+  // Lines that share a card leave it from different points instead of stacking on
+  // one anchor; the offsets are part of the grid, so the router keeps clearance.
+  const sourceOffsets = portOffsets(routable.map((item) => ({ key: item.link.source, index: item.index })), settings.portSpacing, rectMap);
+  const targetOffsets = portOffsets(routable.map((item) => ({ key: item.link.target, index: item.index })), settings.portSpacing, rectMap);
+  const grid = buildGrid([...rectMap.values()], obstacles, [...sourceOffsets.values(), ...targetOffsets.values()], settings.laneSpacing);
+
+  // Routes are placed one after another, and each remembers its straight runs.
+  // Later routes pay a small cost for reusing a lane, so parallel connections
+  // settle into separate lanes instead of drawing one line on top of another.
+  const occupancy: LaneOccupancy = { horizontal: new Map(), vertical: new Map() };
+  const resolved: ResolvedRoute[] = [];
+
   for (const item of routable) {
-    const result = routeOne(item.source, item.target, grid, settings);
+    const result = routeOne(
+      item.source,
+      item.target,
+      grid,
+      settings,
+      occupancy,
+      sourceOffsets.get(item.index) ?? 0,
+      targetOffsets.get(item.index) ?? 0,
+    );
     if (!result) {
       routes.set(item.index, hiddenRoute(item.link, invalidGeometry ? 'invalid-geometry' : 'no-route'));
-      continue;
-    }
-    const path = roundedPath(result.points, settings.cornerRadius);
-    if (!path) {
-      routes.set(item.index, hiddenRoute(item.link, 'no-route'));
       continue;
     }
     const label = item.link.label?.trim();
@@ -208,17 +305,42 @@ export function routeConnections(
       ? placeLabel(label, result.points, labelObstacles, labelBounds, settings.labelGap)
       : null;
     if (labelPlacement) labelBounds.push(labelPlacement.bounds);
-    routes.set(item.index, {
-      ...item.link,
+    rememberLanes(occupancy, result.points);
+    resolved.push({
+      index: item.index,
+      source: item.link.source,
+      target: item.link.target,
       points: result.points,
-      path,
       sourceSide: result.sourceSide,
       targetSide: result.targetSide,
-      sourceHandleId: `source-${result.sourceSide}`,
-      targetHandleId: `target-${result.targetSide}`,
-      labelX: labelPlacement?.x ?? null,
-      labelY: labelPlacement?.y ?? null,
-      labelBounds: labelPlacement?.bounds ?? null,
+      labelPlacement,
+      cuts: [],
+      bridges: 0,
+      crossesOver: false,
+    });
+  }
+
+  if (settings.crossingGap > 0) markCrossings(resolved, settings.crossingGap);
+
+  for (const route of resolved) {
+    const path = bridgedPath(route.points, route.cuts, settings.cornerRadius);
+    if (!path) {
+      routes.set(route.index, hiddenRoute(links[route.index]!, 'no-route'));
+      continue;
+    }
+    routes.set(route.index, {
+      ...links[route.index]!,
+      points: route.points,
+      path,
+      bridges: route.bridges,
+      crossesOver: route.crossesOver,
+      sourceSide: route.sourceSide,
+      targetSide: route.targetSide,
+      sourceHandleId: `source-${route.sourceSide}`,
+      targetHandleId: `target-${route.targetSide}`,
+      labelX: route.labelPlacement?.x ?? null,
+      labelY: route.labelPlacement?.y ?? null,
+      labelBounds: route.labelPlacement?.bounds ?? null,
       hidden: false,
     });
   }
@@ -226,11 +348,34 @@ export function routeConnections(
   return links.map((_, index) => routes.get(index)!);
 }
 
+/**
+ * Add evenly spaced lanes inside the free gaps between card boundaries. Without
+ * them the only lines a route can use run along card edges, so several parallel
+ * connections end up drawing on the same line.
+ */
+function withLanes(values: readonly number[], spacing: number): number[] {
+  const sorted = [...new Set(values)].filter(Number.isFinite).sort((left, right) => left - right);
+  if (!(spacing > 0)) return sorted;
+  const result = new Set(sorted);
+  for (let index = 0; index < sorted.length - 1; index += 1) {
+    const low = sorted[index]!;
+    const high = sorted[index + 1]!;
+    const gap = high - low;
+    if (gap < spacing * 2.5) continue;
+    const count = Math.min(4, Math.floor(gap / spacing) - 1);
+    for (let lane = 1; lane <= count; lane += 1) result.add(low + (gap * lane) / (count + 1));
+  }
+  return [...result].sort((left, right) => left - right);
+}
+
 function routeOne(
   source: PreparedRect,
   target: PreparedRect,
   grid: SearchGrid,
-  settings: typeof DEFAULTS | { clearance: number; cornerRadius: number; bendPenalty: number; labelGap: number },
+  settings: RoutingSettings,
+  occupancy: LaneOccupancy,
+  sourceOffset: number,
+  targetOffset: number,
 ): CandidateRoute | null {
   const paddedSource = grid.obstacleForCard.get(source.id);
   const paddedTarget = grid.obstacleForCard.get(target.id);
@@ -238,19 +383,19 @@ function routeOne(
 
   let best: CandidateRoute | null = null;
   for (const sourceSide of SIDES) {
-    const from = endpoint(source, sourceSide, paddedSource);
+    const from = endpoint(source, sourceSide, paddedSource, sourceOffset);
     const start = gridNode(grid, from.lead);
     if (start === null || blockedStub(from.anchor, from.lead, grid.obstacles, source.id)) continue;
 
     const targetEndpoints = SIDES.map((targetSide) => {
-      const to = endpoint(target, targetSide, paddedTarget);
+      const to = endpoint(target, targetSide, paddedTarget, targetOffset);
       return { side: targetSide, endpoint: to, node: gridNode(grid, to.lead) };
     });
     const usableTargets = targetEndpoints.filter(({ node, endpoint: to }) =>
       node !== null && !blockedStub(to.anchor, to.lead, grid.obstacles, target.id));
     if (usableTargets.length === 0) continue;
 
-    const search = shortestPaths(grid, start, from.outwardDirection, usableTargets, settings.bendPenalty);
+    const search = shortestPaths(grid, start, from.outwardDirection, usableTargets, settings, occupancy);
     for (const candidate of usableTargets) {
       const arrivalDirection = opposite(candidate.endpoint.outwardDirection);
       const targetState = candidate.node! * 5 + arrivalDirection;
@@ -273,7 +418,12 @@ function routeOne(
   return best;
 }
 
-function buildGrid(rects: readonly PreparedRect[], obstacles: readonly Obstacle[]): SearchGrid {
+function buildGrid(
+  rects: readonly PreparedRect[],
+  obstacles: readonly Obstacle[],
+  portOffsets: readonly number[] = [],
+  laneSpacing = 0,
+): SearchGrid {
   const xValues = new Set<number>();
   const yValues = new Set<number>();
   for (const obstacle of obstacles) {
@@ -287,9 +437,15 @@ function buildGrid(rects: readonly PreparedRect[], obstacles: readonly Obstacle[
     // centerline of a card. Including centers lets every edge share this grid.
     xValues.add(rect.x + rect.width / 2);
     yValues.add(rect.y + rect.height / 2);
+    // A spread port sits beside the centerline; its lead must be a grid node too.
+    for (const offset of portOffsets) {
+      if (!Number.isFinite(offset) || Math.abs(offset) <= EPSILON) continue;
+      xValues.add(rect.x + rect.width / 2 + offset);
+      yValues.add(rect.y + rect.height / 2 + offset);
+    }
   }
-  const xs = [...xValues].filter(Number.isFinite).sort((left, right) => left - right);
-  const ys = [...yValues].filter(Number.isFinite).sort((left, right) => left - right);
+  const xs = withLanes([...xValues], laneSpacing);
+  const ys = withLanes([...yValues], laneSpacing);
   const xIndexes = new Map(xs.map((value, index) => [value, index]));
   const yIndexes = new Map(ys.map((value, index) => [value, index]));
   const nodeCount = xs.length * ys.length;
@@ -348,8 +504,10 @@ function shortestPaths(
   start: number,
   initialDirection: number,
   targets: readonly { node: number | null; endpoint: SideEndpoint }[],
-  bendPenalty: number,
+  settings: RoutingSettings,
+  occupancy: LaneOccupancy,
 ): SearchResult {
+  const bendPenalty = settings.bendPenalty;
   const stateCount = grid.nodeCount * 5;
   const distance = new Float64Array(stateCount).fill(Number.POSITIVE_INFINITY);
   const previous = new Int32Array(stateCount).fill(-1);
@@ -369,14 +527,19 @@ function shortestPaths(
     if (unfinished.delete(entry.state) && unfinished.size === 0) break;
     const node = Math.floor(entry.state / 5);
     const priorDirection = entry.state % 5;
+    const from = { x: grid.pointX[node]!, y: grid.pointY[node]! };
     for (let slot = 0; slot < 4; slot += 1) {
       const neighbor = grid.neighbors[node * 4 + slot]!;
       if (neighbor < 0) continue;
       const direction = DIRECTIONS[slot]!;
       if (priorDirection === 0 && direction !== initialDirection) continue;
       const bendCost = priorDirection !== 0 && direction !== priorDirection ? bendPenalty : 0;
+      const to = { x: grid.pointX[neighbor]!, y: grid.pointY[neighbor]! };
       const nextState = neighbor * 5 + direction;
-      const candidate = entry.priority + grid.neighborLengths[node * 4 + slot]! + bendCost;
+      const candidate = entry.priority
+        + grid.neighborLengths[node * 4 + slot]!
+        + bendCost
+        + laneCost(from, to, occupancy, settings.separationCost);
       if (candidate + EPSILON >= distance[nextState]!) continue;
       distance[nextState] = candidate;
       previous[nextState] = entry.state;
@@ -386,9 +549,9 @@ function shortestPaths(
   return { distance, previous };
 }
 
-function endpoint(rect: PreparedRect, side: RoutingSide, paddedEnvelope: Obstacle): SideEndpoint {
-  const centerX = rect.x + rect.width / 2;
-  const centerY = rect.y + rect.height / 2;
+function endpoint(rect: PreparedRect, side: RoutingSide, paddedEnvelope: Obstacle, offset = 0): SideEndpoint {
+  const centerX = rect.x + rect.width / 2 + offset;
+  const centerY = rect.y + rect.height / 2 + offset;
   switch (side) {
     case 'top': return {
       anchor: { x: centerX, y: rect.y },
@@ -534,6 +697,194 @@ function roundedPath(points: readonly RoutingPoint[], requestedRadius: number): 
   return path;
 }
 
+/**
+ * Draw a route with readable over/under crossings: each cut opens a short break
+ * in the line, so the line that stays continuous visibly passes over it.
+ * A break also splits the path into separate subpaths, which keeps corner
+ * rounding out of the gaps.
+ */
+function bridgedPath(points: readonly RoutingPoint[], cuts: readonly RouteCut[], radius: number): string {
+  if (points.length < 2 || points.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return '';
+  if (cuts.length === 0) return roundedPath(points, radius);
+
+  const spans: Array<{ from: RoutingPoint; to: RoutingPoint }> = [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const from = points[index]!;
+    const to = points[index + 1]!;
+    const length = manhattan(from, to);
+    if (length <= EPSILON) continue;
+    const unit = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+    const at = (position: number): RoutingPoint => ({ x: from.x + unit.x * position, y: from.y + unit.y * position });
+    const merged = mergeCuts(cuts.filter((cut) => cut.segment === index), length);
+    let cursor = 0;
+    for (const [start, end] of merged) {
+      if (start > cursor + 0.5) spans.push({ from: at(cursor), to: at(start) });
+      cursor = Math.max(cursor, end);
+    }
+    if (length > cursor + 0.5) spans.push({ from: at(cursor), to: at(length) });
+  }
+  if (spans.length === 0) return '';
+
+  const runs: RoutingPoint[][] = [];
+  for (const span of spans) {
+    const current = runs.at(-1);
+    if (current && samePoint(current.at(-1)!, span.from)) current.push(span.to);
+    else runs.push([span.from, span.to]);
+  }
+  return runs.map((run) => roundedPath(run, radius)).filter((path) => path !== '').join(' ');
+}
+
+/** Resolve overlapping cuts on one segment into clamped, merged visible intervals. */
+function mergeCuts(cuts: readonly RouteCut[], length: number): Array<[number, number]> {
+  const intervals = cuts
+    .map((cut) => {
+      const position = Math.min(Math.max(cut.position, 0), length);
+      return [Math.max(0, position - cut.halfWidth), Math.min(length, position + cut.halfWidth)] as [number, number];
+    })
+    .filter(([start, end]) => end - start > 0.5)
+    .sort((left, right) => left[0] - right[0]);
+  const merged: Array<[number, number]> = [];
+  for (const [start, end] of intervals) {
+    const last = merged.at(-1);
+    if (last && start <= last[1] + 0.5) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  return merged;
+}
+
+/**
+ * Spread the anchors of lines that share one card. Without this, every
+ * connection leaving the same side of a card starts from the same pixel and the
+ * fan-out reads as one thick line.
+ */
+function portOffsets(
+  entries: ReadonlyArray<{ key: string; index: number }>,
+  spacing: number,
+  rects: ReadonlyMap<string, PreparedRect>,
+): Map<number, number> {
+  const offsets = new Map<number, number>();
+  if (spacing <= 0) return offsets;
+  const groups = new Map<string, number[]>();
+  for (const entry of entries) {
+    const group = groups.get(entry.key);
+    if (group) group.push(entry.index);
+    else groups.set(entry.key, [entry.index]);
+  }
+  for (const [cardId, indexes] of groups) {
+    if (indexes.length < 2) continue;
+    const rect = rects.get(cardId);
+    if (!rect) continue;
+    const total = (indexes.length - 1) * spacing;
+    const room = Math.max(0, Math.min(rect.width, rect.height) / 2 - 24);
+    const scale = total <= 0 ? 1 : Math.min(1, room / (total / 2));
+    if (scale <= EPSILON) continue;
+    indexes.forEach((index, position) => offsets.set(index, (position * spacing - total / 2) * scale));
+  }
+  return offsets;
+}
+
+/**
+ * Mark every place where two routes cross. The horizontal line stays continuous
+ * and the vertical line opens a bridge, so "which one is on top" is never a guess.
+ */
+function markCrossings(routes: readonly ResolvedRoute[], gap: number): void {
+  if (routes.length < 2) return;
+  const participating = new Set<number>();
+  for (let left = 0; left < routes.length; left += 1) {
+    for (let right = left + 1; right < routes.length; right += 1) {
+      const a = routes[left]!;
+      const b = routes[right]!;
+      const aSegments = segmentInfos(a.points);
+      const bSegments = segmentInfos(b.points);
+      for (const segmentA of aSegments) {
+        for (const segmentB of bSegments) {
+          if (segmentA.horizontal === segmentB.horizontal) continue;
+          const horizontal = segmentA.horizontal ? segmentA : segmentB;
+          const vertical = segmentA.horizontal ? segmentB : segmentA;
+          const crossingX = vertical.fixed;
+          const crossingY = horizontal.fixed;
+          if (!(crossingX > horizontal.low + gap * 2 && crossingX < horizontal.high - gap * 2)) continue;
+          if (!(crossingY > vertical.low + gap * 2 && crossingY < vertical.high - gap * 2)) continue;
+          const under = segmentA.horizontal ? b : a;
+          const underSegment = segmentA.horizontal ? segmentB : segmentA;
+          const crossingAlong = underSegment.horizontal ? crossingX : crossingY;
+          under.cuts.push({ segment: underSegment.index, position: crossingAlong - underSegment.low, halfWidth: gap });
+          participating.add(left);
+          participating.add(right);
+        }
+      }
+    }
+  }
+  for (let index = 0; index < routes.length; index += 1) {
+    const route = routes[index]!;
+    route.bridges = route.cuts.length;
+    route.crossesOver = participating.has(index) && route.bridges === 0;
+  }
+}
+
+interface SegmentInfo {
+  index: number;
+  horizontal: boolean;
+  fixed: number;
+  low: number;
+  high: number;
+}
+
+function segmentInfos(points: readonly RoutingPoint[]): SegmentInfo[] {
+  const segments: SegmentInfo[] = [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const from = points[index]!;
+    const to = points[index + 1]!;
+    if (Math.abs(from.y - to.y) <= EPSILON) {
+      segments.push({ index, horizontal: true, fixed: from.y, low: Math.min(from.x, to.x), high: Math.max(from.x, to.x) });
+    } else if (Math.abs(from.x - to.x) <= EPSILON) {
+      segments.push({ index, horizontal: false, fixed: from.x, low: Math.min(from.y, to.y), high: Math.max(from.y, to.y) });
+    }
+  }
+  return segments;
+}
+
+/** Straight runs taken by already placed routes, so later routes can keep their own lane. */
+function rememberLanes(occupancy: LaneOccupancy, points: readonly RoutingPoint[]): void {
+  for (const segment of segmentInfos(points)) {
+    if (segment.high - segment.low <= EPSILON) continue;
+    const table = segment.horizontal ? occupancy.horizontal : occupancy.vertical;
+    const lane = laneKey(segment.fixed);
+    const interval: [number, number] = [segment.low, segment.high];
+    const existing = table.get(lane);
+    if (existing) existing.push(interval);
+    else table.set(lane, [interval]);
+  }
+}
+
+/** Cost of drawing along a lane another route already uses. 0 when the lane is free. */
+function laneCost(
+  from: RoutingPoint,
+  to: RoutingPoint,
+  occupancy: LaneOccupancy,
+  costPerUnit: number,
+): number {
+  if (costPerUnit <= 0) return 0;
+  const horizontal = Math.abs(from.y - to.y) <= EPSILON;
+  if (!horizontal && Math.abs(from.x - to.x) > EPSILON) return 0;
+  const table = horizontal ? occupancy.horizontal : occupancy.vertical;
+  const intervals = table.get(laneKey(horizontal ? from.y : from.x));
+  if (!intervals || intervals.length === 0) return 0;
+  const low = horizontal ? Math.min(from.x, to.x) : Math.min(from.y, to.y);
+  const high = horizontal ? Math.max(from.x, to.x) : Math.max(from.y, to.y);
+  let shared = 0;
+  for (const [start, end] of intervals) shared += Math.max(0, Math.min(high, end) - Math.max(low, start));
+  return shared * costPerUnit;
+}
+
+function laneKey(value: number): number {
+  return Math.round(value * 4) / 4;
+}
+
+function samePoint(left: RoutingPoint, right: RoutingPoint): boolean {
+  return Math.abs(left.x - right.x) <= EPSILON && Math.abs(left.y - right.y) <= EPSILON;
+}
+
 function compressPoints(points: readonly RoutingPoint[]): RoutingPoint[] {
   const result: RoutingPoint[] = [];
   for (const point of points) {
@@ -554,7 +905,8 @@ function compressPoints(points: readonly RoutingPoint[]): RoutingPoint[] {
 }
 
 function pointBlocked(point: RoutingPoint, obstacles: readonly Obstacle[]): boolean {
-  return obstacles.some((obstacle) => point.x > obstacle.left + EPSILON
+  return obstacles.some((obstacle) => !obstacle.crossable
+    && point.x > obstacle.left + EPSILON
     && point.x < obstacle.right - EPSILON
     && point.y > obstacle.top + EPSILON
     && point.y < obstacle.bottom - EPSILON);
@@ -564,7 +916,8 @@ function segmentBlocked(from: RoutingPoint, to: RoutingPoint, obstacles: readonl
   if (Math.abs(from.y - to.y) <= EPSILON) {
     const low = Math.min(from.x, to.x);
     const high = Math.max(from.x, to.x);
-    return obstacles.some((obstacle) => from.y > obstacle.top + EPSILON
+    return obstacles.some((obstacle) => !obstacle.crossable
+      && from.y > obstacle.top + EPSILON
       && from.y < obstacle.bottom - EPSILON
       && high > obstacle.left + EPSILON
       && low < obstacle.right - EPSILON);
@@ -572,7 +925,8 @@ function segmentBlocked(from: RoutingPoint, to: RoutingPoint, obstacles: readonl
   if (Math.abs(from.x - to.x) <= EPSILON) {
     const low = Math.min(from.y, to.y);
     const high = Math.max(from.y, to.y);
-    return obstacles.some((obstacle) => from.x > obstacle.left + EPSILON
+    return obstacles.some((obstacle) => !obstacle.crossable
+      && from.x > obstacle.left + EPSILON
       && from.x < obstacle.right - EPSILON
       && high > obstacle.top + EPSILON
       && low < obstacle.bottom - EPSILON);
@@ -589,13 +943,14 @@ function blockedStub(
   return obstacles.some((obstacle) => obstacle.id !== endpointId && segmentBlocked(anchor, lead, [obstacle]));
 }
 
-function expandRect(rect: PreparedRect, margin: number): Obstacle {
+function expandRect(rect: PreparedRect, margin: number, crossable: boolean): Obstacle {
   return {
     ...rect,
     left: rect.x - margin,
     top: rect.y - margin,
     right: rect.right + margin,
     bottom: rect.bottom + margin,
+    crossable,
   };
 }
 

@@ -197,14 +197,8 @@
 .tt-app .tt-review-details, .tt-app .tt-review-checks { margin-block: 10px; font-size: 13px; }
 .tt-app .tt-review-details > summary, .tt-app .tt-review-checks > summary, .tt-app .tt-rollback > summary { cursor: pointer; padding-block: 6px; color: var(--tt-muted); }
 .tt-app .tt-table-rule-details { padding-block: var(--tt-space-1); border-bottom: 1px solid color-mix(in srgb, var(--tt-line), transparent 45%); }
-.tt-app .tt-table-rule-details > summary { min-height: 32px; color: var(--tt-ink); font-size: 13px; cursor: pointer; }
-.tt-app .tt-table-rules .tt-table-proposal { padding: 0; border: 0; background: transparent; }
-.tt-app .tt-table-rules .tt-table-program__summary { display: flex; flex-wrap: wrap; gap: var(--tt-space-4); padding-block: var(--tt-space-2); }
-.tt-app .tt-table-rules .tt-table-program__summary > span { display: flex; align-items: baseline; gap: var(--tt-space-2); padding: 0; border: 0; border-radius: 0; background: transparent; }
-.tt-app .tt-table-rules .tt-table-program__summary strong { font-size: 16px; font-weight: 650; }
-.tt-app .tt-table-rules .tt-table-program__summary small { font-size: 12px; }
-.tt-app .tt-table-rules .tt-table-proposal > h3 { margin-block: 4px; font-size: 20px; font-weight: 650; }
-.tt-app .tt-table-rules .tt-table-program__description { color: var(--tt-muted); font-size: 13px; }
+.tt-app .tt-table-rule-details > summary { min-height: 40px; color: var(--tt-ink); font-size: var(--tt-type-body); cursor: pointer; }
+/* Rules-card body styles live with the card: ui/rules-card.css. */
 .tt-app .tt-table-proposal__apply { display: grid; justify-items: start; gap: var(--tt-space-2); padding-top: var(--tt-space-2); }
 .tt-app .tt-table-proposal__apply > p { margin: 0; }
 .tt-app .tt-table-private-preview > summary, .tt-app .tt-table-advanced-checks > summary, .tt-app .tt-table-history > summary { min-height: 40px; padding-block: var(--tt-space-2); color: var(--tt-muted); cursor: pointer; }
