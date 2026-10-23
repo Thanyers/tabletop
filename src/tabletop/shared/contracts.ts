@@ -101,7 +101,17 @@ export interface DomainDecision {
 }
 export interface CommandEnvelope extends DomainCommand { commandId: string; expectedRevision: string; expectedEpoch: number }
 export interface WorkspaceView { id: string; title: string; kind: CaseKind; epoch: number; revision: string; actor: Member; members: Member[]; domain: DomainState; createdAt: number; expiresAt: number }
-export interface SessionView { csrfToken: string; actorId: string; name: string; expiresAt: number; workspaces: { id: string; title: string; kind: CaseKind; role: Role }[] }
+/** One row of the /tables list. The times and the last editor stay optional so a runtime can omit them. */
+export interface WorkspaceListItem {
+  id: string; title: string; kind: CaseKind; role: Role;
+  /** F053: when the table was created, ms since epoch. */
+  createdAt?: number;
+  /** F053: the newest committed change, ms since epoch; same as `createdAt` before the first change. */
+  updatedAt?: number;
+  /** F053: name of the member who committed that change; absent before the first change. */
+  updatedBy?: string;
+}
+export interface SessionView { csrfToken: string; actorId: string; name: string; expiresAt: number; workspaces: WorkspaceListItem[] }
 export interface CommandAck { ok: true; commandId: string; duplicate: boolean; workspace: WorkspaceView; /** F048: returned only to the caller that issued or consumed the roll. */ roll?: RollResult }
 export interface ApiError { ok: false; errorCode: string; message: string; requestId?: string }
 export class DomainError extends Error { constructor(public readonly code: string, message: string) { super(message); this.name = 'DomainError' } }
