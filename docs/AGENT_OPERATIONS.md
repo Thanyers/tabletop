@@ -2,6 +2,10 @@
 
 อ่านตามเงื่อนไขใน [AGENTS.md](../AGENTS.md) ก่อนทำงานส่วนนั้น เอกสารนี้เก็บรายละเอียดปฏิบัติการเดิม ส่วนกติกาเริ่มงานและขอบเขตของ AI อยู่ใน AGENTS
 
+## 1. Markdown merge conflicts (รายละเอียด)
+
+`CHANGELOG.md`, `PLAN.md`, `MEMORY.md` ใช้ `merge=union` ใน [`.gitattributes`](../.gitattributes): `git merge` ในเครื่องเก็บบรรทัดที่ทั้งสองฝั่งเพิ่มไว้ให้เองโดยไม่หยุด · หลัง merge ยังต้องตรวจตาม [AGENTS.md §1](../AGENTS.md#markdown-merge-conflicts) ข้อ 2–5 (บรรทัดซ้ำ, ลำดับ, หัวข้อ release ที่ตัดแล้ว) · `spec.md` ไม่ใช้ union เพราะมีการแก้เนื้อหาเดิม · ปุ่ม Update branch ของ GitHub ไม่ใช้กฎนี้ ให้ merge `origin/dev` ในเครื่องแทน
+
 ## 3. CI
 
 [`.github/workflows/validate.yml`](../.github/workflows/validate.yml) รันทุก pull request และทุก push เข้า `main` / `dev`
