@@ -1,0 +1,1 @@
+- **เปิด JavaScript/Python compute ผ่าน pipeline (F066-T8):** เติม execution profile ให้ private deployment config โดยไม่เปลี่ยน environment/budget/credentials; ชุดเต็ม CI ทดสอบ Worker Loader และ Container API บน Linux และ smoke ตรวจทั้งสอง engines/libraries หลัง deploy ต้องเปิด Workers Paid และตรวจผล hosted จริงก่อนยืนยัน readiness

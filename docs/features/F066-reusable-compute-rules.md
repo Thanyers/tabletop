@@ -43,6 +43,7 @@
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-23 | ผู้ใช้อนุญาตเปิด Workers Paid และยอมรับค่าใช้บริการผ่าน checkout; pipeline เติม compute profile จากโค้ดหลังตรวจ private config | config ที่ GitHub secret เดิมยังไม่เปิด engines; คง identity/budget/credentials และตรวจ capability/execution แยกกัน |
 | 2026-10-23 | ใช้ทิศทาง Rules = ความสามารถที่เก็บไว้ใช้ซ้ำ ตามที่เจ้าของสั่งให้ implement หลังคุย concept | ไม่ลด Rules เหลือสูตรคอลัมน์ และไม่ต้องขออนุมัติแนวคิดเดิมซ้ำ |
 | 2026-10-23 | หนึ่งโปรแกรมรองรับหลายกฎ/การ์ด; execution session แยกจาก room และ browser session | รักษาการใช้ซ้ำ ความต่อเนื่อง และสิทธิ์ในโต๊ะ |
 | 2026-10-23 | ตรวจ PR #205 (patch), #207 (research) ก่อนแก้; แยกไฟล์ใหม่และรักษา integration points | ลดการชนกับงานที่กำลังทำ ไม่ merge งานคนอื่นโดยปริยาย |
