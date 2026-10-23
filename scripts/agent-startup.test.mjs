@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 import { attachDeepSeekStartup, collectStartup, hookResponse } from './agent-startup.mjs';
 import { TabletopStartup } from '../.opencode/plugins/tabletop-startup.js';
-import { buildDeepSeekPatch } from './setup-agent-startup.mjs';
+import { activateDeepSeek, buildDeepSeekPatch, mergeWorkspaceHooks } from './setup-agent-startup.mjs';
 
 const temporaryRoot = mkdtempSync(path.join(tmpdir(), 'tabletop-startup-test-'));
 const project = fileURLToPath(new URL('../', import.meta.url));
@@ -166,7 +166,7 @@ test('OpenCode refreshes on each prompt and injects current policy before model 
 });
 
 test('checked-in policy fits full Claude context and oversize output cannot claim a full read', () => {
-  const policy = readFileSync(path.join(project, 'AGENTS.md'), 'utf8');
+  const policy = readFileSync(path.join(project, 'AGENTS.md'), 'utf8').replaceAll('\r\n', '\n');
   // Reserve room for Git evidence, a maximum-length branch name, and delimiters.
   assert.ok(policy.length + 1000 <= 10_000, `AGENTS.md too large: ${policy.length} characters`);
   const output = hookResponse({ context: 'x'.repeat(10_001), revision: 'abc' }, 'SessionStart');
@@ -215,10 +215,13 @@ test('publication gate allows only named adapters and still scans them for secre
   };
   assert.equal(scan().status, 0);
   writeFileSync(path.join(work, '.codex/private-state.json'), '{}');
+  mkdirSync(path.join(work, '.claude'));
+  writeFileSync(path.join(work, '.claude/settings.local.json'), '{}');
   writeFileSync(path.join(work, '.codex/hooks.json'), `{"example":"${'sk-' + 'x'.repeat(30)}"}`);
   const result = scan();
   assert.equal(result.status, 1);
   assert.ok(result.report.findings.some(f => f.file === '.codex/private-state.json' && f.reason === 'Private or generated path'));
+  assert.ok(result.report.findings.some(f => f.file === '.claude/settings.local.json' && f.reason === 'Private or generated path'));
   assert.ok(result.report.findings.some(f => f.file === '.codex/hooks.json' && f.reason === 'Provider secret'));
 });
 
@@ -234,4 +237,48 @@ test('DeepSeek home setup is idempotent and preserves unrelated patch rows', () 
   assert.doesNotMatch(moved, /C:\/Users/);
   assert.throws(() => buildDeepSeekPatch('settings: {}\n', '/plugin.js'), /preserved/);
   assert.throws(() => buildDeepSeekPatch('# BEGIN Tabletop automatic task startup\n', '/plugin.js'), /Ambiguous/);
+});
+
+test('failed DeepSeek update preserves the live plugin and patch; successful activation is idempotent', async () => {
+  const home = path.join(temporaryRoot, 'activation fixture');
+  const oldFiles = { 'index.js': 'export const oldValue = true;\n' };
+  const first = await activateDeepSeek(home, oldFiles, async () => {});
+  const patch = path.join(home, 'cordis.patch.yml');
+  const live = readFileSync(patch, 'utf8');
+  await assert.rejects(activateDeepSeek(home, { 'index.js': 'invalid candidate' }, async () => {
+    assert.equal(readFileSync(patch, 'utf8'), live);
+    assert.equal(readFileSync(path.join(first, 'index.js'), 'utf8'), oldFiles['index.js']);
+    throw new Error('validation failed');
+  }), /validation failed/);
+  assert.equal(readFileSync(patch, 'utf8'), live);
+  assert.equal(readFileSync(path.join(first, 'index.js'), 'utf8'), oldFiles['index.js']);
+  assert.equal(await activateDeepSeek(home, oldFiles, async () => {}), first);
+  assert.equal(readFileSync(patch, 'utf8'), live);
+  await assert.rejects(activateDeepSeek(home, { 'index.js': 'another candidate' }, async () => {
+    writeFileSync(patch, live + '# changed by another actor\n');
+  }), /changed during setup/);
+  assert.match(readFileSync(patch, 'utf8'), /changed by another actor/);
+});
+
+test('workspace setup preserves co-hooks inside a mixed managed group and unrelated events', () => {
+  const script = '/workspace/tabletop/scripts/agent-startup.mjs';
+  const other = { type: 'command', command: 'echo keep-me' };
+  const existing = { hooks: { SessionStart: [{ matcher: 'startup', hooks: [{ command: `node '${script}' hook` }, other] }], Stop: [{ hooks: [other] }] } };
+  const template = { hooks: { SessionStart: [{ hooks: [{ type: 'command' }] }] } };
+  const merged = mergeWorkspaceHooks(existing, template, script);
+  assert.deepEqual(merged.hooks.SessionStart[0], { matcher: 'startup', hooks: [other] });
+  assert.deepEqual(merged.hooks.Stop, existing.hooks.Stop);
+  assert.deepEqual(mergeWorkspaceHooks(merged, template, script), merged);
+  assert.equal(existing.hooks.SessionStart[0].hooks.length, 2);
+});
+
+test('DeepSeek activation preserves protected POSIX patch permissions and private backups', { skip: process.platform === 'win32' }, async () => {
+  const home = path.join(temporaryRoot, 'protected setup');
+  mkdirSync(home);
+  const patch = path.join(home, 'cordis.patch.yml');
+  writeFileSync(patch, '# private settings\n');
+  chmodSync(patch, 0o600);
+  const target = await activateDeepSeek(home, { 'index.js': 'export const enabled = true;' }, async () => {});
+  assert.equal(statSync(patch).mode & 0o777, 0o600);
+  assert.equal(statSync(path.join(target, 'home-patch.before.yml')).mode & 0o777, 0o600);
 });

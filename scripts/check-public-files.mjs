@@ -12,7 +12,7 @@ const files = [...new Set(listed.stdout.split('\0').filter(Boolean))];
 const findings = [];
 // Reviewed project startup adapters only; all other harness state stays private.
 const publicHarnessFiles = new Set([
-  '.codex/config.toml', '.codex/hooks.json', '.opencode/plugins/tabletop-startup.js',
+  '.codex/config.toml', '.codex/hooks.json', '.claude/settings.json', '.opencode/plugins/tabletop-startup.js',
 ]);
 const credentialPatterns = [
   ['GitHub credential', /(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,})/],
@@ -26,7 +26,7 @@ for (const file of files) {
   if (stat.isSymbolicLink()) { findings.push({ file, reason: 'Symlink requires explicit review' }); continue; }
   // git lists an untracked nested repository (e.g. a worktree) as one directory entry.
   if (stat.isDirectory()) { findings.push({ file, reason: 'Nested repository must be ignored or reviewed' }); continue; }
-  if ((!publicHarnessFiles.has(file) && /(?:^|\/)(?:node_modules|dist|worker-build|test-results|playwright-report|\.data|\.wrangler|\.npm-cache|\.codex|\.agents|\.aws|\.opencode)(?:\/|$)/.test(file))
+  if ((!publicHarnessFiles.has(file) && /(?:^|\/)(?:node_modules|dist|worker-build|test-results|playwright-report|\.data|\.wrangler|\.npm-cache|\.codex|\.claude|\.agents|\.aws|\.opencode)(?:\/|$)/.test(file))
       || (/(?:^|\/)\.env(?:\.|$)/.test(file) && !file.endsWith('/.env.example') && file !== '.env.example')
       || /(?:^|\/)\.dev\.vars(?:\.|$)/.test(file)
       || /(?:^|\/)(?:\.npmrc|\.pypirc|id_rsa|id_ed25519)$/.test(file)

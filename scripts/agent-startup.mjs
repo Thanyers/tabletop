@@ -114,8 +114,13 @@ async function main() {
   // A local launcher may be attached to the enclosing multi-checkout workspace.
   // Only that script's immediate parent may select its reference checkout.
   const scriptRoot = fileURLToPath(new URL('../', import.meta.url));
-  if (path.relative(path.resolve(cwd), path.dirname(scriptRoot)) === '') cwd = scriptRoot;
+  const workspaceReference = path.relative(path.resolve(cwd), path.dirname(scriptRoot)) === '';
+  if (workspaceReference) cwd = scriptRoot;
   const result = await collectStartup({ cwd });
+  if (workspaceReference && result.context) {
+    result.context = result.context.replace('Tabletop automatic task preflight', 'Tabletop configured workspace reference preflight');
+    result.context += '\nThis is the configured Tabletop workspace reference. Verify the actual task checkout before writing; tasks for other projects must start inside their own repo.';
+  }
   const format = process.argv[2] || 'context';
   if (format === 'hook') {
     process.stdout.write(JSON.stringify(hookResponse(result, input.hook_event_name || 'SessionStart')));

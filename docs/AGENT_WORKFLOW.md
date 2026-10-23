@@ -23,7 +23,7 @@ npm run agents:setup
 
 ตัวติดตั้งใช้ runtime DeepSeek ที่ติดตั้งอยู่ ประกอบ plugin ไว้ใน DSH home และเพิ่มเฉพาะบล็อก Tabletop ใน home-level cordis.patch.yml ซึ่งทุก profile โหลดร่วมกัน เก็บแถวเดิมไว้ ตรวจการ import plugin ด้วย SDK จริงและตรวจ composed config ก่อนเปิดใช้ ไม่ติดตั้ง SDK อีกชุด ไม่แก้ profile/package ของแอป และไม่ปิดแอปที่กำลังทำงาน การตั้งค่าซ้ำไม่เพิ่มแถวซ้ำ เปิด session ใหม่ให้ loader รับการตั้งค่า
 
-ถ้า Codex เปิด workspace โฟลเดอร์แม่ที่มีหลาย checkout ใช้ตัวติดตั้งพร้อม `--workspace <โฟลเดอร์แม่>` ครั้งเดียว จะเพิ่มเฉพาะ hook ของ Tabletop โดยรักษา hook อื่นไว้ Receipt ระบุ checkout อ้างอิงที่ใช้ fetch แล้ว agent ต้องเลือก/ตรวจ checkout งานจริงก่อนเขียน
+ถ้า Codex เปิด workspace โฟลเดอร์แม่ที่มีหลาย checkout ใช้ตัวติดตั้งพร้อม `--workspace <โฟลเดอร์แม่>` ครั้งเดียว จะเพิ่มเฉพาะ hook ของ Tabletop โดยรักษา hook อื่นไว้ โหมดนี้กำหนดให้โฟลเดอร์แม่นั้นเป็น workspace ของ Tabletop; งานโปรเจกต์อื่นให้เปิดจาก repo ของตัวเอง Receipt ระบุว่าเป็น checkout อ้างอิงที่ใช้ fetch แล้ว agent ต้องเลือก/ตรวจ checkout งานจริงก่อนเขียน
 
 ## Native adapters
 

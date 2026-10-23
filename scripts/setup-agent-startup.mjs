@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile, access, realpath } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile, access, realpath, rename, stat, chmod } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -38,6 +39,42 @@ async function exists(file) {
   try { await access(file); return true; } catch { return false; }
 }
 
+async function writeChanged(file, data) {
+  const bytes = Buffer.from(data);
+  if (await exists(file) && (await readFile(file)).equals(bytes)) return;
+  const mode = await exists(file) ? (await stat(file)).mode & 0o777 : 0o600;
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  await writeFile(temporary, bytes, { mode });
+  await chmod(temporary, mode);
+  await rename(temporary, file);
+}
+
+export async function activateDeepSeek(home, files, validate) {
+  const base = path.join(home, 'plugins', 'tabletop-task-startup');
+  const legacyManifest = path.join(base, 'package.json');
+  if (await exists(legacyManifest)
+    && JSON.parse(await readFile(legacyManifest, 'utf8')).name !== '@local/tabletop-task-startup') {
+    throw new Error('Plugin destination belongs to another package; preserved.');
+  }
+  const hash = createHash('sha256');
+  for (const [name, data] of Object.entries(files).sort(([a], [b]) => a.localeCompare(b))) hash.update(name).update(data);
+  const target = path.join(base, hash.digest('hex').slice(0, 20));
+  await mkdir(target, { recursive: true });
+  for (const [name, data] of Object.entries(files)) await writeChanged(path.join(target, name), data);
+  const patch = path.join(home, 'cordis.patch.yml');
+  const before = await exists(patch) ? await readFile(patch, 'utf8') : '';
+  const modulePath = path.join(target, 'index.js');
+  const next = buildDeepSeekPatch(before, modulePath);
+  await validate({ target, modulePath });
+  const current = await exists(patch) ? await readFile(patch, 'utf8') : '';
+  if (current !== before) throw new Error('DSH home patch changed during setup; preserved.');
+  if (before !== next) {
+    if (before) await writeChanged(path.join(target, 'home-patch.before.yml'), before);
+    await writeChanged(patch, next);
+  }
+  return target;
+}
+
 export async function discoverDeepSeek() {
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
     const base = path.join(process.env.LOCALAPPDATA, 'Programs', 'DeepSeek Harness');
@@ -55,6 +92,25 @@ export async function discoverDeepSeek() {
     await execute('dsh', ['--version'], { timeout: 15_000, windowsHide: true });
     return { executable: 'dsh', args: [], env: process.env };
   } catch { return undefined; }
+}
+
+export function mergeWorkspaceHooks(existing, template, script) {
+  const result = structuredClone(existing);
+  const posixPath = "'" + script.replaceAll("'", "'\\''") + "'";
+  const powershellPath = "'" + script.replaceAll("'", "''") + "'";
+  result.hooks ||= {};
+  for (const [event, original] of Object.entries(template.hooks)) {
+    const groups = structuredClone(original);
+    for (const group of groups) for (const hook of group.hooks) {
+      hook.command = `node ${posixPath} hook`;
+      hook.commandWindows = `node ${powershellPath} hook`;
+    }
+    const retained = (result.hooks[event] || []).map(group => ({
+      ...group, hooks: (group.hooks || []).filter(hook => !hook.command?.includes(script)),
+    })).filter(group => group.hooks.length);
+    result.hooks[event] = [...retained, ...groups];
+  }
+  return result;
 }
 
 async function nativeSdkUrl(command) {
@@ -81,23 +137,14 @@ export async function setupAgentStartup({ workspaceRoot } = {}) {
       throw new Error('Workspace bridge must be the immediate parent of this checkout.');
     }
     const file = path.join(workspace, '.codex', 'hooks.json');
-    const existing = await exists(file) ? JSON.parse(await readFile(file, 'utf8')) : {};
+    const previous = await exists(file) ? await readFile(file, 'utf8') : '';
+    const existing = previous ? JSON.parse(previous) : {};
     const template = JSON.parse(await readFile(path.join(project, '.codex/hooks.json'), 'utf8'));
     const script = path.join(project, 'scripts', 'agent-startup.mjs').replaceAll('\\', '/');
-    const posixPath = "'" + script.replaceAll("'", "'\\''") + "'";
-    const powershellPath = "'" + script.replaceAll("'", "''") + "'";
-    existing.hooks ||= {};
-    for (const [event, groups] of Object.entries(template.hooks)) {
-      for (const group of groups) for (const hook of group.hooks) {
-        hook.command = `node ${posixPath} hook`;
-        hook.commandWindows = `node ${powershellPath} hook`;
-      }
-      const retained = (existing.hooks[event] || []).filter(group =>
-        !group.hooks?.some(hook => hook.command?.includes(script)));
-      existing.hooks[event] = [...retained, ...groups];
-    }
+    const merged = mergeWorkspaceHooks(existing, template, script);
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, JSON.stringify(existing, null, 2) + '\n');
+    if (previous) await writeChanged(file + '.tabletop-before.json', previous);
+    await writeChanged(file, JSON.stringify(merged, null, 2) + '\n');
     workspaceCodex = 'local parent-workspace hooks ready; reference checkout is named in each receipt';
   }
   const command = await discoverDeepSeek();
@@ -105,44 +152,42 @@ export async function setupAgentStartup({ workspaceRoot } = {}) {
     return { codex: 'project hooks ready', workspaceCodex, claude: 'project hooks ready', opencode: 'project plugin ready', deepseek: 'NOT_INSTALLED: no runnable DeepSeek Harness found' };
   }
   const home = path.resolve(process.env.DSH_HOME || path.join(homedir(), '.dsh'));
-  const target = path.join(home, 'plugins', 'tabletop-task-startup');
-  const manifest = path.join(target, 'package.json');
-  if (await exists(manifest)) {
-    const old = JSON.parse(await readFile(manifest, 'utf8'));
-    if (old.name !== '@local/tabletop-task-startup') throw new Error('Plugin destination belongs to another package; preserved.');
-  }
-  await mkdir(target, { recursive: true });
+  const files = {};
   for (const name of ['package.json', 'index.js', 'cordis.patch.yml']) {
-    await writeFile(path.join(target, name), await readFile(path.join(project, 'tools/deepseek-startup', name)));
+    files[name] = await readFile(path.join(project, 'tools/deepseek-startup', name));
   }
-  await writeFile(path.join(target, 'agent-startup.mjs'), await readFile(path.join(project, 'scripts/agent-startup.mjs')));
+  files['agent-startup.mjs'] = await readFile(path.join(project, 'scripts/agent-startup.mjs'));
   // Use the installed host's SDK instance; arbitrary home plugins do not join a
   // profile's linked-package peer resolver. No SDK download or duplicate copy.
-  await writeFile(path.join(target, 'native-sdk.mjs'), `export { createUserMessage } from ${JSON.stringify(await nativeSdkUrl(command))};\n`);
-  const patch = path.join(home, 'cordis.patch.yml');
-  const before = await exists(patch) ? await readFile(patch, 'utf8') : '';
-  const modulePath = path.join(target, 'index.js');
-  const next = buildDeepSeekPatch(before, modulePath);
-  const overlay = path.join(target, 'startup-validation.patch.yml');
-  await writeFile(overlay, buildDeepSeekPatch('', modulePath));
-  // Import the real adapter with the host's actual SDK, without a model/session.
-  const probe = 'const {pathToFileURL}=require("node:url"); import(pathToFileURL(process.argv[1]).href).then(m=>{let n=0;m.apply({on:(event,fn)=>{if(event!=="agent/pre-step"||typeof fn!=="function")throw Error("bad hook");n++}});if(n!==1)throw Error("missing hook")}).catch(()=>process.exitCode=1)';
-  await execute(command.sdkBase ? command.executable : process.execPath, [
-    ...(command.sdkBase ? ['--expose-internals'] : []), '-e', probe, modulePath,
-  ], { env: command.env, windowsHide: true, timeout: 15_000 });
-  const validationProfile = await exists(path.join(home, 'profiles', 'web', 'package.json')) ? 'web' : 'shared';
-  // Check composition using an existing profile. Do not mount a second app or
-  // require unrelated third-party plugin schema projections to be error-free.
-  await execute(command.executable, [
-    ...command.args, '--profile', validationProfile,
-    ...(before.includes(begin) ? [] : ['--patch', overlay]), '--dump-config',
-  ], {
-    env: command.env, windowsHide: true, timeout: 45_000, maxBuffer: 16 * 1024 * 1024,
+  files['native-sdk.mjs'] = `export { createUserMessage } from ${JSON.stringify(await nativeSdkUrl(command))};\n`;
+  await activateDeepSeek(home, files, async ({ target, modulePath }) => {
+    const overlay = path.join(target, 'startup-validation.patch.yml');
+    const overlayText = buildDeepSeekPatch('', modulePath).replace('id: tabletop-task-startup', 'id: tabletop-task-startup-validation');
+    await writeChanged(overlay, overlayText);
+    // Import the real adapter with the host's actual SDK, without a model/session.
+    const probe = [
+      'const {pathToFileURL}=require("node:url");',
+      'const entry=pathToFileURL(process.argv[1]);',
+      'Promise.all([import(entry.href),import(new URL("./native-sdk.mjs",entry).href)]).then(([m,sdk])=>{',
+      'let n=0;m.apply({on:(event,fn)=>{if(event!=="agent/pre-step"||typeof fn!=="function")throw Error("bad hook");n++}});',
+      'if(n!==1)throw Error("missing hook");',
+      'const message=sdk.createUserMessage({content:[{type:"text",text:"startup-contract-probe"}],source:{kind:"tabletop-task-startup",form:"instructions"}});',
+      'if(message.source.kind!=="tabletop-task-startup"||message.content[0].text!=="startup-contract-probe")throw Error("bad native context");',
+      '}).catch(()=>process.exitCode=1);',
+    ].join('\n');
+    await execute(command.sdkBase ? command.executable : process.execPath, [
+      ...(command.sdkBase ? ['--expose-internals'] : []), '-e', probe, modulePath,
+    ], { env: command.env, windowsHide: true, timeout: 15_000 });
+    const validationProfile = await exists(path.join(home, 'profiles', 'web', 'package.json')) ? 'web' : 'shared';
+    // Check composition using an existing profile. Do not mount a second app or
+    // require unrelated third-party plugin schema projections to be error-free.
+    await execute(command.executable, [
+      ...command.args, '--profile', validationProfile,
+      '--patch', overlay, '--dump-config',
+    ], {
+      env: command.env, windowsHide: true, timeout: 45_000, maxBuffer: 16 * 1024 * 1024,
   });
-  if (before !== next) {
-    if (before) await writeFile(path.join(target, 'home-patch.before.yml'), before);
-    await writeFile(patch, next);
-  }
+  });
   return {
     codex: 'project hooks ready; native workspace/hook trust required once',
     workspaceCodex,

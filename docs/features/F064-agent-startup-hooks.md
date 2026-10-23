@@ -35,13 +35,13 @@ F063 ระบุกติกาเริ่มงานไว้แล้ว �
 | 2026-10-23 | Codex/Claude ใช้ SessionStart + UserPromptSubmit, OpenCode ใช้ chat.message/pre-model, DeepSeek ใช้ awaited pre-step | ครอบคลุม session ใหม่และงานใหม่ในแชทเดิม โดย context เข้าก่อน request แรกของงาน |
 | 2026-10-23 | ย้ายรายละเอียด AGENTS §3/5/6/9 ไป AGENT_OPERATIONS และคง anchors/ข้อบังคับอ่าน | Claude additionalContext จำกัด 10,000 ตัวอักษร; root AGENTS เหลือ 8,921 ตัวอักษร และมี test กันขนาดกลับมาเกิน |
 | 2026-10-23 | DSH ใช้ home patch อ้างอิง plugin ที่ประกอบจาก source + SDK ของ runtime ที่ติดตั้งจริง | profile เป็นอิสระต่อกัน; home patch ครอบคลุมทั้งหมดโดยไม่แก้/หยุด Desktop และไม่โหลด SDK อีก instance |
-| 2026-10-23 | Publication gate ยกเว้นเฉพาะ 3 ไฟล์ native adapters ที่ระบุชื่อ | ไม่เปิดเผย harness state อื่น และตรวจ secret ในไฟล์ที่ยกเว้นเหมือนเดิม |
+| 2026-10-23 | Publication gate ยกเว้นเฉพาะ 4 ไฟล์ native adapters ที่ระบุชื่อ | ไม่เปิดเผย harness state อื่น และตรวจ secret ในไฟล์ที่ยกเว้นเหมือนเดิม |
 
 ## ผลตรวจ
 
 Node 22.23.2:
 
-- `npm run test:agents`: 12/12 ผ่าน — Git fixture ใช้ local bare remote; ทดสอบ fresh/refreshed dev, dirty/staged/untracked, remote หาย, policy หาย, repo อื่น, JSON events, native PowerShell command/Claude argv ใน path มีช่องว่างและ cwd เป็น subdirectory, OpenCode dispatch, DeepSeek first human request, context budget, publication allowlist และ setup idempotence
+- `npm run test:agents`: 14 passed / 1 SKIPPED (POSIX file modes บน Windows) — Git fixture ใช้ local bare remote; ทดสอบ fresh/refreshed dev, dirty/staged/untracked, remote หาย, policy หาย, repo อื่น, JSON events, native PowerShell command/Claude argv ใน path มีช่องว่างและ cwd เป็น subdirectory, OpenCode dispatch, DeepSeek first human request, context budget, publication allowlist, setup idempotence, failed-update preservation และการรักษา co-hooks
 - `npm run lint`: 0 errors, warnings เดิม; `git diff --check` และ public-file scan ผ่าน
 - `npm run agents:setup -- --workspace <workspace-parent>`: ผ่านและรันซ้ำผ่าน เครื่องนี้ติดตั้ง DSH home patch และ local parent-workspace Codex hooks แล้ว ไม่เขียน credential หรือแก้ plugin/profile เดิม
 - DeepSeek Harness 0.2.1-rc.2: ทดสอบ import adapter ด้วย SDK จริงผ่าน native Electron Node runtime และ compose config ของ profile ที่มีอยู่ โดยไม่เริ่ม session/model หรือปิด Desktop
