@@ -1,0 +1,2 @@
+- **ตัวรัน Python ของห้องเดิม:** อ่าน container binding ตอนถึงคิวรันและแยกเหตุผล unavailable ใน log โดยไม่บันทึก identifiers; input เดิมที่ล้มไม่ถูก autoqueue ซ้ำทุก alarm และยังกด Run เพื่อ retry ได้
+- **CI ทดสอบลาก scene ระหว่างรอ focus:** ควบคุมเวลาของ fixture ให้ pointer-down เริ่มใน pending window จริง โดยคงพิกัด ผลคำนวณ จำนวน action และ camera assertions เดิมทุกข้อ ไม่มีการแก้ production scene/camera

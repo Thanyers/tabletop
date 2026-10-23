@@ -233,7 +233,6 @@ export class TableComputeOrchestrator {
   }
 
   private async drain(workspaceId: string, epoch: number): Promise<void> {
-    const failedInThisDrain = new Set<string>();
     while (!this.closed) {
       const snapshot = await this.options.getSnapshot(workspaceId);
       if (snapshot.workspace.epoch !== epoch) return;
@@ -288,7 +287,6 @@ export class TableComputeOrchestrator {
             await this.update(snapshot.ownerActorId, workspaceId, queued.runId, 'failed', 'COMPUTE_FAILED');
           } else {
             await this.startAndRun(snapshot.ownerActorId, workspaceId, epoch, queued, module, plan);
-            failedInThisDrain.add(queued.runId);
           }
           progressed = true;
           break;
@@ -308,8 +306,7 @@ export class TableComputeOrchestrator {
         if (currentRun?.inputHash === plan.inputHash) continue;
         const failedSameInput = latest?.status === 'failed' && latest.inputHash === plan.inputHash
           && latest.moduleVersion === module.version && latest.runtimeProfile === (module.runtimeProfile ?? 'tabletop-compute-1')
-          && latest.dataRevision === state.dataRevision && latest.ruleRevision === state.ruleRevision
-          && (latest.errorCode !== 'COMPUTE_UNAVAILABLE' || failedInThisDrain.has(latest.runId));
+          && latest.dataRevision === state.dataRevision && latest.ruleRevision === state.ruleRevision;
         if (failedSameInput) continue;
         this.options.onWorkScheduled?.(workspaceId);
         await this.options.executeTrusted(planningSnapshot.context.actorId, workspaceId, 'table.compute.queue', {
