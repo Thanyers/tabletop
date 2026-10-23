@@ -1,0 +1,1 @@
+- **แจ้งเตือนเมื่อออกรุ่น (CD003):** หลัง deploy production สำเร็จ pipeline สร้าง GitHub Release `vX.Y.Z` พร้อมข้อความจากหัวข้อรุ่นใน CHANGELOG ให้เอง · คนที่ Watch repo แบบ Releases จะได้อีเมลแจ้งทุกรุ่น · สร้างไม่สำเร็จจะแค่เตือน ไม่กระทบ production ที่ deploy แล้ว

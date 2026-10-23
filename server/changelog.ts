@@ -68,6 +68,16 @@ export function cutRelease(input: CutInput): CutResult {
   };
 }
 
+/** The body of one cut `## <version>` section (summary + entries), for GitHub Release notes. */
+export function releaseNotes(changelog: string, version: string): string | null {
+  const heading = new RegExp(`^## ${version.replaceAll('.', '\\.')}(?: |$).*$`, 'mu').exec(changelog);
+  if (!heading) return null;
+  const start = heading.index + heading[0].length;
+  const next = changelog.slice(start).search(/^## /mu);
+  const body = (next < 0 ? changelog.slice(start) : changelog.slice(start, start + next)).trim();
+  return body || null;
+}
+
 // ---- CLI ---------------------------------------------------------------------------------
 
 async function readFragments(root: string): Promise<Fragment[]> {
@@ -102,6 +112,12 @@ async function main(argv: string[]): Promise<number> {
     console.log(`changelog.d: ${fragments.length} fragment(s) OK`);
     return 0;
   }
+  if (command === 'notes' && version) {
+    const notes = releaseNotes(await readFile(join(root, 'CHANGELOG.md'), 'utf8'), version);
+    if (!notes) { console.error(`CHANGELOG.md has no ## ${version} section`); return 1; }
+    process.stdout.write(`${notes}\n`);
+    return 0;
+  }
   if (command === 'cut' && version) {
     const flag = (name: string) => { const index = argv.indexOf(name); return index >= 0 ? argv[index + 1] ?? '' : ''; };
     const date = flag('--date') || new Date().toISOString().slice(0, 10);
@@ -112,7 +128,7 @@ async function main(argv: string[]): Promise<number> {
     console.log(`CHANGELOG.md: ## ${version} — ${date} with ${result.entries} entr${result.entries === 1 ? 'y' : 'ies'}; removed ${fragments.length} fragment(s). Review, then commit.`);
     return 0;
   }
-  console.error('Usage: npx tsx server/changelog.ts check | cut X.Y.Z --summary "<bump, why, rollback target>" [--date YYYY-MM-DD]');
+  console.error('Usage: npx tsx server/changelog.ts check | notes X.Y.Z | cut X.Y.Z --summary "<bump, why, rollback target>" [--date YYYY-MM-DD]');
   return 2;
 }
 
