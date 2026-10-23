@@ -74,6 +74,8 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F066-T11 | แก้ actual hosted runner และกัน failure retry loop ก่อน release | `doing` | Codex | `fix/F066-hosted-runtime-repair` | cloudflare compute runner/orchestration + focused tests | — | staging4c4ce93 ได้ COMPUTE_UNAVAILABLE; ห้าม deploy prod ก่อน actual execution ผ่าน |
+| F066-T10 | แก้เฉพาะเคส generated-scene drag ที่บล็อก release ตามอนุมัติผู้ใช้ | `doing` | Codex | `fix/F066-hosted-runtime-repair` | generated-scene regression และสาเหตุโดยตรงเท่านั้น | — | ผู้ใช้อนุญาตขยายขอบเขตเฉพาะ gate; คง assertions ทุกข้อ |
 | F066-T9 | รักษา default ช่องใหม่และแก้ deployment acceptance fixtures | `review` | Codex | `fix/F066-deploy-acceptance` | domain/table.ts + regression, browser fixtures, verification docs | — | PR #244; domain25/25, typecheck/lint, generative4rooms/8calls/0errors, Workers35checks/37calls/0errors; independent review ไม่มี P1/P2 |
 | F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
 | F066-T8 | เปิด hosted JS/Python แก้ CSV derived field และคำถาม library แล้ว deploy/ทดสอบซ้ำ | `review` | Codex | `fix/F066-hosted-compute` | deployment config/workflows, compute runner, domain/provider regressions, acceptance docs | — | candidate unit845/CF177 + real Linux engines + local faults7ผ่าน; Paidเปิดแล้ว รอpipeline/hostedretest หลายบัญชีBLOCKED; ไม่แตะ scene/camera |
