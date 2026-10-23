@@ -160,7 +160,12 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       expect(input.kind).toBe('table');
       const reply = scenarioForInput(input);
       const attached = input.sources?.[0];
-      if (reply.id === 'shadow') {
+      const fixture = sourceFixtures[reply.id];
+      if (reply.edit && fixture) {
+        // Dev #194: the active rules already cite the file, so an edit sends only its id and name.
+        expect(input.sources).toEqual([]);
+        expect((input.importedSources ?? []).map((item) => item.filename)).toEqual([fixture.filename]);
+      } else if (reply.id === 'shadow') {
         expect(attached?.filename).toBe(sourceFixtures.shadow.filename);
         expect(attached?.text).toBe(sourceFixtures.shadow.text);
       } else if (reply.id === 'novel') {
