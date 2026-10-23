@@ -150,7 +150,17 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS room_directory_outbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT, actor_id TEXT NOT NULL, epoch INTEGER NOT NULL, active INTEGER NOT NULL
   )`,
+  // F073: pictures pinned on the canvas. Table state holds only the id; additive table, older rooms simply have none.
+  `CREATE TABLE IF NOT EXISTS room_images (
+    workspace_id TEXT NOT NULL, id TEXT NOT NULL, epoch INTEGER NOT NULL, mime TEXT NOT NULL, bytes BLOB NOT NULL,
+    size INTEGER NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(workspace_id, id)
+  )`,
 ] as const;
+
+/** F073: an uploaded picture no card points at is kept this long, so the card command can follow the upload. */
+export const UNPINNED_IMAGE_GRACE_MS = 10 * 60_000;
+
+export interface StoredCanvasImage { mime: string; bytes: Uint8Array; createdBy: string }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -379,6 +389,7 @@ export class RoomRepository implements WorkspaceRepository {
       this.storage.sql.exec('DELETE FROM room_invitations WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec('DELETE FROM room_invite_links WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec('DELETE FROM room_approvals WHERE workspace_id = ?', workspace.id);
+      this.storage.sql.exec('DELETE FROM room_images WHERE workspace_id = ?', workspace.id);
       this.storage.sql.exec(
         `UPDATE model_jobs SET status = 'revoked',
            data = CASE WHEN json_extract(data, '$.kind') = 'table-assistant'
@@ -444,6 +455,37 @@ export class RoomRepository implements WorkspaceRepository {
   async expireWorkspaces(_now: number, _limit?: number): Promise<number> {
     // Room lifetimes are persistent in the hosted deployment; expiry is disabled here.
     return 0;
+  }
+
+  /**
+   * F073: store one picture for a table. Pictures no card uses are dropped once their grace period ends; the
+   * allowance counts pictures on cards plus recent uploads still waiting for their card.
+   */
+  async storeCanvasImage(input: { workspaceId: string; epoch: number; id: string; mime: string; bytes: Uint8Array; actorId: string; now: number; pinnedIds: ReadonlySet<string>; limit: number }): Promise<void> {
+    await this.serialized(async () => {
+      this.storage.transactionSync(() => {
+        const rows = this.rows('SELECT id, epoch, created_at FROM room_images WHERE workspace_id = ?', input.workspaceId);
+        for (const row of rows) {
+          const id = readString(row.id, 'id');
+          const stale = readNumber(row.epoch, 'epoch') !== input.epoch
+            || (!input.pinnedIds.has(id) && readNumber(row.created_at, 'created_at') + UNPINNED_IMAGE_GRACE_MS < input.now);
+          if (stale) this.storage.sql.exec('DELETE FROM room_images WHERE workspace_id = ? AND id = ?', input.workspaceId, id);
+        }
+        const existing = this.rows('SELECT id FROM room_images WHERE workspace_id = ?', input.workspaceId).map((row) => readString(row.id, 'id'));
+        if (existing.includes(input.id)) return;
+        if (existing.length >= input.limit) throw new AuthorityError('TABLE_LIMIT', `A table can hold at most ${input.limit} images.`, 409);
+        this.storage.sql.exec(
+          `INSERT INTO room_images(workspace_id, id, epoch, mime, bytes, size, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          input.workspaceId, input.id, input.epoch, input.mime, input.bytes, input.bytes.byteLength, input.actorId, input.now,
+        );
+      });
+    });
+  }
+
+  readCanvasImage(workspaceId: string, epoch: number, id: string): StoredCanvasImage | null {
+    const row = this.rows('SELECT mime, bytes, created_by FROM room_images WHERE workspace_id = ? AND epoch = ? AND id = ?', workspaceId, epoch, id)[0];
+    if (!row || !(row.bytes instanceof ArrayBuffer)) return null;
+    return { mime: readString(row.mime, 'mime'), bytes: new Uint8Array(row.bytes), createdBy: readString(row.created_by, 'created_by') };
   }
 
   async listPendingArtifactCleanup(limit = 100): Promise<PendingArtifactCleanup[]> {

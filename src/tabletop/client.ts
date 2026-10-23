@@ -1,3 +1,4 @@
+import { IMAGE_ID_PATTERN } from './shared/canvas-images';
 import { MAX_TABLE_MEMBER_SEATS, type CommandAck, type CommandEnvelope, type SessionView, type WorkspaceView } from './shared/contracts';
 import type { ModelFailureDetails, ModelJobProgress, ModelJobResearch } from './shared/model-job-progress';
 import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
@@ -71,6 +72,8 @@ export interface TabletopCapabilities {
   tableAssistant?: { available: boolean; reason?: string };
   /** Runtime bindings the Worker can actually use for generated table compute. */
   compute?: ComputeRuntimeCapabilities;
+  /** F073: the server stores pictures for image cards (Worker); the Node guest runtime does not. */
+  images?: boolean;
   model: { enabled: boolean; reason: string };
 }
 
@@ -224,7 +227,7 @@ export class TabletopClient {
       tableAssistant: { available: false, reason: unavailableAssistantReason },
       model: { enabled: false, reason: 'AI proposals are not configured on this local server.' },
     };
-    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; compute?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    const body = await readResponse<{ uploads?: unknown; images?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; compute?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
     const tableAssistant = body.tableAssistant;
     const validTableAssistant = tableAssistant === undefined || (
       typeof tableAssistant === 'object'
@@ -241,6 +244,7 @@ export class TabletopClient {
       uploads: body.uploads,
       ...(typeof body.tableReadOnly === 'boolean' ? { tableReadOnly: body.tableReadOnly } : {}),
       ...(body.inviteLinks === true ? { inviteLinks: true } : {}),
+      ...(body.images === true ? { images: true } : {}),
       ...(typeof body.memberSeats === 'number' && Number.isInteger(body.memberSeats) && body.memberSeats >= 1
         ? { memberSeats: Math.min(body.memberSeats, MAX_TABLE_MEMBER_SEATS) } : {}),
       tableAssistant: assistantCapability
@@ -549,6 +553,28 @@ export class TabletopClient {
       throw new ApiFailure('The request could not be sent. Check your connection and try again.', 0);
     }
     return readResponse<T>(response);
+  }
+
+  /** F073: upload one resized picture; the id comes from its bytes, so retrying the same picture is safe. */
+  async uploadCanvasImage(view: Pick<WorkspaceView, 'id'>, image: Blob): Promise<string> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch(`/api/workspaces/${encodeURIComponent(view.id)}/images`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': image.type || 'application/octet-stream', 'x-csrf-token': this.csrfToken },
+          body: image,
+        });
+      } catch (error) {
+        if (attempt === 0 && networkFailure(error)) continue;
+        throw new ApiFailure('The connection dropped while sending the image. You can safely try again.', 0);
+      }
+      const body = await readResponse<{ imageId?: unknown }>(response);
+      if (typeof body.imageId !== 'string' || !IMAGE_ID_PATTERN.test(body.imageId)) throw new ApiFailure('The image upload could not be verified.', 502);
+      return body.imageId;
+    }
+    throw new ApiFailure('The connection dropped while sending the image. You can safely try again.', 0);
   }
 
   private async postWithRetry<T>(path: string, body: unknown): Promise<T> {
