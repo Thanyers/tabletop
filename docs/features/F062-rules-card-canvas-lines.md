@@ -1,11 +1,11 @@
-# F061 — การ์ด Rules อ่านรู้เรื่อง + เส้น canvas ไม่ทับการ์ดหรือกันเอง
+# F062 — การ์ด Rules อ่านรู้เรื่อง + เส้น canvas ไม่ทับการ์ดหรือกันเอง
 
 | | |
 | --- | --- |
-| สถานะ | `review` |
+| สถานะ | `done` (merge เข้า `dev` แล้ว #198 @ `52e4b9a`) |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | MINOR — เปลี่ยนหน้าตา canvas แต่ rollback ได้ด้วย git revert; ไม่มี migration/secret/binding |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F061-T1` |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F062` (งานเสร็จแล้ว ลบแถวงานออกตามกติกา) |
 
 ## ทำไม
 
@@ -39,7 +39,7 @@
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
-| F061-T1 | การ์ด Rules + routing เส้น + เอกสาร | `npm run typecheck`, `npm test`, `npm run lint` (0 error), `npm run build`, `npm run test:r1:browser` (7), `npm run test:cloudflare:browser` (32) ผ่าน · ตรวจในเบราว์เซอร์จริง: 0 เส้นทับการ์ด, 0 คู่เส้นทับกัน, มี bridge ที่จุดตัด, การ์ดไม่ overflow ที่ 390px |
+| F062-T1 | การ์ด Rules + routing เส้น + เอกสาร (เสร็จแล้ว) | `npm run typecheck`, `npm test`, `npm run lint` (0 error), `npm run build`, `npm run test:r1:browser` (7), `npm run test:cloudflare:browser` (32) ผ่าน · ตรวจในเบราว์เซอร์จริง: 0 เส้นทับการ์ด, 0 คู่เส้นทับกัน, มี bridge ที่จุดตัด, การ์ดไม่ overflow ที่ 390px |
 
 ## คำถามเปิด
 
