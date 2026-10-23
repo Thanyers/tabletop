@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — เพิ่ม assistant capability แต่ลืม strict mock ของ browser
+- **What happened:** F066-T8 unit ผ่าน แต่ Workers browser ถาม Available rule แล้วได้ `MODEL_PROVIDER_HTTP_ERROR` เพราะ synthetic outbound fixture ปฏิเสธ request
+- **Root cause:** เพิ่ม `computeCapabilities` ใน assistant context และปรับ unit assertion แล้ว แต่ `tests/cloudflare-browser.mjs` ยังตรวจ key set เดิม จึงกลายเป็น error ของ provider จำลอง
+- **Correct behavior:** เมื่อแก้ provider payload ให้ค้น strict key assertions ใน unit และ browser fixtures พร้อมกัน เพิ่ม key และตรวจค่า capability จริงของ fixture โดยคง redaction/privacy assertions เดิม แล้วรัน Workers browser ก่อนอ้างว่าชุดรวมผ่าน
+
 ### 2026-10-23 — Docker สำเร็จแต่ Container API ปฏิเสธ instance
 - **What happened:** build image และ Node/Docker integration ผ่าน แต่ Linux Workers Container API smoke ของ F066-T8 รัน Python ไม่ได้: `Invalid container instance type` ก่อนเริ่ม process
 - **Root cause:** ใช้ `instance: 'basic'` จากรายการขนาดทั่วไปโดยไม่ได้รันผ่าน Durable Object API ของเวอร์ชันที่ล็อกไว้ ซึ่งรับชุดชื่อไม่เหมือนกัน

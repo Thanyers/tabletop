@@ -492,16 +492,16 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
       const rows = records[previousCollection.id];
       for (const field of addedFields) {
         const restoredFormula = state.program.computedColumns?.find(column => column.collection === previousCollection.id && column.id === field.id);
-        for (const row of rows) {
-          if (restoredFormula) {
+        if (restoredFormula) {
+          for (const row of rows) {
             const saved = row.values[field.id];
             const current = evaluateComputedColumn(restoredFormula, row.values);
             assert(saved !== undefined && saved === current && validValue(field, saved), 'TABLE_PRESERVE_DATA', `Cannot restore ${field.label}: its saved value does not match its current formula; no rows were changed.`);
           }
-          if (validValue(field, row.values[field.id])) continue;
-          assert(!field.required || field.default !== undefined, 'TABLE_PRESERVE_DATA', `A default is required to add ${field.label} to existing records.`);
-          if (field.default !== undefined) row.values[field.id] = structuredClone(field.default);
+          continue;
         }
+        assert(!field.required || rows.length === 0 || field.default !== undefined, 'TABLE_PRESERVE_DATA', `A default is required to add ${field.label} to existing records.`);
+        if (field.default !== undefined) for (const row of rows) row.values[field.id] = structuredClone(field.default);
       }
     }
   }

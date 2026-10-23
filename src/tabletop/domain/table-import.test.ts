@@ -409,6 +409,22 @@ describe('table.importRows', () => {
     expect(result!.state.sources).toEqual(before.sources);
   });
 
+  it('applies an optional field default to existing rows when the field is added', () => {
+    const imported = handleTableCommand(active(), 'table.importRows', {
+      collection: 'items', rows: [{ sku: 'CAM-1', qty: 3 }],
+    }, actorContext())!.state;
+    const change = inventoryChange() as {
+      program: { collections: Array<{ fields: Array<Record<string, unknown>> }> };
+      initialRecords: Record<string, unknown[]>;
+    };
+    change.program.collections[0]!.fields.push({ id: 'discount', label: 'Discount', type: 'number', required: false, default: 10 });
+    change.initialRecords = {};
+
+    const updated = applyTableChange(imported, parseBoundedTableChange(change));
+
+    expect(updated.records.items[0]?.values.discount).toBe(10);
+  });
+
   it('adds rows after existing records without touching them', () => {
     const seeded = applyTableChange(createTableState(), parseBoundedTableChange({
       ...(inventoryChange() as { program: unknown }),
