@@ -32,6 +32,28 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-app input, .tt-app select, .tt-app textarea { max-width: 100%; color: var(--tt-ink); font: inherit; }
 .tt-app input:focus-visible, .tt-app select:focus-visible, .tt-app textarea:focus-visible { outline: 2px solid #315eb0; outline-offset: 2px; }
 
+/* F073 — an open <select> menu must be painted by the page, not by an OS popup window.
+   On Windows at display scaling above 100% the native <select> menu is a separate OS window;
+   that window is what paints the growing black box and stops the tab responding (report
+   2026-10-23, 125% scaling, every dropdown). Chromium's customizable select keeps the option
+   list inside the page at every scale. Browsers without it ignore this block and keep the
+   native control and menu. */
+@supports (appearance: base-select) {
+  .tt-app select, .tt-chooser select, .tt-account-gate select, .tt-loading select, .tt-failure select { appearance: base-select; }
+  /* The chevron the rest of the app draws, in place of the user-agent triangle. */
+  .tt-app select::picker-icon, .tt-chooser select::picker-icon, .tt-account-gate select::picker-icon, .tt-loading select::picker-icon, .tt-failure select::picker-icon { content: ''; width: 7px; height: 7px; margin-left: 6px; transform: translateY(-2px) rotate(45deg); border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; opacity: .75; }
+  /* The list: paper, quiet line, soft lift — the same furniture as the app's other menus. */
+  .tt-app select::picker(select), .tt-chooser select::picker(select), .tt-account-gate select::picker(select), .tt-loading select::picker(select), .tt-failure select::picker(select) { appearance: base-select; max-height: min(320px, 52vh); overflow: auto; padding: 4px; border: 1px solid var(--tt-line, #dfe6e5); border-radius: 10px; background: #fff; color: var(--tt-ink, #243548); box-shadow: 0 14px 34px #24354824; font: inherit; }
+  .tt-app select option, .tt-chooser select option, .tt-account-gate select option, .tt-loading select option, .tt-failure select option { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font: inherit; }
+  .tt-app select option:hover, .tt-chooser select option:hover, .tt-account-gate select option:hover, .tt-loading select option:hover, .tt-failure select option:hover,
+  .tt-app select option:focus-visible, .tt-chooser select option:focus-visible, .tt-account-gate select option:focus-visible, .tt-loading select option:focus-visible, .tt-failure select option:focus-visible { background: var(--tt-canvas, #f2f4f5); outline: 0; }
+  .tt-app select option:checked, .tt-chooser select option:checked, .tt-account-gate select option:checked, .tt-loading select option:checked, .tt-failure select option:checked { color: var(--tt-moss, #24796b); font-weight: 600; }
+  .tt-app select option::checkmark, .tt-chooser select option::checkmark, .tt-account-gate select option::checkmark, .tt-loading select option::checkmark, .tt-failure select option::checkmark { order: -1; color: var(--tt-moss, #24796b); }
+  /* The closed control sizes to the selected option once the page owns the menu; the table
+     filters must keep the width of their widest option so a change does not reflow the row. */
+  .tt-chooser .tt-table-filters select { min-inline-size: max-content; }
+}
+
 .tt-topbar {
   z-index: 30;
   display: flex;

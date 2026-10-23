@@ -14,7 +14,7 @@ export { Room } from './room.js';
 export { Billing } from './billing.js';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|invite-link|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}))?$`, 'u');
+const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|invite-link|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}|images(?:/img_[0-9a-f]{32})?))?$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
 const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
 const joinLinkSchema = z.strictObject({ link: z.string().max(100) });
@@ -140,7 +140,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && path === '/api/capabilities') {
     const enabled = Boolean(env.DEEPSEEK_KEY);
     const compute = computeRuntimeCapabilities({ javascript: Boolean(env.COMPUTE_LOADER), python: env.TABLE_COMPUTE_PYTHON === 'enabled' });
-    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), compute, model: { enabled,
+    return Response.json({ uploads: false, images: true, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), compute, model: { enabled,
       reason: enabled ? 'DeepSeek Flash proposes changes for your review.' : 'AI is awaiting a provider key.' } });
   }
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);

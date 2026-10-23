@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { recordChoiceLabels, recordSummary } from './record-summary';
 import { Pause, Play } from 'lucide-react';
 import type { ActorContext } from '../shared/contracts';
 import type { ControlDescriptor, GenerativeCanvas, GenerativeScalar, GenerativeViewDescriptor } from '../shared/generative-contracts';
-import type { TableAction, TableParameter, TableRecord, TableState, TableValue } from '../shared/table-contracts';
+import type { TableAction, TableParameter, TableState, TableValue } from '../shared/table-contracts';
 import { DICE_LIMITS, diceTotalFitsParameter, diePips, rollDice, type DiceRoll } from '../shared/dice';
 import { rollNotation } from '../shared/roll';
 import { handleTableCommand } from '../domain/table';
@@ -581,6 +582,8 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
   const [drafts, setDrafts] = useState<Record<string, Record<string, TableValue>>>({});
   // The form whose last submit was missing a value, so it can say so instead of doing nothing.
   const [incomplete, setIncomplete] = useState<string | null>(null);
+  // F075: what the last press of each control did, so a quiet success still shows on the card that was pressed.
+  const [done, setDone] = useState<Record<string, string>>({});
   const draftRef = useRef(drafts);
   const submissionGate = useRef<ControlSubmissionGate | null>(null);
   if (!submissionGate.current) submissionGate.current = createControlSubmissionGate();
@@ -621,6 +624,7 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
     const ownerId = `control:${control.descriptor.id}`;
     committedRanges.current.delete(control.descriptor.id);
     // Start from the shown defaults and shared values, so fields the person did not touch still count.
+    setDone((current) => { const next = { ...current }; delete next[control.descriptor.id]; return next; });
     const next = { ...controlValuesFor(control, action), [parameterId]: value };
     draftRef.current = { ...draftRef.current, [control.descriptor.id]: next };
     setDrafts(draftRef.current);
@@ -642,6 +646,13 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
     try {
       committed = await onCommit(action, inputs, `control:${id}`);
       if (committed) {
+        const touched = action.parameters.flatMap((parameter) => {
+          if (parameter.type !== 'record') return [];
+          const row = state.records[parameter.collection ?? '']?.find((record) => record.id === inputs[parameter.id]);
+          // Yes/no fields are left out: they show the value from before this press.
+          return row ? [recordSummary(row, state.program?.collections.find((collection) => collection.id === parameter.collection), undefined, { omitYesNo: true })] : [];
+        });
+        setDone((current) => ({ ...current, [id]: `Done: ${action.title}${touched.length ? ` — ${touched.join('; ')}` : ''}` }));
         const next = { ...draftRef.current };
         delete next[id];
         draftRef.current = next;
@@ -678,10 +689,10 @@ function ControlsView({ projected, state, workspaceView, previewOnly, sandboxEna
         void commitControl(control, action, inputs);
       };
       return <div className="tt-generated-control" key={descriptor.id}>
-        {descriptor.kind === 'button' && <div className="tt-generated-control__button"><button type="button" className="tt-button tt-button--primary" disabled={!enabled} title={reason || undefined} onClick={() => action && void commitControl(control, action, resolvedActionInputs(control, controlValues, action))}>{descriptor.label}</button>{reason && <small role="status">{reason}</small>}</div>}
+        {descriptor.kind === 'button' && <div className="tt-generated-control__button"><button type="button" className="tt-button tt-button--primary" disabled={!enabled} title={reason || undefined} onClick={() => action && void commitControl(control, action, resolvedActionInputs(control, controlValues, action))}>{descriptor.label}</button>{reason && <small role="status">{reason}</small>}{!reason && done[descriptor.id] && <small className="tt-table-action__done" role="status">{done[descriptor.id]}</small>}</div>}
         {descriptor.kind === 'form' && action && <form className="tt-table-action tt-generated-control__form" onSubmit={event => submit(event, control, action)}><header><span className="tt-table-action__glyph">⌑</span><span><strong>{descriptor.label}</strong><small>{action.description}</small></span></header><div className="tt-table-action__inputs">{action.parameters.filter(parameter => descriptor.inputs[parameter.id]?.kind === 'control').map(parameter => parameter.type === 'roll'
           ? <RollParameterControl key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} view={workspaceView} actionId={action.id} parameter={parameter} disabled={!enabled} onRoll={() => { void onRoll(action.id, parameter.id); }} />
-          : <ControlParameter key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} parameter={parameter} state={state} value={controlValues[parameter.id] ?? initialParameterValue(parameter)} disabled={!enabled} onChange={value => updateDraft(control, action, parameter.id, value)} />)}</div>{reason && <p className="tt-table-action__disabled-reason" role="status">{reason}</p>}{!reason && incomplete === descriptor.id && <p className="tt-table-action__disabled-reason" role="alert">{missingRoll ? 'กด “ทอย” ให้ server ทอยค่าของแอ็กชันนี้ก่อน' : 'Fill in every field with a value in range, then send again.'}</p>}<button type="submit" className="tt-button tt-button--primary" disabled={!enabled}>{descriptor.label}</button></form>}
+          : <ControlParameter key={parameter.id} id={controlId(workspaceView, `${descriptor.id}-${parameter.id}`)} parameter={parameter} state={state} value={controlValues[parameter.id] ?? initialParameterValue(parameter)} disabled={!enabled} onChange={value => updateDraft(control, action, parameter.id, value)} />)}</div>{reason && <p className="tt-table-action__disabled-reason" role="status">{reason}</p>}{!reason && incomplete === descriptor.id && <p className="tt-table-action__disabled-reason" role="alert">{missingRoll ? 'กด “ทอย” ให้ server ทอยค่าของแอ็กชันนี้ก่อน' : 'Fill in every field with a value in range, then send again.'}</p>}{!reason && incomplete !== descriptor.id && done[descriptor.id] && <p className="tt-table-action__done" role="status">{done[descriptor.id]}</p>}<button type="submit" className="tt-button tt-button--primary" disabled={!enabled}>{descriptor.label}</button></form>}
         {descriptor.kind === 'slider' && action && <div className="tt-generated-control__range"><label htmlFor={id}>{descriptor.label}<output>{formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))}</output></label><input id={id} type="range" min={descriptor.min} max={descriptor.max} step={descriptor.step ?? 'any'} value={Number(controlValues[descriptor.parameter] ?? descriptor.min)} disabled={!enabled} onChange={event => updateDraft(control, action, descriptor.parameter, Number(event.currentTarget.value))} onPointerDown={() => committedRanges.current.delete(descriptor.id)} onKeyDown={event => { if (isRangeCommitKey(event.key)) committedRanges.current.delete(descriptor.id); }} onPointerUp={commitRange} onKeyUp={event => { if (isRangeCommitKey(event.key)) commitRange(); }} onBlur={commitRange} aria-valuetext={formatNumber(Number(controlValues[descriptor.parameter] ?? descriptor.min))} />{reason && <small role="status">{reason}</small>}</div>}
         {descriptor.kind === 'toggle' && action && <label className="tt-generated-control__toggle"><span>{descriptor.label}</span><input type="checkbox" checked={Boolean(controlValues[descriptor.parameter])} disabled={!enabled} onChange={event => { const value = event.currentTarget.checked; updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }} />{reason && <small role="status">{reason}</small>}</label>}
         {descriptor.kind === 'select' && action && <label className="tt-generated-control__select" htmlFor={id}>{descriptor.label}<select id={id} value={encodeValue(controlScalar(controlValues[descriptor.parameter], descriptor.options[0]?.value ?? ''))} disabled={!enabled} onChange={event => { const value = decodeValue(event.currentTarget.value); updateDraft(control, action, descriptor.parameter, value); const inputs = resolvedActionInputs(control, { ...controlValues, [descriptor.parameter]: value }, action); void commitControl(control, action, inputs); }}>{descriptor.options.map((option, index) => <option value={encodeValue(option.value)} key={`${descriptor.id}-${index}`}>{option.label}</option>)}</select>{reason && <small role="status">{reason}</small>}</label>}
@@ -881,7 +892,9 @@ function ControlParameter({ id, parameter, state, value, disabled, onChange }: {
   if (parameter.type === 'boolean') return <label htmlFor={id}>{parameter.label}<span className="tt-table-action__boolean"><input id={id} type="checkbox" checked={Boolean(value)} disabled={disabled} onChange={event => onChange(event.currentTarget.checked)} /> Yes</span></label>;
   if (parameter.type === 'record') {
     const rows = state.records[parameter.collection ?? ''] ?? [];
-    return <label htmlFor={id}>{parameter.label}<select id={id} value={String(value ?? '')} disabled={disabled} required onChange={event => onChange(event.currentTarget.value)}><option value="">Choose a record</option>{rows.map(row => <option value={row.id} key={row.id}>{recordOptionLabel(row, state, parameter.collection ?? '')}</option>)}</select></label>;
+    // F075: options read as the row's own values, so similar rows can be told apart.
+    const labels = recordChoiceLabels(rows, state.program?.collections.find(collection => collection.id === parameter.collection));
+    return <label htmlFor={id}>{parameter.label}<select id={id} value={String(value ?? '')} disabled={disabled} required onChange={event => onChange(event.currentTarget.value)}><option value="">Choose a record</option>{rows.map(row => <option value={row.id} key={row.id}>{labels.get(row.id) ?? row.id}</option>)}</select></label>;
   }
   if (parameter.type === 'text' && parameter.choices?.length) return <label htmlFor={id}>{parameter.label}<select id={id} value={String(value ?? '')} disabled={disabled} required onChange={event => onChange(event.currentTarget.value)}><option value="">Choose…</option>{parameter.choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}</select></label>;
   return <label htmlFor={id}>{parameter.label}<input id={id} type={parameter.type === 'number' ? 'number' : 'text'} min={parameter.type === 'number' ? parameter.min : undefined} max={parameter.type === 'number' ? parameter.max : undefined} step={parameter.type === 'number' ? 'any' : undefined} maxLength={parameter.type === 'text' ? 500 : undefined} value={value === null ? '' : String(value)} disabled={disabled} required onChange={event => onChange(parameter.type === 'number' ? event.currentTarget.value === '' ? null : Number(event.currentTarget.value) : event.currentTarget.value)} /></label>;
@@ -948,11 +961,6 @@ function encodeValue(value: string | number | boolean): string { return JSON.str
 function decodeValue(value: string): string | number | boolean { return JSON.parse(value) as string | number | boolean; }
 function controlScalar(value: TableValue | undefined, fallback: string | number | boolean): string | number | boolean { return value === null || value === undefined || Array.isArray(value) ? fallback : value; }
 function isGenerativeScalar(value: EvaluatedControl['value']): value is GenerativeScalar { return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'; }
-function recordOptionLabel(record: TableRecord, state: TableState, collectionId: string): string {
-  const field = state.program?.collections.find(collection => collection.id === collectionId)?.fields[0];
-  const value = field ? record.values[field.id] : null;
-  return value === null || value === undefined || value === '' ? record.id : `${String(value)} · ${record.id}`;
-}
 function clamp(value: number, minimum: number, maximum: number): number { return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : minimum; }
 function isRangeCommitKey(key: string): boolean { return ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(key); }
 function formatNumber(value: number): string { return new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(Number.isFinite(value) ? value : 0); }

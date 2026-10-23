@@ -1,4 +1,5 @@
 import { viewerCan } from '../shared/permissions';
+import { recordChoiceLabels } from './record-summary';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { AlertCircle, Database, FilePlus2, Pencil, Play, Trash2, Users } from 'lucide-react';
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
@@ -737,7 +738,10 @@ function ActionForm({ view, action, state, currentSeat, members, busy, values, o
       const choices = parameter.choices ?? [];
       return <label key={parameter.id} htmlFor={id}>{parameter.label}
         {parameter.type === 'boolean' ? <span className="tt-table-action__boolean"><input id={id} type="checkbox" checked={Boolean(value)} disabled={busy !== null} onChange={(event) => onUpdate(action.id, parameter.id, event.target.checked)} /> Yes</span>
-          : parameter.type === 'record' ? <select id={id} value={String(value)} disabled={busy !== null} onChange={(event) => onUpdate(action.id, parameter.id, event.target.value)} required><option value="">Choose a record</option>{recordChoices.map((record) => <option value={record.id} key={record.id}>{recordLabel(record, state.program?.collections.find((collection) => collection.id === parameter.collection), members)}</option>)}</select>
+          : parameter.type === 'record' ? <select id={id} value={String(value)} disabled={busy !== null} onChange={(event) => onUpdate(action.id, parameter.id, event.target.value)} required><option value="">Choose a record</option>{(() => {
+            const labels = recordChoiceLabels(recordChoices, state.program?.collections.find((collection) => collection.id === parameter.collection), members);
+            return recordChoices.map((record) => <option value={record.id} key={record.id}>{labels.get(record.id) ?? record.id}</option>);
+          })()}</select>
             : parameter.type === 'text' && choices.length > 0 ? <select id={id} value={String(value)} disabled={busy !== null} onChange={(event) => onUpdate(action.id, parameter.id, event.target.value)} required><option value="">Choose…</option>{choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}</select>
               : <input id={id} type={parameter.type === 'number' ? 'number' : 'text'} min={parameter.type === 'number' ? parameter.min : undefined} max={parameter.type === 'number' ? parameter.max : undefined} step={parameter.type === 'number' ? 'any' : undefined} maxLength={parameter.type === 'text' ? 500 : undefined} value={String(value)} disabled={busy !== null} onChange={(event) => onUpdate(action.id, parameter.id, event.target.value)} required />}
       </label>;

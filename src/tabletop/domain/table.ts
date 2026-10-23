@@ -10,6 +10,7 @@ import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../
 import { generativeCanvasSchema, generativeExpressionSchema } from '../runtime/generative/schema';
 import { expressionWithinBounds, getGenerativeExpressionType, validateGenerativeProgram } from '../runtime/generative/validation';
 import { preserveCanvasViews } from '../runtime/generative/preserve';
+import { IMAGE_ID_PATTERN, MAX_TABLE_IMAGES } from '../shared/canvas-images';
 import { MAX_COMPUTED_COLUMNS, computedColumnProblems, computedProgramColumnProblems, evaluateComputedColumn, retainComputedColumns } from '../shared/computed-columns';
 import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
 import { computeInputBindingSchema, computeProgramProblems, computeRunRecordSchema, tableComputeProgramSchema, validateComputeOutputs, isComputeTableValue, COMPUTE_LIMITS, type ComputeRunRecord, type ComputeRuntimeProfile } from '../shared/table-compute';
@@ -26,6 +27,8 @@ const NOTE_COORD = z.number().finite().min(-90_000).max(90_000);
 const noteColor = z.enum(NOTE_COLORS);
 const noteText = z.string().max(MAX_NOTE_TEXT).refine(t => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/u.test(t), 'Use printable text only.');
 const noteId = z.string().regex(/^note_[a-z0-9_-]{6,40}$/u);
+/** F073: the id the image upload route returned; the bytes live in the room, never in table state. */
+const imageId = z.string().regex(IMAGE_ID_PATTERN);
 /** F037: notes are resizable; the paper grows but stays bounded so layout stays usable. */
 const noteWidth = z.number().int().min(160).max(480);
 const noteHeight = z.number().int().min(110).max(560);
@@ -778,16 +781,23 @@ function conditionPass(op: string, l: TableValue, r: TableValue): boolean {
 function handleNoteCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): { state: TableState; label: string } {
   const notes = state.notes ?? [];
   if (type === 'table.addNote') {
-    const input = parsePayload(z.strictObject({ text: noteText.optional(), color: noteColor.optional(), x: NOTE_COORD, y: NOTE_COORD, width: noteWidth.optional(), height: noteHeight.optional() }), payload);
-    assert(notes.length < MAX_TABLE_NOTES, 'TABLE_LIMIT', `A table can hold at most ${MAX_TABLE_NOTES} notes.`);
-    const id = `note_${ctx.hash(canonicalJson([ctx.actorId, ctx.now, input.text ?? '', input.x, input.y])).slice(0, 16)}`;
+    const input = parsePayload(z.strictObject({ text: noteText.optional(), color: noteColor.optional(), x: NOTE_COORD, y: NOTE_COORD, width: noteWidth.optional(), height: noteHeight.optional(), imageId: imageId.optional() }), payload);
+    // F073: picture cards have their own allowance, so pinning photos never uses up the room for text notes.
+    if (input.imageId) {
+      assert(notes.filter(note => note.imageId).length < MAX_TABLE_IMAGES, 'TABLE_LIMIT', `A table can hold at most ${MAX_TABLE_IMAGES} images.`);
+      assert(!notes.some(note => note.imageId === input.imageId), 'TABLE_DUPLICATE_NOTE', 'That image is already on the table.');
+    } else {
+      assert(notes.filter(note => !note.imageId).length < MAX_TABLE_NOTES, 'TABLE_LIMIT', `A table can hold at most ${MAX_TABLE_NOTES} notes.`);
+    }
+    const id = `note_${ctx.hash(canonicalJson([ctx.actorId, ctx.now, input.text ?? '', input.x, input.y, input.imageId ?? null])).slice(0, 16)}`;
     assert(!notes.some(note => note.id === id), 'TABLE_DUPLICATE_NOTE', 'That note already exists.');
     const note = {
       id, text: input.text ?? '', color: input.color ?? 'yellow' as const, x: input.x, y: input.y,
       width: input.width ?? NOTE_DEFAULT_WIDTH, height: input.height ?? NOTE_DEFAULT_HEIGHT,
       createdBy: ctx.actorId, createdAt: ctx.now, updatedAt: ctx.now,
+      ...(input.imageId ? { imageId: input.imageId } : {}),
     };
-    return { state: { ...structuredClone(state), notes: [...notes, note] }, label: 'Note added.' };
+    return { state: { ...structuredClone(state), notes: [...notes, note] }, label: input.imageId ? 'Image added.' : 'Note added.' };
   }
   if (type === 'table.updateNote') {
     const input = parsePayload(z.strictObject({ noteId, text: noteText.optional(), color: noteColor.optional(), width: noteWidth.optional(), height: noteHeight.optional() }), payload);
@@ -817,8 +827,11 @@ function handleNoteCommand(state: TableState, type: string, payload: unknown, ct
     };
   }
   const input = parsePayload(z.strictObject({ noteId }), payload);
-  assert(notes.some(note => note.id === input.noteId), 'TABLE_NOTE', 'Note not found.');
-  return { state: { ...structuredClone(state), notes: notes.filter(note => note.id !== input.noteId) }, label: 'Note removed.' };
+  const target = notes.find(note => note.id === input.noteId);
+  assert(target, 'TABLE_NOTE', 'Note not found.');
+  // F073: a picture is removed only by whoever pinned it or the table owner.
+  if (target.imageId) assert(target.createdBy === ctx.actorId || ctx.role === 'owner', 'FORBIDDEN', 'Only the person who added this image or the table owner can remove it.');
+  return { state: { ...structuredClone(state), notes: notes.filter(note => note.id !== input.noteId) }, label: target.imageId ? 'Image removed.' : 'Note removed.' };
 }
 
 export interface TableCommandDecision {

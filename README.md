@@ -92,3 +92,13 @@ Tabletop เกิดจากความคิดว่า งาน ข้อ
 **[Bring your work to the table.](https://tabletop.ptchrr.workers.dev/)**
 
 [คู่มือผู้ใช้](docs/USER_GUIDE_TH.md) · [เอกสารสำหรับทีมพัฒนาและหลักฐานการทดสอบ](docs/README.md)
+
+## License
+
+Copyright (C) 2026 Tabletop contributors.
+
+Tabletop is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, version 3 only (`AGPL-3.0-only`).
+
+Tabletop is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full terms.
+
+Third-party components retain their own licenses. The [source repository](https://github.com/Thanyers/tabletop) includes the project source and build instructions.
