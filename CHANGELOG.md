@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **F064 สไลซ์ B เห็น "ค้นอะไร เจอที่ไหน" บนการ์ดร่าง (MINOR):** job view ของ draft ที่จบแล้วเพิ่ม `research` (queries ≤4 + sources ≤6 พร้อม title, url, date, authority) โดย `title`/`url`/`queries` ถูก redact ด้วย `redactString` + `createIdentityReplacements` ชุดเดียวกับ F050 **ก่อน** clamp · `safeExternalUrl()` บังคับ http/https + host มีจุด + ไม่มี credential ทั้งตอนเก็บและตอนอ่าน ⇒ `javascript:`/`data:` ถูกทิ้ง · เก็บครั้งเดียวตอนจบ job และ `parseModelJobResearch()` ตรวจซ้ำตอนอ่าน · การ์ดร่างที่จบแล้วมี `<details>Sources (N)</details>` (`data-testid="draft-sources"`) ลิงก์เปิดแท็บใหม่พร้อมวันที่และ authority; draft ที่ไม่ค้นไม่มีฟิลด์/บล็อกนี้ · ไม่มี migration/secret/binding; rollback = revert branch · ผลตรวจ Node 22.23.2: unit **764 passed / 1 skipped**, `test:cloudflare` **163/163**, `build` ผ่าน, `lint` 0 error / 105 warning
 - **เพดานคำขอร่างกฎเป็น 128 KiB (F066, MINOR):** สัมพันธ์กับเพดานไฟล์ 64 KiB (ไฟล์เต็มโควตา + อีก 64 KiB ให้กฎและข้อมูล) · เดิม 48 KB ซึ่งน้อยกว่าไฟล์ที่โต๊ะรับได้ จึงแนบไฟล์ได้แต่ร่างกฎไม่ได้ · เพดานทั้งคำขอและการจอง token ของ billing คำนวณจากค่าเดียวกัน · แชทถามตอบยังเป็นเพดานเดิม
 
 - **AI แก้โต๊ะใหญ่ได้เร็วและไม่ทำของเดิมหาย (F065, MINOR):** ตอนแก้โต๊ะที่มีอยู่ AI ส่งมาเฉพาะส่วนที่เพิ่ม/แก้/ลบ (table-patch) แล้วระบบรวมเข้ากับกฎเดิมก่อนตรวจครบทุกขั้นเหมือนเดิม · เดิม AI ต้องเขียนทั้งโต๊ะใหม่ทุกครั้ง โต๊ะใหญ่จึงช้าจนเกินเวลา หรือ AI ทิ้ง action เดิมไปเพื่อย่อคำตอบ · การสร้างโต๊ะใหม่ยังเหมือนเดิม

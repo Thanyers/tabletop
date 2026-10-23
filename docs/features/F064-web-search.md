@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — T1–T4 merge แล้ว (#207) · สไลซ์ A เปิด draft PR [#211](https://github.com/Thanyers/tabletop/pull/211) |
+| สถานะ | `review` — T1–T4 merge แล้ว (#207) · สไลซ์ A merge แล้ว (#211) · สไลซ์ B เปิด draft PR [#214](https://github.com/Thanyers/tabletop/pull/214) |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | MINOR — ใช้ `DEEPSEEK_KEY` เดิม ไม่มี secret/binding/migration ใหม่ |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F064-T*` |
@@ -25,7 +25,7 @@
 
 **รวม:** search adapter (normalize/rank/citation matching) · research tool loop แบบ bounded · ช่อง `research` ใน input ของ drafter + บรรทัดกำกับใน system prompt · env `TABLE_WEB_SEARCH=off` ปิดได้
 
-**ไม่รวม:** ให้ผลค้นเว็บกลายเป็น `program.evidence` (evidence ต้องอ้าง source ที่มีในโต๊ะ; ต้องออกแบบการ import source ก่อน) · UI แสดงแหล่งบนการ์ดร่าง · เปิด tool calling ในสตรีมร่างหลัก (research เป็นขั้นก่อนร่าง)
+**ไม่รวม:** ให้ผลค้นเว็บกลายเป็น `program.evidence` (evidence ต้องอ้าง source ที่มีในโต๊ะ; ต้องออกแบบการ import source ก่อน) · เปิด tool calling ในสตรีมร่างหลัก (research เป็นขั้นก่อนร่าง) · การแก้ไข/ลบแหล่งที่แสดงบนการ์ด (สไลซ์ B แสดงอย่างเดียว)
 
 ## ข้อเท็จจริงจากโค้ด (2026-10-23, `origin/dev` `c5c8803`)
 
@@ -58,6 +58,8 @@
 | F064-T5 | provider: `onProgress` ของ research | unit: event เป็น `searching → reading → done` และเงียบเมื่อไม่ค้น |
 | F064-T6 | worker: redact + bound + throttle บนช่อง progress เดิม | worker test: ไม่มีชื่อ/ID ของสมาชิก, ≤300 ตัวอักษร, `done` อยู่ต่อหลัง tick ถัดไป |
 | F064-T7 | client: บรรทัด live search + CSS | unit ของ `liveSearchLine` 4 เคส + `data-testid="draft-live-search"` |
+| F064-T8 | worker: เก็บ/redact/bound research metadata ต่อ job + ส่งใน job view | worker test: view มีเฉพาะแหล่ง http(s) ที่ redact แล้ว, ไม่มี key เมื่อไม่ค้น |
+| F064-T9 | client: `<details>Sources (N)</details>` + ลิงก์/วันที่/authority | unit ของ `draftSources` 4 เคส + `data-testid="draft-sources"` |
 
 ## สไลซ์ A — เห็นสดว่า "กำลังค้นอะไร เจออะไร" (2026-10-23)
 
@@ -139,3 +141,73 @@ Node **22.23.2** (รุ่นเดียวกับ CI) · branch `feat/F064-
 - **หลักฐานในตารางยังไม่ใช่หลักฐานของโต๊ะ**: ผลค้นใช้ประกอบการร่างเท่านั้น ไม่ได้เข้า `program.evidence` (ต้องทำระบบ import source ก่อน) — งานถัดไป
 - **ต้นทุน/เวลา**: เพิ่มได้ถึง 1 calls + 2 search ต่อการร่างหนึ่งครั้ง (วัดได้ 3–24s) ยังอยู่ในเพดาน 240s
 - **คุณภาพผลค้นไทย**: ดีกับแหล่งราชการ (authority 4) แต่บาง query คืนเอกสารไม่ตรง — validator จึงต้องกรอง/ตรวจเสมอ
+
+## สไลซ์ B — เห็น "ค้นอะไร เจอที่ไหน" บนการ์ดร่าง (2026-10-23)
+
+| | |
+| --- | --- |
+| สถานะ | `review` — draft PR [#214](https://github.com/Thanyers/tabletop/pull/214) |
+| branch | `feat/F064-sources-card` จาก `origin/dev` `d768927` |
+| เวอร์ชัน | MINOR — เพิ่มฟิลด์ optional ใน job view ที่จบแล้ว ไม่มี migration/secret/binding |
+
+### สิ่งที่ผู้ใช้เห็น
+
+การ์ดร่างที่จบแล้วมี `<details>Sources (N)</details>` — กางออกเห็นไตเติลเป็นลิงก์จริง (เปิดแท็บใหม่), วันที่ประกาศ และ authority 0–4 ต่อแหล่ง; draft ที่ไม่ค้นไม่มีบล็อกนี้
+
+### สัญญาที่เปลี่ยน
+
+job view ของ draft ที่จบแล้ว (`GET /api/workspaces/:id/model/:jobId`) เพิ่มฟิลด์ optional:
+
+```jsonc
+{
+  "status": "completed",
+  "candidateId": "…",
+  "research": {
+    "queries": ["VAT ไทย 2569"],
+    "sources": [
+      { "title": "ประกาศอัตรา VAT", "url": "https://www.thaigov.go.th/…", "date": "2026-07-26T16:00:00+00:00", "authority": 4 }
+    ]
+  }
+}
+```
+
+- ≤6 แหล่ง, ≤4 queries; `title` ≤200, `url` ≤500, `date` ≤40 ตัวอักษร, `authority` 0–4
+- `url` ต้องผ่าน `safeExternalUrl()` ทั้งตอนเก็บและตอนอ่าน: http/https เท่านั้น, host ต้องมีจุด, ห้ามมี username/password ⇒ `javascript:` / `data:` ถูกทิ้ง
+- worker redact `title`/`url`/`queries` ด้วย `redactString` + `createIdentityReplacements` ชุดเดียวกับ F050 **ก่อน** clamp; สร้างชุดแทนตัวตนไม่ได้ = ไม่เก็บ research เลย
+- เก็บครั้งเดียวตอนจบ job (clarification หรือ commit) ไม่ได้เขียนทุก progress tick
+- `parseModelJobResearch()` ตรวจซ้ำตอนอ่าน row · draft ที่ไม่ค้นและ draft ที่ล้มไม่มีฟิลด์นี้
+- ไม่มีทางเข้า `program.evidence`; response ของคำสั่งอื่นไม่เปลี่ยน
+
+### การตัดสินใจ
+
+| วันที่ | การตัดสินใจ | เหตุผล |
+| --- | --- | --- |
+| 2026-10-23 | เก็บ research metadata ตอนจบ job ไม่ใช่ทุก tick | รายการแหล่งไม่เปลี่ยนระหว่างร่าง และไม่ทำให้ job row โตทุก 900 ms |
+| 2026-10-23 | แสดงบนการ์ดร่างที่จบแล้วเท่านั้น | ระหว่างรอมีบรรทัด live search อยู่แล้ว; รายการเต็มมีประโยชน์ตอน review |
+| 2026-10-23 | ตรวจ URL ทั้งตอนเก็บและตอนอ่าน | `model_jobs.data` เป็น JSON อิสระ — ฝั่งอ่านต้องไม่เชื่อถือ row เก่าหรือถูกแก้ |
+| 2026-10-23 | ไม่ส่ง brief/summary ขึ้นการ์ด | ข้อความยาวจาก provider ไม่ใช่สิ่งที่ผู้ใช้ขอ และเพิ่มพื้นที่รั่วข้อมูลโดยไม่จำเป็น |
+| 2026-10-23 | web sources ยังไม่เข้า `program.evidence` | ต้องมีขั้น import + ยืนยัน `verified` ก่อน (สไลซ์ C) |
+
+### ผลตรวจสไลซ์ B
+
+Node **22.23.2** · branch `feat/F064-sources-card`
+
+| คำสั่ง | ผล |
+| --- | --- |
+| `npx vitest run src/tabletop/ui/table-chat-state.test.ts` | **31/31** — เพิ่ม 4 เคสของ `draftSources`/`formatSourceDate` |
+| `npm run test:cloudflare` | **163/163** (10 ไฟล์) — เพิ่ม mapping test ใน `ai.test.ts` และ worker test 2 เคส (view ที่ redact/ตัด `javascript:`/ไม่มี key เมื่อไม่ค้น) |
+| `npm test` | **764 passed / 1 skipped** |
+| `npm run build` | ผ่าน |
+| `npm run lint` | 0 error / 105 warning |
+| `node scripts/check-public-files.mjs` | 0 finding |
+
+**ui-gate บน harness ที่ใช้ `table-chat.css` + tokens จริง** (`test-results/f064-sources-harness.html`, collapsed + open): **16/16 measured checks ผ่าน** · overflow 280/320/414 = 0, contrast (light/dark), axe, touch targets, clipped/overlap, mobile-first, RTL ผ่าน · SKIP = DTCG token pairs (โปรเจกต์ใช้ CSS tokens ไม่ใช่ DTCG) + focus trap (ไม่มี dialog) · ภาพ: `docs/previews/f064-sources-{320,414}.jpg`
+
+**บั๊กที่เจอจาก gate และแก้แล้ว:** `display: grid` บน `<ul>` ภายใน `<details>` เป็น author rule ที่ทับ UA rule ที่ซ่อนเนื้อหาเมื่อยังไม่กาง ⇒ รายการโผล่ตลอดแม้ collapsed (เจอเป็น overlap 59% กับปุ่ม Review rules) แก้เป็นซ่อน explicit + `[open] > ul { display: grid }`
+
+### ความเสี่ยง / ข้อจำกัดสไลซ์ B
+
+- **ยังไม่ยืนยันด้วย browser suite แบบ end-to-end**: unit/worker + harness render จริง (16/16) ครบ แต่ยังไม่มี fixture ที่ stream research ผ่านเบราว์เซอร์ทั้งเส้น
+- **authority/date ไม่ได้ตรวจเนื้อหา**: เป็นค่าที่ผู้ให้บริการรายงาน ใช้บอกคุณภาพแหล่งเท่านั้น
+- **แหล่งที่แสดงไม่ใช่หลักฐานของโต๊ะ**: ยังอ้างใน `program.evidence` ไม่ได้และลบ/แก้ไม่ได้ในสไลซ์นี้
+- **ขนาด job row**: โตขึ้นไม่เกิน 6 แหล่ง (ไม่กี่ KB) ครั้งเดียวตอนจบ และถูกเขียนทับเมื่อ job ถูกเก็บกวาดตามรอบเดิม

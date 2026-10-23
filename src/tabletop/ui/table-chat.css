@@ -173,6 +173,20 @@
 /* Once research is done the line stops moving and reports what the draft actually used. */
 .tt-app .tt-chat-card__search[data-search-phase='done'] .tt-chat-card__search-line { color: var(--tt-moss); }
 
+/* F064 slice B: the sources a finished draft used. Bounded like the partial blocks, so a long title
+   wraps inside the card and a long list scrolls instead of widening it. */
+.tt-app .tt-chat-card__sources { justify-self: stretch; min-width: 0; border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium, 10px); background: var(--tt-paper); overflow: hidden; }
+.tt-app .tt-chat-card__sources > summary { padding: 6px 10px; color: var(--tt-ink); font-size: var(--tt-type-small, 12px); line-height: 16px; cursor: pointer; }
+.tt-app .tt-chat-card__sources > summary:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: -2px; }
+/* A closed <details> hides its children, but an author `display` would override that: the list is
+   therefore hidden explicitly and only laid out when the block is open. */
+.tt-app .tt-chat-card__sources > ul { display: none; gap: 8px; margin: 0; padding: 8px 10px; max-height: 200px; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--tt-line); list-style: none; }
+.tt-app .tt-chat-card__sources[open] > ul { display: grid; }
+.tt-app .tt-chat-card__sources li { display: grid; gap: 2px; min-width: 0; }
+.tt-app .tt-chat-card__sources a { color: var(--tt-moss); font-size: var(--tt-type-small, 12px); line-height: 16px; overflow-wrap: anywhere; }
+.tt-app .tt-chat-card__sources a:focus-visible { outline: 2px solid var(--tt-moss); outline-offset: 2px; }
+.tt-app .tt-chat-card__sources span { color: var(--tt-muted); font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 15px; }
+
 /* A card the next chat message is about. */
 .tt-app .tt-table-chat-bar__reference { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-1) var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
 .tt-app .tt-table-chat-bar__reference-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 0; padding: 0; list-style: none; }

@@ -1,6 +1,6 @@
 import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, tailWithin, type ModelFailureDetails, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, parseModelJobResearch, tailWithin, type ModelFailureDetails, type ModelJobResearch, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
 import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
@@ -308,4 +308,45 @@ export function liveSearchLine(search: ModelJobSearchProgress | undefined, maxQu
   return search.phase === 'reading'
     ? `🔎 กำลังค้น: ${query} · เจอ ${search.resultsCount}`
     : `🔎 กำลังค้น: ${query}`;
+}
+
+/** F064 slice B: how much of a source title the card shows before the row wraps. */
+export const DRAFT_SOURCE_TITLE_CHARS = 140;
+
+/** F064 slice B: one source row, already re-validated and re-bounded for display. */
+export interface DraftSource {
+  title: string;
+  url: string;
+  /** Publication date as a readable label, or an empty string when the provider had none. */
+  dateLabel: string;
+  /** 0-4, where 4 is an official source. */
+  authority: number;
+}
+
+/** F064 slice B: `26 Jul 2026`, or nothing when the provider gave no usable date. */
+export function formatSourceDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return '';
+  return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** F064 slice B: the collapsed label; the count tells a member whether it is worth opening. */
+export function draftSourcesLabel(count: number): string {
+  return `Sources (${count})`;
+}
+
+/**
+ * F064 slice B: the sources a finished draft shows, re-validated and re-bounded here as well, so an
+ * older or hostile job row can never render a link the server would refuse.
+ */
+export function draftSources(research: ModelJobResearch | undefined): DraftSource[] {
+  const parsed = parseModelJobResearch(research);
+  if (!parsed) return [];
+  return parsed.sources.map((source) => ({
+    title: headWithin(source.title, DRAFT_SOURCE_TITLE_CHARS),
+    url: source.url,
+    dateLabel: formatSourceDate(source.date),
+    authority: source.authority,
+  }));
 }

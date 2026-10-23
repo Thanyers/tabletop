@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { createDomain } from '../src/tabletop/domain/index.js';
 import type { ActorContext, CaseKind, ChangeSet, Member, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
-import { proposeChange, searchChangeProgress, type AIProposalRequest } from './ai.js';
+import { proposeChange, researchSummary, searchChangeProgress, type AIProposalRequest } from './ai.js';
+import { MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelStreamFailure, measureDeepSeekChangeRequest, type DeepSeekChangeInput, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import type { Env } from './contracts.js';
 
@@ -566,6 +567,37 @@ describe('Cloudflare AI proposal helper', () => {
         reasoningChars: 0,
         search: { phase: 'reading', query: 'VAT ไทย 2569', resultsCount: 4, topTitle: 'รัฐบาลไทย' },
       });
+  });
+
+  it('turns a research outcome into display metadata for the finished card (F064)', () => {
+    const sources = Array.from({ length: MAX_JOB_RESEARCH_SOURCES + 2 }, (_, index) => ({
+      id: `web-${index + 1}`,
+      title: `Source ${index + 1}`,
+      url: `https://example${index}.go.th/report`,
+      normalizedUrl: `https://example${index}.go.th/report`,
+      siteName: 'example',
+      date: '2026-07-26T16:00:00+00:00',
+      authority: 4,
+      score: 2.5,
+      summary: 'not display text on the card',
+    }));
+    const summary = researchSummary({
+      queries: ['VAT ไทย 2569', 'q2', 'q3', 'q4', 'q5'],
+      sources,
+    });
+
+    // The card keeps a bounded list and never the brief or summaries the draft used internally.
+    expect(summary?.sources).toHaveLength(MAX_JOB_RESEARCH_SOURCES);
+    expect(summary?.queries).toHaveLength(MAX_JOB_RESEARCH_QUERIES);
+    expect(summary?.sources[0]).toEqual({
+      title: 'Source 1',
+      url: 'https://example0.go.th/report',
+      date: '2026-07-26T16:00:00+00:00',
+      authority: 4,
+    });
+    expect(summary?.sources[0]).not.toHaveProperty('summary');
+    // A draft that never searched carries no metadata at all.
+    expect(researchSummary({ queries: [], sources: [] })).toBeUndefined();
   });
 
   it('keeps bounded stream details when the provider closes without a finish reason (F045)', async () => {
