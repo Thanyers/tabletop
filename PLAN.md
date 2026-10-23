@@ -50,11 +50,13 @@
 | F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `review` | [F050](docs/features/F050-live-thinking.md) |
 | F054 | เวลา+ที่มาของการ์ดบน Objects panel + sort by created/updated + ปุ่มพาไปหาการ์ด โดยคง panel เดิม | `review` | [F054](docs/features/F054-object-metadata-and-focus.md) |
 | F060 | การ์ด dice ที่ผูก `roll` parameter ใช้ `table.roll` ของ server: แสดงหน้าเต๋า/ผลรวมจาก roll-store, ไม่เขียน shared draft และไม่ใช้ client RNG · dice ที่ผูก `number` ยัง client-side/visual-only · ไม่เปลี่ยน wire contract | `review` | [F053](docs/features/F060-server-dice.md) |
+| F061 | การ์ด Rules อ่านเป็น When → Then → Applies to + เส้น canvas อ้อมการ์ดทุกใบยกเว้น post-it, แยกเลนไม่ทับกัน และเปิดช่องที่จุดตัดให้เห็นว่าอันไหนอยู่บน | `review` | [F061](docs/features/F061-rules-card-canvas-lines.md) |
 
 ## งาน
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F061-T1 | การ์ด Rules โครง When/Then/Applies to + routing เส้นแบบอ้อมการ์ด, แยกเลน, bridge ที่จุดตัด | `review` | lead (AI) | `feat/F061-rules-card-and-lines` | `src/tabletop/ui/TableCanvasObjects.tsx`, `src/tabletop/ui/rules-summary.ts` (ใหม่), `src/tabletop/ui/rules-card.css` (ใหม่), `src/tabletop/ui/CanvasWorkspace.tsx`, `src/tabletop/ui/calm-workspace.css`, `src/state/edge-routing.ts`, `src/components/CanvasEdge.tsx`, `spec.md`, `CHANGELOG.md` | — | unit 721 · r1 browser 7 · cloudflare browser 32 |
 | F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F054-T1 | `cardMeta` model + schema + stamp ตอน activation/command + prune/cap | `review` | lead (AI) | `feat/F054-object-metadata-and-focus` | `shared/table-contracts.ts`, `domain/table-card-meta.ts` (ใหม่), `domain/table.ts`, `domain/evolution.ts`, tests | — | unit 21 ผ่าน + typecheck |
 | F054-T2 | backfill resolver + projection tests | `review` | lead (AI) | 〃 | `domain/table-card-meta.ts`, `domain/projections.ts`, tests | T1 | legacy backfill + private projection ผ่าน |

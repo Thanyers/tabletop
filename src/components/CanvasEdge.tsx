@@ -8,6 +8,11 @@ export interface CanvasEdgeData extends Record<string, unknown> {
   active?: boolean;
   dimmed?: boolean;
   moving?: boolean;
+  /** Line colour; a caller that colours edges by role passes it here. */
+  color?: string;
+  /** Colour of the mask under the line, so it reads cleanly over paper and dots. */
+  haloColor?: string;
+  strokeWidth?: number;
 }
 
 type CanvasFlowEdge = Edge<CanvasEdgeData, 'canvasConnection'>;
@@ -25,8 +30,9 @@ export function CanvasEdge({
   const active = data?.active === true;
   const dimmed = data?.dimmed === true;
   const moving = data?.moving === true;
-  const color = active ? '#7860bd' : dimmed ? '#cbc5d2' : '#a69db4';
-  const strokeWidth = active ? 2.2 : 1.7;
+  const color = data?.color ?? (active ? '#7860bd' : dimmed ? '#cbc5d2' : '#a69db4');
+  const haloColor = data?.haloColor ?? '#fff';
+  const strokeWidth = data?.strokeWidth ?? (active ? 2.2 : 1.7);
   const edgeStyle: CSSProperties = {
     ...style,
     fill: 'none',
@@ -61,7 +67,7 @@ export function CanvasEdge({
         path={route.path}
         className="canvas-edge__halo"
         interactionWidth={0}
-        style={{ stroke: '#fff', strokeWidth: strokeWidth + 4, strokeLinecap: 'round', strokeLinejoin: 'round', opacity: 0.94 }}
+        style={{ stroke: haloColor, strokeWidth: strokeWidth + 4, strokeLinecap: 'round', strokeLinejoin: 'round', opacity: 0.94 }}
       />
       <BaseEdge
         id={id}
