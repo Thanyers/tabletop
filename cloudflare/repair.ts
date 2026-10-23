@@ -19,5 +19,9 @@ export function nextRepairIssues(previous: readonly string[], issues: readonly s
 export const FALLBACK_SIMPLIFY_ISSUES = [
   'Return the smallest valid table that still satisfies the request: one collection with at most four fields, at most one action, no canvas views, no cross-collection field lookups.',
 ] as const;
+/** F065: an edit keeps the current table, so its last attempt shrinks only what it adds. */
+export const EDIT_FALLBACK_SIMPLIFY_ISSUES = [
+  'Return the smallest table-patch that still does the core of the request: change or add as little as possible, leave out any new canvas view that failed, and never remove existing parts to make the patch pass.',
+] as const;
 export const FALLBACK_REPAIR_ATTEMPT = 3;
 

@@ -6,11 +6,12 @@ import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
 import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
+import { runResearch } from '../server/providers/deepseek-research.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
 import { ReasonedDomainError } from './model-failure.js';
-import { FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
+import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
@@ -406,14 +407,38 @@ export async function proposeChange(
   billingConfigured(env);
   actorAndRole(request);
   const prepared = prepareInput(request);
-  const providerBytes = new TextEncoder().encode(canonical(prepared.providerInput)).byteLength;
+  // F064: the drafter decides for itself whether this request needs the web. A search fault
+  // must never block a draft, so research is best-effort and bounded. A caller-injected fetch is a
+  // test double, so research stays off there and tests never reach the network.
+  let researchBlock: { brief: string; sources: { id: string; title: string; url: string; date: string | null; authority: number; summary: string }[] } | undefined;
+  if (prepared.kind === 'table' && fetchImpl === undefined && env.TABLE_WEB_SEARCH !== 'off') {
+    try {
+      const research = await runResearch(request.prompt, {
+        apiKey: env.DEEPSEEK_KEY!,
+        fetchImpl,
+        timeoutMs: 30_000,
+      });
+      if (research.sources.length > 0) {
+        researchBlock = {
+          brief: research.brief,
+          sources: research.sources.map(({ id, title, url, date, authority, summary }) => ({ id, title, url, date, authority, summary })),
+        };
+      }
+    } catch {
+      // Research is an enhancement: fall back to the deterministic draft path.
+    }
+  }
+  const tableProviderInput = prepared.kind === 'table' && prepared.providerInput.kind === 'table'
+    ? (researchBlock ? { ...prepared.providerInput, research: researchBlock } : prepared.providerInput)
+    : null;
+  const providerBytes = new TextEncoder().encode(canonical(tableProviderInput ?? prepared.providerInput)).byteLength;
   if (providerBytes > prepared.maximumInputBytes) {
     fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The proposal request exceeds the allowed size.');
   }
   let maxInputTokens: number;
-  if (prepared.kind === 'table') {
+  if (prepared.kind === 'table' && tableProviderInput) {
     try {
-      maxInputTokens = measureDeepSeekChangeRequest(prepared.providerInput) + TABLE_REQUEST_TOKEN_MARGIN;
+      maxInputTokens = measureDeepSeekChangeRequest(tableProviderInput) + TABLE_REQUEST_TOKEN_MARGIN;
     } catch (error) {
       throw safeProviderFailure(error);
     }
@@ -455,8 +480,8 @@ export async function proposeChange(
   if (dispatch.claimed !== true) {
     fail('AI_PROPOSAL_ALREADY_DISPATCHED', 'This proposal request has already been dispatched or is uncertain.');
   }
-  if (prepared.kind === 'table' && prepared.providerInput.kind === 'table') {
-    return proposeGeneratedTable(env, request, prepared.providerInput, binding, fetchImpl, onProgress);
+  if (prepared.kind === 'table' && prepared.providerInput.kind === 'table' && tableProviderInput) {
+    return proposeGeneratedTable(env, request, tableProviderInput, binding, fetchImpl, onProgress);
   }
 
   let change: ChangeSet;
@@ -577,7 +602,8 @@ async function proposeGeneratedTable(
     if (attempt === MAX_ATTEMPTS - 1) {
       // F028: the final attempt asks for the smallest table that can still activate.
       previousIssues = issues;
-      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...FALLBACK_SIMPLIFY_ISSUES] } };
+      const editing = initialInput.kind === 'table' && initialInput.program !== null;
+      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...(editing ? EDIT_FALLBACK_SIMPLIFY_ISSUES : FALLBACK_SIMPLIFY_ISSUES)] } };
     } else {
       const repairIssues = nextRepairIssues(previousIssues, issues);
       previousIssues = issues;
@@ -608,3 +634,4 @@ async function proposeGeneratedTable(
 }
 
 export { invoiceChangeSchema, teachingChangeSchema, encounterChangeSchema };
+
