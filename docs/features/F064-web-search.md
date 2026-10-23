@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — T1–T4 merge (#207) · สไลซ์ A merge (#211) · สไลซ์ B merge (#214) · สไลซ์ C ลงโค้ดแล้ว (branch `feat/F064-web-evidence`) |
+| สถานะ | `review` — T1–T4 merge (#207) · สไลซ์ A merge (#211) · สไลซ์ B merge (#214) · สไลซ์ C ลงโค้ดแล้ว (PR [#247](https://github.com/Thanyers/tabletop/pull/247)) |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | MINOR — ใช้ `DEEPSEEK_KEY` เดิม ไม่มี secret/binding/migration ใหม่ |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F064-T*` |
