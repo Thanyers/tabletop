@@ -105,8 +105,8 @@ Node **22.23.2** · branch `feat/F064-search-visibility`
 | คำสั่ง | ผล |
 | --- | --- |
 | `npx vitest run server/providers/deepseek-research.test.ts src/tabletop/ui/table-chat-state.test.ts` | **35/35** — provider 8 (เพิ่ม 3: emit, เงียบเมื่อไม่ค้น, listener พัง + bound) + chat-state 27 (เพิ่ม 4: `liveSearchLine`) |
-| `npm run test:cloudflare` | **159/159** (10 ไฟล์) — เพิ่ม mapping test ใน `ai.test.ts` และ worker test ใน `room.test.ts` (redact/≤300/`done` อยู่ต่อ) |
-| `npm test` | **755 passed / 1 skipped** (101 ไฟล์, 1 ไฟล์ skip) |
+| `npm run test:cloudflare` | **160/160** (10 ไฟล์) — เพิ่ม mapping test ใน `ai.test.ts` และ worker test ใน `room.test.ts` (redact/≤300/`done` อยู่ต่อ) |
+| `npm test` | **760 passed / 1 skipped** (102 ไฟล์, 1 ไฟล์ skip) |
 | `npm run build` | ผ่าน (typecheck 3 config + vite) |
 | `npm run lint` | 0 error / 105 warning (เท่า baseline) |
 | `node scripts/check-public-files.mjs` | 0 finding |

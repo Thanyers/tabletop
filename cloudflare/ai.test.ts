@@ -309,6 +309,19 @@ describe('Cloudflare AI proposal helper', () => {
     expect(JSON.stringify(sent)).not.toContain(tableScenarioSources.equipment.text.slice(0, 40));
   });
 
+  it('drafts a table that uses its whole 64 KiB file allowance (F066)', async () => {
+    const input = request('table');
+    const domain = input.workspace.domain;
+    if (domain.kind !== 'table') throw new Error('Expected table fixture.');
+    domain.sources = Array.from({ length: 4 }, (_, index) => ({
+      id: `source_${index}`, filename: `source-${index}.txt`, text: 'x'.repeat(16_000), sha256: 'c'.repeat(64), createdAt: input.workspace.createdAt,
+    }));
+    let calls = 0;
+    const error = await proposeChange(testEnv, input, providerFetch(proposal('table'), () => { calls += 1; })).catch((caught: unknown) => caught);
+    if (calls === 0) throw error;
+    expect(calls).toBeGreaterThan(0);
+  });
+
   it('rejects complete table source sets above the bounded model input before reserving or calling the provider', async () => {
     const input = request('table');
     const domain = input.workspace.domain;
@@ -316,7 +329,7 @@ describe('Cloudflare AI proposal helper', () => {
     domain.sources = Array.from({ length: 4 }, (_, index) => ({
       id: `source_${index}`,
       filename: `source-${index}.txt`,
-      text: 'x'.repeat(15_000),
+      text: 'x'.repeat(17_000),
       sha256: 'b'.repeat(64),
       createdAt: input.workspace.createdAt,
     }));

@@ -1,26 +1,27 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
-import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_AI_INPUT_BYTES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
+import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch } from '../server/providers/deepseek-research.js';
 import type { ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
 import { ReasonedDomainError } from './model-failure.js';
-import { FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
+import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
-const MAX_TABLE_INPUT_BYTES = 48_000;
+const MAX_TABLE_INPUT_BYTES = TABLE_AI_INPUT_BYTES;
 const PROVIDER_OVERHEAD_BYTES = 8_000;
 const MAX_STANDARD_PROVIDER_INPUT_TOKENS = 56_000;
-const MAX_PROVIDER_INPUT_TOKENS = 65_000;
+// A request is measured in bytes and one byte is at most one token, so the reservation covers the largest request.
+const MAX_PROVIDER_INPUT_TOKENS = MAX_CHANGE_REQUEST_BYTES + TABLE_REQUEST_TOKEN_MARGIN;
 const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
 const CHANGE_MAX_OUTPUT_TOKENS = 512;
 const TABLE_MAX_OUTPUT_TOKENS = 32_768;
@@ -612,7 +613,8 @@ async function proposeGeneratedTable(
     if (attempt === MAX_ATTEMPTS - 1) {
       // F028: the final attempt asks for the smallest table that can still activate.
       previousIssues = issues;
-      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...FALLBACK_SIMPLIFY_ISSUES] } };
+      const editing = initialInput.kind === 'table' && initialInput.program !== null;
+      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...(editing ? EDIT_FALLBACK_SIMPLIFY_ISSUES : FALLBACK_SIMPLIFY_ISSUES)] } };
     } else {
       const repairIssues = nextRepairIssues(previousIssues, issues);
       previousIssues = issues;
