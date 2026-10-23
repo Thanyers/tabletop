@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -281,4 +281,16 @@ test('DeepSeek activation preserves protected POSIX patch permissions and privat
   const target = await activateDeepSeek(home, { 'index.js': 'export const enabled = true;' }, async () => {});
   assert.equal(statSync(patch).mode & 0o777, 0o600);
   assert.equal(statSync(path.join(target, 'home-patch.before.yml')).mode & 0o777, 0o600);
+});
+
+test('setup refuses a symlinked home patch without detaching it or changing its target', { skip: process.platform === 'win32' }, async () => {
+  const home = path.join(temporaryRoot, 'linked config setup');
+  mkdirSync(home);
+  const canonical = path.join(home, 'canonical.patch.yml');
+  const patch = path.join(home, 'cordis.patch.yml');
+  writeFileSync(canonical, '# managed elsewhere\n');
+  symlinkSync(canonical, patch);
+  await assert.rejects(activateDeepSeek(home, { 'index.js': 'candidate' }, async () => {}), /symlink/);
+  assert.equal(lstatSync(patch).isSymbolicLink(), true);
+  assert.equal(readFileSync(canonical, 'utf8'), '# managed elsewhere\n');
 });

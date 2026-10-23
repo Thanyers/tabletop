@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile, access, realpath, rename, stat, chmod } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, access, realpath, rename, stat, chmod, lstat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -39,7 +39,14 @@ async function exists(file) {
   try { await access(file); return true; } catch { return false; }
 }
 
+async function assertRegularDestination(file) {
+  let info;
+  try { info = await lstat(file); } catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  if (info.isSymbolicLink() || !info.isFile()) throw new Error('Config symlink or non-file destination is unsupported; preserved.');
+}
+
 async function writeChanged(file, data) {
+  await assertRegularDestination(file);
   const bytes = Buffer.from(data);
   if (await exists(file) && (await readFile(file)).equals(bytes)) return;
   const mode = await exists(file) ? (await stat(file)).mode & 0o777 : 0o600;
@@ -62,6 +69,7 @@ export async function activateDeepSeek(home, files, validate) {
   await mkdir(target, { recursive: true });
   for (const [name, data] of Object.entries(files)) await writeChanged(path.join(target, name), data);
   const patch = path.join(home, 'cordis.patch.yml');
+  await assertRegularDestination(patch);
   const before = await exists(patch) ? await readFile(patch, 'utf8') : '';
   const modulePath = path.join(target, 'index.js');
   const next = buildDeepSeekPatch(before, modulePath);
@@ -137,6 +145,7 @@ export async function setupAgentStartup({ workspaceRoot } = {}) {
       throw new Error('Workspace bridge must be the immediate parent of this checkout.');
     }
     const file = path.join(workspace, '.codex', 'hooks.json');
+    await assertRegularDestination(file);
     const previous = await exists(file) ? await readFile(file, 'utf8') : '';
     const existing = previous ? JSON.parse(previous) : {};
     const template = JSON.parse(await readFile(path.join(project, '.codex/hooks.json'), 'utf8'));

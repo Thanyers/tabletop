@@ -41,7 +41,7 @@ F063 ระบุกติกาเริ่มงานไว้แล้ว �
 
 Node 22.23.2:
 
-- `npm run test:agents`: 14 passed / 1 SKIPPED (POSIX file modes บน Windows) — Git fixture ใช้ local bare remote; ทดสอบ fresh/refreshed dev, dirty/staged/untracked, remote หาย, policy หาย, repo อื่น, JSON events, native PowerShell command/Claude argv ใน path มีช่องว่างและ cwd เป็น subdirectory, OpenCode dispatch, DeepSeek first human request, context budget, publication allowlist, setup idempotence, failed-update preservation และการรักษา co-hooks
+- `npm run test:agents`: 14 passed / 2 SKIPPED (POSIX file modes และ symlink บน Windows) — Git fixture ใช้ local bare remote; ทดสอบ fresh/refreshed dev, dirty/staged/untracked, remote หาย, policy หาย, repo อื่น, JSON events, native PowerShell command/Claude argv ใน path มีช่องว่างและ cwd เป็น subdirectory, OpenCode dispatch, DeepSeek first human request, context budget, publication allowlist, setup idempotence, failed-update preservation และการรักษา co-hooks
 - `npm run lint`: 0 errors, warnings เดิม; `git diff --check` และ public-file scan ผ่าน
 - `npm run agents:setup -- --workspace <workspace-parent>`: ผ่านและรันซ้ำผ่าน เครื่องนี้ติดตั้ง DSH home patch และ local parent-workspace Codex hooks แล้ว ไม่เขียน credential หรือแก้ plugin/profile เดิม
 - DeepSeek Harness 0.2.1-rc.2: ทดสอบ import adapter ด้วย SDK จริงผ่าน native Electron Node runtime และ compose config ของ profile ที่มีอยู่ โดยไม่เริ่ม session/model หรือปิด Desktop
