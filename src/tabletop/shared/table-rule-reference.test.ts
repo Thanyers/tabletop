@@ -14,6 +14,19 @@ describe('authoritative selected-rule context', () => {
     expect(resolveTableRuleReferences('[[table-rule:action:borrow]] Make this easier', state))
       .toContain('id="borrow", current name="Borrow camera"');
   });
+  it('resolves a program-owned formula before a legacy display alias', () => {
+    const state = table();
+    state.program.computedColumns = [{
+      id: 'total', collection: 'equipment', label: 'Rule formula',
+      expression: { op: 'literal', value: 1 },
+    }];
+    state.computedColumns = [{
+      id: 'total', collection: 'equipment', label: 'Legacy alias',
+      expression: { op: 'literal', value: 1 },
+    }];
+    expect(resolveTableRuleReferences('[[table-rule:formula:total]]', state))
+      .toContain('current name="Rule formula"');
+  });
   it('rejects removed rules and malformed markers rather than referring to another rule', () => {
     expect(() => resolveTableRuleReferences('[[table-rule:action:missing]] change it', table())).toThrow(/Select it again/u);
     expect(() => resolveTableRuleReferences('[[table-rule:bogus:borrow]] change it', table())).toThrow();

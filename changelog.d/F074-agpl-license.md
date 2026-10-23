@@ -1,0 +1,1 @@
+- **License ของ Tabletop (F074):** กำหนดซอร์สของโปรเจกต์เป็น GNU Affero General Public License v3.0 only (`AGPL-3.0-only`) เพิ่ม `LICENSE` ฉบับเต็มและข้อความใน README พร้อม package metadata; dependency คง license เดิม ไม่มีการเปลี่ยน runtime หรือออก release เว็บในงานนี้

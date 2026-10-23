@@ -56,7 +56,7 @@ Authority เป็นผู้จัดคิว `queued → running → succee
 | JavaScript | fresh Worker Loader isolate, ไม่มี app bindings/secrets, ปิด outbound network, subrequests 0, hosted CPU 1,000 ms และ wall 30 วินาที |
 | JavaScript ใน Node local | workerd/Miniflare แยกต่อรอบ; hard wall 2 วินาที เพราะ local runtime ไม่บังคับ hosted CPU limit แบบเดียวกัน |
 | Python ใน Node local | Docker ไม่มี host mount/host env, network none, read-only root, user 10001, 512 MiB/1 CPU/32 processes และ temporary filesystem |
-| Python ใน Cloudflare | Room-managed container image `compute`, resources `basic`, ปิดอินเทอร์เน็ต, user 10001, serialize ต่อห้อง, ทำลาย container ก่อน/หลังรัน, wall 30 วินาที |
+| Python ใน Cloudflare | Room-managed container image `compute`, resources `standard-1` (4 GiB/0.5 vCPU), ปิดอินเทอร์เน็ต, user 10001, serialize ต่อห้อง, ทำลาย container ก่อน/หลังรัน, wall 30 วินาที |
 
 Generated code ไม่ได้รับ DB, cookie, credential หรือสิทธิ์ commit ห้อง Python stdout/stderr ปกติถูกทิ้ง; คืนเพียง typed result ที่ตรวจแล้ว Failure ไม่แก้ข้อมูลต้นทางและไม่อ้างว่าคำนวณสำเร็จ Source/ผลยังต้องผ่าน review ความหมายของงาน: schema-valid ไม่ใช่หลักฐานว่าตรรกะธุรกิจถูกทุกกรณี
 
@@ -72,7 +72,11 @@ npx vitest run server/compute-python.integration.test.ts
 
 Cloudflare config ปกติประกาศ `worker_loaders` binding `COMPUTE_LOADER` สำหรับ JavaScript Python เป็น opt-in: รัน `node scripts/compute-config.mjs` เพื่อสร้าง config ทดสอบที่ไม่ track ใน `test-results/compute-config/wrangler.json` จากนั้นตรวจด้วย `wrangler deploy --dry-run --config ...` ได้โดยไม่ deploy
 
-ก่อน release ที่เปิด Python ต้องเพิ่ม `TABLE_COMPUTE_PYTHON="enabled"` และ Room `containers` แบบ `scheduling_policy:"durable_object"` พร้อม named image `images.compute.dockerfile` ให้ config ของ staging/production ที่ pipeline ใช้ รวม `worker_loaders` ด้วย ไม่ย้าย credentials ลง repo และไม่อ้างว่า flag อย่างเดียว provision container สำเร็จ ต้องตรวจ account capability, image provisioning และ synthetic hosted run ผ่าน pipeline ก่อนเปิดใช้จริง
+Pipeline เตรียม compute ผ่าน `server/compute-deploy-config.ts` หลังตรวจ private config ของ environment: เพิ่ม `worker_loaders.COMPUTE_LOADER`, `TABLE_COMPUTE_PYTHON="enabled"` และ Room `containers` แบบ `scheduling_policy:"durable_object"` พร้อม named image `images.compute.dockerfile` โดยไม่เปลี่ยนชื่อ Worker, origin, D1, budget หรือ credentials ตรวจ identity ซ้ำก่อน deploy และ smoke บังคับให้ประกาศทั้งสอง engine/profile/libraries ครบ
+
+บัญชีต้องเปิด Workers Paid และ deploy token ต้องมีสิทธิ์ Containers/registry ที่จำเป็น ผู้ใช้อนุญาตเปิด Paid ในรอบ F066-T8 แล้ว; การมี flag ไม่ยืนยัน image provisioning หรือ execution ต้องรอ pipeline และ synthetic hosted run จริง ห้ามย้าย credentials ลง repo
+
+ชุดเต็ม CI ใช้ `node scripts/compute-cloudflare-local.mjs` บน Linux เพื่อรัน Worker Loader และ Room-managed Container API กับข้อมูลสมมติ โดยไม่มี credentials; บน Windows คำสั่งนี้รายงาน SKIPPED/exit 2 เพราะ Wrangler ไม่รองรับ Containers local ใช้ Docker integration ของ Node ตรวจเครื่อง Windows แยกกัน
 
 ไม่มี SQL migration แต่เป็น contract ใหม่และเพิ่ม runtime/bindings หลังห้องบันทึก `compute` แล้วต้องใช้ writer ที่อ่าน contract นี้ได้ พักการเขียนก่อน recovery ด้วย build เก่า ห้ามสรุปว่า rollback ทันทีได้เพียงเพราะ fields เป็น optional
 

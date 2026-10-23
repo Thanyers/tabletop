@@ -258,8 +258,8 @@ Node **22.23.2** · branch `feat/F064-web-evidence`
 | คำสั่ง | ผล |
 | --- | --- |
 | `npx vitest run src/tabletop/domain/table-web-sources.test.ts src/tabletop/shared/table-draft-input.test.ts` | **12/12** (domain 6 + draft input 6) |
-| `npm run test:cloudflare` | **182/182** (13 ไฟล์) — `web-evidence.test.ts` 4 เคส + room test 1 เคส (redact, event ไม่มีข้อความ) |
-| `npm test` | **864 passed / 5 skipped** (120 ไฟล์) |
+| `npm run test:cloudflare` | **189/189** (13 ไฟล์) — `web-evidence.test.ts` 4 เคส + room test 1 เคส (redact, event ไม่มีข้อความ) |
+| `npm test` | **886 passed / 5 skipped** (122 ไฟล์) |
 | `npm run build` | ผ่าน |
 | `npm run lint` | 0 error / 111 warning (ไม่มี warning ใหม่ในไฟล์ที่แตะ) |
 | `node scripts/check-public-files.mjs` | 0 finding |

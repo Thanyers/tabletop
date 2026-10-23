@@ -17,6 +17,22 @@ const merged = (value: Omit<TablePatch, 'kind'>) => {
 const view = { id: 'heatmap', kind: 'scene', title: 'Heatmap', width: 200, height: 100, elements: [{ id: 'cell', shape: 'rect', x: 0, y: 0, width: 10, height: 10, fill: '#40c463' }] };
 
 describe('table patch (F065)', () => {
+  it('upserts and removes formula columns through the same validated patch path', () => {
+    const program = structuredClone(current);
+    program.collections[0]!.fields.push({ id: 'quantity', label: 'Quantity', type: 'number', required: false });
+    const formula = {
+      id: 'quantity_total', collection: 'equipment', label: 'Quantity total',
+      expression: { op: 'field', field: 'quantity' },
+    };
+    const added = applyTablePatch(program, patch({ upsert: { computedColumns: [formula] } }));
+    if ('issues' in added) throw new Error(added.issues.join(' '));
+    expect(tableChangeSchema.parse(added.change).program.computedColumns).toEqual([formula]);
+
+    const removed = applyTablePatch(tableChangeSchema.parse(added.change).program, patch({ remove: { computedColumns: ['quantity_total'] } }));
+    if ('issues' in removed) throw new Error(removed.issues.join(' '));
+    expect(tableChangeSchema.parse(removed.change).program.computedColumns).toEqual([]);
+  });
+
   it('adds, preserves, edits and removes reusable modules through the same validated patch path', () => {
     const module = { id: 'double', name: 'Double a number', description: 'Multiply a number by two.', version: 1, runtime: 'javascript', source: 'export default inputs => ({total:inputs.amount*2});', inputs: [{ id: 'amount', label: 'Amount', type: 'number', binding: { kind: 'literal', value: 7 } }], outputs: [{ id: 'total', label: 'Total', type: 'number' }] };
     const first = merged({ upsert: { computeModules: [module] } });

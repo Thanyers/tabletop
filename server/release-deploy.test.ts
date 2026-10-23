@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { changelogHasVersion, checkDeployConfig, databaseName, releaseVersionFromMerge, smoke } from './release-deploy';
+import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles';
 
 const config = (overrides: Record<string, unknown> = {}) => JSON.stringify({
   name: 'tabletop-staging',
@@ -50,5 +51,21 @@ describe('release deploy helpers (CD001)', () => {
     expect(good.every(result => result.ok)).toBe(true);
     const stale = await smoke('https://staging.example', '2.2.0', '1234567', fetcher);
     expect(stale.find(result => result.path === '/version')?.ok).toBe(false);
+  });
+  it('fails compute smoke on disabled engines or an incomplete Python profile', async () => {
+    let compute: unknown = { profile: 'tabletop-compute-1', runtimes: [], pythonLibraries: [] };
+    const fetcher = (async (input: URL | RequestInfo) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/api/capabilities') return Response.json({ compute });
+      if (path === '/version') return Response.json({ version: '9.0.0', sha: 'abcdef0' });
+      if (path === '/' || path === '/new') return new Response('<div id="root"></div>');
+      return new Response('ok');
+    }) as typeof fetch;
+    const run = () => smoke('https://staging.example', '9.0.0', 'abcdef012345', fetcher, true);
+    expect((await run()).find(result => result.path === '/api/capabilities.compute')?.ok).toBe(false);
+    compute = computeRuntimeCapabilities({ javascript: true, python: true });
+    expect((await run()).every(result => result.ok)).toBe(true);
+    compute = { ...computeRuntimeCapabilities({ javascript: true, python: true }), pythonLibraries: ['pandas 2.3.3'] };
+    expect((await run()).find(result => result.path === '/api/capabilities.compute')?.ok).toBe(false);
   });
 });

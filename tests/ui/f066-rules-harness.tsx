@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createTableState } from '../../src/tabletop/domain/table';
 import type { WorkspaceView } from '../../src/tabletop/shared/contracts';
 import type { ComputeModule } from '../../src/tabletop/shared/table-compute';
-import type { TableProgram, TableState } from '../../src/tabletop/shared/table-contracts';
+import type { ComputedColumn, TableProgram, TableState } from '../../src/tabletop/shared/table-contracts';
 import type { PlanNode } from '../../src/tabletop/runtime';
 import { TableCanvasObject } from '../../src/tabletop/ui/TableCanvasObjects';
 import { TableChat } from '../../src/tabletop/ui/TableChat';
@@ -33,6 +33,19 @@ const module: ComputeModule = {
   ],
 };
 
+const ruleOwnedColumn: ComputedColumn = {
+  id: 'double_quantity', collection: 'orders', label: 'Double quantity',
+  expression: { op: 'multiply', left: { op: 'field', field: 'quantity' }, right: { op: 'literal', value: 2 } },
+};
+const legacyOrdersColumn: ComputedColumn = {
+  id: 'calc1', collection: 'orders', label: 'Legacy extra',
+  expression: { op: 'add', left: { op: 'field', field: 'quantity' }, right: { op: 'literal', value: 1 } },
+};
+const legacySummaryColumn: ComputedColumn = {
+  id: 'summary_calc1', collection: 'summary', label: 'Legacy summary extra',
+  expression: { op: 'add', left: { op: 'field', field: 'quantity' }, right: { op: 'literal', value: 5 } },
+};
+
 const program: TableProgram = {
   version: 1,
   title: 'Weekend market',
@@ -54,7 +67,7 @@ const program: TableProgram = {
     conditions: [], effects: [{ record: 'order', field: 'paid', op: 'set', value: { literal: true } }], requireTurn: false, advanceTurn: false,
   }],
   invariants: [{ id: 'unique_item', collection: 'orders', fields: ['item'], message: 'Each order needs a name.' }],
-  turnOrder: [], evidence: [], assumptions: [], compute: { version: 1, modules: [module] },
+  turnOrder: [], evidence: [], assumptions: [], computedColumns: [ruleOwnedColumn], compute: { version: 1, modules: [module] },
 };
 
 const initialState: TableState = {
@@ -62,6 +75,7 @@ const initialState: TableState = {
   dataRevision: 8,
   ruleRevision: 4,
   program,
+  computedColumns: [ruleOwnedColumn, legacyOrdersColumn, legacySummaryColumn],
   sources: [{ id: 'source-orders', filename: 'order-notes.csv', text: 'item,quantity\nTea,5', sha256: 'fixture-hash', createdAt: Date.now() - 600_000 }],
   records: { orders: [
     { id: 'order-1', values: { item: 'Tea', quantity: 5, paid: false } },
