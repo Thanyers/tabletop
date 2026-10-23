@@ -12,7 +12,7 @@ const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
 const useCaseIcons = [FileText, BookOpen, UsersRound];
 
 /**
- * The public landing (F061) in English or Thai (F066). The language lives here, so the
+ * The public landing (F061) in English or Thai (F067). The language lives here, so the
  * sign-in / welcome-back box passed as `children` and the `headerAction` receive the
  * current copy and switch with the rest of the page.
  */

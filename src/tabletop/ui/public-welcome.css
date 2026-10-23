@@ -51,7 +51,7 @@
   white-space: nowrap;
 }
 
-/* Language toggle (F066): two pressed-state buttons, each labelled in its own language. */
+/* Language toggle (F067): two pressed-state buttons, each labelled in its own language. */
 .tt-public-welcome .tt-public-welcome__language {
   display: inline-flex;
   flex: 0 0 auto;
@@ -343,7 +343,7 @@
   .tt-public-welcome .tt-public-welcome__start-slot { width: 100%; }
 }
 
-/* Thai stacks vowels and tone marks above and below the line: no negative tracking, taller lines (F066). */
+/* Thai stacks vowels and tone marks above and below the line: no negative tracking, taller lines (F067). */
 .tt-public-welcome[lang="th"] :is(h1, h2, h3) { letter-spacing: 0; line-height: 1.45; }
 .tt-public-welcome[lang="th"] .tt-public-welcome__hero h1 { max-width: 18ch; line-height: 1.3; }
 .tt-public-welcome[lang="th"] :is(.tt-public-welcome__eyebrow, .tt-public-welcome__thesis span) { letter-spacing: 0.02em; }
