@@ -479,6 +479,32 @@ function ruleItemUsers(program: TableProgram, kind: RuleItemKind, id: string): s
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
 }
+
+const fixedOperand = (operand: TableOperand): boolean => 'literal' in operand || ('expression' in operand && operand.expression.op === 'literal');
+
+/**
+ * F066: an action with no inputs and no conditions whose rows are all typed-in values makes the same rows on
+ * every press, and numbers the model worked out from records go stale. Only actions a draft adds or changes are
+ * checked, so an older table that already has one can still be edited, rolled back, or trimmed.
+ */
+export function repeatableFixedCreateIssues(program: TableProgram, previous: TableProgram | null): string[] {
+  const unchanged = (action: TableAction) => previous?.actions.some(old => old.id === action.id && canonicalJson(old) === canonicalJson(action)) ?? false;
+  return program.actions
+    .filter(action => action.parameters.length === 0 && action.conditions.length === 0 && (action.creates?.length ?? 0) > 0
+      && (action.creates ?? []).every(create => Object.values(create.values).every(fixedOperand)) && !unchanged(action))
+    .map(action => {
+      const collection = action.creates?.[0]?.collection ?? 'the collection';
+      return `“${action.title}” has no inputs or conditions and creates the same fixed rows on every press, so a second press duplicates them. `
+        + `Add a condition that blocks a second run, for example {"left":{"expression":{"op":"aggregate","source":{"op":"collection","id":"${collection}"},"fn":"count"}},"op":"eq","right":{"literal":0},"message":"Already added."}. `
+        + 'If the numbers come from current records (totals, shares, balances), compute them with {"expression":...} or show them in a metric or chart instead of typing them in.';
+    });
+}
+
+/** F066: what an AI draft must pass. Manual proposals and rollbacks keep using `tableChangeIssues`. */
+export function aiTableChangeIssues(state: TableState, change: TableChange): string[] {
+  const issues = tableChangeIssues(state, change);
+  return issues.length > 0 ? issues : repeatableFixedCreateIssues(change.program, state.program);
+}
 function isGenerativeArray(value: GenerativeOutput): value is readonly GenerativeScalar[] { return Array.isArray(value); }
 /** The longest seat id any runtime can hand out; probing it bounds output that embeds the seat. */
 const LONGEST_SEAT: Seat = [...SEATS].sort((left, right) => right.length - left.length)[0]!;
