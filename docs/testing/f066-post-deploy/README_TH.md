@@ -2,7 +2,7 @@
 
 สถานะนิยาม/template: **เตรียมแล้ว / ค่าเริ่มต้น NOT_RUN ทั้ง 48 เคส** · วันที่เตรียม 2026-10-23 · ฐาน fixture/contract dev@910b0a3; sync เอกสารกับ dev@91fad1d แล้ว (ไม่ใช่ target ของรอบ hosted)
 
-ผลรอบจริงแยกจาก template: [หลัง deploy9.0.0/ตรวจซ้ำ9.0.1](RELEASE9_RESULTS_TH.md) · [หลัง deploy 8.0.0](RELEASE8_RESULTS_TH.md) — 7 PASS / 4 FAIL / 36 BLOCKED / 1 SKIPPED_SCOPE; ไม่ใช่ 48 เคสที่รันสำเร็จ นิยามและ template ด้านล่างคงสถานะ NOT_RUN สำหรับเริ่มรอบใหม่
+ผลรอบจริงแยกจาก template: [หลัง deploy9.0.0/ตรวจซ้ำถึง9.0.2](RELEASE9_RESULTS_TH.md) · [หลัง deploy 8.0.0](RELEASE8_RESULTS_TH.md) — 7 PASS / 4 FAIL / 36 BLOCKED / 1 SKIPPED_SCOPE; ไม่ใช่ 48 เคสที่รันสำเร็จ ผลล่าสุด9.0.2:37PASS/10BLOCKED/1SKIPPED_SCOPE (รวม7รหัสcontrolledlocalCI; ดูขอบเขตในรายงาน) นิยามและtemplateด้านล่างคงNOT_RUNสำหรับเริ่มรอบใหม่
 
 ชุดนี้เตรียมตามคำขอผู้ใช้สำหรับรันภายหลัง ไม่ใช่คำสั่งให้ release/deploy หรือเริ่มทดสอบ hosted ตอนนี้ เริ่มรอบจริงเมื่อผู้ใช้สั่งหลังมี release เป้าหมายแล้ว ครอบคลุม reusable compute/Rules และการเล่นเคสเดิม; ไม่รวมการไล่แก้ scene drag/camera นอกขอบเขต
 

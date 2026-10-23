@@ -1,26 +1,28 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 (Asia/Bangkok)**: production รายงาน **9.0.1 / f2f1629** จาก [v9.0.1](https://github.com/Thanyers/tabletop/releases/tag/v9.0.1); staging รายงาน **0.0.0-dev / 16de683** หลัง [PR #254](https://github.com/Thanyers/tabletop/pull/254) และ retry deploy ด้วย SHA เดิมสำเร็จ
+ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 (Asia/Bangkok)**: production รายงาน **9.0.2 / 8e2c7e1** จาก [v9.0.2](https://github.com/Thanyers/tabletop/releases/tag/v9.0.2); staging รายงาน **0.0.0-dev / 9e7a66b** หลัง [PR #253](https://github.com/Thanyers/tabletop/pull/253) และ pipelineชุดเต็ม/deploy/smokeสำเร็จ
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [f2f1629](https://github.com/Thanyers/tabletop/commit/f2f16296efc7ccc2bd8d08b9fd36fec75ee9f403) — PR #256 | [16de683](https://github.com/Thanyers/tabletop/commit/16de683032a6a79e0c757675f158d6db7c26a065) — PR #254 |
-| Release | v9.0.1 / 9.0.1 | dev / 0.0.0-dev |
+| Source | [8e2c7e1](https://github.com/Thanyers/tabletop/commit/8e2c7e131fdca3f947fc7bbff5963b207e26e398) — PR #257 | [9e7a66b](https://github.com/Thanyers/tabletop/commit/9e7a66b7f21f7257e8334ff8bf2619866f981d97) — PR #253 |
+| Release | v9.0.2 / 9.0.2 | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
 
-## ผลตรวจ deploy 9.0.0 / 9.0.1 และ hosted compute (23 ตุลาคม 2569)
+## ผลตรวจ deploy 9.0.0 / 9.0.1 / 9.0.2 และ hosted compute (23 ตุลาคม 2569)
 
+- **9.0.2 PATCH:** [PR #257](https://github.com/Thanyers/tabletop/pull/257), main8e2c7e1, [deploy39982761764](https://github.com/Thanyers/tabletop/actions/runs/39982761764) ผ่าน; built_at2026-10-23T15:58:39Z [fullreleaseCI39980581719](https://github.com/Thanyers/tabletop/actions/runs/39980581719) ผ่าน Node22.23.2 unit901/5skipped Workers197 browser3suites แก้Ask/Changeที่ถูกcanvasnavigationรับก่อนส่ง; actualAskอ้างกฎส่วนลดถูกตัวและไม่แก้program/raw/revisions FreshJSRunได้405และfreshPythonRunได้8วันด้วยsource/versionเดิม/rawเดิม ไม่มีmigration/config/credentialchange; rollbacktarget9.0.1
+- **Staging9e7a66b:** [run39979203280](https://github.com/Thanyers/tabletop/actions/runs/39979203280) fullvalidation/deploy/smokeผ่าน built_at2026-10-23T15:50:14Z และactualAskอ้างกฎส่วนลดได้ก่อนขึ้นproduction
 - **9.0.0:** [PR #249](https://github.com/Thanyers/tabletop/pull/249), main49f2dd7, [deploy39962089610](https://github.com/Thanyers/tabletop/actions/runs/39962089610) ผ่าน; built_at2026-10-23T13:33:24Z เปิด JavaScript/Python พร้อม profile `tabletop-compute-1` และ libraries ที่ pin ไว้ มี typed executions จริงจาก hosted QA ไม่ยืนยันจาก flag อย่างเดียว
 - **9.0.1 PATCH:** [PR #256](https://github.com/Thanyers/tabletop/pull/256), mainf2f1629, [deploy39973772263](https://github.com/Thanyers/tabletop/actions/runs/39973772263) ผ่าน; built_at2026-10-23T14:56:01Z [release CI39971674579](https://github.com/Thanyers/tabletop/actions/runs/39971674579) ผ่านครบ Node22.23.2: unit901passed/5skipped, Workers197passed, browser3suites และ real local Worker Loader/Container2checks ผ่าน ไม่มี schema migration หรือ binding/credential ใหม่จาก9.0.0; rollback target9.0.0
-- **Staging:** [run39970589793](https://github.com/Thanyers/tabletop/actions/runs/39970589793) fullvalidationผ่าน; attempt1 deployล้มหลังimageuploadด้วยCloudflare internal error, attempt2 retry failedjobด้วย16de683เดิมผ่านและ smokeผ่าน `/version`built_at2026-10-23T14:42:14Z ปิด auto failure [issue255](https://github.com/Thanyers/tabletop/issues/255) หลังตรวจการกู้คืน ไม่เรียกattempt1ว่าPASS
-- รายละเอียดรายเคสและขอบเขตผลตรวจอยู่ใน [รายงาน48เคส](testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) และ [F066](features/F066-reusable-compute-rules.md); acceptanceของรุ่น9เริ่มจาก9.0.0และแก้/ตรวจซ้ำบน9.0.1 หลายบัญชี8เคสคงBLOCKEDตามผู้ใช้ ผลschema-valid/build/smokeไม่ใช่หลักฐานว่าแต่ละโจทย์AIถูกทุกครั้ง
-- Snapshotนี้ยืนยันรุ่นตามเวลาตรวจข้างต้น; mergeเอกสารกลับdevอาจทำให้ staging deploy commitใหม่โดยอัตโนมัติ ไม่เปลี่ยน production9.0.1
+- **Stagingก่อนหน้า16de683:** [run39970589793](https://github.com/Thanyers/tabletop/actions/runs/39970589793) fullvalidationผ่าน; attempt1 deployล้มหลังimageuploadด้วยCloudflare internal error, attempt2 retry failedjobด้วย16de683เดิมผ่านและ smokeผ่าน `/version`built_at2026-10-23T14:42:14Z ปิด auto failure [issue255](https://github.com/Thanyers/tabletop/issues/255) หลังตรวจการกู้คืน ไม่เรียกattempt1ว่าPASS
+- รายละเอียดรายเคสและขอบเขตผลตรวจอยู่ใน [รายงาน48เคส](testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) และ [F066](features/F066-reusable-compute-rules.md); acceptanceของรุ่น9เริ่มจาก9.0.0และแก้/ตรวจซ้ำถึง9.0.2 หลายบัญชี8เคสคงBLOCKEDตามผู้ใช้ ผลschema-valid/build/smokeไม่ใช่หลักฐานว่าแต่ละโจทย์AIถูกทุกครั้ง
+- Snapshotนี้ยืนยันรุ่นตามเวลาตรวจข้างต้น; mergeเอกสารกลับdevอาจทำให้ staging deploy commitใหม่โดยอัตโนมัติ ไม่เปลี่ยน production9.0.2
 
 ## ผลตรวจ staging หลัง merge license (23 ตุลาคม 2569)
 
@@ -42,7 +44,7 @@ Release 8.0.0 (**MAJOR**) ผ่าน pipeline CD001 ([run 39919542374](https:/
 - Staging: Worker version `97d1d29a-41f8-4fb9-b616-99d2df7c8646`, smoke PASS
 - Production: Worker version `90b81e2a-d7f6-429c-96e7-a98e37396a28`, smoke PASS
 - `/version` ทั้งสอง environment = `8.0.0 / 89a604e` (ตรวจซ้ำด้วยมือ 14:45 น.)
-- ข้อจำกัดที่ยังเปิด: binding `worker_loaders` (`COMPUTE_LOADER`) และ `TABLE_COMPUTE_PYTHON` ยังไม่อยู่ใน `WRANGLER_CONFIG_*` — capability JavaScript/Python compute รายงานปิดจนกว่า operator จะเติม config ตาม [REUSABLE_COMPUTE](REUSABLE_COMPUTE.md) (ระบบไม่ crash เพราะ gate ด้วย capability)
+- ข้อจำกัด ณ snapshot8.0.0 (เปิด enginesแล้วใน9.0.0ตามบันทึกด้านบน): binding `worker_loaders` (`COMPUTE_LOADER`) และ `TABLE_COMPUTE_PYTHON` ยังไม่อยู่ใน `WRANGLER_CONFIG_*` — capability JavaScript/Python compute รายงานปิดจนกว่า operator จะเติม config ตาม [REUSABLE_COMPUTE](REUSABLE_COMPUTE.md) (ระบบไม่ crash เพราะ gate ด้วย capability)
 - `dev` รับ release คืนผ่าน PR `chore/sync-main-8.0.0`
 
 ## ผลตรวจ deploy 7.0.0 (23 ตุลาคม 2569)
