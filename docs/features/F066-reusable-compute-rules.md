@@ -36,6 +36,7 @@
 | F066-T4 | integration, browser proof, independent review, เอกสาร | typecheck/lint/unit/Worker/build และ acceptance ที่เกี่ยวข้องผ่านจริง |
 | F066-T5 | เทสต์ Rules capability หลังเพิ่ม compute | UI แสดงจำนวนตรงกับ endpoint และมี reusable calculations พร้อม gap ที่ยังมีจริง |
 | F066-T6 | เตรียม post-deploy acceptance หลายกรณี | มี prompt/ขั้นตอน/input/expected/evidence และผลตั้งต้น NOT_RUN; ไม่รันทดสอบ hosted ในงานเตรียม |
+| F066-T9 | รักษา default ช่องใหม่และปรับ deployment acceptance fixtures | domain25/25; generative4rooms/8calls, Workers35checks/37calls; รอ pipeline/hosted |
 | F066-T8 | เปิด engines บน hosted แก้เคสไม่ผ่าน และ deploy/ทดสอบซ้ำ | pipeline เปิด runtime จริง, CSV ไม่บังคับค่าที่คำนวณ, คำถาม library ตอบตาม capability; multi-account BLOCKED |
 | F066-T7 | ตรวจ JavaScript/Python และทดสอบหลัง release 8 | ยืนยันรุ่นจริง, actual/evidence และ PASS/FAIL/BLOCKED รายเคส; ไม่อ้าง readiness จาก capability flag อย่างเดียว |
 
@@ -115,3 +116,9 @@ node tests/ui/f066-rules-browser.mjs
 ```
 
 UI-gate ต้องใช้ skill ที่ติดตั้งในเครื่องและรันกับ `tests/ui/f066-rules.html --full` ส่วน real-provider proof ใช้ `TABLETOP_CREDENTIAL_FILE` ที่ไม่อยู่ใน Git แล้ว `node --import tsx scripts/compute-live-local.mjs`; จากนั้นรัน `scripts/compute-runtime-local.mjs` แบบเดียวกัน ไม่มีการ deploy
+
+### F066-T9 — ค่าเริ่มต้นและ deployment acceptance
+
+ช่องใหม่ที่ optional และมี default ต้องเติมค่าให้แถวเดิมเหมือนเดิม; แยก guard ย้อนสูตรที่ต้องรักษาค่าประวัติและห้าม default กลบค่าที่ไม่ตรง มี red→green regression ของ discount=10 และ domain tests 25/25 ผ่าน รวม required/default/rollback; typecheck/scoped lint ผ่านบน Node22.23.2 และ independent review ไม่มี P1/P2
+
+F075@f79b45f คืนชื่อแถวที่ไม่มี text ให้มี ID เช่น 0 · team-south จึงคง assertion ชื่อเดิมและเพิ่มตรวจ selected record ID และ strict assistant mock ให้รับ computeCapabilities พร้อมตรวจ disabled engine profile ของ fixture คง privacy assertions ทั้งหมด Local browser ก่อน sync dev ล่าสุด: generative 4 rooms/8 synthetic calls/0 errors; Workers 35 checks/37 synthetic calls/0 errors ผลนี้ไม่ใช่ hosted acceptance
