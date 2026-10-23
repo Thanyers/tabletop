@@ -1,0 +1,133 @@
+# CD002: every merge into dev deploys tabletop-staging once its full suite passes.
+# Validate (full suite on push to dev, CI007) succeeds → build (version 0.0.0-dev, dev sha)
+# → staging D1 migrations → deploy → smoke. Production is deployed only by release-deploy.yml
+# after a release/hotfix merges into main (CD001).
+# Any failure stops here, opens a GitHub issue and never rolls staging back.
+name: Staging deploy
+
+on:
+  workflow_run:
+    workflows: ["Validate local R1 candidate"]
+    types: [completed]
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full SHA of a commit on dev to deploy to staging (default: dev head)"
+        required: false
+
+permissions: {}
+
+# One staging deploy at a time; GitHub keeps only the newest pending run, so a burst of
+# merges deploys the latest dev instead of every commit. A running deploy is never cut off.
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write # open an issue when a staging deploy fails
+    env:
+      REQUESTED_SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Record start
+        run: |
+          echo "JOB_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          echo "STAGE=prepare" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.REQUESTED_SHA || 'dev' }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+
+      - name: Resolve commit
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+          git fetch --quiet origin dev
+          git merge-base --is-ancestor "$SHA" origin/dev || { echo "::error::$SHA is not on dev"; exit 1; }
+          echo "Staging deploy of dev at $SHA"
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check deploy settings
+        env:
+          WRANGLER_CONFIG_STAGING: ${{ secrets.WRANGLER_CONFIG_STAGING }}
+        run: |
+          missing=""
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WRANGLER_CONFIG_STAGING STAGING_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then echo "::error::Missing repo secrets/variables:$missing"; exit 1; fi
+          umask 077
+          printf '%s' "$WRANGLER_CONFIG_STAGING" > wrangler.staging.json
+          npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
+
+      - name: Build
+        run: |
+          npm run build
+          VERSION="$(node -p "require('./dist/version.json').version")"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          node -e "console.log(require('./dist/version.json'))"
+
+      - name: Staging — migrations
+        run: |
+          echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
+          bash .github/scripts/d1-migrate.sh wrangler.staging.json staging
+
+      - name: Staging — deploy
+        run: |
+          echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
+          npx wrangler deploy --config wrangler.staging.json
+
+      - name: Staging — smoke checks
+        run: |
+          echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
+          npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "STAGE=done" >> "$GITHUB_ENV"
+          echo "Deployed dev $SHA ($VERSION) to staging." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove deploy config
+        if: always()
+        run: rm -f wrangler.staging.json
+
+      # The failure logger must never change the deploy's outcome.
+      - name: Open staging-failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ACTOR: ${{ github.event.workflow_run.actor.login || github.actor }}
+        run: |
+          DETECTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BODY="$(printf '%s\n' \
+            "Staging deploy failed. Staging is NOT rolled back automatically; production is untouched." \
+            "" \
+            "| Field | Value |" "| --- | --- |" \
+            "| Commit (dev) | ${SHA:-unknown} |" \
+            "| Failed stage | ${STAGE:-unknown} |" \
+            "| job_started_at | $JOB_STARTED_AT |" \
+            "| detected_at | $DETECTED_AT |" \
+            "| Triggered by | $ACTOR |" \
+            "| Run | $RUN_URL |" \
+            "" \
+            "Next: read the run log, fix on dev (a new merge redeploys), or re-run **Staging deploy** with this SHA." \
+            "Record the failure and fix times in MEMORY.md → Deploy failures.")"
+          gh issue create --title "Staging deploy failed at ${STAGE:-unknown} (${SHA:0:7})" --body "$BODY" \
+            || echo "Could not open the failure issue; the run log still has the details."

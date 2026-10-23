@@ -47,8 +47,8 @@ browser acceptance ต้องรัน `build` และ `build:cloudflare` �
    - **PATCH** แก้บั๊ก/ข้อความ/CSS · **MINOR** ฟีเจอร์ใหม่ หรือ migration ที่เข้ากันได้ย้อนหลัง
    - **MAJOR** rollback ไม่ได้ถ้าไม่ทำอะไรเพิ่ม เช่น migration ย้อนไม่ได้, ต้องเพิ่ม secret/binding/config ก่อน deploy, เปลี่ยน response จน client เก่าพัง
 3. PR `release/X.Y.Z` → `main` → **AI merge เอง** เมื่อครบเงื่อนไขใน [§8](../AGENTS.md#8-ขอบเขตของ-ai) · ชื่อ branch คือเลขเวอร์ชัน
-4. หลัง merge **pipeline ทำต่อเองทั้งหมด** ([`release-deploy.yml`](../.github/workflows/release-deploy.yml), CD001): รอ `local-validation` ของ merge commit บน `main` ผ่าน (ใช้ผลของ release PR ถ้าโค้ดเหมือนกัน — CI006) → สร้าง annotated tag `vX.Y.Z` → build ครั้งเดียว → staging (D1 migration + deploy + smoke) → production ด้วย build เดียวกัน → smoke · ดูรายละเอียดที่หัวข้อถัดไป
-5. ติดตาม run ของ **Release deploy** จนจบ (`gh run watch`) แล้วรายงานผู้ใช้: เลขเวอร์ชัน, `/version` ของ staging/production, ลิงก์ run
+4. หลัง merge **pipeline ทำต่อเองทั้งหมด** ([`release-deploy.yml`](../.github/workflows/release-deploy.yml), CD001): รอ `local-validation` ของ merge commit บน `main` ผ่าน (ใช้ผลของ release PR ถ้าโค้ดเหมือนกัน — CI006) → สร้าง annotated tag `vX.Y.Z` → build → **production** (D1 migration + deploy + smoke) · staging ไม่อยู่ในขั้นนี้แล้ว เพราะ deploy ทุกครั้งที่ merge เข้า `dev` (CD002) · ดูรายละเอียดที่หัวข้อถัดไป
+5. ติดตาม run ของ **Release deploy** จนจบ (`gh run watch`) แล้วรายงานผู้ใช้: เลขเวอร์ชัน, `/version` ของ production, ลิงก์ run
 6. เปิด PR `main` → `dev` เพื่อนำ commit ของ release กลับเข้า `dev` (AI merge เองได้) พร้อมอัปเดต [`docs/DEPLOYMENTS.md`](DEPLOYMENTS.md)
 
 AI ออก release เมื่อผู้ใช้สั่งในแชท (เช่น "release", "ขึ้น prod") แล้วทำตั้งแต่ข้อ 1 ถึง 6 เองจนจบ ไม่ต้องให้คนเปิด GitHub
@@ -56,10 +56,19 @@ AI ออก release เมื่อผู้ใช้สั่งในแช�
 
 ## 6. Deploy (อัตโนมัติหลัง merge release)
 
-pipeline ทำงานเฉพาะ merge จาก `release/X.Y.Z` หรือ `hotfix/X.Y.Z` เข้า `main` และต้องมีหัวข้อ `## X.Y.Z` ใน `CHANGELOG.md` · merge อื่นเข้า `main` ไม่ deploy
+มี pipeline สองตัว (ผู้ใช้ตัดสิน 2026-10-23):
+
+| pipeline | ทำงานเมื่อ | deploy ไป | `/version` |
+| --- | --- | --- | --- |
+| [`staging-deploy.yml`](../.github/workflows/staging-deploy.yml) (CD002) | push เข้า `dev` (merge PR) และชุดเต็มของ Validate บน push นั้นผ่าน (CI007) | **tabletop-staging** | `0.0.0-dev` + sha ของ dev |
+| [`release-deploy.yml`](../.github/workflows/release-deploy.yml) (CD001) | merge `release/X.Y.Z` / `hotfix/X.Y.Z` เข้า `main` และมีหัวข้อ `## X.Y.Z` ใน `CHANGELOG.md` | **tabletop** (production) | `X.Y.Z` + sha ของ merge commit |
+
+- merge อื่นเข้า `main` ไม่ deploy · staging deploy ทีละรอบ ถ้ามีหลาย merge ติดกัน GitHub เก็บเฉพาะรอบล่าสุดที่รอคิว จึง deploy dev ล่าสุด · ล้มแล้ว merge ใหม่เข้า dev จะ deploy ซ้ำเอง หรือกด **Staging deploy** (workflow_dispatch) ด้วย SHA
+- ⚠️ D1 migration ใน PR เข้า `dev` **รันบน staging ทันทีหลัง merge** · migration แบบย้อนไม่ได้ต้องถามผู้ใช้ก่อน merge เข้า `dev` ด้วย (เดิมถามตอน merge เข้า `main`)
+- production ไม่ได้ใช้ build เดียวกับ staging แล้ว (build ใหม่จาก merge commit บน main) แต่โค้ดเดียวกับ dev ตอนตัด release ที่ผ่าน staging มาแล้ว
 
 - **config จริงอยู่ใน GitHub secrets** (`WRANGLER_CONFIG_STAGING`, `WRANGLER_CONFIG_PRODUCTION`) ไม่อยู่ใน git · pipeline ตรวจชื่อ Worker, `PUBLIC_ORIGIN`, D1 ID ก่อนใช้ เพื่อไม่ให้ config staging ไป deploy production
-- **D1 migration รันอัตโนมัติ** staging ก่อน แล้วค่อย production หลัง staging ผ่าน · ก่อนรันทุกครั้งบันทึก D1 Time Travel bookmark ไว้ใน summary ของ run (กู้ได้ด้วย `wrangler d1 time-travel restore`) · เอา bookmark ไม่ได้ = ไม่ migrate
+- **D1 migration รันอัตโนมัติ** staging ตอน merge เข้า dev และ production ตอน merge release · ก่อนรันทุกครั้งบันทึก D1 Time Travel bookmark ไว้ใน summary ของ run (กู้ได้ด้วย `wrangler d1 time-travel restore`) · เอา bookmark ไม่ได้ = ไม่ migrate
 - **smoke** เป็นการอ่านอย่างเดียว: `/healthz`, `/readyz`, `/api/capabilities`, `/version` ต้องตรงกับ tag, `/` และ `/new` · ไม่ล็อกอิน ไม่สร้างห้อง ไม่เรียก AI → smoke ไม่ครอบ flow ที่ต้องล็อกอินหรือใช้ AI
 - **ล้มที่ขั้นไหนก็หยุดทันที** เปิด GitHub issue "Deploy failed" พร้อม `job_started_at` / `detected_at` / ขั้นที่ล้ม · **ไม่ rollback production อัตโนมัติ** (ดูข้อห้าม rollback ใน [DEPLOYMENTS](DEPLOYMENTS.md)) · AI แจ้งผู้ใช้ทันที แก้ (ถ้าเป็นปัญหาในโค้ด ให้ออกรุ่น PATCH ใหม่) หรือรัน **Release deploy** ใหม่ด้วย SHA เดิม (workflow_dispatch) ถ้าเป็นปัญหาชั่วคราว และบันทึกลง `MEMORY.md` → Deploy failures
 - หลัง deploy อัปเดต [`docs/DEPLOYMENTS.md`](DEPLOYMENTS.md) ผ่าน PR เข้า `dev`

@@ -12,7 +12,7 @@
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
-/demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+/demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
 
 ## ผลตรวจ deploy 8.0.0 (23 ตุลาคม 2569)
 

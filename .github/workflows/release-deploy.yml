@@ -1,7 +1,7 @@
-# CD001: a merged release/X.Y.Z (or hotfix/X.Y.Z) PR on main deploys itself.
+# CD001: a merged release/X.Y.Z (or hotfix/X.Y.Z) PR on main deploys PRODUCTION.
 # Validate passes on the main merge commit (CI006: reusing the release PR's full-suite run
-# when the merge commit's tree equals the PR head) → tag vX.Y.Z → build once → staging
-# (D1 migrations + deploy + smoke) → production (same build) → smoke.
+# when the merge commit's tree equals the PR head) → tag vX.Y.Z → build → production
+# (D1 migrations + deploy + smoke). Staging is deployed from dev by staging-deploy.yml (CD002).
 # Any failure stops the pipeline, opens a GitHub issue and never rolls back.
 # Setup and recovery: docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001
 name: Release deploy
@@ -33,9 +33,7 @@ jobs:
       issues: write   # open an issue when a deploy fails
     env:
       SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
-      STAGING_URL: ${{ vars.STAGING_URL }}
       PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
-      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
       PRODUCTION_WORKER: ${{ vars.PRODUCTION_WORKER || 'tabletop' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -76,18 +74,15 @@ jobs:
       - name: Check deploy settings
         if: env.SKIP != '1'
         env:
-          WRANGLER_CONFIG_STAGING: ${{ secrets.WRANGLER_CONFIG_STAGING }}
           WRANGLER_CONFIG_PRODUCTION: ${{ secrets.WRANGLER_CONFIG_PRODUCTION }}
         run: |
           missing=""
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WRANGLER_CONFIG_STAGING WRANGLER_CONFIG_PRODUCTION STAGING_URL PRODUCTION_URL; do
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WRANGLER_CONFIG_PRODUCTION PRODUCTION_URL; do
             [ -n "${!name}" ] || missing="$missing $name"
           done
           if [ -n "$missing" ]; then echo "::error::Missing repo secrets/variables:$missing"; exit 1; fi
           umask 077
-          printf '%s' "$WRANGLER_CONFIG_STAGING" > wrangler.staging.json
           printf '%s' "$WRANGLER_CONFIG_PRODUCTION" > wrangler.production.json
-          npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
           npx tsx server/release-deploy.ts check-config wrangler.production.json "$PRODUCTION_WORKER" "$PRODUCTION_URL"
 
       - name: Tag v${{ env.VERSION }}
@@ -105,29 +100,11 @@ jobs:
           fi
           git checkout --quiet "$TAG"
 
-      - name: Build once for both environments
+      - name: Build the release
         if: env.SKIP != '1'
         run: |
           npm run build
           node -e "const v=require('./dist/version.json'); if (v.version !== process.env.VERSION) { console.error('::error::dist/version.json is ' + v.version); process.exit(1); } console.log(v)"
-
-      - name: Staging — migrations
-        if: env.SKIP != '1'
-        run: |
-          echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
-          bash .github/scripts/d1-migrate.sh wrangler.staging.json staging
-
-      - name: Staging — deploy
-        if: env.SKIP != '1'
-        run: |
-          echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
-          npx wrangler deploy --config wrangler.staging.json
-
-      - name: Staging — smoke checks
-        if: env.SKIP != '1'
-        run: |
-          echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
-          npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Production — migrations
         if: env.SKIP != '1'
@@ -135,7 +112,7 @@ jobs:
           echo "STAGE=production-migrations" >> "$GITHUB_ENV"
           bash .github/scripts/d1-migrate.sh wrangler.production.json production
 
-      - name: Production — deploy (same build as staging)
+      - name: Production — deploy
         if: env.SKIP != '1'
         run: |
           echo "STAGE=production-deploy" >> "$GITHUB_ENV"
@@ -147,11 +124,11 @@ jobs:
           echo "STAGE=production-smoke" >> "$GITHUB_ENV"
           npx tsx server/release-deploy.ts smoke "$PRODUCTION_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "STAGE=done" >> "$GITHUB_ENV"
-          echo "Released v$VERSION ($SHA) to staging and production." >> "$GITHUB_STEP_SUMMARY"
+          echo "Released v$VERSION ($SHA) to production." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove deploy configs
         if: always()
-        run: rm -f wrangler.staging.json wrangler.production.json
+        run: rm -f wrangler.production.json
 
       # The failure logger must never change the deploy's outcome: it only runs after
       # a failure, and its own errors are swallowed.
