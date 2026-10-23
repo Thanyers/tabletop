@@ -443,7 +443,6 @@
 .tt-chooser .tt-existing-tables__times { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--tt-muted); font-size: 12px; line-height: 1.3; text-align: right; white-space: nowrap; }
 .tt-chooser .tt-existing-tables__updated { display: flex; flex-direction: column; align-items: flex-end; }
 .tt-chooser .tt-existing-tables__updated b { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; color: var(--tt-ink); font-weight: 600; }
-.tt-chooser .tt-existing-tables__created { color: var(--tt-muted); font-size: 11px; }
 .tt-chooser .tt-existing-tables__empty { margin: 4px 0 0; color: var(--tt-muted); font-size: 13px; }
 @media (max-width: 520px) {
   .tt-chooser .tt-table-search { flex-basis: 100%; }

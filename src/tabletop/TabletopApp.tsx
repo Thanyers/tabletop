@@ -1033,7 +1033,7 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
       {session.workspaces.length > 0 && <div className="tt-existing-tables">
         <div className="tt-existing-tables__head">
           <h2>Pick up where you left off</h2>
-          {session.workspaces.length > 1 && <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>}
+          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>
         </div>
         {session.workspaces.length > 1 && <div className="tt-table-filters" role="group" aria-label="Filter tables">
           <label><span>Sort</span><select value={filter.sort} onChange={(event) => changeSort(event.target.value as TableSort)}>
@@ -1060,11 +1060,9 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
         </div>}
         {visibleWorkspaces.map((workspace) => {
           const updatedAt = workspace.updatedAt;
-          const createdAt = workspace.createdAt;
           return <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span>
-            {(updatedAt !== undefined || createdAt !== undefined) && <span className="tt-existing-tables__times">
+            {updatedAt !== undefined && <span className="tt-existing-tables__times">
               {updatedAt !== undefined && <time className="tt-existing-tables__updated" dateTime={new Date(updatedAt).toISOString()} title={`Last changed ${new Date(updatedAt).toLocaleString()}`}><b>{workspace.updatedBy ? `Updated by ${workspace.updatedBy}` : 'Updated'}</b><span>{listDate(updatedAt, now)} · {relativeTime(updatedAt, now)}</span></time>}
-              {createdAt !== undefined && <time className="tt-existing-tables__created" dateTime={new Date(createdAt).toISOString()} title={`Created ${new Date(createdAt).toLocaleString()}`}>Created {listDate(createdAt, now)}</time>}
             </span>}
             <ArrowRight size={16} />
           </button>;
