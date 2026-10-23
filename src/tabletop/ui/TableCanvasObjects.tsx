@@ -23,6 +23,7 @@ import { hasLinkedComputeOutput, LinkedComputeOutputs, TableComputeModuleCard } 
 import { serverRollFor, useServerRollsTick } from './roll-store';
 import { describeProgramDiff, diffProgram, ruleBadge, type ProgramDiff, type RuleBadge } from './rules-summary';
 import { webSourceMeta, webSourceStatusLabel } from './table-source-view';
+import { fixedProgramRecordIds, matchRowsByIdentity, requiredTextIdentityCandidates } from '../shared/row-identity';
 import './record-actions.css';
 import './rules-card.css';
 
@@ -453,6 +454,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   const collectionId = node.id.slice('table.collection.'.length);
   const collection = state.program?.collections.find((item) => item.id === collectionId);
   const rows = (node.inputs.rows as TableRecord[] | undefined) ?? state.records[collectionId] ?? [];
+  const fixedRecordIds = fixedProgramRecordIds(state.program, collectionId);
   const computeWriter = state.program?.compute?.modules.some((module) => module.outputs.some((output) => output.type === 'table' && output.collectionId === collectionId)) ?? false;
   const hasCalculatedRows = hasLinkedComputeOutput(collectionId, state);
   const computed = (state.computedColumns ?? []).filter((column) => column.collection === collectionId);
@@ -507,7 +509,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">SHARED RECORDS</span><strong>{collection?.title ?? node.title}</strong><small>{rows.length} {rows.length === 1 ? 'record' : 'records'} · data r{state.dataRevision}</small></div>
     {collection && <LinkedComputeOutputs collectionId={collectionId} state={state} view={view} expanded={expanded} />}
     {expanded && collection && viewerCan(view, 'data.columns') && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
-    {expanded && collection && viewerCan(view, 'data.import') && !computeWriter && <TableRowImport collection={collection} existingRows={state.records[collectionId]?.length ?? 0} busy={busy} onCommand={onCommand} />}
+    {expanded && collection && viewerCan(view, 'data.import') && !computeWriter && <TableRowImport collection={collection} existingRecords={state.records[collectionId] ?? []} fixedRecordIds={fixedRecordIds} busy={busy} onCommand={onCommand} />}
     {expanded && collection && computeWriter && <p className="tt-table-readonly-inline" role="status">This table is filled by a calculation. Run it from Rules to refresh these results; rows cannot be imported directly here.</p>}
     {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && !hasCalculatedRows && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">{hasCalculatedRows ? 'No source records are available. Calculated results are shown above.' : 'No records are available in this collection.'}</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => { const serverRow = serverValues?.[collectionId]?.[row.id]; const value = serverRow && column.id in serverRow ? serverRow[column.id] : computeRecordRow(computed, collectionId, row)[column.id]; return <td key={column.id}>{formatComputed(value)}</td>; })}</tr>)}</tbody></table></div>}
     {expanded && selectedRecord && <section className="tt-table-record-actions" aria-label={`Actions for ${recordLabel(selectedRecord, collection, view.members)}`}>
@@ -609,29 +611,47 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
   </section>;
 }
 
-function TableRowImport({ collection, existingRows, busy, onCommand }: {
+function TableRowImport({ collection, existingRecords, fixedRecordIds, busy, onCommand }: {
   collection: TableCollection;
-  existingRows: number;
+  existingRecords: TableRecord[];
+  fixedRecordIds: string[];
   busy: string | null;
   onCommand: WorkbenchProps['onCommand'];
 }) {
+  const existingRows = existingRecords.length;
   const [open, setOpen] = useState(false);
   const [csv, setCsv] = useState('');
   const [worksheet, setWorksheet] = useState<ReturnType<typeof worksheetToCsvTable> | null>(null);
   const [fileName, setFileName] = useState('');
   const parsed = useMemo(() => worksheet ?? parseCsv(csv), [worksheet, csv]);
   const [mapping, setMapping] = useState<Record<number, string>>({});
+  const [identityField, setIdentityField] = useState('');
   const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
   const [replaceConfirmed, setReplaceConfirmed] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   const detailId = `${useId().replace(/:/g, '')}-tt-import`;
-  useEffect(() => { setMapping(autoMapping(parsed.headers, collection.fields)); setReplaceConfirmed(false); }, [parsed, collection]);
+  useEffect(() => { setMapping(autoMapping(parsed.headers, collection.fields)); setIdentityField(''); setReplaceConfirmed(false); }, [parsed, collection]);
   const preview = useMemo(() => buildImportRows(parsed, mapping, collection.fields), [parsed, mapping, collection]);
+  const identityCandidates = useMemo(() => requiredTextIdentityCandidates(
+    collection.fields,
+    existingRecords,
+    preview.rows,
+    new Set(Object.values(mapping)),
+  ), [collection.fields, existingRecords, preview.rows, mapping]);
+  useEffect(() => {
+    if (fixedRecordIds.length > 0 && !identityField && identityCandidates.length === 1) setIdentityField(identityCandidates[0]!.id);
+  }, [fixedRecordIds.length, identityField, identityCandidates]);
+  const identityMatch = identityField ? matchRowsByIdentity(existingRecords, preview.rows, identityField) : undefined;
+  const missingFixedRecords = identityMatch?.ok
+    ? fixedRecordIds.filter(recordId => !identityMatch.matchedRecordIds.includes(recordId))
+    : [];
+  const identityReady = identityMatch?.ok === true && missingFixedRecords.length === 0;
   const hasHeaders = parsed.headers.some((header) => header.length > 0);
   const enoughRows = importMode === 'replace' ? hasHeaders : preview.rows.length > 0;
-  const canImport = enoughRows && preview.rows.length <= 100 && preview.invalid.length === 0 && (importMode !== 'replace' || replaceConfirmed) && busy === null && !pending && !readingFile;
+  const linkedRowsReady = importMode !== 'replace' || fixedRecordIds.length === 0 || (identityField.length > 0 && identityReady);
+  const canImport = enoughRows && preview.rows.length <= 100 && preview.invalid.length === 0 && linkedRowsReady && (importMode !== 'replace' || replaceConfirmed) && busy === null && !pending && !readingFile;
   const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -664,7 +684,12 @@ function TableRowImport({ collection, existingRows, busy, onCommand }: {
   const runImport = async () => {
     setPending(true); setMessage('');
     try {
-      const result = await onCommand('table.importRows', { collection: collection.id, rows: preview.rows, mode: importMode });
+      const result = await onCommand('table.importRows', {
+        collection: collection.id,
+        rows: preview.rows,
+        mode: importMode,
+        ...(importMode === 'replace' && identityField ? { identityField } : {}),
+      });
       if (result) {
         setMessage(importMode === 'replace'
           ? preview.rows.length === 0 ? `Removed all rows from ${collection.title}.` : `Replaced ${existingRows} rows with ${preview.rows.length} rows in ${collection.title}.`
@@ -672,6 +697,8 @@ function TableRowImport({ collection, existingRows, busy, onCommand }: {
         setCsv(''); setWorksheet(null); setFileName(''); setReplaceConfirmed(false);
       }
       else setMessage('Import failed. Fix the invalid rows and try again.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Import failed. Fix the invalid rows and try again.');
     } finally { setPending(false); }
   };
   return <section className="tt-table-import" aria-label={`Import rows into ${collection.title}`}>
@@ -681,7 +708,7 @@ function TableRowImport({ collection, existingRows, busy, onCommand }: {
       {fileName && <p className="tt-table-import__file-name">{fileName}{worksheet ? ' · first worksheet' : ' · CSV rows'}</p>}
       {readingFile && <p className="tt-table-import__summary" role="status">Reading file…</p>}
       <label htmlFor={detailId}>Or paste CSV<textarea id={detailId} rows={5} value={csv} placeholder={'sku,qty\nCAM-1,4'} onChange={(event) => { setWorksheet(null); setFileName(''); setCsv(event.target.value); setMessage(''); setReplaceConfirmed(false); }} aria-describedby={`${detailId}-summary`} /></label>
-      {parsed.headers.length > 0 && <div className="tt-table-import__mapping">{parsed.headers.map((header, index) => <label key={`${index}-${header}`}>{header || `Column ${index + 1}`}<select value={mapping[index] ?? ''} onChange={(event) => { const value = event.target.value; setMapping((current) => ({ ...current, [index]: value })); }}><option value="">Ignore</option>{collection.fields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>)}</div>}
+      {parsed.headers.length > 0 && <div className="tt-table-import__mapping">{parsed.headers.map((header, index) => <label key={`${index}-${header}`}>{header || `Column ${index + 1}`}<select value={mapping[index] ?? ''} onChange={(event) => { const value = event.target.value; setMapping((current) => ({ ...current, [index]: value })); setReplaceConfirmed(false); }}><option value="">Ignore</option>{collection.fields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>)}</div>}
       {hasHeaders && <fieldset className="tt-table-import__mode"><legend>What should happen to these rows?</legend>
         <label><input type="radio" name={`${detailId}-mode`} value="append" checked={importMode === 'append'} onChange={() => { setImportMode('append'); setReplaceConfirmed(false); }} /><span>Add rows · keep the current {existingRows} rows</span></label>
         <label><input type="radio" name={`${detailId}-mode`} value="replace" checked={importMode === 'replace'} onChange={() => { setImportMode('replace'); setReplaceConfirmed(false); }} /><span>Replace all {existingRows} current rows with {preview.rows.length} prepared rows</span></label>
@@ -690,8 +717,19 @@ function TableRowImport({ collection, existingRows, busy, onCommand }: {
       {preview.invalid.length > 0 && <ul className="tt-table-error">{preview.invalid.slice(0, 3).map((item) => <li key={item.row}>Row {item.row}: {item.message}</li>)}</ul>}
       {preview.rows.length > 100 && <p className="tt-table-error" role="alert">Import at most 100 rows per command.</p>}
       {importMode === 'replace' && hasHeaders && <>
+        {fixedRecordIds.length > 0 && <div className="tt-table-import__identity">
+          <label htmlFor={`${detailId}-identity`}>Keep linked rows matched by<select id={`${detailId}-identity`} value={identityField} onChange={(event) => { setIdentityField(event.target.value); setReplaceConfirmed(false); }}>
+            <option value="">Choose a text identity field…</option>
+            {collection.fields.filter((field) => field.type === 'text').map((field) => <option key={field.id} value={field.id}>{field.label}{field.required ? ' · required' : ''}</option>)}
+          </select></label>
+          {identityCandidates.length === 1 && identityCandidates[0]?.id === identityField && <p className="tt-table-inline-hint" role="status">Suggested: {identityCandidates[0].label} has unique, nonempty values in the current and prepared rows.</p>}
+          {identityField && identityMatch?.ok && identityReady && <p className="tt-table-inline-hint" role="status">Matching by {collection.fields.find((field) => field.id === identityField)?.label} keeps the IDs of {identityMatch.matchedRecordIds.length} matching rows so rules and controls keep targeting the same records. Unmatched imported rows get new IDs; unmatched current rows are removed.</p>}
+          {identityField && identityMatch && !identityMatch.ok && <p className="tt-table-error" role="alert">{identityMatch.message}</p>}
+          {identityField && identityMatch?.ok && missingFixedRecords.length > 0 && <p className="tt-table-error" role="alert">This replacement is missing the identity value for a row referenced by the rules. Include each referenced row or change the rules first.</p>}
+          {!identityField && <p className="tt-table-inline-hint" role="status">Choose a text field with unique, nonempty values to preserve rows used by the rules.</p>}
+        </div>}
         <p className="tt-table-import__replace-warning" role="status">This will replace {existingRows} existing rows in {collection.title} with {preview.rows.length} prepared rows. The import runs only after you confirm.</p>
-        <label className="tt-table-import__confirm"><input type="checkbox" checked={replaceConfirmed} onChange={(event) => setReplaceConfirmed(event.target.checked)} /><span>Yes, replace all {existingRows} existing rows with these {preview.rows.length} rows.</span></label>
+        <label className="tt-table-import__confirm"><input type="checkbox" checked={replaceConfirmed} onChange={(event) => setReplaceConfirmed(event.target.checked)} /><span>Yes, replace all {existingRows} existing rows with these {preview.rows.length} rows{identityField && fixedRecordIds.length > 0 ? `, matching by ${collection.fields.find((field) => field.id === identityField)?.label}` : ''}.</span></label>
       </>}
       <button type="button" className="tt-button tt-button--primary" disabled={!canImport} onClick={() => void runImport()}>{pending || readingFile ? 'Preparing…' : importMode === 'replace' ? `Replace ${existingRows} rows with ${preview.rows.length}` : `Add ${preview.rows.length} rows`}</button>
       {message && <p className="tt-table-inline-hint" role="status">{message}</p>}
