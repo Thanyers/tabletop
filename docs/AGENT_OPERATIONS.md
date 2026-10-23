@@ -50,8 +50,14 @@ browser acceptance ต้องรัน `build` และ `build:cloudflare` �
 4. หลัง merge **pipeline ทำต่อเองทั้งหมด** ([`release-deploy.yml`](../.github/workflows/release-deploy.yml), CD001): รอ `local-validation` ของ merge commit บน `main` ผ่าน (ใช้ผลของ release PR ถ้าโค้ดเหมือนกัน — CI006) → สร้าง annotated tag `vX.Y.Z` → build → **production** (D1 migration + deploy + smoke) · staging ไม่อยู่ในขั้นนี้แล้ว เพราะ deploy ทุกครั้งที่ merge เข้า `dev` (CD002) · ดูรายละเอียดที่หัวข้อถัดไป
 5. ติดตาม run ของ **Release deploy** จนจบ (`gh run watch`) แล้วรายงานผู้ใช้: เลขเวอร์ชัน, `/version` ของ production, ลิงก์ run
 6. เปิด PR `main` → `dev` เพื่อนำ commit ของ release กลับเข้า `dev` (AI merge เองได้) พร้อมอัปเดต [`docs/DEPLOYMENTS.md`](DEPLOYMENTS.md)
+7. **อัปเดตหน้า Release Notes** (หน้าเว็บสรุปว่าแต่ละรุ่นเปลี่ยนอะไร กดดรอปดาวน์ดูรายละเอียด ค้นหา/กรอง MAJOR·MINOR·PATCH ได้)
+   - สร้างหน้าใหม่จาก `CHANGELOG.md` ของ `main` หลัง release (รวมไฟล์ใน `changelog.d/` เป็นหัวข้อ "ยังไม่ออก"): `node scripts/build-release-notes.mjs` → ได้ `test-results/release-notes/tabletop-releases.html` (ignored ไม่ commit)
+   - เผยแพร่ทับลิงก์เดิม **ห้ามสร้างลิงก์ใหม่**: Claude ใช้ Artifact tool `publish` พร้อม `url` = `https://claude.ai/artifact/HohMBJcKQz2ujHmw6hqKQ8` (อ่านก่อนด้วย `action: "read"` ตามกติกาของ tool) · หน้านี้เป็น private ของเจ้าของ เปิดได้เฉพาะคนที่ถูกแชร์
+   - AI ที่ไม่มี Artifact tool: สร้างไฟล์แล้วบอกผู้ใช้ว่าไฟล์อยู่ที่ไหน ให้ Claude เผยแพร่ต่อ · อย่าข้ามเงียบ
+   - แก้หน้าตา/การทำงานของหน้าที่ [`scripts/release-notes/template.html`](../scripts/release-notes/template.html) · ข้อมูลมาจาก CHANGELOG อย่างเดียว ไม่ต้องแก้มือ
+   - รายงานผู้ใช้พร้อมลิงก์ในข้อความสรุป release (ข้อ 5)
 
-AI ออก release เมื่อผู้ใช้สั่งในแชท (เช่น "release", "ขึ้น prod") แล้วทำตั้งแต่ข้อ 1 ถึง 6 เองจนจบ ไม่ต้องให้คนเปิด GitHub
+AI ออก release เมื่อผู้ใช้สั่งในแชท (เช่น "release", "ขึ้น prod") แล้วทำตั้งแต่ข้อ 1 ถึง 7 เองจนจบ ไม่ต้องให้คนเปิด GitHub
 
 
 ## 6. Deploy (อัตโนมัติหลัง merge release)
