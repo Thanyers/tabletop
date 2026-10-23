@@ -10,3 +10,10 @@
 
 # Retained demo artifacts keep the bytes used by their recorded SHA-256 values.
 handoff/Final/auto-demo/** text eol=lf
+
+# Append-style logs: every PR adds entries at the same spot, so a local merge keeps both
+# sides' lines instead of stopping on a conflict (built-in "union" driver). Not used for
+# spec.md, whose entries are edited in place. GitHub's "Update branch" button ignores it.
+CHANGELOG.md merge=union
+PLAN.md merge=union
+MEMORY.md merge=union
