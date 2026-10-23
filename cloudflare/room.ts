@@ -12,7 +12,7 @@ import { authenticateHash, authenticateRequest, isAdminSession, requireMutation,
 import { proposeChange } from './ai.js';
 import { createIdentityReplacements, redactString, respondToTablePrompt, type IdentityReplacement } from './table-assistant.js';
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
-import type { Env } from './contracts.js';
+import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
 import { headWithin, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
@@ -523,7 +523,12 @@ export class Room extends DurableObject<Env> {
       }
       if (url.pathname === '/internal/view' && request.method === 'GET') {
         const authorized = await this.authorize(request);
-        return json(200, authorized.workspace, { 'x-request-id': requestId });
+        // F053: the table list shows when each table last changed and who changed it; the view contract stays unchanged.
+        const change = this.repository.lastChange(authorized.workspace.id, authorized.workspace.epoch);
+        const headers: Record<string, string> = { 'x-request-id': requestId, [UPDATED_AT_HEADER]: String(change?.at ?? authorized.workspace.createdAt) };
+        // Header values must survive non-Latin names, so the name travels percent-encoded.
+        if (change?.actorName) headers[UPDATED_BY_HEADER] = encodeURIComponent(change.actorName);
+        return json(200, authorized.workspace, headers);
       }
       if (url.pathname === '/internal/metadata' && request.method === 'GET') {
         const session = await authenticateRequest(request, this.env);
