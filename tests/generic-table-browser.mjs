@@ -332,6 +332,16 @@ async function verifyPendingChatMotion(owner, draftNode, draftCard) {
   expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
 }
 
+// Dev #194: a rule request sends the full text only of files the active rules do not cite yet.
+// Cited files travel by id and name as importedSources; their rows are already in the table.
+function expectedModelSources(domain) {
+  const cited = new Set((domain.program?.evidence ?? []).map(item => item.sourceId));
+  return {
+    expectedSources: domain.sources.filter(item => !cited.has(item.id)).map(item => ({ id: item.id, filename: item.filename, text: item.text })),
+    expectedImportedSources: domain.sources.filter(item => cited.has(item.id)).map(item => ({ id: item.id, filename: item.filename })),
+  };
+}
+
 async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false, streamThinking = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -389,7 +399,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const streamReasoning = streamThinking
     ? Array.from({ length: 24 }, (_, index) => `Checking source columns and drafting rule ${index + 1}. `)
     : undefined;
-  setTableReply({ change, gate, streamReasoning, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  setTableReply({ change, gate, streamReasoning, ...expectedModelSources(before.domain) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -563,7 +573,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
 // Picking an answer sends a new rule request at once under the table consent.
 async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
+  const modelSources = expectedModelSources(before.domain);
   const expectUnchanged = async () => {
     const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(current.revision).toBe(before.revision);
@@ -583,7 +593,7 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   const clarifyPrompt = 'Make a shift table.';
   const clarification = { question: 'Who must agree before two people swap shifts?', options: ['Both people', 'Only the owner', 'Nobody'] };
   await prompt.fill(clarifyPrompt);
-  setTableReply({ change: { kind: 'clarify', ...clarification }, expectedSources });
+  setTableReply({ change: { kind: 'clarify', ...clarification }, ...modelSources });
   const firstPost = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   await chat.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(consent).toBeVisible();
@@ -618,7 +628,7 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   // The follow-up job completes with neither a candidate nor a clarification (the poll response is stripped),
   // so its card must offer the message again instead of Review rules.
   const answeredPrompt = `${clarifyPrompt}\n\n${clarification.question} ${clarification.options[1]}`;
-  setTableReply({ change: { kind: 'clarify', question: 'Which shifts exist?', options: ['Morning and evening', 'Three shifts', 'I will attach a file'] }, expectedSources });
+  setTableReply({ change: { kind: 'clarify', question: 'Which shifts exist?', options: ['Morning and evening', 'Three shifts', 'I will attach a file'] }, ...modelSources });
   const pollUrl = `**/api/workspaces/${tableId}/model/*`;
   const stripClarification = async route => {
     if (route.request().method() !== 'GET') { await route.continue(); return; }
@@ -1829,7 +1839,7 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 async function verifyParallelRequests({ owner, member, tableId, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const ownerName = before.actor.name;
-  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
+  const modelSources = expectedModelSources(before.domain);
   const draftChange = (description) => {
     const program = structuredClone(before.domain.program);
     program.description = description;
@@ -1854,7 +1864,7 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
   const gate = new Promise(resolve => { releaseFirst = resolve; });
   try {
     const callsBefore = getProviderCalls();
-    setTableReply({ change: draftChange('F038 first queued-draft check.'), gate, expectedSources });
+    setTableReply({ change: draftChange('F038 first queued-draft check.'), gate, ...modelSources });
     await prompt.fill(firstPrompt);
     await send.click();
     // The provider received the first draft and is held by the gate.
@@ -1907,7 +1917,7 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
     expect(modelPosts).toHaveLength(1);
 
     // Release the first draft: it completes, then the queued draft starts on its own and completes.
-    setTableReply({ change: draftChange('F038 second queued-draft check.'), expectedSources });
+    setTableReply({ change: draftChange('F038 second queued-draft check.'), ...modelSources });
     releaseFirst();
     // F039 + dev #157: both drafts go into use and leave the canvas; each becomes a success notice.
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.ruleRevision, { timeout: 30_000 })
