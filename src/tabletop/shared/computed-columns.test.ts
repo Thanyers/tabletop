@@ -38,7 +38,7 @@ describe('computed columns', () => {
     expect(computedColumnProblems([total()], program())).toEqual([]);
     expect(computedColumnProblems([{ ...total(), collection: 'missing' }], program()).join()).toContain('unknown collection');
     expect(computedColumnProblems([{ ...total(), expression: { op: 'field', field: 'missing' } }], program()).join()).toContain('Unknown field');
-    expect(computedColumnProblems([{ ...total(), expression: { op: 'field', field: 'sku' } }], program()).join()).toContain('not a number field');
+    expect(computedColumnProblems([{ ...total(), expression: { op: 'field', field: 'sku' } }], program()).join()).toContain('must produce a number');
     expect(computedColumnProblems([{ ...total(), label: '' }], program()).join()).toContain('needs a label');
     expect(computedColumnProblems([total(), { ...total(), id: 'total' }], program()).join()).toContain('duplicated');
     const many = Array.from({ length: 7 }, (_, index) => ({ ...total(), id: `total${index}` }));

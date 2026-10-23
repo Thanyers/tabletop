@@ -1617,19 +1617,23 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   let active = await inspectAppliedRules(owner, room.id, api, expectedRules.game);
   expect(active.domain.turn).toBe('host');
 
-  // F017: the owner defines a computed column; the table shows it without a model call.
+  // F017/F055: the owner writes a formula; the table shows the server-computed value without a model call.
   const boatsEditor = await openCanvasObject(owner, 'table.collection.boats');
   await boatsEditor.getByRole('button', { name: 'Add computed column', exact: true }).click();
   const computedSection = boatsEditor.getByRole('region', { name: 'Computed columns for Boats and scores', exact: true });
   await computedSection.getByRole('button', { name: 'Add row', exact: true }).click();
   await computedSection.getByLabel('Label', { exact: true }).fill('Score plus 5');
-  await computedSection.getByLabel('Number', { exact: true }).fill('5');
+  await computedSection.getByLabel('Formula', { exact: true }).fill('score + 5');
   await computedSection.getByRole('button', { name: 'Save computed columns', exact: true }).click();
   const computedState = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
   expect(computedState.computedColumns).toHaveLength(1);
   expect(computedState.computedColumns[0].collection).toBe('boats');
   await expect(boatsEditor.getByRole('columnheader', { name: /Score plus 5/u })).toBeVisible();
   await expect(boatsEditor.getByRole('cell', { name: '5', exact: true })).toHaveCount(2);
+  // F055: the authority computes the column and ships the values in the projection.
+  const projected = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
+  expect(projected.computedValues?.values.boats).toBeDefined();
+  expect(Object.values(projected.computedValues.values.boats).map((values) => values.calc1).sort((a, b) => a - b)).toEqual([5, 5]);
 
   // F019: the rules card explains what the table can and cannot do.
   const capabilityRules = await openCanvasObject(owner, 'table.rules');
@@ -1780,6 +1784,16 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
 
   await removeActionFromRules(owner, room.id, api, { actionTitle: 'Advance boat', actionId: 'advance', collectionTitle: 'Boats and scores' });
   mark('Generic table: an AI draft goes into use on its own, and the owner removes one action from the Rules card as a new rule revision (F039)');
+  // F055: importing new data recomputes the stored formula on the authority, with no model call.
+  const lateBoats = await openCanvasObject(owner, 'table.collection.boats');
+  const callsBeforeImport = getProviderCalls();
+  await lateBoats.getByRole('button', { name: 'Import rows', exact: true }).click();
+  await lateBoats.getByLabel('Or paste CSV').fill('seat,score\nmember-2,10');
+  await lateBoats.getByRole('button', { name: /Import 1 rows?/u }).click();
+  await expect(lateBoats.getByRole('cell', { name: '15', exact: true })).toBeVisible();
+  expect(getProviderCalls()).toBe(callsBeforeImport);
+  const recomputed = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
+  expect(Object.values(recomputed.computedValues?.values.boats ?? {}).map((values) => values.calc1)).toContain(15);
 }
 
 // Evidence screenshot of the page with one canvas card opened in view.

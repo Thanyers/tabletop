@@ -25,11 +25,19 @@ export interface TableProgram {
   canvas?: GenerativeCanvas;
 }
 export interface TableChange { kind: 'table'; program: TableProgram; initialRecords: Record<string, TableRecord[]> }
-/** Row-relative arithmetic over stored number fields (F017). Kept out of the program schema so old writers still read the table. */
+/** Row-relative arithmetic over stored fields (F017). Kept out of the program schema so old writers still read the table. */
+export type ComputedComparison = 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte';
 export type ComputedExpression =
   | { op: 'field'; field: string }
   | { op: 'literal'; value: number }
-  | { op: 'add' | 'subtract' | 'multiply' | 'divide'; left: ComputedExpression; right: ComputedExpression };
+  | { op: 'text'; value: string }
+  | { op: 'add' | 'subtract' | 'multiply' | 'divide'; left: ComputedExpression; right: ComputedExpression }
+  | { op: 'min' | 'max'; left: ComputedExpression; right: ComputedExpression }
+  | { op: 'negate' | 'ceil' | 'floor' | 'abs'; value: ComputedExpression }
+  | { op: 'round'; value: ComputedExpression; digits: number }
+  | { op: 'compare'; compare: ComputedComparison; left: ComputedExpression; right: ComputedExpression }
+  | { op: 'if'; condition: ComputedExpression; then: ComputedExpression; else: ComputedExpression }
+  | { op: 'and' | 'or'; left: ComputedExpression; right: ComputedExpression };
 export interface ComputedColumn { id: string; collection: string; label: string; expression: ComputedExpression }
 /** F037: a shared canvas note. Kept out of the program so it survives rule edits and stays a plain note. */
 export type NoteColor = 'yellow' | 'rose' | 'sky' | 'mint' | 'lavender' | 'sand';
@@ -60,6 +68,17 @@ export interface TableState extends DomainBase {
   };
   /** Display-only computed columns; definitions live in state, not in the program (F017). */
   computedColumns?: ComputedColumn[];
+  /**
+   * F055: values computed by the server authority for every computed column, keyed
+   * collection → record → column. Written only into a member's projection; never persisted
+   * to the room, so every reader sees the same numbers and data changes recompute them.
+   * `revision` stamps the dataRevision it was computed from, so a client-side preview can
+   * tell that the numbers no longer match the state it is showing.
+   */
+  computedValues?: {
+    revision: number;
+    values: Record<string, Record<string, Record<string, number | null>>>;
+  };
   /** Shared sticky notes (F037). Omitted by rooms created before this field existed. */
   notes?: TableNote[];
   /**

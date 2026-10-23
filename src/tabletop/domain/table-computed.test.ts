@@ -82,7 +82,7 @@ describe('table.setComputedColumns', () => {
     expect(run({ columns: [totalColumn] }, 'participant')).toThrow('cannot perform');
     expect(run({ columns: [{ ...totalColumn, collection: 'missing' }] })).toThrow('unknown collection');
     expect(run({ columns: [{ ...totalColumn, expression: { op: 'field', field: 'missing' } }] })).toThrow('Unknown field');
-    expect(run({ columns: [{ ...totalColumn, expression: { op: 'field', field: 'sku' } }] })).toThrow('not a number field');
+    expect(run({ columns: [{ ...totalColumn, expression: { op: 'field', field: 'sku' } }] })).toThrow('must produce a number');
     expect(run({ columns: Array.from({ length: 7 }, (_, index) => ({ ...totalColumn, id: `total${index}` })) })).toThrow();
     expect(() => handleTableCommand(createTableState(), 'table.setComputedColumns', { columns: [totalColumn] }, actorContext())).toThrow('Review and activate');
   });
