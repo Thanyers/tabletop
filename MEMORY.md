@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — staging deploy ที่ใช้ `workflow_run` ไม่ทำงานเพราะไฟล์ไม่อยู่บน default branch
+- **What happened:** CD002 (#230) เพิ่ม `.github/workflows/staging-deploy.yml` แบบ `on: workflow_run` ของ Validate บน `dev` แต่ merge แล้วไม่มี run เลย และ `gh workflow run` ตอบ 404 "workflow … not found on the default branch"
+- **Root cause:** GitHub เรียก workflow ที่ trigger ด้วย `workflow_run` (และ `workflow_dispatch`) จากไฟล์บน **default branch** เท่านั้น ซึ่งของ repo นี้คือ `main` · ไฟล์ใหม่ที่อยู่แค่ใน `dev` จึงไม่ถูกเรียกจนกว่าจะออก release
+- **Correct behavior:** งานที่ต้องเริ่มจาก push เข้า `dev` ให้ใส่เป็น job ใน workflow ที่ trigger ด้วย `push` (เช่น `deploy-staging` ใน `validate.yml` ที่ `needs: local-validation`) · ก่อนพึ่ง `workflow_run`/`workflow_dispatch` ตรวจ `gh repo view --json defaultBranchRef` และยืนยันว่าไฟล์อยู่บน branch นั้นแล้ว
+
 ### 2026-10-23 — ขยายงาน compute/Rules ไปไล่ scene/camera หลัง merge
 - **What happened:** หลังงานหลักผ่าน PR validation และรวม dev แล้ว ใช้เวลาตรวจ generated-scene drag failure ในชุดรวมต่อจนผู้ใช้ทักว่านอกเรื่อง
 - **Root cause:** ถือว่าต้องแก้ทุก failure หลัง merge ทั้งที่ขอบเขตผู้ใช้คือ reusable compute/Rules และความพร้อมบนเว็บยังแยกจากสถานะ release
