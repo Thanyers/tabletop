@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F061 | Landing page ตามคุณค่าและเรื่องเล่า README | `doing` | [F061](docs/features/F061-readme-landing.md) |
 | F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
@@ -55,6 +56,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F061-T1 | ปรับหน้าแรกเฉพาะเนื้อหา ภาพ และ layout | `doing` | Codex | `feat/F061-readme-landing` | `ui/PublicWelcome.tsx`, `ui/public-welcome.css`, ภาพ landing, `docs/features/F061-readme-landing.md`, `spec.md`, `CHANGELOG.md` | — | รักษา account/route/demo เดิม; ไม่รวม draft #180 |
 | F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F054-T1 | `cardMeta` model + schema + stamp ตอน activation/command + prune/cap | `review` | lead (AI) | `feat/F054-object-metadata-and-focus` | `shared/table-contracts.ts`, `domain/table-card-meta.ts` (ใหม่), `domain/table.ts`, `domain/evolution.ts`, tests | — | unit 21 ผ่าน + typecheck |
 | F054-T2 | backfill resolver + projection tests | `review` | lead (AI) | 〃 | `domain/table-card-meta.ts`, `domain/projections.ts`, tests | T1 | legacy backfill + private projection ผ่าน |
