@@ -121,4 +121,4 @@ UI-gate ต้องใช้ skill ที่ติดตั้งในเค�
 
 ช่องใหม่ที่ optional และมี default ต้องเติมค่าให้แถวเดิมเหมือนเดิม; แยก guard ย้อนสูตรที่ต้องรักษาค่าประวัติและห้าม default กลบค่าที่ไม่ตรง มี red→green regression ของ discount=10 และ domain tests 25/25 ผ่าน รวม required/default/rollback; typecheck/scoped lint ผ่านบน Node22.23.2 และ independent review ไม่มี P1/P2
 
-ปรับ dropdown fixture ตาม F075 โดยตรวจ selected record ID ด้วย และ strict assistant mock ให้รับ computeCapabilities พร้อมตรวจ disabled engine profile ของ fixture คง privacy assertions ทั้งหมด Local browser ก่อน sync dev ล่าสุด: generative 4 rooms/8 synthetic calls/0 errors; Workers 35 checks/37 synthetic calls/0 errors ผลนี้ไม่ใช่ hosted acceptance
+F075@f79b45f คืนชื่อแถวที่ไม่มี text ให้มี ID เช่น 0 · team-south จึงคง assertion ชื่อเดิมและเพิ่มตรวจ selected record ID และ strict assistant mock ให้รับ computeCapabilities พร้อมตรวจ disabled engine profile ของ fixture คง privacy assertions ทั้งหมด Local browser ก่อน sync dev ล่าสุด: generative 4 rooms/8 synthetic calls/0 errors; Workers 35 checks/37 synthetic calls/0 errors ผลนี้ไม่ใช่ hosted acceptance
