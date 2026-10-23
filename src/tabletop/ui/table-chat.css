@@ -208,6 +208,10 @@
 .tt-app .tt-chat-card__suggestions button svg { flex: none; margin-top: 3px; color: var(--tt-moss, #2f6f5e); }
 .tt-app .tt-chat-card__suggestions button:hover:not(:disabled) { background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 84%); }
 .tt-app .tt-chat-card__suggestions button:disabled { opacity: .55; cursor: default; }
+.tt-app .tt-chat-card__suggestions button.is-chosen { border-color: color-mix(in srgb, #7860bd, transparent 35%); background: color-mix(in srgb, #7860bd, transparent 88%); font-weight: 600; }
+.tt-app .tt-chat-card__suggestions button.is-chosen svg { color: #7860bd; }
+.tt-app .tt-chat-card__suggestions button.is-chosen:hover { background: color-mix(in srgb, #7860bd, transparent 80%); }
+.tt-app .tt-chat-card__chosen-tag { flex: none; margin-left: auto; padding: 1px 8px; border-radius: 999px; background: #7860bd; color: #fff; font-size: 11px; font-weight: 700; line-height: 1.6; }
 
 /* F067: how full a rule request is for this table. */
 .tt-app .tt-table-chat-bar__context { display: flex; align-items: center; gap: 8px; margin: 4px var(--tt-space-3) 0; color: var(--tt-muted); font-size: 12px; }
