@@ -1,0 +1,3 @@
+- insert:
+    - id: tabletop-task-startup
+      name: '@local/tabletop-task-startup'

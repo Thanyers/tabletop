@@ -1,41 +1,55 @@
-# ทำงานร่วมกันหลาย harness
+# เริ่มงานด้วยกติกา dev ล่าสุดอัตโนมัติ
 
-[`AGENTS.md`](../AGENTS.md) คือกติกากลาง รวมขั้นเริ่ม/รับช่วงงาน การ sync dev, การรวม Markdown และ PR/release ใช้ขั้นในไฟล์นั้นทุกครั้งที่เริ่มหรือรับช่วงงาน
+[AGENTS.md](../AGENTS.md) คือกติกากลาง Hooks/plugins เรียก [agent-startup.mjs](../scripts/agent-startup.mjs) ก่อนเริ่มงาน ส่งกติกาจาก commit ของ dev ที่เพิ่ง fetch เข้าบริบท ไม่ต้องพิมพ์สั่ง agent ให้อ่านใหม่ทุกงาน
 
-## กติกาใหม่ต้อง release ไหม
+## ทำงานอย่างไร
 
-ไม่ต้อง release เว็บ: merge PR กติกาเข้า `dev` แล้วใช้ checkout ที่มี commit นั้นและอ่านกติกาใหม่ งานปกติแตกจาก `origin/dev` และส่ง PR กลับ `dev`; การ release เว็บเป็นอีกขั้นตาม AGENTS §5
+1. เริ่ม session หรือส่งงานใหม่ในแชทเดิม → adapter เรียกตัวกลาง
+2. ตรวจว่า origin เป็น repo Tabletop → fetch เฉพาะ dev → pin SHA → อ่าน AGENTS จาก SHA นั้น
+3. ส่ง receipt ชื่อ checkout/branch/HEAD/dev, ฐานงานตาม dev หรือยัง, งานค้าง และกติกาฉบับเต็มเข้าบริบทก่อนโมเดลเริ่มทำงาน
+4. Agent ใช้กติกาปัจจุบันจัด branch/รวม dev และส่ง PR ตาม AGENTS การ fetch ของ hook ไม่ใช่การ merge โค้ด
 
-clone ที่ค้างบน `main`, tag หรือ branch เก่าจะยังมีไฟล์เก่า และ session ที่เปิดค้างอาจยังถือบริบทเดิม ต้อง fetch/sync และอ่านใหม่ก่อนทำต่อ การมีไฟล์บน GitHub ไม่ได้พิสูจน์ว่า agent บนเครื่องอื่นได้อ่านแล้ว
+ตัวกลางไม่ checkout, reset, stash, stage, commit หรือเปลี่ยนไฟล์งาน เช็ค failed/timeout ให้ UNVERIFIED พร้อมข้อจำกัด ไม่ replay กติกาเก่าแล้วอ้างว่าสดใหม่ ใช้ Git credential ที่มีอยู่แล้วแบบไม่เปิด prompt และไม่แสดง URL/credential จาก error
 
-## จุดอ่านกติกา
+## รับใช้ครั้งแรก
 
-ตรวจเอกสารต้นทาง 2026-10-23; ตารางนี้อธิบาย loader ที่มีเอกสารรองรับ ไม่ใช่ผลทดสอบบนเครื่องสมาชิกทุกคน
+ดึง dev ที่มี F064 แล้วเปิด session ใหม่จาก checkout ของ Tabletop มี Node และ Git พร้อมใช้งาน Codex/Claude อาจให้ยอมรับ workspace หรือ hooks ครั้งแรกตามระบบของตัวเอง การยอมรับนี้เป็นครั้งแรกของเครื่อง/นิยาม hook ไม่ใช่การสั่งให้อ่านกติกาซ้ำทุกงาน ห้ามข้ามระบบ trust
 
-| Harness | จุดอ่านใน repo นี้ | เมื่อกติกาเปลี่ยน |
+สำหรับ DeepSeek ให้รันครั้งเดียวใน checkout:
+
+```sh
+npm run agents:setup
+```
+
+ตัวติดตั้งใช้ runtime DeepSeek ที่ติดตั้งอยู่ ประกอบ plugin ไว้ใน DSH home และเพิ่มเฉพาะบล็อก Tabletop ใน home-level cordis.patch.yml ซึ่งทุก profile โหลดร่วมกัน เก็บแถวเดิมไว้ ตรวจการ import plugin ด้วย SDK จริงและตรวจ composed config ก่อนเปิดใช้ ไม่ติดตั้ง SDK อีกชุด ไม่แก้ profile/package ของแอป และไม่ปิดแอปที่กำลังทำงาน การตั้งค่าซ้ำไม่เพิ่มแถวซ้ำ เปิด session ใหม่ให้ loader รับการตั้งค่า
+
+ถ้า Codex เปิด workspace โฟลเดอร์แม่ที่มีหลาย checkout ใช้ตัวติดตั้งพร้อม `--workspace <โฟลเดอร์แม่>` ครั้งเดียว จะเพิ่มเฉพาะ hook ของ Tabletop โดยรักษา hook อื่นไว้ Receipt ระบุ checkout อ้างอิงที่ใช้ fetch แล้ว agent ต้องเลือก/ตรวจ checkout งานจริงก่อนเขียน
+
+## Native adapters
+
+| Harness | จุดเรียก | ความถี่ |
 | --- | --- | --- |
-| Codex | `AGENTS.md` ในลำดับจาก repo root ถึง working directory | สร้างชุดคำสั่งตอนเริ่ม run/session; หลัง sync ให้เริ่ม session ใหม่หรือสั่งให้อ่านไฟล์ปัจจุบันก่อนทำต่อ ตรวจ override และขนาด context ถ้ากติกาหาย |
-| Claude Code | `CLAUDE.md` import `@AGENTS.md` โดยตรง แล้วเพิ่มข้อเฉพาะ Claude ด้านล่าง | หลัง sync เริ่ม session ใหม่ ตรวจ `/context` ว่ามีไฟล์กติกา ไม่อาศัยเพียงประโยคว่า “ไปอ่าน AGENTS” |
-| OpenCode | `AGENTS.md` ของโปรเจกต์; `CLAUDE.md` เป็น fallback เมื่อไม่มี AGENTS | หลัง sync เริ่ม session ใหม่จาก checkout งาน หรือให้อ่านไฟล์ปัจจุบันก่อนทำต่อ ตรวจว่าไม่ได้เริ่มในโฟลเดอร์อื่น |
-| DeepSeek Harness (`dsh`) | plugin `dsh-agent-instructions` อ่าน `AGENTS.md` และ `CLAUDE.md`; `dsh-base` เปิดให้ตามค่าเริ่มต้น | custom profile อาจปิด plugin ได้; resume จะทบทวน baseline ส่วนการแก้ไฟล์ภายนอกไม่มี watcher จึงเริ่ม session ใหม่หรืออ่านกติกาผ่าน filesystem tool ให้ refresh ก่อนทำต่อ |
+| Codex | [.codex/hooks.json](../.codex/hooks.json), เปิด feature ใน [.codex/config.toml](../.codex/config.toml) | SessionStart (startup/resume/clear/compact/fork) + UserPromptSubmit |
+| Claude Code | [.claude/settings.json](../.claude/settings.json), direct Node argv | SessionStart + UserPromptSubmit; CLAUDE import AGENTS ยังคงอยู่ |
+| OpenCode | [.opencode/plugins/tabletop-startup.js](../.opencode/plugins/tabletop-startup.js) | ทุก chat.message แล้ว inject ก่อน model dispatch; compact รับกติกาใหม่ด้วย |
+| DeepSeek Harness | [native plugin template](../tools/deepseek-startup/index.js) + DSH home patch จากตัวติดตั้ง | awaited agent/pre-step ของขั้นแรกในทุก turn ที่มีข้อความผู้ใช้; ส่ง context ใน request เดียวกัน ไม่รอรอบถัดไป |
 
-DeepSeek Harness ไม่ตีความ `@path` import แต่โหลด `AGENTS.md` โดยตรงอยู่แล้ว จึงไม่ต้องมี `DEEPSEEK.md` หรือคัดลอกกติกาอีกฉบับ การใช้โมเดล DeepSeek ผ่าน harness อื่นให้ยึดวิธีโหลดของ harness นั้น
+DeepSeek plugin ตรวจ repo ก่อน fetch จึงไม่ส่งกติกา Tabletop เข้าบริบทโปรเจกต์อื่น ส่วน OpenCode ใช้ native project plugin directory เพื่อเรียกตัวกลางเท่านั้น ไม่เก็บกติกาคัดลอกไว้ใน .opencode
 
-## ตรวจว่า agent พร้อมเริ่มจริง
+## ขนาด context และขอบเขตหลักฐาน
 
-Agent ต้องรายงาน checkout, branch, HEAD, `origin/dev` และผล sync ตาม AGENTS โดยอ้างผลคำสั่งที่เพิ่งตรวจ แล้วบอกได้ว่างานปกติส่งเข้า branch ไหนและ Markdown conflict ต้องรวมอย่างไร ถ้าตอบได้เพียงชื่อไฟล์ ยังไม่ใช่หลักฐานว่าใช้กติกาล่าสุด
+Claude จำกัด additionalContext ที่ 10,000 ตัวอักษร จึงย้ายรายละเอียด CI/release/deploy/admin ไป [AGENT_OPERATIONS](AGENT_OPERATIONS.md) โดยคงหัวข้อ/ลิงก์และข้อบังคับให้อ่านตามงานไว้ใน AGENTS มี test กัน AGENTS โตเกินงบ; ถ้า runtime พบเกินงบจริงจะรายงาน POLICY_CONTEXT_TOO_LARGE แทนการอ้างว่าอ่านครบ Codex ตั้ง additionalContextLimit เป็น 0 และส่งเฉพาะข้อมูลที่สคริปต์ควบคุม
 
-อ่าน `AGENTS.md` จากไฟล์จริงจนจบตามขั้นเริ่มงาน ถ้า tool ตัดผลอ่านให้แบ่งอ่านต่อ การโหลดอัตโนมัติมีงบขนาด: Codex ใช้ค่าเริ่มต้น 32 KiB สำหรับคำสั่งรวม ส่วน DeepSeek Harness ขึ้นกับ `maxBytes` ของ profile จึงไม่ถือว่าการมีชื่อไฟล์ใน context แปลว่าเนื้อหาท้ายไฟล์ครบ
+ทดสอบตัวกลางและ adapter ด้วย Git fixture ที่ไม่ต่อ GitHub จริง ทั้ง dev เปลี่ยนระหว่างงาน, staged/unstaged/untracked ค้าง, remote ใช้ไม่ได้, กติกาหาย, ข้ามโปรเจกต์อื่น, สอง hook events, OpenCode/DeepSeek pre-model injection, การตั้งค่าซ้ำ และ publication gate เฉพาะไฟล์ที่อนุญาต CI รัน `npm run test:agents` ทุก PR
 
-สำหรับ session เก่าที่ยังไม่เคยได้กติกานี้ ให้เริ่ม session ใหม่ใน checkout ที่ sync แล้ว หรือสั่ง:
-
-> อ่าน AGENTS.md ปัจจุบัน ตรวจ origin/dev ล่าสุด และทำขั้นก่อนเริ่มหรือรับช่วงงานให้ครบ ก่อนแก้ไฟล์ต่อ รักษางานค้างใน checkout ไว้
-
-นี่คือกติกาที่ agent ต้องทำตาม ไม่ใช่ hook ที่บังคับการทำงานทุก harness โดยตัวมันเอง ต้องแยก “รองรับจุดอ่านตามเอกสาร” จาก “เห็นหลักฐานว่า session นี้ทำตามแล้ว” และคง PR/checks ตาม AGENTS เหมือนเดิม
+การทดสอบ callback/JSON และ native plugin import ไม่แทนการยืนยัน model request จริงบนเครื่องสมาชิกทุกคน ดูหลักฐานและข้อจำกัดรอบนี้ใน [F064](features/F064-agent-startup-hooks.md)
 
 ## เอกสารต้นทาง
 
-- [Codex: Custom instructions with AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
-- [Claude Code: Share one file with other coding tools](https://code.claude.com/docs/en/memory#share-one-file-with-other-coding-tools)
-- [OpenCode: Rules](https://opencode.ai/docs/rules/)
-- [DeepSeek Harness: agent-instructions package](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/context/agent-instructions/README.md)
+ตรวจ 2026-10-23:
+
+- [Codex hooks](https://learn.chatgpt.com/docs/hooks): project hooks, trust, events และ additionalContextLimit
+- [Claude Code hooks](https://code.claude.com/docs/en/hooks): project settings, direct executable args, events และงบ context
+- [OpenCode plugins](https://opencode.ai/docs/plugins/), [released v1.19.4 hook types](https://github.com/anomalyco/opencode/blob/v1.19.4/packages/plugin/src/index.ts): project plugin discovery และ pre-model callbacks
+- [DeepSeek time-context plugin](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/context/time-context/src/index.ts): awaited pre-step context
+- [DeepSeek profile layers](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md), [app boot](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/boot/app-boot/README.md): home-level patch และ absolute module paths
