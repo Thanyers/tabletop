@@ -53,3 +53,10 @@
 - GitHub Contents API อ่าน `LICENSE` กลับจาก commit `c074f32`: blob `be3f7b28e564e7dd05eaf59d64adba1a4065ac0e` ตรงกับ `git rev-parse HEAD:LICENSE`
 - Local runtime/browser/unit suites: **SKIPPED** เพราะแก้เอกสารและ license metadata เท่านั้น; PR ยังต้องผ่าน `local-validation` ของ commit ล่าสุด
 - PR: [#238](https://github.com/Thanyers/tabletop/pull/238)
+
+### Sync ก่อน merge เข้า dev (2026-10-23)
+
+- รวม `dev` @ `b0ba328` และ `ad6764e` เข้าสาขางาน เก็บรายการสถานะจากทั้งสองฝั่งครบ แก้ conflict เฉพาะ Markdown ใน `spec.md`; ไม่มี code conflict
+- ตรวจรายการอิสระใน spec/PLAN จาก merge parents และ Markdown links ผ่าน; ไม่พบ conflict markers หรือ unmerged paths
+- Node `22.23.2`: public scan **797 files / 0 findings**, changelog **10 fragments ผ่าน**, `git diff --cached --check` ผ่านหลังรวม dev ล่าสุด
+- CI ก่อน sync (`b82b27c`): `local-validation` ผ่าน, unit **827 passed / 5 skipped**, Workers **170 passed**; หลัง sync ต้องใช้ check ของ commit ใหม่ก่อน merge

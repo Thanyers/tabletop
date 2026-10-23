@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — T1–T4 merge แล้ว (#207) · สไลซ์ A merge แล้ว (#211) · สไลซ์ B เปิด draft PR [#214](https://github.com/Thanyers/tabletop/pull/214) |
+| สถานะ | `review` — T1–T4 merge แล้ว (#207) · สไลซ์ A merge แล้ว (#211) · สไลซ์ B merge แล้ว (#214) · สไลซ์ C เป็นเอกสารออกแบบ (`design`) ยังไม่ลงโค้ด |
 | เจ้าของฟีเจอร์ | lead (AI) |
 | เวอร์ชันที่คาด | MINOR — ใช้ `DEEPSEEK_KEY` เดิม ไม่มี secret/binding/migration ใหม่ |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F064-T*` |
@@ -25,7 +25,7 @@
 
 **รวม:** search adapter (normalize/rank/citation matching) · research tool loop แบบ bounded · ช่อง `research` ใน input ของ drafter + บรรทัดกำกับใน system prompt · env `TABLE_WEB_SEARCH=off` ปิดได้
 
-**ไม่รวม:** ให้ผลค้นเว็บกลายเป็น `program.evidence` (evidence ต้องอ้าง source ที่มีในโต๊ะ; ต้องออกแบบการ import source ก่อน) · เปิด tool calling ในสตรีมร่างหลัก (research เป็นขั้นก่อนร่าง) · การแก้ไข/ลบแหล่งที่แสดงบนการ์ด (สไลซ์ B แสดงอย่างเดียว)
+**ไม่รวม:** ให้ผลค้นเว็บกลายเป็น `program.evidence` (evidence ต้องอ้าง source ที่มีในโต๊ะ — ออกแบบไว้แล้วที่ [สไลซ์ C](F064-slice-c-web-evidence.md) แต่ยังไม่ลงโค้ด) · เปิด tool calling ในสตรีมร่างหลัก (research เป็นขั้นก่อนร่าง) · การแก้ไข/ลบแหล่งที่แสดงบนการ์ด (สไลซ์ B แสดงอย่างเดียว)
 
 ## ข้อเท็จจริงจากโค้ด (2026-10-23, `origin/dev` `c5c8803`)
 
@@ -221,3 +221,12 @@ Node **22.23.2** · branch `feat/F064-sources-card`
 - **authority/date ไม่ได้ตรวจเนื้อหา**: เป็นค่าที่ผู้ให้บริการรายงาน ใช้บอกคุณภาพแหล่งเท่านั้น
 - **แหล่งที่แสดงไม่ใช่หลักฐานของโต๊ะ**: ยังอ้างใน `program.evidence` ไม่ได้และลบ/แก้ไม่ได้ในสไลซ์นี้
 - **ขนาด job row**: โตขึ้นไม่เกิน 6 แหล่ง (ไม่กี่ KB) ครั้งเดียวตอนจบ และถูกเขียนทับเมื่อ job ถูกเก็บกวาดตามรอบเดิม
+
+## สไลซ์ C — ผลค้นเป็นหลักฐานของโต๊ะ (ออกแบบแล้ว ยังไม่ลงโค้ด)
+
+เอกสารออกแบบฉบับเต็ม: [F064-slice-c-web-evidence.md](F064-slice-c-web-evidence.md) — สรุปสาระสำคัญ:
+
+- **ข้อสมมติใน handoff ใช้ไม่ได้ตรง ๆ**: `TableChange` ไม่มีช่อง `sources` และกติกา evidence บังคับว่า quote ต้องอยู่ใน source ที่อยู่บนโต๊ะแล้ว ⇒ การเพิ่มแหล่งต้องเป็นคำสั่งแยก (`table.addWebSources`) และ "ร่างถัดไป" จึงอ้างได้หลังมีคนกด verify
+- **แบบที่เสนอ**: `TableSource` เพิ่ม `origin:'web'` + `status:'provided'|'verified'|'rejected'` + url/date/authority (optional, ไฟล์เดิมไม่กระทบ) · ต้อง verify ก่อนจึงอ้างใน `program.evidence` · quote ของ web source ต้องมาจาก `title+summary` (ไม่ใช่ URL/วันที่) · draft input ส่งเฉพาะที่ verified · ปิดได้ด้วย `TABLE_WEB_EVIDENCE=off`
+- **ยังต้องให้เจ้าของผลิตภัณฑ์ตัดสิน 4 ข้อ**: ใครยืนยันได้ (owner/editor) · เพดาน 4 แหล่งเดิมหรือแยกโควตา web · source ที่ reject เก็บหรือลบ · ร่างเดิมต้องขอใหม่หรือทำปุ่มแนบ citation
+- ไม่แตะ runtime ในรอบนี้; เมื่อได้ข้อสรุปแล้วจึงเริ่ม `F064-T12..T16` ตามตารางในเอกสารออกแบบ
