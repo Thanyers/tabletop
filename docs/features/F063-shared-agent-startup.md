@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` — [PR #200](https://github.com/Thanyers/tabletop/pull/200) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | เอกสารเท่านั้น ใช้จาก checkout ที่ sync แล้ว ไม่ต้อง release เว็บ |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F063-T1` |
@@ -37,3 +37,9 @@ Agent ระบุ branch, HEAD และ `origin/dev` ที่ตรวจจ�
 | --- | --- | --- |
 | 2026-10-23 | เก็บนโยบายใน `AGENTS.md` แห่งเดียว และใช้ native import สำหรับ Claude | ลดกติกาที่คัดลอกแล้วคลาดเคลื่อน; loader ของอีกสาม harness อ่าน AGENTS โดยตรงตามเอกสารต้นทาง |
 | 2026-10-23 | ตรวจ checkout และ refresh กติกาอย่างชัดเจน แยกจาก release เว็บ | merge เข้า dev ไม่ได้อัปเดต clone หรือบริบทของแชทเก่าทันที |
+
+## ผลตรวจ
+
+Node 22.23.2: ตรวจไฟล์เอกสารทั้ง 7 ไฟล์ที่แก้ ลิงก์ภายในชี้ไปไฟล์/โฟลเดอร์ที่มีจริง ไม่มี conflict marker, native `@AGENTS.md` อยู่บรรทัดแรกของ `CLAUDE.md`, `git diff --check` และ `node scripts/check-public-files.mjs` ผ่าน ดูข้อจำกัดและแหล่งต้นทางใน [คู่มือ agent](../AGENT_WORKFLOW.md)
+
+Runtime/browser suites: **SKIPPED** ในเครื่อง เพราะแก้เฉพาะเอกสาร ไม่เปลี่ยนฟีเจอร์; การโหลดจริงบนเครื่องสมาชิกทั้งสี่ harness: **UNVERIFIED** ต้องดู session ของแต่ละเครื่อง ไม่สรุปจากไฟล์หรือเอกสารผู้พัฒนาเพียงอย่างเดียว

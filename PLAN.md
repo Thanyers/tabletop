@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F063 | เริ่มงานจาก dev ล่าสุดและอ่านกติกากลางข้าม harness | `doing` | [F063](docs/features/F063-shared-agent-startup.md) |
+| F063 | เริ่มงานจาก dev ล่าสุดและอ่านกติกากลางข้าม harness | `review` | [F063](docs/features/F063-shared-agent-startup.md) |
 | F061 | Landing page ตามคุณค่าและเรื่องเล่า README | `review` | [F061](docs/features/F061-readme-landing.md) |
 | F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
@@ -60,7 +60,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F063-T1 | กติกาเริ่ม/รับช่วงงานและ Claude import | `doing` | Codex | `docs/F063-shared-agent-startup` | `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_WORKFLOW.md`, `docs/README.md`, `docs/features/F063-shared-agent-startup.md`, `spec.md` | — | เอกสารเท่านั้น; Codex, Claude Code, OpenCode, DeepSeek Harness |
+| F063-T1 | กติกาเริ่ม/รับช่วงงานและ Claude import | `review` | Codex | `docs/F063-shared-agent-startup` / #200 | `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_WORKFLOW.md`, `docs/README.md`, `docs/features/F063-shared-agent-startup.md`, `spec.md` | — | เอกสารเท่านั้น; Codex, Claude Code, OpenCode, DeepSeek Harness |
 | F061-T1 | ปรับหน้าแรกเฉพาะเนื้อหา ภาพ และ layout | `review` | Codex | `feat/F061-readme-landing` / #197 | `ui/PublicWelcome.tsx`, `ui/public-welcome.css`, ภาพ landing, `docs/features/F061-readme-landing.md`, `spec.md`, `CHANGELOG.md` | — | รักษา account/route/demo เดิม; ไม่รวม draft #180 |
 | F061-T1 | การ์ด Rules โครง When/Then/Applies to + routing เส้นแบบอ้อมการ์ด, แยกเลน, bridge ที่จุดตัด | `review` | lead (AI) | `feat/F061-rules-card-and-lines` | `src/tabletop/ui/TableCanvasObjects.tsx`, `src/tabletop/ui/rules-summary.ts` (ใหม่), `src/tabletop/ui/rules-card.css` (ใหม่), `src/tabletop/ui/CanvasWorkspace.tsx`, `src/tabletop/ui/calm-workspace.css`, `src/state/edge-routing.ts`, `src/components/CanvasEdge.tsx`, `spec.md`, `CHANGELOG.md` | — | unit 721 · r1 browser 7 · cloudflare browser 32 |
 | F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
