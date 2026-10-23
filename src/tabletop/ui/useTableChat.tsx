@@ -8,7 +8,7 @@ import type { ComputeRuntimeCapabilities } from '../shared/compute-runtime-profi
 import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
-import { TableChat } from './TableChat';
+import { TableChat, type ComposerTools } from './TableChat';
 import { MAX_CHAT_CARD_REFERENCES, chatReferencePrompt, followUpPrompt, parseReferencedPrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
 import { tableDraftBytes } from '../shared/table-draft-input';
 import { TABLE_AI_INPUT_BYTES } from '../domain/table';
@@ -55,8 +55,8 @@ export interface UseTableChatOptions {
   webEvidence?: boolean;
   /** F064 slice C: offer the finished draft's researched sources as provided table sources. */
   addWebSources?: (view: WorkspaceView, sources: ReturnType<typeof addableWebSources>) => Promise<void>;
-  /** F037: extra composer control (add a note) rendered beside Send. */
-  composerAction?: ReactNode;
+  /** F076: note and picture tools for the composer's + menu. */
+  composerTools?: ComposerTools;
   /** A short notification; the optional action (e.g. View rules) shows as a button on it. */
   notify: (text: string, tone: 'info' | 'error' | 'success', action?: { label: string; run: () => void }) => void;
   prefill?: { text: string; key: number };
@@ -895,7 +895,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     cardReferences={cardReferences}
     onRemoveCardReference={(id) => setCardReferences((current) => current.filter((item) => item.id !== id))}
     onClearCardReferences={() => setCardReferences([])}
-    composerAction={options.composerAction}
+    composerTools={options.composerTools}
     aiContext={aiContext}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };

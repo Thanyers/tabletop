@@ -17,7 +17,7 @@ import { HeaderPeople } from './ui/HeaderPeople';
 import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
-import { NewImageButton, NewNoteButton } from './ui/NoteCard';
+import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
 import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
@@ -873,13 +873,15 @@ export default function TabletopApp() {
     focusObject: requestCanvasFocus,
     notify: showNotice,
     prefill: aiPrefill,
-    composerAction: view && isTableWorkspaceView(view)
-      ? <>
-        <NewNoteButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand} />
-        {capabilities.images && <NewImageButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand}
-          upload={(image) => tabletopClient.uploadCanvasImage(view, image)} onError={(message) => showNotice(message, 'error')} />}
-      </>
-      : undefined,
+    // F076: notes and pictures live in the composer's + menu; pictures wait in the composer until sent.
+    composerTools: view && isTableWorkspaceView(view) && capabilities.tableReadOnly !== true ? {
+      onAddNote: () => addNote(view, runCommand),
+      noteDisabledReason: noteLimitReason(view),
+      ...(capabilities.images ? {
+        onPinImages: (images: readonly File[], caption: string) => pinImages(view, images, caption, runCommand, (image) => tabletopClient.uploadCanvasImage(view, image)),
+        imagesLeft: imagesLeft(view),
+      } : {}),
+    } : undefined,
   });
 
   if (starting) return <LoadingScreen />;
