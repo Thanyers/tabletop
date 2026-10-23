@@ -389,6 +389,27 @@ describe('Cloudflare AI proposal helper', () => {
     expect(rows.every(row => row.status === 'settled')).toBe(true);
   });
 
+  it('sends a no-input action that types in the same rows back for repair (F068)', async () => {
+    const input = request('table');
+    const bad = equipmentChange('source_fixture');
+    bad.program.actions.push({
+      id: 'add_spare', title: 'Add spare', description: 'Add a spare item.', roles: ['owner'], parameters: [], conditions: [], effects: [],
+      creates: [{ collection: 'equipment', values: { name: { literal: 'Spare' }, available: { literal: true }, borrower: { literal: null } } }],
+      requireTurn: false, advanceTurn: false,
+    });
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+      const sent = JSON.parse(data.messages[1].content);
+      calls++;
+      if (calls === 2) expect(sent.repair.issues.join(' ')).toContain('“Add spare” has no inputs or conditions');
+      return providerFetch(calls === 1 ? bad : proposal('table'))(url, init);
+    };
+    const result = await proposeChange(testEnv, input, fetchImpl);
+    expect(calls).toBe(2);
+    expect(result.change).toEqual(proposal('table'));
+  });
+
   it('returns a table clarification after one settled attempt without validating rules (F012)', async () => {
     const input = request('table');
     const clarification = { question: 'Which records should the table track?', options: ['Equipment', 'Shifts', 'I will attach a file'] };
