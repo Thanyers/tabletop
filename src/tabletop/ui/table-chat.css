@@ -220,3 +220,19 @@
 .tt-app .tt-table-chat-bar__context[data-level="high"] .tt-table-chat-bar__context-bar i { background: #c9922b; }
 .tt-app .tt-table-chat-bar__context[data-level="over"] { color: var(--tt-clay-1, #a4513a); }
 .tt-app .tt-table-chat-bar__context[data-level="over"] .tt-table-chat-bar__context-bar i { background: var(--tt-clay-1, #a4513a); }
+
+/* F076: the + menu (file, note, image) and pictures waiting to be pinned. */
+.tt-app .tt-table-chat-bar__add { position: relative; flex: none; }
+.tt-app .tt-table-chat-bar__menu { position: absolute; left: 0; bottom: calc(100% + 10px); z-index: 30; display: grid; gap: 2px; min-width: 248px; padding: 6px; border: 1px solid var(--tt-line, #d9d4c4); border-radius: 12px; background: var(--tt-paper, #fffdf6); box-shadow: 0 10px 28px rgb(39 52 68 / 16%); }
+.tt-app .tt-table-chat-bar__menu button { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.tt-app .tt-table-chat-bar__menu button svg { flex: none; margin-top: 3px; color: var(--tt-moss, #2f6f5e); }
+.tt-app .tt-table-chat-bar__menu button span { display: grid; gap: 1px; }
+.tt-app .tt-table-chat-bar__menu button small { color: var(--tt-muted); font-size: 12px; }
+.tt-app .tt-table-chat-bar__menu button:hover:not(:disabled), .tt-app .tt-table-chat-bar__menu button:focus-visible { background: var(--tt-canvas); outline: none; }
+.tt-app .tt-table-chat-bar__menu button:disabled { opacity: .5; cursor: not-allowed; }
+.tt-app .tt-table-chat-bar__images { display: grid; gap: 6px; margin: 0 var(--tt-space-3, 12px) 6px; }
+.tt-app .tt-table-chat-bar__images ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tt-app .tt-table-chat-bar__images li { position: relative; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px #303d3a26; background: #fff; }
+.tt-app .tt-table-chat-bar__images img { width: 100%; height: 100%; object-fit: cover; }
+.tt-app .tt-table-chat-bar__images li button { position: absolute; top: 3px; right: 3px; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: rgb(30 36 34 / 72%); color: #fff; cursor: pointer; }
+.tt-app .tt-table-chat-bar__images small { color: var(--tt-muted); font-size: 12px; }

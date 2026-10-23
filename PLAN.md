@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
 | F072 | ปุ่มแนบไฟล์ในแชทใช้ไอคอน + แทนคลิป | `review` | [F072](docs/features/F072-attach-plus-icon.md) |
@@ -74,6 +75,7 @@
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F066-T9 | รักษา default ช่องใหม่และแก้ deployment acceptance fixtures | `review` | Codex | `fix/F066-deploy-acceptance` | domain/table.ts + regression, browser fixtures, verification docs | — | PR #244; domain25/25, typecheck/lint, generative4rooms/8calls/0errors, Workers35checks/37calls/0errors; independent review ไม่มี P1/P2 |
+| F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
 | F066-T8 | เปิด hosted JS/Python แก้ CSV derived field และคำถาม library แล้ว deploy/ทดสอบซ้ำ | `review` | Codex | `fix/F066-hosted-compute` | deployment config/workflows, compute runner, domain/provider regressions, acceptance docs | — | candidate unit845/CF177 + real Linux engines + local faults7ผ่าน; Paidเปิดแล้ว รอpipeline/hostedretest หลายบัญชีBLOCKED; ไม่แตะ scene/camera |
 | F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |
 | F073-T1 | `room_images` + `/images` route + `imageId` บน note + การ์ดรูป + ปุ่มอัปโหลด | `review` | lead (AI) | `feat/F073-image-cards` | `domain/table.ts`, `shared/table-contracts.ts`, `cloudflare/{index,room,room-repository}.ts`, `ui/NoteCard.tsx`, `ui/note-card.css`, `client.ts`, tests | — | ตาราง DO ใหม่แบบเพิ่มอย่างเดียว (ผู้ใช้อนุมัติ 2026-10-23) |
