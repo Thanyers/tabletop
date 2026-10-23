@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- PR งานไม่แก้ไฟล์นี้: เพิ่มไฟล์ใน changelog.d/ แทน · ตอน release ใช้ `npx tsx server/changelog.ts cut X.Y.Z --summary "…"` (CI008) -->
+
 ## Unreleased
 
 - **เมนูบัญชีเป็นวงกลมโปรไฟล์ (F071):** ล็อกอินแล้ว header ของ `/`, `/tables` และ `/new` แสดงวงกลมอักษรย่อ (สีเดียวกับ cursor) แทนชื่อ/อีเมลและปุ่ม Sign out · กดแล้วเปิดเมนู Your tables, ข้อมูลโต๊ะทั้งหมด (admin) และ Sign out · บน landing ข้อความตามภาษาที่เลือก
