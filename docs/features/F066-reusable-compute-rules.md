@@ -36,7 +36,7 @@
 | F066-T4 | integration, browser proof, independent review, เอกสาร | typecheck/lint/unit/Worker/build และ acceptance ที่เกี่ยวข้องผ่านจริง |
 | F066-T5 | เทสต์ Rules capability หลังเพิ่ม compute | UI แสดงจำนวนตรงกับ endpoint และมี reusable calculations พร้อม gap ที่ยังมีจริง |
 | F066-T6 | เตรียม post-deploy acceptance หลายกรณี | มี prompt/ขั้นตอน/input/expected/evidence และผลตั้งต้น NOT_RUN; ไม่รันทดสอบ hosted ในงานเตรียม |
-| F066-T9 | ปรับ deployment acceptance ให้ตรงชื่อรายการ F075 | selected recordId/ผลโอนยังตรวจครบ; local browserผ่าน แล้ว pipelineตรวจซ้ำ |
+| F066-T9 | รักษา default ช่องใหม่และปรับ deployment acceptance fixtures | domain25/25; generative4rooms/8calls, Workers35checks/37calls; รอ pipeline/hosted |
 | F066-T8 | เปิด engines บน hosted แก้เคสไม่ผ่าน และ deploy/ทดสอบซ้ำ | pipeline เปิด runtime จริง, CSV ไม่บังคับค่าที่คำนวณ, คำถาม library ตอบตาม capability; multi-account BLOCKED |
 | F066-T7 | ตรวจ JavaScript/Python และทดสอบหลัง release 8 | ยืนยันรุ่นจริง, actual/evidence และ PASS/FAIL/BLOCKED รายเคส; ไม่อ้าง readiness จาก capability flag อย่างเดียว |
 

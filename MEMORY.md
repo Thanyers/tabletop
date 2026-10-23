@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — guard ย้อนสูตรทำให้ optional default ถูกข้าม
+- **What happened:** ช่อง optional ใหม่ที่มี default ไม่เติมค่าให้แถวเดิมหลังเพิ่ม formula rollback guard
+- **Root cause:** ใช้ validValue กับ undefined เพื่อข้ามแถวก่อนเติม default ทั้งที่ optional ยอมรับ undefined ได้
+- **Correct behavior:** แยกสูตรที่คืนเป็น stored fieldเพื่อตรวจ historical equality แล้ว continue; ช่องใหม่ปกติต้องเติม declared default ทุกแถวและมี regression ของ optional/default บนข้อมูลเดิม
+
 ### 2026-10-23 — เพิ่ม assistant capability แต่ลืม strict mock ของ browser
 - **What happened:** F066-T8 unit ผ่าน แต่ Workers browser ถาม Available rule แล้วได้ `MODEL_PROVIDER_HTTP_ERROR` เพราะ synthetic outbound fixture ปฏิเสธ request
 - **Root cause:** เพิ่ม `computeCapabilities` ใน assistant context และปรับ unit assertion แล้ว แต่ `tests/cloudflare-browser.mjs` ยังตรวจ key set เดิม จึงกลายเป็น error ของ provider จำลอง
