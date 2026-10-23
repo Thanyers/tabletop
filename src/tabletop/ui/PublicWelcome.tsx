@@ -13,12 +13,15 @@ const useCaseIcons = [FileText, BookOpen, UsersRound];
 
 /**
  * The public landing (F061) in English or Thai (F069). The language lives here, so the
- * sign-in / welcome-back box passed as `children` and the `headerAction` receive the
- * current copy and switch with the rest of the page.
+ * welcome-back box passed as `children`, the `headerAction` and the `notice` line receive the
+ * current copy and switch with the rest of the page. Signed out there is no box: sign-in is
+ * Google only, so the header and the hero go straight to Google (`primaryHref`).
  */
-export function PublicWelcome({ children, headerAction }: {
-  children: (copy: LandingCopy) => ReactNode;
+export function PublicWelcome({ children, headerAction, notice, primaryHref = '#sign-in' }: {
+  children?: (copy: LandingCopy) => ReactNode;
   headerAction?: (copy: LandingCopy) => ReactNode;
+  notice?: (copy: LandingCopy) => ReactNode;
+  primaryHref?: string;
 }) {
   const [language, setLanguage] = useState<LandingLanguage>(readLandingLanguage);
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia(reducedMotionQuery).matches);
@@ -80,6 +83,7 @@ export function PublicWelcome({ children, headerAction }: {
       </div>
       {headerAction?.(copy) ?? <a className="tt-public-welcome__signin" href="#sign-in">{copy.header.signIn} <ArrowUpRight size={14} aria-hidden="true" /></a>}
     </header>
+    {notice?.(copy)}
 
     <div className="tt-public-welcome__content">
       <section className="tt-public-welcome__hero" aria-labelledby="tt-public-welcome-title">
@@ -88,7 +92,7 @@ export function PublicWelcome({ children, headerAction }: {
           <h1 id="tt-public-welcome-title">{copy.hero.title}</h1>
           <p className="tt-public-welcome__promise">{copy.hero.promise}</p>
           <div className="tt-public-welcome__hero-actions">
-            <a className="tt-public-welcome__primary-link" href="#sign-in">{copy.hero.primary} <ArrowUpRight size={16} aria-hidden="true" /></a>
+            <a className="tt-public-welcome__primary-link" href={primaryHref}>{copy.hero.primary} <ArrowUpRight size={16} aria-hidden="true" /></a>
             <a className="tt-public-welcome__secondary-link" href="/demo" target="_blank" rel="noopener">{copy.hero.secondary} <ArrowUpRight size={15} aria-hidden="true" /></a>
           </div>
         </div>
@@ -177,13 +181,13 @@ export function PublicWelcome({ children, headerAction }: {
         <p className="tt-public-welcome__demo-note">{copy.useCases.demoNote}</p>
       </section>
 
-      <section className="tt-public-welcome__start" aria-labelledby="tt-public-welcome-start-title">
+      <section className={'tt-public-welcome__start' + (children ? '' : ' tt-public-welcome__start--solo')} aria-labelledby="tt-public-welcome-start-title">
         <div className="tt-public-welcome__start-copy">
           <p className="tt-public-welcome__eyebrow">{copy.start.eyebrow}</p>
           <h2 id="tt-public-welcome-start-title">{copy.start.title}</h2>
           <p>{copy.start.body}</p>
         </div>
-        <div className="tt-public-welcome__start-slot">{children(copy)}</div>
+        {children && <div className="tt-public-welcome__start-slot">{children(copy)}</div>}
       </section>
 
       <footer className="tt-public-welcome__footer">

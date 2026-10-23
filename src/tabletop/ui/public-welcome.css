@@ -355,3 +355,17 @@
   .tt-public-welcome *::before,
   .tt-public-welcome *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* Signed out: Google is the only sign-in, so the header button names it and goes straight there. */
+.tt-public-welcome .tt-public-welcome__google { gap: 8px; }
+.tt-public-welcome .tt-public-welcome__google-mark { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--tt-paper, #fff); color: #4285f4; font: 800 12px/1 Arial, sans-serif; box-shadow: 0 0 0 1px var(--tt-line, #dbe3dd); }
+/* A failed sign-in or a saved invitation: one line under the header instead of a box. */
+.tt-public-welcome .tt-public-welcome__notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; width: min(100%, 1180px); margin: 12px auto 0; padding-inline: clamp(16px, 4vw, 40px); }
+.tt-public-welcome .tt-public-welcome__notice > * { margin: 0; }
+.tt-public-welcome .tt-public-welcome__start--solo { grid-template-columns: minmax(0, 1fr); }
+.tt-public-welcome .tt-public-welcome__google-short { display: none; }
+/* Phones: the full "Continue with Google" does not fit beside the logo and language switch. */
+@media (max-width: 560px) {
+  .tt-public-welcome .tt-public-welcome__google-long { display: none; }
+  .tt-public-welcome .tt-public-welcome__google-short { display: inline; }
+}
