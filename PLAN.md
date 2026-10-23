@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F066 | เพดานคำขอร่างกฎให้สัมพันธ์กับเพดานไฟล์ (128 KiB) | `review` | [F066](docs/features/F066-ai-input-limit.md) |
 | F065 | AI แก้โต๊ะแบบส่งเฉพาะส่วนที่เปลี่ยน (patch) แทนการเขียนทั้งโปรแกรมใหม่ | `review` | [F065](docs/features/F065-table-patch-edits.md) |
 | F064 | ค้นเว็บเองเมื่อโจทย์ต้องใช้ข้อเท็จจริงภายนอก (native research ก่อนร่าง) | `review` | [F064](docs/features/F064-web-search.md) |
 | F064 | โหลดกติกา dev ล่าสุดอัตโนมัติเมื่อเริ่มงานในสี่ harness | `review` | [F064](docs/features/F064-agent-startup-hooks.md) |
@@ -63,6 +64,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F066-T1 | `TABLE_AI_INPUT_BYTES` + provider/ai/billing อ่านค่ากลาง + เทสต์ + เอกสาร | `review` | lead (AI) | `feat/F066-ai-input-limit` | `src/tabletop/domain/table.ts`, `server/providers/deepseek-changes.ts`, `cloudflare/ai.ts`, `cloudflare/billing.ts`, `TableCanvasObjects.tsx`, tests, docs | — | ไม่มี migration |
 | F065-T1..T4 | `applyTablePatch` + provider รับ `table-patch` ตอนแก้ + prompt แก้/ซ่อม + ลองจริงบน emulator + เอกสาร | `review` | lead (AI) | `feat/F065-table-patch-edits` / #205 | `server/providers/deepseek-changes.ts`, `src/tabletop/domain/table-patch.ts` (ใหม่), tests, `spec.md`, `CHANGELOG.md` | — | ไม่แตะ prompt ของการสร้างใหม่ · ไม่มี migration |
 | F064-T1 | สคริปต์กลางและ native startup adapters | `review` | Codex | `feat/F064-agent-startup-hooks` / #202 | `scripts/agent-startup*`, `scripts/setup-agent-startup.mjs`, native configs, `tools/deepseek-startup/`, public-file gate, CI, AGENTS/agent docs, `spec.md`, `MEMORY.md`, `package.json` | — | fetch/read เท่านั้น; ไม่ checkout/merge หรือแก้งานค้างอัตโนมัติ |
 | F063-T1 | กติกาเริ่ม/รับช่วงงานและ Claude import | `review` | Codex | `docs/F063-shared-agent-startup` / #200 | `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_WORKFLOW.md`, `docs/README.md`, `docs/features/F063-shared-agent-startup.md`, `spec.md` | — | เอกสารเท่านั้น; Codex, Claude Code, OpenCode, DeepSeek Harness |
