@@ -991,7 +991,8 @@ try {
       expect(tableActRequests).toHaveLength(requestsBeforeForm);
       const submit = form.getByRole('button', { name: 'Choose a team and amount', exact: true });
       await expect(submit).toBeEnabled();
-      await expect(team.locator('option[value="team-south"]')).toHaveText('0 · team-south');
+      await expect(team).toHaveValue('team-south');
+      await expect(team.locator('option[value="team-south"]')).toHaveText('0');
 
       const responsePromise = responseAfter(owner, (response) => isCommandResponse(response, 'table.act'));
       expect((await responsePromise(() => submit.click())).status()).toBe(200);

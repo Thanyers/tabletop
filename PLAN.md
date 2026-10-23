@@ -73,7 +73,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F066-T9 | ปรับ assertion dropdown ให้ตรง F075 เพื่อผ่าน deployment acceptance | `doing` | Codex | `fix/F066-deploy-acceptance` | tests/generative-canvas-browser.mjs, verification docs | — | upstream CI ก่อน #239 ล้มสองรอบที่ labelเดิม; คงตรวจ recordId/ผลโอน ไม่แก้ runtime |
+| F066-T9 | ปรับ assertion dropdown ให้ตรง F075 เพื่อผ่าน deployment acceptance | `review` | Codex | `fix/F066-deploy-acceptance` | tests/generative-canvas-browser.mjs, verification docs | — | PR #244; generative browser4rooms/8syntheticcalls/0errorsผ่าน; คงตรวจrecordId/ผลโอน ไม่แก้runtime |
 | F066-T8 | เปิด hosted JS/Python แก้ CSV derived field และคำถาม library แล้ว deploy/ทดสอบซ้ำ | `review` | Codex | `fix/F066-hosted-compute` | deployment config/workflows, compute runner, domain/provider regressions, acceptance docs | — | candidate unit845/CF177 + real Linux engines + local faults7ผ่าน; Paidเปิดแล้ว รอpipeline/hostedretest หลายบัญชีBLOCKED; ไม่แตะ scene/camera |
 | F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |
 | F073-T1 | `room_images` + `/images` route + `imageId` บน note + การ์ดรูป + ปุ่มอัปโหลด | `review` | lead (AI) | `feat/F073-image-cards` | `domain/table.ts`, `shared/table-contracts.ts`, `cloudflare/{index,room,room-repository}.ts`, `ui/NoteCard.tsx`, `ui/note-card.css`, `client.ts`, tests | — | ตาราง DO ใหม่แบบเพิ่มอย่างเดียว (ผู้ใช้อนุมัติ 2026-10-23) |
