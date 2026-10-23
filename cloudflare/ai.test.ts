@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createDomain } from '../src/tabletop/domain/index.js';
 import type { ActorContext, CaseKind, ChangeSet, Member, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
-import { proposeChange, type AIProposalRequest } from './ai.js';
+import { proposeChange, searchChangeProgress, type AIProposalRequest } from './ai.js';
 import { ModelStreamFailure, measureDeepSeekChangeRequest, type DeepSeekChangeInput, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import type { Env } from './contracts.js';
 
@@ -542,6 +542,17 @@ describe('Cloudflare AI proposal helper', () => {
     // The counters grow with the stream, not only when it finishes.
     expect(new Set(samples.map((sample) => sample.receivedChars)).size).toBeGreaterThan(2);
     expect(samples.every((sample) => sample.reasoningChars === 0)).toBe(true);
+  });
+
+  it('puts a research event on the same progress channel as the thinking tail, without counters (F064)', () => {
+    // Research runs before the draft streams, so the shared channel must carry it with zero counters;
+    // the room merges it into every later tick so the closing line survives the whole draft.
+    expect(searchChangeProgress({ phase: 'reading', query: 'VAT ไทย 2569', resultsCount: 4, topTitle: 'รัฐบาลไทย' }))
+      .toEqual({
+        receivedChars: 0,
+        reasoningChars: 0,
+        search: { phase: 'reading', query: 'VAT ไทย 2569', resultsCount: 4, topTitle: 'รัฐบาลไทย' },
+      });
   });
 
   it('keeps bounded stream details when the provider closes without a finish reason (F045)', async () => {

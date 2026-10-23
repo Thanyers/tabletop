@@ -159,6 +159,19 @@
   white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
 }
 
+/* F064: the live search line while a rule draft waits. Same single-line treatment as the thinking
+   line, because a long query must not push the card's buttons off a 320px screen. */
+.tt-app .tt-chat-card__search { margin-top: var(--tt-space-2); min-width: 0; }
+.tt-app .tt-chat-card .tt-chat-card__search-line {
+  display: block; min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
+  border-radius: 0 var(--tt-radius-medium, 10px) var(--tt-radius-medium, 10px) 0;
+  background: var(--tt-paper); color: var(--tt-muted);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Once research is done the line stops moving and reports what the draft actually used. */
+.tt-app .tt-chat-card__search[data-search-phase='done'] .tt-chat-card__search-line { color: var(--tt-moss); }
+
 /* A card the next chat message is about. */
 .tt-app .tt-table-chat-bar__reference { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-1) var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
 .tt-app .tt-table-chat-bar__reference-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 0; padding: 0; list-style: none; }

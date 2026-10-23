@@ -7,6 +7,7 @@ import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepse
 import type { ModelInput } from '../server/model.js';
 import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch } from '../server/providers/deepseek-research.js';
+import type { ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
@@ -392,6 +393,14 @@ export async function markAIUsageUncertain(env: Env, binding: AIBillingBinding):
 }
 
 /**
+ * F064: research reports progress on F050's channel so a waiting card needs no second transport.
+ * The counters stay at zero because the draft itself has not started streaming yet.
+ */
+export function searchChangeProgress(event: ModelJobSearchProgress): DeepSeekChangeProgress {
+  return { receivedChars: 0, reasoningChars: 0, search: event };
+}
+
+/**
  * Returns a validated proposal only. The room authority must recheck its current session,
  * membership, epoch, and revision before committing `change` as evolve.propose.
  */
@@ -417,6 +426,7 @@ export async function proposeChange(
         apiKey: env.DEEPSEEK_KEY!,
         fetchImpl,
         timeoutMs: 30_000,
+        onProgress: (event) => onProgress?.(searchChangeProgress(event)),
       });
       if (research.sources.length > 0) {
         researchBlock = {
