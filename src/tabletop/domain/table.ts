@@ -15,6 +15,12 @@ import type { ComputedColumn, ComputedExpression } from '../shared/table-contrac
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
+/**
+ * F066: the table part of one AI rule request (prompt, files, rules, rows, turn, notes as JSON). It is the whole
+ * file allowance plus the same again for the current rules and rows, so a table that accepted its files can
+ * still be drafted. The request around it (system prompt, envelope) and the billing reservation derive from it.
+ */
+export const TABLE_AI_INPUT_BYTES = 128 * 1024;
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
 export const MAX_TABLE_NOTES = 20;
 export const MAX_NOTE_TEXT = 500;
@@ -483,7 +489,7 @@ export function tableChangeIssues(state: TableState, change: TableChange): strin
 const fixedOperand = (operand: TableOperand): boolean => 'literal' in operand || ('expression' in operand && operand.expression.op === 'literal');
 
 /**
- * F066: an action with no inputs and no conditions whose rows are all typed-in values makes the same rows on
+ * F067: an action with no inputs and no conditions whose rows are all typed-in values makes the same rows on
  * every press, and numbers the model worked out from records go stale. Only actions a draft adds or changes are
  * checked, so an older table that already has one can still be edited, rolled back, or trimmed.
  */
@@ -500,7 +506,7 @@ export function repeatableFixedCreateIssues(program: TableProgram, previous: Tab
     });
 }
 
-/** F066: what an AI draft must pass. Manual proposals and rollbacks keep using `tableChangeIssues`. */
+/** F067: what an AI draft must pass. Manual proposals and rollbacks keep using `tableChangeIssues`. */
 export function aiTableChangeIssues(state: TableState, change: TableChange): string[] {
   const issues = tableChangeIssues(state, change);
   return issues.length > 0 ? issues : repeatableFixedCreateIssues(change.program, state.program);
