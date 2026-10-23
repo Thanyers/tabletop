@@ -58,7 +58,9 @@ const mf = new Miniflare(convertV4MiniflareOptions({
   durableObjects: { ROOMS: { className: 'Room', useSQLite: true }, BILLING: { className: 'Billing', useSQLite: true } },
   bindings: { PUBLIC_ORIGIN: origin, GOOGLE_OAUTH_CLIENT_ID: 'synthetic-client', GOOGLE_OAUTH_CLIENT_SECRET: 'synthetic-secret',
     DEEPSEEK_KEY: 'synthetic-provider-key', TABLE_WEB_SEARCH: 'off', AI_MONTHLY_BUDGET_MICRO_USD: '1000000', AI_DAILY_BUDGET_MICRO_USD: '1000000' },
-  outboundService: async request => {
+  // A failed expectation inside the synthetic provider reaches the app only as MODEL_PROVIDER_HTTP_ERROR;
+  // print its message so a CI failure names the request field that changed.
+  outboundService: async request => { try {
     if (request.url !== 'https://api.deepseek.com/chat/completions') throw new Error('Unexpected external request in isolated browser test');
     providerCalls++;
     const body = await request.json();
@@ -130,7 +132,10 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(change) } }],
       usage: { prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 30, completion_tokens_details: { reasoning_tokens: 0 } },
     });
-  },
+  } catch (error) {
+    console.error(`Synthetic provider rejected a request: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  } },
   assets: { directory: resolve('dist'), binding: 'ASSETS',
     run_worker_first: ['/api/*', '/healthz', '/readyz', '/version', '/internal/*'],
     routerConfig: { has_user_worker: true },
