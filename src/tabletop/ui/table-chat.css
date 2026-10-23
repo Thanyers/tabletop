@@ -160,8 +160,9 @@
 }
 
 /* F064: the live search line while a rule draft waits. Same single-line treatment as the thinking
-   line, because a long query must not push the card's buttons off a 320px screen. */
-.tt-app .tt-chat-card__search { margin-top: var(--tt-space-2); min-width: 0; }
+   line, because a long query must not push the card's buttons off a 320px screen. A working card
+   centres its grid items, so the row must stretch explicitly or a nowrap query sizes it to content. */
+.tt-app .tt-chat-card__search { justify-self: stretch; margin-top: var(--tt-space-2); min-width: 0; }
 .tt-app .tt-chat-card .tt-chat-card__search-line {
   display: block; min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
   border-radius: 0 var(--tt-radius-medium, 10px) var(--tt-radius-medium, 10px) 0;

@@ -111,11 +111,15 @@ Node **22.23.2** · branch `feat/F064-search-visibility`
 | `npm run lint` | 0 error / 105 warning (เท่า baseline) |
 | `node scripts/check-public-files.mjs` | 0 finding |
 
+**ui-gate บน harness ที่ใช้ `table-chat.css` + tokens จริง** (`test-results/f064-search-line-harness.html`): **15/16 measured checks ผ่าน** · overflow 280/320/414 = 0 · contrast (light/dark), axe, touch targets, clipped content, mobile-first, RTL ผ่าน — เหลือ FAIL เดียวคือ "No emoji in UI output" เพราะอักขระ `🔎`/`✓` เป็น copy ที่ handoff กำหนด; DTCG token pairs = SKIP (โปรเจกต์ใช้ CSS tokens ไม่ใช่ไฟล์ DTCG) · ภาพ: `docs/previews/f064-search-line-{320,414}.jpg`
+
 ### ความเสี่ยง / ข้อจำกัดสไลซ์ A
 
-- **ยังไม่ยืนยันด้วย browser suite**: เทสต์ยืนยัน provider/worker/client line แล้ว แต่ยังไม่มี fixture ที่ stream event ค้นจริงผ่านเบราว์เซอร์
-- **ข้อความจากผู้ให้บริการ**: query มาจากโมเดลและ title มาจากเว็บสาธารณะ → ยังต้อง redact ก่อนเก็บเหมือน thinking tail
+- **ยังไม่ยืนยันด้วย browser suite แบบ end-to-end**: provider, worker และ client line มี unit/worker test ครบ และมี harness render จริงแล้ว แต่ยังไม่มี fixture ที่ stream event ค้นผ่านเบราว์เซอร์ทั้งเส้น
+- **การ์ดแคบมาก (320px)**: บรรทัดเดียวจึงตัดท้ายด้วย `…` ได้ เช่น query ไทยยาวจะเห็น `…2569` โดย `· เจอ N` ถูกตัด (ที่ 414px เห็นครบ); บรรทัดปิด `✓ ใช้ N แหล่ง` สั้นจึงเห็นครบเสมอ — ตัวเลข"N ที่ใช้จริง" จึงไม่หาย
+- **ข้อความจากผู้ให้บริการ**: query มาจากโมเดลและ title มาจากเว็บสาธารณะ → redact ก่อนเก็บเหมือน thinking tail
 - **ค่าใช้จ่ายต่อ tick**: job row โตขึ้น ≤300 ตัวอักษรต่อครั้งที่เขียน (ไม่เกิน 1 ครั้ง/900 ms) และถูกเขียนทับด้วยผลลัพธ์เมื่อจบ
+- **ข้อสังเกต (ไม่แก้ในสไลซ์นี้):** บรรทัด `liveThinkingLine` ของ F050 เป็น grid item ใน `.tt-chat-card--working` ที่ `justify-items:center` จึงมีโอกาสถูกจัดขนาดตาม content (nowrap) แบบเดียวกับที่พบในสไลซ์นี้; สไลซ์นี้แก้เฉพาะ element ของตนด้วย `justify-self: stretch` — F050 ควรได้ `justify-self: stretch` เพิ่มถ้าพบข้อความยาวล้นในการ์ดแคบ
 
 
 ## ผลตรวจ
