@@ -18,15 +18,15 @@ export const tablePatchSchema = z.strictObject({
     description: z.string().optional(),
     turnOrder: z.array(z.string()).optional(),
   }).optional(),
-  upsert: z.strictObject({ collections: items, actions: items, invariants: items, views: items, computeModules: items }).optional(),
-  remove: z.strictObject({ collections: ids, actions: ids, invariants: ids, views: ids, computeModules: ids }).optional(),
+  upsert: z.strictObject({ collections: items, actions: items, invariants: items, views: items, computedColumns: items, computeModules: items }).optional(),
+  remove: z.strictObject({ collections: ids, actions: ids, invariants: ids, views: ids, computedColumns: ids, computeModules: ids }).optional(),
   addEvidence: z.array(z.looseObject({})).max(16).optional(),
   addAssumptions: z.array(z.string()).max(16).optional(),
 });
 export type TablePatch = z.infer<typeof tablePatchSchema>;
 
-type Part = 'collections' | 'actions' | 'invariants' | 'views' | 'computeModules';
-const PARTS: readonly Part[] = ['collections', 'actions', 'invariants', 'views', 'computeModules'];
+type Part = 'collections' | 'actions' | 'invariants' | 'views' | 'computedColumns' | 'computeModules';
+const PARTS: readonly Part[] = ['collections', 'actions', 'invariants', 'views', 'computedColumns', 'computeModules'];
 
 export function isTablePatch(value: unknown): boolean {
   return typeof value === 'object' && value !== null && (value as { kind?: unknown }).kind === 'table-patch';
@@ -51,12 +51,16 @@ export function applyTablePatch(current: TableProgram, patch: TablePatch): { cha
   const issues: string[] = [];
   const program = structuredClone(current) as TableProgram;
   const views = () => program.canvas?.views ?? [];
-  const listOf = (part: Part): { id: string }[] => part === 'views' ? views() : part === 'computeModules' ? program.compute?.modules ?? [] : program[part];
+  const listOf = (part: Part): { id: string }[] => part === 'views' ? views()
+    : part === 'computeModules' ? program.compute?.modules ?? []
+      : part === 'computedColumns' ? program.computedColumns ?? [] : program[part];
   const setList = (part: Part, list: { id: string }[]) => {
     if (part === 'views') {
       if (list.length > 0 || program.canvas) program.canvas = { version: 1, ...(program.canvas ?? {}), views: list as NonNullable<TableProgram['canvas']>['views'] };
     } else if (part === 'computeModules') {
       program.compute = { version: 1, modules: list as NonNullable<TableProgram['compute']>['modules'] };
+    } else if (part === 'computedColumns') {
+      program.computedColumns = list as NonNullable<TableProgram['computedColumns']>;
     } else {
       (program as unknown as Record<Part, { id: string }[]>)[part] = list;
     }

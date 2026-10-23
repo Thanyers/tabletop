@@ -54,7 +54,7 @@ async function runPython(container: Container | undefined, request: ComputeRunne
   try {
     if (container.running) await container.destroy();
     if (!container.images.compute) throw new Error('COMPUTE_UNAVAILABLE');
-    container.start({ image: container.images.compute, enableInternet: false, instance: 'basic' });
+    container.start({ image: container.images.compute, enableInternet: false, instance: 'standard-1' });
     await container.setInactivityTimeout(COMPUTE_EXECUTION_TIMEOUT_MS + 5_000);
     const process = await container.exec(['timeout', '--kill-after=2', '30', 'python3', '-I', '-c', COMPUTE_PYTHON_ENTRY], {
       user: '10001:10001', cwd: '/tmp', signal,

@@ -36,12 +36,14 @@
 | F066-T4 | integration, browser proof, independent review, เอกสาร | typecheck/lint/unit/Worker/build และ acceptance ที่เกี่ยวข้องผ่านจริง |
 | F066-T5 | เทสต์ Rules capability หลังเพิ่ม compute | UI แสดงจำนวนตรงกับ endpoint และมี reusable calculations พร้อม gap ที่ยังมีจริง |
 | F066-T6 | เตรียม post-deploy acceptance หลายกรณี | มี prompt/ขั้นตอน/input/expected/evidence และผลตั้งต้น NOT_RUN; ไม่รันทดสอบ hosted ในงานเตรียม |
+| F066-T8 | เปิด engines บน hosted แก้เคสไม่ผ่าน และ deploy/ทดสอบซ้ำ | pipeline เปิด runtime จริง, CSV ไม่บังคับค่าที่คำนวณ, คำถาม library ตอบตาม capability; multi-account BLOCKED |
 | F066-T7 | ตรวจ JavaScript/Python และทดสอบหลัง release 8 | ยืนยันรุ่นจริง, actual/evidence และ PASS/FAIL/BLOCKED รายเคส; ไม่อ้าง readiness จาก capability flag อย่างเดียว |
 
 ## การตัดสินใจ
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-23 | ผู้ใช้อนุญาตเปิด Workers Paid และยอมรับค่าใช้บริการผ่าน checkout; pipeline เติม compute profile จากโค้ดหลังตรวจ private config | config ที่ GitHub secret เดิมยังไม่เปิด engines; คง identity/budget/credentials และตรวจ capability/execution แยกกัน |
 | 2026-10-23 | ใช้ทิศทาง Rules = ความสามารถที่เก็บไว้ใช้ซ้ำ ตามที่เจ้าของสั่งให้ implement หลังคุย concept | ไม่ลด Rules เหลือสูตรคอลัมน์ และไม่ต้องขออนุมัติแนวคิดเดิมซ้ำ |
 | 2026-10-23 | หนึ่งโปรแกรมรองรับหลายกฎ/การ์ด; execution session แยกจาก room และ browser session | รักษาการใช้ซ้ำ ความต่อเนื่อง และสิทธิ์ในโต๊ะ |
 | 2026-10-23 | ตรวจ PR #205 (patch), #207 (research) ก่อนแก้; แยกไฟล์ใหม่และรักษา integration points | ลดการชนกับงานที่กำลังทำ ไม่ merge งานคนอื่นโดยปริยาย |
@@ -52,6 +54,22 @@
 ## ผลตรวจ
 
 รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)
+
+### F066-T8 — candidate เปิด runtime และแก้ผลไม่ผ่าน
+
+ผู้ใช้อนุญาต deploy และให้คงหลายบัญชีเป็น BLOCKED เปิด Workers Paid ผ่าน checkout ตามการยืนยันของผู้ใช้แล้ว API Containers อ่านได้ แต่ยังไม่มี container application ก่อน deploy
+
+Node 22.23.2: deployment profile/smoke regression **8/8** ผ่าน; Python image dry-run build ผ่าน ไม่ deploy จากเครื่อง ชุดเต็ม CI [run 39932319011](https://github.com/Thanyers/tabletop/actions/runs/39932319011) fast-checks ผ่านพร้อม Linux Worker Loader/Container API **2 checks / 4 executions**: JavaScript 10→42 และ Python ใช้ pandas/numpy/scipy/openpyxl/dateutil 10→42 ไม่มี credentials ใน fixture ผลนี้เป็น emulator ไม่ใช่ hosted acceptance รอบก่อนจับ `Invalid container instance type` จาก `basic` จึงเปลี่ยนเป็น `standard-1` แล้วผ่าน
+
+PD005: เพิ่ม `TableProgram.computedColumns` สำหรับสูตร numeric AST ของกฎ; CSV รับเฉพาะ stored fields ส่วนสูตรคำนวณใน projection จาก authority ชุดเดียวกับ F055 การ promote field เดิมใช้ ID/collection เดิมและค่าที่เก็บไว้ต้องตรงสูตร ตรวจ candidate ทั้งก้อนจึงแก้ metric/invariant ที่อ้าง total เดิมพร้อมกันได้ ไม่ยอมลบ field อื่นหรือทับค่าประวัติ ย้อนกลับไป stored field ได้เมื่อค่าที่เก็บไว้ยังตรงสูตรปัจจุบันเท่านั้น; guard ป้องกัน default กลบค่าที่หาย สูตรเพิ่มเองแยกจากสูตรใน program เพื่อไม่ให้ rollback ฟื้นสูตรที่ถูกยกเลิก ตัวแก้ตารางแสดงสูตรจากกฎอ่านอย่างเดียวและชี้ Rules → Calculated fields → Change this rule; manual save รักษา IDs/สูตรของ collection อื่น
+
+PD035: assistant ได้ `computeCapabilities` ชุดเดียวกับ host และคำถามเรื่องความพร้อมตอบจาก capability โดยตรง ไม่เรียก provider/จองงบ/แก้ตาราง มี guard ให้คำขอสร้างงานทั้งภาษาไทย/อังกฤษและคำถามที่ขอสร้างต่อยังเข้า provider ตามเดิม ทดสอบ Polars/GeoPandas แยกจาก pandas โดยไม่แอบติดตั้ง package payload จริงที่ production ปฏิเสธใน release 8 ไม่ถูกเก็บไว้ จึงยืนยันได้เฉพาะ rejection path และการป้องกันใหม่
+
+ผล local ก่อน sync dev: Node22.23.2 unit **845/5 skipped**, CF **177/177**, build/typecheck/lint0errors110warnings ผ่าน Controlled HTTP authority + explicit disposable PGlite + real JS isolate/Docker **7 cases / 17 executions** ผ่าน: PD022 current435/oldrunstale/pendingmetricnull, PD023/033/034ปฏิเสธfailure/type/Infinityโดยrawไม่เปลี่ยนและmetricไม่ใช้ผลเก่า, PD024กันrunซ้ำ, PD036กันcycle/0executions, PD042counter1ทั้ง3รอบแยกJS/Python Results ใน ignored `test-results/post-deploy/compute-controlled-local/results.json`; ไม่เรียก hosted หรือ AI
+
+UI harness interactions และความกว้าง280/320/390/414pxผ่าน Full ui-gate รอบ fixtureใหม่ **16/17 measured,3SKIP** มี raw FAIL overflow detectorนับ controlsใน native detailsที่ปิดอยู่; วัดปุ่มที่แสดงจริงหลังเปิดทั้งสอง sections ที่320/414pxได้0overlaps เก็บ rawผลใน ignored `test-results/f066-t8-ui-gate.txt` ไม่แทน FAIL ด้วย PASS Independent review ปิด P2 ย้อนกฎที่เก็บยอดเก่าด้วย guard และยืนยันใหม่; ไม่เหลือ P1/P2 ใน scopeตรวจ
+
+หลัง sync dev@bae156d (เก็บงาน image/record picker ของทีมครบ): unit **871 passed/5 skipped**, CF **184/184**, typecheck/build/Worker dry-run ผ่าน รอ CI/pipeline/hosted acceptance; รายงาน release 8 ด้านล่างเป็นผลก่อนแก้ ไม่แก้ย้อนหลังเป็น PASS หลายบัญชีคง BLOCKED ตามผู้ใช้
 
 ### F066-T7 — ผลหลัง deploy 8.0.0
 

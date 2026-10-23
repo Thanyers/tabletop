@@ -119,6 +119,10 @@ describe('DeepSeekChangeProvider', () => {
     expect(result.change.initialRecords).toEqual({});
     expect(system).toContain('table-patch');
     expect(system).toContain('never repeat unchanged');
+    expect(system).toContain('"computedColumns"?:[...');
+    expect(system).toContain('explicit derived-field promotion');
+    expect(system).toContain('rejects mismatches');
+    expect(system).toContain('update any action, invariant, formula or canvas view that referred to the old field in the same patch');
     // A patch that cannot apply is a repairable reply with the reason, not a silent guess.
     const rejected = await reply(JSON.stringify({ kind: 'table-patch', remove: { actions: ['missing'] } })).propose(editInput, new AbortController().signal).catch((error: unknown) => error);
     expect(rejected).toBeInstanceOf(RejectedChangeReply);
@@ -155,8 +159,8 @@ describe('DeepSeekChangeProvider', () => {
     const messages = body?.messages as Array<{ role: string; content: string }>;
     expect(messages[0]?.content).toContain('TABLE-CHANGE COMPACT SCHEMA v1');
     expect(messages[0]?.content).not.toContain('"$schema"');
-    // F064 adds one research-grounding line (~150 chars); the guard still catches unbounded growth.
-    expect(messages[0]?.content.length).toBeLessThan(20_500);
+    // The compact guide now includes the bounded computed-column AST and promotion rule.
+    expect(messages[0]?.content.length).toBeLessThan(23_000);
     expect(messages[0]?.content).toContain('contains');
     expect(messages[0]?.content).toContain('exact existing source id');
     expect(messages[0]?.content).toContain('compare distinct selected rows with {"input":"first"} neq {"input":"second"}');
