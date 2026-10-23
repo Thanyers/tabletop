@@ -278,13 +278,15 @@ describe('DeepSeekChangeProvider', () => {
     const oversized: DeepSeekChangeInput = {
       kind: 'table',
       prompt: 'Create a table from all source files.',
+      // F066: four full files (120 KB) plus rows push the table input past 128 KiB.
       sources: Array.from({ length: 4 }, (_, index) => ({
         id: `source_${index}`,
         filename: `source-${index}.txt`,
-        text: 'x'.repeat(15_000),
+        text: 'x'.repeat(30_000),
       })),
       program: null,
       turn: null,
+      records: { notes: Array.from({ length: 40 }, (_, index) => ({ id: `note_${index}`, values: { text: 'y'.repeat(500) } })) },
     };
     const provider = new DeepSeekChangeProvider({
       apiKey: API_KEY,

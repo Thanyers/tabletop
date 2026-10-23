@@ -15,6 +15,12 @@ import type { ComputedColumn, ComputedExpression } from '../shared/table-contrac
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
+/**
+ * F066: the table part of one AI rule request (prompt, files, rules, rows, turn, notes as JSON). It is the whole
+ * file allowance plus the same again for the current rules and rows, so a table that accepted its files can
+ * still be drafted. The request around it (system prompt, envelope) and the billing reservation derive from it.
+ */
+export const TABLE_AI_INPUT_BYTES = 128 * 1024;
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
 export const MAX_TABLE_NOTES = 20;
 export const MAX_NOTE_TEXT = 500;
