@@ -112,8 +112,9 @@ EXPR (typed data-only AST; used inside {expression}, view values, control values
   args/values = EXPR[1..200]. ARITY: add/subtract/multiply/divide/remainder/power exactly 2; abs/sqrt/sin/cos/tan/asin/acos/atan/floor/ceil/round exactly 1; min/max >=2.
   EXPR literal list arrays may hold up to 200 items.
 
-DERIVED: totals/shares/balances that follow from rows stay an EXPR (METRIC, CHART value, {expression}), never typed-in numbers.
-  A CHART value runs per row bound as "row", so it can aggregate another collection filtered on {op:"field",record:"row",field}.
+DERIVED: totals/shares/balances from rows go in a METRIC or CHART EXPR so they follow row changes.
+  A CHART value runs per row as "row"; aggregates over other collections may filter on it.
+  A no-input button saving fixed rows needs a condition refusing a 2nd press.
 
 CANVAS{version:1,views:VIEW[<=12]}
 VIEW = SCENE | CHART | METRIC | CONTROLS; every view is {id,kind,title,relatedTo?{views?:ID[<=12],collections?:ID[<=6]}}.
