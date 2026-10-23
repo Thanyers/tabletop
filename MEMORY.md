@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — การคลิกใน QA ต้องตรวจค่าหลัง action ที่ล้มเหลว
+- **What happened:** ตอนเก็บหลักฐานคำถามเพิ่ม การเลือก checkbox บนการ์ดที่อยู่นอกมุมมองคืน error แต่มีตัวเลือกอื่นถูกเลือก เมื่อเก็บ snapshot พบว่าเช็กลิสต์กับคำตอบเองถูกส่งร่วมกัน จึงบันทึกรอบนั้นเป็น multi-answer ตามจริง ไม่อ้างว่าเลือกเฉพาะคำตอบเอง
+- **Root cause:** ถือว่า action ที่ error ไม่เปลี่ยน UI และตรวจเพียงตัวเลือกเป้าหมาย หลัง layout ของการ์ดขยับ
+- **Correct behavior:** ใช้ Objects เปิดการ์ดให้อยู่ในมุมมองก่อนเลือก; หลัง action ที่ error อ่านค่าของทุก checkbox ใหม่ เก็บ snapshot ของคำตอบ/ทุกค่าที่เลือกก่อน Submit และแยกหลักฐานก่อน/หลัง command ไม่ใช้ snapshot สถานะสุดท้ายแทนลำดับการทำงาน
+
 ### 2026-10-23 — staging deploy ที่ใช้ `workflow_run` ไม่ทำงานเพราะไฟล์ไม่อยู่บน default branch
 - **What happened:** CD002 (#230) เพิ่ม `.github/workflows/staging-deploy.yml` แบบ `on: workflow_run` ของ Validate บน `dev` แต่ merge แล้วไม่มี run เลย และ `gh workflow run` ตอบ 404 "workflow … not found on the default branch"
 - **Root cause:** GitHub เรียก workflow ที่ trigger ด้วย `workflow_run` (และ `workflow_dispatch`) จากไฟล์บน **default branch** เท่านั้น ซึ่งของ repo นี้คือ `main` · ไฟล์ใหม่ที่อยู่แค่ใน `dev` จึงไม่ถูกเรียกจนกว่าจะออก release

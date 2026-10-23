@@ -72,6 +72,7 @@
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F073-T1 | `room_images` + `/images` route + `imageId` บน note + การ์ดรูป + ปุ่มอัปโหลด | `review` | lead (AI) | `feat/F073-image-cards` | `domain/table.ts`, `shared/table-contracts.ts`, `cloudflare/{index,room,room-repository}.ts`, `ui/NoteCard.tsx`, `ui/note-card.css`, `client.ts`, tests | — | ตาราง DO ใหม่แบบเพิ่มอย่างเดียว (ผู้ใช้อนุมัติ 2026-10-23) |
+| F066-T7 | ตรวจ release 8 และรัน post-deploy acceptance ตามชุดเตรียม | `review` | Codex | `docs/F066-release8-acceptance` / #231 | acceptance report, ignored evidence, feature/spec | — | 7 PASS/4 FAIL/36 BLOCKED/1 SKIPPED_SCOPE; JS/Pythonยังปิด, หลักฐานสมมติ; ไม่แก้ runtime/config หรือสั่ง deploy |
 | F072-T1 | เปลี่ยนไอคอนปุ่ม Attach a file | `review` | lead (AI) | `feat/F072-attach-plus-icon` | `ui/TableChat.tsx` | — | ไอคอนอย่างเดียว |
 | F070-T1 | สถานะเลือกแล้วของชิป + เส้น follow-up + ตำแหน่งการ์ดลูก (client, localStorage) | `review` | lead (AI) | `feat/F070-choice-trail` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, `ui/table-chat.css`, `ui/CanvasWorkspace.tsx`, tests | — | ไม่แตะ server/contract · ไม่มี migration |
 | F066-T6 | เตรียมเคสทดสอบหลัง deploy พร้อมข้อมูลสมมติและผลอ้างอิง | `review` | Codex | `docs/F066-post-deploy-tests` / #223 | docs test pack, fixture data, read-only pack checker, spec/docs index | — | 48 เคส/8 กลุ่ม/P0 12, fixtures 15, offline golden checks 38 ผ่าน; acceptance 48 NOT_RUN รอผู้ใช้สั่งหลัง deploy |
