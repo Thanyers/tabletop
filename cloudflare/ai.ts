@@ -10,7 +10,7 @@ import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
 import { ReasonedDomainError } from './model-failure.js';
-import { FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
+import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
@@ -577,7 +577,8 @@ async function proposeGeneratedTable(
     if (attempt === MAX_ATTEMPTS - 1) {
       // F028: the final attempt asks for the smallest table that can still activate.
       previousIssues = issues;
-      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...FALLBACK_SIMPLIFY_ISSUES] } };
+      const editing = initialInput.kind === 'table' && initialInput.program !== null;
+      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...(editing ? EDIT_FALLBACK_SIMPLIFY_ISSUES : FALLBACK_SIMPLIFY_ISSUES)] } };
     } else {
       const repairIssues = nextRepairIssues(previousIssues, issues);
       previousIssues = issues;

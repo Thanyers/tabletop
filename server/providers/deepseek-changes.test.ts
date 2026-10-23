@@ -97,6 +97,38 @@ describe('DeepSeekChangeProvider', () => {
     }
   });
 
+  it('F065: merges a table-patch into the current program when editing, and the edit prompt asks for patches', async () => {
+    const current = equipmentChange('source_equipment');
+    if (current.kind !== 'table') throw new Error('Expected a table change.');
+    const view = { id: 'heatmap', kind: 'scene', title: 'Heatmap', width: 200, height: 100, elements: [{ id: 'cell', shape: 'rect', x: 0, y: 0, width: 10, height: 10, fill: '#40c463' }] };
+    const editInput: DeepSeekChangeInput = {
+      kind: 'table', prompt: 'Add a heatmap.', sources: [], program: current.program, turn: null, records: current.initialRecords,
+    };
+    let system = '';
+    const reply = (content: string) => new DeepSeekChangeProvider({
+      apiKey: API_KEY,
+      fetch: async (_url, options) => {
+        system = (JSON.parse(String(options?.body)) as { messages: Array<{ content: string }> }).messages[0]?.content ?? '';
+        return response(content);
+      },
+    });
+    const result = await reply(JSON.stringify({ kind: 'table-patch', upsert: { views: [view] } })).propose(editInput, new AbortController().signal);
+    if (!('change' in result) || result.change.kind !== 'table') throw new Error('Expected a merged table change.');
+    expect(result.change.program.actions).toEqual(current.program.actions);
+    expect(result.change.program.canvas?.views.at(-1)?.id).toBe('heatmap');
+    expect(result.change.initialRecords).toEqual({});
+    expect(system).toContain('table-patch');
+    expect(system).toContain('never repeat unchanged');
+    // A patch that cannot apply is a repairable reply with the reason, not a silent guess.
+    const rejected = await reply(JSON.stringify({ kind: 'table-patch', remove: { actions: ['missing'] } })).propose(editInput, new AbortController().signal).catch((error: unknown) => error);
+    expect(rejected).toBeInstanceOf(RejectedChangeReply);
+    expect((rejected as RejectedChangeReply).issues.join(' ')).toMatch(/"missing" is not in the current program/u);
+    // Creating a table still asks for (and only accepts) a complete program.
+    const created = await reply(JSON.stringify({ kind: 'table-patch', upsert: { views: [view] } })).propose({ ...editInput, program: null, records: {} }, new AbortController().signal).catch((error: unknown) => error);
+    expect(created).toBeInstanceOf(RejectedChangeReply);
+    expect(system).not.toContain('table-patch');
+  });
+
   it('sends all bounded table sources with the declarative schema and rejects unsupported operators', async () => {
     const tableChange = equipmentChange('source_equipment');
     const tableInput: DeepSeekChangeInput = {

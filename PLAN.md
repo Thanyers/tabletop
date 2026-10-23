@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F065 | AI แก้โต๊ะแบบส่งเฉพาะส่วนที่เปลี่ยน (patch) แทนการเขียนทั้งโปรแกรมใหม่ | `doing` | [F065](docs/features/F065-table-patch-edits.md) |
+| F065 | AI แก้โต๊ะแบบส่งเฉพาะส่วนที่เปลี่ยน (patch) แทนการเขียนทั้งโปรแกรมใหม่ | `review` | [F065](docs/features/F065-table-patch-edits.md) |
 | F064 | โหลดกติกา dev ล่าสุดอัตโนมัติเมื่อเริ่มงานในสี่ harness | `review` | [F064](docs/features/F064-agent-startup-hooks.md) |
 | F063 | เริ่มงานจาก dev ล่าสุดและอ่านกติกากลางข้าม harness | `review` | [F063](docs/features/F063-shared-agent-startup.md) |
 | F061 | Landing page ตามคุณค่าและเรื่องเล่า README | `review` | [F061](docs/features/F061-readme-landing.md) |
@@ -62,7 +62,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F065-T1..T4 | `applyTablePatch` + provider รับ `table-patch` ตอนแก้ + prompt แก้/ซ่อม + ลองจริงบน emulator + เอกสาร | `doing` | lead (AI) | `feat/F065-table-patch-edits` | `server/providers/deepseek-changes.ts`, `src/tabletop/domain/table-patch.ts` (ใหม่), tests, `spec.md`, `CHANGELOG.md` | — | ไม่แตะ prompt ของการสร้างใหม่ · ไม่มี migration |
+| F065-T1..T4 | `applyTablePatch` + provider รับ `table-patch` ตอนแก้ + prompt แก้/ซ่อม + ลองจริงบน emulator + เอกสาร | `review` | lead (AI) | `feat/F065-table-patch-edits` / #205 | `server/providers/deepseek-changes.ts`, `src/tabletop/domain/table-patch.ts` (ใหม่), tests, `spec.md`, `CHANGELOG.md` | — | ไม่แตะ prompt ของการสร้างใหม่ · ไม่มี migration |
 | F064-T1 | สคริปต์กลางและ native startup adapters | `review` | Codex | `feat/F064-agent-startup-hooks` / #202 | `scripts/agent-startup*`, `scripts/setup-agent-startup.mjs`, native configs, `tools/deepseek-startup/`, public-file gate, CI, AGENTS/agent docs, `spec.md`, `MEMORY.md`, `package.json` | — | fetch/read เท่านั้น; ไม่ checkout/merge หรือแก้งานค้างอัตโนมัติ |
 | F063-T1 | กติกาเริ่ม/รับช่วงงานและ Claude import | `review` | Codex | `docs/F063-shared-agent-startup` / #200 | `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_WORKFLOW.md`, `docs/README.md`, `docs/features/F063-shared-agent-startup.md`, `spec.md` | — | เอกสารเท่านั้น; Codex, Claude Code, OpenCode, DeepSeek Harness |
 | F061-T1 | ปรับหน้าแรกเฉพาะเนื้อหา ภาพ และ layout | `review` | Codex | `feat/F061-readme-landing` / #197 | `ui/PublicWelcome.tsx`, `ui/public-welcome.css`, ภาพ landing, `docs/features/F061-readme-landing.md`, `spec.md`, `CHANGELOG.md` | — | รักษา account/route/demo เดิม; ไม่รวม draft #180 |
