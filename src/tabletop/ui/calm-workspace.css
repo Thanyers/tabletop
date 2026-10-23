@@ -366,9 +366,12 @@
 .tt-app .tt-canvas-objects__list li > button:first-child { flex: 1 1 auto; min-width: 0; }
 /* F054: a listed card is a two-line grid — name, then its meta line — so three actions still fit at 280px. */
 .tt-app .tt-canvas-objects__list li.tt-canvas-objects__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 2px; border-radius: 6px; }
+/* Every row reserves the same four action columns (star, rename, eye, delete) so the
+   glyphs line up down the panel even when a card cannot be renamed or deleted. */
+.tt-app .tt-canvas-objects__actions { display: grid; grid-template-columns: repeat(4, 32px); align-items: center; justify-content: end; gap: 2px; }
+.tt-app .tt-canvas-objects__slot { width: 32px; min-height: 32px; }
+.tt-app .tt-canvas-objects__row .tt-canvas-objects__meta { grid-column: 1 / -1; }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 32px; padding: 0; color: var(--tt-muted); }
-.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 36px; padding: 0; color: var(--tt-muted); }
-.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus:hover:not(:disabled) { border-color: #d9e6df; color: var(--tt-moss); background: #eaf3ee; }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye[aria-pressed='true'] { color: var(--tt-moss); }
 
 /* A notification's action button (e.g. View rules after new rules went into use). */

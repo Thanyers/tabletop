@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — DSH plugin นอก linked profile หา SDK ไม่พบ และ hook context อาจตัดกติกาท้ายไฟล์
+- **What happened:** absolute module จาก home patch import `@deepseek-ai/dsh-llm` แบบ bare ไม่สำเร็จ; AGENTS เดิมยาวเกินงบ additionalContext ของ Claude
+- **Root cause:** module นอก linked package ไม่ร่วม peer resolution ของ profile และ Claude ส่ง context เกิน 10,000 ตัวอักษรเป็น preview
+- **Correct behavior:** รัน `npm run agents:setup` เพื่อใช้ SDK instance ของ runtime ที่ติดตั้งจริงและตรวจ import/composition ก่อนเปิดใช้; รัน `npm run test:agents` เพื่อกัน AGENTS โตเกินงบ เก็บรายละเอียดปฏิบัติการที่ [AGENT_OPERATIONS](docs/AGENT_OPERATIONS.md) ตาม pointer ใน AGENTS
+
 ### 2026-10-23 — ตรวจ UI แล้วฟิลด์ใหม่ไม่ขึ้น ทั้งที่ typecheck/build ผ่าน เพราะพอร์ต 4310 เป็นของ checkout อื่น
 - **What happened:** เปิด Playwright ตรวจหน้า `/tables` หลังเพิ่ม `createdAt`/`updatedAt`/`updatedBy` แล้ว `/api/session` ยังคืนเฉพาะ id/title/kind/role · log ของ server ที่เพิ่งสตาร์ทมี `EADDRINUSE` แต่ตรวจ `/api/capabilities` ได้ 200 จึงดูเหมือนปกติ
 - **Root cause:** มี process `node --import tsx server/bootstrap.ts` จากอีก checkout จับ `127.0.0.1:4310` อยู่ก่อน (สร้าง 09:04) · `vite.config.ts` proxy `/api` ไป 4310 ตายตัว จึงคุยกับโค้ดเก่า ไม่ใช่โค้ดที่เพิ่งแก้ · อีกสองกับดักที่เจอพร้อมกัน: Playwright ใน repo คาด chromium รุ่นที่ไม่ติดตั้ง (ใช้ `channel:'msedge'`) และ `waitUntil:'networkidle'` timeout กับ Vite dev เพราะ HMR websocket

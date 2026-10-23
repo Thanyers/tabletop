@@ -2,8 +2,9 @@ import { viewerCan } from '../shared/permissions';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { AlertCircle, Database, FilePlus2, Pencil, Play, Trash2, Users } from 'lucide-react';
 import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
-import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
+import type { ComputedColumn } from '../shared/table-contracts';
 import { computeRecordRow } from '../shared/computed-columns';
+import { formatComputedExpression, parseComputedFormula } from '../shared/computed-formula';
 import { TABLE_CAPABILITIES, TABLE_CAPABILITY_LIMITS } from '../shared/table-capabilities';
 import type { ActorContext, WorkspaceView } from '../shared/contracts';
 import type { PlanNode } from '../runtime';
@@ -427,6 +428,9 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   const collection = state.program?.collections.find((item) => item.id === collectionId);
   const rows = (node.inputs.rows as TableRecord[] | undefined) ?? state.records[collectionId] ?? [];
   const computed = (state.computedColumns ?? []).filter((column) => column.collection === collectionId);
+  // F055: prefer the authority's numbers for the state on screen; a local candidate preview
+  // (different dataRevision) falls back to the same bounded evaluator.
+  const serverValues = state.computedValues?.revision === state.dataRevision ? state.computedValues.values : undefined;
   const actionController = useTableActionController(view, onCommand);
   const contextId = useId().replace(/:/g, '');
   const actionSelectId = `${contextId}-tt-table-record-action`;
@@ -475,7 +479,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">SHARED RECORDS</span><strong>{collection?.title ?? node.title}</strong><small>{rows.length} {rows.length === 1 ? 'record' : 'records'} · data r{state.dataRevision}</small></div>
     {expanded && collection && viewerCan(view, 'data.columns') && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
     {expanded && collection && viewerCan(view, 'data.import') && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
-    {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">No records are available in this collection.</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => <td key={column.id}>{formatComputed(computeRecordRow(computed, collectionId, row)[column.id])}</td>)}</tr>)}</tbody></table></div>}
+    {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">No records are available in this collection.</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => { const serverRow = serverValues?.[collectionId]?.[row.id]; const value = serverRow && column.id in serverRow ? serverRow[column.id] : computeRecordRow(computed, collectionId, row)[column.id]; return <td key={column.id}>{formatComputed(value)}</td>; })}</tr>)}</tbody></table></div>}
     {expanded && selectedRecord && <section className="tt-table-record-actions" aria-label={`Actions for ${recordLabel(selectedRecord, collection, view.members)}`}>
       <div><strong>{recordLabel(selectedRecord, collection, view.members)}</strong></div>
       {eligibleActions.length === 0 ? <p className="tt-canvas-inline__note">{collectionActions.length === 0 ? 'No table actions use this collection.' : `Actions for this collection are limited to ${formatActionRoles(collectionActions)}.`}</p> : <>
@@ -490,7 +494,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   </div>;
 }
 
-interface ComputedDraft { label: string; leftField: string; op: 'add' | 'subtract' | 'multiply' | 'divide'; rightKind: 'field' | 'number'; rightField: string; rightValue: string }
+interface ComputedDraft { label: string; formula: string }
 
 function TableComputedColumns({ collection, state, busy, onCommand }: {
   collection: TableCollection;
@@ -498,7 +502,7 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
   busy: string | null;
   onCommand: WorkbenchProps['onCommand'];
 }) {
-  const numberFields = collection.fields.filter((field) => field.type === 'number');
+  const numericFields = collection.fields.filter((field) => field.type === 'number');
   const existing = (state.computedColumns ?? []).filter((column) => column.collection === collection.id);
   const [open, setOpen] = useState(false);
   const [drafts, setDrafts] = useState<ComputedDraft[]>([]);
@@ -507,64 +511,44 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
   const sectionRef = useRef<HTMLElement>(null);
   // The editor sits near the bottom of a long card; bring it into view when it opens.
   useEffect(() => { if (open) sectionRef.current?.scrollIntoView({ block: 'nearest' }); }, [open]);
+  const defaultFormula = numericFields[0] ? `${numericFields[0].id} + 0` : '0';
   const start = () => {
-    setDrafts(existing.map((column) => draftFromColumn(column, numberFields)));
+    setDrafts(existing.map((column) => ({ label: column.label, formula: formatComputedExpression(column.expression) })));
     setMessage(''); setOpen(true);
   };
   const update = (index: number, patch: Partial<ComputedDraft>) => setDrafts((current) => current.map((item, at) => at === index ? { ...item, ...patch } : item));
   const save = async () => {
-    const columns = drafts.map((draft, index) => ({
-      id: `calc${index + 1}`, collection: collection.id,
-      label: draft.label.trim() || `Calculated ${index + 1}`,
-      expression: draftExpression(draft),
-    }));
+    const columns: ComputedColumn[] = [];
+    for (const [index, draft] of drafts.entries()) {
+      const parsed = parseComputedFormula(draft.formula, collection.fields.map((field) => ({ id: field.id, type: field.type })));
+      if (!parsed.ok) { setMessage(`Formula ${index + 1}: ${parsed.error}`); return; }
+      columns.push({ id: `calc${index + 1}`, collection: collection.id, label: draft.label.trim() || `Calculated ${index + 1}`, expression: parsed.expression });
+    }
     setPending(true); setMessage('');
     try {
       const result = await onCommand('table.setComputedColumns', { columns });
       if (result) { setMessage(`Saved ${columns.length} computed column${columns.length === 1 ? '' : 's'}.`); setOpen(false); }
-      else setMessage('The computed columns were rejected. Check the fields and number.');
+      else setMessage('The computed columns were rejected. Check the formula and its fields.');
     } finally { setPending(false); }
   };
-  if (numberFields.length === 0) return null;
+  if (collection.fields.length === 0) return null;
   return <section ref={sectionRef} className="tt-table-computed" aria-label={`Computed columns for ${collection.title}`}>
     {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={start}>{existing.length ? `Computed columns (${existing.length})` : 'Add computed column'}</button> : <>
       <div className="tt-table-computed__head"><strong>Computed columns</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => setOpen(false)}>Close</button></div>
       {drafts.length === 0 && <p className="tt-table-inline-hint">No computed columns yet.</p>}
       {drafts.map((draft, index) => <div className="tt-table-computed__row" key={index}>
         <label>Label<input value={draft.label} maxLength={40} placeholder={`Calculated ${index + 1}`} onChange={(event) => update(index, { label: event.target.value })} /></label>
-        <label>Field<select value={draft.leftField} onChange={(event) => update(index, { leftField: event.target.value })}>{numberFields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>
-        <label>Operator<select value={draft.op} onChange={(event) => update(index, { op: event.target.value as ComputedDraft['op'] })}><option value="add">+</option><option value="subtract">−</option><option value="multiply">×</option><option value="divide">÷</option></select></label>
-        <label>Value<select value={draft.rightKind} onChange={(event) => update(index, { rightKind: event.target.value as ComputedDraft['rightKind'] })}><option value="number">number</option><option value="field">field</option></select></label>
-        {draft.rightKind === 'number'
-          ? <label>Number<input type="number" inputMode="decimal" value={draft.rightValue} onChange={(event) => update(index, { rightValue: event.target.value })} /></label>
-          : <label>Field<select value={draft.rightField} onChange={(event) => update(index, { rightField: event.target.value })}>{numberFields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>}
+        <label>Formula<input value={draft.formula} placeholder={defaultFormula} spellCheck={false} autoComplete="off" onChange={(event) => update(index, { formula: event.target.value })} /></label>
         <button type="button" className="tt-button tt-button--quiet" disabled={pending} onClick={() => setDrafts((current) => current.filter((_, at) => at !== index))}>Remove</button>
       </div>)}
+      <p className="tt-table-inline-hint">Fields: {collection.fields.map((field) => `${field.id} (${field.type})`).join(' · ')}<br />Functions: IF, CEIL, FLOOR, ABS, ROUND, MIN, MAX, AND, OR. Example: IF(goods_total &gt;= 5000, 0, IF(zone = &quot;BKK&quot;, 35, 45) + IF(weight_kg &gt; 3, CEIL(weight_kg - 3) * 10, 0))</p>
       <div className="tt-table-computed__actions">
-        <button type="button" className="tt-button tt-button--quiet" disabled={pending || drafts.length >= 6} onClick={() => setDrafts((current) => [...current, { label: '', leftField: numberFields[0].id, op: 'add', rightKind: 'number', rightField: numberFields[1]?.id ?? '', rightValue: '0' }])}>Add row</button>
+        <button type="button" className="tt-button tt-button--quiet" disabled={pending || drafts.length >= 6} onClick={() => setDrafts((current) => [...current, { label: '', formula: defaultFormula }])}>Add row</button>
         <button type="button" className="tt-button tt-button--primary" disabled={pending || busy !== null} onClick={() => void save()}>{pending ? 'Saving…' : 'Save computed columns'}</button>
       </div>
       {message && <p className="tt-table-inline-hint" role="status">{message}</p>}
     </>}
   </section>;
-}
-
-function draftFromColumn(column: ComputedColumn, numberFields: TableField[]): ComputedDraft {
-  const fallback: ComputedDraft = { label: column.label, leftField: numberFields[0]?.id ?? '', op: 'add', rightKind: 'number', rightField: numberFields[1]?.id ?? '', rightValue: '0' };
-  const expression = column.expression;
-  if (expression.op === 'field' || expression.op === 'literal') return fallback;
-  if (expression.left.op !== 'field') return fallback;
-  if (expression.right.op === 'field') return { ...fallback, leftField: expression.left.field, op: expression.op, rightKind: 'field', rightField: expression.right.field };
-  if (expression.right.op === 'literal') return { ...fallback, leftField: expression.left.field, op: expression.op, rightKind: 'number', rightValue: String(expression.right.value) };
-  return fallback;
-}
-
-function draftExpression(draft: ComputedDraft): ComputedExpression {
-  return {
-    op: draft.op,
-    left: { op: 'field', field: draft.leftField },
-    right: draft.rightKind === 'field' ? { op: 'field', field: draft.rightField } : { op: 'literal', value: Number(draft.rightValue) },
-  };
 }
 
 function TableRowImport({ collection, busy, onCommand }: {

@@ -20,7 +20,10 @@ env:
 jobs:
   # Decides how much this run checks.
   # CI005: the slow browser suites run only for releases (PRs into main, pushes to main,
-  # hotfixes) and on manual runs. PRs and pushes to dev run the fast checks.
+  # hotfixes) and on manual runs. PRs into dev run the fast checks.
+  # CI007: a push to dev (a merged PR) also runs the browser suites. Rulesets only gate PRs,
+  # so a red run here never blocks merging; it opens/updates a GitHub issue instead, so a
+  # regression shows up the day it lands rather than on release day.
   # CI006: a release merge on main whose code is identical to its release PR head, which
   # already passed the full suite as a PR into main, reuses that result instead of running
   # everything again, so the deploy starts a few seconds after the merge.
@@ -50,6 +53,8 @@ jobs:
           full=false
           reuse=false
           if [ "$EVENT" = workflow_dispatch ] || [ "$BASE_REF" = main ]; then
+            full=true
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/dev ]; then
             full=true
           elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
             full=true
@@ -101,6 +106,8 @@ jobs:
         run: npm audit --audit-level=high
       - name: Lint
         run: npm run lint
+      - name: Agent startup adapters and instruction budget
+        run: npm run test:agents
       - name: Unit and local SQL integration tests
         run: npm test -- --reporter=default --reporter=json --outputFile=test-results/unit-report.json
       - name: Legacy local Component Lab regression tests
@@ -119,7 +126,7 @@ jobs:
         run: npm run build:cloudflare
       - name: Browser suites skipped for this change
         if: needs.plan.outputs.full_suite != 'true'
-        run: echo "::notice::Fast checks only. Browser suites run on the release PR into main, on main, or via Run workflow (workflow_dispatch)."
+        run: echo "::notice::Fast checks only. Browser suites run after the merge into dev, on the release PR into main, on main, or via Run workflow (workflow_dispatch)."
       - name: Retain test summaries
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -296,3 +303,32 @@ jobs:
           bad="$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result != "success" and .value.result != "skipped") | .key] | join(", ")')"
           if [ -n "$bad" ]; then echo "::error::Failed or cancelled: $bad"; exit 1; fi
           if [ "$(echo "$RESULTS" | jq -r '.plan.result')" != success ]; then echo "::error::plan did not run"; exit 1; fi
+
+  # CI007: a failed browser run on dev (after a merge) is reported as an issue rather than
+  # blocking anything. Cancelled runs are ignored: a newer merge into dev supersedes them.
+  report-dev-failure:
+    needs: [plan, fast-checks, browser-node, browser-workers, browser-generated]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the dev browser-suite issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          TITLE: "dev: browser suites failing after merge"
+        run: |
+          failed="$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result == "failure") | .key] | join(", ")')"
+          body="Failed after merge into \`dev\` at \`${SHA:0:7}\`: **$failed** — $RUN_URL
+          Nothing was blocked (CI007). Fix on \`dev\` before the next release; the release PR runs the same suites."
+          number="$(gh issue list -R "$REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" -R "$REPO" --body "$body"
+          else
+            gh issue create -R "$REPO" --title "$TITLE" --body "$body"
+          fi
