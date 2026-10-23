@@ -40,6 +40,10 @@
 | F066-T8 | เปิด engines บน hosted แก้เคสไม่ผ่าน และ deploy/ทดสอบซ้ำ | pipeline เปิด runtime จริง, CSV ไม่บังคับค่าที่คำนวณ, คำถาม library ตอบตาม capability; multi-account BLOCKED |
 | F066-T7 | ตรวจ JavaScript/Python และทดสอบหลัง release 8 | ยืนยันรุ่นจริง, actual/evidence และ PASS/FAIL/BLOCKED รายเคส; ไม่อ้าง readiness จาก capability flag อย่างเดียว |
 
+## ติดตาม release 9
+
+F066-T8 ทำผล acceptance ต่อใน `docs/F066-release9-acceptance` พร้อมนำ main กลับ dev: production **9.0.0 / 49f2dd7** deploy สำเร็จจาก [PR #249](https://github.com/Thanyers/tabletop/pull/249), [pipeline 39962089610](https://github.com/Thanyers/tabletop/actions/runs/39962089610) ประกาศ JS/Python profile `tabletop-compute-1` แล้ว การตรวจ production แบบล็อกอินและใช้ AI ยังอยู่ระหว่างดำเนินการ; staging rehearsals และ local controlled cases แยกจาก production PASS หลายบัญชี 8 เคสคง BLOCKED ตามผู้ใช้
+
 ## การตัดสินใจ
 
 | วันที่ | การตัดสินใจ | เหตุผล |
