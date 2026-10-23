@@ -88,9 +88,16 @@ const operand: z.ZodType<TableOperand> = z.union([z.strictObject({ literal: valu
 const computedExpressionSchema: z.ZodType<ComputedExpression> = z.lazy(() => z.union([
   z.strictObject({ op: z.literal('field'), field: id }),
   z.strictObject({ op: z.literal('literal'), value: z.number().finite().min(-1e9).max(1e9) }),
-  ...(['add', 'subtract', 'multiply', 'divide'] as const).map((op) => z.strictObject({
+  z.strictObject({ op: z.literal('text'), value: z.string().min(1).max(100) }),
+  ...(['add', 'subtract', 'multiply', 'divide', 'min', 'max', 'and', 'or'] as const).map((op) => z.strictObject({
     op: z.literal(op), left: computedExpressionSchema, right: computedExpressionSchema,
   })),
+  ...(['negate', 'ceil', 'floor', 'abs'] as const).map((op) => z.strictObject({
+    op: z.literal(op), value: computedExpressionSchema,
+  })),
+  z.strictObject({ op: z.literal('round'), value: computedExpressionSchema, digits: z.number().int().min(0).max(6) }),
+  z.strictObject({ op: z.literal('compare'), compare: z.enum(['eq', 'neq', 'lt', 'lte', 'gt', 'gte']), left: computedExpressionSchema, right: computedExpressionSchema }),
+  z.strictObject({ op: z.literal('if'), condition: computedExpressionSchema, then: computedExpressionSchema, else: computedExpressionSchema }),
 ]));
 const computedColumnSchema: z.ZodType<ComputedColumn> = z.strictObject({ id, collection: id, label: z.string().min(1).max(40), expression: computedExpressionSchema });
 export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({

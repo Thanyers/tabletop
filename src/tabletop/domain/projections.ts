@@ -2,6 +2,21 @@ import { DomainError, type ActorContext, type DomainState, type EncounterState, 
 import { clone } from './helpers';
 import { projectCanvasLayout } from './canvas-layout';
 import { VISIBILITY_POLICY, type VisibilityPolicy } from '../shared/visibility';
+import { computeRecordValues } from '../shared/computed-columns';
+import type { TableState } from '../shared/table-contracts';
+
+/** F055: the authority computes every computed column for the reader; the result is projection-only. */
+function attachComputedValues(state: TableState): void {
+  delete state.computedValues;
+  if (!state.computedColumns?.length) return;
+  const values: NonNullable<TableState['computedValues']>['values'] = {};
+  for (const [collectionId, records] of Object.entries(state.records)) {
+    const rows: Record<string, Record<string, number | null>> = {};
+    for (const record of records) rows[record.id] = computeRecordValues(state.computedColumns, collectionId, record.values);
+    if (Object.keys(rows).length > 0) values[collectionId] = rows;
+  }
+  if (Object.keys(values).length > 0) state.computedValues = { revision: state.dataRevision, values };
+}
 
 /** Membership/role gate shared by both visibility policies. */
 function assertCanRead(state: DomainState, ctx: ActorContext): void {
@@ -26,6 +41,7 @@ export function projectDomain(state: DomainState, ctx: ActorContext, policy: Vis
       if (state.canvasLayout) full.canvasLayout = projectCanvasLayout(state, 'open');
       // F048: an unused roll belongs to the member who rolled it; never broadcast it to the table.
       delete full.pendingRolls;
+      attachComputedValues(full);
     }
     return full;
   }
@@ -40,6 +56,7 @@ function projectPrivate(state: DomainState, ctx: ActorContext): DomainState {
     if (state.canvasLayout) projected.canvasLayout = projectCanvasLayout(state, 'private');
     // F048: pending rolls stay private to their roller under either visibility policy.
     delete projected.pendingRolls;
+    attachComputedValues(projected);
     if (ctx.role === 'participant') {
       // F008: table files are visible to every member; drafts and draft history stay with the owner.
       projected.candidate = null; projected.revisions = [];
