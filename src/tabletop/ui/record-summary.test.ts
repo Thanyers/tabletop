@@ -31,6 +31,8 @@ describe('F075 readable record picker', () => {
     expect([...labels.values()]).toEqual(['A · B · 10 · Settled: No · s1', 'A · B · 10 · Settled: No · s2', 'C · B · 10 · Settled: No']);
     const teams: TableCollection = { id: 'teams', title: 'Teams', fields: [{ id: 'delivered', label: 'Delivered', type: 'number', required: true }] };
     expect(recordChoiceLabels([row('team-north', { delivered: 0 }), row('team-south', { delivered: 0 })], teams).get('team-south')).toBe('0 · team-south');
+    // Unique but nameless: a bare number still keeps its id.
+    expect(recordChoiceLabels([row('team-north', { delivered: 7 }), row('team-south', { delivered: 0 })], teams).get('team-south')).toBe('0 · team-south');
   });
 
   it('names members, skips empty values and falls back to the id when nothing is readable', () => {

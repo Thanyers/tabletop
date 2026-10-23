@@ -14,6 +14,11 @@
 - **What happened:** F066-T8 unit ผ่าน แต่ Workers browser ถาม Available rule แล้วได้ `MODEL_PROVIDER_HTTP_ERROR` เพราะ synthetic outbound fixture ปฏิเสธ request
 - **Root cause:** เพิ่ม `computeCapabilities` ใน assistant context และปรับ unit assertion แล้ว แต่ `tests/cloudflare-browser.mjs` ยังตรวจ key set เดิม จึงกลายเป็น error ของ provider จำลอง
 - **Correct behavior:** เมื่อแก้ provider payload ให้ค้น strict key assertions ใน unit และ browser fixtures พร้อมกัน เพิ่ม key และตรวจค่า capability จริงของ fixture โดยคง redaction/privacy assertions เดิม แล้วรัน Workers browser ก่อนอ้างว่าชุดรวมผ่าน
+### 2026-10-23 — เปลี่ยนข้อความตัวเลือกใน UI แล้ว browser suite บน dev ล้ม staging เลยค้าง
+
+- **what happened:** F075 เปลี่ยนข้อความ option ของช่อง "Choose a record" ผ่าน unit/CI เร็วของ PR แต่ `test:generative:browser` บน push เข้า `dev` ล้มที่ `toHaveText('0 · team-south')` (ได้ `"0"`) → ชุดเต็มไม่ผ่าน staging ไม่ deploy commit ต่อ ๆ ไป
+- **root cause:** PR เข้า dev รันแค่เช็คเร็ว (ไม่มี browser suite) และผมเช็คแค่ว่าเทสต์มีข้อความเดิมอยู่ไหม โดยคิดเองว่าค่าสองแถวยังซ้ำกันตอนถึงบรรทัดนั้น ไม่ได้รันจริง
+- **correct behavior:** แก้ข้อความที่ผู้ใช้เห็นเมื่อไหร่ ให้ `grep -rn "<ข้อความเดิม>" tests/*.mjs` แล้วรัน suite ที่เจอในเครื่องก่อน merge: `npm run build && npm run build:cloudflare && BROWSER_CHANNEL=chrome npm run test:generative:browser` (หรือ suite ที่เกี่ยว)
 
 ### 2026-10-23 — Docker สำเร็จแต่ Container API ปฏิเสธ instance
 - **What happened:** build image และ Node/Docker integration ผ่าน แต่ Linux Workers Container API smoke ของ F066-T8 รัน Python ไม่ได้: `Invalid container instance type` ก่อนเริ่ม process
