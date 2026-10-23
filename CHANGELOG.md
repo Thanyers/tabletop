@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+## 9.0.1 — 2026-10-23
+
+PATCH: fix linked-row replacement, rule questions, and source-free drafting; rollback to 9.0.0 without a schema change.
+
+- **สร้างหน้า Release Notes บน Windows ได้:** ตัวสร้างอ่านหัวข้อรุ่นจาก CHANGELOG ที่ใช้ CRLF ได้เหมือน LF แทนการแสดงว่าไม่มีรุ่น; ไม่เปลี่ยน runtime หรือเนื้อหาหัวข้อรุ่นที่ตัดแล้ว
+- **F066: เปลี่ยนไฟล์แล้วกฎยังอ้างแถวถูกต้อง:** Replace ให้เลือกฟิลด์ข้อความสำหรับจับคู่รายการเดิม รักษา ID แม้เรียงแถวใหม่ และปฏิเสธข้อมูลกำกวมหรือขาดแถวที่กฎยังใช้แบบไม่เปลี่ยนข้อมูลเดิม; Append ยังใช้ได้ตามเดิม
+- **F066: ถามและแก้กฎแยกเจตนาได้ตรงขึ้น:** Ask คำถามว่ากฎรับอะไรหรือเปลี่ยนผลตรงไหนยังเป็นคำถาม ส่วนคำสั่งแก้ยังร่างกฎ; คำถาม library แบบมีเงื่อนไขตอบจากความสามารถที่เปิดจริง และ prompt ของโต๊ะไม่มีไฟล์ไม่ให้ตัวอย่าง source สมมติ
+- **ตัวรัน Python ของห้องเดิม:** อ่าน container binding ตอนถึงคิวรันและแยกเหตุผล unavailable ใน log โดยไม่บันทึก identifiers; input เดิมที่ล้มไม่ถูก autoqueue ซ้ำทุก alarm และยังกด Run เพื่อ retry ได้
+- **CI ทดสอบลาก scene ระหว่างรอ focus:** ควบคุมเวลาของ fixture ให้ pointer-down เริ่มใน pending window จริง โดยคงพิกัด ผลคำนวณ จำนวน action และ camera assertions เดิมทุกข้อ ไม่มีการแก้ production scene/camera
+- **แจ้งเตือนเมื่อออกรุ่น (CD003):** หลัง deploy production สำเร็จ pipeline สร้าง GitHub Release `vX.Y.Z` พร้อมข้อความจากหัวข้อรุ่นใน CHANGELOG ให้เอง · คนที่ Watch repo แบบ Releases จะได้อีเมลแจ้งทุกรุ่น · สร้างไม่สำเร็จจะแค่เตือน ไม่กระทบ production ที่ deploy แล้ว
+
 ## 9.0.0 — 2026-10-23
 
 MAJOR: enable hosted JavaScript/Python bindings and versioned computed formulas; rollback to 8.0.0 requires removing new formula contracts before restoring the old writer
