@@ -19,27 +19,24 @@ export function AccountSignIn({ status, notice, hasPendingInvite, checking, onRe
   onRetry: () => void;
   onDismissNotice: () => void;
 }) {
-  return <PublicWelcome>{(copy) => <section id="sign-in" className="tt-public-welcome__auth" aria-labelledby="tt-public-welcome-auth-title">
-    <span className="tt-account-gate__eyebrow"><ShieldCheck size={14} /> {copy.auth.eyebrow}</span>
-    <h2 id="tt-public-welcome-auth-title">{copy.auth.title}</h2>
-    <p className="tt-public-welcome__auth-copy">{copy.auth.body}</p>
-    {hasPendingInvite && <p className="tt-account-gate__invite" role="status"><ShieldCheck size={15} /> {copy.auth.inviteSaved}</p>}
-    {notice && <div className={`tt-account-gate__notice tt-account-gate__notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><AlertCircle size={15} /><span lang="en">{notice.text}</span><button type="button" aria-label={copy.auth.dismiss} onClick={onDismissNotice}>×</button></div>}
-    <a className="tt-account-gate__google" href={status.loginUrl}>
-      <span className="tt-account-gate__google-mark" aria-hidden="true">G</span>
-      <span>{copy.auth.google}</span>
-      <ArrowRight size={16} />
-    </a>
-    <button className="tt-account-gate__retry" type="button" onClick={onRetry} disabled={checking}>
-      <RefreshCw size={13} className={checking ? 'tt-account-gate__spin' : ''} />
-      {checking ? copy.auth.checking : copy.auth.checkAgain}
-    </button>
-    <details className="tt-public-welcome__invite-details">
-      <summary>{copy.auth.inviteHelpTitle}</summary>
-      <p>{copy.auth.inviteHelp}</p>
-    </details>
-    <a className="tt-account-gate__demo" href="/demo" target="_blank" rel="noopener" aria-label={copy.auth.demoLabel}><span>{copy.auth.demo}</span><small>{copy.auth.demoHint}</small><ArrowRight size={14} /></a>
-  </section>}</PublicWelcome>;
+  // Google is the only way in, so there is no sign-in box: the header and the hero's main button go
+  // straight to Google, and a failed sign-in or a saved invitation shows as one line under the header.
+  return <PublicWelcome
+    primaryHref={status.loginUrl}
+    headerAction={(copy) => <a className="tt-public-welcome__signin tt-public-welcome__google" href={status.loginUrl} aria-label={copy.auth.google}>
+      <span className="tt-public-welcome__google-mark" aria-hidden="true">G</span>
+      <span className="tt-public-welcome__google-long" aria-hidden="true">{copy.auth.google}</span>
+      <span className="tt-public-welcome__google-short" aria-hidden="true">Google</span>
+    </a>}
+    notice={(copy) => (notice || hasPendingInvite) ? <div className="tt-public-welcome__notice">
+      {hasPendingInvite && <p className="tt-account-gate__invite" role="status"><ShieldCheck size={15} /> {copy.auth.inviteSaved}</p>}
+      {notice && <div className={`tt-account-gate__notice tt-account-gate__notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><AlertCircle size={15} /><span lang="en">{notice.text}</span><button type="button" aria-label={copy.auth.dismiss} onClick={onDismissNotice}>×</button></div>}
+      {notice?.tone === 'error' && <button className="tt-account-gate__retry" type="button" onClick={onRetry} disabled={checking}>
+        <RefreshCw size={13} className={checking ? 'tt-account-gate__spin' : ''} />
+        {checking ? copy.auth.checking : copy.auth.checkAgain}
+      </button>}
+    </div> : null}
+  />;
 }
 
 /** The public landing for someone already signed in: same story, with a way back to their tables instead of sign-in. */

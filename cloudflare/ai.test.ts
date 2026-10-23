@@ -621,7 +621,7 @@ describe('Cloudflare AI proposal helper', () => {
       sources,
     });
 
-    // The card keeps a bounded list and never the brief or summaries the draft used internally.
+    // The card keeps a bounded list; F064 C keeps the summary because a verified web source cites it.
     expect(summary?.sources).toHaveLength(MAX_JOB_RESEARCH_SOURCES);
     expect(summary?.queries).toHaveLength(MAX_JOB_RESEARCH_QUERIES);
     expect(summary?.sources[0]).toEqual({
@@ -629,8 +629,9 @@ describe('Cloudflare AI proposal helper', () => {
       url: 'https://example0.go.th/report',
       date: '2026-07-26T16:00:00+00:00',
       authority: 4,
+      summary: 'not display text on the card',
     });
-    expect(summary?.sources[0]).not.toHaveProperty('summary');
+    expect(summary?.sources[0]).not.toHaveProperty('brief');
     // A draft that never searched carries no metadata at all.
     expect(researchSummary({ queries: [], sources: [] })).toBeUndefined();
   });

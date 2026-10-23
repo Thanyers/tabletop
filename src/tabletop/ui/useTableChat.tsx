@@ -15,7 +15,7 @@ import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, parseChatFollowUps, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from './table-chat-state';
+import { addableWebSources, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, parseChatFollowUps, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -51,6 +51,10 @@ export interface UseTableChatOptions {
   confirm: (view: TableView, job: TableAssistantJob, commandId: CommandId) => Promise<void>;
   attach: (view: WorkspaceView, file: File) => Promise<WorkspaceView>;
   focusObject: (id: string) => void;
+  /** F064 slice C: the server can store researched web sources and review them. */
+  webEvidence?: boolean;
+  /** F064 slice C: offer the finished draft's researched sources as provided table sources. */
+  addWebSources?: (view: WorkspaceView, sources: ReturnType<typeof addableWebSources>) => Promise<void>;
   /** F076: note and picture tools for the composer's + menu. */
   composerTools?: ComposerTools;
   /** A short notification; the optional action (e.g. View rules) shows as a button on it. */
@@ -825,9 +829,11 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         chosen={chosen}
         view={table}
         readOnly={readOnly}
+        webEvidence={options.webEvidence === true}
         retryDisabled={!aiEnabled || readOnly || (card.kind === 'answer' && !assistantAvailable)}
         busy={operationBusy}
         onOpenObject={options.focusObject}
+        onAddWebSources={options.addWebSources}
         onConfirm={() => void confirmCard(card)}
         onRetry={() => void retrySameRequest(card)}
         onCheck={() => void checkStatus(card)}
@@ -840,7 +846,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       />,
       };
     });
-  }, [table, displayCards, followUps, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
+  }, [table, displayCards, followUps, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, options.addWebSources, options.webEvidence, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
   // F067: the table's share of a rule request, measured with the server's own request builder.
   const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft')
@@ -910,15 +916,19 @@ function askerOf(card: ChatCard, view: TableView): string | null {
   return view.members.find((member) => member.actorId === askedBy)?.name ?? 'Another member';
 }
 
-function ChatCardContent({ card, chosen, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild, onSuggest }: {
+function ChatCardContent({ card, chosen, view, readOnly, webEvidence, retryDisabled, busy, onOpenObject, onAddWebSources, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild, onSuggest }: {
   card: ChatCard;
   /** F070: options already picked under this card, mapped to the canvas card each one opened. */
   chosen: ReadonlyMap<string, string>;
   view: TableView;
   readOnly: boolean;
+  /** F064 slice C: the server stores web sources; the button is hidden when it cannot. */
+  webEvidence: boolean;
   retryDisabled: boolean;
   busy: boolean;
   onOpenObject: (id: string) => void;
+  /** F064 slice C: add the draft's researched sources; the app shows the result notice. */
+  onAddWebSources?: (view: WorkspaceView, sources: ReturnType<typeof addableWebSources>) => Promise<void>;
   onConfirm: () => void;
   onRetry: () => void;
   onCheck: () => void;
@@ -1050,6 +1060,10 @@ function ChatCardContent({ card, chosen, view, readOnly, retryDisabled, busy, on
     const reviewReasons = card.modelJob?.autoApply === 'needs-review' ? card.modelJob.autoApplyReasons ?? [] : [];
     // F064 slice B: the web sources this draft used, collapsed so the card stays small.
     const sources = draftSources(card.modelJob?.research);
+    // F064 slice C: only a source with a summary can become table evidence; owners and members
+    // who may add files can then verify it on the Files card.
+    const addableSources = webEvidence ? addableWebSources(card.modelJob?.research) : [];
+    const canAddSources = addableSources.length > 0 && viewerCan(view, 'files.add') && !readOnly;
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       {card.modelJob?.autoApply === 'needs-review' && !card.pollError && <p className="tt-chat-card__hint">These rules were not added automatically because a check did not pass{reviewReasons.length ? `: ${reviewReasons.join(' ')}` : '.'}</p>}
       <p><Sparkles size={14} /> {card.pollError ? 'The rule draft is ready, but the table could not refresh.' : 'A rule draft is ready. Review it before anyone uses it.'}</p>
@@ -1064,7 +1078,7 @@ function ChatCardContent({ card, chosen, view, readOnly, retryDisabled, busy, on
       </details>}
       {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
       {card.pollError && <><p className="tt-chat-card__error" role="alert">{card.pollError}</p><button type="button" className="tt-button tt-button--quiet" disabled={busy || readOnly || card.checking} onClick={onRetryRefresh}>{card.checking ? <LoaderCircle size={13} className="tt-spin" /> : <RotateCcw size={13} />}Retry table refresh</button></>}
-      <div className="tt-card-cta"><button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}</div>
+      <div className="tt-card-cta">{canAddSources && <button type="button" className="tt-button tt-button--quiet" data-testid="draft-add-sources" disabled={busy || card.checking} onClick={() => void onAddWebSources?.(view, addableSources)}>Add to table sources</button>}<button type="button" className="tt-button tt-button--primary" disabled={Boolean(card.pollError) || card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />Review rules</button>{dismissButton}</div>
     </div>;
   }
   const job = card.job;

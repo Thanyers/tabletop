@@ -140,7 +140,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && path === '/api/capabilities') {
     const enabled = Boolean(env.DEEPSEEK_KEY);
     const compute = computeRuntimeCapabilities({ javascript: Boolean(env.COMPUTE_LOADER), python: env.TABLE_COMPUTE_PYTHON === 'enabled' });
-    return Response.json({ uploads: false, images: true, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), compute, model: { enabled,
+    return Response.json({ uploads: false, images: true, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), compute, webEvidence: env.TABLE_WEB_EVIDENCE !== 'off', model: { enabled,
       reason: enabled ? 'DeepSeek Flash proposes changes for your review.' : 'AI is awaiting a provider key.' } });
   }
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);

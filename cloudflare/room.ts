@@ -16,9 +16,10 @@ import { createIdentityReplacements, redactString, respondToTablePrompt, type Id
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
-import { externalHost, headWithin, parseModelJobResearch, safeExternalUrl, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, MAX_SOURCE_AUTHORITY, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { externalHost, headWithin, parseModelJobResearch, safeExternalUrl, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, MAX_SOURCE_AUTHORITY, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
+import { prepareWebEvidenceCommand } from './web-evidence.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
 import {
   tableAssistantConfirmationSchema,
@@ -478,7 +479,13 @@ function boundedResearch(
     const date = typeof source.date === 'string' ? headWithin(source.date, MAX_JOB_RESEARCH_DATE_CHARS) : '';
     const authority = Number.isSafeInteger(source.authority)
       ? Math.min(Math.max(source.authority, 0), MAX_SOURCE_AUTHORITY) : 0;
-    sources.push({ title: title || externalHost(url), url, date: date || null, authority });
+    // F064 C: the summary becomes the citable text of a web source, so it travels redacted too.
+    const summary = source.summary
+      ? headWithin(redactString(source.summary, replacements), MAX_JOB_RESEARCH_SUMMARY_CHARS).trim() : '';
+    sources.push({
+      title: title || externalHost(url), url, date: date || null, authority,
+      ...(summary ? { summary } : {}),
+    });
   }
   if (sources.length === 0) return undefined;
   const queries = research.queries
@@ -709,7 +716,9 @@ export class Room extends DurableObject<Env> {
         requireMutation(request, this.env, authorized.session);
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
         const envelope = await readJson(request, MAX_COMMAND_BODY_BYTES);
-        const result = await this.authority.execute(authorized.session, envelope, workspaceId);
+        const prepared = prepareWebEvidenceCommand(this.env, authorized.workspace, envelope);
+        if (!prepared.ok) throw new AuthorityError(prepared.code);
+        const result = await this.authority.execute(authorized.session, prepared.envelope, workspaceId);
         this.scheduleDirectorySync();
         return json(200, result, { 'x-request-id': requestId });
       }

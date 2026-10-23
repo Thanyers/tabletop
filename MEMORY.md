@@ -5,6 +5,12 @@
 
 ## Lessons
 
+### 2026-10-23 — เปลี่ยนข้อความตัวเลือกใน UI แล้ว browser suite บน dev ล้ม staging เลยค้าง
+
+- **what happened:** F075 เปลี่ยนข้อความ option ของช่อง "Choose a record" ผ่าน unit/CI เร็วของ PR แต่ `test:generative:browser` บน push เข้า `dev` ล้มที่ `toHaveText('0 · team-south')` (ได้ `"0"`) → ชุดเต็มไม่ผ่าน staging ไม่ deploy commit ต่อ ๆ ไป
+- **root cause:** PR เข้า dev รันแค่เช็คเร็ว (ไม่มี browser suite) และผมเช็คแค่ว่าเทสต์มีข้อความเดิมอยู่ไหม โดยคิดเองว่าค่าสองแถวยังซ้ำกันตอนถึงบรรทัดนั้น ไม่ได้รันจริง
+- **correct behavior:** แก้ข้อความที่ผู้ใช้เห็นเมื่อไหร่ ให้ `grep -rn "<ข้อความเดิม>" tests/*.mjs` แล้วรัน suite ที่เจอในเครื่องก่อน merge: `npm run build && npm run build:cloudflare && BROWSER_CHANNEL=chrome npm run test:generative:browser` (หรือ suite ที่เกี่ยว)
+
 ### 2026-10-23 — Docker สำเร็จแต่ Container API ปฏิเสธ instance
 - **What happened:** build image และ Node/Docker integration ผ่าน แต่ Linux Workers Container API smoke ของ F066-T8 รัน Python ไม่ได้: `Invalid container instance type` ก่อนเริ่ม process
 - **Root cause:** ใช้ `instance: 'basic'` จากรายการขนาดทั่วไปโดยไม่ได้รันผ่าน Durable Object API ของเวอร์ชันที่ล็อกไว้ ซึ่งรับชุดชื่อไม่เหมือนกัน
