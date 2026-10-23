@@ -128,6 +128,9 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: false
         run: npm run build:cloudflare
+      - name: Isolated JavaScript and Python Container API integration
+        if: needs.plan.outputs.full_suite == 'true'
+        run: node scripts/compute-cloudflare-local.mjs
       - name: Browser suites skipped for this change
         if: needs.plan.outputs.full_suite != 'true'
         run: echo "::notice::Fast checks only. Browser suites run after the merge into dev, on the release PR into main, on main, or via Run workflow (workflow_dispatch)."
@@ -139,6 +142,8 @@ jobs:
           path: |
             test-results/unit-report.json
             test-results/cloudflare-report.json
+            test-results/compute-cloudflare/result.json
+            test-results/compute-cloudflare/runtime.log
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore
@@ -386,6 +391,8 @@ jobs:
           umask 077
           printf '%s' "$WRANGLER_CONFIG_STAGING" > wrangler.staging.json
           npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
+          npx tsx server/compute-deploy-config.ts wrangler.staging.json
+          npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
       - name: Build
         run: |
           npm run build
@@ -402,7 +409,7 @@ jobs:
       - name: Staging — smoke checks
         run: |
           echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
-          npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" --compute | tee -a "$GITHUB_STEP_SUMMARY"
           echo "STAGE=done" >> "$GITHUB_ENV"
           echo "Deployed dev $SHA ($VERSION) to staging." >> "$GITHUB_STEP_SUMMARY"
       - name: Remove deploy config

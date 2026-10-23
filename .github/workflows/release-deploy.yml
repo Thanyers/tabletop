@@ -84,6 +84,8 @@ jobs:
           umask 077
           printf '%s' "$WRANGLER_CONFIG_PRODUCTION" > wrangler.production.json
           npx tsx server/release-deploy.ts check-config wrangler.production.json "$PRODUCTION_WORKER" "$PRODUCTION_URL"
+          npx tsx server/compute-deploy-config.ts wrangler.production.json
+          npx tsx server/release-deploy.ts check-config wrangler.production.json "$PRODUCTION_WORKER" "$PRODUCTION_URL"
 
       - name: Tag v${{ env.VERSION }}
         if: env.SKIP != '1'
@@ -122,7 +124,7 @@ jobs:
         if: env.SKIP != '1'
         run: |
           echo "STAGE=production-smoke" >> "$GITHUB_ENV"
-          npx tsx server/release-deploy.ts smoke "$PRODUCTION_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          npx tsx server/release-deploy.ts smoke "$PRODUCTION_URL" "$VERSION" "$SHA" --compute | tee -a "$GITHUB_STEP_SUMMARY"
           echo "STAGE=done" >> "$GITHUB_ENV"
           echo "Released v$VERSION ($SHA) to production." >> "$GITHUB_STEP_SUMMARY"
 
