@@ -159,6 +159,20 @@
   white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
 }
 
+/* F064: the live search line while a rule draft waits. Same single-line treatment as the thinking
+   line, because a long query must not push the card's buttons off a 320px screen. A working card
+   centres its grid items, so the row must stretch explicitly or a nowrap query sizes it to content. */
+.tt-app .tt-chat-card__search { justify-self: stretch; margin-top: var(--tt-space-2); min-width: 0; }
+.tt-app .tt-chat-card .tt-chat-card__search-line {
+  display: block; min-width: 0; margin: 0; padding: 6px 10px; border-left: 2px solid var(--tt-moss);
+  border-radius: 0 var(--tt-radius-medium, 10px) var(--tt-radius-medium, 10px) 0;
+  background: var(--tt-paper); color: var(--tt-muted);
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; line-height: 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Once research is done the line stops moving and reports what the draft actually used. */
+.tt-app .tt-chat-card__search[data-search-phase='done'] .tt-chat-card__search-line { color: var(--tt-moss); }
+
 /* A card the next chat message is about. */
 .tt-app .tt-table-chat-bar__reference { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tt-space-1) var(--tt-space-2); margin: 0 var(--tt-space-2) var(--tt-space-1); }
 .tt-app .tt-table-chat-bar__reference-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; margin: 0; padding: 0; list-style: none; }
@@ -174,3 +188,11 @@
 .tt-app .tt-chat-card__suggestions button svg { flex: none; margin-top: 3px; color: var(--tt-moss, #2f6f5e); }
 .tt-app .tt-chat-card__suggestions button:hover:not(:disabled) { background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 84%); }
 .tt-app .tt-chat-card__suggestions button:disabled { opacity: .55; cursor: default; }
+
+/* F067: how full a rule request is for this table. */
+.tt-app .tt-table-chat-bar__context { display: flex; align-items: center; gap: 8px; margin: 4px var(--tt-space-3) 0; color: var(--tt-muted); font-size: 12px; }
+.tt-app .tt-table-chat-bar__context-bar { position: relative; flex: 0 0 72px; height: 5px; overflow: hidden; border-radius: 999px; background: var(--tt-line); }
+.tt-app .tt-table-chat-bar__context-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--tt-moss, #2f6f5e); }
+.tt-app .tt-table-chat-bar__context[data-level="high"] .tt-table-chat-bar__context-bar i { background: #c9922b; }
+.tt-app .tt-table-chat-bar__context[data-level="over"] { color: var(--tt-clay-1, #a4513a); }
+.tt-app .tt-table-chat-bar__context[data-level="over"] .tt-table-chat-bar__context-bar i { background: var(--tt-clay-1, #a4513a); }

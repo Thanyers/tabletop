@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { CLARIFY_LANGUAGE_ISSUE, clarifyMatchesRequestLanguage } from './clarify-language.js';
 import { TABLE_SCHEMA_GUIDE } from './table-schema-guide.js';
 import { encounterRuleSchema, physicsParamsSchema } from '../../src/tabletop/domain/index.js';
-import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_AI_INPUT_BYTES, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
+import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
+import { MAX_CHANGE_REQUEST_BYTES, TABLE_AI_INPUT_BYTES, TABLE_REQUEST_TOKEN_MARGIN } from '../../src/tabletop/shared/ai-request-limits.js';
 import { normalizeGeneratedTableChange } from '../../src/tabletop/domain/id-normalization.js';
 import { applyTablePatch, isTablePatch, tablePatchSchema } from '../../src/tabletop/domain/table-patch.js';
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type ChangeSet } from '../../src/tabletop/shared/contracts.js';
@@ -15,6 +16,7 @@ import {
   headWithin,
   tailWithin,
   type ModelFailureDetails,
+  type ModelJobSearchProgress,
 } from '../../src/tabletop/shared/model-job-progress.js';
 import { expressionWithinBounds } from '../../src/tabletop/runtime/generative/index.js';
 
@@ -22,9 +24,7 @@ const ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const MODEL = 'deepseek-flash';
 const MAX_KEY_CHARS = 4096;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
-// F066: the table input plus room for the system prompt (< 20,000 characters, tested) and the JSON envelope.
-export const MAX_CHANGE_REQUEST_BYTES = TABLE_AI_INPUT_BYTES + 32 * 1024;
-export const TABLE_REQUEST_TOKEN_MARGIN = 1_000;
+export { MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN };
 const MAX_REPAIR_ISSUES = 4;
 const MAX_REPAIR_ISSUE_CHARS = 1_000;
 const MAX_UNION_DIAGNOSTIC_BRANCHES = 2;
@@ -139,6 +139,11 @@ export interface DeepSeekChangeProgress {
    * model is doing instead of only counting characters. The caller redacts it before storing.
    */
   thinkingTail?: string;
+  /**
+   * F064: the latest web-research step that ran before this attempt, carried on the same channel.
+   * The research step happens outside this provider, so it only rides along here.
+   */
+  search?: ModelJobSearchProgress;
 }
 
 /** Provider progress plus the bounded text that is worth keeping as evidence. */

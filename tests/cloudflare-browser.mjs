@@ -211,7 +211,7 @@ try {
   expect((await api(anonymous, '/api/session')).status).toBe(401);
   mark('Public welcome explains the concept on desktop/mobile, preserves the Google/demo entry points and keeps anonymous users outside the Canvas');
 
-  // F067: English by default; the English / ไทย toggle switches the whole landing including the sign-in box, sets <html lang> and survives reload.
+  // F068: English by default; the English / ไทย toggle switches the whole landing including the sign-in box, sets <html lang> and survives reload.
   const languages = anonymous.getByRole('group', { name: 'Language' });
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'en');
   await expect(languages.getByRole('button', { name: 'English', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -240,7 +240,7 @@ try {
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-en-375.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 1440, height: 1000 });
   expect(providerCalls).toBe(0);
-  mark('Landing language toggle (F067): English default, ไทย switches <html lang>, h1 and the Google sign-in, survives reload, fits 375px, English restores');
+  mark('Landing language toggle (F068): English default, ไทย switches <html lang>, h1 and the Google sign-in, survives reload, fits 375px, English restores');
 
   const failedSignIn = await newPage(null, `${origin}/?auth_error=google_login_failed`);
   await expect(failedSignIn.getByRole('alert')).toContainText('Google sign-in did not complete.');

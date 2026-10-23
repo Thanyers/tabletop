@@ -1,4 +1,4 @@
-// Public landing copy in English and Thai (F067). Only the public landing, its
+// Public landing copy in English and Thai (F068). Only the public landing, its
 // sign-in box and the signed-in "welcome back" box read from here; the app
 // behind sign-in stays English. Server meta in index.html stays English too.
 

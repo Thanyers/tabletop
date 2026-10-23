@@ -9,10 +9,12 @@ import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
 import { TableChat } from './TableChat';
 import { MAX_CHAT_CARD_REFERENCES, chatReferencePrompt, followUpPrompt, parseReferencedPrompt, onChatCardReference, splitReferencedPrompt, type ChatCardReference } from './canvas-object-finder';
+import { tableDraftBytes } from '../shared/table-draft-input';
+import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchLine, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -802,6 +804,13 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }));
   }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
+  // F067: the table's share of a rule request, measured with the server's own request builder.
+  const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft') ? tableDraftBytes(table.domain, '') : null, [table]);
+  const aiContext = draftBaseBytes === null ? undefined : {
+    // The message adds its JSON-escaped length; quotes are already counted in the empty prompt.
+    used: draftBaseBytes + new TextEncoder().encode(JSON.stringify(composerMessage)).byteLength - 2,
+    limit: TABLE_AI_INPUT_BYTES,
+  };
   if (!table) return { bar: null, cards: [], editRules, cancelEditRules };
   const owner = viewerCan(table, 'rules.draft');
   const modeCanAsk = mode === 'draft' || assistantAvailable;
@@ -842,6 +851,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     onRemoveCardReference={(id) => setCardReferences((current) => current.filter((item) => item.id !== id))}
     onClearCardReferences={() => setCardReferences([])}
     composerAction={options.composerAction}
+    aiContext={aiContext}
   />;
   return { bar, cards: auxiliary, editRules, cancelEditRules };
 }
@@ -905,8 +915,13 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     // The thinking tail exists only on the rule-draft job, never on an answer job.
     const liveThinkingTail = card.kind === 'draft' ? card.modelJob?.progress?.thinkingTail : undefined;
     const liveThinking = liveThinkingTail ? liveThinkingLine(liveThinkingTail) : null;
+    // F064: the research step runs before the draft, and its closing line stays while it drafts.
+    const liveSearch = card.kind === 'draft' ? liveSearchLine(card.modelJob?.progress?.search) : null;
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
       <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingText}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} limitMs={card.kind === 'draft' ? card.modelJob?.limitMs : undefined} chars={progress?.receivedChars} reasoningChars={progress?.reasoningChars} /></p>
+      {liveSearch && <div className="tt-chat-card__search" data-testid="draft-live-search" data-search-phase={card.modelJob?.progress?.search?.phase}>
+        <p className="tt-chat-card__search-line" aria-live="off">{liveSearch}</p>
+      </div>}
       {liveThinking && <div className="tt-chat-card__thinking" data-testid="draft-live-thinking" data-thinking-chars={progress?.reasoningChars}>
         <p className="tt-chat-card__thinking-line" aria-live="off">{liveThinking}</p>
         {liveThinkingTail && liveThinkingTail.length > liveThinking.length && <details className="tt-chat-card__thinking-full">
