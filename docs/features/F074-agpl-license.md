@@ -47,7 +47,9 @@
 - Node `22.23.2`: ตรวจ LICENSE SHA-256 เท่าต้นฉบับ GNU ที่ดาวน์โหลดจาก `https://www.gnu.org/licenses/agpl-3.0.txt` เป็น `0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0`
 - `node -e` ตรวจ integrity/metadata/README รวม **5 checks ผ่าน**
 - `npx tsx server/changelog.ts check`: **7 fragments ผ่าน**
-- `node scripts/check-public-files.mjs`: **781 files / 0 findings** ก่อนเพิ่มผลตรวจ; รันซ้ำก่อน commit
-- `git diff --check`: ผ่าน
+- ตรวจ Markdown links ของ README/feature: **9 links ผ่าน**, ไม่พบ conflict markers
+- `node scripts/check-public-files.mjs`: **781 files / 0 findings** หลังเพิ่มผลตรวจและก่อน commit
+- `git diff --cached --check`: ผ่าน รวม LICENSE ที่ stage แล้ว
+- GitHub Contents API อ่าน `LICENSE` กลับจาก commit `c074f32`: blob `be3f7b28e564e7dd05eaf59d64adba1a4065ac0e` ตรงกับ `git rev-parse HEAD:LICENSE`
 - Local runtime/browser/unit suites: **SKIPPED** เพราะแก้เอกสารและ license metadata เท่านั้น; PR ยังต้องผ่าน `local-validation` ของ commit ล่าสุด
 - PR: [#238](https://github.com/Thanyers/tabletop/pull/238)
