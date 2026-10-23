@@ -78,7 +78,7 @@ changelog ใส่ใน `changelog.d/` · PR ต้องมี: เปลี�
 
 ## 6. Deploy (อัตโนมัติหลัง merge release)
 
-ก่อนติดตาม deploy หรือกู้จากความล้มเหลว **อ่าน [ขั้น deploy](docs/AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)** · ใช้ pipeline หลัง merge release/hotfix เข้า main เท่านั้น ห้าม deploy จากเครื่อง · ติดตามจนจบแล้วรายงานรุ่น/หลักฐานจริง · สถานะปัจจุบันอยู่ใน [DEPLOYMENTS](docs/DEPLOYMENTS.md)
+ก่อนติดตาม deploy หรือกู้จากความล้มเหลว **อ่าน [ขั้น deploy](docs/AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)** · merge เข้า dev → staging · release/hotfix เข้า main → prod · ห้าม deploy จากเครื่อง · ติดตามจนจบแล้วรายงานรุ่น/หลักฐานจริง · สถานะปัจจุบันอยู่ใน [DEPLOYMENTS](docs/DEPLOYMENTS.md)
 
 ## 7. Hotfix
 
@@ -106,7 +106,7 @@ git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รั
 **ห้ามเด็ดขาด:**
 - merge เข้า `main` จาก branch อื่นที่ไม่ใช่ `release/*` / `hotfix/*`
 - push ตรงเข้า `main` / `dev` หรือ force push
-- deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · การ deploy เกิดจาก pipeline หลัง merge release เท่านั้น
+- deploy จากเครื่องตัวเอง, รัน `wrangler deploy` ที่ไม่ใช่ `--dry-run`, หรือรัน migration แบบ `--remote` · deploy เกิดจาก pipeline เท่านั้น
 - แก้ `release-deploy.yml` ให้ข้ามการรอ check, ข้าม smoke หรือ deploy จาก branch อื่นนอกจาก `main`
 - ลบหรือย้าย tag ที่ push แล้ว (รุ่นพังให้ออกรุ่นใหม่)
 - hardcode เลขเวอร์ชันไว้ที่อื่นนอกจาก git tag · ข้ามเลข หรือใช้เลขที่เคย tag แล้ว

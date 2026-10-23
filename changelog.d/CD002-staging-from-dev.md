@@ -1,0 +1,1 @@
+- **Deploy แยก staging/production (CD002):** merge เข้า `dev` แล้วชุดเต็มผ่าน → deploy **tabletop-staging** อัตโนมัติ (`/version` = `0.0.0-dev` + sha) · merge release/hotfix เข้า `main` → deploy **tabletop** (production) อย่างเดียว · D1 migration ใน PR เข้า dev รันบน staging ทันทีหลัง merge
