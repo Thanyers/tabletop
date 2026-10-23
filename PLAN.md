@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F063 | เริ่มงานจาก dev ล่าสุดและอ่านกติกากลางข้าม harness | `review` | [F063](docs/features/F063-shared-agent-startup.md) |
 | F061 | Landing page ตามคุณค่าและเรื่องเล่า README | `review` | [F061](docs/features/F061-readme-landing.md) |
 | F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
@@ -59,6 +60,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F063-T1 | กติกาเริ่ม/รับช่วงงานและ Claude import | `review` | Codex | `docs/F063-shared-agent-startup` / #200 | `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_WORKFLOW.md`, `docs/README.md`, `docs/features/F063-shared-agent-startup.md`, `spec.md` | — | เอกสารเท่านั้น; Codex, Claude Code, OpenCode, DeepSeek Harness |
 | F061-T1 | ปรับหน้าแรกเฉพาะเนื้อหา ภาพ และ layout | `review` | Codex | `feat/F061-readme-landing` / #197 | `ui/PublicWelcome.tsx`, `ui/public-welcome.css`, ภาพ landing, `docs/features/F061-readme-landing.md`, `spec.md`, `CHANGELOG.md` | — | รักษา account/route/demo เดิม; ไม่รวม draft #180 |
 | F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F053-T1 | Room → Worker: `SessionView` มี `createdAt`, `updatedAt`, `updatedBy` | `review` | lead (AI) | `feat/tables-search-filter` / #196 | `cloudflare/{contracts,index,room,room-repository,room.test}.ts`, `src/tabletop/shared/contracts.ts` | — | header เท่านั้น ไม่มี migration/schema change |
@@ -73,6 +75,7 @@
 | F054-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | ตาม CI005 รันตอน release PR; PR นี้ใช้ UI Lab |
 | F054-T7 | spec/PLAN/verification docs | `doing` | lead (AI) | 〃 | `spec.md`, docs | T1–T6 | อัปเดตแล้ว เหลือ PR |
 | F054-T8 | AI origin provenance (auto/reviewed/pasted/rollback) | `todo` | — | — | `shared/contracts.ts`, `domain/evolution.ts`, `cloudflare/room.ts` | v1 | เลื่อนหลัง v1 |
+| F054-T9 | Objects panel: ปุ่มเครื่องมือเรียงเป็นคอลัมน์เดียว + เอา locate ออก ให้คลิกชื่อการ์ดพาไปหาการ์ด | `doing` | lead (AI) | `feat/objects-panel-tools` | `src/tabletop/ui/CanvasWorkspace.tsx`, `calm-workspace.css` | F054-T4 | typecheck/unit/build; PR ยังไม่เปิด |
 | F046-T1 | semantic view salvage + link cleanup ใน domain (ไม่แตะ provider ที่ F045 ถือ) | `review` | lead (AI) | `feat/F046-view-salvage` | `src/tabletop/domain/table.ts`, `table-canvas-salvage.test.ts`, เอกสาร | — | ไม่เปลี่ยนสัญญา JSON/จำนวนครั้งที่เรียกโมเดล |
 | F047-T1 | normalize id ที่โมเดลตั้ง + เขียน reference ใหม่ทั้ง program/records/views | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/id-normalization.ts` (ใหม่), `server/providers/deepseek-changes.ts` | — | ชื่อชนกัน = ยกเลิกทั้งก้อน |
 | F047-T2 | `TABLE_LIMITS` เป็นแหล่งเดียว + guide interpolate + drift test | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/table.ts`, `server/providers/table-schema-guide.ts` (+ test) | — | ปิดช่อง manifestNodes/depth |
