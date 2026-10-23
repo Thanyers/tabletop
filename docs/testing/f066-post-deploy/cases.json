@@ -1,0 +1,1161 @@
+{
+  "schemaVersion": 1,
+  "feature": "F066",
+  "preparedOn": "2026-10-23",
+  "baselineCommit": "910b0a3a6bf1b89cdafc1b70365f1677d7376485",
+  "preparationOnly": true,
+  "acceptanceExecuted": false,
+  "groups": [
+    "A — ก่อนเริ่มและเส้นทางแชท",
+    "B — สูตร ภาษา และ libraries",
+    "C — input/output และการเชื่อมการ์ด",
+    "D — คำนวณซ้ำและความต่อเนื่อง",
+    "E — Rules สำหรับคนใช้ทั่วไป",
+    "F — ชนิดข้อมูลและผลผิดรูป",
+    "G — สิทธิ์และขอบเขตการรัน",
+    "H — เคสเดิม"
+  ],
+  "cases": [
+    {
+      "id": "F066-PD-001",
+      "group": "A — ก่อนเริ่มและเส้นทางแชท",
+      "title": "ยืนยัน build และขอบเขต release ที่จะทดสอบ",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "ได้รับ URL และ expected git tag/commit จาก release operator",
+      "prompt": "",
+      "steps": [
+        "อ่าน /version และ /api/capabilities แบบ read-only",
+        "เทียบ build identity กับ release record; จด engine ที่คาดว่าจะเปิดก่อนเริ่ม"
+      ],
+      "assertions": [
+        "version ตรงเป้าหมาย; ถ้าไม่ตรงให้ BLOCKED ทั้งรอบ ไม่ใช้หน้าที่โหลดได้เป็นหลักฐานว่า build ถูก",
+        "แยก intended scope: JS-only หรือ JS+Python ไว้ในผลรอบนี้"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-002",
+      "group": "A — ก่อนเริ่มและเส้นทางแชท",
+      "title": "JavaScript capability ตรงกับสิ่งที่เปิดใช้",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [],
+      "setup": "ผ่าน 001 และ release ตั้งใจเปิด JavaScript",
+      "prompt": "",
+      "steps": [
+        "อ่าน compute.profile/runtimes จาก capability endpoint",
+        "ตรวจ Rules > What this table can do และลองเคส 008"
+      ],
+      "assertions": [
+        "profile เป็น tabletop-compute-1 และ runtimes มี javascript",
+        "UI มี Reusable calculations; ต้องมีผลรันจริงจาก 008 จึงยืนยัน execution ไม่ใช่ตรวจ flag อย่างเดียว"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-003",
+      "group": "A — ก่อนเริ่มและเส้นทางแชท",
+      "title": "Python capability และ image พร้อมใช้งานจริง",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "python"
+      ],
+      "fixtures": [],
+      "setup": "operator ระบุว่า release นี้ตั้งใจเปิด Python; ถ้าไม่เปิดให้ SKIPPED_SCOPE",
+      "prompt": "",
+      "steps": [
+        "อ่าน runtimes/pythonLibraries",
+        "ทำเคส 009–012; ตรวจผลและ source ที่ใช้ package จริง"
+      ],
+      "assertions": [
+        "มี python และรายการ pandas/numpy/scipy/openpyxl/dateutil ตาม profile",
+        "flag มีแต่รันไม่ได้เป็น FAIL provisioning; เคส Python ที่ตามมาเป็น BLOCKED ไม่ใช่ PASS"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-004",
+      "group": "A — ก่อนเริ่มและเส้นทางแชท",
+      "title": "ถามข้อมูลอย่างเดียวไม่แก้กฎหรือข้อมูล",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "ห้อง QA ใหม่ มี raw sales ตาม sales-v1.csv; quantity/unit_price เป็น number; input ของการคำนวณผูก collection sales",
+      "prompt": "ยอดรวมตอนนี้เท่าไร และคิดอย่างไร ขอคำอธิบายอย่างเดียว",
+      "steps": [
+        "จด raw rows, rule/data revision และ active program ก่อนถาม",
+        "ส่งคำถามแล้วอ่านคำตอบ; เทียบสถานะหลังตอบ"
+      ],
+      "assertions": [
+        "คำตอบอธิบาย 225 จาก 75+150",
+        "ไม่มีการแก้ raw rows, active rule หรือสร้าง compute module ใหม่"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-005",
+      "group": "A — ก่อนเริ่มและเส้นทางแชท",
+      "title": "เริ่มจากโจทย์โดยไม่มีไฟล์ แล้วเติมข้อมูลทีหลัง",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "ห้อง QA ว่าง ไม่แนบไฟล์ตอนส่งโจทย์",
+      "prompt": "สร้างเครื่องมือยอดขายเปล่า มี branch, product, quantity, unit_price และยอดรวม ฉันจะนำข้อมูลเข้าทีหลัง ไม่ต้องใส่ข้อมูลสมมติแทนข้อมูลฉัน",
+      "steps": [
+        "รอร่างและการเปิดใช้; ดู assumptions/ชนิด fields",
+        "นำ sales-v1.csv เข้า raw sales แล้วดูผล"
+      ],
+      "assertions": [
+        "เริ่มเครื่องมือได้จาก intent และไม่มีการสร้างยอดจริงปลอมขึ้นมา",
+        "หลังนำเข้าข้อมูลยอดเป็น 225 และ raw rows 2 แถว"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-006",
+      "group": "A — ก่อนเริ่มและเส้นทางแชท",
+      "title": "ถามเพิ่มเมื่อโจทย์ไม่พอและเก็บบริบทคำตอบ",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "ห้อง QA ว่าง",
+      "prompt": "ช่วยทำเครื่องมือให้หน่อย",
+      "steps": [
+        "หาก AI ถามเพิ่ม ให้เลือกตัวเลือกหรืออธิบายว่าต้องการเครื่องมือยอดขาย quantity × unit_price",
+        "รอเครื่องมือที่ใช้ได้ ตรวจว่าคำตอบอ้างกลับคำถามเดิมถูก"
+      ],
+      "assertions": [
+        "เมื่อถามเพิ่มมีคำถาม/ตัวเลือกที่ตอบได้ และไม่เปิดกฎที่เดาโดยไม่มีโจทย์",
+        "แสดงคำถามเดียวพร้อม3ตัวเลือกก่อนสร้างกฎ; หลังตอบบริบทไม่หาย ถ้าเดาเปิดเครื่องมือจากโจทย์นี้ก่อนถามให้FAILและเก็บหลักฐาน"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-007",
+      "group": "B — สูตร ภาษา และ libraries",
+      "title": "งานเล็กใช้สูตรและเปลี่ยนส่วนลดได้",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "ห้อง QA ใหม่ มี raw sales ตาม sales-v1.csv; quantity/unit_price เป็น number; input ของการคำนวณผูก collection sales",
+      "prompt": "เพิ่มยอดหลังส่วนลด โดยเริ่มส่วนลด 10% และปรับเปอร์เซ็นต์ได้ งานนี้ใช้สูตรที่มีได้",
+      "steps": [
+        "ดูยอด 225 และหลังส่วนลด 202.50",
+        "ปรับส่วนลดเป็น 20% แล้วดูยอด 180"
+      ],
+      "assertions": [
+        "สูตรผูกข้อมูลและตัวควบคุมจริง ไม่คัดลอกตัวเลขสำเร็จลง literal",
+        "ไม่มีเหตุให้บังคับเปิด Python สำหรับสูตรง่ายนี้"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-008",
+      "group": "B — สูตร ภาษา และ libraries",
+      "title": "JavaScript คำนวณคะแนนเกมที่ไม่ได้ใช้ pandas",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "scores-v1.csv",
+        "scores-v2.csv"
+      ],
+      "setup": "ห้อง QA มี scores: player=text, score=number",
+      "prompt": "ใช้ JavaScript standard library เก็บโปรแกรมคะแนนเกม: นำคะแนนสูงสุดสองคนมารวม แสดงผู้ได้คะแนนสูงสุดและผลรวม เปลี่ยนคะแนนแล้วคำนวณใหม่; อย่าเรียก npm",
+      "steps": [
+        "นำ scores-v1.csv เข้าแล้วดูผล 13",
+        "Replace ด้วย scores-v2.csv แล้วดูผล 19; ตรวจ source และ run ใหม่"
+      ],
+      "assertions": [
+        "เป็น javascript module ที่รันสำเร็จตาม profile",
+        "raw score rows ไม่ถูก reorder/แก้ค่าจากการ sort ในโปรแกรม; ผล 13 → 19"
+      ],
+      "oracle": "game",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-009",
+      "group": "B — สูตร ภาษา และ libraries",
+      "title": "pandas เตรียมข้อมูลสิบขั้นพร้อมสรุปสาขา",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "python"
+      ],
+      "fixtures": [
+        "transactions.csv"
+      ],
+      "setup": "raw transactions เก็บทั้ง 6 แถว; transaction_id ไม่ตั้ง unique เพราะต้องทดสอบ dedupe ในผล derived",
+      "prompt": "ใช้ Python/pandas เก็บวิธีทำงาน 10 ขั้น: trim ข้อความ, normalize ชื่อสาขาเป็น North/South, normalize status เป็นตัวเล็ก, ตรวจ numeric, parse ISO date, dedupe transaction_id, กรอง paid, คิด quantity × unit_price, group/sort ยอดสาขา, คิดสัดส่วนและส่งยอดรวมกับตารางสาขา อย่าแก้ raw rows",
+      "steps": [
+        "เปิดใช้แล้วตรวจ source/inputs/output schema และ run สำเร็จ",
+        "เทียบยอด/จำนวน/ลำดับสาขากับ expected.json; ดู raw 6 แถวยังอยู่"
+      ],
+      "assertions": [
+        "เหลือรายการ paid ที่ไม่ซ้ำ 3 รายการ ยอดรวม 300; North=200, South=100",
+        "ลำดับ North/South และสัดส่วน 66.67/33.33; raw records ไม่ถูกลบหรือแก้"
+      ],
+      "oracle": "clean",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-010",
+      "group": "B — สูตร ภาษา และ libraries",
+      "title": "NumPy คำนวณหลายสถิติจาก input เดียว",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "python"
+      ],
+      "fixtures": [
+        "vector.csv"
+      ],
+      "setup": "collection vector.value เป็น number",
+      "prompt": "ใช้ Python/NumPy คำนวณ count, sum, mean, population variance และ population standard deviation (ddof=0) จาก vector ส่งเป็นหลาย outputs ให้การ์ด",
+      "steps": [
+        "ตรวจ source import numpy และโค้ดใช้ข้อมูล input",
+        "เทียบทั้งห้าค่ากับ oracle ภายใน tolerance 1e-6"
+      ],
+      "assertions": [
+        "count=4, sum=20, mean=5, variance=5, std≈2.2360679775",
+        "เป็น run สำเร็จจริงและชนิดผล number ไม่ใช่ข้อความ"
+      ],
+      "oracle": "numpy",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-011",
+      "group": "B — สูตร ภาษา และ libraries",
+      "title": "SciPy ทำ linear regression และส่งผลให้หลายการ์ด",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "python"
+      ],
+      "fixtures": [
+        "statistics.csv"
+      ],
+      "setup": "collection statistics มี numeric x,y",
+      "prompt": "ใช้ scipy.stats.linregress กับ x,y ในข้อมูล แสดง slope, intercept และ prediction เมื่อ x=5 โดยให้ input x ใหม่ปรับได้",
+      "steps": [
+        "ตรวจ source ใช้ scipy จริงและรันสำเร็จ",
+        "ตรวจค่า slope/intercept และเปลี่ยน prediction input จาก 5 เป็น 6"
+      ],
+      "assertions": [
+        "slope=2, intercept=1; prediction 11 → 13",
+        "ไม่สร้างคำตอบตายตัวและไม่เรียกเว็บเพื่อคำนวณ"
+      ],
+      "oracle": "scipy",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-012",
+      "group": "B — สูตร ภาษา และ libraries",
+      "title": "openpyxl และ dateutil ใช้ได้จริงภายในตัวรัน",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "python"
+      ],
+      "fixtures": [
+        "dates-v1.csv",
+        "dates-v2.csv"
+      ],
+      "setup": "raw dates มี event_id/date_text เป็น text",
+      "prompt": "ใช้ openpyxl สร้าง workbook ในหน่วยความจำจาก rows แล้วอ่านกลับ ใช้ dateutil: ISO ใช้ isoparse; รูปวัน/เดือน/ปีอื่นให้ dayfirst=True แสดงวัน ISO และช่วงวันมากสุด-น้อยสุด ไม่ต้องสร้างไฟล์ดาวน์โหลด",
+      "steps": [
+        "ตรวจ source เรียกทั้งสอง library จริง",
+        "นำ dates-v1 แล้ว Replace dates-v2 และเทียบวัน/ช่วงวัน"
+      ],
+      "assertions": [
+        "วันที่ v1 เป็น 2026-10-01/03/08 และ span=7; v2 ลงท้าย 09 และ span=8",
+        "ผลต่อการ์ดเป็นค่าหรือตารางตาม contract; ไม่ใช้การไม่มี download เป็น FAIL ของเคสนี้"
+      ],
+      "oracle": "dates",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-013",
+      "group": "C — input/output และการเชื่อมการ์ด",
+      "title": "metric อ่านผล backend เดียวกับการ์ดคำนวณ",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-v2.csv"
+      ],
+      "setup": "ห้อง QA ใหม่ มี raw sales ตาม sales-v1.csv; quantity/unit_price เป็น number; input ของการคำนวณผูก collection sales",
+      "prompt": "สร้างเครื่องมือยอดขายจาก sales คำนวณ quantity × unit_price ต่อแถวและรวมยอด มีการ์ดยอดรวมและตารางต้นทาง ค่าต้องคำนวณจาก input จริง ไม่ใส่คำตอบตายตัว ใช้ JavaScript module และเชื่อม output gross กับ metric",
+      "steps": [
+        "ตรวจ total ใน compute card, metric และ authoritative readback",
+        "Replace เป็น v2 แล้วเทียบทุกจุดอีกครั้ง"
+      ],
+      "assertions": [
+        "ทั้งสามจุดเป็น 225 แล้วเป็น 405 จาก current run เดียวกัน",
+        "เก็บค่าใน UI และ readback ที่ผู้ทดสอบมีสิทธิ์: module/version, input binding, data/rule revision, runId/status/inputHash; ห้ามเก็บ cookie/token"
+      ],
+      "oracle": "sales.replaced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-014",
+      "group": "C — input/output และการเชื่อมการ์ด",
+      "title": "กราฟอ่าน derived table ไม่ค้างตัวเลขตัวอย่าง",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "python"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-v2.csv"
+      ],
+      "setup": "ห้อง QA ใหม่ มี raw sales ตาม sales-v1.csv; quantity/unit_price เป็น number; input ของการคำนวณผูก collection sales",
+      "prompt": "ใช้ pandas สรุปยอดตามสาขาเป็น derived table และผูก bar chart จากตารางนั้น ให้แสดงจำนวนจริงทุกครั้งที่ sales เปลี่ยน",
+      "steps": [
+        "ดู bars North75/South150",
+        "Replace v2 แล้วดู bars North105/South300 เทียบ underlying derived rows"
+      ],
+      "assertions": [
+        "กราฟและตารางตรงกันและรวมได้ 225 → 405",
+        "source sales ไม่ถูกเขียนทับ"
+      ],
+      "oracle": "sales.replaced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-015",
+      "group": "C — input/output และการเชื่อมการ์ด",
+      "title": "join สอง inputs แล้วส่งตารางผล",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "python"
+      ],
+      "fixtures": [
+        "products.csv",
+        "orders.csv"
+      ],
+      "setup": "สอง raw collections products/orders; product_id join แบบ one-to-many ที่ระบุไว้",
+      "prompt": "ใช้ pandas join orders กับ products ตาม product_id ตรวจว่าทุกรายการมีราคา สร้าง derived order totals และ metric ยอดรวม ห้ามแทนราคาที่ไม่พบด้วยศูนย์",
+      "steps": [
+        "ผูกสอง inputs ให้ถูก collection",
+        "ตรวจสามบรรทัดและยอดรวม รวมทั้ง raw collections หลังรัน"
+      ],
+      "assertions": [
+        "ผลต่อบรรทัด 100/75/80 รวม 255",
+        "มี lineage จากทั้งสอง input และ raw collections เดิมไม่เปลี่ยน"
+      ],
+      "oracle": "joined",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-016",
+      "group": "C — input/output และการเชื่อมการ์ด",
+      "title": "module ต่อกันหลายขั้นและรันตามลำดับ",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-v2.csv"
+      ],
+      "setup": "ห้อง QA ใหม่ มี raw sales ตาม sales-v1.csv; quantity/unit_price เป็น number; input ของการคำนวณผูก collection sales",
+      "prompt": "สร้าง 3 modules: A gross sales; B รับ output A แล้วลด 10%; C รับ B แล้วเพิ่ม VAT สมมติ 7% ปัด half-up 2 ตำแหน่ง ส่งแต่ละผลให้ metric คนละใบ",
+      "steps": [
+        "ตรวจ bindings A → B → C และ run lineage",
+        "Replace v2 แล้วดูผลทุกใบ"
+      ],
+      "assertions": [
+        "225 → 202.50 → 216.68; หลังเปลี่ยนเป็น 405 → 364.50 → 390.02",
+        "B/C ไม่ใช้ upstream run เก่าเป็นผลปัจจุบัน"
+      ],
+      "oracle": "sales.replaced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-017",
+      "group": "C — input/output และการเชื่อมการ์ด",
+      "title": "หนึ่งโปรแกรมมีหลาย output และหลายการ์ด",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "ห้อง QA ใหม่ มี raw sales ตาม sales-v1.csv; quantity/unit_price เป็น number; input ของการคำนวณผูก collection sales",
+      "prompt": "เก็บโปรแกรมเดียว มี helper functions ได้ คืน gross, rowCount, meanLineAmount ให้สาม metrics ไม่ต้องแยกเป็นหนึ่งสคริปต์ต่อหนึ่งการ์ด",
+      "steps": [
+        "เปิด Advanced ตรวจหนึ่ง module/สาม output bindings",
+        "เทียบค่าของทั้งสามการ์ดกับ run เดียวกัน"
+      ],
+      "assertions": [
+        "gross225, rowCount2, meanLineAmount112.5",
+        "ไม่มีการเรียก AI หนึ่งครั้งต่อการ์ดเมื่อคำนวณซ้ำ"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-018",
+      "group": "C — input/output และการเชื่อมการ์ด",
+      "title": "เปลี่ยนแหล่ง input โดยอ้างกฎให้ตรงใบ",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-v2.csv"
+      ],
+      "setup": "สอง collections ชื่อ sales/current และ sales_next; ข้อมูล 225 และ 405 ตามลำดับ",
+      "prompt": "เลือก Change this rule ของ module ยอดรวม: เปลี่ยน input ไป sales_next เท่านั้น โดยไม่เปลี่ยนสูตรหรือข้อมูลตารางเดิม",
+      "steps": [
+        "ก่อนแก้บันทึก module version/binding และสอง collections",
+        "ขอแก้ผ่านกฎรายข้อ แล้วตรวจ binding/version/current result"
+      ],
+      "assertions": [
+        "input ย้ายตามคำขอ ผล405; raw สอง collections ไม่เปลี่ยน",
+        "source/version ของ module อื่นที่ไม่เกี่ยวไม่ถูกแก้; ไม่อ้างว่าการแนบไฟล์ใหม่ทำให้ binding เก่าเปลี่ยนเอง"
+      ],
+      "oracle": "sales.replaced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-019",
+      "group": "D — คำนวณซ้ำและความต่อเนื่อง",
+      "title": "Replace input แล้วรันโปรแกรมเดิมโดยไม่เรียก AI",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-v2.csv"
+      ],
+      "setup": "ใช้ห้อง QA ที่สร้างจากเคส 013 สำเร็จแล้ว หรือสร้างใหม่ด้วยโจทย์เดียวกัน; ทุกเคสเริ่ม sales-v1.csv ใหม่ยกเว้นระบุไว้",
+      "prompt": "",
+      "steps": [
+        "จด module source/version, model-job list และ compute run ก่อนเปลี่ยน",
+        "นำ v2 เข้า raw sales ด้วย Replace และยืนยัน แล้วรอ current result"
+      ],
+      "assertions": [
+        "225 → 405; source/version เดิม, run/inputHash ใหม่, raw 2 แถวตาม v2",
+        "ไม่มี model job ใหม่; การอ้าง 0 provider calls ต้องมี server/ledger evidence ตามคู่มือ"
+      ],
+      "oracle": "sales.replaced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-020",
+      "group": "D — คำนวณซ้ำและความต่อเนื่อง",
+      "title": "reload และกลับเข้าห้องด้วยบัญชีเดิม",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v2.csv"
+      ],
+      "setup": "ห้อง QA ที่เคส 019 ผ่านและผล current405",
+      "prompt": "",
+      "steps": [
+        "reload หน้า จากนั้นปิดแท็บและเปิด URL ห้องเดิมอีกครั้ง",
+        "ตรวจนิยาม/ข้อมูล/current result และประวัติ run"
+      ],
+      "assertions": [
+        "โปรแกรม รุ่น binding raw rows และผล405ยังอยู่",
+        "ไม่เกิด AI draft ใหม่เพียงเพราะ reload; ถ้า runtime กู้ interrupted run ให้แยกจากการสร้างโปรแกรมใหม่"
+      ],
+      "oracle": "sales.replaced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-021",
+      "group": "D — คำนวณซ้ำและความต่อเนื่อง",
+      "title": "Append เป็นค่าเริ่มต้นและ Replace ต้องยืนยัน",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-append.csv",
+        "sales-v2.csv"
+      ],
+      "setup": "ใช้ห้อง QA ที่สร้างจากเคส 013 สำเร็จแล้ว หรือสร้างใหม่ด้วยโจทย์เดียวกัน; ทุกเคสเริ่ม sales-v1.csv ใหม่ยกเว้นระบุไว้",
+      "prompt": "",
+      "steps": [
+        "นำ sales-append.csv เข้าโดย Append: ต้องรวมเป็น 3 แถว",
+        "เปิด Replace v2 แล้ว Cancel: สถานะไม่เปลี่ยน จากนั้นทำ Replace และยืนยัน"
+      ],
+      "assertions": [
+        "225 → 265 หลัง Append; Cancel คง265; ยืนยัน Replace ได้405และ2แถว",
+        "ไม่มีการทับข้อมูลจากการเปิด preview อย่างเดียว"
+      ],
+      "oracle": "sales.appendedToInitial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-022",
+      "group": "D — คำนวณซ้ำและความต่อเนื่อง",
+      "title": "ข้อมูลเปลี่ยนระหว่างรัน ผลเก่าไม่เป็น current",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-v2.csv",
+        "sales-v3.csv"
+      ],
+      "setup": "ใช้เครื่องมือควบคุม timing ใน local/staging เท่านั้น; ต้องพิสูจน์ว่ารัน v2 ยังไม่จบตอนรับ v3",
+      "prompt": "",
+      "steps": [
+        "เริ่มจาก225 เปลี่ยนเป็นv2 แล้วรับv3ขณะ run v2 ค้าง",
+        "ปล่อยงานจบและอ่าน run statuses/input revisions กับทุกการ์ด"
+      ],
+      "assertions": [
+        "ผลสุดท้าย435จาก v3; run v2 เก่าเป็น stale หรือถูกปฏิเสธตาม authority",
+        "ถ้าจับช่วง in-flight ไม่ได้ ให้ BLOCKED (reason=TIMING) ไม่รายงาน PASS จากการแก้สองครั้งตามลำดับ"
+      ],
+      "oracle": "sales.latest",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-023",
+      "group": "D — คำนวณซ้ำและความต่อเนื่อง",
+      "title": "runtime error ไม่ทำลาย input หรือแสดงผลเก่าว่าสด",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "local/staging QA room; มีผล225แล้ว ใช้ controlled-faults.json แบบ throw-error เพิ่ม module version ผ่าน Advanced ที่ได้รับสิทธิ์",
+      "prompt": "",
+      "steps": [
+        "เปิดใช้ version ที่ throw แบบจำกัด แล้ว Run หนึ่งครั้ง",
+        "ดู failure, raw rows และการแสดงผลก่อนหน้า"
+      ],
+      "assertions": [
+        "run ใหม่ failed มีข้อความที่เข้าใจได้; raw rows ยังเดิม",
+        "225 เดิมถ้าแสดง ต้องระบุเป็นผลก่อนหน้า และไม่มีการเรียก AI ซ่อมเอง"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-024",
+      "group": "D — คำนวณซ้ำและความต่อเนื่อง",
+      "title": "กด Run ซ้ำขณะ module เดียวกันยัง pending",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "local/staging ใช้ timing control ที่ระบุช่วง queued/running ได้; ไม่ใช้ infinite loop หรือ load test",
+      "prompt": "",
+      "steps": [
+        "จด pending runId แล้วกด Run ซ้ำขณะงานนั้นยังทำอยู่",
+        "ปล่อยงานจบและอ่าน history/command result"
+      ],
+      "assertions": [
+        "ไม่มีงาน pending ซ้ำสำหรับ module เดียวกัน; UI disable หรือ server ปฏิเสธอย่างชัดเจน",
+        "ผลสุดท้าย225; ถ้าไม่พิสูจน์ช่วง pending ให้ BLOCKED (reason=TIMING)"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-025",
+      "group": "E — Rules สำหรับคนใช้ทั่วไป",
+      "title": "Rules อธิบายงานโดยไม่ต้องอ่าน source",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "ห้อง QA มียอดรวม/derived table ที่ทำงานแล้ว",
+      "prompt": "",
+      "steps": [
+        "เปิด Rules ในมุมมองเริ่มต้น",
+        "ผู้ทดสอบชี้ชื่อกฎ วัตถุประสงค์ input output และการ์ดปลายทางจากข้อความที่แสดง"
+      ],
+      "assertions": [
+        "เข้าใจเส้นทางข้อมูลได้ก่อนเปิด Advanced; ชื่อเป็นภาษาคนใช้",
+        "บันทึกข้อสงสัยของคนทดสอบตามจริง; แค่มี labels ไม่ถือว่าผ่าน human comprehension โดยอัตโนมัติ"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-026",
+      "group": "E — Rules สำหรับคนใช้ทั่วไป",
+      "title": "Advanced ดูภาษา version และ source ได้ตามสิทธิ์",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "ผู้ทดสอบมี rules.draft และมี module ทำงานแล้ว",
+      "prompt": "",
+      "steps": [
+        "เปิด Advanced ของ module",
+        "เทียบภาษา/profile/version/source/ports กับนิยามที่ authority เก็บ"
+      ],
+      "assertions": [
+        "ข้อมูลตรงกันและ source ไม่บังการใช้งานปกติเมื่อพับ",
+        "การซ่อน source ทาง UI ไม่ถูกอ้างว่าเป็น privacy boundary ภายใต้ open visibility"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-027",
+      "group": "E — Rules สำหรับคนใช้ทั่วไป",
+      "title": "Ask รายกฎได้คำตอบอ้างกฎที่เลือก",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "มีกฎยอดรวมและกฎส่วนลดคนละข้อ",
+      "prompt": "กด Ask ที่กฎส่วนลด แล้วถาม: กฎนี้รับอะไรและเปลี่ยนผลตรงไหน",
+      "steps": [
+        "ตรวจ reference chip และส่งคำถาม",
+        "อ่านคำตอบแล้วเทียบ raw rows/program/revisions"
+      ],
+      "assertions": [
+        "คำตอบอ้างกฎส่วนลดที่เลือก ไม่สลับเป็นยอดรวม",
+        "ไม่มีการแก้กฎหรือข้อมูลจากการถามอย่างเดียว"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-028",
+      "group": "E — Rules สำหรับคนใช้ทั่วไป",
+      "title": "Change this rule แก้เฉพาะกฎที่ระบุ",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "มี module gross และ discount10%; บันทึก IDs/versions/source ก่อนเริ่ม",
+      "prompt": "เลือก Change this rule ของ discount แล้วขอเปลี่ยนเป็น 20% เท่านั้น",
+      "steps": [
+        "ส่งคำขอจาก reference chip แล้วรอการตรวจร่าง",
+        "เทียบ source/versions และ outputs ก่อน/หลัง"
+      ],
+      "assertions": [
+        "ผลหลังส่วนลด225เป็น180; grossยัง225",
+        "module ที่แก้เพิ่ม version; modules/raw data ที่ไม่เกี่ยวคงเดิม และ downstream ที่ผูกมันคำนวณตามใหม่"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-029",
+      "group": "E — Rules สำหรับคนใช้ทั่วไป",
+      "title": "อ้างหลายการ์ด/กฎร่วมกันและไม่เกินห้ารายการ",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "ห้อง QA มี objects/rules อย่างน้อยหกรายการ",
+      "prompt": "เลือกอ้างกฎ/การ์ดห้ารายการแล้วขออธิบายความสัมพันธ์ ไม่แก้ข้อมูล",
+      "steps": [
+        "ดู chips ว่าตรงกับสิ่งที่เลือกทั้งห้า",
+        "ลองเพิ่มรายการที่หก และตรวจว่าไม่สร้าง ref แอบแฝง"
+      ],
+      "assertions": [
+        "รวม card/rule references ไม่เกิน5; UI จำกัดหรือแจ้งข้อจำกัด",
+        "คำถามอ้างสิ่งที่เลือกจริง และไม่มี state mutation"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-030",
+      "group": "E — Rules สำหรับคนใช้ทั่วไป",
+      "title": "Rules บนจอแคบและใช้คีย์บอร์ด",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "ห้อง QA มี Rules ยาว; browser viewport 320px และ desktop ที่ใช้จริง",
+      "prompt": "",
+      "steps": [
+        "เปิด/เลื่อน Rules และ Advanced ด้วยคีย์บอร์ด",
+        "เข้าถึง Ask/Change และกลับ composer ได้; ดูจอ320px"
+      ],
+      "assertions": [
+        "อ่านและเลื่อนเนื้อหาได้ ปุ่มไม่ถูกบัง และไม่มี page-level horizontal overflow",
+        "ไม่ใช้ force-click; เคสนี้ไม่รวม scene drag/camera investigation"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-031",
+      "group": "F — ชนิดข้อมูลและผลผิดรูป",
+      "title": "ข้อมูล numeric ผิดชนิดต้องไม่ import บางส่วน",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-invalid.csv"
+      ],
+      "setup": "ใช้ห้อง QA ที่สร้างจากเคส 013 สำเร็จแล้ว หรือสร้างใหม่ด้วยโจทย์เดียวกัน; ทุกเคสเริ่ม sales-v1.csv ใหม่ยกเว้นระบุไว้",
+      "prompt": "",
+      "steps": [
+        "จด raw rows/revisions แล้วนำ sales-invalid.csv เข้า raw sales",
+        "ตรวจ preview/errors และผลหลังส่งถ้าระบบยอมให้ลอง"
+      ],
+      "assertions": [
+        "not-a-number ไม่ถูกเงียบแปลงเป็น0; การนำเข้าถูกปฏิเสธพร้อมเหตุผล",
+        "แถว s3 ที่ถูกต้องในไฟล์เดียวกันไม่หลุด commit แค่บางส่วน; total/rawยัง225"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-032",
+      "group": "F — ชนิดข้อมูลและผลผิดรูป",
+      "title": "required input หายไม่กลายเป็นศูนย์",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv",
+        "sales-missing.csv"
+      ],
+      "setup": "sales.quantity เป็น required; ไม่กำหนด default0",
+      "prompt": "",
+      "steps": [
+        "จด baseline แล้วนำไฟล์ที่ quantity ว่างเข้า",
+        "ตรวจการแจ้งเตือนและ raw rows หลังลอง"
+      ],
+      "assertions": [
+        "missing quantity ถูกระบุว่าไม่ครบ; ไม่สร้างผลเหมือนรับ quantity0 สำเร็จ",
+        "ไม่มี partial commit หรือแทนข้อมูลดีเดิมโดยไม่แจ้ง"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-033",
+      "group": "F — ชนิดข้อมูลและผลผิดรูป",
+      "title": "ชนิด output ไม่ตรงสัญญาถูกปฏิเสธ",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [],
+      "setup": "local/staging: controlled-faults wrong-output-type; declared total=number แต่ codeคืนtext",
+      "prompt": "",
+      "steps": [
+        "เปิดใช้ controlled module ตาม procedure แล้ว Run",
+        "เทียบ declared output, actual run status และ metric"
+      ],
+      "assertions": [
+        "run failed/invalid output; ไม่แสดง text เป็น numeric result สำเร็จ",
+        "program อื่นและข้อมูลต้นทางไม่ถูกแก้"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-034",
+      "group": "F — ชนิดข้อมูลและผลผิดรูป",
+      "title": "NaN/Infinity ไม่ถูกส่งเป็นค่าถูกต้องหรือ null ปลอม",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [],
+      "setup": "local/staging: controlled-faults non-finite-number; total declarednumber",
+      "prompt": "",
+      "steps": [
+        "Run module ที่คืน Infinity แล้วดูสถานะ",
+        "ถ้าทดสอบ Pythonเพิ่ม ให้แยกผลของ float NaN เป็น subcaseที่มีevidenceจริง"
+      ],
+      "assertions": [
+        "output ไม่ผ่าน finite JSON contract; run failed",
+        "ไม่มี metric อ้างสำเร็จด้วย0/nullจากการแปลงแบบเงียบ"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-035",
+      "group": "F — ชนิดข้อมูลและผลผิดรูป",
+      "title": "ขอ library ที่ไม่ได้ติดตั้ง",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "จดรายการ capabilities ของ release ก่อนเริ่ม",
+      "prompt": "อยากใช้ Polars ที่นี่ ถ้าเครื่องไม่มีให้บอกข้อจำกัดและใช้ engine/library ที่มีทำยอดขายแบบเดียวกัน ห้ามติดตั้งเพิ่มระหว่างรัน",
+      "steps": [
+        "ส่งโจทย์และดูคำอธิบาย/source/runtime ที่เลือก",
+        "ถ้ามีโปรแกรมถูกสร้างให้ตรวจ runจริงและผลจาก sales fixtureเมื่อใช้"
+      ],
+      "assertions": [
+        "ไม่อ้างว่าติดตั้งหรือใช้ Polars สำเร็จทั้งที่ไม่อยู่ใน image",
+        "อาจเสนอทางเลือกที่มีจริงหรือแจ้งข้อจำกัด; runtime failureต้องแสดงตรงตามจริง ไม่อ้างว่าคำนวณเสร็จ"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-036",
+      "group": "F — ชนิดข้อมูลและผลผิดรูป",
+      "title": "วงจร dependencies ถูกกันก่อนเปิดใช้",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [],
+      "setup": "local/staging QA room มีโปรแกรมดีเดิม; ผู้ทดสอบแก้ candidate ผ่าน Advanced ที่ได้รับสิทธิ์",
+      "prompt": "",
+      "steps": [
+        "สร้าง candidate A รับ B และ B รับ A โดยใช้schemaปัจจุบัน",
+        "ลองตรวจ/เปิดใช้ แล้วอ่าน active program/revision"
+      ],
+      "assertions": [
+        "เกิดข้อความ cycle/rejected ก่อนเรียก runner; ไม่มีร่างวงจรกลายเป็น active",
+        "active program/ข้อมูลดีเดิมคงอยู่"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-037",
+      "group": "G — สิทธิ์และขอบเขตการรัน",
+      "title": "ผู้ดูที่ปิดสิทธิ์แก้กฎแก้ไม่ได้จริง",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "สร้าง QA member แยกbrowser; ปิด rules.draft/rules.approve ผ่าน permission UI ในห้องQA; อย่าอิงชื่อ role เพราะ defaultอาจให้สิทธิ์กว้าง",
+      "prompt": "ในบัญชีผู้ดู ลองขอเปลี่ยนกฎ",
+      "steps": [
+        "ตรวจว่า UI ไม่ให้เริ่มแก้ และลองคำขอที่รองรับตามบัญชีนั้น",
+        "ownerตรวจ active program/revisions หลังลอง"
+      ],
+      "assertions": [
+        "ผู้ไม่มีสิทธิ์แก้กฎไม่ทำให้กฎเปลี่ยน แม้เรียก actionเดิมที่ยังได้รับสิทธิ์ได้",
+        "หากตั้ง test permissionไม่ได้ให้BLOCKED_SETUP ไม่สรุปจากคำว่าparticipant"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-038",
+      "group": "G — สิทธิ์และขอบเขตการรัน",
+      "title": "ดูผลได้แต่กดคำนวณไม่ได้เมื่อปิด data.compute",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "QA memberได้รับอ่านห้องแต่ data.compute=false; ownerมีสิทธิ์และผล225แล้ว",
+      "prompt": "",
+      "steps": [
+        "memberอ่านผล225แล้วลองmanualRun",
+        "ownerตรวจ run historyก่อน/หลังและผลเดิม"
+      ],
+      "assertions": [
+        "ผลอ่านได้ตามvisibilitypolicy แต่memberเริ่มrunที่ไม่ได้รับสิทธิ์ไม่ได้",
+        "ไม่มี pendingrunใหม่จากคำขอที่ถูกปฏิเสธ"
+      ],
+      "oracle": "sales.initial",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-039",
+      "group": "G — สิทธิ์และขอบเขตการรัน",
+      "title": "สองคนแก้ input แล้วทั้งคู่เห็นผลล่าสุดตรงกัน",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [
+        "sales-v1.csv"
+      ],
+      "setup": "ownerกับmemberแยกsessionและมีdata.writeตามscope QA",
+      "prompt": "",
+      "steps": [
+        "Aเปลี่ยน s1.unit_price เป็น35; Bเปลี่ยน s2.quantityเป็น10ในช่วงใกล้กัน",
+        "ถ้าเจอconflictให้refreshแล้วretryอย่างชัดเจนจนทั้งสองค่าถูกรับ จากนั้นอ่านทั้งสองจอ"
+      ],
+      "assertions": [
+        "ไม่มีการสูญหายเงียบ; conflict/การretryบันทึกไว้ตามจริง",
+        "สถานะสุดท้ายสอดคล้องกัน s1=105,s2=300,total405จากcurrentrevision"
+      ],
+      "oracle": "sales.replaced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-040",
+      "group": "G — สิทธิ์และขอบเขตการรัน",
+      "title": "ถอนสมาชิกระหว่าง actor-bound run",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript"
+      ],
+      "fixtures": [],
+      "setup": "local/staging: moduleรับactor/seatจากhost, memberมีสิทธิ์รัน; มีtimingcontrolพิสูจน์inflightได้",
+      "prompt": "",
+      "steps": [
+        "memberเริ่มrun แล้วownerถอนสมาชิกในQAroomก่อนจบ",
+        "ปล่อยรันจบและลองเปิด/รันใหม่จากsessionสมาชิกเดิม"
+      ],
+      "assertions": [
+        "สมาชิกที่ถูกถอนเข้าห้อง/เริ่มrunใหม่ไม่ได้",
+        "ผลเก่าไม่commitเป็นcurrentในบริบทสมาชิกที่ถูกถอน และไม่สลับไปใช้ownerโดยเงียบ; จับinflightไม่ได้ให้BLOCKED (reason=TIMING)"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-041",
+      "group": "G — สิทธิ์และขอบเขตการรัน",
+      "title": "คนละบัญชีที่ไม่เคยได้รับสิทธิ์เข้าห้อง QA ไม่ได้",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "มีQAroomกับผู้ทดสอบบัญชีอื่นแยกbrowserที่ไม่เป็นสมาชิก ไม่มีการใช้ห้องธุรกิจจริง",
+      "prompt": "",
+      "steps": [
+        "ลองเปิด URL QAroomด้วยบัญชีนอกห้อง",
+        "ตรวจข้อความและnetworkresponseโดยไม่บันทึกcookie/token"
+      ],
+      "assertions": [
+        "ไม่คืนข้อมูลโปรแกรม/source/rowsของQAroomให้คนนอก",
+        "เจ้าของยังใช้ห้องได้ตามปกติ; ไม่ใช้การซ่อนปุ่มอย่างเดียวเป็นหลักฐานauthz"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-042",
+      "group": "G — สิทธิ์และขอบเขตการรัน",
+      "title": "แต่ละ execution ไม่ใช้ global state จากรอบก่อน",
+      "priority": "P1",
+      "scope": "local-or-staging",
+      "runtimes": [
+        "javascript",
+        "python"
+      ],
+      "fixtures": [],
+      "setup": "local/staging: controlled-faults fresh-counter ที่ไม่เปลี่ยนinput และเก็บตัวนับในprocessเท่านั้น; ทดสอบแยกengineที่เปิด",
+      "prompt": "",
+      "steps": [
+        "manualRunต่อเนื่อง3ครั้งที่จบทีละรอบ โดยเก็บrunIds",
+        "เทียบ outputและengine/sourceversionของแต่ละรอบ"
+      ],
+      "assertions": [
+        "ทั้งสามรอบคืน counter=1 จากisolate/containerใหม่",
+        "ไม่มีstateข้ามรอบ; ถ้าengineไม่อยู่ในrelease scopeให้SKIPPED_SCOPEรายengine"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-043",
+      "group": "H — เคสเดิม",
+      "title": "Invoice เดิม: rate change และยอด155",
+      "priority": "P0",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "มีprepared Invoiceและsample/evidence ที่route/environmentนั้นรองรับ; legacyuploadถ้าปิดตามcapabilityให้SKIPPED_SCOPE hostedและเก็บไว้รันlocalตามคู่มือเดิม",
+      "prompt": "",
+      "steps": [
+        "ใช้syntheticsamplesของpreparedInvoice; verify evidenceเมื่อflowกำหนด",
+        "ตั้งremote surcharge750satang เริ่ม2026-10-20 ทุกzone แล้วSimulate/Validate/Approve/Activateตามflowเดิม"
+      ],
+      "assertions": [
+        "total155.00ตรงbilled; rows52.50/62.50/40.00",
+        "save/reloadยังตรง; ไม่มีcomputeใหม่แทรกในการเปลี่ยนrateเดิม"
+      ],
+      "oracle": "legacy",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-044",
+      "group": "H — เคสเดิม",
+      "title": "Teaching เดิม: shared lesson กับ local experiment",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "prepared Physics lesson, teacherกับlearnerแยกbrowser; ตั้งsharedforce10Nและtime2sให้ชัดก่อนเริ่ม ไม่อิงseedที่อาจเปลี่ยน",
+      "prompt": "",
+      "steps": [
+        "teacherเปลี่ยนsharedmassเป็น5kg: position4m",
+        "learnerทดลองlocalmass2kg: position10m แล้วrefreshดูsharedlesson"
+      ],
+      "assertions": [
+        "localexperimentไม่เขียนทับsharedmass5/position4",
+        "ไม่ใช้ข้อความprivacyเก่ามาตัดสิน; visibilityปัจจุบันเป็นopenและห้องใช้ข้อมูลสมมติเท่านั้น"
+      ],
+      "oracle": "legacy",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-045",
+      "group": "H — เคสเดิม",
+      "title": "Encounter เดิม: shield/HP/AP",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "prepared Shared encounter; DM/Mira/Pipแยกbrowserและตั้งpermissionsตามflowที่จะเล่น",
+      "prompt": "",
+      "steps": [
+        "เปิดกฎshield ally/cost1AP/once-per-turn; DM Hit Pip, Mira Shield Pip, DM Resolve hit",
+        "ตรวจHP/AP แล้วEnd turnและreload"
+      ],
+      "assertions": [
+        "Pip8/10HP; Mira1APหลังshieldและ2APเมื่อendturn",
+        "การคำนวณ/turnเดิมไม่ต้องสร้างPythonmodule; ไม่อ้างprivacyจากguideเก่าภายใต้openpolicy"
+      ],
+      "oracle": "legacy",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-046",
+      "group": "H — เคสเดิม",
+      "title": "ร้านกาแฟเดิม: กดจบงานทีละรายการ",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "QAโต๊ะกาแฟผ่านDSLเดิม มีespresso3นาทีและtea5นาที; บันทึกschemaก่อนเพิ่มcompute",
+      "prompt": "สร้างคิว espresso 3 นาที และ tea 5 นาที ปุ่มจบงานทีละรายการสะสมเวลาที่ใช้จริง ใช้ actions/สูตรเดิมได้",
+      "steps": [
+        "กดจบespressoแล้วtea",
+        "ขอเพิ่มmetricจำนวนงานค้างและreload"
+      ],
+      "assertions": [
+        "เวลาสะสม3แล้ว8นาที จำนวนค้างสุดท้าย0",
+        "รายการที่จบแล้วไม่ถูกลบจากคำขอเพิ่มmetric และกดซ้ำไม่คิดงานเดิมซ้ำ"
+      ],
+      "oracle": "legacy",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-047",
+      "group": "H — เคสเดิม",
+      "title": "เกมแบ่งน้ำเดิม: turn และผลรวมคงที่",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "QAเกมแบ่งน้ำ100หน่วย สมาชิกสองคนแยกsession ใช้actionตรวจturnเดิม",
+      "prompt": "สร้างเกมแบ่งน้ำรวม100 สองคนผลัดกันส่งน้ำ มีน้ำคงเหลือและน้ำส่งแล้ว ห้ามส่งเกินที่เหลือ",
+      "steps": [
+        "คนแรกส่ง20 คนถัดไปส่ง15",
+        "ลองส่งผิดturnและเกินน้ำที่เหลือ แล้วreload"
+      ],
+      "assertions": [
+        "เหลือ65 ส่งแล้ว35 ผลรวม100; คำขอผิดไม่เปลี่ยนข้อมูล",
+        "turnและค่าที่แชร์ตรงกันทั้งสองจอ"
+      ],
+      "oracle": "legacy",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "F066-PD-048",
+      "group": "H — เคสเดิม",
+      "title": "เกมเดิม: server dice และ computed column",
+      "priority": "P1",
+      "scope": "hosted-ui",
+      "runtimes": [],
+      "fixtures": [],
+      "setup": "QAเกมเดิมเริ่มscore0 มีroll2d6ที่serverรับรอง และcomputedcolumn score+5; ใช้serverroll actionเดิม",
+      "prompt": "",
+      "steps": [
+        "ทอย2d6เก็บผลserver แล้วใช้rollนั้นบวกscoreครั้งเดียว",
+        "ตรวจcomputedcolumnและลองใช้rollเดิมซ้ำก่อนreload"
+      ],
+      "assertions": [
+        "diceแต่ละหน้า1..6, sum2..12; scoreเท่าผลserverและcomputed=score+5",
+        "rollเดิมไม่ถูกใช้ซ้ำ; reloadยังตรงserverและไม่มีclient-generatedเลขมาแทนผลserver"
+      ],
+      "oracle": null,
+      "status": "NOT_RUN"
+    }
+  ]
+}
