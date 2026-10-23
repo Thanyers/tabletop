@@ -1,7 +1,7 @@
 # CD001: a merged release/X.Y.Z (or hotfix/X.Y.Z) PR on main deploys PRODUCTION.
 # Validate passes on the main merge commit (CI006: reusing the release PR's full-suite run
 # when the merge commit's tree equals the PR head) → tag vX.Y.Z → build → production
-# (D1 migrations + deploy + smoke). Staging is deployed from dev by staging-deploy.yml (CD002).
+# (D1 migrations + deploy + smoke). Staging is deployed from dev by the deploy-staging job in validate.yml (CD002).
 # Any failure stops the pipeline, opens a GitHub issue and never rolls back.
 # Setup and recovery: docs/TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001
 name: Release deploy

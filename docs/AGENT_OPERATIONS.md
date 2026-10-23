@@ -60,10 +60,10 @@ AI ออก release เมื่อผู้ใช้สั่งในแช�
 
 | pipeline | ทำงานเมื่อ | deploy ไป | `/version` |
 | --- | --- | --- | --- |
-| [`staging-deploy.yml`](../.github/workflows/staging-deploy.yml) (CD002) | push เข้า `dev` (merge PR) และชุดเต็มของ Validate บน push นั้นผ่าน (CI007) | **tabletop-staging** | `0.0.0-dev` + sha ของ dev |
+| job `deploy-staging` ใน [`validate.yml`](../.github/workflows/validate.yml) (CD002) | push เข้า `dev` (merge PR) และ `local-validation` ชุดเต็มของ run เดียวกันผ่าน (CI007) | **tabletop-staging** | `0.0.0-dev` + sha ของ dev |
 | [`release-deploy.yml`](../.github/workflows/release-deploy.yml) (CD001) | merge `release/X.Y.Z` / `hotfix/X.Y.Z` เข้า `main` และมีหัวข้อ `## X.Y.Z` ใน `CHANGELOG.md` | **tabletop** (production) | `X.Y.Z` + sha ของ merge commit |
 
-- merge อื่นเข้า `main` ไม่ deploy · staging deploy ทีละรอบ ถ้ามีหลาย merge ติดกัน GitHub เก็บเฉพาะรอบล่าสุดที่รอคิว จึง deploy dev ล่าสุด · ล้มแล้ว merge ใหม่เข้า dev จะ deploy ซ้ำเอง หรือกด **Staging deploy** (workflow_dispatch) ด้วย SHA
+- merge อื่นเข้า `main` ไม่ deploy · staging deploy ทีละรอบ ถ้ามีหลาย merge ติดกัน GitHub เก็บเฉพาะรอบล่าสุดที่รอคิว จึง deploy dev ล่าสุด · ล้มแล้ว merge ใหม่เข้า dev จะ deploy ซ้ำเอง หรือกด Re-run failed jobs ของ run นั้น · run บน `dev` ไม่ถูกยกเลิกกลางทางเมื่อมี merge ใหม่ (กัน deploy/migration ค้างครึ่งทาง) · เป็น job ใน validate.yml เพราะ `workflow_run` ทำงานเฉพาะไฟล์บน default branch (`main`)
 - ⚠️ D1 migration ใน PR เข้า `dev` **รันบน staging ทันทีหลัง merge** · migration แบบย้อนไม่ได้ต้องถามผู้ใช้ก่อน merge เข้า `dev` ด้วย (เดิมถามตอน merge เข้า `main`)
 - production ไม่ได้ใช้ build เดียวกับ staging แล้ว (build ใหม่จาก merge commit บน main) แต่โค้ดเดียวกับ dev ตอนตัด release ที่ผ่าน staging มาแล้ว
 

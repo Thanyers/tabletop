@@ -11,7 +11,9 @@ permissions:
 
 concurrency:
   group: validate-${{ github.ref }}
-  cancel-in-progress: true
+  # CD002: a run on dev may be deploying staging (D1 migrations included), so a newer merge
+  # never cancels it; GitHub keeps only the newest pending run. Other refs still cancel.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' }}
 
 env:
   BROWSER_CHANNEL: chromium
@@ -334,3 +336,98 @@ jobs:
           else
             gh issue create -R "$REPO" --title "$TITLE" --body "$body"
           fi
+
+  # CD002: a merge into dev whose full suite passed deploys tabletop-staging. It lives here,
+  # not in a workflow_run file, because workflow_run only fires for files on the default
+  # branch (main). Production is deployed only by release-deploy.yml (CD001).
+  deploy-staging:
+    name: Deploy tabletop-staging
+    needs: [local-validation]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.local-validation.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: staging-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write # open an issue when a staging deploy fails
+    env:
+      SHA: ${{ github.sha }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Record start
+        run: |
+          echo "JOB_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          echo "STAGE=prepare" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Check deploy settings
+        env:
+          WRANGLER_CONFIG_STAGING: ${{ secrets.WRANGLER_CONFIG_STAGING }}
+        run: |
+          missing=""
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WRANGLER_CONFIG_STAGING STAGING_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then echo "::error::Missing repo secrets/variables:$missing"; exit 1; fi
+          umask 077
+          printf '%s' "$WRANGLER_CONFIG_STAGING" > wrangler.staging.json
+          npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
+      - name: Build
+        run: |
+          npm run build
+          echo "VERSION=$(node -p "require('./dist/version.json').version")" >> "$GITHUB_ENV"
+          node -e "console.log(require('./dist/version.json'))"
+      - name: Staging — migrations
+        run: |
+          echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
+          bash .github/scripts/d1-migrate.sh wrangler.staging.json staging
+      - name: Staging — deploy
+        run: |
+          echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
+          npx wrangler deploy --config wrangler.staging.json
+      - name: Staging — smoke checks
+        run: |
+          echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
+          npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "STAGE=done" >> "$GITHUB_ENV"
+          echo "Deployed dev $SHA ($VERSION) to staging." >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove deploy config
+        if: always()
+        run: rm -f wrangler.staging.json
+      # The failure logger must never change the deploy's outcome.
+      - name: Open staging-failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          DETECTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BODY="$(printf '%s\n' \
+            "Staging deploy failed. Staging is NOT rolled back automatically; production is untouched." \
+            "" \
+            "| Field | Value |" "| --- | --- |" \
+            "| Commit (dev) | $SHA |" \
+            "| Failed stage | ${STAGE:-unknown} |" \
+            "| job_started_at | $JOB_STARTED_AT |" \
+            "| detected_at | $DETECTED_AT |" \
+            "| Triggered by | ${{ github.actor }} |" \
+            "| Run | $RUN_URL |" \
+            "" \
+            "Next: read the run log, then fix on dev (the next merge redeploys) or re-run the failed job." \
+            "Record the failure and fix times in MEMORY.md → Deploy failures.")"
+          gh issue create --title "Staging deploy failed at ${STAGE:-unknown} (${SHA:0:7})" --body "$BODY" \
+            || echo "Could not open the failure issue; the run log still has the details."
