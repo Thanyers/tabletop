@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails, type ModelJobSearchProgress } from '../shared/model-job-progress';
 import {
-  canApplyWorkspaceRefresh, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
-  draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard,
-  LIVE_THINKING_LINE_CHARS, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
+  canApplyWorkspaceRefresh, DRAFT_SOURCE_TITLE_CHARS, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
+  draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, formatSourceDate, historyCard,
+  LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
 } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
@@ -37,6 +37,14 @@ describe('private table chat recovery state', () => {
     expect(tableChatMode('owner', true, false)).toBe('ask');
     expect(tableChatMode('owner', true, true)).toBe('draft');
     expect(tableChatMode('participant', false, true)).toBe('ask');
+  });
+
+  it('routes a specific rule change to drafting while keeping a question in ask mode', () => {
+    const request = (prompt: string) => ({ prompt, hasCreateAction: false, referencedRule: true });
+    expect(tableChatMode('owner', true, false, request('Make this rule easier to understand'))).toBe('draft');
+    expect(tableChatMode('owner', true, false, request('What does this rule do?'))).toBe('ask');
+    expect(tableChatMode('owner', true, false, { prompt: 'Change this rule', hasCreateAction: false })).toBe('ask');
+    expect(tableChatMode('participant', true, true, request('Make this rule easier'))).toBe('ask');
   });
 
   it('returns an active table to assistant mode when explicit rule editing is cancelled', () => {
@@ -233,6 +241,76 @@ describe('live thinking line while a draft runs (F050)', () => {
   it('is bounded by the job tail, never by an unbounded provider reply', () => {
     const line = liveThinkingLine('x'.repeat(MAX_JOB_THINKING_TAIL_CHARS));
     expect(line).toHaveLength(LIVE_THINKING_LINE_CHARS + 1);
+  });
+});
+
+describe('live search line while a draft runs (F064)', () => {
+  const search = (patch: Partial<ModelJobSearchProgress> = {}): ModelJobSearchProgress =>
+    ({ phase: 'searching', query: 'VAT ไทย 2569', resultsCount: 0, ...patch });
+
+  it('returns null when no research ran, so a file-only draft shows no extra line', () => {
+    expect(liveSearchLine(undefined)).toBeNull();
+    expect(liveSearchLine(search({ query: '   ' }))).toBeNull();
+  });
+
+  it('names the query while searching and the count once results are in', () => {
+    expect(liveSearchLine(search())).toBe('🔎 กำลังค้น: VAT ไทย 2569');
+    expect(liveSearchLine(search({ phase: 'reading', resultsCount: 4 })))
+      .toBe('🔎 กำลังค้น: VAT ไทย 2569 · เจอ 4');
+  });
+
+  it('ends on what the draft actually used instead of repeating the query', () => {
+    expect(liveSearchLine(search({ phase: 'done', resultsCount: 3 }))).toBe('✓ ใช้ 3 แหล่ง');
+  });
+
+  it('re-bounds the query and collapses whitespace, so an oversized row cannot widen the card', () => {
+    const line = liveSearchLine(search({ query: `${'  very\nlong  '}${'q'.repeat(MAX_JOB_SEARCH_QUERY_CHARS * 2)}` }));
+    expect(line).not.toBeNull();
+    expect(line).not.toContain('  ');
+    expect(line).not.toContain('\n');
+    expect(line?.length).toBeLessThanOrEqual(LIVE_SEARCH_QUERY_CHARS + '🔎 กำลังค้น: '.length);
+  });
+});
+
+describe('web sources on a finished draft card (F064)', () => {
+  const source = (patch: Partial<{ title: string; url: string; date: string | null; authority: number }> = {}) =>
+    ({ title: 'ประกาศ VAT', url: 'https://example.go.th/x', date: '2026-07-26T16:00:00+00:00', authority: 4, ...patch });
+
+  it('returns nothing when the draft never searched', () => {
+    expect(draftSources(undefined)).toEqual([]);
+    expect(draftSources({ queries: [], sources: [] })).toEqual([]);
+  });
+
+  it('shows a real link, a readable date and the authority', () => {
+    const items = draftSources({ queries: ['VAT'], sources: [source()] });
+    expect(items).toEqual([{ title: 'ประกาศ VAT', url: 'https://example.go.th/x', dateLabel: '26 Jul 2026', authority: 4 }]);
+    expect(draftSourcesLabel(items.length)).toBe('Sources (1)');
+  });
+
+  it('drops links that are not plain http(s) and bounds the list', () => {
+    const items = draftSources({
+      queries: [],
+      sources: [
+        source({ url: 'javascript:alert(1)' }),
+        source({ url: 'data:text/html,<b>x</b>' }),
+        ...Array.from({ length: MAX_JOB_RESEARCH_SOURCES + 3 }, (_, index) =>
+          source({ title: `S${index}`, url: `https://example${index}.go.th/x` })),
+      ],
+    });
+    expect(items).toHaveLength(MAX_JOB_RESEARCH_SOURCES);
+    for (const item of items) expect(item.url.startsWith('https://')).toBe(true);
+  });
+
+  it('falls back to the host, ignores an unusable date and bounds a long title', () => {
+    const items = draftSources({
+      queries: [],
+      sources: [source({ title: '', date: 'not-a-date' }), source({ title: 'T'.repeat(DRAFT_SOURCE_TITLE_CHARS * 2) })],
+    });
+    expect(items[0]?.title).toBe('example.go.th');
+    expect(items[0]?.dateLabel).toBe('');
+    expect(items[1]?.title.length).toBeLessThanOrEqual(DRAFT_SOURCE_TITLE_CHARS);
+    expect(formatSourceDate(null)).toBe('');
+    expect(formatSourceDate('soon')).toBe('');
   });
 });
 

@@ -3,6 +3,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
 import { isSeat, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
+import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
 import { exportInvoice } from '../server/exports.js';
@@ -14,7 +15,7 @@ import { createIdentityReplacements, redactString, respondToTablePrompt, type Id
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
-import { headWithin, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { externalHost, headWithin, parseModelJobResearch, safeExternalUrl, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, MAX_SOURCE_AUTHORITY, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
@@ -31,6 +32,8 @@ import {
 import { decideDomain } from '../src/tabletop/domain/index.js';
 import { CURSOR_MIN_INTERVAL_MS, cursorRelay, parseCursorInput, type CursorInput } from '../src/tabletop/shared/cursor-protocol.js';
 import { cleanReasons, modelFailureMessage, safeAssistantFailureCode, safeModelFailureCode, safeModelFailureReasons, tableAssistantFailureMessage } from './model-failure.js';
+import { resolveTableRuleReferences } from '../src/tabletop/shared/table-rule-reference.js';
+import { COMPUTE_EXECUTION_TIMEOUT_MS } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
@@ -95,6 +98,8 @@ interface PublicModelJob {
   limitMs?: number;
   /** F045: bounded, redacted evidence of how far a failed draft got. */
   failureDetails?: ModelFailureDetails;
+  /** F064 slice B: what the draft searched and which sources it used (display only, no evidence). */
+  research?: ModelJobResearch;
 }
 
 interface RunModelJobInput extends ModelInput {
@@ -363,6 +368,7 @@ function modelJobStatusView(job: RoomModelJob, limitMs: number): PublicModelJob 
     // F045: the card needs the same limit the job runs under, not a client-side guess.
     return { id: job.id, status: 'running', limitMs, ...(progress ? { progress } : {}) };
   }
+  const research = parseModelJobResearch(job.data.research);
   return {
     id: job.id,
     status: 'completed',
@@ -370,6 +376,8 @@ function modelJobStatusView(job: RoomModelJob, limitMs: number): PublicModelJob 
     ...(publicClarification(job.data.clarification) ?? {}),
     ...(job.data.autoApply === 'applied' || job.data.autoApply === 'needs-review' ? { autoApply: job.data.autoApply } : {}),
     ...(Array.isArray(job.data.autoApplyReasons) ? { autoApplyReasons: job.data.autoApplyReasons.filter((item): item is string => typeof item === 'string').slice(0, 6) } : {}),
+    // F064 slice B: the editor may still be unknown; the card renders it only when present.
+    ...(research ? { research } : {}),
   };
 }
 
@@ -407,6 +415,57 @@ function boundedFailureDetails(details: ModelFailureDetails, replacements: Ident
   };
 }
 
+/**
+ * F064: one research event, redacted then clamped so a stored search line never exceeds its budget.
+ * `null` replacements mean the identity set could not be built, so the event is dropped unseen.
+ */
+function boundedSearchProgress(
+  search: ModelJobSearchProgress | undefined,
+  replacements: IdentityReplacement[] | null,
+): ModelJobSearchProgress | undefined {
+  if (!search || replacements === null) return undefined;
+  const query = headWithin(redactString(search.query, replacements), MAX_JOB_SEARCH_QUERY_CHARS).trim();
+  if (!query) return undefined;
+  const topTitle = search.topTitle
+    ? headWithin(redactString(search.topTitle, replacements), MAX_JOB_SEARCH_TITLE_CHARS).trim() : '';
+  const resultsCount = Number.isSafeInteger(search.resultsCount) && search.resultsCount >= 0
+    ? Math.min(search.resultsCount, MAX_JOB_SEARCH_RESULTS) : 0;
+  return {
+    phase: search.phase,
+    query,
+    resultsCount,
+    ...(topTitle ? { topTitle } : {}),
+  };
+}
+
+/**
+ * F064 slice B: the sources a finished card may list, redacted then clamped like the live search
+ * line. A URL that is not plain http(s) after redaction is dropped; `null` replacements drop it all.
+ */
+function boundedResearch(
+  research: ModelJobResearch | undefined,
+  replacements: IdentityReplacement[] | null,
+): ModelJobResearch | undefined {
+  if (!research || replacements === null) return undefined;
+  const sources: ModelJobResearch['sources'] = [];
+  for (const source of research.sources) {
+    if (sources.length >= MAX_JOB_RESEARCH_SOURCES) break;
+    const url = safeExternalUrl(redactString(source.url, replacements));
+    if (!url) continue;
+    const title = headWithin(redactString(source.title, replacements), MAX_JOB_RESEARCH_TITLE_CHARS).trim();
+    const date = typeof source.date === 'string' ? headWithin(source.date, MAX_JOB_RESEARCH_DATE_CHARS) : '';
+    const authority = Number.isSafeInteger(source.authority)
+      ? Math.min(Math.max(source.authority, 0), MAX_SOURCE_AUTHORITY) : 0;
+    sources.push({ title: title || externalHost(url), url, date: date || null, authority });
+  }
+  if (sources.length === 0) return undefined;
+  const queries = research.queries
+    .slice(0, MAX_JOB_RESEARCH_QUERIES)
+    .map((query) => headWithin(redactString(query, replacements), MAX_JOB_SEARCH_QUERY_CHARS).trim())
+    .filter((query) => query.length > 0);
+  return { queries, sources };
+}
+
 function publicClarification(value: unknown): { clarification: { question: string; options: string[] } } | null {
   if (typeof value !== 'object' || value === null) return null;
   const { question, options } = value as { question?: unknown; options?: unknown };
@@ -440,6 +499,14 @@ export class Room extends DurableObject<Env> {
       workspaceIdFactory: () => this.requireBoundRoomId(),
       workspaceExpiresAt: ROOM_EXPIRES_AT,
       onWorkspaceChanged: () => this.scheduleOutboxDrain(),
+      computeRunner: createCloudflareComputeRunner({
+        loader: env.COMPUTE_LOADER,
+        ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? { container: this.ctx.container } : {}),
+      }),
+      scheduleBackground: task => this.ctx.waitUntil(task),
+      onComputeWorkScheduled: () => this.ctx.waitUntil(
+        this.scheduleAlarmAt(Date.now() + COMPUTE_EXECUTION_TIMEOUT_MS + RETRY_DELAY_MS).catch(() => undefined),
+      ),
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -640,7 +707,10 @@ export class Room extends DurableObject<Env> {
         requireWorkspaceWritable(this.env, authorized.workspace.kind);
         // F035: drafting rules (incl. AI drafts) needs the rules.draft permission.
         if (!authorized.context.permissions?.has('rules.draft')) throw new AuthorityError('ROLE_FORBIDDEN');
-        const input = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const parsedInput = parseModelInput(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const input = authorized.workspace.domain.kind === 'table'
+          ? { ...parsedInput, prompt: resolveTableRuleReferences(parsedInput.prompt, authorized.workspace.domain) }
+          : parsedInput;
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({
           commandId: input.commandId,
@@ -771,7 +841,8 @@ export class Room extends DurableObject<Env> {
         }
         // F035: asking the table AI needs the ai.ask permission.
         if (!authorized.context.permissions?.has('ai.ask')) throw new AuthorityError('ROLE_FORBIDDEN');
-        const input = parseTableAssistantRequest(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const parsedInput = parseTableAssistantRequest(await readJson(request, MAX_COMMAND_BODY_BYTES));
+        const input = { ...parsedInput, prompt: resolveTableRuleReferences(parsedInput.prompt, authorized.workspace.domain) };
         if (input.expectedEpoch !== authorized.workspace.epoch) throw new AuthorityError('STALE_EPOCH');
         const requestHash = sha256(canonicalJson({
           commandId: input.commandId,
@@ -1035,6 +1106,7 @@ export class Room extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     try {
+      if (this.repository.roomId) await this.authority.resumeTableCompute(this.repository.roomId);
       await this.recoverStaleModelJobs();
       await this.syncDirectory();
       await this.drainOutbox();
@@ -1376,21 +1448,30 @@ export class Room extends DurableObject<Env> {
 
       // Store live counters at most once per interval; the final status always wins afterwards.
       // F050: the bounded thinking tail rides along so the waiting card can show the live text.
+      // F064: the last research event is re-sent with every tick, so "✓ used N sources" stays on the
+      // card for the whole draft instead of vanishing on the next progress write.
       let lastProgressWrite = 0;
+      let lastSearch: ModelJobSearchProgress | undefined;
       const onProgress = (progress: DeepSeekChangeProgress) => {
         const now = Date.now();
-        if (now - lastProgressWrite < 900) return;
+        // A finished research step is never throttled: dropping it would leave the card saying
+        // "searching…" until the draft ends, which is the one line this feature exists to replace.
+        const searchDone = progress.search?.phase === 'done';
+        if (!searchDone && now - lastProgressWrite < 900) return;
         lastProgressWrite = now;
         // Redact before clamping, and drop the text entirely when the identity set cannot be built.
         const thinkingTail = progress.thinkingTail && progressReplacements
           ? tailWithin(redactString(progress.thinkingTail, progressReplacements), MAX_JOB_THINKING_TAIL_CHARS)
           : '';
+        const search = boundedSearchProgress(progress.search, progressReplacements);
+        if (search) lastSearch = search;
         void this.repository.updateModelJobProgress(
           input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
           {
             receivedChars: progress.receivedChars,
             reasoningChars: progress.reasoningChars,
             ...(thinkingTail ? { thinkingTail } : {}),
+            ...(lastSearch ? { search: lastSearch } : {}),
             updatedAt: now,
           },
         ).catch(() => undefined);
@@ -1420,10 +1501,20 @@ export class Room extends DurableObject<Env> {
       if (!job || job.status !== 'running') return;
       requireWorkspaceWritable(this.env, authorized.workspace.kind);
 
+      // F064 slice B: the sources this draft used, redacted and bounded once, then stored with the
+      // job so every member opening the card sees the same list.
+      const researchMeta = boundedResearch(
+        'research' in proposal ? proposal.research : undefined, progressReplacements,
+      );
+
       if ('clarification' in proposal) {
         // Nothing to commit: the owner answers in the chat and asks again.
         await this.repository.finishModelJob(input.jobId, input.workspaceId, input.expectedEpoch,
-          input.actorId, 'completed', { ...initialData, clarification: proposal.clarification });
+          input.actorId, 'completed', {
+            ...initialData,
+            clarification: proposal.clarification,
+            ...(researchMeta ? { research: researchMeta } : {}),
+          });
         return;
       }
 
@@ -1440,7 +1531,7 @@ export class Room extends DurableObject<Env> {
         expectedRevision: envelope.expectedRevision,
         expectedEpoch: envelope.expectedEpoch,
       });
-      const committingData = { ...initialData, proposalHash };
+      const committingData = { ...initialData, proposalHash, ...(researchMeta ? { research: researchMeta } : {}) };
       if (!await this.repository.beginModelJobCommit(
         input.jobId, input.workspaceId, input.expectedEpoch, input.actorId, committingData,
       )) return;

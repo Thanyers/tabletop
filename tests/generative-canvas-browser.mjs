@@ -15,6 +15,7 @@ import {
 } from '../src/tabletop/testing/generative-scenarios.ts';
 
 const output = resolve('test-results/generative-canvas');
+const importedSourceNote = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 for (const required of ['dist/index.html', 'worker-build/index.js']) {
   if (!existsSync(required)) throw new Error(`Build output is missing: ${required}. Build the app and Cloudflare worker before running this harness.`);
 }
@@ -31,6 +32,7 @@ const checks = [];
 const browserErrors = [];
 const blockedExternal = [];
 const providerResponses = [];
+const providerDiagnostics = [];
 const tableActRequests = [];
 let providerCalls = 0;
 let lastUiDiagnostics = null;
@@ -145,6 +147,7 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       GOOGLE_OAUTH_CLIENT_ID: 'synthetic-client',
       GOOGLE_OAUTH_CLIENT_SECRET: 'synthetic-secret',
       DEEPSEEK_KEY: 'synthetic-provider-key',
+      TABLE_WEB_SEARCH: 'off',
       AI_MONTHLY_BUDGET_MICRO_USD: '1000000',
       AI_DAILY_BUDGET_MICRO_USD: '1000000',
     },
@@ -154,33 +157,57 @@ const mf = new Miniflare(convertV4MiniflareOptions({
         throw new Error(`Unexpected external worker request: ${new URL(request.url).origin}`);
       }
       providerCalls += 1;
-      const body = await request.json();
-      expect(body.model).toBe('deepseek-flash');
-      const input = JSON.parse(body.messages?.[1]?.content ?? '{}');
-      expect(input.kind).toBe('table');
-      const reply = scenarioForInput(input);
-      const attached = input.sources?.[0];
-      const fixture = sourceFixtures[reply.id];
-      if (reply.edit && fixture) {
-        // Dev #194: the active rules already cite the file, so an edit sends only its id and name.
-        expect(input.sources).toEqual([]);
-        expect((input.importedSources ?? []).map((item) => item.filename)).toEqual([fixture.filename]);
-      } else if (reply.id === 'shadow') {
-        expect(attached?.filename).toBe(sourceFixtures.shadow.filename);
-        expect(attached?.text).toBe(sourceFixtures.shadow.text);
-      } else if (reply.id === 'novel') {
-        expect(attached?.filename).toBe(sourceFixtures.novel.filename);
-        expect(attached?.text).toBe(sourceFixtures.novel.text);
-      } else expect(input.sources).toEqual([]);
-      providerResponses.push({ scenario: reply.id, edit: reply.edit, attachedFile: Boolean(attached) });
-      return Response.json({
-        model: 'deepseek-flash',
-        choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(reply.change) } }],
-        usage: {
-          prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 30,
-          completion_tokens_details: { reasoning_tokens: 0 },
-        },
-      });
+      let body;
+      let input;
+      try {
+        body = await request.json();
+        expect(body.model).toBe('deepseek-flash');
+        input = JSON.parse(body.messages?.[1]?.content ?? '{}');
+        expect(input.kind).toBe('table');
+        const reply = scenarioForInput(input);
+        const attached = input.sources?.[0];
+        const expectedSource = reply.id === 'shadow' ? sourceFixtures.shadow : reply.id === 'novel' ? sourceFixtures.novel : null;
+        if (reply.edit) {
+          const evidenceIds = [...new Set((input.program?.evidence ?? []).map((item) => item.sourceId))].sort();
+          const importedSources = input.importedSources ?? [];
+          expect(input.sources).toEqual([]);
+          expect(importedSources.map((source) => source.id).sort()).toEqual(evidenceIds);
+          if (expectedSource) {
+            expect(evidenceIds.length).toBeGreaterThan(0);
+            expect(importedSources).toEqual(evidenceIds.map((id) => ({ id, filename: expectedSource.filename, note: importedSourceNote })));
+          } else {
+            expect(evidenceIds).toEqual([]);
+            expect(importedSources).toEqual([]);
+          }
+        } else if (expectedSource) {
+          expect(input.sources).toHaveLength(1);
+          expect(attached?.filename).toBe(expectedSource.filename);
+          expect(attached?.text).toBe(expectedSource.text);
+          expect(input.importedSources ?? []).toEqual([]);
+        } else {
+          expect(input.sources).toEqual([]);
+          expect(input.importedSources ?? []).toEqual([]);
+        }
+        providerResponses.push({ scenario: reply.id, edit: reply.edit, attachedFile: Boolean(attached) });
+        return Response.json({
+          model: 'deepseek-flash',
+          choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(reply.change) } }],
+          usage: {
+            prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 10, prompt_cache_miss_tokens: 30,
+            completion_tokens_details: { reasoning_tokens: 0 },
+          },
+        });
+      } catch (error) {
+        providerDiagnostics.push({
+          call: providerCalls,
+          inputKind: input?.kind ?? null,
+          prompt: typeof input?.prompt === 'string' ? input.prompt : null,
+          sourceFilenames: Array.isArray(input?.sources) ? input.sources.map((source) => source?.filename ?? null) : [],
+          importedSourceFilenames: Array.isArray(input?.importedSources) ? input.importedSources.map((source) => source?.filename ?? null) : [],
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     },
     assets: {
       directory: resolve('dist'),
@@ -551,7 +578,7 @@ try {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
     if (before.domain.program || before.domain.candidate?.status === 'active') {
       const rules = await openCanvasObject(owner, 'table.rules');
-      await clickVisible(rules.getByRole('button', { name: 'Edit rules', exact: true }));
+      await clickVisible(rules.getByRole('button', { name: 'Describe a rule change', exact: true }));
     }
     const sourceNames = before.domain.sources.map((source) => source.filename);
     const prompt = draftPrompt(scenario, phase);
@@ -1159,7 +1186,7 @@ try {
   expect(providerCalls).toBe(8);
   mark('All four fresh local rooms completed; generated views and rules made eight intercepted synthetic provider calls with no browser errors or external network requests');
   await writeFile(join(output, 'report.json'), JSON.stringify({
-    status: 'PASS', checks, providerCalls, providerResponses, browserErrors, blockedExternal,
+    status: 'PASS', checks, providerCalls, providerResponses, providerDiagnostics, browserErrors, blockedExternal,
     runtime: 'Disposable local Miniflare Workers, D1 and SQLite Durable Objects; no production endpoint or database.',
     login: 'Synthetic fixture accounts and sessions; no OAuth provider was contacted.',
     ai: 'Explicit fixture outputs from src/tabletop/testing/generative-scenarios.ts plus one synthetic loan view; every DeepSeek URL was intercepted locally.',
@@ -1170,7 +1197,7 @@ try {
     if (!pages[index].isClosed()) await pages[index].screenshot({ path: join(output, `failure-${index}.png`), fullPage: true }).catch(() => {});
   }
   await writeFile(join(output, 'report.json'), JSON.stringify({
-    status: 'FAIL', checks, providerCalls, providerResponses, browserErrors, blockedExternal, lastUiDiagnostics,
+    status: 'FAIL', checks, providerCalls, providerResponses, providerDiagnostics, browserErrors, blockedExternal, lastUiDiagnostics,
     failure: String(error),
     runtime: 'Disposable local Miniflare Workers, D1 and SQLite Durable Objects; no production endpoint or database.',
     login: 'Synthetic fixture accounts and sessions; no OAuth provider was contacted.',

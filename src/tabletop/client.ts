@@ -1,7 +1,8 @@
 import { MAX_TABLE_MEMBER_SEATS, type CommandAck, type CommandEnvelope, type SessionView, type WorkspaceView } from './shared/contracts';
-import type { ModelFailureDetails, ModelJobProgress } from './shared/model-job-progress';
+import type { ModelFailureDetails, ModelJobProgress, ModelJobResearch } from './shared/model-job-progress';
 import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
 import { parseCursorRelay, type CursorRelay } from './shared/cursor-protocol';
+import { COMPUTE_RUNTIME_PROFILE, computeRuntimeCapabilities, type ComputeRuntimeCapabilities } from './shared/compute-runtime-profiles';
 
 export class ApiFailure extends Error {
   constructor(
@@ -56,6 +57,8 @@ export interface ModelJob {
   limitMs?: number;
   /** F045: why a failed draft stopped early and how much of the reply it had received. */
   failureDetails?: ModelFailureDetails;
+  /** F064 slice B: what the draft searched and which sources it used (display only). */
+  research?: ModelJobResearch;
 }
 
 export interface TabletopCapabilities {
@@ -66,6 +69,8 @@ export interface TabletopCapabilities {
   /** Member seats a table can hand out besides its owner; missing = the Node runtime's seven. */
   memberSeats?: number;
   tableAssistant?: { available: boolean; reason?: string };
+  /** Runtime bindings the Worker can actually use for generated table compute. */
+  compute?: ComputeRuntimeCapabilities;
   model: { enabled: boolean; reason: string };
 }
 
@@ -116,6 +121,35 @@ async function readResponse<T>(response: Response): Promise<T> {
 
 function networkFailure(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof DOMException && error.name === 'NetworkError');
+}
+
+function readComputeRuntimeCapabilities(value: unknown): ComputeRuntimeCapabilities | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ApiFailure('The workspace compute settings could not be read.', 502);
+  }
+  const candidate = value as { profile?: unknown; runtimes?: unknown; pythonLibraries?: unknown };
+  if (candidate.profile !== COMPUTE_RUNTIME_PROFILE || !Array.isArray(candidate.runtimes) || !Array.isArray(candidate.pythonLibraries)) {
+    throw new ApiFailure('The workspace compute settings could not be read.', 502);
+  }
+  const runtimes: unknown[] = candidate.runtimes;
+  const pythonLibraries: unknown[] = candidate.pythonLibraries;
+  if (!runtimes.every((runtime) => runtime === 'javascript' || runtime === 'python')
+    || new Set<unknown>(runtimes).size !== runtimes.length
+    || !pythonLibraries.every((library) => typeof library === 'string')) {
+    throw new ApiFailure('The workspace compute settings could not be read.', 502);
+  }
+  const expected = computeRuntimeCapabilities({
+    javascript: runtimes.includes('javascript'),
+    python: runtimes.includes('python'),
+  });
+  if (runtimes.length !== expected.runtimes.length
+    || !expected.runtimes.every((runtime) => runtimes.includes(runtime))
+    || pythonLibraries.length !== expected.pythonLibraries.length
+    || expected.pythonLibraries.some((library, index) => pythonLibraries[index] !== library)) {
+    throw new ApiFailure('The workspace compute settings could not be read.', 502);
+  }
+  return expected;
 }
 
 function csrfHeaders(token: string, headers?: HeadersInit): Headers {
@@ -190,7 +224,7 @@ export class TabletopClient {
       tableAssistant: { available: false, reason: unavailableAssistantReason },
       model: { enabled: false, reason: 'AI proposals are not configured on this local server.' },
     };
-    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    const body = await readResponse<{ uploads?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; compute?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
     const tableAssistant = body.tableAssistant;
     const validTableAssistant = tableAssistant === undefined || (
       typeof tableAssistant === 'object'
@@ -212,6 +246,7 @@ export class TabletopClient {
       tableAssistant: assistantCapability
         ? { available: assistantCapability.available, ...(assistantCapability.reason ? { reason: assistantCapability.reason } : {}) }
         : { available: false, reason: unavailableAssistantReason },
+      ...(body.compute === undefined ? {} : { compute: readComputeRuntimeCapabilities(body.compute) }),
       model: {
         enabled: body.model.enabled,
         reason: typeof body.model.reason === 'string' ? body.model.reason : '',

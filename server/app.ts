@@ -622,6 +622,7 @@ export function createApp(options: CreateAppOptions): TabletopApp {
       clearInterval(outboxTimer);
       if (expiryTimer) clearInterval(expiryTimer);
       clearInterval(heartbeat);
+      await authority.closeComputeJobs();
       await Promise.all([outboxTask, expiryTask].filter((task): task is Promise<void> => task !== null));
       for (const peer of peers) peer.socket.close(1001, 'Server shutting down');
       peers.clear();

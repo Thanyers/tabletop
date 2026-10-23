@@ -11,7 +11,7 @@ const sorted = (values: Iterable<string>) => [...values].sort();
 
 describe('F035 permission model', () => {
   it('lists the common permissions plus the kind permissions, with a label for each and no reset permission', () => {
-    expect(permissionsFor('table')).toEqual([...COMMON_PERMISSIONS, 'files.add', 'files.remove', 'data.import', 'data.columns', 'table.act', 'ai.ask']);
+    expect(permissionsFor('table')).toEqual([...COMMON_PERMISSIONS, 'files.add', 'files.remove', 'data.import', 'data.columns', 'data.compute', 'table.act', 'ai.ask']);
     expect(permissionsFor('teaching')).toEqual([...COMMON_PERMISSIONS, 'lesson.parameters', 'lesson.representation', 'lesson.note']);
     expect(permissionsFor('encounter')).toEqual([...COMMON_PERMISSIONS, 'game.direct', 'game.note']);
     expect(permissionsFor('invoice')).toEqual([...COMMON_PERMISSIONS, 'invoice.review']);
@@ -48,7 +48,7 @@ describe('F035 permission model', () => {
       roles: [{ id: 'custom-a', name: 'Files only', permissions: ['files.add', 'files.remove'] }],
       assignments: { editor: 'editor', contributor: 'contributor', viewer: 'viewer', custom: 'custom-a', ghost: 'custom-missing' },
     };
-    expect(sorted(memberPermissions('table', access, 'contributor', false))).toEqual(sorted(['rules.draft', 'files.add', 'table.act', 'ai.ask']));
+    expect(sorted(memberPermissions('table', access, 'contributor', false))).toEqual(sorted(['rules.draft', 'files.add', 'data.compute', 'table.act', 'ai.ask']));
     expect(memberPermissions('table', access, 'editor', false).has('roles.manage')).toBe(false);
     expect(memberPermissions('table', access, 'editor', false).has('rules.approve')).toBe(true);
     expect(memberPermissions('table', access, 'viewer', false).size).toBe(0);

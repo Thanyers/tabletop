@@ -8,6 +8,14 @@ import './table-chat.css';
 const MAX_MESSAGE_CHARS = 1200;
 const MAX_ROWS = 5;
 
+function referenceGroupLabel(references: readonly ChatCardReference[]): string {
+  const hasRules = references.some((reference) => reference.rule);
+  const hasCards = references.some((reference) => !reference.rule);
+  if (hasRules && hasCards) return 'cards and rules';
+  if (hasRules) return references.length === 1 ? 'rule' : 'rules';
+  return references.length === 1 ? 'card' : 'cards';
+}
+
 export interface TableChatProps {
   workspaceId: string;
   epoch: number;
@@ -36,6 +44,8 @@ export interface TableChatProps {
   onSend: (message: string) => Promise<boolean>;
   /** F037: an extra round control rendered beside the composer (add a note). */
   composerAction?: ReactNode;
+  /** F067: bytes a rule request would carry for this table, shown while the next message is a rule request. */
+  aiContext?: { used: number; limit: number };
   onMessageChange?: (message: string) => void;
   /** A card the next message is about, shown as a chip above the box. */
   /** Cards the next message is about; each chip can be removed on its own. */
@@ -48,7 +58,7 @@ export interface TableChatProps {
 export function TableChat({
   workspaceId, epoch, actorId, mode, sourceFiles, placeholder, aiEnabled, canAttach, busy,
   acceptFiles, historyStatus = 'ready', onRetryHistory, prefill, acknowledged, focusKey = 0,
-  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction,
+  explicitRuleEdit = false, onCancelRuleEdit, onAttach, onSend, onMessageChange, composerAction, aiContext,
   cardReferences = [], onRemoveCardReference, onClearCardReferences,
 }: TableChatProps) {
   const [message, setMessage] = useState('');
@@ -182,16 +192,16 @@ export function TableChat({
       </div>
     </div>}
     {cardReferences.length > 0 && <div className="tt-table-chat-bar__reference" data-testid="chat-card-reference">
-      <ul className="tt-table-chat-bar__reference-chips" aria-label="Cards this message is about">
+      <ul className="tt-table-chat-bar__reference-chips" aria-label="Items this message is about">
         {cardReferences.map((reference) => <li key={reference.id} className="tt-table-chat-bar__reference-chip" title={reference.detail}>
           <AtSign size={13} aria-hidden="true" /><span>{reference.title}</span>
-          <button type="button" aria-label={`Stop referencing ${reference.title}`} onClick={() => { onRemoveCardReference?.(reference.id); fieldRef.current?.focus(); }}><X size={12} aria-hidden="true" /></button>
+          <button type="button" aria-label={`Stop referencing ${reference.rule ? 'rule' : 'card'} ${reference.title}`} onClick={() => { onRemoveCardReference?.(reference.id); fieldRef.current?.focus(); }}><X size={12} aria-hidden="true" /></button>
         </li>)}
       </ul>
-      <small>{cardReferences.length > 1
-        ? mode === 'draft' ? 'Your message changes these cards’ rules.' : `Your message is about these ${cardReferences.length} cards. Add more with the chat icon on a card.`
-        : mode === 'draft' ? 'Your message changes this card’s rules.' : 'Your message is about this card. Add more with the chat icon on another card.'}</small>
-      {cardReferences.length > 1 && <button type="button" className="tt-table-chat-bar__reference-clear" aria-label="Stop referencing all cards" onClick={() => { onClearCardReferences?.(); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>}
+      <small>{mode === 'draft'
+        ? `Your message changes the selected ${referenceGroupLabel(cardReferences)}.`
+        : `Your message is about the selected ${referenceGroupLabel(cardReferences)}. Add another with a chat button on the canvas.`}</small>
+      {cardReferences.length > 1 && <button type="button" className="tt-table-chat-bar__reference-clear" aria-label="Stop referencing all selected items" onClick={() => { onClearCardReferences?.(); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>}
     </div>}
     <form className="tt-table-chat-bar__box" onSubmit={(event) => { event.preventDefault(); submit(); }}>
       {canAttach && <>
@@ -216,5 +226,20 @@ export function TableChat({
       {composerAction}
       <button type="submit" className="tt-table-chat-bar__send" aria-label="Send message" disabled={!canSend} title={busy ? 'Send is available once the pending step on the table is resolved' : undefined}>{sending ? <LoaderCircle size={16} className="tt-spin" /> : <ArrowUp size={17} />}</button>
     </form>
+    {mode === 'draft' && aiContext && <AiContextMeter {...aiContext} />}
   </div>;
+}
+
+/** "AI context 41 / 128 KiB": how much of a rule request this table already fills (F067). */
+function AiContextMeter({ used, limit }: { used: number; limit: number }) {
+  const kib = (bytes: number) => Math.max(1, Math.round(bytes / 1024));
+  const ratio = used / limit;
+  const level = ratio > 1 ? 'over' : ratio > 0.8 ? 'high' : 'ok';
+  return <p className="tt-table-chat-bar__context" data-level={level} data-testid="ai-context-meter"
+    title="Your message, files the rules do not cite yet, the rules and every row go to the AI with each rule request. Files the rules already cite go by name only.">
+    <span className="tt-table-chat-bar__context-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }} /></span>
+    AI context {kib(used)} / {kib(limit)} KiB
+    {level === 'over' && <b> · too large to send. Remove a file or some rows.</b>}
+    {level === 'high' && <b> · almost full</b>}
+  </p>;
 }

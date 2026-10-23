@@ -27,7 +27,7 @@ interface CanvasObjectContentProps {
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
-  onEditRules?: () => void;
+  onEditRules?: (prompt?: string) => void;
   preparedDemoArt?: boolean;
   expanded?: boolean;
 }

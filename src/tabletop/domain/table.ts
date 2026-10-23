@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DomainError, SEATS, TABLE_TURN_SEATS, TABLE_TURN_SEAT_PATTERN, type ActorContext, type Seat } from '../shared/contracts';
-import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue } from '../shared/table-contracts';
+import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue, TableSource } from '../shared/table-contracts';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
 import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
 import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
@@ -12,9 +12,12 @@ import { expressionWithinBounds, getGenerativeExpressionType, validateGenerative
 import { preserveCanvasViews } from '../runtime/generative/preserve';
 import { MAX_COMPUTED_COLUMNS, computedColumnProblems, retainComputedColumns } from '../shared/computed-columns';
 import type { ComputedColumn, ComputedExpression } from '../shared/table-contracts';
+import { computeInputBindingSchema, computeProgramProblems, computeRunRecordSchema, tableComputeProgramSchema, validateComputeOutputs, isComputeTableValue, COMPUTE_LIMITS, type ComputeRunRecord, type ComputeRuntimeProfile } from '../shared/table-compute';
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
+// F066: kept in a leaf module so Worker startup can never read it before it is set.
+export { TABLE_AI_INPUT_BYTES } from '../shared/ai-request-limits';
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
 export const MAX_TABLE_NOTES = 20;
 export const MAX_NOTE_TEXT = 500;
@@ -110,12 +113,21 @@ export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
     effects: z.array(z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand })).max(TABLE_LIMITS.effectsPerAction),
     creates: z.array(z.strictObject({ collection: id, values: z.record(id, operand) })).max(MAX_TABLE_ACTION_CREATES).optional(),
     requireTurn: z.boolean(), advanceTurn: z.boolean(),
-  })).min(1).max(TABLE_LIMITS.actions),
+  })).max(TABLE_LIMITS.actions),
   invariants: z.array(z.strictObject({ id, collection: id, fields: z.array(id).min(1).max(TABLE_LIMITS.invariantFields), message: text })).max(TABLE_LIMITS.invariants),
   turnOrder: z.array(z.string().regex(TABLE_TURN_SEAT_PATTERN)).max(TABLE_LIMITS.turnOrder),
   evidence: z.array(z.strictObject({ sourceId: z.string().min(1).max(100), quote: z.string().min(1).max(500) })).max(TABLE_LIMITS.evidence),
   assumptions: z.array(text).max(TABLE_LIMITS.assumptions),
   canvas: generativeCanvasSchema.optional(),
+  compute: tableComputeProgramSchema.optional(),
+}).superRefine((program, refinement) => {
+  if (program.actions.length === 0 && !program.compute?.modules.length) {
+    refinement.addIssue({ code: 'custom', path: ['actions'], message: 'A table needs at least one action or saved compute rule.' });
+  }
+  if (program.compute) {
+    const problems = computeProgramProblems(program.compute, program.collections, undefined);
+    for (const problem of problems) refinement.addIssue({ code: 'custom', path: ['compute'], message: problem.message });
+  }
 });
 export const tableRowSchema = z.strictObject({ id, values: z.record(id, value) });
 export const tableRecordsSchema = z.record(id, z.array(tableRowSchema).max(TABLE_LIMITS.rowsPerCollection)).superRefine((records, ctx) => {
@@ -309,7 +321,7 @@ function checkRows(program: TableProgram, records: Record<string, TableRecord[]>
     }
   }
 }
-export function checkProgram(program: TableProgram) {
+export function checkProgram(program: TableProgram, sources?: readonly TableSource[]) {
   unique(program.collections.map(c => c.id), 'Collection identifiers'); unique(program.actions.map(a => a.id), 'Action identifiers'); unique(program.turnOrder, 'Turn seats'); unique(program.invariants.map(i => i.id), 'Invariant identifiers');
   for (const c of program.collections) {
     unique(c.fields.map(f => f.id), 'Field identifiers');
@@ -373,12 +385,36 @@ export function checkProgram(program: TableProgram) {
     const c = program.collections.find(c => c.id === i.collection);
     assert(c && i.fields.every(key => c.fields.some(f => f.id === key)), 'TABLE_SCHEMA', 'Unique constraint refers to an unknown field.');
   }
+  if (program.compute) {
+    unique(program.compute.modules.map(module => module.id), 'Compute module identifiers');
+    const problems = computeProgramProblems(program.compute, program.collections, sources);
+    assert(problems.length === 0, 'TABLE_SCHEMA', problems[0]?.message ?? 'The compute modules are invalid.');
+    const derivedCollections = new Set(program.compute.modules.flatMap(module =>
+      module.outputs.flatMap(output => output.collectionId ? [output.collectionId] : [])));
+    for (const action of program.actions) {
+      assert(!action.parameters.some(parameter => parameter.collection && derivedCollections.has(parameter.collection))
+        && !(action.creates ?? []).some(create => derivedCollections.has(create.collection)),
+      'TABLE_SCHEMA', 'Actions cannot select or write rows in a derived compute collection.');
+    }
+    assert(!program.invariants.some(invariant => derivedCollections.has(invariant.collection)),
+      'TABLE_SCHEMA', 'Checks cannot target rows in a derived compute collection.');
+  }
 }
 
 export function applyTableChange(state: TableState, raw: TableChange, actor?: Pick<ActorContext, 'actorId' | 'seat'>): TableState {
   const change = parseBoundedTableChange(raw);
   assert(bytes(JSON.stringify(change.program)) <= TABLE_LIMITS.programBytes && bytes(JSON.stringify(change.initialRecords)) <= TABLE_LIMITS.recordsBytes, 'TABLE_LIMIT', 'The proposed rules or records exceed the table size limit.');
-  checkProgram(change.program);
+  checkProgram(change.program, state.sources);
+  if (state.program?.compute) {
+    const nextModules = new Map((change.program.compute?.modules ?? []).map(module => [module.id, module]));
+    for (const previous of state.program.compute.modules) {
+      const next = nextModules.get(previous.id);
+      assert(next, 'TABLE_PRESERVE_COMPUTE', 'Keep ' + previous.name + ' in an evolved program; remove it with the Rules card so its dependencies and run history can be checked.');
+      const previousBehavior = canonicalJson({ runtime: previous.runtime, runtimeProfile: previous.runtimeProfile ?? 'tabletop-compute-1', source: previous.source, inputs: previous.inputs, outputs: previous.outputs });
+      const nextBehavior = canonicalJson({ runtime: next.runtime, runtimeProfile: next.runtimeProfile ?? 'tabletop-compute-1', source: next.source, inputs: next.inputs, outputs: next.outputs });
+      assert(next.version >= previous.version && (previousBehavior === nextBehavior || next.version > previous.version), 'TABLE_COMPUTE_VERSION', 'Increment the version of ' + previous.name + ' when its code or port bindings change.');
+    }
+  }
   if (state.sources.length === 0) assert(change.program.evidence.length === 0, 'TABLE_EVIDENCE', 'Prompt-only tables cannot cite a source that is not on the table.');
   else {
     assert(change.program.evidence.length > 0, 'TABLE_EVIDENCE', 'Cite at least one uploaded source.');
@@ -421,11 +457,11 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
   const generativeIssues = validateGenerativeProgram(change.program, records);
   assert(generativeIssues.length === 0, 'TABLE_SCHEMA', generativeIssues[0] ?? 'Generated table program is invalid.');
   const turn = state.turn ?? change.program.turnOrder[0] ?? null;
-  validateGenerativeOutput(change.program, records, actor ? { actor: actor.actorId, ...(actor.seat ? { seat: actor.seat } : {}), turn } : undefined);
+  validateGenerativeOutput(change.program, records, actor ? { actor: actor.actorId, ...(actor.seat ? { seat: actor.seat } : {}), turn } : undefined, state.computeRuns, state);
   const computedColumns = retainComputedColumns(state.computedColumns, change.program);
   return { ...structuredClone(state), program: structuredClone(change.program), records, turn, computedColumns };
 }
-export type RuleItemKind = 'action' | 'invariant' | 'view' | 'collection';
+export type RuleItemKind = 'action' | 'invariant' | 'view' | 'collection' | 'compute';
 
 /**
  * F039: the active program without one action, unique constraint, view or collection. Removing a collection
@@ -440,6 +476,11 @@ export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: s
   if (kind === 'action') { found = program.actions.some(item => item.id === id); program.actions = program.actions.filter(item => item.id !== id); }
   if (kind === 'invariant') { found = program.invariants.some(item => item.id === id); program.invariants = program.invariants.filter(item => item.id !== id); }
   if (kind === 'collection') { found = program.collections.some(item => item.id === id); program.collections = program.collections.filter(item => item.id !== id); delete records[id]; }
+  if (kind === 'compute' && program.compute) {
+    found = program.compute.modules.some(item => item.id === id);
+    program.compute.modules = program.compute.modules.filter(item => item.id !== id);
+    if (program.compute.modules.length === 0) delete program.compute;
+  }
   if (kind === 'view' && program.canvas) {
     found = program.canvas.views.some(item => item.id === id);
     program.canvas.views = program.canvas.views.filter(item => item.id !== id);
@@ -448,10 +489,11 @@ export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: s
   assert(found, 'RULE_ITEM_NOT_FOUND', 'That rule is no longer on this table.');
   // F046: links between views are only hints, so drop links to what was removed instead of blocking.
   if (kind === 'view' || kind === 'collection') dropRuleItemLinks(program, kind, id);
-  const users = ruleItemUsers(program, kind, id);
+  // Inspect a removed module's output bindings before discarding its definition.
+  const users = ruleItemUsers(kind === 'compute' ? state.program : program, kind, id);
   if (users.length > 0) throw new DomainError('RULE_ITEM_IN_USE', `Remove ${users.join(', ')} first; it still uses this.`);
   try {
-    checkProgram(program);
+    checkProgram(program, state.sources);
     checkRows(program, records);
     const issues = validateGenerativeProgram(program, records);
     assert(issues.length === 0, 'TABLE_SCHEMA', issues[0] ?? 'The remaining rules are invalid.');
@@ -464,12 +506,35 @@ export function removeTableRuleItem(state: TableState, kind: RuleItemKind, id: s
 }
 
 /** Names of the rules that still use an action or collection, so the removal message can say what to remove first. */
+function referencesComputeResult(value: unknown, moduleId: string): boolean {
+  if (Array.isArray(value)) return value.some(item => referencesComputeResult(item, moduleId));
+  if (value === null || typeof value !== 'object') return false;
+  const object = value as Record<string, unknown>;
+  if (object.op === 'computeResult' && object.moduleId === moduleId) return true;
+  return Object.values(object).some(item => referencesComputeResult(item, moduleId));
+}
+
 function ruleItemUsers(program: TableProgram, kind: RuleItemKind, id: string): string[] {
   const views = program.canvas?.views ?? [];
   const mentions = (value: unknown, key: string) => JSON.stringify(value).includes(`${JSON.stringify(key)}:${JSON.stringify(id)}`);
   if (kind === 'action') return views.filter(view => mentions(view, 'actionId')).map(view => `the view “${view.title}”`);
+  if (kind === 'compute') {
+    const removed = program.compute?.modules.find(module => module.id === id);
+    const derivedIds = new Set(removed?.outputs.flatMap(output => output.collectionId ? [output.collectionId] : []) ?? []);
+    return [
+      ...(program.compute?.modules.filter(module => module.id !== id && module.inputs.some(input =>
+        input.binding.kind === 'result' && input.binding.moduleId === id
+        || input.binding.kind === 'collection' && derivedIds.has(input.binding.collectionId)))
+        .map(module => 'the compute rule “' + module.name + '”') ?? []),
+      ...(program.canvas?.views.filter(view => referencesComputeResult(view, id)
+        || 'collection' in view && derivedIds.has(view.collection))
+        .map(view => 'the view “' + view.title + '”') ?? []),
+    ];
+  }
   if (kind !== 'collection') return [];
   return [
+    ...(program.compute?.modules.filter(module => module.inputs.some(input => input.binding.kind === 'collection' && input.binding.collectionId === id)
+      || module.outputs.some(output => output.collectionId === id)).map(module => 'the compute rule “' + module.name + '”') ?? []),
     ...program.actions.filter(action => action.parameters.some(p => p.collection === id) || (action.creates ?? []).some(create => create.collection === id)).map(action => `the action “${action.title}”`),
     ...program.invariants.filter(invariant => invariant.collection === id).map(invariant => `the check “${invariant.message}”`),
     ...views.filter(view => mentions(view, 'collection')).map(view => `the view “${view.title}”`),
@@ -478,6 +543,32 @@ function ruleItemUsers(program: TableProgram, kind: RuleItemKind, id: string): s
 
 export function tableChangeIssues(state: TableState, change: TableChange): string[] {
   try { applyTableChange(state, change); return [] } catch (e) { return [e instanceof Error ? e.message : 'Invalid table program.'] }
+}
+
+const fixedOperand = (operand: TableOperand): boolean => 'literal' in operand || ('expression' in operand && operand.expression.op === 'literal');
+
+/**
+ * F068: an action with no inputs and no conditions whose rows are all typed-in values makes the same rows on
+ * every press, and numbers the model worked out from records go stale. Only actions a draft adds or changes are
+ * checked, so an older table that already has one can still be edited, rolled back, or trimmed.
+ */
+export function repeatableFixedCreateIssues(program: TableProgram, previous: TableProgram | null): string[] {
+  const unchanged = (action: TableAction) => previous?.actions.some(old => old.id === action.id && canonicalJson(old) === canonicalJson(action)) ?? false;
+  return program.actions
+    .filter(action => action.parameters.length === 0 && action.conditions.length === 0 && (action.creates?.length ?? 0) > 0
+      && (action.creates ?? []).every(create => Object.values(create.values).every(fixedOperand)) && !unchanged(action))
+    .map(action => {
+      const collection = action.creates?.[0]?.collection ?? 'the collection';
+      return `“${action.title}” has no inputs or conditions and creates the same fixed rows on every press, so a second press duplicates them. `
+        + `Add a condition that blocks a second run, for example {"left":{"expression":{"op":"aggregate","source":{"op":"collection","id":"${collection}"},"fn":"count"}},"op":"eq","right":{"literal":0},"message":"Already added."}. `
+        + 'If the numbers come from current records (totals, shares, balances), compute them with {"expression":...} or show them in a metric or chart instead of typing them in.';
+    });
+}
+
+/** F068: what an AI draft must pass. Manual proposals and rollbacks keep using `tableChangeIssues`. */
+export function aiTableChangeIssues(state: TableState, change: TableChange): string[] {
+  const issues = tableChangeIssues(state, change);
+  return issues.length > 0 ? issues : repeatableFixedCreateIssues(change.program, state.program);
 }
 function isGenerativeArray(value: GenerativeOutput): value is readonly GenerativeScalar[] { return Array.isArray(value); }
 /** The longest seat id any runtime can hand out; probing it bounds output that embeds the seat. */
@@ -578,11 +669,11 @@ function generativeValidationContexts(program: TableProgram, canvas: NonNullable
   return contexts;
 }
 
-function validateGenerativeOutput(program: TableProgram, records: Record<string, TableRecord[]>, actualContext?: GenerativeValidationContext): void {
+function validateGenerativeOutput(program: TableProgram, records: Record<string, TableRecord[]>, actualContext?: GenerativeValidationContext, computeRuns?: TableState['computeRuns'], revisions?: Pick<TableState, 'dataRevision' | 'ruleRevision'>): void {
   if (!program.canvas) return;
   try {
     for (const context of generativeValidationContexts(program, program.canvas, records, actualContext)) {
-      evaluateGenerativeCanvas(program.canvas, { program, records, ...context });
+      evaluateGenerativeCanvas(program.canvas, { program, records, ...(computeRuns ? { computeRuns } : {}), ...(revisions ? { dataRevision: revisions.dataRevision, ruleRevision: revisions.ruleRevision } : {}), allowPendingDerivedCollections: true, ...context });
     }
   } catch (error) {
     throw new DomainError('TABLE_GENERATIVE', error instanceof Error ? error.message : 'The generated canvas could not be evaluated.');
@@ -669,7 +760,120 @@ export interface TableCommandDecision {
   rollParameterId?: string;
 }
 
+function derivedComputeRunId(ctx: ActorContext, moduleId: string, runs: readonly ComputeRunRecord[]): string {
+  const digest = ctx.hash(canonicalJson([ctx.workspaceId, ctx.actorId, ctx.now, moduleId, runs[0]?.runId ?? null])).slice(0, 32).padEnd(32, '0');
+  return digest.slice(0, 8) + '-' + digest.slice(8, 12) + '-4' + digest.slice(13, 16) + '-8' + digest.slice(17, 20) + '-' + digest.slice(20, 32);
+}
+
+function queueComputeRun(state: TableState, payload: unknown, ctx: ActorContext, userRequested: boolean): TableCommandDecision {
+  if (userRequested) requirePermission(ctx, 'data.compute', ['owner', 'participant']);
+  hasRole(ctx, ['owner', 'participant']);
+  const input = parsePayload(z.strictObject({ moduleId: id, runId: z.string().uuid().optional() }), payload);
+  const program = state.program?.compute;
+  assert(program, 'TABLE_COMPUTE_NOT_FOUND', 'There are no saved compute rules on this table.');
+  const module = program.modules.find(item => item.id === input.moduleId);
+  assert(module, 'TABLE_COMPUTE_NOT_FOUND', 'That compute rule is no longer on this table.');
+  const problems = computeProgramProblems(program, state.program!.collections, state.sources);
+  assert(problems.length === 0, 'TABLE_SCHEMA', problems[0]?.message ?? 'The compute rules are invalid.');
+  const runs = state.computeRuns ?? [];
+  const unfinished = runs.filter(run => run.status === 'queued' || run.status === 'running');
+  assert(!unfinished.some(run => run.moduleId === module.id) && unfinished.length < COMPUTE_LIMITS.runHistory,
+    'TABLE_COMPUTE_BUSY', 'This calculation already has a pending run. Wait for it to finish.');
+  const runId = input.runId ?? derivedComputeRunId(ctx, module.id, runs);
+  assert(!runs.some(run => run.runId === runId), 'TABLE_COMPUTE_DUPLICATE', 'That compute run already exists.');
+  const profile: ComputeRuntimeProfile = module.runtimeProfile ?? 'tabletop-compute-1';
+  const run: ComputeRunRecord = {
+    runId, moduleId: module.id, moduleVersion: module.version, runtimeProfile: profile,
+    actorId: ctx.actorId, role: ctx.role, seat: ctx.seat ?? null,
+    status: 'queued', startedAt: ctx.now,
+  };
+  computeRunRecordSchema.parse(run);
+  const next = structuredClone(state);
+  let terminalSlots = COMPUTE_LIMITS.runHistory - unfinished.length - 1;
+  next.computeRuns = [run, ...runs].filter(item => item.status === 'queued' || item.status === 'running' || terminalSlots-- > 0);
+  return { state: next, label: 'Queued ' + module.name + '.' };
+}
+
+function updateComputeRun(state: TableState, payload: unknown, ctx: ActorContext): TableCommandDecision {
+  hasRole(ctx, ['owner', 'participant']);
+  const input = parsePayload(z.strictObject({
+    runId: z.string().uuid(),
+    status: z.enum(['running', 'succeeded', 'failed', 'stale']),
+    inputHash: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
+    sourceIds: z.array(z.string().min(1).max(100)).max(4).optional(),
+    inputProvenance: z.array(z.strictObject({
+      inputId: id, type: z.enum(['text', 'number', 'boolean', 'text-list', 'table']),
+      binding: computeInputBindingSchema,
+      sourceIds: z.array(z.string().min(1).max(100)).max(4),
+      upstreamRunId: z.string().uuid().optional(),
+    })).max(COMPUTE_LIMITS.portsPerModule).optional(),
+    dataRevision: z.number().int().nonnegative().optional(),
+    ruleRevision: z.number().int().nonnegative().optional(),
+    runtimeProfile: z.literal('tabletop-compute-1').optional(),
+    outputs: z.array(z.strictObject({ outputId: id, value: z.unknown() })).max(COMPUTE_LIMITS.outputsPerModule).optional(),
+    errorCode: z.enum(['COMPUTE_UNAVAILABLE', 'COMPUTE_FAILED', 'COMPUTE_INVALID_OUTPUT', 'COMPUTE_STALE']).optional(),
+  }), payload);
+  const next = structuredClone(state);
+  const runIndex = (next.computeRuns ?? []).findIndex(run => run.runId === input.runId);
+  assert(runIndex >= 0, 'TABLE_COMPUTE_NOT_FOUND', 'That compute run has expired from the run history.');
+  const run = next.computeRuns![runIndex]!;
+  const module = next.program?.compute?.modules.find(item => item.id === run.moduleId);
+  if (input.status === 'running') {
+    assert(module && module.version === run.moduleVersion
+      && run.status === 'queued' && input.inputHash && input.sourceIds && input.inputProvenance
+      && input.dataRevision !== undefined && input.ruleRevision !== undefined
+      && input.runtimeProfile === (module.runtimeProfile ?? 'tabletop-compute-1'),
+    'TABLE_COMPUTE_STATE', 'The queued run has incomplete or stale input details.');
+    Object.assign(run, {
+      status: 'running', inputHash: input.inputHash, sourceIds: input.sourceIds,
+      inputProvenance: input.inputProvenance, dataRevision: input.dataRevision,
+      ruleRevision: input.ruleRevision, runtimeProfile: input.runtimeProfile, startedAt: ctx.now,
+    });
+  } else if (input.status === 'succeeded') {
+    if (run.status === 'running' && (!module || module.version !== run.moduleVersion
+        || run.dataRevision !== next.dataRevision || run.ruleRevision !== next.ruleRevision)) {
+      Object.assign(run, { status: 'stale', errorCode: 'COMPUTE_STALE', completedAt: ctx.now });
+      delete run.outputs;
+      return { state: next, label: 'The input changed before this result could be saved.' };
+    }
+    assert(module && module.version === run.moduleVersion && run.status === 'running',
+      'TABLE_COMPUTE_STALE', 'The compute rule changed before its run could finish.');
+    assert(input.outputs, 'TABLE_COMPUTE_STATE', 'A successful compute run must include outputs.');
+    let result: ReturnType<typeof validateComputeOutputs>;
+    try {
+      result = validateComputeOutputs(module, { outputs: Object.fromEntries(input.outputs.map(output => [output.outputId, output.value])) });
+      // Derived cards obey the target collection's field contract even though source rows stay untouched.
+      for (const port of module.outputs) {
+        if (!port.collectionId) continue;
+        const collection = next.program!.collections.find(item => item.id === port.collectionId);
+        const table = result.outputs[port.id];
+        if (!collection || !isComputeTableValue(table)) throw new Error('COMPUTE_INVALID_OUTPUT');
+        for (const row of table.rows) for (const field of collection.fields) {
+          if (!value.safeParse(row[field.id]).success || !validValue(field, row[field.id])) throw new Error('COMPUTE_INVALID_OUTPUT');
+        }
+      }
+    } catch {
+      throw new DomainError('COMPUTE_INVALID_OUTPUT', 'The compute result does not match its declared outputs.');
+    }
+    run.status = 'succeeded';
+    run.completedAt = ctx.now;
+    run.outputs = Object.entries(result.outputs).map(([outputId, value]) => ({ outputId, value }));
+    delete run.errorCode;
+  } else {
+    assert(run.status === 'queued' || run.status === 'running', 'TABLE_COMPUTE_STATE', 'Only an unfinished compute job can fail or become stale.');
+    run.status = input.status;
+    run.completedAt = ctx.now;
+    assert(input.status === 'stale' || input.errorCode !== 'COMPUTE_STALE', 'TABLE_COMPUTE_STATE', 'A failed compute run cannot use the stale error code.');
+    run.errorCode = input.status === 'stale' ? 'COMPUTE_STALE' : (input.errorCode ?? 'COMPUTE_FAILED');
+  }
+  computeRunRecordSchema.parse(run);
+  return { state: next, label: input.status === 'succeeded' ? 'Compute run completed.' : 'Compute run ' + input.status + '.' };
+}
+
 export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): TableCommandDecision | null {
+  if (type === 'table.compute.run') return queueComputeRun(state, payload, ctx, true);
+  if (type === 'table.compute.queue') return queueComputeRun(state, payload, ctx, false);
+  if (type === 'table.compute.update') return updateComputeRun(state, payload, ctx);
   if (type === 'table.import') {
     // F008: any member may add a file; removal stays with the owner.
     requirePermission(ctx, 'files.add', ['owner', 'participant']);
@@ -690,8 +894,14 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   if (type === 'table.removeSource') {
     requirePermission(ctx, 'files.remove', ['owner']); const input = parsePayload(z.strictObject({ sourceId: z.string().min(1).max(100) }), payload);
     assert(state.sources.some(s => s.id === input.sourceId), 'TABLE_FILE', 'Source not found.');
+    const computeSourceUsed = (program: TableProgram | null | undefined) => program?.compute?.modules.some(module =>
+      module.inputs.some(port => port.binding.kind === 'source' && port.binding.sourceId === input.sourceId)) ?? false;
+    const computeRunSourceUsed = (state.computeRuns ?? []).some(run => run.sourceIds?.includes(input.sourceId));
     assert(!state.program?.evidence.some(e => e.sourceId === input.sourceId)
-      && !state.revisions.some(r => r.snapshot.kind === 'table' && r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId)),
+      && !computeSourceUsed(state.program)
+      && !computeRunSourceUsed
+      && !state.revisions.some(r => r.snapshot.kind === 'table'
+        && (r.snapshot.program.evidence.some(e => e.sourceId === input.sourceId) || computeSourceUsed(r.snapshot.program))),
       'TABLE_EVIDENCE', 'An active or retained rule revision cites this source. Keep it with the room.');
     const next: TableState = { ...structuredClone(state), sources: state.sources.filter(s => s.id !== input.sourceId), dataRevision: state.dataRevision + 1, candidate: null };
     // F054: removing a file moves the Files card's update time, but never invents a creation time.
@@ -716,16 +926,23 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     requirePermission(ctx, 'data.import', ['owner']);
     const input = parsePayload(z.strictObject({
       collection: id,
-      rows: z.array(z.record(z.string().min(1).max(100), value)).min(1).max(100),
+      mode: z.enum(['append', 'replace']).optional(),
+      rows: z.array(z.record(z.string().min(1).max(100), value)).max(100),
+    }).superRefine((request, context) => {
+      if ((request.mode ?? 'append') === 'append' && request.rows.length === 0) {
+        context.addIssue({ code: 'custom', path: ['rows'], message: 'Add at least one row when appending.' });
+      }
     }), payload);
     const program = state.program;
     assert(program, 'TABLE_INACTIVE', 'Review and activate the table rules first.');
     const collection = program.collections.find(item => item.id === input.collection);
     assert(collection, 'TABLE_SCHEMA', 'Choose an existing collection.');
+    assert(!program.compute?.modules.some(module => module.outputs.some(output => output.collectionId === collection.id)),
+      'TABLE_INPUT', 'Import rows into a raw collection, not a derived compute output.');
     const nextActionRevision = (state.actionRevision ?? 0) + 1;
     assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
     const next = structuredClone(state);
-    const existing = next.records[collection.id] ?? [];
+    const existing = input.mode === 'replace' ? [] : next.records[collection.id] ?? [];
     const created: TableRecord[] = [];
     input.rows.forEach((raw, index) => {
       const rowNumber = index + 1;
@@ -751,13 +968,15 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
       assert(!existing.some(row => row.id === recordId) && !created.some(row => row.id === recordId), 'TABLE_INPUT', 'A generated record identifier collision prevented this import. No rows were imported.');
       created.push({ id: recordId, values });
     });
-    next.records[collection.id] = [...existing, ...created];
+    next.records[collection.id] = input.mode === 'replace' ? created : [...existing, ...created];
     // Validate the whole table once, so a limit or unique violation imports nothing.
     checkRows(program, next.records);
-    validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
+    validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn }, state.computeRuns, state);
     next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
     next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-100);
-    return { state: next, label: `Imported ${created.length} rows into ${collection.title}.` };
+    return { state: next, label: input.mode === 'replace'
+      ? `Replaced ${collection.title} with ${created.length} rows.`
+      : `Imported ${created.length} rows into ${collection.title}.` };
   }
   if (type === 'table.addNote' || type === 'table.updateNote' || type === 'table.moveNote' || type === 'table.removeNote') {
     // F037: any member may keep shared notes on the canvas.
@@ -831,7 +1050,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   }
   const nextActionRevision = (state.actionRevision ?? 0) + 1;
   assert(Number.isSafeInteger(nextActionRevision), 'TABLE_LIMIT', 'The table action counter reached its limit.');
-  const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: resolvedInputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn });
+  const evaluateExpression = createGenerativeExpressionSession({ program, records: state.records, inputs: resolvedInputs, action, actor: ctx.actorId, seat: ctx.seat, turn: state.turn, computeRuns: state.computeRuns, dataRevision: state.dataRevision, ruleRevision: state.ruleRevision });
   for (const c of action.conditions) assert(conditionPass(c.op, resolve(action, state, resolvedInputs, c.left, ctx, evaluateExpression), resolve(action, state, resolvedInputs, c.right, ctx, evaluateExpression)), 'TABLE_CONDITION', c.message);
   const next = structuredClone(state), touched = new Set<string>();
   if (consumedRoll && consumedRollParameterId) {
@@ -871,7 +1090,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   }
   checkRows(program, next.records);
   if (action.advanceTurn) next.turn = program.turnOrder[(program.turnOrder.indexOf(state.turn ?? '') + 1) % program.turnOrder.length];
-  validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn });
+  validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn }, state.computeRuns, state);
   next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
   next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-100);
   return {

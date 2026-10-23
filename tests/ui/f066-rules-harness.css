@@ -1,0 +1,56 @@
+/* Small shell for rendering the actual Rules and collection components outside React Flow. */
+html { background: var(--tt-cream-2); }
+body { min-width: 0; min-height: 100vh; margin: 0; background: var(--tt-cream-2); }
+#root { min-height: 100vh; }
+.tt-app.tt-f066-harness {
+  position: relative;
+  width: 100%;
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+  overflow-x: clip;
+  padding-bottom: 128px;
+  background: var(--tt-cream-2);
+}
+.tt-f066-harness__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tt-space-3);
+  padding: var(--tt-space-4) max(var(--tt-space-4), calc((100vw - 1240px) / 2));
+  border-bottom: 1px solid var(--tt-line);
+  background: var(--tt-cream-0);
+}
+.tt-f066-harness__header h1 { margin: 0; color: var(--tt-ink); font-size: clamp(20px, 3vw, 26px); line-height: 1.2; }
+.tt-f066-harness__header p { margin: var(--tt-space-1) 0 0; color: var(--tt-muted); font-size: 13px; }
+.tt-f066-harness__header button { min-height: 40px; padding: 0 var(--tt-space-3); border: 1px solid var(--tt-line); border-radius: var(--tt-radius-medium); background: var(--tt-paper); color: var(--tt-ink); }
+.tt-f066-harness__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+  align-items: start;
+  gap: var(--tt-space-4);
+  width: min(1240px, calc(100% - 32px));
+  margin: 0 auto;
+  padding-block: var(--tt-space-4);
+}
+.tt-f066-harness__column { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--tt-space-4); min-width: 0; }
+.tt-f066-harness__card {
+  min-width: 0;
+  width: 100%;
+  padding: var(--tt-space-4);
+  border: 1px solid var(--tt-card-edge);
+  border-radius: var(--tt-card-radius);
+  background: var(--tt-card-surface);
+  box-shadow: var(--tt-shadow-piece);
+}
+.tt-f066-harness__card > h2 { margin: 0 0 var(--tt-space-3); color: var(--tt-muted); font-size: var(--tt-type-small); font-weight: 650; }
+.tt-f066-harness__card .tt-canvas-inline { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.tt-f066-harness__card .tt-canvas-inline__heading { box-sizing: border-box; width: 100%; min-width: 0; }
+.tt-f066-harness__card .tt-table-grid-scroll { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; }
+.tt-f066-harness__chat-title { margin: 0 0 var(--tt-space-2); color: var(--tt-ink); font-size: var(--tt-type-title); }
+.tt-f066-harness__chat-note { margin: 0; color: var(--tt-muted); font-size: var(--tt-type-small); line-height: 1.5; }
+.tt-f066-harness__sent-prompt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: pre-wrap; }
+@media (max-width: 700px) {
+  .tt-f066-harness__header { align-items: flex-start; flex-direction: column; }
+  .tt-f066-harness__main { grid-template-columns: minmax(0, 1fr); width: min(560px, calc(100% - 20px)); padding-block: var(--tt-space-3); }
+}

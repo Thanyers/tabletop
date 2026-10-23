@@ -28,7 +28,7 @@ export interface TableSurfaceProps extends Omit<WorkbenchProps, 'plan'> {
   emptyContent?: ReactNode;
   openedObjectId?: string | null;
   onOpenObject?: (id: string | null) => void;
-  onEditRules?: () => void;
+  onEditRules?: (prompt?: string) => void;
   onInvite?: () => void;
   aiContent?: ReactNode;
   assistantContent?: ReactNode;

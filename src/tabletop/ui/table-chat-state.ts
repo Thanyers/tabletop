@@ -1,10 +1,17 @@
 import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, tailWithin, type ModelFailureDetails, type ModelTimeoutSource } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, parseModelJobResearch, tailWithin, type ModelFailureDetails, type ModelJobResearch, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
 import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
-export interface TableChatRequestContext { prompt: string; hasCreateAction: boolean; /** A card the message is about (chat reference). */ referencedCard?: boolean }
+export interface TableChatRequestContext {
+  prompt: string;
+  hasCreateAction: boolean;
+  /** A canvas card the message is about (chat reference). */
+  referencedCard?: boolean;
+  /** A specific rule/module the message is about (stable server-resolved reference). */
+  referencedRule?: boolean;
+}
 
 const CARD_CHANGE = /\b(?:harder|easier|more|less|remove|rename|add|make|change|edit|extend)\b|ยาก|ง่าย|ลด|ลบ|เปลี่ยน|เอาออก|เพิ่ม|ปรับ|แก้/iu;
 const QUESTION_LEAD = /^(?:(?:how many|how much|what|which|why|when|who|where|explain|summari[sz]e)\b|อธิบาย|สรุป|ทำไม|มี.{0,32}กี่|กี่)/iu;
@@ -14,7 +21,9 @@ export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: b
   if (!hasActiveProgram || explicitDraft) return 'draft';
   if (!request) return 'ask';
   const prompt = request.prompt.trim();
-  // A message about one specific card is a rule change for that card, unless it is a question.
+  // A requested change about one exact rule is a draft, unless it is phrased as a question.
+  if (request.referencedRule && CARD_CHANGE.test(prompt) && !QUESTION_LEAD.test(prompt)) return 'draft';
+  // Keep the original behavior for general canvas cards such as a collection or chart.
   if (request.referencedCard && CARD_CHANGE.test(prompt) && !QUESTION_LEAD.test(prompt)) return 'draft';
   // F047: one classifier shared by every entry point; build/edit become a rule draft, ask/act stay
   // conversational because an action still needs the person's explicit confirmation.
@@ -290,4 +299,63 @@ export function liveThinkingLine(tail: string | undefined, maxChars = LIVE_THINK
   const space = window.indexOf(' ');
   const kept = space > 0 && space < 60 ? window.slice(space + 1) : window;
   return `…${kept.trimStart()}`;
+}
+
+/** F064: how much of the search query the waiting card shows as one line. */
+export const LIVE_SEARCH_QUERY_CHARS = 160;
+
+/**
+ * F064: one line saying what the research step is doing: what it searches, what it found, and then
+ * what the draft actually used. Re-bounded here as well, so a hostile or older job row cannot grow
+ * the card. Returns null when there is nothing worth showing (no search, or no query text yet).
+ */
+export function liveSearchLine(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): string | null {
+  if (!search) return null;
+  if (search.phase === 'done') return `✓ ใช้ ${search.resultsCount} แหล่ง`;
+  const query = headWithin(search.query.replace(/\s+/gu, ' ').trim(), maxQueryChars).trim();
+  if (!query) return null;
+  return search.phase === 'reading'
+    ? `🔎 กำลังค้น: ${query} · เจอ ${search.resultsCount}`
+    : `🔎 กำลังค้น: ${query}`;
+}
+
+/** F064 slice B: how much of a source title the card shows before the row wraps. */
+export const DRAFT_SOURCE_TITLE_CHARS = 140;
+
+/** F064 slice B: one source row, already re-validated and re-bounded for display. */
+export interface DraftSource {
+  title: string;
+  url: string;
+  /** Publication date as a readable label, or an empty string when the provider had none. */
+  dateLabel: string;
+  /** 0-4, where 4 is an official source. */
+  authority: number;
+}
+
+/** F064 slice B: `26 Jul 2026`, or nothing when the provider gave no usable date. */
+export function formatSourceDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return '';
+  return new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** F064 slice B: the collapsed label; the count tells a member whether it is worth opening. */
+export function draftSourcesLabel(count: number): string {
+  return `Sources (${count})`;
+}
+
+/**
+ * F064 slice B: the sources a finished draft shows, re-validated and re-bounded here as well, so an
+ * older or hostile job row can never render a link the server would refuse.
+ */
+export function draftSources(research: ModelJobResearch | undefined): DraftSource[] {
+  const parsed = parseModelJobResearch(research);
+  if (!parsed) return [];
+  return parsed.sources.map((source) => ({
+    title: headWithin(source.title, DRAFT_SOURCE_TITLE_CHARS),
+    url: source.url,
+    dateLabel: formatSourceDate(source.date),
+    authority: source.authority,
+  }));
 }

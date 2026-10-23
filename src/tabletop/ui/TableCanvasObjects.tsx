@@ -15,8 +15,10 @@ import type { Command, WorkbenchProps } from './types';
 import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
 import { applyTableCandidate } from './table-candidate-apply';
 import { NoteCard } from './NoteCard';
-import { autoMapping, buildImportRows, parseCsv } from './table-row-import';
+import { autoMapping, buildImportRows, parseCsv, worksheetToCsvTable } from './table-row-import';
 import { RollParameterControl } from './RollParameterControl';
+import { RuleChatActions } from './RuleChatActions';
+import { hasLinkedComputeOutput, LinkedComputeOutputs, TableComputeModuleCard } from './TableComputeModuleCard';
 import { serverRollFor, useServerRollsTick } from './roll-store';
 import { describeProgramDiff, diffProgram, ruleBadge, type ProgramDiff, type RuleBadge } from './rules-summary';
 import './record-actions.css';
@@ -30,7 +32,7 @@ interface TableCanvasObjectProps {
   onTableImport?: WorkbenchProps['onTableImport'];
   outputs: Record<string, unknown>;
   expanded?: boolean;
-  onEditRules?: () => void;
+  onEditRules?: (prompt?: string) => void;
 }
 
 const MAX_SOURCE_FILES = 4;
@@ -110,7 +112,7 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
         <small>CSV, JSON, TXT or Markdown · 32 KiB each</small>
         <button type="button" className="tt-button tt-button--quiet" onClick={() => inputRef.current?.click()} disabled={busy !== null || importing}>Choose files</button>
         <input ref={inputRef} type="file" accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown" multiple hidden onChange={onInput} aria-label="Choose table source files" />
-        <details><summary>File limits</summary><small>UTF-8 text · four files, 64 KiB total. PDF and images are not supported. AI requests have a separate 48 KiB input limit including your prompt and current rules.</small></details>
+        <details><summary>File limits</summary><small>UTF-8 text · four files, 64 KiB total. PDF and images are not supported. AI rule requests can carry 128 KiB: your message, these files (files the rules already cite go by name only), the current rules and rows.</small></details>
       </div> : <p className="tt-table-limit-note">{state.sources.length >= MAX_SOURCE_FILES ? 'All four source file slots are in use.' : totalBytes >= MAX_SOURCE_BYTES ? 'The 64 KiB source limit has been reached.' : 'Files cannot be added here.'}</p>}
     </>}
     {error && <p className="tt-table-error" role="alert"><AlertCircle size={14} />{error}</p>}
@@ -194,18 +196,19 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
     return diffProgram(state.program, candidateChange.program, { startingRows });
   }, [candidateChange, state.program]);
   const diffLine = diff ? describeProgramDiff(diff) : '';
-  const ruleCount = program ? program.actions.length + program.invariants.length : 0;
+  const displayProgram = reviewingProposal ? candidateChange?.program ?? null : program;
+  const displayRuleCount = displayProgram ? displayProgram.actions.length + displayProgram.invariants.length + (displayProgram.compute?.modules.length ?? 0) : 0;
 
   return <div className="tt-canvas-inline tt-table-rules">
-    <div className="tt-canvas-inline__heading"><span className="tt-kicker">{isOwner ? 'OWNER REVIEW · SHARED ACTIVE RULES' : 'SHARED ACTIVE RULES'}</span><strong>{program?.title ?? 'Rules and proposal'}</strong><small>{program ? `Active r${state.ruleRevision}` : candidateChange ? 'Proposed, not active' : 'No active program'}</small></div>
-    {isOwner && program && onEditRules && <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || readOnly || Boolean(state.candidate && state.candidate.status !== 'active')} onClick={onEditRules}><Pencil size={13} />Edit rules</button></div>}
-    {!expanded ? <p className="tt-canvas-inline__note">{program ? `${ruleCount} ${ruleCount === 1 ? 'rule' : 'rules'} on ${program.collections.length} ${program.collections.length === 1 ? 'table' : 'tables'} · open to read them.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
+    <div className="tt-canvas-inline__heading"><span className="tt-table-rules__label">{reviewingProposal ? 'Rules to review' : program ? 'Rules in use' : 'Table rules'}</span><strong>{displayProgram?.title ?? 'Your table'}</strong><small>{displayProgram ? `${displayRuleCount} ${displayRuleCount === 1 ? 'rule' : 'rules'} · ${displayProgram.collections.length} ${displayProgram.collections.length === 1 ? 'table' : 'tables'}` : 'No rules yet'}</small></div>
+    {isOwner && program && onEditRules && <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || readOnly || Boolean(state.candidate && state.candidate.status !== 'active')} onClick={() => onEditRules()}><Pencil size={13} />Describe a rule change</button></div>}
+    {!expanded ? <p className="tt-canvas-inline__note">{reviewingProposal ? 'Open to review the proposed rules.' : program ? 'Open to read each rule, ask a question, or request a change.' : 'Add a file, or describe the table you want.'}</p> : <>
       {reviewingProposal && candidateChange ? <>
         <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title">
           <span className="tt-kicker">NOT ACTIVE YET</span>
           <h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3>
           {diffLine && <p className="tt-table-proposal__changes">{diffLine}</p>}
-          <ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} diff={diff} />
+          <ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} diff={diff} view={view} busy={busy} onCommand={onCommand} interactive={false} />
           {isOwner && candidateState?.program?.canvas?.views.length ? <details className="tt-table-private-preview"><summary>Private preview</summary><DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /></details> : null}
         </section>
         {isOwner && <div className="tt-card-cta tt-table-proposal__apply">
@@ -217,8 +220,8 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
 
       {program
         ? reviewingProposal
-          ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /></details>
-          : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} onRemove={canRemove && busy === null ? requestRemoval : undefined} />
+          ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} view={view} busy={busy} onCommand={onCommand} onEditRules={onEditRules} interactive /></details>
+          : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} onRemove={canRemove && busy === null ? requestRemoval : undefined} view={view} busy={busy} onCommand={onCommand} onEditRules={onEditRules} interactive />
         : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
 
       {pendingRemoval && <div className="tt-table-remove-confirm" role="alertdialog" aria-label={`Remove ${pendingRemoval.title}`}>
@@ -232,6 +235,7 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
         <ul className="tt-table-capability-list">{TABLE_CAPABILITIES.supported.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul>
         <details className="tt-table-capability-gaps"><summary>Known gaps ({TABLE_CAPABILITIES.gaps.length})</summary><ul className="tt-table-capability-list">{TABLE_CAPABILITIES.gaps.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul></details>
       </details>
+      <details className="tt-table-advanced-meta"><summary>Advanced table details</summary><p>{program ? `Active rules revision r${state.ruleRevision} · data revision r${state.dataRevision}.` : 'No rules are active yet.'} The owner reviews and applies proposals before they change this table.</p></details>
       {isOwner && state.candidate && <details className={state.candidate.status === 'active' ? 'tt-table-history' : 'tt-table-advanced-checks'}><summary>{state.candidate.status === 'active' ? 'History and restore' : 'Advanced checks'}</summary><CandidateLifecycle view={view} onCommand={onCommand} busy={busy} readOnly={readOnly} /></details>}
       {isOwner && !readOnly && <details className="tt-table-manual-editor"><summary>Advanced manual rule change</summary><p>Paste a prepared table change only if needed. Normal requests can be written in plain language in the AI draft assistant.</p><form onSubmit={proposeManual}><label htmlFor="tt-table-manual-change">Table change</label><textarea id="tt-table-manual-change" rows={7} value={manualChange} onChange={(event) => { setManualChange(event.target.value); setManualError(''); }} placeholder={'{"kind":"table","program":{...},"initialRecords":{...}}'} spellCheck={false} /><small>New tables include initial records. Changes to an active table must preserve its collections and current records.</small>{manualError && <span role="alert" className="tt-table-error">{manualError}</span>}<button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || manualChange.trim().length === 0}>Propose manual change</button></form></details>}
       {!isOwner && <p className="tt-canvas-inline__note">Proposals and review controls are private to the owner. Files, active rules and records are shared with this table.</p>}
@@ -297,7 +301,7 @@ function localSandboxActor(view: WorkspaceView): ActorContext {
   };
 }
 
-type RuleRemoval = { kind: 'action' | 'invariant' | 'view' | 'collection'; id: string; title: string };
+type RuleRemoval = { kind: 'action' | 'invariant' | 'view' | 'collection' | 'compute'; id: string; title: string };
 
 function RemoveRuleButton({ removal, onRemove }: { removal: RuleRemoval; onRemove?: (removal: RuleRemoval) => void }) {
   if (!onRemove) return null;
@@ -309,44 +313,58 @@ function RuleBadgeMark({ badge }: { badge?: RuleBadge }) {
   return <span className={`tt-rule-badge tt-rule-badge--${badge}`}>{badge === 'new' ? 'New' : badge === 'changed' ? 'Edited' : 'Removed'}</span>;
 }
 
-/**
- * The heart of the Rules card: what rules exist, how each one works, and what it
- * applies to. Every rule answers the same three questions in the same order, so a
- * new rule can be read the same way as an old one.
- */
-function ProgramOverview({ program, state, label, change, members, onRemove, diff = null }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void; diff?: ProgramDiff | null }) {
+/** The Rules card keeps abilities, checks, tables, calculations, and views together. */
+function ProgramOverview({ program, state, label, change, members, onRemove, diff = null, view, busy = null, onCommand, onEditRules, interactive = false }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void; diff?: ProgramDiff | null; view?: WorkspaceView; busy?: string | null; onCommand?: WorkbenchProps['onCommand']; onEditRules?: (prompt?: string) => void; interactive?: boolean }) {
   const sources = new Map(state.sources.map((source) => [source.id, source.filename]));
   const evidence = program.evidence ?? [];
   const views = program.canvas?.views ?? [];
+  const canEditRules = Boolean(interactive && onEditRules && view && viewerCan(view, 'rules.draft'));
   // A proposal already states its size in the change line; repeating the counts
   // right under it is the kind of noise this card is meant to lose.
   const changeLine = diff ? describeProgramDiff(diff) : '';
   return <section className="tt-table-program" aria-label={label}>
-    {changeLine ? null : <p className="tt-table-program__summary"><span><strong>{program.actions.length}</strong> {program.actions.length === 1 ? 'rule' : 'rules'}</span><span><strong>{program.collections.length}</strong> {program.collections.length === 1 ? 'table' : 'tables'}</span><span><strong>{program.invariants.length}</strong> {program.invariants.length === 1 ? 'check' : 'checks'}</span></p>}
+    {changeLine ? null : <p className="tt-table-program__summary"><span><strong>{program.actions.length + (program.compute?.modules.length ?? 0)}</strong> {program.actions.length + (program.compute?.modules.length ?? 0) === 1 ? 'ability' : 'abilities'}</span><span><strong>{program.collections.length}</strong> {program.collections.length === 1 ? 'table' : 'tables'}</span><span><strong>{program.invariants.length}</strong> {program.invariants.length === 1 ? 'check' : 'checks'}</span></p>}
     {program.description && <p className="tt-table-program__description">{program.description}</p>}
 
     <details className="tt-table-rule-details" open>
-      <summary>Actions · {program.actions.length}</summary>
+      <summary>Ways to use this table · {program.actions.length}</summary>
       {program.actions.length === 0
-        ? <p className="tt-table-inline-hint">No rule yet. Describe what should happen when someone uses this table.</p>
-        : program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} onRemove={onRemove} badge={ruleBadge(diff, 'action', action.id)} />)}
+        ? <p className="tt-table-inline-hint">No action buttons yet. Describe an action people can use on this table.</p>
+        : program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} onRemove={onRemove} badge={ruleBadge(diff, 'action', action.id)} interactive={interactive} canEdit={canEditRules} onEditRules={onEditRules} />)}
     </details>
 
     {program.invariants.length > 0 && <details className="tt-table-rule-details" open>
-      <summary>Data checks · {program.invariants.length}</summary>
+      <summary>Checks before saving · {program.invariants.length}</summary>
       <ul className="tt-table-check-list">{program.invariants.map((invariant) => <li key={invariant.id}>
-        <div className="tt-table-check-list__body"><strong>{invariant.message}</strong><small>{onLabel(program, invariant.collection)} · {invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(', ')}</small></div>
+        <div className="tt-table-check-list__body"><strong>{invariant.message}</strong><small>Checks {onLabel(program, invariant.collection)} · {invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(', ')}</small></div>
         <RuleBadgeMark badge={ruleBadge(diff, 'check', invariant.id)} />
         <RemoveRuleButton removal={{ kind: 'invariant', id: invariant.id, title: invariant.message }} onRemove={onRemove} />
+        {interactive && <RuleChatActions kind="check" id={invariant.id} title={invariant.message} detail={`data check; ${invariant.message}; applies to ${onLabel(program, invariant.collection)}`} canEdit={canEditRules} onEdit={onEditRules} />}
       </li>)}</ul>
     </details>}
 
     <details className="tt-table-rule-details">
-      <summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>
-      {program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} onRemove={onRemove} badge={ruleBadge(diff, 'table', collection.id)} />)}
+      <summary>Tables and their fields · {program.collections.length}</summary>
+      {program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} onRemove={onRemove} badge={ruleBadge(diff, 'table', collection.id)} interactive={interactive} canEdit={canEditRules} onEditRules={onEditRules} />)}
     </details>
 
-    {onRemove && views.length > 0 && <details className="tt-table-rule-details"><summary>Views · {views.length}</summary><ul className="tt-table-view-list">{views.map((descriptor) => <li key={descriptor.id}><span><strong>{descriptor.title}</strong><small>{descriptor.kind}</small></span><RuleBadgeMark badge={ruleBadge(diff, 'view', descriptor.id)} /><RemoveRuleButton removal={{ kind: 'view', id: descriptor.id, title: descriptor.title }} onRemove={onRemove} /></li>)}</ul></details>}
+    {interactive && (state.computedColumns ?? []).filter((column) => program.collections.some((collection) => collection.id === column.collection)).length > 0 && <details className="tt-table-rule-details">
+      <summary>Calculated fields · {(state.computedColumns ?? []).filter((column) => program.collections.some((collection) => collection.id === column.collection)).length}</summary>
+      {(state.computedColumns ?? []).filter((column) => program.collections.some((collection) => collection.id === column.collection)).map((column) => <section className="tt-table-program__group" key={column.id}>
+        <header className="tt-rule-head"><h4>{column.label}</h4></header>
+        <p className="tt-rule-description">Updates from each row in {onLabel(program, column.collection)}.</p>
+        <details className="tt-compute-advanced"><summary>Formula details</summary><code>{formatComputedExpression(column.expression)}</code></details>
+        <RuleChatActions kind="formula" id={column.id} title={column.label} detail={`calculated field; ${column.label}; collection ${onLabel(program, column.collection)}; formula ${formatComputedExpression(column.expression)}`} canEdit={canEditRules} onEdit={onEditRules} />
+      </section>)}
+    </details>}
+
+    {views.length > 0 && <details className="tt-table-rule-details"><summary>Views · {views.length}</summary><ul className="tt-table-view-list">{views.map((descriptor) => <li key={descriptor.id}><span><strong>{descriptor.title}</strong><small>A {descriptor.kind} view of this table</small></span><RuleBadgeMark badge={ruleBadge(diff, 'view', descriptor.id)} /><RemoveRuleButton removal={{ kind: 'view', id: descriptor.id, title: descriptor.title }} onRemove={onRemove} />{interactive && <RuleChatActions kind="view" id={descriptor.id} title={descriptor.title} detail={`canvas view; ${descriptor.title}; ${descriptor.kind}`} canEdit={canEditRules} onEdit={onEditRules} />}</li>)}</ul></details>}
+
+    {program.compute?.modules.length ? <details className="tt-table-rule-details tt-compute-modules" open>
+      <summary>Calculations · {program.compute.modules.length}</summary>
+      <p className="tt-table-inline-hint">Reusable calculations can power more than one rule or table card. Their latest results stay connected to this table.</p>
+      {view && onCommand ? program.compute.modules.map((module) => <TableComputeModuleCard key={module.id} module={module} program={program} state={state} view={view} busy={busy} onCommand={onCommand} onEditRules={onEditRules} onRemove={onRemove} interactive={interactive} />) : null}
+    </details> : null}
 
     {program.turnOrder.length > 0 && <p className="tt-table-turn-order">Turn order: {program.turnOrder.map((seat) => seat === 'host' ? 'Owner' : seat.replace('member-', 'Member ')).join(' → ')}</p>}
     {change && program.collections.filter((collection) => (change.initialRecords[collection.id] ?? []).length > 0).map((collection) => <ProposedRecords key={`proposed-${collection.id}`} collection={collection} records={change.initialRecords[collection.id] ?? []} members={members} />)}
@@ -362,11 +380,11 @@ function onLabel(program: TableProgram, collectionId: string): string {
   return program.collections.find((collection) => collection.id === collectionId)?.title ?? collectionId;
 }
 
-function CollectionDefinition({ collection, onRemove, badge }: { collection: TableCollection; onRemove?: (removal: RuleRemoval) => void; badge?: RuleBadge }) {
-  return <section className="tt-table-program__group"><header className="tt-rule-head"><h4>{collection.title}</h4><RuleBadgeMark badge={badge} /><RemoveRuleButton removal={{ kind: 'collection', id: collection.id, title: collection.title }} onRemove={onRemove} /></header><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · required' : ' · optional'}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul></section>;
+function CollectionDefinition({ collection, onRemove, badge, interactive = false, canEdit = false, onEditRules }: { collection: TableCollection; onRemove?: (removal: RuleRemoval) => void; badge?: RuleBadge; interactive?: boolean; canEdit?: boolean; onEditRules?: (prompt?: string) => void }) {
+  return <section className="tt-table-program__group"><header className="tt-rule-head"><h4>{collection.title}</h4><RuleBadgeMark badge={badge} /><RemoveRuleButton removal={{ kind: 'collection', id: collection.id, title: collection.title }} onRemove={onRemove} /></header><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · needed' : ''}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul>{interactive && <RuleChatActions kind="table" id={collection.id} title={collection.title} detail={`table fields; ${collection.title}; ${collection.fields.map((field) => `${field.label} (${fieldTypeLabel(field)})`).join(', ')}`} canEdit={canEdit} onEdit={onEditRules} />}</section>;
 }
 
-function ActionDefinition({ action, program, members, onRemove, badge }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void; badge?: RuleBadge }) {
+function ActionDefinition({ action, program, members, onRemove, badge, interactive = false, canEdit = false, onEditRules }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void; badge?: RuleBadge; interactive?: boolean; canEdit?: boolean; onEditRules?: (prompt?: string) => void }) {
   const effects = action.effects.map((effect) => {
     const param = action.parameters.find((item) => item.id === effect.record);
     const collection = param?.collection;
@@ -397,23 +415,24 @@ function ActionDefinition({ action, program, members, onRemove, badge }: { actio
   }
   for (const create of action.creates ?? []) noteTarget(create.collection);
   const appliesTo = targets.size === 0
-    ? 'No shared row changes'
+    ? 'no shared records'
     : [...targets].map(([title, fields]) => fields.size ? `${title} · ${[...fields].join(', ')}` : title).join(' · ');
-  const who = action.roles.includes('owner') && action.roles.includes('participant') ? 'Owner and members' : action.roles.includes('owner') ? 'Owner only' : 'Members';
-  const flags = [action.requireTurn ? 'follows the turn order' : '', action.advanceTurn ? 'advances the turn' : ''].filter(Boolean).join(' · ');
+  const who = action.roles.includes('owner') && action.roles.includes('participant') ? 'everyone at this table' : action.roles.includes('owner') ? 'the owner' : 'members';
+  const flags = action.advanceTurn ? 'Passes the turn to the next player.' : '';
+  const whenClauses = action.conditions.map((condition) => `${operandLabel(condition.left, action, program, members)} ${conditionOperator(condition.op)} ${operandLabel(condition.right, action, program, members)}`);
+  if (action.requireTurn) whenClauses.push('it is the current turn');
+  const when = whenClauses.length > 0 ? whenClauses.join(' and ') : 'someone chooses this rule';
+  const behavior = `When ${when}, it ${effects.length > 0 ? effects.join('; ') : 'does not change shared records'}.`;
+  const explanation = action.description.trim() || (targets.size > 0 ? `Updates ${[...targets.keys()].join(' and ')} when chosen.` : 'Checks the information before the action can continue.');
   return <section className="tt-table-program__group">
     <header className="tt-rule-head"><h4>{action.title}</h4><RuleBadgeMark badge={badge} /><RemoveRuleButton removal={{ kind: 'action', id: action.id, title: action.title }} onRemove={onRemove} /></header>
-    {action.description && <p className="tt-rule-description">{action.description}</p>}
-    <dl className="tt-rule-anatomy">
-      <div><dt>When</dt><dd>{action.conditions.length > 0
-        ? <ul className="tt-table-rule-list">{action.conditions.map((condition, index) => <li key={index}><strong>{operandLabel(condition.left, action, program, members)} {conditionOperator(condition.op)} {operandLabel(condition.right, action, program, members)}</strong><span>{condition.message}</span></li>)}</ul>
-        : <p className="tt-rule-plain">someone uses it</p>}</dd></div>
-      <div><dt>Then</dt><dd>{effects.length > 0
-        ? <ul className="tt-table-effect-list">{effects.map((effect, index) => <li key={index}>{effect}</li>)}</ul>
-        : <p className="tt-rule-plain">nothing changes</p>}</dd></div>
-      <div><dt>Applies to</dt><dd className="tt-rule-applies">{appliesTo}</dd></div>
-    </dl>
-    <p className="tt-rule-meta">{who}{flags ? ` · ${flags}` : ''}</p>
+    <p className="tt-rule-description">{explanation}</p>
+    <p className="tt-rule-meta">For {who} · affects {appliesTo}{flags ? ` · ${flags}` : ''}</p>
+    <details className="tt-rule-failure-details"><summary>How this rule works</summary>
+      <p className="tt-rule-behavior">{behavior}</p>
+      {action.conditions.length > 0 && <><p className="tt-rule-meta">If something does not match</p><ul>{action.conditions.map((condition, index) => <li key={index}>{condition.message}</li>)}</ul></>}
+    </details>
+    {interactive && <RuleChatActions kind="action" id={action.id} title={action.title} detail={`table rule; ${action.title}; ${action.description || behavior}; changes ${appliesTo}`} canEdit={canEdit} onEdit={onEditRules} />}
   </section>;
 }
 
@@ -427,6 +446,8 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   const collectionId = node.id.slice('table.collection.'.length);
   const collection = state.program?.collections.find((item) => item.id === collectionId);
   const rows = (node.inputs.rows as TableRecord[] | undefined) ?? state.records[collectionId] ?? [];
+  const computeWriter = state.program?.compute?.modules.some((module) => module.outputs.some((output) => output.type === 'table' && output.collectionId === collectionId)) ?? false;
+  const hasCalculatedRows = hasLinkedComputeOutput(collectionId, state);
   const computed = (state.computedColumns ?? []).filter((column) => column.collection === collectionId);
   // F055: prefer the authority's numbers for the state on screen; a local candidate preview
   // (different dataRevision) falls back to the same bounded evaluator.
@@ -477,9 +498,11 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
 
   return <div className="tt-canvas-inline tt-table-collection">
     <div className="tt-canvas-inline__heading"><span className="tt-kicker">SHARED RECORDS</span><strong>{collection?.title ?? node.title}</strong><small>{rows.length} {rows.length === 1 ? 'record' : 'records'} · data r{state.dataRevision}</small></div>
+    {collection && <LinkedComputeOutputs collectionId={collectionId} state={state} view={view} expanded={expanded} />}
     {expanded && collection && viewerCan(view, 'data.columns') && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
-    {expanded && collection && viewerCan(view, 'data.import') && <TableRowImport collection={collection} busy={busy} onCommand={onCommand} />}
-    {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">No records are available in this collection.</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => { const serverRow = serverValues?.[collectionId]?.[row.id]; const value = serverRow && column.id in serverRow ? serverRow[column.id] : computeRecordRow(computed, collectionId, row)[column.id]; return <td key={column.id}>{formatComputed(value)}</td>; })}</tr>)}</tbody></table></div>}
+    {expanded && collection && viewerCan(view, 'data.import') && !computeWriter && <TableRowImport collection={collection} existingRows={state.records[collectionId]?.length ?? 0} busy={busy} onCommand={onCommand} />}
+    {expanded && collection && computeWriter && <p className="tt-table-readonly-inline" role="status">This table is filled by a calculation. Run it from Rules to refresh these results; rows cannot be imported directly here.</p>}
+    {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && !hasCalculatedRows && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">{hasCalculatedRows ? 'No source records are available. Calculated results are shown above.' : 'No records are available in this collection.'}</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => { const serverRow = serverValues?.[collectionId]?.[row.id]; const value = serverRow && column.id in serverRow ? serverRow[column.id] : computeRecordRow(computed, collectionId, row)[column.id]; return <td key={column.id}>{formatComputed(value)}</td>; })}</tr>)}</tbody></table></div>}
     {expanded && selectedRecord && <section className="tt-table-record-actions" aria-label={`Actions for ${recordLabel(selectedRecord, collection, view.members)}`}>
       <div><strong>{recordLabel(selectedRecord, collection, view.members)}</strong></div>
       {eligibleActions.length === 0 ? <p className="tt-canvas-inline__note">{collectionActions.length === 0 ? 'No table actions use this collection.' : `Actions for this collection are limited to ${formatActionRoles(collectionActions)}.`}</p> : <>
@@ -551,45 +574,91 @@ function TableComputedColumns({ collection, state, busy, onCommand }: {
   </section>;
 }
 
-function TableRowImport({ collection, busy, onCommand }: {
+function TableRowImport({ collection, existingRows, busy, onCommand }: {
   collection: TableCollection;
+  existingRows: number;
   busy: string | null;
   onCommand: WorkbenchProps['onCommand'];
 }) {
   const [open, setOpen] = useState(false);
   const [csv, setCsv] = useState('');
-  const parsed = useMemo(() => parseCsv(csv), [csv]);
+  const [worksheet, setWorksheet] = useState<ReturnType<typeof worksheetToCsvTable> | null>(null);
+  const [fileName, setFileName] = useState('');
+  const parsed = useMemo(() => worksheet ?? parseCsv(csv), [worksheet, csv]);
   const [mapping, setMapping] = useState<Record<number, string>>({});
+  const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
+  const [replaceConfirmed, setReplaceConfirmed] = useState(false);
+  const [readingFile, setReadingFile] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   const detailId = `${useId().replace(/:/g, '')}-tt-import`;
-  useEffect(() => { setMapping(autoMapping(parsed.headers, collection.fields)); }, [parsed, collection]);
+  useEffect(() => { setMapping(autoMapping(parsed.headers, collection.fields)); setReplaceConfirmed(false); }, [parsed, collection]);
   const preview = useMemo(() => buildImportRows(parsed, mapping, collection.fields), [parsed, mapping, collection]);
-  const canImport = preview.rows.length > 0 && preview.rows.length <= 100 && preview.invalid.length === 0 && busy === null && !pending;
+  const hasHeaders = parsed.headers.some((header) => header.length > 0);
+  const enoughRows = importMode === 'replace' ? hasHeaders : preview.rows.length > 0;
+  const canImport = enoughRows && preview.rows.length <= 100 && preview.invalid.length === 0 && (importMode !== 'replace' || replaceConfirmed) && busy === null && !pending && !readingFile;
   const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 32 * 1024) { setMessage('CSV files must be 32 KiB or smaller.'); return; }
-    setMessage(''); setCsv(await file.text()); setOpen(true);
+    const fileInput = event.currentTarget;
+    setMessage(''); setCsv(''); setWorksheet(null); setFileName(''); setReplaceConfirmed(false); setOpen(true);
+    if (file.size > 32 * 1024) { setMessage('Files must be 32 KiB or smaller.'); fileInput.value = ''; return; }
+    setReadingFile(true);
+    try {
+      if (/\.xlsx$/iu.test(file.name)) {
+        const { readSheet } = await import('read-excel-file/browser');
+        const firstWorksheet = await readSheet(file, 0);
+        const table = worksheetToCsvTable(firstWorksheet);
+        if (!table.headers.some((header) => header.length > 0)) throw new Error('The first worksheet needs a header row.');
+        setWorksheet(table);
+      } else if (/\.csv$/iu.test(file.name) || file.type === 'text/csv' || file.type === 'text/plain') {
+        setCsv(await file.text());
+      } else {
+        throw new Error('Choose a .csv or .xlsx file.');
+      }
+      setFileName(file.name);
+    } catch (error) {
+      setMessage(error instanceof Error && error.message === 'The first worksheet needs a header row.'
+        ? error.message
+        : 'This file could not be read. Use a valid .csv or .xlsx file.');
+    } finally {
+      setReadingFile(false);
+      fileInput.value = '';
+    }
   };
   const runImport = async () => {
     setPending(true); setMessage('');
     try {
-      const result = await onCommand('table.importRows', { collection: collection.id, rows: preview.rows });
-      if (result) { setMessage(`Imported ${preview.rows.length} rows into ${collection.title}.`); setCsv(''); }
+      const result = await onCommand('table.importRows', { collection: collection.id, rows: preview.rows, mode: importMode });
+      if (result) {
+        setMessage(importMode === 'replace'
+          ? preview.rows.length === 0 ? `Removed all rows from ${collection.title}.` : `Replaced ${existingRows} rows with ${preview.rows.length} rows in ${collection.title}.`
+          : `Added ${preview.rows.length} rows to ${collection.title}.`);
+        setCsv(''); setWorksheet(null); setFileName(''); setReplaceConfirmed(false);
+      }
       else setMessage('Import failed. Fix the invalid rows and try again.');
     } finally { setPending(false); }
   };
   return <section className="tt-table-import" aria-label={`Import rows into ${collection.title}`}>
     {!open ? <button type="button" className="tt-button tt-button--quiet" disabled={busy !== null} onClick={() => setOpen(true)}>Import rows</button> : <>
-      <div className="tt-table-import__head"><strong>Import rows into {collection.title}</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => { setOpen(false); setCsv(''); setMessage(''); }}>Close</button></div>
-      <label className="tt-table-import__file">CSV file<input type="file" accept=".csv,text/csv,text/plain" onChange={(event) => void chooseFile(event)} /></label>
-      <label htmlFor={detailId}>Or paste CSV<textarea id={detailId} rows={5} value={csv} placeholder={'sku,qty\nCAM-1,4'} onChange={(event) => setCsv(event.target.value)} aria-describedby={`${detailId}-summary`} /></label>
+      <div className="tt-table-import__head"><strong>Import rows into {collection.title}</strong><button type="button" className="tt-button tt-button--quiet" onClick={() => { setOpen(false); setCsv(''); setWorksheet(null); setFileName(''); setMessage(''); setReplaceConfirmed(false); }}>Close</button></div>
+      <label className="tt-table-import__file">Choose a CSV or Excel file<input type="file" accept=".csv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => void chooseFile(event)} /></label>
+      {fileName && <p className="tt-table-import__file-name">{fileName}{worksheet ? ' · first worksheet' : ' · CSV rows'}</p>}
+      {readingFile && <p className="tt-table-import__summary" role="status">Reading file…</p>}
+      <label htmlFor={detailId}>Or paste CSV<textarea id={detailId} rows={5} value={csv} placeholder={'sku,qty\nCAM-1,4'} onChange={(event) => { setWorksheet(null); setFileName(''); setCsv(event.target.value); setMessage(''); setReplaceConfirmed(false); }} aria-describedby={`${detailId}-summary`} /></label>
       {parsed.headers.length > 0 && <div className="tt-table-import__mapping">{parsed.headers.map((header, index) => <label key={`${index}-${header}`}>{header || `Column ${index + 1}`}<select value={mapping[index] ?? ''} onChange={(event) => { const value = event.target.value; setMapping((current) => ({ ...current, [index]: value })); }}><option value="">Ignore</option>{collection.fields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label>)}</div>}
+      {hasHeaders && <fieldset className="tt-table-import__mode"><legend>What should happen to these rows?</legend>
+        <label><input type="radio" name={`${detailId}-mode`} value="append" checked={importMode === 'append'} onChange={() => { setImportMode('append'); setReplaceConfirmed(false); }} /><span>Add rows · keep the current {existingRows} rows</span></label>
+        <label><input type="radio" name={`${detailId}-mode`} value="replace" checked={importMode === 'replace'} onChange={() => { setImportMode('replace'); setReplaceConfirmed(false); }} /><span>Replace all {existingRows} current rows with {preview.rows.length} prepared rows</span></label>
+      </fieldset>}
       <p id={`${detailId}-summary`} className="tt-table-import__summary" role="status">{preview.rows.length} {preview.rows.length === 1 ? 'row' : 'rows'} ready · {preview.invalid.length} invalid{preview.ignoredHeaders.length > 0 ? ` · ignored: ${preview.ignoredHeaders.join(', ')}` : ''}</p>
       {preview.invalid.length > 0 && <ul className="tt-table-error">{preview.invalid.slice(0, 3).map((item) => <li key={item.row}>Row {item.row}: {item.message}</li>)}</ul>}
       {preview.rows.length > 100 && <p className="tt-table-error" role="alert">Import at most 100 rows per command.</p>}
-      <button type="button" className="tt-button tt-button--primary" disabled={!canImport} onClick={() => void runImport()}>{pending ? 'Importing…' : `Import ${preview.rows.length} rows`}</button>
+      {importMode === 'replace' && hasHeaders && <>
+        <p className="tt-table-import__replace-warning" role="status">This will replace {existingRows} existing rows in {collection.title} with {preview.rows.length} prepared rows. The import runs only after you confirm.</p>
+        <label className="tt-table-import__confirm"><input type="checkbox" checked={replaceConfirmed} onChange={(event) => setReplaceConfirmed(event.target.checked)} /><span>Yes, replace all {existingRows} existing rows with these {preview.rows.length} rows.</span></label>
+      </>}
+      <button type="button" className="tt-button tt-button--primary" disabled={!canImport} onClick={() => void runImport()}>{pending || readingFile ? 'Preparing…' : importMode === 'replace' ? `Replace ${existingRows} rows with ${preview.rows.length}` : `Add ${preview.rows.length} rows`}</button>
       {message && <p className="tt-table-inline-hint" role="status">{message}</p>}
     </>}
   </section>;

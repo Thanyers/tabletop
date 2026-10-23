@@ -5,6 +5,35 @@
 
 ## Lessons
 
+### 2026-10-23 — ขยายงาน compute/Rules ไปไล่ scene/camera หลัง merge
+- **What happened:** หลังงานหลักผ่าน PR validation และรวม dev แล้ว ใช้เวลาตรวจ generated-scene drag failure ในชุดรวมต่อจนผู้ใช้ทักว่านอกเรื่อง
+- **Root cause:** ถือว่าต้องแก้ทุก failure หลัง merge ทั้งที่ขอบเขตผู้ใช้คือ reusable compute/Rules และความพร้อมบนเว็บยังแยกจากสถานะ release
+- **Correct behavior:** แยก failure ที่เกิดจากงานตนและ failure ส่วนอื่นก่อนลงมือ เก็บเทสต์ capability ที่งานตนเปลี่ยนให้ถูก รายงาน CI ส่วนอื่นตรงตามผลจริง และหยุดการแก้ runtime นอกขอบเขตเมื่อผู้ใช้ย้ำขอบเขต อย่าทำให้คำว่า feature ยังไม่ release กลายเป็นข้ออ้างเปิดงานแก้ส่วนอื่น
+
+### 2026-10-23 — เพิ่ม compute capability แต่ browser ยังตรวจจำนวนและชื่อช่องว่างเดิม
+- **What happened:** full CI หลัง #208 ล้มที่ Rules capability summary เพราะคาด 8 capabilities แต่ของจริงมี 9 และชื่อ gap ของ stored relations เปลี่ยนแล้ว
+- **Root cause:** เพิ่มรายการ compute และแก้ copy หลัง browser suite ในเครื่องรอบก่อนหน้า แต่ไม่ได้ปรับ assertion สองจุดตามกัน
+- **Correct behavior:** เทียบจำนวนบน UI กับ `/api/capabilities` และยืนยันรายการใหม่ `compute` กับข้อความ Reusable calculations โดยตรง พร้อมตรวจ gap ที่ยังมีจริง รัน browser suite หลังเปลี่ยน catalog/copy ที่ใช้ใน Rules ก่อน merge
+
+### 2026-10-23 — มาตรวัด AI context ไม่รวม capability ที่ backend เติม
+- **What happened:** หลังรวม F067 กับ reusable compute เทสต์ payload equality ใน CI ได้ 2,338 bytes แต่ UI helper นับ 2,236 bytes
+- **Root cause:** ทั้งสองใช้ตัวสร้างส่วนโต๊ะร่วมกันแล้ว แต่ backend เติม `computeCapabilities` ภายหลังโดย UI ไม่ได้รับข้อมูลชุดนี้
+- **Correct behavior:** ส่ง capability ที่เปิดจริงผ่าน endpoint ใช้ตัวสร้าง payload เดียวกันทั้ง provider และมาตรวัด รวม metadata ที่รู้ก่อนส่ง และคงเทสต์เทียบ bytes จริงไว้; research/repair ที่รู้ภายหลังให้ระบุขอบเขตและตรวจเพดานที่ backend หลัง merge งานที่แตะ contract เดียวกันต้องรันชุด Cloudflare อีกครั้งก่อน push
+
+### 2026-10-23 — Browser harness ใช้ assets เก่าแล้ว build ลบไฟล์ระหว่างทดสอบ
+- **What happened:** browser suite นำทางเข้าห้องใหม่แล้วได้ HTTP response failure หลัง suite เริ่มผ่านหลายข้อ
+- **Root cause:** สั่ง Vite build ระหว่าง Miniflare harness ยังทำงาน; asset manifest ของ process เดิมชี้ไฟล์ที่ build ใหม่ลบไป
+- **Correct behavior:** รอ browser processes จบก่อนสร้าง `dist/worker-build` ใหม่ จากนั้นเริ่ม harness ใหม่กับ build ชุดเดียวที่คงที่จนจบ รัน browser suites ขนานกันได้เฉพาะเมื่อทุก suite อ่าน artifacts อย่างเดียว
+
+### 2026-10-23 — Compute ผ่าน runner/unit แต่เส้นทางห้องจริงไม่เริ่มงาน
+- **What happened:** โปรแกรมจาก AI รันใน container โดยตรงได้ แต่ authority ไม่จัดคิวหรือจบด้วย failure ก่อนเรียก runner
+- **Root cause:** ช่วงแรกผูก durable job กับ HTTP session และส่งค่า CSRF ที่ hash แล้วเข้า raw-value comparison อีกครั้ง; mocks ไม่ตรวจ authentication จริง อีก race คือ schedule ทิ้ง wakeup ที่มาตอน drain กำลังจบ
+- **Correct behavior:** ตรวจ session ตอนรับคำขอ; งานที่รับแล้วใช้ actor/membership/permission/epoch ที่ตรวจใหม่ก่อนรันและก่อน commit ตาม [durable-job policy](docs/REUSABLE_COMPUTE.md) ไม่เก็บ token ใน run ทดสอบผ่าน HTTP authority จริงรวม restart/alarm และเก็บ dirty flag เพื่อ drain อีกครั้งเมื่อมีสถานะเปลี่ยนระหว่างงานกำลังรัน หากใช้ raw-value hash helper ใน request path ต้องส่ง raw token ไม่ใช่ hash
+### 2026-10-23 — F066 merge แล้ว Worker บูตไม่ขึ้น ทั้งที่ unit test และ CI ผ่าน
+- **What happened:** หลัง #212 merge emulator ล้มตอน start ด้วย `Uncaught ReferenceError: TABLE_AI_INPUT_BYTES is not defined` · `test:cloudflare` 158/158 และ CI เขียว
+- **Root cause:** ค่าคงที่ระดับ module (`MAX_CHANGE_REQUEST_BYTES = TABLE_AI_INPUT_BYTES + …` ใน provider, `MAX_INPUT_TOKENS` ใน billing) อ่าน export จาก `domain/table.ts` ซึ่งอยู่ในวงจร import ของ bundle Worker จึงยังไม่ถูกตั้ง · vitest โหลด module คนละลำดับ และ CI ของ PR เข้า `dev` ไม่บูต Worker (ชุด browser ถูก skip)
+- **Correct behavior:** ค่าคงที่ที่ module อื่นอ่านตอนโหลด ให้อยู่ใน leaf module ที่ไม่ import อะไร (เช่น `src/tabletop/shared/ai-request-limits.ts`) · หลังแก้ไฟล์ใต้ `cloudflare/` หรือ `server/providers/` ให้บูต Worker จริงก่อนเปิด PR: `npm run dev:cloudflare` แล้วรอเห็น `Ready on http://127.0.0.1:8787` (หรือดู terminal ของ emulator ที่รันอยู่ว่า reload แล้วไม่มี `✘ [ERROR]`)
+
 ### 2026-10-23 — DSH plugin นอก linked profile หา SDK ไม่พบ และ hook context อาจตัดกติกาท้ายไฟล์
 - **What happened:** absolute module จาก home patch import `@deepseek-ai/dsh-llm` แบบ bare ไม่สำเร็จ; AGENTS เดิมยาวเกินงบ additionalContext ของ Claude
 - **Root cause:** module นอก linked package ไม่ร่วม peer resolution ของ profile และ Claude ส่ง context เกิน 10,000 ตัวอักษรเป็น preview

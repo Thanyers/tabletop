@@ -14,7 +14,13 @@ export interface Env {
   AI_DAILY_BUDGET_MICRO_USD?: string;
   /** F045: whole-job stop for a rule draft, in milliseconds (default 240000, max 300000). */
   AI_TABLE_DEADLINE_MS?: string;
+  /** F064: set to `off` to draft without the native web-research step. */
+  TABLE_WEB_SEARCH?: string;
   TABLE_READ_ONLY?: string;
+  /** F066: WorkerLoader module binding used for isolated generated JavaScript. */
+  COMPUTE_LOADER?: WorkerLoader;
+  /** F066: opt in to Python execution inside the room's isolated container. */
+  TABLE_COMPUTE_PYTHON?: string;
 }
 
 export interface Account {

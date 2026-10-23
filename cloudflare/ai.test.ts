@@ -1,12 +1,15 @@
 import { env } from 'cloudflare:workers';
+import { tableDraftBytes } from '../src/tabletop/shared/table-draft-input.js';
 import { runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { createDomain } from '../src/tabletop/domain/index.js';
 import type { ActorContext, CaseKind, ChangeSet, Member, WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
-import { proposeChange, type AIProposalRequest } from './ai.js';
+import { proposeChange, researchSummary, searchChangeProgress, type AIProposalRequest } from './ai.js';
+import { MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelStreamFailure, measureDeepSeekChangeRequest, type DeepSeekChangeInput, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import type { Env } from './contracts.js';
+import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 const testEnv = env as Env;
 
@@ -239,11 +242,15 @@ describe('Cloudflare AI proposal helper', () => {
     const input = request('table');
     const table = input.workspace.domain;
     if (table.kind !== 'table') throw new Error('Expected table fixture.');
+    const computeCapabilities = computeRuntimeCapabilities({
+      javascript: Boolean(testEnv.COMPUTE_LOADER),
+      python: testEnv.TABLE_COMPUTE_PYTHON === 'enabled',
+    });
     const measuredInput: DeepSeekChangeInput = {
       kind: 'table', prompt: input.prompt,
       sources: table.sources.map(({ id, filename, text }) => ({ id, filename, text })),
       program: table.program, turn: table.turn,
-      records: table.records,
+      records: table.records, computeCapabilities,
     };
     const requestBytes = measureDeepSeekChangeRequest(measuredInput);
     let observed = '';
@@ -262,7 +269,7 @@ describe('Cloudflare AI proposal helper', () => {
         sources: [{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
         program: null,
         turn: null,
-        records: {},
+        records: {}, computeCapabilities,
       });
     }));
     expect(result.change).toEqual(proposal('table'));
@@ -300,13 +307,34 @@ describe('Cloudflare AI proposal helper', () => {
     table.sources.push({ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n', sha256: 'b'.repeat(64), createdAt: 1 });
     expect(change.program.evidence.some((item) => item.sourceId === 'source_fixture')).toBe(true);
     let sent: { sources: Array<{ id: string; text: string }>; importedSources?: Array<{ id: string; filename: string }> } | undefined;
+    let sentBytes = 0;
     await proposeChange(testEnv, input, providerFetch({ ...change, initialRecords: {} }, (content) => {
       sent ??= JSON.parse(content) as typeof sent;
+      sentBytes ||= new TextEncoder().encode(content).byteLength;
     })).catch((error: unknown) => { if (!sent) throw error; });
+    // F067: the "AI context" the table shows is exactly what the provider receives.
+    const computeCapabilities = computeRuntimeCapabilities({
+      javascript: Boolean(testEnv.COMPUTE_LOADER),
+      python: testEnv.TABLE_COMPUTE_PYTHON === 'enabled',
+    });
+    expect(sentBytes).toBe(tableDraftBytes(table, input.prompt, computeCapabilities));
     expect(sent?.sources).toEqual([{ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n' }]);
     expect(sent?.importedSources).toMatchObject([{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename }]);
     expect(sent?.importedSources?.[0]).toHaveProperty('note');
     expect(JSON.stringify(sent)).not.toContain(tableScenarioSources.equipment.text.slice(0, 40));
+  });
+
+  it('drafts a table that uses its whole 64 KiB file allowance (F066)', async () => {
+    const input = request('table');
+    const domain = input.workspace.domain;
+    if (domain.kind !== 'table') throw new Error('Expected table fixture.');
+    domain.sources = Array.from({ length: 4 }, (_, index) => ({
+      id: `source_${index}`, filename: `source-${index}.txt`, text: 'x'.repeat(16_000), sha256: 'c'.repeat(64), createdAt: input.workspace.createdAt,
+    }));
+    let calls = 0;
+    const error = await proposeChange(testEnv, input, providerFetch(proposal('table'), () => { calls += 1; })).catch((caught: unknown) => caught);
+    if (calls === 0) throw error;
+    expect(calls).toBeGreaterThan(0);
   });
 
   it('rejects complete table source sets above the bounded model input before reserving or calling the provider', async () => {
@@ -316,7 +344,7 @@ describe('Cloudflare AI proposal helper', () => {
     domain.sources = Array.from({ length: 4 }, (_, index) => ({
       id: `source_${index}`,
       filename: `source-${index}.txt`,
-      text: 'x'.repeat(15_000),
+      text: 'x'.repeat(17_000),
       sha256: 'b'.repeat(64),
       createdAt: input.workspace.createdAt,
     }));
@@ -369,6 +397,27 @@ describe('Cloudflare AI proposal helper', () => {
       .exec<{ status: string }>('SELECT status FROM billing_jobs WHERE workspace_id = ?', input.workspace.id).toArray());
     expect(rows).toHaveLength(2);
     expect(rows.every(row => row.status === 'settled')).toBe(true);
+  });
+
+  it('sends a no-input action that types in the same rows back for repair (F068)', async () => {
+    const input = request('table');
+    const bad = equipmentChange('source_fixture');
+    bad.program.actions.push({
+      id: 'add_spare', title: 'Add spare', description: 'Add a spare item.', roles: ['owner'], parameters: [], conditions: [], effects: [],
+      creates: [{ collection: 'equipment', values: { name: { literal: 'Spare' }, available: { literal: true }, borrower: { literal: null } } }],
+      requireTurn: false, advanceTurn: false,
+    });
+    let calls = 0;
+    const fetchImpl: typeof fetch = async (url, init) => {
+      const data = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+      const sent = JSON.parse(data.messages[1].content);
+      calls++;
+      if (calls === 2) expect(sent.repair.issues.join(' ')).toContain('“Add spare” has no inputs or conditions');
+      return providerFetch(calls === 1 ? bad : proposal('table'))(url, init);
+    };
+    const result = await proposeChange(testEnv, input, fetchImpl);
+    expect(calls).toBe(2);
+    expect(result.change).toEqual(proposal('table'));
   });
 
   it('returns a table clarification after one settled attempt without validating rules (F012)', async () => {
@@ -542,6 +591,48 @@ describe('Cloudflare AI proposal helper', () => {
     // The counters grow with the stream, not only when it finishes.
     expect(new Set(samples.map((sample) => sample.receivedChars)).size).toBeGreaterThan(2);
     expect(samples.every((sample) => sample.reasoningChars === 0)).toBe(true);
+  });
+
+  it('puts a research event on the same progress channel as the thinking tail, without counters (F064)', () => {
+    // Research runs before the draft streams, so the shared channel must carry it with zero counters;
+    // the room merges it into every later tick so the closing line survives the whole draft.
+    expect(searchChangeProgress({ phase: 'reading', query: 'VAT ไทย 2569', resultsCount: 4, topTitle: 'รัฐบาลไทย' }))
+      .toEqual({
+        receivedChars: 0,
+        reasoningChars: 0,
+        search: { phase: 'reading', query: 'VAT ไทย 2569', resultsCount: 4, topTitle: 'รัฐบาลไทย' },
+      });
+  });
+
+  it('turns a research outcome into display metadata for the finished card (F064)', () => {
+    const sources = Array.from({ length: MAX_JOB_RESEARCH_SOURCES + 2 }, (_, index) => ({
+      id: `web-${index + 1}`,
+      title: `Source ${index + 1}`,
+      url: `https://example${index}.go.th/report`,
+      normalizedUrl: `https://example${index}.go.th/report`,
+      siteName: 'example',
+      date: '2026-07-26T16:00:00+00:00',
+      authority: 4,
+      score: 2.5,
+      summary: 'not display text on the card',
+    }));
+    const summary = researchSummary({
+      queries: ['VAT ไทย 2569', 'q2', 'q3', 'q4', 'q5'],
+      sources,
+    });
+
+    // The card keeps a bounded list and never the brief or summaries the draft used internally.
+    expect(summary?.sources).toHaveLength(MAX_JOB_RESEARCH_SOURCES);
+    expect(summary?.queries).toHaveLength(MAX_JOB_RESEARCH_QUERIES);
+    expect(summary?.sources[0]).toEqual({
+      title: 'Source 1',
+      url: 'https://example0.go.th/report',
+      date: '2026-07-26T16:00:00+00:00',
+      authority: 4,
+    });
+    expect(summary?.sources[0]).not.toHaveProperty('summary');
+    // A draft that never searched carries no metadata at all.
+    expect(researchSummary({ queries: [], sources: [] })).toBeUndefined();
   });
 
   it('keeps bounded stream details when the provider closes without a finish reason (F045)', async () => {

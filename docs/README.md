@@ -21,6 +21,7 @@
 รายละเอียดสถานะรุ่นอยู่ใน [Deployments](DEPLOYMENTS.md) ส่วนผลตรวจร้านกาแฟ แสงและเงา เกมแบ่งน้ำ และลิงก์ CI ที่เคยสรุปบน README ตามได้จาก [Generative Canvas acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md) และ [Release 2.0 acceptance](RELEASE_2_0_ACCEPTANCE.md) ทั้งสองเป็นบันทึกตามรอบตรวจของตัวเอง ไม่ใช่การยืนยันรุ่นปัจจุบัน
 
 - [GENERATIVE_CANVAS_RUNTIME](GENERATIVE_CANVAS_RUNTIME.md): candidate ที่กำลังทดสอบสำหรับภาพ/สูตร/เครื่องมือใหม่บน Canvas, ทดลองร่าง, layout ร่วมกัน และการค้นบทสนทนาเดิม
+- [REUSABLE_COMPUTE](REUSABLE_COMPUTE.md): โปรแกรม JavaScript/Python ที่เก็บไว้คำนวณซ้ำ, typed input/output, run lineage, Rules และการเตรียม runtime ก่อน release
 - [GENERATIVE_CANVAS_ACCEPTANCE](GENERATIVE_CANVAS_ACCEPTANCE.md): หลักฐานและขอบเขตของ candidate แยกโมเดลจำลอง, AI จริง และ hosted release
 - [GENERATIVE_CANVAS_PLAN_TH](GENERATIVE_CANVAS_PLAN_TH.md): แผนจากโจทย์สู่เครื่องมือ/scene ใหม่บน Canvas, algorithm จัดการ์ดตามความสัมพันธ์, multiplayer/memory และต้นทุน — ดู runtime/acceptance สำหรับส่วนที่ทำแล้ว
 - [GENERATIVE_CANVAS_RESEARCH_2026-10-20](GENERATIVE_CANVAS_RESEARCH_2026-10-20.md): แหล่งต้นทางเรื่อง generative UI, sandbox/QuickJS/Dynamic Workers, sync และ animation พร้อมข้อจำกัดที่ยังไม่พิสูจน์

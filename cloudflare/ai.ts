@@ -1,24 +1,30 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
-import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { aiTableChangeIssues, tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { MAX_REQUEST_INPUT_TOKENS, TABLE_AI_INPUT_BYTES } from '../src/tabletop/shared/ai-request-limits.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
+import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
+import { runResearch, type ResearchOutcome } from '../server/providers/deepseek-research.js';
+import { MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { tableDraftInput } from '../src/tabletop/shared/table-draft-input.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
 import { ReasonedDomainError } from './model-failure.js';
-import { FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
+import { computeRuntimeCapabilities, type ComputeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
+import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
-const MAX_TABLE_INPUT_BYTES = 48_000;
+const MAX_TABLE_INPUT_BYTES = TABLE_AI_INPUT_BYTES;
 const PROVIDER_OVERHEAD_BYTES = 8_000;
 const MAX_STANDARD_PROVIDER_INPUT_TOKENS = 56_000;
-const MAX_PROVIDER_INPUT_TOKENS = 65_000;
+// A request is measured in bytes and one byte is at most one token, so the reservation covers the largest request.
+const MAX_PROVIDER_INPUT_TOKENS = MAX_REQUEST_INPUT_TOKENS;
 const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
 const CHANGE_MAX_OUTPUT_TOKENS = 512;
 const TABLE_MAX_OUTPUT_TOKENS = 32_768;
@@ -122,8 +128,8 @@ export interface AIProposalRequest {
 
 /** Table requests may return a question for the owner instead of a draft (F012). */
 export type AIProposalResult =
-  | { change: ChangeSet; jobId: string; usage: DeepSeekUsage }
-  | { clarification: TableClarification; jobId: string; usage: DeepSeekUsage };
+  | { change: ChangeSet; jobId: string; usage: DeepSeekUsage; research?: ModelJobResearch }
+  | { clarification: TableClarification; jobId: string; usage: DeepSeekUsage; research?: ModelJobResearch };
 
 type BillingBinding = BillingRequestBinding;
 export type AIBillingBinding = BillingBinding;
@@ -184,7 +190,7 @@ function actorAndRole(request: AIProposalRequest): void {
   }
 }
 
-function prepareInput(request: AIProposalRequest): PreparedInput {
+function prepareInput(request: AIProposalRequest, computeCapabilities: ComputeRuntimeCapabilities): PreparedInput {
   const { workspace, prompt } = request;
   if (workspace.domain.kind === 'invoice') {
     const state = invoiceDomainSchema.safeParse(workspace.domain);
@@ -225,20 +231,7 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current table state is invalid.');
     const sourceBytes = parsed.data.sources.reduce((total, source) => total + new TextEncoder().encode(source.text).byteLength, 0);
     if (sourceBytes > TABLE_TOTAL_SOURCE_BYTES) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The table sources exceed the allowed proposal size.');
-    // Files the active rules already cite were imported earlier: their rows are in records and their quotes are
-    // checked against the stored text, so only their names travel. A large table can keep growing this way.
-    const cited = new Set((parsed.data.program?.evidence ?? []).map((item) => item.sourceId));
-    const imported = parsed.data.sources.filter((source) => cited.has(source.id));
-    const providerInput: DeepSeekChangeInput = {
-      kind: 'table',
-      prompt,
-      sources: parsed.data.sources.filter((source) => !cited.has(source.id)).map(({ id, filename, text }) => ({ id, filename, text })),
-      ...(imported.length ? { importedSources: imported.map(({ id, filename }) => ({ id, filename, note: IMPORTED_SOURCE_NOTE })) } : {}),
-      program: structuredClone(parsed.data.program),
-      records: structuredClone(parsed.data.records),
-      turn: parsed.data.turn,
-      ...(parsed.data.notes?.length ? { notes: parsed.data.notes.map(({ text, color }) => ({ text, color })) } : {}),
-    };
+    const providerInput: DeepSeekChangeInput = tableDraftInput(parsed.data, prompt, computeCapabilities);
     return {
       kind: 'table',
       providerInput,
@@ -258,9 +251,6 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     maximumInputBytes: MAX_CHANGE_INPUT_BYTES,
   };
 }
-
-/** Read by the model next to each omitted file, so the system prompt stays within its size budget. */
-const IMPORTED_SOURCE_NOTE = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 
 function mapUsage(usage: DeepSeekUsage): BillingUsage {
   return {
@@ -391,6 +381,27 @@ export async function markAIUsageUncertain(env: Env, binding: AIBillingBinding):
 }
 
 /**
+ * F064: research reports progress on F050's channel so a waiting card needs no second transport.
+ * The counters stay at zero because the draft itself has not started streaming yet.
+ */
+export function searchChangeProgress(event: ModelJobSearchProgress): DeepSeekChangeProgress {
+  return { receivedChars: 0, reasoningChars: 0, search: event };
+}
+
+/**
+ * F064 slice B: the research the draft may show on its card. Only display metadata leaves the
+ * provider call: no brief, no summary text, and nothing that could be mistaken for table evidence.
+ */
+export function researchSummary(outcome: Pick<ResearchOutcome, 'queries' | 'sources'>): ModelJobResearch | undefined {
+  if (outcome.sources.length === 0) return undefined;
+  return {
+    queries: outcome.queries.slice(0, MAX_JOB_RESEARCH_QUERIES),
+    sources: outcome.sources.slice(0, MAX_JOB_RESEARCH_SOURCES)
+      .map(({ title, url, date, authority }) => ({ title, url, date: date ?? null, authority })),
+  };
+}
+
+/**
  * Returns a validated proposal only. The room authority must recheck its current session,
  * membership, epoch, and revision before committing `change` as evolve.propose.
  */
@@ -405,15 +416,47 @@ export async function proposeChange(
   const request = parsed.data;
   billingConfigured(env);
   actorAndRole(request);
-  const prepared = prepareInput(request);
-  const providerBytes = new TextEncoder().encode(canonical(prepared.providerInput)).byteLength;
+  const computeCapabilities = computeRuntimeCapabilities({
+    javascript: Boolean(env.COMPUTE_LOADER),
+    python: env.TABLE_COMPUTE_PYTHON === 'enabled',
+  });
+  const prepared = prepareInput(request, computeCapabilities);
+  // F064: the drafter decides for itself whether this request needs the web. A search fault
+  // must never block a draft, so research is best-effort and bounded. A caller-injected fetch is a
+  // test double, so research stays off there and tests never reach the network.
+  let researchBlock: { brief: string; sources: { id: string; title: string; url: string; date: string | null; authority: number; summary: string }[] } | undefined;
+  // F064 slice B: the same run also yields the sources the finished card may list.
+  let researchMetadata: ModelJobResearch | undefined;
+  if (prepared.kind === 'table' && fetchImpl === undefined && env.TABLE_WEB_SEARCH !== 'off') {
+    try {
+      const research = await runResearch(request.prompt, {
+        apiKey: env.DEEPSEEK_KEY!,
+        fetchImpl,
+        timeoutMs: 30_000,
+        onProgress: (event) => onProgress?.(searchChangeProgress(event)),
+      });
+      researchMetadata = researchSummary(research);
+      if (research.sources.length > 0) {
+        researchBlock = {
+          brief: research.brief,
+          sources: research.sources.map(({ id, title, url, date, authority, summary }) => ({ id, title, url, date, authority, summary })),
+        };
+      }
+    } catch {
+      // Research is an enhancement: fall back to the deterministic draft path.
+    }
+  }
+  const tableProviderInput = prepared.kind === 'table' && prepared.providerInput.kind === 'table'
+    ? { ...prepared.providerInput, ...(researchBlock ? { research: researchBlock } : {}) }
+    : null;
+  const providerBytes = new TextEncoder().encode(canonical(tableProviderInput ?? prepared.providerInput)).byteLength;
   if (providerBytes > prepared.maximumInputBytes) {
     fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The proposal request exceeds the allowed size.');
   }
   let maxInputTokens: number;
-  if (prepared.kind === 'table') {
+  if (prepared.kind === 'table' && tableProviderInput) {
     try {
-      maxInputTokens = measureDeepSeekChangeRequest(prepared.providerInput) + TABLE_REQUEST_TOKEN_MARGIN;
+      maxInputTokens = measureDeepSeekChangeRequest(tableProviderInput) + TABLE_REQUEST_TOKEN_MARGIN;
     } catch (error) {
       throw safeProviderFailure(error);
     }
@@ -455,8 +498,11 @@ export async function proposeChange(
   if (dispatch.claimed !== true) {
     fail('AI_PROPOSAL_ALREADY_DISPATCHED', 'This proposal request has already been dispatched or is uncertain.');
   }
-  if (prepared.kind === 'table' && prepared.providerInput.kind === 'table') {
-    return proposeGeneratedTable(env, request, prepared.providerInput, binding, fetchImpl, onProgress);
+  if (prepared.kind === 'table' && prepared.providerInput.kind === 'table' && tableProviderInput) {
+    const result = await proposeGeneratedTable(env, request, tableProviderInput, binding, fetchImpl, onProgress);
+    // F064 slice B: a draft that used the web carries its sources; a clarification may too, so the
+    // member can see what the question was grounded in.
+    return researchMetadata ? { ...result, research: researchMetadata } : result;
   }
 
   let change: ChangeSet;
@@ -477,7 +523,7 @@ export async function proposeChange(
       const result = await provider.propose(prepared.providerInput, new AbortController().signal);
       change = validateChange(workspace.kind, 'change' in result ? result.change : null);
       if (workspace.domain.kind === 'table' && change.kind === 'table'
-          && tableChangeIssues(workspace.domain, change).length > 0) {
+          && aiTableChangeIssues(workspace.domain, change).length > 0) {
         fail('MODEL_PROVIDER_OUTPUT_REJECTED', 'The model returned table rules that do not fit the current sources and active records.');
       }
       usage = result.usage;
@@ -568,7 +614,9 @@ async function proposeGeneratedTable(
     if (usage.reasoningTokens !== undefined) total.reasoningTokens = (total.reasoningTokens ?? 0) + usage.reasoningTokens;
     if (clarification) return { clarification, jobId: initialBinding.id, usage: total };
     if (change?.kind === 'table' && request.workspace.domain.kind === 'table') {
-      issues = tableChangeIssues(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
+      // F068: the minimal fallback has no repair left, so a table that activates beats rejecting its sample button.
+      const check = attempt === MAX_ATTEMPTS ? tableChangeIssues : aiTableChangeIssues;
+      issues = check(request.workspace.domain, change).slice(0, 4).map(issue => issue.slice(0, 1000));
       if (!issues.length) return { change, jobId: initialBinding.id, usage: total };
       previousOutput = JSON.stringify(change).slice(0, 18_000);
     }
@@ -577,7 +625,8 @@ async function proposeGeneratedTable(
     if (attempt === MAX_ATTEMPTS - 1) {
       // F028: the final attempt asks for the smallest table that can still activate.
       previousIssues = issues;
-      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...FALLBACK_SIMPLIFY_ISSUES] } };
+      const editing = initialInput.kind === 'table' && initialInput.program !== null;
+      input = { ...initialInput, repair: { attempt: FALLBACK_REPAIR_ATTEMPT, issues: [...(editing ? EDIT_FALLBACK_SIMPLIFY_ISSUES : FALLBACK_SIMPLIFY_ISSUES)] } };
     } else {
       const repairIssues = nextRepairIssues(previousIssues, issues);
       previousIssues = issues;
@@ -608,3 +657,4 @@ async function proposeGeneratedTable(
 }
 
 export { invoiceChangeSchema, teachingChangeSchema, encounterChangeSchema };
+

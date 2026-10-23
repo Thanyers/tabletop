@@ -6,6 +6,8 @@ import type { SqlDatabase } from './database.js';
 import { createPGliteDatabase, createPostgresDatabase } from './database.js';
 import { assertSchemaReady, migrateDatabase, type MigrationEnvironment } from './migrations.js';
 import { CommandAuthority } from './authority.js';
+import { createNodeComputeRunner } from './compute-runner.js';
+import type { ComputeRunner } from '../src/tabletop/shared/table-compute.js';
 import { SqlWorkspaceRepository } from './repository.js';
 import { createApp, type RouteExtension, type TabletopApp } from './app.js';
 import { DEFAULT_HOST, DEFAULT_PORT } from './limits.js';
@@ -22,6 +24,7 @@ export interface StartServerOptions {
   readonly database?: SqlDatabase;
   readonly extensions?: readonly RouteExtension[];
   readonly now?: () => number;
+  readonly computeRunner?: ComputeRunner;
 }
 
 export interface StartedServer {
@@ -130,6 +133,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     const authority = new CommandAuthority({
       repository,
       secureCookies: environment === 'production',
+      computeRunner: options.computeRunner ?? createNodeComputeRunner(),
       ...(options.now ? { now: options.now } : {}),
     });
     const app = createApp({

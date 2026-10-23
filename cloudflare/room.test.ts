@@ -4,11 +4,13 @@ import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'c
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Room } from './room.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
-import { csrfForToken } from './auth.js';
+import { authenticateRequest, csrfForToken } from './auth.js';
 import { canonicalJson, hashValue, sha256 } from '../server/codec.js';
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import type { ComputeRunRecord } from '../src/tabletop/shared/table-compute.js';
 import { equipmentChange, rollCombatChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { rollTotal } from '../src/tabletop/domain/roll.js';
+import { evaluateGenerativeCanvas } from '../src/tabletop/runtime/generative/evaluator.js';
 import type { PendingDirectoryChange } from './room-repository.js';
 import { proposeChange } from './ai.js';
 import type { AIProposalRequest, AIProposalResult } from './ai.js';
@@ -18,6 +20,7 @@ import type { TableAssistantResponse } from './table-assistant.js';
 import { CURSOR_MIN_INTERVAL_MS } from '../src/tabletop/shared/cursor-protocol.js';
 import { ReasonedDomainError } from './model-failure.js';
 import { ModelProviderClosed, ModelRequestTimeout } from '../server/providers/deepseek-changes.js';
+import { MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_TEXT_CHARS, MAX_JOB_SEARCH_TITLE_CHARS } from '../src/tabletop/shared/model-job-progress.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
@@ -41,6 +44,8 @@ const MODEL_WAIT_INTERVAL_MS = 10;
 const SOCKET_PROJECTION_TIMEOUT_MS = 1_000;
 const ASSISTANT_WAIT_ATTEMPTS = 50;
 const ASSISTANT_WAIT_INTERVAL_MS = 10;
+const COMPUTE_WAIT_ATTEMPTS = 100;
+const COMPUTE_WAIT_INTERVAL_MS = 25;
 
 interface TestActor {
   id: string;
@@ -63,8 +68,8 @@ interface TestModelJob {
   autoApply?: 'applied' | 'needs-review';
   autoApplyReasons?: string[];
   failureCode?: string;
-  /** F045: live counters while the draft runs; F050 adds the bounded thinking tail. */
-  progress?: { receivedChars: number; reasoningChars: number; thinkingTail?: string; updatedAt: number };
+  /** F045: live counters while the draft runs; F050 adds the bounded thinking tail, F064 the search line. */
+  progress?: { receivedChars: number; reasoningChars: number; thinkingTail?: string; search?: { phase: 'searching' | 'reading' | 'done'; query: string; resultsCount: number; topTitle?: string }; updatedAt: number };
   /** F045: the configured whole-job deadline the draft runs under. */
   limitMs?: number;
   /** F045: bounded, redacted stop evidence for a failed draft. */
@@ -77,6 +82,8 @@ interface TestModelJob {
     partialContent?: string;
     thinkingTail?: string;
   };
+  /** F064 slice B: the web sources a finished draft used, or absent when it never searched. */
+  research?: { queries: string[]; sources: { title: string; url: string; date: string | null; authority: number }[] };
 }
 
 interface TestTableAssistantJob {
@@ -183,7 +190,7 @@ async function waitForTableAssistantJob(
   throw new Error('TABLE_ASSISTANT_JOB_DID_NOT_FINISH');
 }
 
-async function createActiveEquipmentTable(owner: TestActor) {
+async function createActiveEquipmentTable(owner: TestActor, includeCompute = false) {
   const { roomId, stub, workspace: created } = await createRoom(owner, 'table');
   const imported = await issueCommand(stub, created, owner, 'table.import', {
     filename: tableScenarioSources.equipment.filename,
@@ -194,9 +201,32 @@ async function createActiveEquipmentTable(owner: TestActor) {
   }
   const sourceId = imported.body.workspace.domain.sources[0]?.id;
   if (!sourceId) throw new Error('TABLE_ASSISTANT_TEST_SOURCE_MISSING');
+  const change = equipmentChange(sourceId);
+  if (includeCompute) {
+    change.program.compute = {
+      version: 1,
+      modules: [{
+        id: 'available_count',
+        name: 'Available equipment count',
+        description: 'Count equipment that can still be borrowed.',
+        runtime: 'javascript',
+        version: 1,
+        source: 'export default function compute(inputs) { return { count: inputs.items.rows.filter((row) => row.available).length }; }',
+        inputs: [
+          { id: 'items', label: 'Equipment', type: 'table', binding: { kind: 'collection', collectionId: 'equipment' } },
+          { id: 'seat', label: 'Current seat', type: 'text', binding: { kind: 'actor', property: 'seat' } },
+        ],
+        outputs: [{ id: 'count', label: 'Available count', type: 'number' }],
+      }],
+    };
+    change.program.canvas = {
+      version: 1,
+      views: [{ id: 'available_count_metric', kind: 'metric', title: 'Available equipment', value: { op: 'computeResult', moduleId: 'available_count', outputId: 'count' } }],
+    };
+  }
   let current = imported.body.workspace;
   for (const [type, payload] of [
-    ['evolve.propose', { change: equipmentChange(sourceId) }],
+    ['evolve.propose', { change }],
     ['evolve.simulate', {}],
     ['evolve.validate', {}],
     ['evolve.approve', {}],
@@ -207,6 +237,30 @@ async function createActiveEquipmentTable(owner: TestActor) {
     current = result.body.workspace;
   }
   return { roomId, stub, workspace: current };
+}
+
+async function waitForCurrentComputeRun(stub: DurableObjectStub<Room>, workspaceId: string, actorId?: string): Promise<{
+  state: import('../src/tabletop/shared/table-contracts.js').TableState;
+  run: ComputeRunRecord;
+}> {
+  let lastState: import('../src/tabletop/shared/table-contracts.js').TableState | null = null;
+  for (let attempt = 0; attempt < COMPUTE_WAIT_ATTEMPTS; attempt += 1) {
+    const current = await runInDurableObject(stub, async instance => {
+      const workspace = await instance.repository.getWorkspace(workspaceId);
+      if (!workspace || workspace.domainState.kind !== 'table') return null;
+      const state = workspace.domainState;
+      const run = state.computeRuns?.find(item => item.status === 'succeeded'
+        && item.dataRevision === state.dataRevision && item.ruleRevision === state.ruleRevision
+        && (actorId === undefined || item.actorId === actorId));
+      return run ? { state, run } : null;
+    });
+    if (current) return current;
+    const stored = await runInDurableObject(stub, instance => instance.repository.getWorkspace(workspaceId));
+    lastState = stored?.domainState.kind === 'table' ? stored.domainState : null;
+    await new Promise<void>(resolve => setTimeout(resolve, COMPUTE_WAIT_INTERVAL_MS));
+  }
+  const runs = lastState?.computeRuns?.map(run => ({ status: run.status, errorCode: run.errorCode })) ?? [];
+  throw new Error(`TABLE_COMPUTE_RUN_DID_NOT_FINISH: modules=${lastState?.program?.compute?.modules.length ?? 0}; runs=${JSON.stringify(runs)}`);
 }
 
 function modelResult(request: AIProposalRequest): AIProposalResult {
@@ -432,6 +486,109 @@ describe('Cloudflare room Durable Object', () => {
   beforeEach(async () => {
     vi.mocked(proposeChange).mockReset();
     vi.mocked(respondToTablePrompt).mockReset();
+  });
+
+  it('keeps accepted actor-bound compute through session revocation and hides its result after member removal', async () => {
+    const owner = newActor('Compute room owner');
+    await saveActor(owner);
+    const { roomId, stub } = await createActiveEquipmentTable(owner, true);
+    const first = await waitForCurrentComputeRun(stub, roomId);
+    expect(first.run).toMatchObject({
+      moduleId: 'available_count', status: 'succeeded', actorId: owner.id,
+      outputs: [{ outputId: 'count', value: 2 }],
+    });
+
+    const current = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(current.response.status).toBe(200);
+    const borrowed = await issueCommand(stub, current.body, owner, 'table.act', {
+      actionId: 'borrow', inputs: { item: 'camera' },
+    });
+    expect(borrowed.response.status).toBe(200);
+    if (!('ok' in borrowed.body) || !borrowed.body.ok) throw new Error('COMPUTE_ROOM_ACTION_FAILED');
+
+    const refreshed = await waitForCurrentComputeRun(stub, roomId);
+    expect(refreshed.run).toMatchObject({
+      moduleId: 'available_count', status: 'succeeded', actorId: owner.id,
+      outputs: [{ outputId: 'count', value: 1 }],
+    });
+    expect(refreshed.run.inputHash).not.toBe(first.run.inputHash);
+    expect(refreshed.state.computeRuns?.filter(run => run.moduleId === 'available_count')).toHaveLength(2);
+    expect(refreshed.state.records.equipment?.find(row => row.id === 'camera')?.values.available).toBe(false);
+
+    const program = refreshed.state.program;
+    if (!program?.canvas) throw new Error('COMPUTE_ROOM_CARD_MISSING');
+    const card = evaluateGenerativeCanvas(program.canvas, {
+      program,
+      records: refreshed.state.records,
+      computeRuns: refreshed.state.computeRuns,
+      dataRevision: refreshed.state.dataRevision,
+      ruleRevision: refreshed.state.ruleRevision,
+      actor: owner.id,
+      turn: refreshed.state.turn,
+    }).find(view => view.id === 'available_count_metric');
+    expect(card).toMatchObject({ kind: 'metric', value: 1 });
+
+    const persisted = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    expect(persisted.response.status).toBe(200);
+    if (persisted.body.domain.kind !== 'table') throw new Error('COMPUTE_ROOM_VIEW_MISSING');
+    expect(persisted.body.domain.computeRuns?.[0]).toMatchObject({
+      status: 'succeeded', outputs: [{ outputId: 'count', value: 1 }],
+    });
+
+    const participant = newActor('Compute participant');
+    await saveActor(participant);
+    const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-1' }, mutation: true,
+    });
+    expect(invitation.response.status).toBe(201);
+    const joined = await call<WorkspaceView>(stub, '/internal/redeem', participant, {
+      method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(joined.response.status).toBe(200);
+    const acceptedSession = await authenticateRequest(new Request(ORIGIN, { headers: headers(participant) }), runtime);
+    const participantRun = await issueCommand(stub, joined.body, participant, 'table.compute.run', { moduleId: 'available_count' });
+    expect(participantRun.response.status).toBe(200);
+    const acceptedRunId = participantRun.envelope.commandId;
+    await runtime.DB.prepare('UPDATE web_sessions SET revoked_at = ? WHERE token_hash = ?')
+      .bind(Date.now(), acceptedSession.record.tokenHash).run();
+    const revokedSessionRead = await call<PublicError>(stub, `/api/workspaces/${roomId}`, participant);
+    expect(revokedSessionRead.response.status).toBe(401);
+    expect(revokedSessionRead.body.errorCode).toBe('SESSION_EXPIRED');
+    await runDurableObjectAlarm(stub);
+    const participantCurrentRun = await waitForCurrentComputeRun(stub, roomId, participant.id);
+    expect(participantCurrentRun.run).toMatchObject({
+      runId: acceptedRunId, status: 'succeeded', actorId: participant.id, seat: 'member-1',
+      dataRevision: participantCurrentRun.state.dataRevision,
+    });
+
+    const dataRevisionBeforeRemoval = participantCurrentRun.state.dataRevision;
+    const removed = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}/members/remove`, owner, {
+      method: 'POST', body: { actorId: participant.id }, mutation: true,
+    });
+    expect(removed.response.status).toBe(200);
+    const afterRemoval = await runInDurableObject(stub, async instance => {
+      const workspace = await instance.repository.getWorkspace(roomId);
+      if (!workspace || workspace.domainState.kind !== 'table') throw new Error('COMPUTE_ROOM_INVALIDATION_MISSING');
+      return workspace.domainState;
+    });
+    expect(afterRemoval.dataRevision).toBe(dataRevisionBeforeRemoval + 1);
+    expect(afterRemoval.computeRuns?.find(run => run.runId === participantCurrentRun.run.runId)).toMatchObject({
+      status: 'succeeded', dataRevision: dataRevisionBeforeRemoval,
+    });
+    const removedView = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner);
+    if (removedView.body.domain.kind !== 'table' || !removedView.body.domain.program?.canvas) {
+      throw new Error('COMPUTE_ROOM_INVALIDATED_CARD_MISSING');
+    }
+    const invalidatedCard = evaluateGenerativeCanvas(removedView.body.domain.program.canvas, {
+      program: removedView.body.domain.program,
+      records: removedView.body.domain.records,
+      computeRuns: removedView.body.domain.computeRuns,
+      dataRevision: removedView.body.domain.dataRevision,
+      ruleRevision: removedView.body.domain.ruleRevision,
+      actor: owner.id,
+      turn: removedView.body.domain.turn,
+    }).find(view => view.id === 'available_count_metric');
+    expect(invalidatedCard).toMatchObject({ kind: 'metric', value: null });
   });
 
   it('rebuilds the D1 room-kind constraint without losing room or membership rows and rolls back a failed batch', async () => {
@@ -2641,6 +2798,156 @@ describe('Cloudflare room Durable Object', () => {
     expect(liveProgress?.thinkingTail).not.toContain(owner.name);
     expect(liveProgress?.thinkingTail).not.toContain(owner.id);
     await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+  });
+
+  it('streams a bounded, identity-redacted search line and keeps it for the whole draft (F064)', async () => {
+    const owner = newActor('Live search owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const longQuery = `VAT ${owner.name} ${owner.id} ${'q'.repeat(400)}`;
+    const longTitle = `ประกาศ ${owner.name} ${'t'.repeat(400)}`;
+    let providerStarted = false;
+    let plainTickSent = false;
+    let releaseProvider = () => {};
+    let releasePlainTick = () => {};
+    const providerWait = new Promise<void>((resolve) => { releaseProvider = resolve; });
+    const plainTickWait = new Promise<void>((resolve) => { releasePlainTick = resolve; });
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request, _fetchImpl, onProgress) => {
+      onProgress?.({ receivedChars: 0, reasoningChars: 0, search: { phase: 'searching', query: longQuery, resultsCount: 0 } });
+      // The closing line is written even though the throttle window is still open.
+      onProgress?.({ receivedChars: 0, reasoningChars: 0, search: { phase: 'done', query: longQuery, resultsCount: 3, topTitle: longTitle } });
+      providerStarted = true;
+      await providerWait;
+      // A later draft tick carries counters but no search event: the stored line must survive it.
+      await new Promise<void>((resolve) => setTimeout(resolve, 950));
+      onProgress?.({ receivedChars: 12, reasoningChars: 0 });
+      plainTickSent = true;
+      await plainTickWait;
+      return modelResult(request);
+    });
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    await waitForCondition(() => providerStarted);
+    let live: TestModelJob['progress'];
+    for (let attempt = 0; attempt < 40 && live?.search?.phase !== 'done'; attempt += 1) {
+      live = (await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner)).body.progress;
+      if (live?.search?.phase !== 'done') await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    expect(live?.search?.phase).toBe('done');
+    expect(live?.search?.resultsCount).toBe(3);
+    // Redacted before clamping, exactly like the live thinking tail.
+    expect(JSON.stringify(live)).not.toContain(owner.name);
+    expect(JSON.stringify(live)).not.toContain(owner.id);
+    expect(live?.search?.query.length).toBeLessThanOrEqual(MAX_JOB_SEARCH_QUERY_CHARS);
+    expect(live?.search?.topTitle?.length ?? 0).toBeLessThanOrEqual(MAX_JOB_SEARCH_TITLE_CHARS);
+    expect((live?.search?.query.length ?? 0) + (live?.search?.topTitle?.length ?? 0))
+      .toBeLessThanOrEqual(MAX_JOB_SEARCH_TEXT_CHARS);
+
+    releaseProvider();
+    // The mock waits out the 900 ms throttle window before its plain tick, so allow more than it.
+    for (let attempt = 0; attempt < 200 && !plainTickSent; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+    expect(plainTickSent).toBe(true);
+    let afterTick: TestModelJob['progress'];
+    for (let attempt = 0; attempt < 40 && afterTick?.receivedChars !== 12; attempt += 1) {
+      afterTick = (await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner)).body.progress;
+      if (afterTick?.receivedChars !== 12) await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    // The draft moved on but the card still says what the research used.
+    expect(afterTick?.receivedChars).toBe(12);
+    expect(afterTick?.search).toMatchObject({ phase: 'done', resultsCount: 3 });
+    releasePlainTick();
+    await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+  });
+
+  it('shows the redacted web sources of a completed draft and drops links that are not http(s) (F064)', async () => {
+    const owner = newActor('Sources owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: emptyWorkspace } = await createRoom(owner, 'table');
+    const imported = await issueCommand(stub, emptyWorkspace, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    expect(imported.response.status).toBe(200);
+    const workspace = (imported.body as CommandAck).workspace;
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => ({
+      ...modelResult(request),
+      research: {
+        queries: [`VAT ${owner.name}`, 'WHO BMI'],
+        sources: [
+          { title: `ประกาศ ${owner.name} (${owner.id})`, url: `https://example.go.th/${owner.id}?q=vat`, date: '2026-07-26T16:00:00+00:00', authority: 4 },
+          { title: 'unsafe', url: 'javascript:alert(1)', date: null, authority: 3 },
+          { title: '', url: 'https://noise.example/a', date: null, authority: 2 },
+        ],
+      },
+    }));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    const job = await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    expect(job.status).toBe('completed');
+
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    const research = visible.body.research;
+    if (!research) throw new Error('Expected the sources this draft used.');
+    // `javascript:` is dropped, and a title that redacts to nothing falls back to the host.
+    expect(research.sources).toHaveLength(2);
+    expect(research.sources[0]?.url).toMatch(/^https:\/\/example\.go\.th\//u);
+    expect(research.sources[1]?.title).toBe('noise.example');
+    expect(research.sources[0]?.date).toBe('2026-07-26T16:00:00+00:00');
+    for (const source of research.sources) {
+      expect(source.url.startsWith('https://')).toBe(true);
+      expect(source.authority).toBeGreaterThanOrEqual(0);
+      expect(source.authority).toBeLessThanOrEqual(4);
+      expect(source.title).not.toContain(owner.name);
+      expect(source.url).not.toContain(owner.id);
+    }
+    // Nothing raw about a member survives inside the stored or served research.
+    expect(JSON.stringify(visible.body.research)).not.toContain(owner.name);
+    expect(JSON.stringify(visible.body.research)).not.toContain(owner.id);
+    expect(JSON.stringify(job.data.research)).not.toContain(owner.name);
+    expect(JSON.stringify(job.data.research)).not.toContain(owner.id);
+  });
+
+  it('omits the research block for a completed draft that never searched (F064)', async () => {
+    const owner = newActor('No research owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace: emptyWorkspace } = await createRoom(owner, 'table');
+    const imported = await issueCommand(stub, emptyWorkspace, owner, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    expect(imported.response.status).toBe(200);
+    const workspace = (imported.body as CommandAck).workspace;
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request) => modelResult(request));
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+    const visible = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner);
+    expect(visible.response.status).toBe(200);
+    // Adding an optional field must stay invisible for drafts that did not use the web.
+    expect(visible.body).not.toHaveProperty('research');
   });
 
   it('keeps bounded, identity-redacted failure details when our own deadline stops a draft (F045)', async () => {

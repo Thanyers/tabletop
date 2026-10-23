@@ -26,6 +26,7 @@ describe('table capabilities', () => {
     expect(summary.gaps).toEqual(TABLE_CAPABILITIES.gaps.map((item) => item.id));
     expect(summary.limits).toEqual(TABLE_CAPABILITY_LIMITS);
     expect(summary.supported).toContain('computed');
+    expect(summary.supported).toContain('compute');
     expect(summary.supported).toContain('import');
     expect(summary.gaps).toContain('joins');
   });

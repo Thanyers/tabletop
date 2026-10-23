@@ -16,6 +16,7 @@ const origin = `http://127.0.0.1:${port}`;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const csrf = token => createHash('sha256').update(`tabletop-csrf-v1:${token}`).digest('base64url');
 const output = resolve('test-results/cloudflare-browser');
+const importedSourceNote = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 let providerCalls = 0;
 let tableAIReply = null;
 let tableAssistantReply = null;
@@ -56,7 +57,7 @@ const mf = new Miniflare(convertV4MiniflareOptions({
   d1Databases: ['DB'],
   durableObjects: { ROOMS: { className: 'Room', useSQLite: true }, BILLING: { className: 'Billing', useSQLite: true } },
   bindings: { PUBLIC_ORIGIN: origin, GOOGLE_OAUTH_CLIENT_ID: 'synthetic-client', GOOGLE_OAUTH_CLIENT_SECRET: 'synthetic-secret',
-    DEEPSEEK_KEY: 'synthetic-provider-key', AI_MONTHLY_BUDGET_MICRO_USD: '1000000', AI_DAILY_BUDGET_MICRO_USD: '1000000' },
+    DEEPSEEK_KEY: 'synthetic-provider-key', TABLE_WEB_SEARCH: 'off', AI_MONTHLY_BUDGET_MICRO_USD: '1000000', AI_DAILY_BUDGET_MICRO_USD: '1000000' },
   outboundService: async request => {
     if (request.url !== 'https://api.deepseek.com/chat/completions') throw new Error('Unexpected external request in isolated browser test');
     providerCalls++;
@@ -92,13 +93,23 @@ const mf = new Miniflare(convertV4MiniflareOptions({
     } else if (input.kind === 'table') {
       if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
       if (tableAIReply.expectedSources) {
-        expect(input.sources).toEqual(tableAIReply.expectedSources);
-        expect((input.importedSources ?? []).map(({ id, filename }) => ({ id, filename }))).toEqual(tableAIReply.expectedImportedSources ?? []);
+        const expectedSources = tableAIReply.expectedSources;
+        if (input.program) {
+          const evidenceIds = [...new Set((input.program.evidence ?? []).map(item => item.sourceId))].sort();
+          const citedSources = expectedSources.filter(source => evidenceIds.includes(source.id));
+          expect(citedSources.map(source => source.id).sort()).toEqual(evidenceIds);
+          expect(input.sources).toEqual(expectedSources.filter(source => !evidenceIds.includes(source.id)));
+          expect(input.importedSources ?? []).toEqual(citedSources.map(({ id, filename }) => ({ id, filename, note: importedSourceNote })));
+        } else {
+          expect(input.sources).toEqual(expectedSources);
+          expect(input.importedSources ?? []).toEqual([]);
+        }
       }
       else {
         expect(input.sources).toHaveLength(1);
         expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);
         expect(input.sources[0].text).toBe(tableAIReply.expectedText);
+        expect(input.importedSources ?? []).toEqual([]);
       }
       expect(typeof input.prompt).toBe('string');
       change = tableAIReply.change;
@@ -213,6 +224,37 @@ try {
   await anonymous.setViewportSize({ width: 1440, height: 1000 });
   expect((await api(anonymous, '/api/session')).status).toBe(401);
   mark('Public welcome explains the concept on desktop/mobile, preserves the Google/demo entry points and keeps anonymous users outside the Canvas');
+
+  // F069: English by default; the English / ไทย toggle switches the whole landing including the sign-in box, sets <html lang> and survives reload.
+  const languages = anonymous.getByRole('group', { name: 'Language' });
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(languages.getByRole('button', { name: 'English', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await languages.getByRole('button', { name: 'ไทย', exact: true }).focus();
+  await anonymous.keyboard.press('Enter');
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText('เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน');
+  await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toHaveAttribute('href', '/api/auth/google/start');
+  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
+  await expect(anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'ไทย', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
+  await anonymous.reload();
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText('เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน');
+  await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeVisible();
+  await anonymous.screenshot({ path: join(output, 'public-welcome-desktop-th.png'), fullPage: true });
+  await anonymous.setViewportSize({ width: 375, height: 812 });
+  expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await anonymous.getByRole('link', { name: 'เข้าสู่ระบบ', exact: true }).click();
+  await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeInViewport();
+  await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-th.png'), fullPage: true });
+  await anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
+  await expect(anonymous.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(anonymous.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
+  await anonymous.evaluate(() => window.scrollTo(0, 0));
+  await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-en-375.png'), fullPage: true });
+  await anonymous.setViewportSize({ width: 1440, height: 1000 });
+  expect(providerCalls).toBe(0);
+  mark('Landing language toggle (F069): English default, ไทย switches <html lang>, h1 and the Google sign-in, survives reload, fits 375px, English restores');
 
   const failedSignIn = await newPage(null, `${origin}/?auth_error=google_login_failed`);
   await expect(failedSignIn.getByRole('alert')).toContainText('Google sign-in did not complete.');
@@ -338,6 +380,11 @@ try {
   for (const link of await dm.getByRole('link', { name: 'Your tables', exact: true }).all()) await expect(link).toHaveAttribute('href', '/tables');
   await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
   await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
+  await dm.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'ไทย', exact: true }).click();
+  await expect(dm.getByRole('heading', { name: 'ยินดีต้อนรับกลับ DM', exact: true })).toBeVisible();
+  await expect(dm.getByRole('link', { name: 'โต๊ะของฉัน', exact: true })).toHaveCount(2);
+  await dm.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
+  await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
   await dm.locator('.tt-public-welcome header').getByRole('link', { name: 'Your tables', exact: true }).click();
   await expect(dm).toHaveURL(`${origin}/tables`);
   await expect(dm.getByRole('heading', { name: 'What are you here to do?' })).toBeVisible();

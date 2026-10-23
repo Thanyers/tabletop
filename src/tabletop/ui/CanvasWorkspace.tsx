@@ -73,7 +73,7 @@ interface PlanCanvasNodeData extends CanvasNodeBaseData {
   localPhysics: PhysicsParams;
   onLocalPhysicsChange: (value: PhysicsParams) => void;
   onResetLocalPhysics: () => void;
-  onEditRules?: () => void;
+  onEditRules?: (prompt?: string) => void;
 }
 
 interface AuxiliaryCanvasNodeData extends CanvasNodeBaseData {
@@ -660,7 +660,7 @@ interface CanvasWorkspaceProps {
   emptyContent?: ReactNode;
   openedObjectId?: string | null;
   onOpenObject?: (id: string | null) => void;
-  onEditRules?: () => void;
+  onEditRules?: (prompt?: string) => void;
 }
 
 function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy, onUpload, onTableImport, onExport, onFocusEvidence, focusSourceIds, persistLayout = true, preparedDemoArt = false, visibleNodeIds, focusNodeId, focusRequestKey, auxiliaryObjects = [], emptyContent, openedObjectId, onOpenObject, onEditRules }: CanvasWorkspaceProps) {

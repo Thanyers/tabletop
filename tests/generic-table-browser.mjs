@@ -332,16 +332,6 @@ async function verifyPendingChatMotion(owner, draftNode, draftCard) {
   expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
 }
 
-// Dev #194: a rule request sends the full text only of files the active rules do not cite yet.
-// Cited files travel by id and name as importedSources; their rows are already in the table.
-function expectedModelSources(domain) {
-  const cited = new Set((domain.program?.evidence ?? []).map(item => item.sourceId));
-  return {
-    expectedSources: domain.sources.filter(item => !cited.has(item.id)).map(item => ({ id: item.id, filename: item.filename, text: item.text })),
-    expectedImportedSources: domain.sources.filter(item => cited.has(item.id)).map(item => ({ id: item.id, filename: item.filename })),
-  };
-}
-
 async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false, streamThinking = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -351,7 +341,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const editingActiveRules = Boolean(before.domain.program || before.domain.candidate?.status === 'active');
   if (editingActiveRules) {
     const rules = await openCanvasObject(owner, 'table.rules');
-    await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+    await rules.getByRole('button', { name: 'Describe a rule change', exact: true }).click();
   }
   const chat = owner.getByTestId('table-chat-bar');
   const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
@@ -364,7 +354,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await expect(prompt).toHaveValue('');
     await expect(cancelRuleEdit).toHaveCount(0);
     const rules = await openCanvasObject(owner, 'table.rules');
-    await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+    await rules.getByRole('button', { name: 'Describe a rule change', exact: true }).click();
   }
   const proposalPrompt = 'Build a shared table from the source, with bounded actions and checks.';
   await prompt.fill(proposalPrompt);
@@ -399,7 +389,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const streamReasoning = streamThinking
     ? Array.from({ length: 24 }, (_, index) => `Checking source columns and drafting rule ${index + 1}. `)
     : undefined;
-  setTableReply({ change, gate, streamReasoning, ...expectedModelSources(before.domain) });
+  setTableReply({ change, gate, streamReasoning, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -573,7 +563,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
 // Picking an answer sends a new rule request at once under the table consent.
 async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  const modelSources = expectedModelSources(before.domain);
+  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
   const expectUnchanged = async () => {
     const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(current.revision).toBe(before.revision);
@@ -593,7 +583,7 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   const clarifyPrompt = 'Make a shift table.';
   const clarification = { question: 'Who must agree before two people swap shifts?', options: ['Both people', 'Only the owner', 'Nobody'] };
   await prompt.fill(clarifyPrompt);
-  setTableReply({ change: { kind: 'clarify', ...clarification }, ...modelSources });
+  setTableReply({ change: { kind: 'clarify', ...clarification }, expectedSources });
   const firstPost = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   await chat.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(consent).toBeVisible();
@@ -628,7 +618,7 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   // The follow-up job completes with neither a candidate nor a clarification (the poll response is stripped),
   // so its card must offer the message again instead of Review rules.
   const answeredPrompt = `${clarifyPrompt}\n\n${clarification.question} ${clarification.options[1]}`;
-  setTableReply({ change: { kind: 'clarify', question: 'Which shifts exist?', options: ['Morning and evening', 'Three shifts', 'I will attach a file'] }, ...modelSources });
+  setTableReply({ change: { kind: 'clarify', question: 'Which shifts exist?', options: ['Morning and evening', 'Three shifts', 'I will attach a file'] }, expectedSources });
   const pollUrl = `**/api/workspaces/${tableId}/model/*`;
   const stripClarification = async route => {
     if (route.request().method() !== 'GET') { await route.continue(); return; }
@@ -675,22 +665,34 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
 async function inspectAppliedRules(owner, tableId, api, rules) {
   const editor = await openCanvasObject(owner, 'table.rules');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
+  await expect(editor.locator('.tt-table-rules__label')).toHaveText('Rules in use');
   const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
   await expect(activeRules).toBeVisible();
-  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Ways to use this table · / }) });
   if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
-  await expect(activeRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
   for (const rule of rules) {
     const action = activeRules.locator('.tt-table-program__group').filter({ hasText: rule.action });
     await expect(action).toHaveCount(1);
+    await expect(action.locator('.tt-rule-description')).not.toBeEmpty();
+    await expect(action.locator('.tt-rule-head + .tt-rule-description + .tt-rule-meta')).toContainText(/^For .+ · affects /u);
     await expect(action.getByRole('button', { name: `Remove ${rule.action}`, exact: true })).toBeVisible();
-    const conditionRows = action.locator('.tt-table-rule-list li');
-    await expect(conditionRows).toHaveCount(rule.rows.length);
+    const howThisRuleWorks = action.locator('details.tt-rule-failure-details');
+    await expect(howThisRuleWorks.locator('summary')).toHaveText('How this rule works');
+    await expect(howThisRuleWorks).not.toHaveAttribute('open');
+    const detailsSummary = howThisRuleWorks.locator('summary');
+    await detailsSummary.scrollIntoViewIfNeeded();
+    await detailsSummary.click();
+    await expect(howThisRuleWorks).toHaveAttribute('open', '');
+    const behavior = howThisRuleWorks.locator('.tt-rule-behavior');
+    await expect(behavior).toContainText(/^When /u);
     for (let index = 0; index < rule.rows.length; index += 1) {
-      const row = conditionRows.nth(index);
-      await expect(row.locator('strong')).toHaveText(rule.rows[index].predicate);
-      await expect(row.locator('span')).toHaveText(rule.rows[index].message);
+      await expect(behavior).toContainText(rule.rows[index].predicate);
     }
+    const mismatchMessages = howThisRuleWorks.locator('ul li');
+    await expect(mismatchMessages).toHaveCount(rule.rows.length);
+    for (let index = 0; index < rule.rows.length; index += 1) await expect(mismatchMessages.nth(index)).toHaveText(rule.rows[index].message);
+    await detailsSummary.click();
+    await expect(howThisRuleWorks).not.toHaveAttribute('open');
   }
   const active = (await api(owner, `/api/workspaces/${tableId}`)).body;
   expect(active.domain.candidate?.status).toBe('active');
@@ -704,7 +706,7 @@ async function removeActionFromRules(owner, tableId, api, { actionTitle, actionI
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const editor = await openCanvasObject(owner, 'table.rules');
   const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
-  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Ways to use this table · / }) });
   if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
   const removed = owner.waitForResponse(response => isCommandResponse(response, 'evolve.removeItem'));
   await activeRules.getByRole('button', { name: `Remove ${actionTitle}`, exact: true }).click();
@@ -716,7 +718,7 @@ async function removeActionFromRules(owner, tableId, api, { actionTitle, actionI
   expect(after.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
   expect(after.domain.records).toEqual(before.domain.records);
   // Removing a table asks first; Cancel keeps it and its rows.
-  const dataFields = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Data fields · / }) });
+  const dataFields = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Tables and their fields · / }) });
   if (await dataFields.getAttribute('open') === null) await dataFields.locator('summary').click();
   await activeRules.getByRole('button', { name: `Remove ${collectionTitle}`, exact: true }).click();
   const confirm = editor.getByRole('alertdialog', { name: `Remove ${collectionTitle}`, exact: true });
@@ -1411,8 +1413,9 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await collectionEditor.getByRole('button', { name: 'Import rows', exact: true }).click();
   await collectionEditor.getByRole('textbox', { name: 'Or paste CSV', exact: true }).fill('name,available,borrower,borrow_note\nMegaphone,yes,,Imported in bulk\nSpare tripod,no,owner,');
   await expect(collectionEditor.getByText('2 rows ready · 0 invalid', { exact: true })).toBeVisible();
-  await collectionEditor.getByRole('button', { name: 'Import 2 rows', exact: true }).click();
-  await expect(collectionEditor.getByText('Imported 2 rows into Equipment.', { exact: true })).toBeVisible();
+  await expect(collectionEditor.getByRole('radio', { name: 'Add rows · keep the current 2 rows', exact: true })).toBeChecked();
+  await collectionEditor.getByRole('button', { name: 'Add 2 rows', exact: true }).click();
+  await expect(collectionEditor.getByText('Added 2 rows to Equipment.', { exact: true })).toBeVisible();
   await expect.poll(async () => (await api(owner, `/api/workspaces/${room.id}`)).body.domain.records.equipment.length).toBe(4);
   await expect(collectionEditor.getByText('Megaphone', { exact: true })).toBeVisible();
   expect(getProviderCalls()).toBe(callsBeforeImport);
@@ -1421,7 +1424,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await addSource(owner, room.id, equipmentNotes, api, 'chat', { aiDisabled: true, failHistory: true });
   expect(getProviderCalls()).toBe(callsBeforeSecondSource);
   const ownerRules = await openCanvasObject(owner, 'table.rules');
-  await ownerRules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+  await ownerRules.getByRole('button', { name: 'Describe a rule change', exact: true }).click();
   const ownerChat = owner.getByTestId('table-chat-bar');
   const ownerPrompt = ownerChat.getByRole('textbox', { name: 'Message', exact: true });
   // F013: the owner already consented on this table epoch, so a file added later does not ask again;
@@ -1593,7 +1596,7 @@ async function verifyRoleAssignment(owner, member, tableId, api) {
   const memberName = memberView.actor.name;
   expect(memberView.domain.access?.assignments?.[memberView.actor.actorId]).toBeUndefined();
   const memberRules = await openCanvasObject(member, 'table.rules');
-  await expect(memberRules.getByRole('button', { name: 'Edit rules', exact: true })).toBeVisible();
+  await expect(memberRules.getByRole('button', { name: 'Describe a rule change', exact: true })).toBeVisible();
 
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
@@ -1606,7 +1609,7 @@ async function verifyRoleAssignment(owner, member, tableId, api) {
   await expect(select.locator('option:checked')).toHaveText('Viewer');
   await expect.poll(async () => (await api(member, `/api/workspaces/${tableId}`)).body.domain.access?.assignments?.[memberView.actor.actorId]).toBe('viewer');
   // The member's screen drops the rule controls once the new projection arrives, without a reload.
-  await expect(memberRules.getByRole('button', { name: 'Edit rules', exact: true })).toHaveCount(0);
+  await expect(memberRules.getByRole('button', { name: 'Describe a rule change', exact: true })).toHaveCount(0);
 
   await roles.locator('summary').filter({ hasText: 'Manage roles' }).click();
   await roles.getByRole('button', { name: 'New role', exact: true }).click();
@@ -1648,9 +1651,12 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   // F019: the rules card explains what the table can and cannot do.
   const capabilityRules = await openCanvasObject(owner, 'table.rules');
   await capabilityRules.getByText('What this table can do', { exact: true }).click();
-  await expect(capabilityRules.getByText(/8 capabilities · 5 known gaps/u)).toBeVisible();
-  await capabilityRules.getByText(/Known gaps \(5\)/u).click();
-  await expect(capabilityRules.getByText(/Joins and rollups across collections/u)).toBeVisible();
+  const capabilities = (await api(owner, '/api/capabilities')).body.table;
+  expect(capabilities.supported).toContain('compute');
+  await expect(capabilityRules.getByText(new RegExp(`${capabilities.supported.length} capabilities · ${capabilities.gaps.length} known gaps`, 'u'))).toBeVisible();
+  await expect(capabilityRules.getByText('Reusable calculations', { exact: true })).toBeVisible();
+  await capabilityRules.getByText(`Known gaps (${capabilities.gaps.length})`, { exact: true }).click();
+  await expect(capabilityRules.getByText('Stored relations between collections', { exact: true })).toBeVisible();
   const generatedTableTitle = 'River Race: Active Canvas';
   await owner.getByRole('button', { name: 'Rename table', exact: true }).click();
   const renameInput = owner.getByLabel('Table name', { exact: true });
@@ -1799,7 +1805,7 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   const callsBeforeImport = getProviderCalls();
   await lateBoats.getByRole('button', { name: 'Import rows', exact: true }).click();
   await lateBoats.getByLabel('Or paste CSV').fill('seat,score\nmember-2,10');
-  await lateBoats.getByRole('button', { name: /Import 1 rows?/u }).click();
+  await lateBoats.getByRole('button', { name: /^Add 1 rows?$/u }).click();
   await expect(lateBoats.getByRole('cell', { name: '15', exact: true })).toBeVisible();
   expect(getProviderCalls()).toBe(callsBeforeImport);
   const recomputed = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
@@ -1823,7 +1829,7 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 async function verifyParallelRequests({ owner, member, tableId, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const ownerName = before.actor.name;
-  const modelSources = expectedModelSources(before.domain);
+  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
   const draftChange = (description) => {
     const program = structuredClone(before.domain.program);
     program.description = description;
@@ -1848,7 +1854,7 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
   const gate = new Promise(resolve => { releaseFirst = resolve; });
   try {
     const callsBefore = getProviderCalls();
-    setTableReply({ change: draftChange('F038 first queued-draft check.'), gate, ...modelSources });
+    setTableReply({ change: draftChange('F038 first queued-draft check.'), gate, expectedSources });
     await prompt.fill(firstPrompt);
     await send.click();
     // The provider received the first draft and is held by the gate.
@@ -1901,7 +1907,7 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
     expect(modelPosts).toHaveLength(1);
 
     // Release the first draft: it completes, then the queued draft starts on its own and completes.
-    setTableReply({ change: draftChange('F038 second queued-draft check.'), ...modelSources });
+    setTableReply({ change: draftChange('F038 second queued-draft check.'), expectedSources });
     releaseFirst();
     // F039 + dev #157: both drafts go into use and leave the canvas; each becomes a success notice.
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.ruleRevision, { timeout: 30_000 })
