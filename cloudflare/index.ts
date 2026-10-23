@@ -9,6 +9,7 @@ import { GOOGLE_CALLBACK_PATH, UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Direct
 import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
 import { displayWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { tableCapabilitySummary } from '../src/tabletop/shared/table-capabilities.js';
+import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 export { Room } from './room.js';
 export { Billing } from './billing.js';
 
@@ -138,7 +139,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'POST' && path === '/api/auth/logout') return logout(request, env);
   if (method === 'GET' && path === '/api/capabilities') {
     const enabled = Boolean(env.DEEPSEEK_KEY);
-    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), model: { enabled,
+    const compute = computeRuntimeCapabilities({ javascript: Boolean(env.COMPUTE_LOADER), python: env.TABLE_COMPUTE_PYTHON === 'enabled' });
+    return Response.json({ uploads: false, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), compute, model: { enabled,
       reason: enabled ? 'DeepSeek Flash proposes changes for your review.' : 'AI is awaiting a provider key.' } });
   }
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);

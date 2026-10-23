@@ -43,6 +43,7 @@
 | 2026-10-23 | หนึ่งโปรแกรมรองรับหลายกฎ/การ์ด; execution session แยกจาก room และ browser session | รักษาการใช้ซ้ำ ความต่อเนื่อง และสิทธิ์ในโต๊ะ |
 | 2026-10-23 | ตรวจ PR #205 (patch), #207 (research) ก่อนแก้; แยกไฟล์ใหม่และรักษา integration points | ลดการชนกับงานที่กำลังทำ ไม่ merge งานคนอื่นโดยปริยาย |
 | 2026-10-23 | งานที่ authority รับแล้วอยู่กับ room+actor และอยู่ต่อหลัง cookie หมดอายุ/revoke | alarm/restart ใช้กติกาเดียวกัน; ตรวจ membership/permission/epoch ก่อนและหลังเสมอ ไม่เก็บ session credential ใน run |
+| 2026-10-23 | ใช้ capability block เดียวกันใน endpoint, provider และ AI context meter หลังรวม F067 | ตัวเลขก่อนส่งนับ engine/profile/libraries ที่ host เปิดจริง; research/repair/reference context ที่เพิ่มบน server ตรวจเพดานซ้ำตอนส่ง |
 
 ## ผลตรวจ
 
@@ -58,7 +59,7 @@
 - UI-gate **16/16 measured PASS**, **4 SKIPPED**: theme refs, token schema/contrast pairs และ focus trap ไม่มี input/selector; ไม่ถือเป็น PASS ตรวจ viewport 280/320/390/414 และดูภาพ desktop/mobile แล้ว
 - `wrangler deploy --dry-run` ทั้ง default และ config Python opt-in ผ่าน พร้อม build image; ไม่ได้ provision หรือ execute Python บน hosted Cloudflare
 
-ชุดรวมหลัง sync `dev@a37f8a8`: unit **803 passed / 5 skipped**, Cloudflare **166/166**, lint **0 errors / 106 warnings**, typecheck/build/Worker dry-run ผ่าน; public-file scan 0 findings; audit ไม่มี high/critical แต่มี moderate dev-test advisories เดิม 2 รายการ Independent review ไม่เหลือ P1/P2 ในขอบเขตตรวจ browser regression รวมผ่าน: Cloudflare **32 checks**, Generative Canvas **8 checks** ผลทดสอบและภาพดิบอยู่ใน ignored `test-results/` ไม่ใช่ข้อมูล production
+ชุดรวมหลัง sync `dev@fa5efe4`: unit **818 passed / 5 skipped**, Cloudflare **170/170**, lint **0 errors / 107 warnings**, typecheck/build/Worker dry-run และบูต Worker จริง (`/healthz`, `/api/capabilities`) ผ่าน; public-file scan 0 findings; audit ไม่มี high/critical แต่มี moderate dev-test advisories เดิม 2 รายการ Independent review ไม่เหลือ P1/P2 ในขอบเขตตรวจ browser regression รวมผ่าน: Cloudflare **32 checks**, Generative Canvas **8 checks** ผลทดสอบและภาพดิบอยู่ใน ignored `test-results/` ไม่ใช่ข้อมูล production
 
 ## คำสั่งตรวจที่ทำซ้ำได้
 

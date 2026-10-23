@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — มาตรวัด AI context ไม่รวม capability ที่ backend เติม
+- **What happened:** หลังรวม F067 กับ reusable compute เทสต์ payload equality ใน CI ได้ 2,338 bytes แต่ UI helper นับ 2,236 bytes
+- **Root cause:** ทั้งสองใช้ตัวสร้างส่วนโต๊ะร่วมกันแล้ว แต่ backend เติม `computeCapabilities` ภายหลังโดย UI ไม่ได้รับข้อมูลชุดนี้
+- **Correct behavior:** ส่ง capability ที่เปิดจริงผ่าน endpoint ใช้ตัวสร้าง payload เดียวกันทั้ง provider และมาตรวัด รวม metadata ที่รู้ก่อนส่ง และคงเทสต์เทียบ bytes จริงไว้; research/repair ที่รู้ภายหลังให้ระบุขอบเขตและตรวจเพดานที่ backend หลัง merge งานที่แตะ contract เดียวกันต้องรันชุด Cloudflare อีกครั้งก่อน push
+
 ### 2026-10-23 — Browser harness ใช้ assets เก่าแล้ว build ลบไฟล์ระหว่างทดสอบ
 - **What happened:** browser suite นำทางเข้าห้องใหม่แล้วได้ HTTP response failure หลัง suite เริ่มผ่านหลายข้อ
 - **Root cause:** สั่ง Vite build ระหว่าง Miniflare harness ยังทำงาน; asset manifest ของ process เดิมชี้ไฟล์ที่ build ใหม่ลบไป

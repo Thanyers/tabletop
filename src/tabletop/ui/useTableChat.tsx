@@ -4,6 +4,7 @@ import { ApiFailure, type ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob, TableAssistantReference } from '../shared/table-assistant-contracts';
 import type { TableState } from '../shared/table-contracts';
+import type { ComputeRuntimeCapabilities } from '../shared/compute-runtime-profiles';
 import { sharedChatCanvasId } from '../shared/canvas-layout-ids';
 import { VISIBILITY_POLICY } from '../shared/visibility';
 import type { CanvasAuxiliaryObject } from './CanvasWorkspace';
@@ -34,6 +35,7 @@ export interface UseTableChatOptions {
   view: WorkspaceView | null;
   aiEnabled: boolean;
   assistantAvailable?: boolean;
+  computeCapabilities?: ComputeRuntimeCapabilities;
   readOnly: boolean;
   busy?: boolean;
   requestDraft: (view: WorkspaceView, prompt: string, commandId: CommandId) => Promise<ModelJob>;
@@ -814,7 +816,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
   // F067: the table's share of a rule request, measured with the server's own request builder.
-  const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft') ? tableDraftBytes(table.domain, '') : null, [table]);
+  const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft')
+    ? tableDraftBytes(table.domain, '', options.computeCapabilities) : null, [table, options.computeCapabilities]);
   const aiContext = draftBaseBytes === null ? undefined : {
     // The message adds its JSON-escaped length; quotes are already counted in the empty prompt.
     used: draftBaseBytes + new TextEncoder().encode(JSON.stringify(composerMessage)).byteLength - 2,

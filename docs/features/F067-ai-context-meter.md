@@ -21,7 +21,7 @@
 ## ทำอย่างไร
 
 - `src/tabletop/shared/table-draft-input.ts`: `tableDraftInput(state, prompt)` สร้างส่วนโต๊ะของคำขอ (ย้ายมาจาก `cloudflare/ai.ts`) และ `tableDraftBytes()` วัดเป็น UTF-8 JSON
-- Worker และหน้าแชทใช้ฟังก์ชันเดียวกัน ตัวเลขจึงตรงกันเสมอ (มีเทสต์เทียบกับ bytes ที่ provider ได้รับจริง)
+- Worker และหน้าแชทใช้ฟังก์ชันเดียวกัน รวม `computeCapabilities` จาก host (มีเทสต์เทียบกับ bytes ที่ provider ได้รับจริง) ส่วน research/repair และ context ของ card/rule references ที่ server ขยายเพิ่มหลังส่งไม่รวมในตัวเลขก่อนส่ง; backend ตรวจเพดานรวมอีกครั้ง
 - เพดานมาจาก `TABLE_AI_INPUT_BYTES` (F066)
 
 ## งาน

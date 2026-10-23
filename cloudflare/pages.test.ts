@@ -4,6 +4,7 @@ import wranglerConfig from '../wrangler.jsonc?raw';
 import { GOOGLE_CALLBACK_PATH, type Env } from './contracts.js';
 import worker from './index.js';
 import { isPagePath, pageKind } from './pages.js';
+import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 // F051: which paths a crawler may list, which are app-only, and which are real 404s.
 
@@ -123,6 +124,10 @@ describe('F051 HTML routes through the Worker', () => {
     expect(capabilities.response.status).toBe(200);
     expect(capabilities.response.headers.get('Cache-Control')).toBe('no-store');
     expect(capabilities.response.headers.get('X-Robots-Tag')).toBeNull();
+    await expect(capabilities.response.json()).resolves.toMatchObject({ compute: computeRuntimeCapabilities({
+      javascript: Boolean(bindings.COMPUTE_LOADER),
+      python: bindings.TABLE_COMPUTE_PYTHON === 'enabled',
+    }) });
     // Without the bound cookie the callback fails as before, but inside the auth handler (a redirect), not as a page.
     const callback = await fetchPage(`${GOOGLE_CALLBACK_PATH}?state=x&code=y`);
     expect(callback.response.headers.get('Content-Type') ?? '').not.toContain('text/html');

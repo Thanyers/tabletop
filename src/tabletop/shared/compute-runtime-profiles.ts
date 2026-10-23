@@ -7,10 +7,26 @@ export interface ComputeRuntimeCapabilities {
   runtimes: Array<'javascript' | 'python'>;
   pythonLibraries: string[];
 }
+export interface ComputeRuntimeAvailability {
+  javascript: boolean;
+  python: boolean;
+}
 export const COMPUTE_RUNTIME_PROFILES = {
   javascript: { name: 'JavaScript', libraries: ['ECMAScript standard library'], entrypoint: 'export default function compute(inputs) { return { outputId: value }; }' },
   python: { name: 'Python', libraries: ['Python standard library', 'pandas 2.3.3', 'numpy 2.3.4', 'scipy 1.16.3', 'openpyxl 3.1.5', 'python-dateutil 2.9.0.post0'], entrypoint: 'def compute(inputs):\n    return {"outputId": value}' },
 } as const;
+
+/** Build the public AI capability block from the host's actual runtime bindings. */
+export function computeRuntimeCapabilities(availability: ComputeRuntimeAvailability): ComputeRuntimeCapabilities {
+  return {
+    profile: COMPUTE_RUNTIME_PROFILE,
+    runtimes: [
+      ...(availability.javascript ? ['javascript' as const] : []),
+      ...(availability.python ? ['python' as const] : []),
+    ],
+    pythonLibraries: availability.python ? [...COMPUTE_RUNTIME_PROFILES.python.libraries] : [],
+  };
+}
 
 export const COMPUTE_GENERATION_POLICY = `REUSABLE COMPUTE (${COMPUTE_RUNTIME_PROFILE}):
 The request's computeCapabilities lists the engines actually enabled on this host. Choose ONLY one of those runtimes; if capabilities are absent use expressions only. A runtime listed below is a possible engine, not evidence that it is enabled. Choose the smallest suitable engine by operations, dependencies and expected workload, not a row-count guess alone.

@@ -23,18 +23,19 @@ export const TABLE_CAPABILITIES: { supported: CapabilityItem[]; gaps: Capability
     { id: 'collections', title: 'Collections and typed fields', detail: 'Text, number, boolean and list fields; up to 6 collections with 12 fields each.' },
     { id: 'actions', title: 'Actions with conditions and effects', detail: 'Owner/participant roles, optional turns, set/add effects and up to 12 created rows per action.' },
     { id: 'creates', title: 'Forms and buttons that add rows', detail: 'Typed creates validate on the server before anything is committed.' },
-    { id: 'import', title: 'Import rows from CSV', detail: 'Owner imports up to 100 rows per command; all-or-nothing with unique checks.' },
+    { id: 'import', title: 'Import rows from CSV or Excel', detail: 'Owner previews CSV or the first Excel sheet, then appends or confirms replacement; all-or-nothing with typed checks.' },
     { id: 'computed', title: 'Computed columns', detail: 'Row formulas over number fields (+ − × ÷ field or number), up to 6 per table.' },
+    { id: 'compute', title: 'Reusable calculations', detail: 'Typed inputs and outputs connect saved calculation modules to cards and other modules. Available engines depend on the host configuration.' },
     { id: 'canvas', title: 'Canvas views', detail: 'Scene, chart, metric and controls descriptors; up to 12 views, kept when rules evolve.' },
     { id: 'files', title: 'Shared source files', detail: 'Up to 4 UTF-8 files (32 KiB each, 64 KiB total) visible to invited members.' },
     { id: 'live', title: 'Live collaboration', detail: 'Shared card layout, live cursors, private chat answers and AI consent once per table.' },
   ],
   gaps: [
-    { id: 'joins', title: 'Joins and rollups across collections', detail: 'Views can aggregate inside a collection; there is no stored relation or cross-collection join yet.' },
+    { id: 'joins', title: 'Stored relations between collections', detail: 'There is no persistent relation field. Enabled calculation modules can join collection inputs and return a derived table.' },
     { id: 'schema', title: 'Destructive schema edits', detail: 'AI rule edits cannot remove collections, fields or invariants that hold data. Remove a collection or check by hand from the Rules card; fields cannot be removed.' },
     { id: 'media', title: 'Image, audio or 3D generation', detail: 'The provider returns data and canvas descriptors only.' },
     { id: 'simulation', title: 'Shared simulation clock', detail: 'Scene expressions update with state; there is no continuous real-time simulation.' },
-    { id: 'capability-builder', title: 'Capabilities beyond the DSL', detail: 'Tables compose the supported primitives; they cannot invent new runtime behaviour.' },
+    { id: 'capability-builder', title: 'Additional engines and packages', detail: 'Calculation modules use only the engines and offline libraries enabled by the host. They cannot install packages or call external services.' },
   ],
 };
 

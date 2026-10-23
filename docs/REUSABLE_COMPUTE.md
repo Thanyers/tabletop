@@ -20,6 +20,8 @@ Rules แสดงชื่อ วัตถุประสงค์ ข้อม
 
 Prompt ใช้ operations, dependencies และภาระงานประกอบการเลือก ไม่ตัดสินจากจำนวนแถวอย่างเดียว และเลือกได้เฉพาะ `computeCapabilities` ที่ host เปิดจริง ไม่อ้างว่ารองรับภาษา/แพ็กเกจอื่น ไม่ติดตั้งแพ็กเกจตอนรัน
 
+Host ส่ง engine/profile/libraries ที่เปิดอยู่ผ่าน `/api/capabilities` และใช้ข้อมูลชุดเดียวกันประกอบคำขอร่างกฎกับการนับ AI context ก่อนส่ง ส่วน research, repair และ context ของ card/rule references ที่ server ขยายเพิ่มภายหลังไม่รวมในตัวเลขก่อนส่ง; backend ตรวจเพดานคำขอรวมอีกครั้งเสมอ
+
 Profile `tabletop-compute-1` เตรียม Python 3.12, pandas 2.3.3, numpy 2.3.4, scipy 1.16.3, openpyxl 3.1.5 และ python-dateutil 2.9.0.post0 ไว้ใน image ที่ pin base digest และ dependency versions การเปลี่ยน profile ต้องรักษา lineage ของนิยามและผลเดิม
 
 ## Contract และการเชื่อมการ์ด

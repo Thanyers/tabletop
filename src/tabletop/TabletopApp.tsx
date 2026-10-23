@@ -842,6 +842,7 @@ export default function TabletopApp() {
     view,
     aiEnabled: capabilities.model.enabled,
     assistantAvailable: capabilities.tableAssistant?.available === true,
+    computeCapabilities: capabilities.compute,
     readOnly: capabilities.tableReadOnly === true,
     busy: busy !== null,
     requestDraft: (target, prompt, commandId) => requestAI(target, prompt, undefined, commandId),
