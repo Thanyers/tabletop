@@ -204,8 +204,9 @@ try {
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(1);
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
-  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
-  await expect(anonymous.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('target', '_blank');
+  // Signed out there is no sign-in box (Google is the only way in); the hero's demo link is the demo entry point.
+  await expect(anonymous.getByRole('link', { name: /^See the prepared demo/ })).toHaveAttribute('href', '/demo');
+  await expect(anonymous.getByRole('link', { name: /^See the prepared demo/ })).toHaveAttribute('target', '_blank');
   await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
   await expect(anonymous.locator('.tt-canvas-panel')).toHaveCount(0);
   const conceptImage = anonymous.locator('.tt-public-welcome__story-frame img');
@@ -218,6 +219,7 @@ try {
   await anonymous.setViewportSize({ width: 390, height: 844 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   // Google is the only sign-in: the header button goes straight to Google and there is no sign-in box below.
+  await anonymous.evaluate(() => window.scrollTo(0, 0));
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeInViewport();
   await expect(anonymous.locator('.tt-public-welcome__auth')).toHaveCount(0);
   await expect(anonymous.getByRole('link', { name: /^Start with your own work/ })).toHaveAttribute('href', '/api/auth/google/start');
@@ -245,6 +247,7 @@ try {
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop-th.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 375, height: 812 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await anonymous.evaluate(() => window.scrollTo(0, 0));
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeInViewport();
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-th.png'), fullPage: true });
   await anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
