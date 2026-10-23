@@ -58,18 +58,20 @@ describe('F035 access commands', () => {
       expect(() => run(empty, type, payload, noManage)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
     }
 
-    const limitedManager = withPermissions(['roles.manage', 'files.add', 'rules.draft', 'table.act', 'ai.ask']);
+    const limitedManager = withPermissions(['roles.manage', 'files.add', 'rules.draft', 'data.compute', 'table.act', 'ai.ask']);
     expect(() => run(empty, 'access.saveRole', { name: 'Bigger', permissions: ['members.remove'] }, limitedManager)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
     expect(() => run(empty, 'access.assign', { actorId: 'account-c', roleId: 'manager' }, limitedManager)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
     expect(() => run(empty, 'access.assign', { actorId: 'account-c', roleId: 'default' }, limitedManager)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
     // Within their own permissions they may assign someone who holds no more than they do, and create roles.
     const withViewer = run(empty, 'access.assign', { actorId: 'account-c', roleId: 'viewer' }, owner);
+    expect(() => run(withViewer, 'access.assign', { actorId: 'account-c', roleId: 'contributor' }, withPermissions(['roles.manage', 'files.add', 'rules.draft', 'table.act', 'ai.ask'])))
+      .toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));
     expect(run(withViewer, 'access.assign', { actorId: 'account-c', roleId: 'contributor' }, limitedManager).access?.assignments).toEqual({ 'account-c': 'contributor' });
     expect(roles(run(empty, 'access.saveRole', { name: 'Smaller', permissions: ['files.add'] }, limitedManager))).toHaveLength(1);
   });
 
   it('refuses changing the role of someone who holds a permission the caller lacks (no demoting a stronger manager)', () => {
-    const limitedManager = withPermissions(['roles.manage', 'files.add', 'rules.draft', 'table.act', 'ai.ask']);
+    const limitedManager = withPermissions(['roles.manage', 'files.add', 'rules.draft', 'data.compute', 'table.act', 'ai.ask']);
     const empty = createDomain('table', owner);
     // Unassigned (default) and Manager both hold members.remove, which the caller lacks.
     expect(() => run(empty, 'access.assign', { actorId: 'account-c', roleId: 'viewer' }, limitedManager)).toThrow(expect.objectContaining({ code: 'FORBIDDEN' }));

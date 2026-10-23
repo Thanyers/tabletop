@@ -11,6 +11,7 @@ import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
 import { ReasonedDomainError } from './model-failure.js';
+import { COMPUTE_RUNTIME_PROFILE, COMPUTE_RUNTIME_PROFILES, type ComputeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
 const MAX_PROMPT_CHARS = 4_000;
@@ -428,8 +429,13 @@ export async function proposeChange(
       // Research is an enhancement: fall back to the deterministic draft path.
     }
   }
+  const computeCapabilities: ComputeRuntimeCapabilities = {
+    profile: COMPUTE_RUNTIME_PROFILE,
+    runtimes: [...(env.COMPUTE_LOADER ? ['javascript' as const] : []), ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? ['python' as const] : [])],
+    pythonLibraries: env.TABLE_COMPUTE_PYTHON === 'enabled' ? [...COMPUTE_RUNTIME_PROFILES.python.libraries] : [],
+  };
   const tableProviderInput = prepared.kind === 'table' && prepared.providerInput.kind === 'table'
-    ? (researchBlock ? { ...prepared.providerInput, research: researchBlock } : prepared.providerInput)
+    ? { ...prepared.providerInput, ...(researchBlock ? { research: researchBlock } : {}), computeCapabilities }
     : null;
   const providerBytes = new TextEncoder().encode(canonical(tableProviderInput ?? prepared.providerInput)).byteLength;
   if (providerBytes > prepared.maximumInputBytes) {

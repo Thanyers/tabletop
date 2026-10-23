@@ -1,6 +1,8 @@
+import type { TableDataProvenance } from './table-data-provenance';
 import type { DomainBase } from './contracts';
 import type { GenerativeCanvas, GenerativeExpression } from './generative-contracts';
 import type { RollSpec, TablePendingRoll } from './roll';
+import type { ComputeRunRecord, TableComputeProgram } from './table-compute';
 
 /** Data-only program with a bounded arithmetic AST and optional closed canvas descriptors. */
 export type TableValue = string | number | boolean | null | string[];
@@ -23,6 +25,8 @@ export interface TableProgram {
   evidence: { sourceId: string; quote: string }[]; assumptions: string[];
   /** Optional local canvas descriptions; omitted by existing version 1 programs. */
   canvas?: GenerativeCanvas;
+  /** F066: reusable server-executed modules, versioned with the table rules. */
+  compute?: TableComputeProgram;
 }
 export interface TableChange { kind: 'table'; program: TableProgram; initialRecords: Record<string, TableRecord[]> }
 /** Row-relative arithmetic over stored fields (F017). Kept out of the program schema so old writers still read the table. */
@@ -56,6 +60,7 @@ export interface CanvasCardMeta {
   source: 'recorded' | 'inferred';
 }
 export interface TableState extends DomainBase {
+  dataProvenance?: TableDataProvenance;
   kind: 'table'; sources: TableSource[]; program: TableProgram | null;
   records: Record<string, TableRecord[]>; turn: string | null;
   canvasLayout?: {
@@ -75,6 +80,8 @@ export interface TableState extends DomainBase {
    * `revision` stamps the dataRevision it was computed from, so a client-side preview can
    * tell that the numbers no longer match the state it is showing.
    */
+  /** F066: bounded run lineage and results persist with the room for reconnect/resume. */
+  computeRuns?: ComputeRunRecord[];
   computedValues?: {
     revision: number;
     values: Record<string, Record<string, Record<string, number | null>>>;

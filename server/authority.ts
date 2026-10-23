@@ -9,6 +9,10 @@ import { z } from 'zod';
 import { canonicalJson, hashValue, keyedSha256, randomId, randomToken, sha256, constantTimeHashEqual, isRecord } from './codec.js';
 import { jsonWithinBudget } from '../src/tabletop/shared/json-budget.js';
 import { AuthorityError } from './errors.js';
+import { TableComputeOrchestrator } from './table-compute-orchestrator.js';
+import type { ComputeWorkspaceSnapshot } from './table-compute-orchestrator.js';
+import type { ComputeRunner } from '../src/tabletop/shared/table-compute.js';
+import { computeModuleIdSchema } from '../src/tabletop/shared/table-compute.js';
 import {
   INVITE_TTL_MS,
   MAX_COMMAND_TYPE_CHARS,
@@ -75,7 +79,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
   ]),
   table: new Set([
-    'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.roll', 'table.setComputedColumns', 'canvas.layout',
+    'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.roll', 'table.setComputedColumns', 'table.compute.run', 'canvas.layout',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
     'evolve.autoApply', 'evolve.removeItem',
@@ -121,6 +125,14 @@ export interface AuthorityOptions {
   readonly workspaceIdFactory?: () => string;
   readonly workspaceLifetimeMs?: number;
   readonly workspaceExpiresAt?: number;
+  readonly computeRunner?: ComputeRunner;
+  readonly reauthenticateComputeSession?: (session: AuthenticatedSession) => Promise<AuthenticatedSession>;
+  readonly scheduleBackground?: (task: Promise<void>) => void;
+  readonly onComputeWorkScheduled?: (workspaceId: string) => void;
+}
+
+interface InternalCommandSession {
+  record: Pick<SessionRecord, 'actorId' | 'tokenHash'>;
 }
 
 function cookieToken(request: IncomingMessage): string | null {
@@ -239,6 +251,9 @@ export class CommandAuthority {
   private readonly workspaceLifetimeMs: number;
   private readonly workspaceExpiresAt: number | null;
   private onWorkspaceChanged: (workspaceId: string, epoch: number) => void;
+  private readonly computeOrchestrator: TableComputeOrchestrator | null;
+  private readonly scheduleBackground: (task: Promise<void>) => void;
+  private readonly onComputeWorkScheduled: (workspaceId: string) => void;
 
   constructor(options: AuthorityOptions) {
     this.repository = options.repository;
@@ -254,6 +269,17 @@ export class CommandAuthority {
       throw new Error('WORKSPACE_EXPIRY_INVALID');
     }
     this.onWorkspaceChanged = options.onWorkspaceChanged ?? (() => undefined);
+    this.scheduleBackground = options.scheduleBackground ?? (task => { void task; });
+    this.onComputeWorkScheduled = options.onComputeWorkScheduled ?? (() => undefined);
+    this.computeOrchestrator = options.computeRunner ? new TableComputeOrchestrator({
+      runner: options.computeRunner,
+      onWorkScheduled: workspaceId => this.onComputeWorkScheduled(workspaceId),
+      getSnapshot: (workspaceId, actorId) => this.computeSnapshot(workspaceId, actorId),
+      executeTrusted: (actorId, workspaceId, type, payload) => this.executeTrustedCompute(actorId, workspaceId, type, payload),
+      reauthenticate: session => options.reauthenticateComputeSession
+        ? options.reauthenticateComputeSession(session)
+        : this.reauthenticateSession(session),
+    }) : null;
   }
 
   setWorkspaceChangedHandler(handler: (workspaceId: string, epoch: number) => void): void {
@@ -338,7 +364,7 @@ export class CommandAuthority {
   }
 
   async authorizeSession(session: AuthenticatedSession, workspaceId: string): Promise<AuthorizedWorkspace> {
-    return this.repository.withWorkspaceTransaction(workspaceId, async (transaction) => {
+    const authorized = await this.repository.withWorkspaceTransaction(workspaceId, async (transaction) => {
       const workspace = transaction.workspace;
       const now = this.now();
       if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
@@ -359,6 +385,8 @@ export class CommandAuthority {
       const view = this.toWorkspaceView(workspace, member, domain, members);
       return { session, member, workspace: view, context };
     });
+    if (authorized.workspace.kind === 'table') this.scheduleCompute(authorized.workspace.id, authorized.workspace.epoch, session);
+    return authorized;
   }
 
   async createWorkspace(session: AuthenticatedSession, input: unknown): Promise<WorkspaceView> {
@@ -444,6 +472,13 @@ export class CommandAuthority {
       if (targetActorId === workspace.ownerActorId) throw new AuthorityError('MEMBER_NOT_REMOVABLE', 'The table owner cannot be removed.');
       const target = await transaction.getMember(targetActorId);
       if (!target || target.revokedAt !== null) throw new AuthorityError('MEMBER_NOT_FOUND', 'This person is not at the table.');
+      const tableState = workspace.domainState;
+      if (tableState.kind === 'table' && tableState.program?.compute?.modules.some(module =>
+        module.inputs.some(input => input.binding.kind === 'actor'))) {
+        const invalidated = structuredClone(tableState);
+        invalidated.dataRevision += 1;
+        await transaction.updateWorkspaceDomainState(invalidated);
+      }
       await transaction.revokeMember(targetActorId, now);
     });
     this.onWorkspaceChanged(workspaceId, epoch);
@@ -564,7 +599,36 @@ export class CommandAuthority {
 
   async execute(session: AuthenticatedSession, rawEnvelope: unknown, workspaceId = session.record.workspaceId): Promise<CommandAck> {
     if (!workspaceId) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-    return this.executeInternal(session, workspaceId, commandFrom(rawEnvelope), null);
+    const envelope = commandFrom(rawEnvelope);
+    if (envelope.type === 'table.compute.run') {
+      const parsed = z.strictObject({ moduleId: computeModuleIdSchema }).safeParse(envelope.payload);
+      if (!parsed.success) throw new AuthorityError('INVALID_COMMAND_PAYLOAD');
+      return this.executeInternal(session, workspaceId, { ...envelope, payload: { ...parsed.data, runId: envelope.commandId } }, null);
+    }
+    return this.executeInternal(session, workspaceId, envelope, null);
+  }
+
+  async closeComputeJobs(): Promise<void> {
+    await this.computeOrchestrator?.close();
+  }
+
+  async resumeTableCompute(workspaceId: string): Promise<void> {
+    if (!this.computeOrchestrator) return;
+    try {
+      const epoch = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => {
+        const { workspace } = transaction;
+        if (workspace.kind !== 'table' || workspace.domainState.kind !== 'table'
+            || workspace.expiresAt <= this.now() || workspace.schemaVersion !== SCHEMA_VERSION) return null;
+        const owner = await transaction.getMember(workspace.ownerActorId);
+        if (!owner || owner.revokedAt !== null || owner.role !== 'owner') return null;
+        return workspace.epoch;
+      });
+      if (epoch !== null) this.scheduleCompute(workspaceId, epoch);
+    } catch (error) {
+      if (error instanceof AuthorityError && error.code === 'WORKSPACE_NOT_FOUND') return;
+      if (error instanceof Error && error.message === 'WORKSPACE_NOT_FOUND') return;
+      throw error;
+    }
   }
 
   async executeModelProposal(
@@ -683,11 +747,66 @@ export class CommandAuthority {
     );
   }
 
+  private async reauthenticateSession(session: AuthenticatedSession): Promise<AuthenticatedSession> {
+    const record = await this.repository.getSession(session.record.tokenHash);
+    if (!record || record.revokedAt !== null || expiresAt(record) <= this.now()
+        || record.actorId !== session.record.actorId
+        || !constantTimeHashEqual(record.csrfHash, session.csrfToken)) {
+      throw new AuthorityError('SESSION_EXPIRED');
+    }
+    return { record, csrfToken: session.csrfToken, expiresAt: expiresAt(record) };
+  }
+
+  private scheduleCompute(workspaceId: string, epoch: number, session?: AuthenticatedSession): void {
+    if (!this.computeOrchestrator) return;
+    this.scheduleBackground(this.computeOrchestrator.schedule(workspaceId, epoch, session));
+  }
+
+  private async computeSnapshot(workspaceId: string, actorId?: string): Promise<ComputeWorkspaceSnapshot> {
+    return this.repository.withWorkspaceTransaction(workspaceId, async transaction => {
+      const workspace = transaction.workspace;
+      const now = this.now();
+      if (workspace.expiresAt <= now) throw new AuthorityError('WORKSPACE_NOT_FOUND');
+      if (workspace.kind !== 'table') throw new AuthorityError('COMMAND_NOT_ALLOWED');
+      if (workspace.schemaVersion !== SCHEMA_VERSION) {
+        throw new AuthorityError('SCHEMA_VERSION_UNSUPPORTED', 'Workspace data uses an unsupported schema version.', 503);
+      }
+      const member = await transaction.getMember(actorId ?? workspace.ownerActorId);
+      if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
+      const context = actorContext(workspace, member, now);
+      const domain = projectDomain(workspace.domainState, context);
+      if (domain.kind !== 'table') throw new AuthorityError('COMMAND_NOT_ALLOWED');
+      const view = this.toWorkspaceView(workspace, member, domain, await transaction.listMembers());
+      return { workspace: view, context, ownerActorId: workspace.ownerActorId };
+    });
+  }
+
+  private async executeTrustedCompute(
+    actorId: string,
+    workspaceId: string,
+    type: 'table.compute.queue' | 'table.compute.update',
+    payload: unknown,
+  ): Promise<void> {
+    const snapshot = await this.computeSnapshot(workspaceId, actorId);
+    if ((type === 'table.compute.update' && actorId !== snapshot.ownerActorId)
+        || !snapshot.context.permissions?.has('data.compute')) {
+      throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
+    }
+    const envelope: CommandEnvelope = {
+      commandId: randomId(),
+      expectedRevision: snapshot.workspace.revision,
+      expectedEpoch: snapshot.workspace.epoch,
+      type,
+      payload,
+    };
+    await this.executeInternal({ record: { actorId, tokenHash: '' } }, workspaceId, envelope, 'table-compute');
+  }
+
   private async executeInternal(
-    session: AuthenticatedSession,
+    session: AuthenticatedSession | InternalCommandSession,
     workspaceId: string,
     envelope: CommandEnvelope,
-    trustedOperation: 'artifact-import' | null,
+    trustedOperation: 'artifact-import' | 'table-compute' | null,
     requestFingerprint?: string,
     modelJobGuard?: ModelJobCommitGuard,
   ): Promise<CommandAck> {
@@ -707,6 +826,10 @@ export class CommandAuthority {
           if (envelope.type === 'invoice.import') throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
           throw new AuthorityError('COMMAND_NOT_ALLOWED');
         }
+        if (trustedOperation === 'table-compute'
+            && (workspace.kind !== 'table'
+              || (envelope.type === 'table.compute.update' && workspace.ownerActorId !== session.record.actorId)
+              || !may(workspace, member, 'data.compute'))) throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
         if (modelJobGuard) await transaction.assertModelJobCommitting(modelJobGuard);
         if (workspace.kind === 'teaching' && envelope.type === 'teaching.setRepresentation') {
           await this.validateTeachingTarget(transaction, envelope.payload);
@@ -770,6 +893,10 @@ export class CommandAuthority {
       throw this.storageError(error);
     }
     this.onWorkspaceChanged(ack.workspace.id, ack.workspace.epoch);
+    if (ack.workspace.kind === 'table') {
+      this.scheduleCompute(ack.workspace.id, ack.workspace.epoch,
+        trustedOperation === null && 'csrfToken' in session ? session : undefined);
+    }
     return ack;
   }
 
@@ -831,7 +958,7 @@ export class CommandAuthority {
     transaction: import('./repository.js').WorkspaceTransaction,
     workspace: StoredWorkspace,
     member: StoredMember,
-    session: AuthenticatedSession,
+    session: AuthenticatedSession | InternalCommandSession,
     envelope: CommandEnvelope,
     requestHash: string,
     decision: DomainDecision,
@@ -917,7 +1044,7 @@ export class CommandAuthority {
     transaction: import('./repository.js').WorkspaceTransaction,
     workspace: StoredWorkspace,
     member: StoredMember,
-    session: AuthenticatedSession,
+    session: AuthenticatedSession | InternalCommandSession,
     envelope: CommandEnvelope,
     requestHash: string,
     title: string,
@@ -970,7 +1097,7 @@ export class CommandAuthority {
     transaction: import('./repository.js').WorkspaceTransaction,
     workspace: StoredWorkspace,
     member: StoredMember,
-    session: AuthenticatedSession,
+    session: AuthenticatedSession | InternalCommandSession,
     envelope: CommandEnvelope,
     requestHash: string,
     now: number,
@@ -1088,9 +1215,10 @@ export class CommandAuthority {
   }
 }
 
-function commandAllowed(kind: CaseKind, type: string, trustedOperation: 'artifact-import' | null): boolean {
+function commandAllowed(kind: CaseKind, type: string, trustedOperation: 'artifact-import' | 'table-compute' | null): boolean {
   if (type === 'workspace.reset' || type === 'workspace.rename') return true;
   if (type === 'invoice.import') return trustedOperation === 'artifact-import' && kind === 'invoice';
+  if (type === 'table.compute.queue' || type === 'table.compute.update') return trustedOperation === 'table-compute' && kind === 'table';
   return publicCommands[kind].has(type);
 }
 

@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — Compute ผ่าน runner/unit แต่เส้นทางห้องจริงไม่เริ่มงาน
+- **What happened:** โปรแกรมจาก AI รันใน container โดยตรงได้ แต่ authority ไม่จัดคิวหรือจบด้วย failure ก่อนเรียก runner
+- **Root cause:** reauthentication ใช้ helper ที่ hash ค่า raw ไปเทียบกับค่า hash โดยส่ง `csrfHash` ที่ hash แล้วเข้าไปอีกครั้ง; mocks ไม่ตรวจ authentication จริง อีก race คือ schedule ทิ้ง wakeup ที่มาตอน drain กำลังจบ
+- **Correct behavior:** ส่ง `session.csrfToken` ให้ raw-value hash comparison; ทดสอบด้วย session ที่สร้างและ authenticate ผ่าน authority จริงก่อนยืนยัน integration และเก็บ dirty flag เพื่อ drain อีกครั้งเมื่อมีสถานะเปลี่ยนระหว่างงานกำลังรัน
+
 ### 2026-10-23 — DSH plugin นอก linked profile หา SDK ไม่พบ และ hook context อาจตัดกติกาท้ายไฟล์
 - **What happened:** absolute module จาก home patch import `@deepseek-ai/dsh-llm` แบบ bare ไม่สำเร็จ; AGENTS เดิมยาวเกินงบ additionalContext ของ Claude
 - **Root cause:** module นอก linked package ไม่ร่วม peer resolution ของ profile และ Claude ส่ง context เกิน 10,000 ตัวอักษรเป็น preview

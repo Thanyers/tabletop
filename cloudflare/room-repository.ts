@@ -1265,6 +1265,7 @@ export class RoomRepository implements WorkspaceRepository {
       const expiredInvitations = new Map<string, number>();
       const replacedInvitations = new Map<Seat, number>();
       const revokedMembers = new Map<string, number>();
+      let domainStateCommit: DomainState | null = null;
       let commandCommit: CommandCommit | null = null;
       const repository = this;
       const transaction: WorkspaceTransaction = {
@@ -1339,6 +1340,11 @@ export class RoomRepository implements WorkspaceRepository {
         async revokeMember(actorId, now): Promise<void> {
           revokedMembers.set(actorId, now);
         },
+        async updateWorkspaceDomainState(domainState): Promise<void> {
+          if (domainState.kind !== workspace.kind) throw new Error('WORKSPACE_DOMAIN_KIND_MISMATCH');
+          if (commandCommit) throw new Error('WORKSPACE_STATE_UPDATE_CONFLICT');
+          domainStateCommit = structuredClone(domainState);
+        },
         async getApproval(approvalId, epoch): Promise<{ actorId: string; candidateHash: string; proofHash: string; expiresAt: number; revoked: boolean } | null> {
           const row = repository.rows(
             `SELECT approving_actor_id, candidate_hash, proof_hash, expires_at, revoked FROM room_approvals
@@ -1363,11 +1369,12 @@ export class RoomRepository implements WorkspaceRepository {
         async commitCommand(commit): Promise<void> {
           if (commit.workspace.id !== workspaceId) throw new Error('WORKSPACE_TRANSACTION_MISMATCH');
           if (commandCommit) throw new Error('WORKSPACE_TRANSACTION_ALREADY_COMMITTED');
+          if (domainStateCommit) throw new Error('WORKSPACE_STATE_UPDATE_CONFLICT');
           commandCommit = commit;
         },
       };
       const result = await operation(transaction);
-      if (stagedInvitations.length || expiredInvitations.size || replacedInvitations.size || revokedMembers.size || commandCommit) {
+      if (stagedInvitations.length || expiredInvitations.size || replacedInvitations.size || revokedMembers.size || domainStateCommit || commandCommit) {
         const completedCommit = commandCommit;
         this.storage.transactionSync(() => {
           for (const [ticketHash, revokedAt] of expiredInvitations) {
@@ -1399,6 +1406,12 @@ export class RoomRepository implements WorkspaceRepository {
               invitation.ticketHash, invitation.workspaceId, invitation.epoch, invitation.role,
               invitation.seat, invitation.createdBy, invitation.createdAt, invitation.expiresAt,
               invitation.redeemedAt, invitation.redeemedBy, invitation.revokedAt,
+            );
+          }
+          if (domainStateCommit) {
+            this.storage.sql.exec(
+              `UPDATE room_workspaces SET domain_state = ?, state_hash = ? WHERE id = ? AND epoch = ?`,
+              JSON.stringify(domainStateCommit), hashValue(domainStateCommit), workspaceId, workspace.epoch,
             );
           }
           if (completedCommit) this.persistCommit(completedCommit, workspace);

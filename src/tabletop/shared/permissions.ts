@@ -11,7 +11,7 @@ export const COMMON_PERMISSIONS = [
 ] as const;
 
 export const KIND_PERMISSIONS = {
-  table: ['files.add', 'files.remove', 'data.import', 'data.columns', 'table.act', 'ai.ask'],
+  table: ['files.add', 'files.remove', 'data.import', 'data.columns', 'data.compute', 'table.act', 'ai.ask'],
   teaching: ['lesson.parameters', 'lesson.representation', 'lesson.note'],
   encounter: ['game.direct', 'game.note'],
   invoice: ['invoice.review'],
@@ -30,6 +30,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'files.remove': 'Remove files',
   'data.import': 'Import rows',
   'data.columns': 'Set computed columns',
+  'data.compute': 'Run saved compute rules',
   'table.act': 'Use table actions',
   'ai.ask': 'Ask the AI',
   'lesson.parameters': 'Change lesson settings',
@@ -68,8 +69,8 @@ const all = (kind: CaseKind) => permissionsFor(kind);
 export const PRESET_ROLES: Record<CaseKind, AccessRole[]> = {
   table: [
     { id: 'manager', name: 'Manager', permissions: all('table') },
-    { id: 'editor', name: 'Editor', permissions: ['table.rename', 'rules.draft', 'rules.approve', 'files.add', 'files.remove', 'data.import', 'data.columns', 'table.act', 'ai.ask'] },
-    { id: 'contributor', name: 'Contributor', permissions: ['rules.draft', 'files.add', 'table.act', 'ai.ask'] },
+    { id: 'editor', name: 'Editor', permissions: ['table.rename', 'rules.draft', 'rules.approve', 'files.add', 'files.remove', 'data.import', 'data.columns', 'data.compute', 'table.act', 'ai.ask'] },
+    { id: 'contributor', name: 'Contributor', permissions: ['rules.draft', 'files.add', 'data.compute', 'table.act', 'ai.ask'] },
     { id: 'viewer', name: 'Viewer', permissions: [] },
   ],
   teaching: [

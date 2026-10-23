@@ -8,7 +8,7 @@ type Scope = ReadonlyMap<string, ScopeBinding>;
 type Records = Readonly<Record<string, readonly TableRecord[]>>;
 
 const forbiddenNames = new Set<string>(GENERATIVE_FORBIDDEN_IDENTIFIERS);
-const expressionOps = new Set(['literal', 'input', 'selectedField', 'recordField', 'system', 'variable', 'field', 'collection', 'if', 'math', 'compare', 'logic', 'not', 'map', 'filter', 'reduce', 'aggregate']);
+const expressionOps = new Set(['literal', 'input', 'selectedField', 'recordField', 'system', 'variable', 'field', 'collection', 'computeResult', 'if', 'math', 'compare', 'logic', 'not', 'map', 'filter', 'reduce', 'aggregate']);
 const binaryMath = new Set(['add', 'subtract', 'multiply', 'divide', 'remainder', 'power']);
 const unaryMath = new Set(['abs', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'floor', 'ceil', 'round']);
 
@@ -86,6 +86,12 @@ function infer(expression: GenerativeExpression, program: TableProgram, action: 
     case 'collection':
       assert(program.collections.some(item => item.id === expression.id), 'Expression refers to an unknown collection.');
       return 'rows';
+    case 'computeResult': {
+      const module = program.compute?.modules.find(item => item.id === expression.moduleId);
+      const output = module?.outputs.find(item => item.id === expression.outputId);
+      assert(output && output.type !== 'table' && output.type !== 'text-list', 'Compute result expressions require a declared scalar output.');
+      return output.type;
+    }
     case 'if': {
       assert(infer(expression.test, program, action, records, scope, depth + 1) === 'boolean', 'Conditional tests must be boolean.');
       return joinedType(infer(expression.then, program, action, records, scope, depth + 1), infer(expression.otherwise, program, action, records, scope, depth + 1));

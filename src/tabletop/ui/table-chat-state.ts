@@ -4,7 +4,14 @@ import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin,
 import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
-export interface TableChatRequestContext { prompt: string; hasCreateAction: boolean; /** A card the message is about (chat reference). */ referencedCard?: boolean }
+export interface TableChatRequestContext {
+  prompt: string;
+  hasCreateAction: boolean;
+  /** A canvas card the message is about (chat reference). */
+  referencedCard?: boolean;
+  /** A specific rule/module the message is about (stable server-resolved reference). */
+  referencedRule?: boolean;
+}
 
 const CARD_CHANGE = /\b(?:harder|easier|more|less|remove|rename|add|make|change|edit|extend)\b|ยาก|ง่าย|ลด|ลบ|เปลี่ยน|เอาออก|เพิ่ม|ปรับ|แก้/iu;
 const QUESTION_LEAD = /^(?:(?:how many|how much|what|which|why|when|who|where|explain|summari[sz]e)\b|อธิบาย|สรุป|ทำไม|มี.{0,32}กี่|กี่)/iu;
@@ -14,7 +21,9 @@ export function tableChatMode(role: 'owner' | 'participant', hasActiveProgram: b
   if (!hasActiveProgram || explicitDraft) return 'draft';
   if (!request) return 'ask';
   const prompt = request.prompt.trim();
-  // A message about one specific card is a rule change for that card, unless it is a question.
+  // A requested change about one exact rule is a draft, unless it is phrased as a question.
+  if (request.referencedRule && CARD_CHANGE.test(prompt) && !QUESTION_LEAD.test(prompt)) return 'draft';
+  // Keep the original behavior for general canvas cards such as a collection or chart.
   if (request.referencedCard && CARD_CHANGE.test(prompt) && !QUESTION_LEAD.test(prompt)) return 'draft';
   // F047: one classifier shared by every entry point; build/edit become a rule draft, ask/act stay
   // conversational because an action still needs the person's explicit confirmation.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TableField } from '../shared/table-contracts';
-import { autoMapping, buildImportRows, cellValue, parseCsv } from './table-row-import';
+import { autoMapping, buildImportRows, cellValue, parseCsv, worksheetToCsvTable } from './table-row-import';
 
 const fields: TableField[] = [
   { id: 'sku', label: 'SKU', type: 'text', required: true },
@@ -19,6 +19,21 @@ describe('parseCsv', () => {
   it('keeps newlines inside quotes and drops blank lines', () => {
     const parsed = parseCsv('a,b\n"line1\nline2",2\n\n');
     expect(parsed.rows).toEqual([['line1\nline2', '2']]);
+  });
+});
+
+describe('worksheetToCsvTable', () => {
+  it('uses one worksheet as typed import cells and drops blank worksheet rows', () => {
+    const table = worksheetToCsvTable([
+      ['SKU', 'Qty', 'Active', 'Date'],
+      ['A-1', 4, false, new Date(2026, 9, 23)],
+      ['', null, null, null],
+    ]);
+    expect(table.headers).toEqual(['SKU', 'Qty', 'Active', 'Date']);
+    expect(table.rows).toEqual([['A-1', '4', 'false', '2026-10-23']]);
+    expect(buildImportRows(table, autoMapping(table.headers, fields), fields).rows).toEqual([
+      { sku: 'A-1', qty: 4, active: false, note: null },
+    ]);
   });
 });
 

@@ -33,6 +33,7 @@ export type GenerativeExpression =
   | { op: 'variable'; name: string }
   | { op: 'field'; record: string; field: string }
   | { op: 'collection'; id: string }
+  | { op: 'computeResult'; moduleId: string; outputId: string }
   | { op: 'if'; test: GenerativeExpression; then: GenerativeExpression; otherwise: GenerativeExpression }
   | { op: 'math'; fn: 'add' | 'subtract' | 'multiply' | 'divide' | 'remainder' | 'power' | 'min' | 'max' | 'abs' | 'sqrt' | 'sin' | 'cos' | 'tan' | 'asin' | 'acos' | 'atan' | 'floor' | 'ceil' | 'round'; args: GenerativeExpression[] }
   | { op: 'compare'; fn: 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains'; left: GenerativeExpression; right: GenerativeExpression }

@@ -28,7 +28,7 @@ export function isProgramCardId(cardId: string): boolean {
 }
 
 /** The canvas card a removed rule item owned, if that item had one of its own. */
-export function ruleItemCardId(kind: 'action' | 'invariant' | 'view' | 'collection', id: string): string | null {
+export function ruleItemCardId(kind: 'action' | 'invariant' | 'view' | 'collection' | 'compute', id: string): string | null {
   if (kind === 'collection') return `${COLLECTION_PREFIX}${id}`;
   if (kind === 'view') return `${VIEW_PREFIX}${id}`;
   // Actions share one card and invariants have none; removing them only touches `table.rules`.

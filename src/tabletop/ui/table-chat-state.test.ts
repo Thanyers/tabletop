@@ -39,6 +39,14 @@ describe('private table chat recovery state', () => {
     expect(tableChatMode('participant', false, true)).toBe('ask');
   });
 
+  it('routes a specific rule change to drafting while keeping a question in ask mode', () => {
+    const request = (prompt: string) => ({ prompt, hasCreateAction: false, referencedRule: true });
+    expect(tableChatMode('owner', true, false, request('Make this rule easier to understand'))).toBe('draft');
+    expect(tableChatMode('owner', true, false, request('What does this rule do?'))).toBe('ask');
+    expect(tableChatMode('owner', true, false, { prompt: 'Change this rule', hasCreateAction: false })).toBe('ask');
+    expect(tableChatMode('participant', true, true, request('Make this rule easier'))).toBe('ask');
+  });
+
   it('returns an active table to assistant mode when explicit rule editing is cancelled', () => {
     expect(tableChatMode('owner', true, true)).toBe('draft');
     expect(tableChatMode('owner', true, false)).toBe('ask');

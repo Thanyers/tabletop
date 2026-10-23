@@ -23,6 +23,7 @@ export const generativeExpressionSchema: z.ZodType<GenerativeExpression> = z.laz
   z.strictObject({ op: z.literal('variable'), name: generativeIdSchema }),
   z.strictObject({ op: z.literal('field'), record: generativeIdSchema, field: generativeIdSchema }),
   z.strictObject({ op: z.literal('collection'), id: generativeIdSchema }),
+  z.strictObject({ op: z.literal('computeResult'), moduleId: generativeIdSchema, outputId: generativeIdSchema }),
   z.strictObject({ op: z.literal('if'), test: generativeExpressionSchema, then: generativeExpressionSchema, otherwise: generativeExpressionSchema }),
   z.strictObject({
     op: z.literal('math'),

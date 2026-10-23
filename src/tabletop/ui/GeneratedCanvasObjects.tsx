@@ -81,6 +81,9 @@ function getProjection(state: TableState, view: WorkspaceView, preview?: LocalAc
     const result = { views: evaluateGenerativeCanvas(canvas, {
       program,
       records: state.records,
+      computeRuns: state.computeRuns,
+      dataRevision: state.dataRevision,
+      ruleRevision: state.ruleRevision,
       ...(action ? { action } : {}),
       ...(inputs ? { inputs } : {}),
       actor: view.actor.actorId,

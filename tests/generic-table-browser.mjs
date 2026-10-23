@@ -341,7 +341,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const editingActiveRules = Boolean(before.domain.program || before.domain.candidate?.status === 'active');
   if (editingActiveRules) {
     const rules = await openCanvasObject(owner, 'table.rules');
-    await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+    await rules.getByRole('button', { name: 'Describe a rule change', exact: true }).click();
   }
   const chat = owner.getByTestId('table-chat-bar');
   const prompt = chat.getByRole('textbox', { name: 'Message', exact: true });
@@ -354,7 +354,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
     await expect(prompt).toHaveValue('');
     await expect(cancelRuleEdit).toHaveCount(0);
     const rules = await openCanvasObject(owner, 'table.rules');
-    await rules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+    await rules.getByRole('button', { name: 'Describe a rule change', exact: true }).click();
   }
   const proposalPrompt = 'Build a shared table from the source, with bounded actions and checks.';
   await prompt.fill(proposalPrompt);
@@ -667,7 +667,7 @@ async function inspectAppliedRules(owner, tableId, api, rules) {
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.rules');
   const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
   await expect(activeRules).toBeVisible();
-  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Ways to use this table · / }) });
   if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
   await expect(activeRules.locator('.tt-table-rule-list')).toHaveCount(rules.length);
   for (const rule of rules) {
@@ -694,7 +694,7 @@ async function removeActionFromRules(owner, tableId, api, { actionTitle, actionI
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const editor = await openCanvasObject(owner, 'table.rules');
   const activeRules = editor.getByRole('region', { name: 'Current active rules', exact: true });
-  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Actions · / }) });
+  const actionDetails = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Ways to use this table · / }) });
   if (await actionDetails.getAttribute('open') === null) await actionDetails.locator('summary').click();
   const removed = owner.waitForResponse(response => isCommandResponse(response, 'evolve.removeItem'));
   await activeRules.getByRole('button', { name: `Remove ${actionTitle}`, exact: true }).click();
@@ -706,7 +706,7 @@ async function removeActionFromRules(owner, tableId, api, { actionTitle, actionI
   expect(after.domain.ruleRevision).toBe(before.domain.ruleRevision + 1);
   expect(after.domain.records).toEqual(before.domain.records);
   // Removing a table asks first; Cancel keeps it and its rows.
-  const dataFields = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Data fields · / }) });
+  const dataFields = activeRules.locator('details.tt-table-rule-details').filter({ has: owner.locator('summary').filter({ hasText: /^Tables and their fields · / }) });
   if (await dataFields.getAttribute('open') === null) await dataFields.locator('summary').click();
   await activeRules.getByRole('button', { name: `Remove ${collectionTitle}`, exact: true }).click();
   const confirm = editor.getByRole('alertdialog', { name: `Remove ${collectionTitle}`, exact: true });
@@ -1411,7 +1411,7 @@ async function equipmentScenario({ owner, member, secondMember, newPage, api, se
   await addSource(owner, room.id, equipmentNotes, api, 'chat', { aiDisabled: true, failHistory: true });
   expect(getProviderCalls()).toBe(callsBeforeSecondSource);
   const ownerRules = await openCanvasObject(owner, 'table.rules');
-  await ownerRules.getByRole('button', { name: 'Edit rules', exact: true }).click();
+  await ownerRules.getByRole('button', { name: 'Describe a rule change', exact: true }).click();
   const ownerChat = owner.getByTestId('table-chat-bar');
   const ownerPrompt = ownerChat.getByRole('textbox', { name: 'Message', exact: true });
   // F013: the owner already consented on this table epoch, so a file added later does not ask again;
@@ -1583,7 +1583,7 @@ async function verifyRoleAssignment(owner, member, tableId, api) {
   const memberName = memberView.actor.name;
   expect(memberView.domain.access?.assignments?.[memberView.actor.actorId]).toBeUndefined();
   const memberRules = await openCanvasObject(member, 'table.rules');
-  await expect(memberRules.getByRole('button', { name: 'Edit rules', exact: true })).toBeVisible();
+  await expect(memberRules.getByRole('button', { name: 'Describe a rule change', exact: true })).toBeVisible();
 
   await owner.getByRole('button', { name: 'Invite', exact: true }).click();
   const dialog = owner.getByRole('dialog', { name: 'People at this table' });
@@ -1596,7 +1596,7 @@ async function verifyRoleAssignment(owner, member, tableId, api) {
   await expect(select.locator('option:checked')).toHaveText('Viewer');
   await expect.poll(async () => (await api(member, `/api/workspaces/${tableId}`)).body.domain.access?.assignments?.[memberView.actor.actorId]).toBe('viewer');
   // The member's screen drops the rule controls once the new projection arrives, without a reload.
-  await expect(memberRules.getByRole('button', { name: 'Edit rules', exact: true })).toHaveCount(0);
+  await expect(memberRules.getByRole('button', { name: 'Describe a rule change', exact: true })).toHaveCount(0);
 
   await roles.locator('summary').filter({ hasText: 'Manage roles' }).click();
   await roles.getByRole('button', { name: 'New role', exact: true }).click();

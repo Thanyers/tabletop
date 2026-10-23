@@ -149,6 +149,8 @@ export interface WorkspaceTransaction {
   revokeOutstandingInvitations(seat: Seat, now: number): Promise<void>;
   /** F003: end one member's access in the current epoch (owner removal). */
   revokeMember(actorId: string, now: number): Promise<void>;
+  /** Persist an authority-owned state adjustment in the same transaction as membership changes. */
+  updateWorkspaceDomainState(domainState: DomainState): Promise<void>;
   getApproval(
     approvalId: string,
     epoch: number,
@@ -860,6 +862,14 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
             `UPDATE memberships SET revoked_at = $4
              WHERE workspace_id = $1 AND epoch = $2 AND actor_id = $3 AND revoked_at IS NULL`,
             [workspaceId, workspace.epoch, actorId, now],
+          );
+        },
+        async updateWorkspaceDomainState(domainState): Promise<void> {
+          if (domainState.kind !== workspace.kind) throw new Error('WORKSPACE_DOMAIN_KIND_MISMATCH');
+          await transaction.query(
+            `UPDATE workspaces SET domain_state = $3::jsonb, state_hash = $4
+             WHERE id = $1 AND epoch = $2`,
+            [workspaceId, workspace.epoch, JSON.stringify(domainState), hashValue(domainState)],
           );
         },
         async revokeOutstandingInvitations(seat, now): Promise<void> {

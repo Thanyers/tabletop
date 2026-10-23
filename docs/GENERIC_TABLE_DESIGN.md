@@ -6,7 +6,7 @@ The unreleased Generative Canvas candidate extends this base contract with promp
 
 Status: implemented and deployed as a testing release on 19 October 2026. [Acceptance](GENERIC_TABLE_ACCEPTANCE.md) records CI, real-provider/two-account staging checks and the approved production migration; [Deployments](DEPLOYMENTS.md) identifies the active source/version. The gates below remain requirements for changes to these paths.
 
-The signed-in app gains a blank `table` room. The existing invoice, lesson and encounter rooms retain their behavior and data. This is a bounded general table runtime: collections, typed fields, records, actions, conditions, atomic effects, unique constraints and optional turns. It does not execute generated code.
+The signed-in app gains a blank `table` room. The existing invoice, lesson and encounter rooms retain their behavior and data. This base release is a bounded general table runtime: collections, typed fields, records, actions, conditions, atomic effects, unique constraints and optional turns. Its later [reusable compute extension](REUSABLE_COMPUTE.md) adds isolated generated JavaScript/Python with typed ports and saved run lineage; see that contract for current execution limits.
 
 ## User flow
 

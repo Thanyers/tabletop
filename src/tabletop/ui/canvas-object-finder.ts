@@ -84,7 +84,13 @@ export function runCanvasObjectCommand(text: string): CanvasObjectCommandResult 
 }
 
 /** A card the person pointed the chat at ("about this card: make it harder"). */
-export interface ChatCardReference { id: string; title: string; detail: string }
+export interface ChatCardReference {
+  id: string;
+  title: string;
+  detail: string;
+  /** The exact table rule being discussed. Labels and details stay display-only. */
+  rule?: { kind: 'action' | 'check' | 'table' | 'view' | 'formula' | 'compute'; id: string };
+}
 
 let referenceListener: ((reference: ChatCardReference) => void) | null = null;
 
@@ -116,7 +122,14 @@ export function chatReferencePrompt(references: ChatCardReference | readonly Cha
   const head = `[การ์ด ${list.map((reference) => `“${reference.title}”`).join(' + ')}] ${message}`;
   const overhead = head.length + (list.length === 1 ? '\n(Card in question: )'.length : '\n(Cards in question:)'.length + list.length * 6);
   const budget = Math.max(40, Math.floor((MAX_CHAT_PROMPT_LENGTH - overhead) / list.length));
-  const detail = (reference: ChatCardReference) => reference.detail.length > budget ? `${reference.detail.slice(0, budget - 1)}…` : reference.detail;
+  const detail = (reference: ChatCardReference) => {
+    const marker = reference.rule ? ` [[table-rule:${reference.rule.kind}:${reference.rule.id}]]` : '';
+    const detailBudget = Math.max(1, budget - marker.length);
+    const shortened = reference.detail.length > detailBudget
+      ? `${reference.detail.slice(0, Math.max(0, detailBudget - 1))}…`
+      : reference.detail;
+    return `${shortened}${marker}`;
+  };
   if (list.length === 1) return `${head}\n(Card in question: ${detail(list[0])})`;
   return `${head}\n(Cards in question:\n${list.map((reference, index) => `${index + 1}. ${detail(reference)}`).join('\n')})`;
 }
@@ -134,7 +147,18 @@ export function parseReferencedPrompt(prompt: string): { references: ChatCardRef
   const single = /^\(Card in question: ([^]*)\)$/u.exec(block);
   const listed = /^\(Cards in question:\n([^]*)\)$/u.exec(block);
   const details = single ? [single[1]] : listed ? listed[1].split('\n').map((line) => line.replace(/^\d+\. /u, '')) : [];
-  const references = titles.map((title, index) => ({ id: `prompt-reference-${index}-${title}`, title, detail: details[index] ?? `card “${title}”` }));
+  const references = titles.map((title, index) => {
+    const rawDetail = details[index] ?? `card “${title}”`;
+    const marker = /\s*\[\[table-rule:(action|check|table|view|formula|compute):([a-z][a-z0-9_-]{0,39})\]\]\s*$/u.exec(rawDetail);
+    const detail = marker ? rawDetail.slice(0, marker.index).trimEnd() : rawDetail;
+    const rule = marker ? { kind: marker[1] as NonNullable<ChatCardReference['rule']>['kind'], id: marker[2] } : undefined;
+    return {
+      id: rule ? `rule:${rule.kind}:${rule.id}` : `prompt-reference-${index}-${title}`,
+      title,
+      detail,
+      ...(rule ? { rule } : {}),
+    };
+  });
   return { references, message: firstLine.slice(match[0].length) };
 }
 

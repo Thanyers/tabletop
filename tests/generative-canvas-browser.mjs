@@ -546,7 +546,7 @@ try {
     const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
     if (before.domain.program || before.domain.candidate?.status === 'active') {
       const rules = await openCanvasObject(owner, 'table.rules');
-      await clickVisible(rules.getByRole('button', { name: 'Edit rules', exact: true }));
+      await clickVisible(rules.getByRole('button', { name: 'Describe a rule change', exact: true }));
     }
     const sourceNames = before.domain.sources.map((source) => source.filename);
     const prompt = draftPrompt(scenario, phase);

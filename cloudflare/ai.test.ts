@@ -7,6 +7,7 @@ import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/t
 import { proposeChange, type AIProposalRequest } from './ai.js';
 import { ModelStreamFailure, measureDeepSeekChangeRequest, type DeepSeekChangeInput, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import type { Env } from './contracts.js';
+import type { ComputeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 const testEnv = env as Env;
 
@@ -239,11 +240,12 @@ describe('Cloudflare AI proposal helper', () => {
     const input = request('table');
     const table = input.workspace.domain;
     if (table.kind !== 'table') throw new Error('Expected table fixture.');
+    const computeCapabilities: ComputeRuntimeCapabilities = { profile: 'tabletop-compute-1', runtimes: ['javascript'], pythonLibraries: [] };
     const measuredInput: DeepSeekChangeInput = {
       kind: 'table', prompt: input.prompt,
       sources: table.sources.map(({ id, filename, text }) => ({ id, filename, text })),
       program: table.program, turn: table.turn,
-      records: table.records,
+      records: table.records, computeCapabilities,
     };
     const requestBytes = measureDeepSeekChangeRequest(measuredInput);
     let observed = '';
@@ -262,7 +264,7 @@ describe('Cloudflare AI proposal helper', () => {
         sources: [{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename, text: tableScenarioSources.equipment.text }],
         program: null,
         turn: null,
-        records: {},
+        records: {}, computeCapabilities,
       });
     }));
     expect(result.change).toEqual(proposal('table'));

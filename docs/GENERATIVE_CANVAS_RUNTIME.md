@@ -32,13 +32,13 @@
 
 ## ขอบเขตที่บังคับจริง
 
-- ไม่รัน JavaScript, HTML, dependency, URL หรือคำสั่งระบบที่โมเดลสร้าง สูตรเป็นข้อมูลที่ interpreter ของ Tabletop ประมวลผล
+- สูตร AST เป็นข้อมูลที่ interpreter ประมวลผล ส่วน candidate [Reusable compute](REUSABLE_COMPUTE.md) เพิ่ม JavaScript/Python เฉพาะใน isolated backend ที่ host เปิดและมี typed ports; ไม่รัน generated HTML หรือ URL ใน renderer และไม่ติดตั้ง dependency ระหว่างรัน
 - สูงสุด 12 generated views และ 24 nodes รวมบน Canvas; scene รวมไม่เกิน 128 ชิ้น; expression depth 32 และ 512 expression nodes
 - การประมวลผลหนึ่ง action และภาพรวมหนึ่ง Canvas จำกัด 10,000 evaluation steps และผลลัพธ์ 16 KiB พร้อมตรวจจำนวน ค่าตัวเลข และการอ้างอิง
 - ปุ่มทุกปุ่มอ้าง action ที่ประกาศไว้ ห้าม renderer แก้ shared records ตรง ๆ; action ที่ผิดเงื่อนไขหรือสร้างผลลัพธ์ผิดขอบเขตไม่ commit
 - ต่อเติม collection ว่างหรือ field ใหม่ได้ โดยคง collection, field definition และ invariant เดิมทั้งหมด field ที่บังคับบนตารางมีข้อมูลต้องมี default ที่ผ่านการตรวจ ร่างแก้ไขใช้ `initialRecords: {}` เสมอ ไม่เขียนทับแถวเดิม
 - action สร้างแถวใช้ `creates: [{ collection, values }]` ค่าทุก field เป็น operand เช่น `{input:"amount"}` หรือ `{literal:250}` และใช้ default ของ field ได้ Server สร้าง ID ให้เอง ตรวจ role/turn, input, จำนวนแถว และ invariant แล้ว commit พร้อม effects แบบ atomic จากสถานะก่อน action เดียวกัน จำกัด 12 creates ต่อ action, 100 แถวต่อ collection, 200 แถวรวม
-- การเคลื่อนไหวเป็นภาพที่คำนวณตาม input และ transition; ยังไม่มี shared simulation clock, arbitrary animation timeline, arbitrary code sandbox, image generation, 3D หรือเกม real-time
+- การเคลื่อนไหวเป็นภาพที่คำนวณตาม input และ transition; ยังไม่มี shared simulation clock, arbitrary animation timeline, image generation, 3D หรือเกม real-time ขอบเขต code execution ใหม่แยกอยู่ใน [Reusable compute](REUSABLE_COMPUTE.md)
 - เพดานประวัติ assistant jobs ยังเป็น 500 ต่อห้อง ไม่ใช่การเก็บความจำไม่จำกัด และไม่มี retention/export/delete workflow ใหม่
 
 ## จุดต่อสำหรับทีม
