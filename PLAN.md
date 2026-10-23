@@ -7,7 +7,7 @@
 
 1. **ก่อนหยิบงาน:** ดูตารางด้านล่าง แล้วรัน `gh pr list -R Thanyers/tabletop --state open` ว่าไม่มี PR ที่ชื่อขึ้นต้นด้วย ID เดียวกัน
 2. **จองงาน:** แตก branch จาก `dev` (`feat/<ID>-<ชื่อสั้น>`) แก้แถวของงานนั้นในไฟล์นี้ (สถานะ `doing`, ผู้รับผิดชอบ, branch) แล้ว **เปิด draft PR ทันที** ชื่อ PR ขึ้นต้นด้วย ID เช่น `F001-T4: ...` · draft PR คือการจองที่ทุกคนเห็น
-3. **แก้เฉพาะแถวของตัวเอง** อย่าจัดรูปแบบหรือเรียงตารางใหม่ จะได้ไม่ชนกับคนอื่น
+3. **แก้เฉพาะแถวของตัวเอง** อย่าจัดรูปแบบหรือเรียงตารางใหม่ จะได้ไม่ชนกับคนอื่น ยกเว้นบล็อกที่ต้องรวมจาก merge/rebase ให้ทำตาม [กติกา Markdown merge conflicts](AGENTS.md#markdown-merge-conflicts)
 4. **ดูคอลัมน์ "พื้นที่ที่แตะ":** ถ้างานที่ `doing` อยู่แตะไฟล์เดียวกับงานที่จะหยิบ ให้รอ หรือคุยกันก่อน · งานที่มี "ต้องรอ" ห้ามเริ่มจนงานนั้น `done`
 5. **จบงาน:** PR พร้อม review → เปลี่ยนสถานะเป็น `review` · merge แล้ว (คนหรือ AI) → `done` (แก้ใน PR ถัดไปของคุณได้)
 6. งานใหม่ที่ยังไม่มีใครจอง ให้เพิ่มไว้ใน feature doc ก่อน แล้วค่อยเพิ่มแถวที่นี่
@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F061 | Landing page ตามคุณค่าและเรื่องเล่า README | `review` | [F061](docs/features/F061-readme-landing.md) |
 | F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
@@ -44,6 +45,7 @@
 | F047 | ลดการปฏิเสธร่างที่เกิดจากชื่อ/เพดานที่ไม่ได้บอก: normalize id, guide จากค่าคงที่เดียว, classifier 4 intent | `review` | [F047](docs/features/F047-generation-reliability.md) |
 | F048 | ลูกเต๋าที่ server ทอยให้เป็น parameter ของ action: `table.roll` + pending roll อายุ 10 นาทีผูก `dataRevision` + ใช้ครั้งเดียว + เก็บหน้าเต๋า/ผลลง event | `review` | [F048](docs/features/F048-roll-parameter.md) |
 
+| F053 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F051](docs/features/F051-seo-baseline.md) |
 | F051 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F051](docs/features/F051-seo-baseline.md) |
 | F049 | ลูกเต๋าบนการ์ด controls: stepper จำนวน/หน้า + ปุ่ม ทอย + หน้าลูกเต๋า/ผลรวม และค่าที่ทอยได้ส่งต่อให้การ์ดอื่นที่ bind parameter เดียวกัน (v1 สุ่มฝั่ง client, visual-only; server roll = F048) · prompt guide ให้ drafter เขียน dice ได้ | `review` | [F049](docs/features/F049-dice-visual.md) |
 | F052 | Landing ภาษาอังกฤษ + รูปแชร์ใหม่ (การ์ดแบรนด์) | `doing` | [F052](docs/features/F052-english-landing.md) |
@@ -57,6 +59,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F061-T1 | ปรับหน้าแรกเฉพาะเนื้อหา ภาพ และ layout | `review` | Codex | `feat/F061-readme-landing` / #197 | `ui/PublicWelcome.tsx`, `ui/public-welcome.css`, ภาพ landing, `docs/features/F061-readme-landing.md`, `spec.md`, `CHANGELOG.md` | — | รักษา account/route/demo เดิม; ไม่รวม draft #180 |
 | F061-T1 | การ์ด Rules โครง When/Then/Applies to + routing เส้นแบบอ้อมการ์ด, แยกเลน, bridge ที่จุดตัด | `review` | lead (AI) | `feat/F061-rules-card-and-lines` | `src/tabletop/ui/TableCanvasObjects.tsx`, `src/tabletop/ui/rules-summary.ts` (ใหม่), `src/tabletop/ui/rules-card.css` (ใหม่), `src/tabletop/ui/CanvasWorkspace.tsx`, `src/tabletop/ui/calm-workspace.css`, `src/state/edge-routing.ts`, `src/components/CanvasEdge.tsx`, `spec.md`, `CHANGELOG.md` | — | unit 721 · r1 browser 7 · cloudflare browser 32 |
 | F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
 | F053-T1 | Room → Worker: `SessionView` มี `createdAt`, `updatedAt`, `updatedBy` | `review` | lead (AI) | `feat/tables-search-filter` / #196 | `cloudflare/{contracts,index,room,room-repository,room.test}.ts`, `src/tabletop/shared/contracts.ts` | — | header เท่านั้น ไม่มี migration/schema change |

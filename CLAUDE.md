@@ -2,6 +2,8 @@
 
 **อ่าน [`AGENTS.md`](AGENTS.md) ก่อน** ไฟล์นั้นคือกติกากลางของ AI ทุกตัว: spec-driven workflow, branch `dev`/`main`, CI, release, deploy, hotfix และขอบเขตของ AI
 
+**เมื่อ merge/rebase ชน Markdown:** ใช้ [AGENTS.md → Markdown merge conflicts](AGENTS.md#markdown-merge-conflicts) เพื่อ resolve จน commit/push และตรวจสถานะ PR
+
 ไฟล์นี้เก็บเฉพาะสิ่งที่ Claude Code ต้องรู้เพิ่ม และใช้ **ทับบน** global `~/.claude/CLAUDE.md` · ข้อไหนไม่ได้เขียนไว้ที่นี่หรือใน `AGENTS.md` ให้ใช้ตาม global
 
 ## โปรเจกต์นี้ไม่ต่อ phak
