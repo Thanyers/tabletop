@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **F064/F050 แก้บรรทัดล้น/ถูกตัดในการ์ดแคบ:** `liveSearchParts()` แยก query กับ `· เจอ N` เป็นคนละ span ⇒ คำว่า "เจอ N" ไม่ถูก ellipsis ตัดที่ 320px อีก (สตริงรวมยังเหมือนเดิมผ่าน `liveSearchLine()`) · `.tt-chat-card__thinking` ของ F050 ได้ `justify-self: stretch` กัน nowrap content ดันการ์ดเกินจอ · synthetic local scripts (`generic-table-local`, `canvas-evolution-local`) ปิด `TABLE_WEB_SEARCH` เฉพาะโหมดไม่มี real AI ให้ตรงกับ browser fixtures (dev ปิดใน `tests/*-browser.mjs` แล้ว) · ไม่มี migration/secret/binding; rollback = revert branch
+
 - **เมนูบัญชีเป็นวงกลมโปรไฟล์ (F071):** ล็อกอินแล้ว header ของ `/`, `/tables` และ `/new` แสดงวงกลมอักษรย่อ (สีเดียวกับ cursor) แทนชื่อ/อีเมลและปุ่ม Sign out · กดแล้วเปิดเมนู Your tables, ข้อมูลโต๊ะทั้งหมด (admin) และ Sign out · บน landing ข้อความตามภาษาที่เลือก
 
 ## 8.0.0 — 2026-10-23
