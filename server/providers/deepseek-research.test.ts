@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_RESEARCH_ROUNDS, runResearch } from './deepseek-research.js';
+import { MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_TITLE_CHARS, type ModelJobSearchProgress } from '../../src/tabletop/shared/model-job-progress.js';
 
 interface Scripted {
   chat: unknown[];
@@ -123,5 +124,64 @@ describe('runResearch', () => {
       .rejects.toMatchObject({ code: 'RESEARCH_REQUEST_FAILED' });
     await expect(runResearch('x', { apiKey: '' }))
       .rejects.toMatchObject({ code: 'RESEARCH_NOT_CONFIGURED' });
+  });
+
+  it('reports what it searches and what it kept, so a waiting card can show it (F064)', async () => {
+    const events: ModelJobSearchProgress[] = [];
+    const { fetchImpl } = scriptedFetch({
+      chat: [
+        toolTurn('VAT ไทย 2569'),
+        finalTurn({ brief: 'VAT 7% ถึง 30 ก.ย. 2570', sourceUrls: ['https://www.thaigov.go.th/th/news/166956'] }),
+      ],
+      search: [searchResults],
+    });
+
+    await runResearch('VAT ไทยปี 2026', { apiKey: 'k', fetchImpl, onProgress: (event) => events.push(event) });
+
+    expect(events.map((event) => event.phase)).toEqual(['searching', 'reading', 'done']);
+    expect(events[0]).toMatchObject({ query: 'VAT ไทย 2569', resultsCount: 0 });
+    // The count is what the adapter kept after filtering, not the raw provider row count.
+    expect(events[1]).toMatchObject({ query: 'VAT ไทย 2569', resultsCount: 1, topTitle: 'รัฐบาลไทย' });
+    expect(events[2]).toMatchObject({ resultsCount: 1, topTitle: 'รัฐบาลไทย' });
+    expect(events[1].topTitle).not.toBe('noise');
+  });
+
+  it('stays silent when the request needs no search (F064)', async () => {
+    const events: ModelJobSearchProgress[] = [];
+    const { fetchImpl } = scriptedFetch({
+      chat: [finalTurn({ brief: '', sourceUrls: [] })],
+      search: [],
+    });
+
+    await runResearch('บวกเลขจากยอดที่ให้', { apiKey: 'k', fetchImpl, onProgress: (event) => events.push(event) });
+
+    // No "used 0 sources" line: nothing searched means nothing to report.
+    expect(events).toEqual([]);
+  });
+
+  it('never lets progress break the research step, and bounds what it reports (F064)', async () => {
+    const events: ModelJobSearchProgress[] = [];
+    const longTitle = { results: [{ title: `T${'t'.repeat(400)}`, url: 'https://example.go.th/x', authority: 4, rerank_score: 3, summary: 'ok' }] };
+    const { fetchImpl } = scriptedFetch({
+      chat: [toolTurn('Q'.repeat(300)), finalTurn({ brief: 'ok', sourceUrls: [] })],
+      search: [longTitle],
+    });
+
+    const outcome = await runResearch('ขอตัวเลข', {
+      apiKey: 'k',
+      fetchImpl,
+      onProgress: (event) => {
+        events.push(event);
+        throw new Error('a broken listener must not stop the draft');
+      },
+    });
+
+    expect(outcome.usedSearch).toBe(true);
+    expect(outcome.sources).toHaveLength(1);
+    expect(events).not.toHaveLength(0);
+    for (const event of events) {
+      expect(event.query.length).toBeLessThanOrEqual(MAX_JOB_SEARCH_QUERY_CHARS);
+      expect(event.topTitle?.length ?? 0).toBeLessThanOrEqual(MAX_JOB_SEARCH_TITLE_CHARS);
+    }
   });
 });
