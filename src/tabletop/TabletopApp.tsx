@@ -14,7 +14,7 @@ import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
 import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { HeaderPeople } from './ui/HeaderPeople';
-import { AccountBadge, AccountSignIn, SignedInWelcome } from './ui/account';
+import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
 import { NewNoteButton } from './ui/NoteCard';
@@ -868,7 +868,7 @@ export default function TabletopApp() {
   if (!session) return <FailureScreen onRetry={retryBootstrap} notice={notice} />;
   const headerAccount = accountForHeader(authStatus, session);
   if (!view && page === 'new') return <StartPage
-    header={<ChooserHeader session={session} account={headerAccount} busy={busy} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} onHome={openLandingPage} />}
+    header={<ChooserHeader session={session} account={headerAccount} busy={busy} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} onHome={openLandingPage} onOpenTables={openTablesPage} />}
     notice={<NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />}
     busy={busy !== null}
     tableReadOnly={capabilities.tableReadOnly === true}
@@ -878,7 +878,7 @@ export default function TabletopApp() {
     onStartEmpty={() => void createWorkspace('table')}
     onBack={leaveStartPage}
   />;
-  if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} onOpenTables={openTablesPage} onStart={openStartPage} />;
+  if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} busy={busy === 'auth.logout'} onOpenTables={openTablesPage} onStart={openStartPage} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />;
   if (!view) return <WorkspaceChooser session={session} account={headerAccount} onHome={openLandingPage} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -1003,8 +1003,8 @@ function FailureScreen({ notice, onRetry }: { notice: { text: string; tone: 'inf
   return <main className="tt-failure"><span className="tt-dialog__mark"><CircleAlert size={18} /></span><p className="tt-kicker">TABLETOP</p><h1>The table could not be opened</h1><p>{notice?.text ?? 'Check your connection and try again.'}</p><button type="button" className="tt-button tt-button--primary" onClick={onRetry}><RefreshCw size={14} /> Try again</button></main>;
 }
 
-function ChooserHeader({ session, account, busy, onSignOut, onLoadAdminWorkspaces, onHome }: { session: SessionView; account: GoogleAuthUser | null; busy: string | null; onSignOut: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; onHome?: () => void }) {
-  return <header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop home" onClick={(event) => { event.preventDefault(); onHome?.(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountBadge user={account} busy={busy === 'auth.logout'} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>;
+function ChooserHeader({ session, account, busy, onSignOut, onLoadAdminWorkspaces, onHome, onOpenTables }: { session: SessionView; account: GoogleAuthUser | null; busy: string | null; onSignOut: () => void; onLoadAdminWorkspaces: (after?: string) => Promise<AdminWorkspacePage>; onHome?: () => void; onOpenTables?: () => void }) {
+  return <header className="tt-chooser__top"><a className="tt-brand" href="/" aria-label="Tabletop home" onClick={(event) => { event.preventDefault(); onHome?.(); }}><span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span><span>tabletop<span>.</span></span></a><a className="tt-chooser-demo-link" href="/demo" target="_blank" rel="noopener" aria-label="Auto demo (opens in a new tab)"><Play size={13} fill="currentColor" /><span>Auto demo</span><small>↗</small></a>{account ? <AccountMenu user={account} busy={busy === 'auth.logout'} onOpenTables={onOpenTables} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} /> : <span className="tt-session-name">Signed in as {session.name}</span>}</header>;
 }
 
 function NoticeBanner({ notice, onDismiss }: { notice: { text: string; tone: 'info' | 'error' | 'success' } | null; onDismiss: () => void }) {

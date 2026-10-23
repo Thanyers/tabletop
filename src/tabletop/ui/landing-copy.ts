@@ -108,6 +108,7 @@ const en = {
     demoHint: 'opens in a new tab',
     demoLabel: 'Auto demo (opens in a new tab)',
   },
+  profile: { menu: 'Account menu', yourTables: 'Your tables', admin: 'All table metadata (admin)', signOut: 'Sign out', signingOut: 'Signing out…' },
   welcome: {
     eyebrow: 'SIGNED IN',
     title: (name: string | null) => name ? `Welcome back, ${name}` : 'Welcome back',
@@ -201,6 +202,7 @@ const th: LandingCopy = {
     demoHint: 'เปิดในแท็บใหม่',
     demoLabel: 'เดโมอัตโนมัติ (เปิดในแท็บใหม่)',
   },
+  profile: { menu: 'เมนูบัญชี', yourTables: 'โต๊ะของฉัน', admin: 'ข้อมูลโต๊ะทั้งหมด (ผู้ดูแลระบบ)', signOut: 'ออกจากระบบ', signingOut: 'กำลังออกจากระบบ…' },
   welcome: {
     eyebrow: 'เข้าสู่ระบบแล้ว',
     title: (name: string | null) => name ? `ยินดีต้อนรับกลับ ${name}` : 'ยินดีต้อนรับกลับ',
