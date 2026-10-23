@@ -217,9 +217,10 @@ try {
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 390, height: 844 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await anonymous.getByRole('link', { name: 'Sign in', exact: true }).click();
+  // Google is the only sign-in: the header button goes straight to Google and there is no sign-in box below.
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeInViewport();
-  await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
+  await expect(anonymous.locator('.tt-public-welcome__auth')).toHaveCount(0);
+  await expect(anonymous.getByRole('link', { name: /^Start with your own work/ })).toHaveAttribute('href', '/api/auth/google/start');
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 1440, height: 1000 });
   expect((await api(anonymous, '/api/session')).status).toBe(401);
@@ -244,7 +245,6 @@ try {
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop-th.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 375, height: 812 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await anonymous.getByRole('link', { name: 'เข้าสู่ระบบ', exact: true }).click();
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeInViewport();
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-th.png'), fullPage: true });
   await anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
@@ -261,7 +261,10 @@ try {
   await expect(failedSignIn.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
   await failedSignIn.getByRole('button', { name: 'Dismiss message', exact: true }).click();
   await expect(failedSignIn.getByRole('alert')).toHaveCount(0);
+  // "Check again" sits next to the error line (there is no sign-in box any more), so reopen the failed sign-in to try it.
+  await failedSignIn.goto(`${origin}/?auth_error=google_login_failed`);
   await failedSignIn.getByRole('button', { name: 'Already signed in? Check again', exact: true }).click();
+  await expect(failedSignIn.getByRole('alert')).toHaveCount(0);
   await expect(failedSignIn.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
   expect(providerCalls).toBe(0);
   await failedSignIn.context().close();
