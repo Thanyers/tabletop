@@ -125,6 +125,7 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-flow-wrap .react-flow__controls-button svg { max-width: 12px; max-height: 12px; }
 .tt-flow-wrap .react-flow__attribution { display: none; }
 .tt-flow-wrap .react-flow__handle { width: 7px; height: 7px; border: 1px solid #fff; border-radius: 50%; background: #6eaa9b; opacity: .85; pointer-events: none; }
+.tt-flow-wrap .react-flow__handle.tt-follow-up-handle { opacity: 0; }
 .tt-flow-wrap .react-flow__edge-path { stroke-linecap: round; }
 .tt-flow-wrap .react-flow__edge-textbg { fill: #f5f8f7; }
 .tt-flow-wrap .react-flow__edge-text { font-family: 'IBM Plex Mono', monospace; }

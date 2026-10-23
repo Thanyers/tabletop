@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F070 | ตัวเลือกใต้คำตอบ AI ที่เลือกแล้วเปลี่ยนสี + เส้นจากการ์ดคำถามไปการ์ดขั้นถัดไป | `doing` | [F070](docs/features/F070-choice-trail.md) |
+| F070 | ตัวเลือกใต้คำตอบ AI ที่เลือกแล้วเปลี่ยนสี + เส้นจากการ์ดคำถามไปการ์ดขั้นถัดไป | `review` | [F070](docs/features/F070-choice-trail.md) |
 | F066 | วิธีคำนวณที่เก็บไว้ใช้ซ้ำ, execution/session lineage และ Rules แบบ no-code + Advanced + per-rule reference | `review` | [F066](docs/features/F066-reusable-compute-rules.md) |
 | F069 | หน้าแรกสองภาษา English / ไทย (แทน #180) | `review` | [F069](docs/features/F069-landing-bilingual.md) |
 | F068 | ร่างกฎจาก AI ห้ามมีปุ่มไม่มี input/เงื่อนไขที่สร้างแถวตัวเลขตายตัว (กดซ้ำแล้วซ้ำ) + แนะนำให้ค่าที่คำนวณได้เป็นสูตร | `review` | [F068](docs/features/F068-fixed-seed-rows.md) |
@@ -69,7 +69,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F070-T1 | สถานะเลือกแล้วของชิป + เส้น follow-up + ตำแหน่งการ์ดลูก (client, localStorage) | `doing` | lead (AI) | `feat/F070-choice-trail` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, `ui/table-chat.css`, `ui/CanvasWorkspace.tsx`, tests | — | ไม่แตะ server/contract · ไม่มี migration |
+| F070-T1 | สถานะเลือกแล้วของชิป + เส้น follow-up + ตำแหน่งการ์ดลูก (client, localStorage) | `review` | lead (AI) | `feat/F070-choice-trail` | `ui/useTableChat.tsx`, `ui/table-chat-state.ts`, `ui/table-chat.css`, `ui/CanvasWorkspace.tsx`, tests | — | ไม่แตะ server/contract · ไม่มี migration |
 | F066-T1..T4 | reusable compute runtime, persistent links และ Rules UX | `review` | Codex | `feat/F066-reusable-compute-rules` / #208 | compute/schema/domain/authority/Room, Rules/ref/import UI, tests/docs | — | unit 818 + CF 170, Python 4, real AI/reuse/browser 8; browser regression 32 + generative 8 ผ่าน; ไม่มี SQL migration/ไม่ deploy |
 | F069-T1 | ปุ่มสลับภาษาและ copy สองภาษาบนหน้าแรก F061 | `review` | Claude Code | `feat/F069-landing-bilingual` | `ui/PublicWelcome.tsx`, `ui/landing-copy.ts`, `ui/account.tsx` (กล่อง sign-in/welcome), `ui/public-welcome.css`, `tests/cloudflare-browser.mjs`, `docs/features/F069-landing-bilingual.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `CHANGELOG.md` | — | แทน #180 · client อย่างเดียว ไม่แตะ meta ใน `index.html` |
 | F068-T1 | ตัวตรวจ `aiTableChangeIssues` + ต่อสายร่างจาก AI + คำแนะนำ DERIVED VALUES ใน schema guide | `review` | lead (AI) | `fix/F066-fixed-seed-rows` | `src/tabletop/domain/table.ts`, `cloudflare/ai.ts`, `server/providers/table-schema-guide.ts`, tests, `spec.md`, `CHANGELOG.md` | — | ไม่แตะ `deepseek-changes.ts` (F065 จอง) · ไม่มี migration |

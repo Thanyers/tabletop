@@ -15,7 +15,7 @@ import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchLine, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, chosenFollowUps, historyCard, isUncertainRequest, parseChatFollowUps, liveSearchLine, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -61,6 +61,8 @@ export interface UseTableChatOptions {
 interface PrivateChatLocalState {
   dismissed: string[];
   cardIdsByJob: Record<string, string>;
+  /** F070: which card each follow-up came from, keyed by the follow-up card id. Private to this browser. */
+  followUps: Record<string, ChatFollowUp>;
 }
 
 function isTableView(view: WorkspaceView | null): view is TableView {
@@ -125,13 +127,13 @@ function storageKey(scope: string): string {
 }
 
 function readPrivateChatState(scope: string): PrivateChatLocalState {
-  if (!scope || typeof window === 'undefined') return { dismissed: [], cardIdsByJob: {} };
+  if (!scope || typeof window === 'undefined') return { dismissed: [], cardIdsByJob: {}, followUps: {} };
   try {
     const raw = window.localStorage.getItem(storageKey(scope));
-    if (!raw) return { dismissed: [], cardIdsByJob: {} };
+    if (!raw) return { dismissed: [], cardIdsByJob: {}, followUps: {} };
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { dismissed: [], cardIdsByJob: {} };
-    const candidate = parsed as { dismissed?: unknown; cardIdsByJob?: unknown };
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { dismissed: [], cardIdsByJob: {}, followUps: {} };
+    const candidate = parsed as { dismissed?: unknown; cardIdsByJob?: unknown; followUps?: unknown };
     const dismissed = Array.isArray(candidate.dismissed) ? candidate.dismissed.filter((id): id is string => typeof id === 'string').slice(-LOCAL_CARD_IDS) : [];
     const cardIdsByJob: Record<string, string> = {};
     if (typeof candidate.cardIdsByJob === 'object' && candidate.cardIdsByJob !== null && !Array.isArray(candidate.cardIdsByJob)) {
@@ -139,9 +141,9 @@ function readPrivateChatState(scope: string): PrivateChatLocalState {
         if (typeof cardId === 'string' && jobId.length <= 160 && cardId.length <= 240) cardIdsByJob[jobId] = cardId;
       }
     }
-    return { dismissed, cardIdsByJob: Object.fromEntries(Object.entries(cardIdsByJob).slice(-LOCAL_CARD_IDS)) };
+    return { dismissed, cardIdsByJob: Object.fromEntries(Object.entries(cardIdsByJob).slice(-LOCAL_CARD_IDS)), followUps: parseChatFollowUps(candidate.followUps, LOCAL_CARD_IDS) };
   } catch {
-    return { dismissed: [], cardIdsByJob: {} };
+    return { dismissed: [], cardIdsByJob: {}, followUps: {} };
   }
 }
 
@@ -151,6 +153,7 @@ function writePrivateChatState(scope: string, state: PrivateChatLocalState): voi
     window.localStorage.setItem(storageKey(scope), JSON.stringify({
       dismissed: state.dismissed.slice(-LOCAL_CARD_IDS),
       cardIdsByJob: Object.fromEntries(Object.entries(state.cardIdsByJob).slice(-LOCAL_CARD_IDS)),
+      followUps: Object.fromEntries(Object.entries(state.followUps).slice(-LOCAL_CARD_IDS)),
     }));
   } catch { /* Local closed state is a convenience; server history remains authoritative. */ }
 }
@@ -158,6 +161,15 @@ function writePrivateChatState(scope: string, state: PrivateChatLocalState): voi
 function rememberJobCard(scope: string, jobId: string, cardId: string): void {
   const local = readPrivateChatState(scope);
   writePrivateChatState(scope, { ...local, cardIdsByJob: { ...local.cardIdsByJob, [jobId]: cardId } });
+}
+
+function shortTitle(title: string): string {
+  return title.length > 48 ? `${title.slice(0, 47)}…` : title;
+}
+
+function rememberFollowUp(scope: string, cardId: string, link: ChatFollowUp): void {
+  const local = readPrivateChatState(scope);
+  writePrivateChatState(scope, { ...local, followUps: { ...local.followUps, [cardId]: link } });
 }
 
 function isDismissed(card: ChatCard, state: PrivateChatLocalState): boolean {
@@ -584,7 +596,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }
   }, [acceptAnswer, acceptDraft, patchCard]);
 
-  const send = useCallback(async (prompt: string, forcedMode?: 'draft'): Promise<boolean> => {
+  const send = useCallback(async (prompt: string, forcedMode?: 'draft', origin?: ChatFollowUp): Promise<boolean> => {
     const current = viewRef.current;
     const targetScope = scopeRef.current;
     const selectedMode = forcedMode ?? modeRef.current;
@@ -602,6 +614,8 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       phase: queue ? 'queued' : 'sending',
       requestCommandId: queue ? undefined : commandId,
     };
+    // F070: remember where a picked option leads before the card renders, so its line and chosen chip appear together.
+    if (origin) rememberFollowUp(targetScope, card.id, origin);
     updateCards(targetScope, (items) => [card, ...items]);
     optionsRef.current.focusObject(chatNodeId(targetScope, card.id));
     if (queue) return true;
@@ -781,22 +795,34 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   // a finished one becomes a notification (below) instead.
   const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState) && !isFinishedResult(card));
   const operationBusy = externalBusy || confirmBusy;
+  const followUps = currentLocalState.followUps;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
-    return displayCards.map((card, index) => ({
+    const byId = new Map(displayCards.map((card) => [card.id, card]));
+    return displayCards.map((card, index) => {
+      const chosen = new Map([...chosenFollowUps(card.id, displayCards, followUps)].map(([option, childId]) => [option, chatCardNodeId(scope, byId.get(childId)!)]));
+      const link = followUps[card.id];
+      const parent = link ? byId.get(link.parentCardId) : undefined;
+      // Siblings from the same card stack in the order they were picked (oldest first).
+      const siblings = link ? displayCards.filter((item) => followUps[item.id]?.parentCardId === link.parentCardId).reverse() : [];
+      return {
       id: chatCardNodeId(scope, card),
       title: chatCardTitle(card),
       // Another member's card names the asker in a muted line under the title (open visibility, F034).
-      subtitle: askerOf(card, table) ?? undefined,
-      eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : 'AI answer',
+      // F070: a follow-up names the card it came from, so a trail reads as steps.
+      subtitle: [askerOf(card, table), parent ? `Next step after “${shortTitle(chatCardTitle(parent))}”` : null].filter(Boolean).join(' · ') || undefined,
+      // F070: a card opened from a picked option reads as the next step of the card it came from.
+      eyebrow: card.kind === 'draft' ? card.phase === 'queued' ? 'Rule draft · queued' : 'Rule draft' : parent ? 'Next step · AI answer' : 'AI answer',
       glyph: <Sparkles size={16} />,
       busy: card.phase === 'sending' || card.phase === 'waiting',
       // F054: a chat answer is dated by this browser's clock (no command stamps it) and names the asker.
       at: card.createdAt,
       actorId: card.job?.askedBy ?? card.modelJob?.askedBy,
       position: { x: 760, y: 40 + index * 300 },
+      linkedFrom: parent && link ? { id: chatCardNodeId(scope, parent), label: link.option, order: Math.max(0, siblings.findIndex((item) => item.id === card.id)) } : undefined,
       content: <ChatCardContent
         card={card}
+        chosen={chosen}
         view={table}
         readOnly={readOnly}
         retryDisabled={!aiEnabled || readOnly || (card.kind === 'answer' && !assistantAvailable)}
@@ -810,10 +836,11 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         onAnswerQuestion={(answer) => void answerQuestion(card, answer)}
         onDismiss={() => dismiss(card)}
         onBuild={() => prepareFromCard(card)}
-        onSuggest={(message) => void send(followUpPrompt(card.prompt, message))}
+        onSuggest={(message) => void send(followUpPrompt(card.prompt, message), undefined, { parentCardId: card.id, option: message })}
       />,
-    }));
-  }, [table, displayCards, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
+      };
+    });
+  }, [table, displayCards, followUps, scope, readOnly, aiEnabled, assistantAvailable, operationBusy, options.focusObject, confirmCard, retrySameRequest, checkStatus, retryDraftRefresh, prefillCard, answerQuestion, dismiss, prepareFromCard, send]);
 
   // F067: the table's share of a rule request, measured with the server's own request builder.
   const draftBaseBytes = useMemo(() => table && viewerCan(table, 'rules.draft')
@@ -883,8 +910,10 @@ function askerOf(card: ChatCard, view: TableView): string | null {
   return view.members.find((member) => member.actorId === askedBy)?.name ?? 'Another member';
 }
 
-function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild, onSuggest }: {
+function ChatCardContent({ card, chosen, view, readOnly, retryDisabled, busy, onOpenObject, onConfirm, onRetry, onCheck, onRetryRefresh, onPrefill, onAnswerQuestion, onDismiss, onBuild, onSuggest }: {
   card: ChatCard;
+  /** F070: options already picked under this card, mapped to the canvas card each one opened. */
+  chosen: ReadonlyMap<string, string>;
   view: TableView;
   readOnly: boolean;
   retryDisabled: boolean;
@@ -1049,7 +1078,13 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
       {askerLine}
       <div data-testid="chat-answer-card"><p className="tt-chat-card__text">{result.text}</p></div>
       {result.kind === 'build-request' && viewerCan(view, 'rules.draft') && !foreign && <button type="button" className="tt-button tt-button--primary" disabled={readOnly || busy} onClick={onBuild}><Sparkles size={14} />Prepare changes</button>}
-      {suggestions.length > 0 && !foreign && <div className="tt-chat-card__suggestions" role="group" aria-label="Suggested replies">{suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={readOnly || busy} onClick={() => onSuggest(suggestion)}><CornerDownRight size={13} aria-hidden="true" />{suggestion}</button>)}</div>}
+      {suggestions.length > 0 && !foreign && <div className="tt-chat-card__suggestions" role="group" aria-label="Suggested replies">{suggestions.map((suggestion) => {
+        const opened = chosen.get(suggestion);
+        // F070: a picked option shows as chosen and leads to its answer instead of asking again.
+        return opened
+          ? <button type="button" key={suggestion} className="is-chosen" aria-pressed="true" title="Chosen: go to its answer" onClick={() => onOpenObject(opened)}><Check size={13} aria-hidden="true" />{suggestion}<span className="tt-chat-card__chosen-tag">Chosen</span></button>
+          : <button type="button" key={suggestion} aria-pressed="false" disabled={readOnly || busy} onClick={() => onSuggest(suggestion)}><CornerDownRight size={13} aria-hidden="true" />{suggestion}</button>;
+      })}</div>}
       {references.length > 0 && <div className="tt-chat-card__references">{references.map((reference, index) => <button type="button" key={`${reference.kind}-${index}`} onClick={() => onOpenObject(objectForReference(reference))}>{reference.label}</button>)}</div>}
       {dismissButton}
     </div>;

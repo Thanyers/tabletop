@@ -359,3 +359,37 @@ export function draftSources(research: ModelJobResearch | undefined): DraftSourc
     authority: source.authority,
   }));
 }
+
+/** F070: a chat card that came from picking one option under another chat card. */
+export interface ChatFollowUp { parentCardId: string; option: string }
+
+const FOLLOW_UP_ID_CHARS = 240;
+const FOLLOW_UP_OPTION_CHARS = 120;
+
+/** F070: keep only well-formed links from this browser's private state; the newest `limit` survive. */
+export function parseChatFollowUps(value: unknown, limit: number): Record<string, ChatFollowUp> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  const links: Array<[string, ChatFollowUp]> = [];
+  for (const [childId, link] of Object.entries(value)) {
+    if (typeof link !== 'object' || link === null) continue;
+    const { parentCardId, option } = link as { parentCardId?: unknown; option?: unknown };
+    if (typeof parentCardId !== 'string' || typeof option !== 'string') continue;
+    if (!childId || childId.length > FOLLOW_UP_ID_CHARS || !parentCardId || parentCardId.length > FOLLOW_UP_ID_CHARS || parentCardId === childId) continue;
+    if (!option.trim() || option.length > FOLLOW_UP_OPTION_CHARS) continue;
+    links.push([childId, { parentCardId, option }]);
+  }
+  return Object.fromEntries(links.slice(-limit));
+}
+
+/**
+ * F070: the options already picked under `parentId`, each mapped to the follow-up card it opened.
+ * A link whose follow-up card is gone (dismissed, another table) does not count, so the option can be picked again.
+ */
+export function chosenFollowUps(parentId: string, cards: readonly Pick<ChatCard, 'id'>[], followUps: Readonly<Record<string, ChatFollowUp>>): Map<string, string> {
+  const present = new Set(cards.map((card) => card.id));
+  const chosen = new Map<string, string>();
+  for (const [childId, link] of Object.entries(followUps)) {
+    if (link.parentCardId === parentId && present.has(childId) && !chosen.has(link.option)) chosen.set(link.option, childId);
+  }
+  return chosen;
+}
