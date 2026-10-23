@@ -34,7 +34,7 @@
 | F066-T2 | isolated runner, generation/invocation และการคำนวณซ้ำ | ใช้โปรแกรมเดิมกับข้อมูลสองชุดโดยไม่เรียก AI ซ้ำ; failure ไม่ทำลายผลเดิม |
 | F066-T3 | Rules card, Advanced, per-rule chat references | อ่านแบบ no-code, keyboard/mobile, specific reference ผ่าน server context |
 | F066-T4 | integration, browser proof, independent review, เอกสาร | typecheck/lint/unit/Worker/build และ acceptance ที่เกี่ยวข้องผ่านจริง |
-| F066-T5 | ติดตาม regression บน CI หลัง merge | scene drag ระหว่าง pending focus ต้องได้พิกัดที่ผู้ใช้ลากจริง; ชุด browser บน CI ผ่าน |
+| F066-T5 | เทสต์ Rules capability หลังเพิ่ม compute | UI แสดงจำนวนตรงกับ endpoint และมี reusable calculations พร้อม gap ที่ยังมีจริง |
 
 ## การตัดสินใจ
 
@@ -45,10 +45,13 @@
 | 2026-10-23 | ตรวจ PR #205 (patch), #207 (research) ก่อนแก้; แยกไฟล์ใหม่และรักษา integration points | ลดการชนกับงานที่กำลังทำ ไม่ merge งานคนอื่นโดยปริยาย |
 | 2026-10-23 | งานที่ authority รับแล้วอยู่กับ room+actor และอยู่ต่อหลัง cookie หมดอายุ/revoke | alarm/restart ใช้กติกาเดียวกัน; ตรวจ membership/permission/epoch ก่อนและหลังเสมอ ไม่เก็บ session credential ใน run |
 | 2026-10-23 | ใช้ capability block เดียวกันใน endpoint, provider และ AI context meter หลังรวม F067 | ตัวเลขก่อนส่งนับ engine/profile/libraries ที่ host เปิดจริง; research/repair/reference context ที่เพิ่มบน server ตรวจเพดานซ้ำตอนส่ง |
+| 2026-10-23 | ผู้ใช้ย้ำขอบเขตเฉพาะ compute/Rules; หยุดการไล่ scene/camera และคืนโค้ดทดลองทั้งหมด | แยกสถานะยังไม่ release ออกจาก browser failure ของส่วนอื่น ไม่ขยายงานของผู้ใช้ตามทุก failure ในชุดรวม |
 
 ## ผลตรวจ
 
 รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)
+
+หลัง #208 รวมเข้า `dev@2f741d7` ชุด PR validation ผ่าน แต่ full CI พบ Workers fixture ยังตรวจ capability count/copy เดิม และ generated-scene drag ได้พิกัดไม่ตรงเป้า แก้เฉพาะ capability assertions ที่สัมพันธ์กับฟีเจอร์นี้ใน F066-T5 / #220: capability unit 3/3, scoped lint และ Cloudflare browser 33 checks / 37 synthetic provider calls / 0 browser errors ผ่าน ผู้ใช้ให้หยุดการไล่ scene/camera นอกขอบเขตและคืนโค้ดทดลองแล้ว จึงไม่อ้างว่า full CI รอบนั้นผ่านทั้งหมด ฟีเจอร์ยังไม่ได้ release และ hosted Python ยังต้อง provision ตาม runtime contract
 
 ตรวจด้วย Node **22.23.2**, Docker Engine **29.9.2** และข้อมูลสมมติเท่านั้น:
 
