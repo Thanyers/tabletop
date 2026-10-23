@@ -17,7 +17,7 @@ import { HeaderPeople } from './ui/HeaderPeople';
 import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
-import { NewNoteButton } from './ui/NoteCard';
+import { NewImageButton, NewNoteButton } from './ui/NoteCard';
 import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope } from './ui/table-chat-state';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
@@ -859,7 +859,11 @@ export default function TabletopApp() {
     notify: showNotice,
     prefill: aiPrefill,
     composerAction: view && isTableWorkspaceView(view)
-      ? <NewNoteButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand} />
+      ? <>
+        <NewNoteButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand} />
+        {capabilities.images && <NewImageButton view={view} readOnly={capabilities.tableReadOnly === true} onCommand={runCommand}
+          upload={(image) => tabletopClient.uploadCanvasImage(view, image)} onError={(message) => showNotice(message, 'error')} />}
+      </>
       : undefined,
   });
 
