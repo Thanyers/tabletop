@@ -13,6 +13,7 @@
 | [DEPLOYMENTS](DEPLOYMENTS.md) | ตรวจ URL, source/version, resources และผลตรวจ release ล่าสุด |
 | [CONTRIBUTING](../CONTRIBUTING.md) | ตั้งเครื่อง พัฒนา ตรวจงาน และส่ง PR |
 | [AGENT_WORKFLOW](AGENT_WORKFLOW.md) | ใช้ Codex / Claude Code / OpenCode / DeepSeek Harness ร่วมกัน ตรวจ dev ล่าสุด และรับกติกาใหม่ |
+| [AGENT_OPERATIONS](AGENT_OPERATIONS.md) | รายละเอียด CI, release, deploy และ ruleset ที่ agent ต้องอ่านก่อนทำงานส่วนนั้น |
 | [ตัวอย่างสามโจทย์](examples/README.md) | ใช้ไฟล์และ prompt จำลองกับ Shared data table |
 
 ## Design, contract และ acceptance

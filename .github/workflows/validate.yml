@@ -101,6 +101,8 @@ jobs:
         run: npm audit --audit-level=high
       - name: Lint
         run: npm run lint
+      - name: Agent startup adapters and instruction budget
+        run: npm run test:agents
       - name: Unit and local SQL integration tests
         run: npm test -- --reporter=default --reporter=json --outputFile=test-results/unit-report.json
       - name: Legacy local Component Lab regression tests

@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "startup|resume|clear|compact|fork",
+      "hooks": [{
+        "type": "command",
+        "command": "node \"$(git rev-parse --show-toplevel)/scripts/agent-startup.mjs\" hook",
+        "commandWindows": "node (Join-Path (git rev-parse --show-toplevel) 'scripts/agent-startup.mjs') hook",
+        "timeout": 30,
+        "additionalContextLimit": 0
+      }]
+    }],
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node \"$(git rev-parse --show-toplevel)/scripts/agent-startup.mjs\" hook",
+        "commandWindows": "node (Join-Path (git rev-parse --show-toplevel) 'scripts/agent-startup.mjs') hook",
+        "timeout": 30,
+        "additionalContextLimit": 0
+      }]
+    }]
+  }
+}

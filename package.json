@@ -4,6 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "agents:setup": "node scripts/setup-agent-startup.mjs",
+    "test:agents": "node --test scripts/agent-startup.test.mjs",
     "dev": "vite --host 127.0.0.1",
     "dev:api": "node --import tsx server/bootstrap.ts",
     "build": "node scripts/generate-public-demo.mjs --check && npm run typecheck && vite build",
