@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F067 | แสดงว่าโต๊ะใช้พื้นที่คำขอ AI ไปเท่าไร (AI context x / 128 KiB) | `review` | [F067](docs/features/F067-ai-context-meter.md) |
 | F066 | เพดานคำขอร่างกฎให้สัมพันธ์กับเพดานไฟล์ (128 KiB) | `review` | [F066](docs/features/F066-ai-input-limit.md) |
 | F065 | AI แก้โต๊ะแบบส่งเฉพาะส่วนที่เปลี่ยน (patch) แทนการเขียนทั้งโปรแกรมใหม่ | `review` | [F065](docs/features/F065-table-patch-edits.md) |
 | F064 | ค้นเว็บเองเมื่อโจทย์ต้องใช้ข้อเท็จจริงภายนอก (native research ก่อนร่าง) | `review` (T1–T4 merge #207, T5–T7 PR #211) | [F064](docs/features/F064-web-search.md) |
@@ -64,6 +65,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F067-T1 | `shared/table-draft-input.ts` + มาตรวัดในแชท + เทสต์ + เอกสาร | `review` | lead (AI) | `feat/F067-ai-context-meter` | `cloudflare/ai.ts`, `src/tabletop/shared/table-draft-input.ts`, `TableChat.tsx`, `useTableChat.tsx`, `table-chat.css`, tests, docs | F066 | ไม่เปลี่ยนสิ่งที่ส่งให้ AI |
 | F066-T1 | `TABLE_AI_INPUT_BYTES` + provider/ai/billing อ่านค่ากลาง + เทสต์ + เอกสาร | `review` | lead (AI) | `feat/F066-ai-input-limit` | `src/tabletop/domain/table.ts`, `server/providers/deepseek-changes.ts`, `cloudflare/ai.ts`, `cloudflare/billing.ts`, `TableCanvasObjects.tsx`, tests, docs | — | ไม่มี migration |
 | F065-T1..T4 | `applyTablePatch` + provider รับ `table-patch` ตอนแก้ + prompt แก้/ซ่อม + ลองจริงบน emulator + เอกสาร | `review` | lead (AI) | `feat/F065-table-patch-edits` / #205 | `server/providers/deepseek-changes.ts`, `src/tabletop/domain/table-patch.ts` (ใหม่), tests, `spec.md`, `CHANGELOG.md` | — | ไม่แตะ prompt ของการสร้างใหม่ · ไม่มี migration |
 | F064-T1 | สคริปต์กลางและ native startup adapters | `review` | Codex | `feat/F064-agent-startup-hooks` / #202 | `scripts/agent-startup*`, `scripts/setup-agent-startup.mjs`, native configs, `tools/deepseek-startup/`, public-file gate, CI, AGENTS/agent docs, `spec.md`, `MEMORY.md`, `package.json` | — | fetch/read เท่านั้น; ไม่ checkout/merge หรือแก้งานค้างอัตโนมัติ |

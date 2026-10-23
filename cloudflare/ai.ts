@@ -8,6 +8,7 @@ import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepse
 import type { ModelInput } from '../server/model.js';
 import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch } from '../server/providers/deepseek-research.js';
+import { tableDraftInput } from '../src/tabletop/shared/table-draft-input.js';
 import type { ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
@@ -229,20 +230,7 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current table state is invalid.');
     const sourceBytes = parsed.data.sources.reduce((total, source) => total + new TextEncoder().encode(source.text).byteLength, 0);
     if (sourceBytes > TABLE_TOTAL_SOURCE_BYTES) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The table sources exceed the allowed proposal size.');
-    // Files the active rules already cite were imported earlier: their rows are in records and their quotes are
-    // checked against the stored text, so only their names travel. A large table can keep growing this way.
-    const cited = new Set((parsed.data.program?.evidence ?? []).map((item) => item.sourceId));
-    const imported = parsed.data.sources.filter((source) => cited.has(source.id));
-    const providerInput: DeepSeekChangeInput = {
-      kind: 'table',
-      prompt,
-      sources: parsed.data.sources.filter((source) => !cited.has(source.id)).map(({ id, filename, text }) => ({ id, filename, text })),
-      ...(imported.length ? { importedSources: imported.map(({ id, filename }) => ({ id, filename, note: IMPORTED_SOURCE_NOTE })) } : {}),
-      program: structuredClone(parsed.data.program),
-      records: structuredClone(parsed.data.records),
-      turn: parsed.data.turn,
-      ...(parsed.data.notes?.length ? { notes: parsed.data.notes.map(({ text, color }) => ({ text, color })) } : {}),
-    };
+    const providerInput: DeepSeekChangeInput = tableDraftInput(parsed.data, prompt);
     return {
       kind: 'table',
       providerInput,
@@ -262,9 +250,6 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     maximumInputBytes: MAX_CHANGE_INPUT_BYTES,
   };
 }
-
-/** Read by the model next to each omitted file, so the system prompt stays within its size budget. */
-const IMPORTED_SOURCE_NOTE = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 
 function mapUsage(usage: DeepSeekUsage): BillingUsage {
   return {
