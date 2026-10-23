@@ -15,7 +15,6 @@ import {
   type ComputeRuntimeProfile,
   type TableComputeProgram,
 } from '../src/tabletop/shared/table-compute.js';
-import type { AuthenticatedSession } from './authority.js';
 
 export interface ComputeWorkspaceSnapshot {
   workspace: WorkspaceView;
@@ -33,12 +32,10 @@ export interface TableComputeOrchestratorOptions {
     type: 'table.compute.queue' | 'table.compute.update',
     payload: unknown,
   ): Promise<void>;
-  reauthenticate(session: AuthenticatedSession): Promise<AuthenticatedSession>;
 }
 
 interface ScheduledComputeDrain {
   epoch: number;
-  session?: AuthenticatedSession;
   dirty: boolean;
   task: Promise<void>;
 }
@@ -197,18 +194,16 @@ export class TableComputeOrchestrator {
     this.options = options;
   }
 
-  schedule(workspaceId: string, epoch: number, session?: AuthenticatedSession): Promise<void> {
+  schedule(workspaceId: string, epoch: number): Promise<void> {
     if (this.closed) return Promise.resolve();
     const active = this.tasks.get(workspaceId);
     if (active) {
       active.epoch = epoch;
-      if (session) active.session = session;
       active.dirty = true;
       return active.task;
     }
     const scheduled: ScheduledComputeDrain = {
       epoch,
-      ...(session ? { session } : {}),
       dirty: false,
       task: Promise.resolve(),
     };
@@ -227,9 +222,8 @@ export class TableComputeOrchestrator {
     while (!this.closed) {
       scheduled.dirty = false;
       const epoch = scheduled.epoch;
-      const session = scheduled.session;
       try {
-        await this.drain(workspaceId, epoch, session);
+        await this.drain(workspaceId, epoch);
       } catch {
         // The persisted queue/run state is recovered by the next schedule or room alarm.
       }
@@ -238,8 +232,7 @@ export class TableComputeOrchestrator {
     if (this.tasks.get(workspaceId) === scheduled) this.tasks.delete(workspaceId);
   }
 
-  private async drain(workspaceId: string, epoch: number, session?: AuthenticatedSession): Promise<void> {
-    if (session) await this.options.reauthenticate(session);
+  private async drain(workspaceId: string, epoch: number): Promise<void> {
     const failedInThisDrain = new Set<string>();
     while (!this.closed) {
       const snapshot = await this.options.getSnapshot(workspaceId);
@@ -264,7 +257,7 @@ export class TableComputeOrchestrator {
         if (actorSnapshot && plan && plan.inputHash === interrupted.inputHash
             && plan.dataRevision === interrupted.dataRevision && plan.ruleRevision === interrupted.ruleRevision
             && permittedToCompute(actorSnapshot)) {
-          await this.runExisting(workspaceId, epoch, snapshot.ownerActorId, interrupted, module!, plan, session);
+          await this.runExisting(workspaceId, epoch, snapshot.ownerActorId, interrupted, module!, plan);
         } else {
           await this.update(snapshot.ownerActorId, workspaceId, interrupted.runId, 'stale');
         }
@@ -294,7 +287,7 @@ export class TableComputeOrchestrator {
           if (!actorSnapshot || !permittedToCompute(actorSnapshot)) {
             await this.update(snapshot.ownerActorId, workspaceId, queued.runId, 'failed', 'COMPUTE_FAILED');
           } else {
-            await this.startAndRun(snapshot.ownerActorId, workspaceId, epoch, queued, module, plan, session);
+            await this.startAndRun(snapshot.ownerActorId, workspaceId, epoch, queued, module, plan);
             failedInThisDrain.add(queued.runId);
           }
           progressed = true;
@@ -337,7 +330,6 @@ export class TableComputeOrchestrator {
     run: ComputeRunRecord,
     module: ComputeModule,
     plan: ComputePlan,
-    session?: AuthenticatedSession,
   ): Promise<void> {
     await this.options.executeTrusted(systemActorId, workspaceId, 'table.compute.update', {
       runId: run.runId,
@@ -349,7 +341,7 @@ export class TableComputeOrchestrator {
       ruleRevision: plan.ruleRevision,
       runtimeProfile: plan.request.runtimeProfile,
     });
-    await this.runExisting(workspaceId, epoch, systemActorId, { ...run, status: 'running', inputHash: plan.inputHash }, module, plan, session);
+    await this.runExisting(workspaceId, epoch, systemActorId, { ...run, status: 'running', inputHash: plan.inputHash }, module, plan);
   }
 
   private async runExisting(
@@ -359,13 +351,11 @@ export class TableComputeOrchestrator {
     run: ComputeRunRecord,
     module: ComputeModule,
     plan: ComputePlan,
-    session?: AuthenticatedSession,
   ): Promise<void> {
     this.activeRuns.add(run.runId);
     const controller = new AbortController();
     this.aborters.set(run.runId, controller);
     try {
-      if (session && session.record.actorId === run.actorId) await this.options.reauthenticate(session);
       const authorized = await this.options.getSnapshot(workspaceId, run.actorId);
       const authorizedTable = tableSnapshot(authorized);
       const authorizedModule = authorizedTable?.program.modules.find(item => item.id === run.moduleId);
@@ -382,7 +372,6 @@ export class TableComputeOrchestrator {
       }
       const result = await this.options.runner.run(plan.request, controller.signal);
       const checked = validateComputeOutputs(module, result);
-      if (session && session.record.actorId === run.actorId) await this.options.reauthenticate(session);
       const fresh = await this.options.getSnapshot(workspaceId, run.actorId).catch(() => null);
       const current = fresh ? tableSnapshot(fresh) : null;
       const currentModule = current?.program.modules.find(item => item.id === run.moduleId);

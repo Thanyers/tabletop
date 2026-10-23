@@ -127,7 +127,6 @@ describe('table compute orchestration', () => {
         return snapshot;
       },
       executeTrusted: (actorId, workspaceId, type, payload) => fixture.executeTrusted(actorId, type, payload),
-      reauthenticate: async session => session,
     });
     try {
       const firstDrain = orchestrator.schedule(WORKSPACE_ID, 1);
@@ -149,7 +148,6 @@ describe('table compute orchestration', () => {
       runner: runnerFor(requests),
       getSnapshot: async (_workspaceId, actorId) => fixture.snapshot(actorId),
       executeTrusted: (actorId, workspaceId, type, payload) => fixture.executeTrusted(actorId, type, payload),
-      reauthenticate: async session => session,
     });
     try {
       await fixture.queueRun();
@@ -200,7 +198,6 @@ describe('table compute orchestration', () => {
       },
       getSnapshot: async (_workspaceId, actorId) => fixture.snapshot(actorId),
       executeTrusted: (actorId, _workspaceId, type, payload) => fixture.executeTrusted(actorId, type, payload),
-      reauthenticate: async session => session,
     });
     try {
       await orchestrator.schedule(WORKSPACE_ID, 1);
@@ -229,7 +226,6 @@ describe('table compute orchestration', () => {
       runner: runnerFor(requests),
       getSnapshot: async (_workspaceId, actorId) => fixture.snapshot(actorId),
       executeTrusted: (actorId, _workspaceId, type, payload) => fixture.executeTrusted(actorId, type, payload),
-      reauthenticate: async session => session,
     });
     try {
       const decision = decideDomain(fixture.state, {
@@ -274,7 +270,6 @@ describe('table compute orchestration', () => {
       runner,
       getSnapshot: async (_workspaceId, actorId) => fixture.snapshot(actorId),
       executeTrusted: (actorId, _workspaceId, type, payload) => fixture.executeTrusted(actorId, type, payload),
-      reauthenticate: async session => session,
     });
     try {
       await fixture.queueRun();

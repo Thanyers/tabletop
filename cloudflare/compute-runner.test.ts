@@ -23,6 +23,10 @@ describe('real isolated generated JavaScript', () => {
     expect(await runner.run(count)).toEqual({ outputs: { total: 1 } });
     expect(await runner.run(count)).toEqual({ outputs: { total: 1 } });
   });
+  it('rejects non-finite table cells before JSON can silently turn them into null', async () => {
+    const runner = createCloudflareComputeRunner({ loader: bindings.COMPUTE_LOADER });
+    await expect(runner.run({ ...request, source: 'export default () => ({total:{columns:[{id:"amount",label:"Amount",type:"number"}],rows:[{amount:NaN}]}});' })).rejects.toThrow('COMPUTE_FAILED');
+  });
   it('denies generated outbound network access', async () => {
     const runner = createCloudflareComputeRunner({ loader: bindings.COMPUTE_LOADER });
     const network = { ...request, source: 'export default async () => { try { await fetch("https://example.test/"); return {total:0}; } catch { return {total:1}; } };' };

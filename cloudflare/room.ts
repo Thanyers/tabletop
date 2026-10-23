@@ -5,7 +5,7 @@ import { isSeat, type CommandAck, type WorkspaceView } from '../src/tabletop/sha
 import { CommandAuthority } from '../server/authority.js';
 import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
-import { canonicalJson, constantTimeHashEqual, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
+import { canonicalJson, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
 import { exportInvoice } from '../server/exports.js';
 import { projectionCursor } from '../server/projection-cursor.js';
 import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
@@ -470,16 +470,6 @@ export class Room extends DurableObject<Env> {
         loader: env.COMPUTE_LOADER,
         ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? { container: this.ctx.container } : {}),
       }),
-      // Re-read the primary D1 session at both compute execution boundaries. Durable Object
-      // membership checks are separate and cannot replace session revocation/expiry checks.
-      reauthenticateComputeSession: async session => {
-        const current = await authenticateHash(session.record.tokenHash, this.env);
-        if (current.record.actorId !== session.record.actorId
-            || !constantTimeHashEqual(current.record.csrfHash, session.csrfToken)) {
-          throw new AuthorityError('SESSION_EXPIRED');
-        }
-        return { ...current, csrfToken: session.csrfToken };
-      },
       scheduleBackground: task => this.ctx.waitUntil(task),
       onComputeWorkScheduled: () => this.ctx.waitUntil(
         this.scheduleAlarmAt(Date.now() + COMPUTE_EXECUTION_TIMEOUT_MS + RETRY_DELAY_MS).catch(() => undefined),

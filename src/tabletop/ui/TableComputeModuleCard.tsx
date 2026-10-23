@@ -24,8 +24,8 @@ export function TableComputeModuleCard({ module, program, state, view, busy, onC
   const [runMessage, setRunMessage] = useState('');
   const [runFailed, setRunFailed] = useState(false);
   const [runtimeChoice, setRuntimeChoice] = useState(module.runtime);
-  const canDraft = viewerCan(view, 'rules.draft') && Boolean(onEditRules);
-  const canEdit = interactive && canDraft;
+  const canDraft = viewerCan(view, 'rules.draft');
+  const canEdit = interactive && canDraft && Boolean(onEditRules);
   const canRun = interactive && viewerCan(view, 'data.compute');
   const currentVersion = state.program?.compute?.modules.some((item) => item.id === module.id && item.version === module.version) ?? false;
   const latest = interactive && currentVersion ? computeLatestRun(module.id, state.computeRuns, module) : undefined;

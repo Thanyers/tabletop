@@ -486,7 +486,7 @@ describe('Cloudflare room Durable Object', () => {
     vi.mocked(respondToTablePrompt).mockReset();
   });
 
-  it('runs isolated generated JavaScript after activation and automatically refreshes the saved card result', async () => {
+  it('keeps accepted actor-bound compute through session revocation and hides its result after member removal', async () => {
     const owner = newActor('Compute room owner');
     await saveActor(owner);
     const { roomId, stub } = await createActiveEquipmentTable(owner, true);
@@ -543,35 +543,21 @@ describe('Cloudflare room Durable Object', () => {
       method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
     });
     expect(joined.response.status).toBe(200);
+    const acceptedSession = await authenticateRequest(new Request(ORIGIN, { headers: headers(participant) }), runtime);
     const participantRun = await issueCommand(stub, joined.body, participant, 'table.compute.run', { moduleId: 'available_count' });
     expect(participantRun.response.status).toBe(200);
+    const acceptedRunId = participantRun.envelope.commandId;
+    await runtime.DB.prepare('UPDATE web_sessions SET revoked_at = ? WHERE token_hash = ?')
+      .bind(Date.now(), acceptedSession.record.tokenHash).run();
+    const revokedSessionRead = await call<PublicError>(stub, `/api/workspaces/${roomId}`, participant);
+    expect(revokedSessionRead.response.status).toBe(401);
+    expect(revokedSessionRead.body.errorCode).toBe('SESSION_EXPIRED');
+    await runDurableObjectAlarm(stub);
     const participantCurrentRun = await waitForCurrentComputeRun(stub, roomId, participant.id);
     expect(participantCurrentRun.run).toMatchObject({
-      status: 'succeeded', actorId: participant.id, seat: 'member-1', dataRevision: participantCurrentRun.state.dataRevision,
+      runId: acceptedRunId, status: 'succeeded', actorId: participant.id, seat: 'member-1',
+      dataRevision: participantCurrentRun.state.dataRevision,
     });
-
-    const staleSession = await authenticateRequest(new Request(ORIGIN, { headers: headers(participant) }), runtime);
-    const beforeRevocation = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, participant);
-    expect(beforeRevocation.response.status).toBe(200);
-    const staleCommandId = randomUUID();
-    const staleEnvelope = {
-      commandId: staleCommandId,
-      expectedRevision: beforeRevocation.body.revision,
-      expectedEpoch: beforeRevocation.body.epoch,
-      type: 'table.compute.run',
-      payload: { moduleId: 'available_count' },
-    };
-    await runtime.DB.prepare('UPDATE web_sessions SET revoked_at = ? WHERE token_hash = ?')
-      .bind(Date.now(), staleSession.record.tokenHash).run();
-    await runInDurableObject(stub, instance => instance.authority.execute(staleSession, staleEnvelope, roomId));
-    await new Promise<void>(resolve => setTimeout(resolve, COMPUTE_WAIT_INTERVAL_MS * 4));
-    const queuedAfterRevocation = await runInDurableObject(stub, async instance => {
-      const workspace = await instance.repository.getWorkspace(roomId);
-      return workspace?.domainState.kind === 'table'
-        ? workspace.domainState.computeRuns?.find(run => run.runId === staleCommandId)
-        : undefined;
-    });
-    expect(queuedAfterRevocation).toMatchObject({ status: 'queued', actorId: participant.id });
 
     const dataRevisionBeforeRemoval = participantCurrentRun.state.dataRevision;
     const removed = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}/members/remove`, owner, {

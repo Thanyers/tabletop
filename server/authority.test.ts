@@ -1425,9 +1425,19 @@ describe('F035 role permissions at the authority', () => {
 });
 
 describe('F066 compute command boundary', () => {
-  it('reauthenticates a real HTTP session before running generated table compute', async () => {
+  it('completes an accepted generated compute job after its HTTP session is revoked', async () => {
+    let signalRunnerStarted: (() => void) | undefined;
+    let releaseRunner: (() => void) | undefined;
+    let runnerInvocations = 0;
+    const runnerStarted = new Promise<void>(resolveStarted => { signalRunnerStarted = resolveStarted; });
+    const runnerGate = new Promise<void>(resolveRunner => { releaseRunner = resolveRunner; });
     const computeRunner: ComputeRunner = {
       async run() {
+        runnerInvocations += 1;
+        if (runnerInvocations === 2) {
+          signalRunnerStarted?.();
+          await runnerGate;
+        }
         return { outputs: { total: 7 } };
       },
     };
@@ -1472,20 +1482,45 @@ describe('F066 compute command boundary', () => {
       request.headers.cookie = owner.cookie;
       const authenticated = await server.authority.authenticate(request);
       requestSocket.destroy();
-      await server.authority.authorizeSession(authenticated, workspace.id);
-
+      await currentView(base, owner, workspace.id);
       let refreshed = await server.repository.getWorkspace(workspace.id);
-      const deadline = Date.now() + 2_000;
-      while (!refreshed?.domainState.kind || refreshed.domainState.kind !== 'table'
+      const initialDeadline = Date.now() + 2_000;
+      while (refreshed?.domainState.kind !== 'table'
           || !refreshed.domainState.computeRuns?.some(run => run.status === 'succeeded')) {
-        if (Date.now() >= deadline) break;
+        if (Date.now() >= initialDeadline) break;
         await new Promise(resolveWait => setTimeout(resolveWait, 10));
         refreshed = await server.repository.getWorkspace(workspace.id);
       }
       expect(refreshed?.domainState.kind === 'table' ? refreshed.domainState.computeRuns : []).toMatchObject([
         expect.objectContaining({ status: 'succeeded', outputs: [{ outputId: 'total', value: 7 }] }),
       ]);
+
+      const accepted = await command(base, owner, await currentView(base, owner, workspace.id), 'table.compute.run', {
+        moduleId: 'session_total',
+      });
+      expect(accepted.response.status, JSON.stringify(accepted.body)).toBe(200);
+      await runnerStarted;
+      await server.database.query('UPDATE sessions SET revoked_at = $2 WHERE token_hash = $1', [
+        authenticated.record.tokenHash,
+        Date.now(),
+      ]);
+      expect((await call<WorkspaceView>(base, `/api/workspaces/${workspace.id}`, { session: owner })).response.status).toBe(401);
+      releaseRunner?.();
+
+      refreshed = await server.repository.getWorkspace(workspace.id);
+      const deadline = Date.now() + 2_000;
+      while (!refreshed?.domainState.kind || refreshed.domainState.kind !== 'table'
+          || !refreshed.domainState.computeRuns?.some(run => run.runId === accepted.envelope.commandId && run.status === 'succeeded')) {
+        if (Date.now() >= deadline) break;
+        await new Promise(resolveWait => setTimeout(resolveWait, 10));
+        refreshed = await server.repository.getWorkspace(workspace.id);
+      }
+      const acceptedRun = refreshed?.domainState.kind === 'table'
+        ? refreshed.domainState.computeRuns?.find(run => run.runId === accepted.envelope.commandId)
+        : undefined;
+      expect(acceptedRun).toMatchObject({ status: 'succeeded', outputs: [{ outputId: 'total', value: 7 }] });
     } finally {
+      releaseRunner?.();
       await closeServer(server);
     }
   });

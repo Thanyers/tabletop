@@ -126,7 +126,6 @@ export interface AuthorityOptions {
   readonly workspaceLifetimeMs?: number;
   readonly workspaceExpiresAt?: number;
   readonly computeRunner?: ComputeRunner;
-  readonly reauthenticateComputeSession?: (session: AuthenticatedSession) => Promise<AuthenticatedSession>;
   readonly scheduleBackground?: (task: Promise<void>) => void;
   readonly onComputeWorkScheduled?: (workspaceId: string) => void;
 }
@@ -276,9 +275,6 @@ export class CommandAuthority {
       onWorkScheduled: workspaceId => this.onComputeWorkScheduled(workspaceId),
       getSnapshot: (workspaceId, actorId) => this.computeSnapshot(workspaceId, actorId),
       executeTrusted: (actorId, workspaceId, type, payload) => this.executeTrustedCompute(actorId, workspaceId, type, payload),
-      reauthenticate: session => options.reauthenticateComputeSession
-        ? options.reauthenticateComputeSession(session)
-        : this.reauthenticateSession(session),
     }) : null;
   }
 
@@ -385,7 +381,7 @@ export class CommandAuthority {
       const view = this.toWorkspaceView(workspace, member, domain, members);
       return { session, member, workspace: view, context };
     });
-    if (authorized.workspace.kind === 'table') this.scheduleCompute(authorized.workspace.id, authorized.workspace.epoch, session);
+    if (authorized.workspace.kind === 'table') this.scheduleCompute(authorized.workspace.id, authorized.workspace.epoch);
     return authorized;
   }
 
@@ -747,19 +743,9 @@ export class CommandAuthority {
     );
   }
 
-  private async reauthenticateSession(session: AuthenticatedSession): Promise<AuthenticatedSession> {
-    const record = await this.repository.getSession(session.record.tokenHash);
-    if (!record || record.revokedAt !== null || expiresAt(record) <= this.now()
-        || record.actorId !== session.record.actorId
-        || !constantTimeHashEqual(record.csrfHash, session.csrfToken)) {
-      throw new AuthorityError('SESSION_EXPIRED');
-    }
-    return { record, csrfToken: session.csrfToken, expiresAt: expiresAt(record) };
-  }
-
-  private scheduleCompute(workspaceId: string, epoch: number, session?: AuthenticatedSession): void {
+  private scheduleCompute(workspaceId: string, epoch: number): void {
     if (!this.computeOrchestrator) return;
-    this.scheduleBackground(this.computeOrchestrator.schedule(workspaceId, epoch, session));
+    this.scheduleBackground(this.computeOrchestrator.schedule(workspaceId, epoch));
   }
 
   private async computeSnapshot(workspaceId: string, actorId?: string): Promise<ComputeWorkspaceSnapshot> {
@@ -894,8 +880,7 @@ export class CommandAuthority {
     }
     this.onWorkspaceChanged(ack.workspace.id, ack.workspace.epoch);
     if (ack.workspace.kind === 'table') {
-      this.scheduleCompute(ack.workspace.id, ack.workspace.epoch,
-        trustedOperation === null && 'csrfToken' in session ? session : undefined);
+      this.scheduleCompute(ack.workspace.id, ack.workspace.epoch);
     }
     return ack;
   }

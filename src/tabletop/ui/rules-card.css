@@ -3,6 +3,11 @@
  * No nested boxes around a single rule; a hairline separates them.
  */
 .tt-app .tt-table-rules { display: grid; gap: var(--tt-space-3); }
+/* Keep long rule sets readable when the canvas focuses this card. */
+.tt-app[data-workspace-kind="table"] .tt-flow-wrap .tt-canvas-node.tt-canvas-node--table-rules.is-expanded .tt-canvas-node__body {
+  max-height: 70dvh;
+  overflow: auto;
+}
 .tt-app .tt-table-rules__label {
   color: var(--tt-muted);
   font-size: var(--tt-type-small);

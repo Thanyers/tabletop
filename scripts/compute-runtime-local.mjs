@@ -86,7 +86,16 @@ try {
   await openCard(page, 'table.view.total-metric');
   await expect(page.getByTestId('canvas-object-editor')).toContainText('405');
   checks.push('live canvas metric displays the backend result 405');
-  await openCard(page, 'table.rules');
+  const rules = await openCard(page, 'table.rules');
+  const bodySize = await rules.locator('.tt-canvas-node__body').evaluate(element => ({ height: element.clientHeight, viewport: window.innerHeight, overflow: getComputedStyle(element).overflowY, maximum: getComputedStyle(element).maxHeight, classes: element.closest('.react-flow__node')?.className }));
+  if (bodySize.height > bodySize.viewport * 0.7 + 1 || bodySize.overflow !== 'auto') throw new Error(`Long rules should scroll inside a readable card: ${JSON.stringify(bodySize)}`);
+  checks.push('long rules scroll inside the focused card instead of shrinking the whole rule set');
+  await rules.locator('.tt-compute-advanced > summary').click();
+  await rules.locator('.tt-compute-source > summary').click();
+  await expect(rules.locator('.tt-compute-source pre')).toBeVisible();
+  checks.push('an authorized owner can inspect Advanced source even when local AI is disabled');
+  await rules.locator('.tt-compute-advanced > summary').click();
+  await rules.locator('.tt-canvas-node__body').evaluate(element => { element.scrollTop = 0; });
   await page.screenshot({ path: resolve(output, 'table-desktop.png'), fullPage: true });
   await page.reload();
   await openCard(page, 'table.rules');

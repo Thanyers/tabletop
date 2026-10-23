@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **วิธีคำนวณที่เก็บไว้ใช้ซ้ำ (F066):** AI เตรียมสูตร, JavaScript หรือ Python/pandas ตาม runtime ที่เปิดจริง แล้วคำนวณซ้ำจากข้อมูลใหม่โดยไม่เรียก AI; typed ports เชื่อม metric/กราฟ/ตารางและ module อื่น มีรุ่น ประวัติ ผู้รัน ที่มา และการตรวจผลเก่า เก็บในห้องเดิมและกู้คิวหลังกลับมาเปิดได้ · Rules อ่านเป็นชื่อ/วัตถุประสงค์ก่อน พร้อม Ask / Change this rule รายข้อและ Advanced; import แถว CSV/Excel เลือก append หรือยืนยัน replace ได้ · ไม่มี SQL migration; ก่อน release ต้องเตรียม Worker Loader และเปิด Python container ตาม [runtime contract](docs/REUSABLE_COMPUTE.md) ผล hosted Python ยังไม่ยืนยัน
+
 - แก้ Worker ไม่ขึ้นหลัง F066 (`TABLE_AI_INPUT_BYTES is not defined`): ย้ายค่าเพดานคำขอ AI ไปไฟล์ที่ไม่ import อะไร (`shared/ai-request-limits.ts`) เพื่อไม่ให้ลำดับโหลด module ทำให้ค่ายังไม่ถูกตั้ง · unit test ไม่เจอเพราะ vitest โหลด module คนละลำดับกับ bundle ของ Worker
 
 - **เพดานคำขอร่างกฎเป็น 128 KiB (F066, MINOR):** สัมพันธ์กับเพดานไฟล์ 64 KiB (ไฟล์เต็มโควตา + อีก 64 KiB ให้กฎและข้อมูล) · เดิม 48 KB ซึ่งน้อยกว่าไฟล์ที่โต๊ะรับได้ จึงแนบไฟล์ได้แต่ร่างกฎไม่ได้ · เพดานทั้งคำขอและการจอง token ของ billing คำนวณจากค่าเดียวกัน · แชทถามตอบยังเป็นเพดานเดิม

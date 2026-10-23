@@ -39,6 +39,8 @@ Profile `tabletop-compute-1` เตรียม Python 3.12, pandas 2.3.3, numpy
 
 Authority เป็นผู้จัดคิว `queued → running → succeeded/failed/stale` และตรวจสมาชิก สิทธิ์ epoch และความสดก่อนและหลังรัน Client ส่งได้เพียง `table.compute.run {moduleId}` ส่ง queue/update หรือปลอมผลเองไม่ได้ การเปลี่ยนข้อมูล/เปิดห้องกลับมาจัดงานที่ต้องรันตาม dependency; Cloudflare ใช้ `waitUntil` และ alarm สำหรับ recovery งาน interrupted ต้อง resolve และตรวจ input ใหม่ก่อน retry
 
+คำขอต้องผ่าน web-session authentication ตอนรับ แต่เมื่อรับแล้ว job เป็นของโต๊ะและ actor ไม่ผูกอายุ cookie: ปิดแท็บ, session หมดอายุ หรือ revoke web session ไม่ยกเลิกงานที่รับแล้ว การถอนสมาชิก/สิทธิ์ หรือเปลี่ยน epoch หยุดสิทธิ์รันและ commit ไม่มีการเก็บ session token หรือ token hash ใน run record; alarm จึงใช้กติกาเดียวกับการรันปกติ
+
 รันอัตโนมัติเริ่มในบริบทเจ้าของ ถ้า module รับ actor role/seat ให้ใช้ผู้ขอรันล่าสุดต่อไปและตรวจสิทธิ์สมาชิกใหม่ ห้ามแทนด้วยบริบทเจ้าของทันทีหลังสมาชิกกดรัน ถ้าสมาชิกนั้นไม่มีสิทธิ์แล้วไม่แทนตัวผู้รันโดยเงียบ
 
 ประวัติ bounded 24 รายการ เก็บงานที่ยังไม่จบไว้ และ trim เฉพาะ terminal history ปฏิเสธการขอซ้ำระหว่าง module เดียวกันยังทำอยู่ ไม่ใช่ durable job queue หรือ audit archive แบบไม่จำกัด

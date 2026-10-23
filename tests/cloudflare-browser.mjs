@@ -16,6 +16,7 @@ const origin = `http://127.0.0.1:${port}`;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const csrf = token => createHash('sha256').update(`tabletop-csrf-v1:${token}`).digest('base64url');
 const output = resolve('test-results/cloudflare-browser');
+const importedSourceNote = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 let providerCalls = 0;
 let tableAIReply = null;
 let tableAssistantReply = null;
@@ -56,7 +57,7 @@ const mf = new Miniflare(convertV4MiniflareOptions({
   d1Databases: ['DB'],
   durableObjects: { ROOMS: { className: 'Room', useSQLite: true }, BILLING: { className: 'Billing', useSQLite: true } },
   bindings: { PUBLIC_ORIGIN: origin, GOOGLE_OAUTH_CLIENT_ID: 'synthetic-client', GOOGLE_OAUTH_CLIENT_SECRET: 'synthetic-secret',
-    DEEPSEEK_KEY: 'synthetic-provider-key', AI_MONTHLY_BUDGET_MICRO_USD: '1000000', AI_DAILY_BUDGET_MICRO_USD: '1000000' },
+    DEEPSEEK_KEY: 'synthetic-provider-key', TABLE_WEB_SEARCH: 'off', AI_MONTHLY_BUDGET_MICRO_USD: '1000000', AI_DAILY_BUDGET_MICRO_USD: '1000000' },
   outboundService: async request => {
     if (request.url !== 'https://api.deepseek.com/chat/completions') throw new Error('Unexpected external request in isolated browser test');
     providerCalls++;
@@ -91,11 +92,24 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       if (assistantGate) await assistantGate;
     } else if (input.kind === 'table') {
       if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
-      if (tableAIReply.expectedSources) expect(input.sources).toEqual(tableAIReply.expectedSources);
+      if (tableAIReply.expectedSources) {
+        const expectedSources = tableAIReply.expectedSources;
+        if (input.program) {
+          const evidenceIds = [...new Set((input.program.evidence ?? []).map(item => item.sourceId))].sort();
+          const citedSources = expectedSources.filter(source => evidenceIds.includes(source.id));
+          expect(citedSources.map(source => source.id).sort()).toEqual(evidenceIds);
+          expect(input.sources).toEqual(expectedSources.filter(source => !evidenceIds.includes(source.id)));
+          expect(input.importedSources ?? []).toEqual(citedSources.map(({ id, filename }) => ({ id, filename, note: importedSourceNote })));
+        } else {
+          expect(input.sources).toEqual(expectedSources);
+          expect(input.importedSources ?? []).toEqual([]);
+        }
+      }
       else {
         expect(input.sources).toHaveLength(1);
         expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);
         expect(input.sources[0].text).toBe(tableAIReply.expectedText);
+        expect(input.importedSources ?? []).toEqual([]);
       }
       expect(typeof input.prompt).toBe('string');
       change = tableAIReply.change;

@@ -5,10 +5,15 @@
 
 ## Lessons
 
+### 2026-10-23 — Browser harness ใช้ assets เก่าแล้ว build ลบไฟล์ระหว่างทดสอบ
+- **What happened:** browser suite นำทางเข้าห้องใหม่แล้วได้ HTTP response failure หลัง suite เริ่มผ่านหลายข้อ
+- **Root cause:** สั่ง Vite build ระหว่าง Miniflare harness ยังทำงาน; asset manifest ของ process เดิมชี้ไฟล์ที่ build ใหม่ลบไป
+- **Correct behavior:** รอ browser processes จบก่อนสร้าง `dist/worker-build` ใหม่ จากนั้นเริ่ม harness ใหม่กับ build ชุดเดียวที่คงที่จนจบ รัน browser suites ขนานกันได้เฉพาะเมื่อทุก suite อ่าน artifacts อย่างเดียว
+
 ### 2026-10-23 — Compute ผ่าน runner/unit แต่เส้นทางห้องจริงไม่เริ่มงาน
 - **What happened:** โปรแกรมจาก AI รันใน container โดยตรงได้ แต่ authority ไม่จัดคิวหรือจบด้วย failure ก่อนเรียก runner
-- **Root cause:** reauthentication ใช้ helper ที่ hash ค่า raw ไปเทียบกับค่า hash โดยส่ง `csrfHash` ที่ hash แล้วเข้าไปอีกครั้ง; mocks ไม่ตรวจ authentication จริง อีก race คือ schedule ทิ้ง wakeup ที่มาตอน drain กำลังจบ
-- **Correct behavior:** ส่ง `session.csrfToken` ให้ raw-value hash comparison; ทดสอบด้วย session ที่สร้างและ authenticate ผ่าน authority จริงก่อนยืนยัน integration และเก็บ dirty flag เพื่อ drain อีกครั้งเมื่อมีสถานะเปลี่ยนระหว่างงานกำลังรัน
+- **Root cause:** ช่วงแรกผูก durable job กับ HTTP session และส่งค่า CSRF ที่ hash แล้วเข้า raw-value comparison อีกครั้ง; mocks ไม่ตรวจ authentication จริง อีก race คือ schedule ทิ้ง wakeup ที่มาตอน drain กำลังจบ
+- **Correct behavior:** ตรวจ session ตอนรับคำขอ; งานที่รับแล้วใช้ actor/membership/permission/epoch ที่ตรวจใหม่ก่อนรันและก่อน commit ตาม [durable-job policy](docs/REUSABLE_COMPUTE.md) ไม่เก็บ token ใน run ทดสอบผ่าน HTTP authority จริงรวม restart/alarm และเก็บ dirty flag เพื่อ drain อีกครั้งเมื่อมีสถานะเปลี่ยนระหว่างงานกำลังรัน หากใช้ raw-value hash helper ใน request path ต้องส่ง raw token ไม่ใช่ hash
 
 ### 2026-10-23 — DSH plugin นอก linked profile หา SDK ไม่พบ และ hook context อาจตัดกติกาท้ายไฟล์
 - **What happened:** absolute module จาก home patch import `@deepseek-ai/dsh-llm` แบบ bare ไม่สำเร็จ; AGENTS เดิมยาวเกินงบ additionalContext ของ Claude

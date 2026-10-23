@@ -329,7 +329,7 @@ function ProgramOverview({ program, state, label, change, members, onRemove, dif
     <details className="tt-table-rule-details" open>
       <summary>Ways to use this table · {program.actions.length}</summary>
       {program.actions.length === 0
-        ? <p className="tt-table-inline-hint">No rule yet. Describe what should happen when someone uses this table.</p>
+        ? <p className="tt-table-inline-hint">No action buttons yet. Describe an action people can use on this table.</p>
         : program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} onRemove={onRemove} badge={ruleBadge(diff, 'action', action.id)} interactive={interactive} canEdit={canEditRules} onEditRules={onEditRules} />)}
     </details>
 

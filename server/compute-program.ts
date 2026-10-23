@@ -6,7 +6,10 @@ export default { async fetch(request) {
   try {
     const inputs = await request.json();
     const outputs = await compute(inputs);
-    const body = JSON.stringify({ outputs });
+    const body = JSON.stringify({ outputs }, (_key, value) => {
+      if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Non-finite output');
+      return value;
+    });
     if (!body || new TextEncoder().encode(body).byteLength > ${COMPUTE_WIRE_BYTES}) return new Response('Output exceeds the execution limit.', {status:422});
     return new Response(body, {headers:{'content-type':'application/json'}});
   } catch { return new Response('The function failed. Check its inputs and code in Advanced.', {status:422}); }

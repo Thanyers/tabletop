@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` |
 | เจ้าของฟีเจอร์ | Codex |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F066-T*` |
 
@@ -42,7 +42,35 @@
 | 2026-10-23 | ใช้ทิศทาง Rules = ความสามารถที่เก็บไว้ใช้ซ้ำ ตามที่เจ้าของสั่งให้ implement หลังคุย concept | ไม่ลด Rules เหลือสูตรคอลัมน์ และไม่ต้องขออนุมัติแนวคิดเดิมซ้ำ |
 | 2026-10-23 | หนึ่งโปรแกรมรองรับหลายกฎ/การ์ด; execution session แยกจาก room และ browser session | รักษาการใช้ซ้ำ ความต่อเนื่อง และสิทธิ์ในโต๊ะ |
 | 2026-10-23 | ตรวจ PR #205 (patch), #207 (research) ก่อนแก้; แยกไฟล์ใหม่และรักษา integration points | ลดการชนกับงานที่กำลังทำ ไม่ merge งานคนอื่นโดยปริยาย |
+| 2026-10-23 | งานที่ authority รับแล้วอยู่กับ room+actor และอยู่ต่อหลัง cookie หมดอายุ/revoke | alarm/restart ใช้กติกาเดียวกัน; ตรวจ membership/permission/epoch ก่อนและหลังเสมอ ไม่เก็บ session credential ใน run |
 
 ## ผลตรวจ
 
-ยังไม่ได้ตรวจ implementation; อัปเดตด้วยผลจริงก่อนส่ง review
+รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)
+
+ตรวจด้วย Node **22.23.2**, Docker Engine **29.9.2** และข้อมูลสมมติเท่านั้น:
+
+- Provider จริงสร้าง Python/pandas module ได้หนึ่งเคส ร่างก่อนหน้าหนึ่งครั้งถูก validator ปฏิเสธ จึงไม่อ้างว่าสร้างได้สำเร็จทุกครั้ง
+- ใช้ source ที่ AI สร้างใน authority + PGlite + Docker จริง: ผล **225 → 405** เมื่อแทนแถวต้นทาง, runner 2 ครั้ง, ไม่เรียก provider ตอนคำนวณซ้ำ
+- ปิด/เปิด server ใช้ฐานเดิมกับ session เดิมแล้วอ่านโปรแกรม/ข้อมูล/ผลกลับได้; browser เปิด metric ได้ **405** และ reload ยังอ่านผลเดิม; Rules ยาวเลื่อนอ่านในการ์ดและ owner เปิด source ใน Advanced ได้แม้ local AI ปิด รวม acceptance **8 checks**
+- Python integration **4/4**: pandas ใช้ซ้ำ, standard image libraries, ไม่มี network/host credential, ทิ้ง generated logs จำนวนมากโดยไม่เก็บใน host memory
+- UI focused **47/47**, actual component browser interactions ผ่าน: Ask/Change references หลายข้อ, สิทธิ์แก้/ดู, Advanced/source, เปลี่ยนภาษาแบบขอร่าง, run ที่ถูกปฏิเสธ, ยืนยัน replace และปิด import บน derived table
+- UI-gate **16/16 measured PASS**, **4 SKIPPED**: theme refs, token schema/contrast pairs และ focus trap ไม่มี input/selector; ไม่ถือเป็น PASS ตรวจ viewport 280/320/390/414 และดูภาพ desktop/mobile แล้ว
+- `wrangler deploy --dry-run` ทั้ง default และ config Python opt-in ผ่าน พร้อม build image; ไม่ได้ provision หรือ execute Python บน hosted Cloudflare
+
+ชุดรวมหลัง sync `dev@a37f8a8`: unit **803 passed / 5 skipped**, Cloudflare **166/166**, lint **0 errors / 106 warnings**, typecheck/build/Worker dry-run ผ่าน; public-file scan 0 findings; audit ไม่มี high/critical แต่มี moderate dev-test advisories เดิม 2 รายการ Independent review ไม่เหลือ P1/P2 ในขอบเขตตรวจ browser regression รวมผ่าน: Cloudflare **32 checks**, Generative Canvas **8 checks** ผลทดสอบและภาพดิบอยู่ใน ignored `test-results/` ไม่ใช่ข้อมูล production
+
+## คำสั่งตรวจที่ทำซ้ำได้
+
+```powershell
+npm test
+npm run test:cloudflare
+npm run build
+npm run build:cloudflare
+$env:TABLETOP_COMPUTE_DOCKER_TEST='1'
+npx vitest run server/compute-python.integration.test.ts
+node scripts/build-f066-rules-harness.mjs
+node tests/ui/f066-rules-browser.mjs
+```
+
+UI-gate ต้องใช้ skill ที่ติดตั้งในเครื่องและรันกับ `tests/ui/f066-rules.html --full` ส่วน real-provider proof ใช้ `TABLETOP_CREDENTIAL_FILE` ที่ไม่อยู่ใน Git แล้ว `node --import tsx scripts/compute-live-local.mjs`; จากนั้นรัน `scripts/compute-runtime-local.mjs` แบบเดียวกัน ไม่มีการ deploy
