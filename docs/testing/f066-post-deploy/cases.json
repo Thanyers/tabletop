@@ -547,7 +547,7 @@
         "sales-v2.csv",
         "sales-v3.csv"
       ],
-      "setup": "ใช้เครื่องมือควบคุม timing ใน local/staging เท่านั้น; ต้องพิสูจน์ว่ารัน v2 ยังไม่จบตอนรับ v3",
+      "setup": "ใช้เครื่องมือควบคุม timing ใน local/staging เท่านั้น; ต้องพิสูจน์ว่ารัน v2 ยังไม่จบตอนรับ v3; ต้องมี local/staging QA runner ที่หยุดก่อนส่งผลกลับ authority และแจ้ง runId/started ได้; pack นี้ไม่ได้ติดตั้ง timing harness ให้ หากไม่มีให้ BLOCKED (reason=TIMING_TOOL_UNAVAILABLE)",
       "prompt": "",
       "steps": [
         "เริ่มจาก225 เปลี่ยนเป็นv2 แล้วรับv3ขณะ run v2 ค้าง",
@@ -597,7 +597,7 @@
       "fixtures": [
         "sales-v1.csv"
       ],
-      "setup": "local/staging ใช้ timing control ที่ระบุช่วง queued/running ได้; ไม่ใช้ infinite loop หรือ load test",
+      "setup": "local/staging ใช้ timing control ที่ระบุช่วง queued/running ได้; ไม่ใช้ infinite loop หรือ load test; ต้องมี local/staging QA runner ที่หยุดก่อนส่งผลกลับ authority และแจ้ง runId/started ได้; pack นี้ไม่ได้ติดตั้ง timing harness ให้ หากไม่มีให้ BLOCKED (reason=TIMING_TOOL_UNAVAILABLE)",
       "prompt": "",
       "steps": [
         "จด pending runId แล้วกด Run ซ้ำขณะงานนั้นยังทำอยู่",
@@ -716,14 +716,14 @@
       "scope": "hosted-ui",
       "runtimes": [],
       "fixtures": [],
-      "setup": "ห้อง QA มี objects/rules อย่างน้อยหกรายการ",
+      "setup": "ห้อง QA มี objects/rules อย่างน้อยหกรายการ; เพดานปัจจุบันมาจาก MAX_CHAT_CARD_REFERENCES ใน src/tabletop/ui/canvas-object-finder.ts",
       "prompt": "เลือกอ้างกฎ/การ์ดห้ารายการแล้วขออธิบายความสัมพันธ์ ไม่แก้ข้อมูล",
       "steps": [
         "ดู chips ว่าตรงกับสิ่งที่เลือกทั้งห้า",
-        "ลองเพิ่มรายการที่หก และตรวจว่าไม่สร้าง ref แอบแฝง"
+        "เพิ่มรายการที่หกทีละรายการ: chip เก่าสุดหลุดออก เหลือห้ารายการล่าสุด; ตรวจว่า prompt/context ตรงกับ chips ไม่มี ref แอบแฝง"
       ],
       "assertions": [
-        "รวม card/rule references ไม่เกิน5; UI จำกัดหรือแจ้งข้อจำกัด",
+        "รวม card/rule references ไม่เกิน5; การเพิ่มทีละรายการเก็บห้ารายการล่าสุดตาม useTableChat.tsx ไม่บังคับว่าต้องมีข้อความเตือน",
         "คำถามอ้างสิ่งที่เลือกจริง และไม่มี state mutation"
       ],
       "oracle": null,
@@ -973,7 +973,7 @@
         "javascript"
       ],
       "fixtures": [],
-      "setup": "local/staging: moduleรับactor/seatจากhost, memberมีสิทธิ์รัน; มีtimingcontrolพิสูจน์inflightได้",
+      "setup": "local/staging: moduleรับactor/seatจากhost, memberมีสิทธิ์รัน; มีtimingcontrolพิสูจน์inflightได้; ต้องมี local/staging QA runner ที่หยุดก่อนส่งผลกลับ authority และแจ้ง runId/started ได้; pack นี้ไม่ได้ติดตั้ง timing harness ให้ หากไม่มีให้ BLOCKED (reason=TIMING_TOOL_UNAVAILABLE)",
       "prompt": "",
       "steps": [
         "memberเริ่มrun แล้วownerถอนสมาชิกในQAroomก่อนจบ",

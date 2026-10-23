@@ -1,6 +1,6 @@
 # F066 — ชุดทดสอบหลัง release/deploy
 
-สถานะ: **เตรียมแล้ว / acceptance ยัง NOT_RUN ทั้ง 48 เคส** · วันที่เตรียม 2026-10-23 · ฐาน source dev@910b0a3
+สถานะ: **เตรียมแล้ว / acceptance ยัง NOT_RUN ทั้ง 48 เคส** · วันที่เตรียม 2026-10-23 · ฐาน fixture/contract dev@910b0a3; sync เอกสารกับ dev@91fad1d แล้ว (ไม่ใช่ target ของรอบ hosted)
 
 ชุดนี้เตรียมตามคำขอผู้ใช้สำหรับรันภายหลัง ไม่ใช่คำสั่งให้ release/deploy หรือเริ่มทดสอบ hosted ตอนนี้ เริ่มรอบจริงเมื่อผู้ใช้สั่งหลังมี release เป้าหมายแล้ว ครอบคลุม reusable compute/Rules และการเล่นเคสเดิม; ไม่รวมการไล่แก้ scene drag/camera นอกขอบเขต
 
@@ -31,6 +31,14 @@
 - เก็บภาพdesktop/mobile, input snapshot, module/version/bindings, runId/status/inputHash, revisions และผลอ่านกลับตามจำเป็น ลบ/ปิดบัง cookies,tokens,credentialsก่อนเก็บ/แชร์ ห้ามนำค่าจริงขึ้นrepo
 - แต่ละเคสเริ่มห้องใหม่หรือระบุเคสก่อนหน้าชัดเจน; AppendและReplaceเป็นคนละการกระทำ ตารางderivedให้แก้rawinputแทนimportผลตรง
 - visibilityของโต๊ะปัจจุบันเป็นopen ห้ามใช้ข้อความprivacyจากคู่มือR1เก่ามาอ้างว่าซ่อนsource/คำตอบ/โน้ตระหว่างสมาชิกได้ การปิดAdvancedในUIไม่ใช่ขอบเขตความลับ
+
+## ความพร้อมสำหรับเคสควบคุมจังหวะ
+
+PD-022/024/040 เป็นเคสมีเงื่อนไขใน local/staging; ชุดนี้ไม่ได้ติดตั้ง timing harness ให้ ก่อนรัน operator ต้องเตรียม QA runner ที่พักการส่งผลกลับ authority ได้และมีเหตุการณ์ started/runId ชัดเจน แนวทางมีอยู่ใน [orchestrator test](../../../server/table-compute-orchestrator.test.ts) กรณี “marks an in-flight result stale”: runner แจ้ง started แล้วรอ promise ก่อนคืนผล ไม่ใส่ delay/infinite loop ใน generated source หรือปรับ production
+
+ขั้นตอน operator: 1) ยืนยันเครื่องมือและช่องทางปล่อยผลใน QA environment 2) เริ่ม run และเก็บหลักฐาน queued/running พร้อม input revision 3) ทำการเปลี่ยน input/กด Run ซ้ำ/ถอนสมาชิกตามเคส 4) ปล่อยผลและอ่านสถานะหลังจบ 5) ปิด QA timing control หลังรอบ ถ้าเครื่องมือไม่มีให้ BLOCKED (reason=TIMING_TOOL_UNAVAILABLE); ถ้ามีแต่จับช่วงไม่ได้ให้ BLOCKED (reason=TIMING) การรัน unit test เดิมไม่ใช้แทนผล acceptance นี้
+
+เพดาน PD-029 ตรวจจาก [MAX_CHAT_CARD_REFERENCES](../../../src/tabletop/ui/canvas-object-finder.ts) และ [ตัวสะสม reference](../../../src/tabletop/ui/useTableChat.tsx): สูงสุดห้ารายการรวมการ์ด/กฎ การเพิ่มทีละรายการเก็บห้ารายการล่าสุด จึงตรวจ chips/context จริงโดยไม่ตั้งเกณฑ์ว่าต้องมี popup เตือน
 
 ## ผลอ้างอิงสำคัญ
 
@@ -262,7 +270,7 @@
 #### F066-PD-022 — ข้อมูลเปลี่ยนระหว่างรัน ผลเก่าไม่เป็น current
 
 - Priority: P1 · Scope: local-or-staging · Engine: javascript · Status: **NOT_RUN**
-- ก่อนเริ่ม: ใช้เครื่องมือควบคุม timing ใน local/staging เท่านั้น; ต้องพิสูจน์ว่ารัน v2 ยังไม่จบตอนรับ v3
+- ก่อนเริ่ม: ใช้เครื่องมือควบคุม timing ใน local/staging เท่านั้น; ต้องพิสูจน์ว่ารัน v2 ยังไม่จบตอนรับ v3; ต้องมี local/staging QA runner ที่หยุดก่อนส่งผลกลับ authority และแจ้ง runId/started ได้; pack นี้ไม่ได้ติดตั้ง timing harness ให้ หากไม่มีให้ BLOCKED (reason=TIMING_TOOL_UNAVAILABLE)
 - ข้อมูล: [sales-v1.csv](fixtures/sales-v1.csv), [sales-v2.csv](fixtures/sales-v2.csv), [sales-v3.csv](fixtures/sales-v3.csv)
 - ขั้นตอน: 1) เริ่มจาก225 เปลี่ยนเป็นv2 แล้วรับv3ขณะ run v2 ค้าง → 2) ปล่อยงานจบและอ่าน run statuses/input revisions กับทุกการ์ด
 - Expected: ผลสุดท้าย435จาก v3; run v2 เก่าเป็น stale หรือถูกปฏิเสธตาม authority · ถ้าจับช่วง in-flight ไม่ได้ ให้ BLOCKED (reason=TIMING) ไม่รายงาน PASS จากการแก้สองครั้งตามลำดับ
@@ -280,7 +288,7 @@
 #### F066-PD-024 — กด Run ซ้ำขณะ module เดียวกันยัง pending
 
 - Priority: P1 · Scope: local-or-staging · Engine: javascript · Status: **NOT_RUN**
-- ก่อนเริ่ม: local/staging ใช้ timing control ที่ระบุช่วง queued/running ได้; ไม่ใช้ infinite loop หรือ load test
+- ก่อนเริ่ม: local/staging ใช้ timing control ที่ระบุช่วง queued/running ได้; ไม่ใช้ infinite loop หรือ load test; ต้องมี local/staging QA runner ที่หยุดก่อนส่งผลกลับ authority และแจ้ง runId/started ได้; pack นี้ไม่ได้ติดตั้ง timing harness ให้ หากไม่มีให้ BLOCKED (reason=TIMING_TOOL_UNAVAILABLE)
 - ข้อมูล: [sales-v1.csv](fixtures/sales-v1.csv)
 - ขั้นตอน: 1) จด pending runId แล้วกด Run ซ้ำขณะงานนั้นยังทำอยู่ → 2) ปล่อยงานจบและอ่าน history/command result
 - Expected: ไม่มีงาน pending ซ้ำสำหรับ module เดียวกัน; UI disable หรือ server ปฏิเสธอย่างชัดเจน · ผลสุดท้าย225; ถ้าไม่พิสูจน์ช่วง pending ให้ BLOCKED (reason=TIMING)
@@ -326,11 +334,11 @@
 #### F066-PD-029 — อ้างหลายการ์ด/กฎร่วมกันและไม่เกินห้ารายการ
 
 - Priority: P1 · Scope: hosted-ui · Engine: ตามโจทย์/ไม่บังคับ runner · Status: **NOT_RUN**
-- ก่อนเริ่ม: ห้อง QA มี objects/rules อย่างน้อยหกรายการ
+- ก่อนเริ่ม: ห้อง QA มี objects/rules อย่างน้อยหกรายการ; เพดานปัจจุบันมาจาก MAX_CHAT_CARD_REFERENCES ใน src/tabletop/ui/canvas-object-finder.ts
 - ข้อมูล: ตาม precondition; ไม่มี fixture file เพิ่ม
 - ข้อความพร้อมส่ง: “เลือกอ้างกฎ/การ์ดห้ารายการแล้วขออธิบายความสัมพันธ์ ไม่แก้ข้อมูล”
-- ขั้นตอน: 1) ดู chips ว่าตรงกับสิ่งที่เลือกทั้งห้า → 2) ลองเพิ่มรายการที่หก และตรวจว่าไม่สร้าง ref แอบแฝง
-- Expected: รวม card/rule references ไม่เกิน5; UI จำกัดหรือแจ้งข้อจำกัด · คำถามอ้างสิ่งที่เลือกจริง และไม่มี state mutation
+- ขั้นตอน: 1) ดู chips ว่าตรงกับสิ่งที่เลือกทั้งห้า → 2) เพิ่มรายการที่หกทีละรายการ: chip เก่าสุดหลุดออก เหลือห้ารายการล่าสุด; ตรวจว่า prompt/context ตรงกับ chips ไม่มี ref แอบแฝง
+- Expected: รวม card/rule references ไม่เกิน5; การเพิ่มทีละรายการเก็บห้ารายการล่าสุดตาม useTableChat.tsx ไม่บังคับว่าต้องมีข้อความเตือน · คำถามอ้างสิ่งที่เลือกจริง และไม่มี state mutation
 
 #### F066-PD-030 — Rules บนจอแคบและใช้คีย์บอร์ด
 
@@ -424,7 +432,7 @@
 #### F066-PD-040 — ถอนสมาชิกระหว่าง actor-bound run
 
 - Priority: P1 · Scope: local-or-staging · Engine: javascript · Status: **NOT_RUN**
-- ก่อนเริ่ม: local/staging: moduleรับactor/seatจากhost, memberมีสิทธิ์รัน; มีtimingcontrolพิสูจน์inflightได้
+- ก่อนเริ่ม: local/staging: moduleรับactor/seatจากhost, memberมีสิทธิ์รัน; มีtimingcontrolพิสูจน์inflightได้; ต้องมี local/staging QA runner ที่หยุดก่อนส่งผลกลับ authority และแจ้ง runId/started ได้; pack นี้ไม่ได้ติดตั้ง timing harness ให้ หากไม่มีให้ BLOCKED (reason=TIMING_TOOL_UNAVAILABLE)
 - ข้อมูล: ตาม precondition; ไม่มี fixture file เพิ่ม
 - ขั้นตอน: 1) memberเริ่มrun แล้วownerถอนสมาชิกในQAroomก่อนจบ → 2) ปล่อยรันจบและลองเปิด/รันใหม่จากsessionสมาชิกเดิม
 - Expected: สมาชิกที่ถูกถอนเข้าห้อง/เริ่มrunใหม่ไม่ได้ · ผลเก่าไม่commitเป็นcurrentในบริบทสมาชิกที่ถูกถอน และไม่สลับไปใช้ownerโดยเงียบ; จับinflightไม่ได้ให้BLOCKED (reason=TIMING)
