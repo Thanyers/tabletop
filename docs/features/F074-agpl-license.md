@@ -30,6 +30,7 @@
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
 | T1 | เพิ่ม license และ metadata ให้ตรงกัน | LICENSE ตรงกับต้นฉบับ GNU, README/package/lockfile ระบุ `AGPL-3.0-only`, public scan และ diff check ผ่าน |
+| T2 | บันทึกผลหลัง merge และ staging | ผลตรวจและ version readback ผูกกับ merge commit/run ที่เสร็จจริงใน DEPLOYMENTS และ spec |
 
 ## การตัดสินใจ
 

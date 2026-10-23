@@ -74,6 +74,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F074-T2 | บันทึกผล merge license และ staging | `doing` | Codex | `docs/F074-merge-verification` | `docs/DEPLOYMENTS.md`, `docs/features/F074-agpl-license.md`, `spec.md`, `PLAN.md` | — | PR #238 merge แล้ว; บันทึก snapshot ของ run 39933143323 |
 | F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |
 | F074-T1 | เพิ่ม AGPL v3, README และ package metadata | `review` | Codex | `docs/F074-agpl-license` / #238 | `LICENSE`, `README.md`, `package.json`, `package-lock.json`, `docs/features/F074-agpl-license.md`, `changelog.d/F074-agpl-license.md`, `spec.md`, `PLAN.md` | — | GNU text/metadata 5 checks, changelog 7 fragments ผ่าน; ไม่ออก release เว็บ; dependency คง license เดิม |
 | F073-T1 | `room_images` + `/images` route + `imageId` บน note + การ์ดรูป + ปุ่มอัปโหลด | `review` | lead (AI) | `feat/F073-image-cards` | `domain/table.ts`, `shared/table-contracts.ts`, `cloudflare/{index,room,room-repository}.ts`, `ui/NoteCard.tsx`, `ui/note-card.css`, `client.ts`, tests | — | ตาราง DO ใหม่แบบเพิ่มอย่างเดียว (ผู้ใช้อนุมัติ 2026-10-23) |
