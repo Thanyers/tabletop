@@ -9,6 +9,10 @@
 - **What happened:** CD002 (#230) เพิ่ม `.github/workflows/staging-deploy.yml` แบบ `on: workflow_run` ของ Validate บน `dev` แต่ merge แล้วไม่มี run เลย และ `gh workflow run` ตอบ 404 "workflow … not found on the default branch"
 - **Root cause:** GitHub เรียก workflow ที่ trigger ด้วย `workflow_run` (และ `workflow_dispatch`) จากไฟล์บน **default branch** เท่านั้น ซึ่งของ repo นี้คือ `main` · ไฟล์ใหม่ที่อยู่แค่ใน `dev` จึงไม่ถูกเรียกจนกว่าจะออก release
 - **Correct behavior:** งานที่ต้องเริ่มจาก push เข้า `dev` ให้ใส่เป็น job ใน workflow ที่ trigger ด้วย `push` (เช่น `deploy-staging` ใน `validate.yml` ที่ `needs: local-validation`) · ก่อนพึ่ง `workflow_run`/`workflow_dispatch` ตรวจ `gh repo view --json defaultBranchRef` และยืนยันว่าไฟล์อยู่บน branch นั้นแล้ว
+### 2026-10-23 — dropdown บน Windows เป็นกล่องดำขยายค้าง เพราะเมนู `<select>` ถูกวาดโดยหน้าต่าง OS
+- **What happened:** ผู้ใช้กด `Sort` บน `/tables` แล้วมีกล่องดำโผล่และขยายจน browser ค้าง · เกิดกับ dropdown ทุกตัว · เครื่องที่ตั้ง display scaling 125%
+- **Root cause:** ที่ scaling ≠ 100% Chromium ส่งเมนู `<select>` ให้หน้าต่าง OS แยกวาด ไม่ได้วาดในหน้า · วัดได้ว่า `select:matches(':open')` เป็น true แต่ `<option>` มี rect 0×0 และภาพที่ renderer วาดไม่มีเมนู ขณะที่ 100% เมนูอยู่ในหน้าและไม่มีอาการ
+- **Correct behavior:** ให้ `@supports (appearance: base-select)` เปิด customizable select ใน `src/tabletop/ui/tabletop.css` (เมนูถูกวาดในหน้าเสมอ) และ **อย่า** ใส่ `min-inline-size: max-content` ให้ select ทั้งแอป — `min-width` ชนะ `max-width: 100%` ทำให้ select ใน card แคบล้น (วัดได้ 277.7 px ใน card 150 px) · ตรวจซ้ำด้วย harness ที่ `deviceScaleFactor` 1.25 และดู rect ของ `<option>` ว่าไม่เป็น 0
 
 ### 2026-10-23 — ขยายงาน compute/Rules ไปไล่ scene/camera หลัง merge
 - **What happened:** หลังงานหลักผ่าน PR validation และรวม dev แล้ว ใช้เวลาตรวจ generated-scene drag failure ในชุดรวมต่อจนผู้ใช้ทักว่านอกเรื่อง
