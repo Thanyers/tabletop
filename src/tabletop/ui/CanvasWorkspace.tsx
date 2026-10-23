@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Background, BackgroundVariant, Controls, Handle, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type EdgeTypes, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
-import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, Focus, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2, Star, Pencil, Search } from 'lucide-react';
+import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2, Star, Pencil, Search } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
 import type { Binding } from '../runtime';
 import type { WorkspaceView, PhysicsParams } from '../shared/contracts';
@@ -127,18 +127,8 @@ interface OpenObjectFocusRequest {
 }
 
 /** F054: the go-to button waits for React Flow to measure the card before it moves the camera. */
-interface LocateObjectFocusRequest {
-  id: string;
-  attempts: number;
-  /** A narrow screen fits the one card to the whole canvas; a wide one keeps the panel open. */
-  narrow: boolean;
-  frame?: number;
-  timer?: number;
-}
 
 /** ~5.8s of frames at 32ms, the same patience the open-and-focus request has. */
-const LOCATE_FOCUS_MAX_ATTEMPTS = 180;
-const NARROW_CANVAS_QUERY = '(max-width: 760px)';
 
 /** One row of the Objects panel: a card, its time line, and whether this viewer closed it. */
 interface CanvasCardRow {
@@ -745,26 +735,15 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       seedAttemptCounts.clear();
     };
   }, [workspaceKey]);
-  // F054: a "go to card" camera move that is still waiting for the card to be measured.
-  const pendingLocateFocusRef = useRef<LocateObjectFocusRequest | null>(null);
-  const cancelPendingLocateFocus = useCallback(() => {
-    const request = pendingLocateFocusRef.current;
-    if (!request) return;
-    if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
-    if (request.timer !== undefined) window.clearTimeout(request.timer);
-    pendingLocateFocusRef.current = null;
-  }, []);
-  useEffect(() => () => cancelPendingLocateFocus(), [cancelPendingLocateFocus]);
   const cancelPendingOpenObjectFocus = useCallback(() => {
-    // Any pointer or key interaction that cancels the open-and-focus request cancels the camera move too.
-    cancelPendingLocateFocus();
+    // Any pointer or key interaction that cancels the open-and-focus request stops its camera move too.
     const request = pendingOpenObjectFocusRef.current;
     if (!request) return;
     if (request.frame !== undefined) window.cancelAnimationFrame(request.frame);
     if (request.timer !== undefined) window.clearTimeout(request.timer);
     pendingOpenObjectFocusRef.current = null;
     canvasInteractionRevisionRef.current += 1;
-  }, [cancelPendingLocateFocus]);
+  }, []);
   const requestOpenObjectFocus = useCallback((id: string, requireOpened: boolean, returnFocusToObjects: boolean) => {
     cancelPendingOpenObjectFocus();
     const sequence = ++openObjectFocusSequenceRef.current;
@@ -1221,66 +1200,6 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       objectsButtonRef.current?.focus();
     }));
   }, [cancelPendingOpenObjectFocus, flow, focusNodeId, focusRequestKey, hiddenIds, nodes, onOpenObject, openedObjectId, onSelectNode, requestOpenObjectFocus, view.kind, workspaceKey]);
-
-  /**
-   * F054: "go to card" only moves the camera. The card is selected, never opened or expanded, and on a
-   * wide screen the panel stays open so the next card is one press away. On a narrow screen the panel
-   * would cover the card, so it closes and focus returns to the Objects button, as opening a card does.
-   */
-  const focusCanvasObject = useCallback((id: string) => {
-    const title = cardRows.find((row) => row.id === id)?.title ?? id;
-    if (hiddenIds.has(id)) showObject(id);
-    cancelPendingOpenObjectFocus();
-    setPreviousView(flow.getViewport());
-    onSelectNode(id);
-    announce(`Moved to ${title}.`);
-    const narrow = window.matchMedia(NARROW_CANVAS_QUERY).matches;
-    if (narrow) {
-      // The panel would cover the card, so it closes and focus goes back to the Objects button.
-      setObjectsMenuOpen(false);
-      window.requestAnimationFrame(() => objectsButtonRef.current?.focus());
-    }
-    // A card that was just revealed, or that has not measured yet, has no size to fit. Wait for React Flow
-    // to report one, then on a wide screen place it in the free area the open panel leaves, and on a narrow
-    // screen fit the one card to the whole canvas so the panel never hides it.
-    const request: LocateObjectFocusRequest = { id, attempts: 0, narrow };
-    pendingLocateFocusRef.current = request;
-    const settle = () => {
-      if (pendingLocateFocusRef.current !== request) return;
-      const node = flow.getNode(id);
-      const width = node?.measured?.width;
-      const height = node?.measured?.height;
-      const wrap = flowWrapRef.current?.getBoundingClientRect();
-      if (node && typeof width === 'number' && width > 0 && typeof height === 'number' && height > 0 && wrap && wrap.width > 0 && wrap.height > 0) {
-        pendingLocateFocusRef.current = null;
-        if (request.narrow) {
-          void flow.fitView({ nodes: [{ id }], padding: 0.1, minZoom: 0.62, maxZoom: 1.15, duration: canvasMotionDuration(220) });
-          return;
-        }
-        const panel = objectsMenuRef.current?.querySelector<HTMLElement>('.tt-canvas-objects__panel')?.getBoundingClientRect();
-        const safeLeft = panel ? Math.max(12, panel.right - wrap.left + 12) : 12;
-        const freeWidth = Math.max(0, wrap.width - safeLeft - 12);
-        const freeHeight = Math.max(0, wrap.height - 64 - 12);
-        const zoom = Math.min(1.15, Math.max(0.3, Math.min(1.15, freeWidth / (width + 24), freeHeight / (height + 24))));
-        void flow.setViewport({
-          x: safeLeft + (freeWidth - width * zoom) / 2 - node.position.x * zoom,
-          y: 64 + (freeHeight - height * zoom) / 2 - node.position.y * zoom,
-          zoom,
-        }, { duration: canvasMotionDuration(220) });
-        return;
-      }
-      request.attempts += 1;
-      if (request.attempts >= LOCATE_FOCUS_MAX_ATTEMPTS) {
-        pendingLocateFocusRef.current = null;
-        announce('Card is not ready yet.');
-        return;
-      }
-      request.timer = window.setTimeout(() => {
-        request.frame = window.requestAnimationFrame(settle);
-      }, 32);
-    };
-    request.frame = window.requestAnimationFrame(settle);
-  }, [announce, cancelPendingOpenObjectFocus, cardRows, flow, hiddenIds, onSelectNode, showObject]);
 
   const changeCardSort = useCallback((mode: CardSortMode) => {
     writeCardSortMode(workspaceKey, mode);
@@ -2222,7 +2141,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
                   event.stopPropagation();
                   if (event.key === 'Enter') { event.preventDefault(); void commitRename(); }
                   if (event.key === 'Escape') { event.preventDefault(); setRenamingId(null); }
-                }} /> : <button type="button" className="tt-canvas-objects__main" data-testid={`open-canvas-${object.id}`} data-hidden={object.hidden || undefined} aria-label={object.hidden ? `Reopen ${object.title}` : `Open ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>
+                }} /> : <button type="button" className="tt-canvas-objects__main" data-testid={`open-canvas-${object.id}`} data-hidden={object.hidden || undefined} aria-label={object.hidden ? `Reopen and go to ${object.title}` : `Open and go to ${object.title}`} aria-current={selectedNodeId === object.id ? 'location' : undefined} aria-expanded={activeOpenedId === object.id} onClick={(event) => { event.stopPropagation(); navigateToObject(object.id); }}>
                   <span className="tt-canvas-objects__glyph" data-role={canvasRole(object.capability, object.kind)} aria-hidden="true">{capabilityGlyph(object.capability, object.kind)}</span>
                   <span className="tt-canvas-objects__title" title={object.title}>{object.title}</span>
                 </button>}
@@ -2230,18 +2149,15 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
                   <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__star" data-testid={`star-canvas-${object.id}`} aria-pressed={starredIds.has(object.id)} aria-label={starredIds.has(object.id) ? `Unstar ${object.title}` : `Star ${object.title}`} title={starredIds.has(object.id) ? 'Starred: listed first' : 'Star to list it first'} onClick={(event) => { event.stopPropagation(); toggleStar(object.id); }}>
                     <Star size={15} aria-hidden="true" fill={starredIds.has(object.id) ? 'currentColor' : 'none'} />
                   </button>
-                  {canRename(view, object.id) && renamingId !== object.id && <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__more" data-testid={`rename-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Rename ${object.title}`} title="Rename for everyone (leave blank for the original name)" onClick={(event) => { event.stopPropagation(); startRename(object.id, object.title); }}>
+                  {canRename(view, object.id) && renamingId !== object.id ? <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__more" data-testid={`rename-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Rename ${object.title}`} title="Rename for everyone (leave blank for the original name)" onClick={(event) => { event.stopPropagation(); startRename(object.id, object.title); }}>
                     <Pencil size={14} aria-hidden="true" />
-                  </button>}
-                  <button type="button" className="tt-canvas-objects__focus" data-testid={`go-to-canvas-${object.id}`} aria-label={`Go to ${object.title}`} title="Go to card" onClick={(event) => { event.stopPropagation(); focusCanvasObject(object.id); }}>
-                    <Focus size={15} aria-hidden="true" />
-                  </button>
+                  </button> : <span className="tt-canvas-objects__slot" aria-hidden="true" />}
                   <button type="button" className="tt-canvas-objects__eye" data-testid={`toggle-canvas-${object.id}`} aria-pressed={!object.hidden} aria-label={object.hidden ? `Show ${object.title}` : `Hide ${object.title}`} title={object.hidden ? 'Show on canvas' : 'Hide from canvas'} onClick={(event) => { event.stopPropagation(); if (object.hidden) showObject(object.id); else hideObject(object.id); }}>
                     {object.hidden ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
                   </button>
-                  {canTrash(view, object.id) && <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__delete tt-canvas-objects__more" data-testid={`delete-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Delete ${object.title}`} title="Delete for everyone (restore from Deleted)" onClick={(event) => { event.stopPropagation(); void trashObject(object.id, true); }}>
+                  {canTrash(view, object.id) ? <button type="button" className="tt-canvas-objects__eye tt-canvas-objects__delete tt-canvas-objects__more" data-testid={`delete-canvas-${object.id}`} disabled={tableReadOnly} aria-label={`Delete ${object.title}`} title="Delete for everyone (restore from Deleted)" onClick={(event) => { event.stopPropagation(); void trashObject(object.id, true); }}>
                     <Trash2 size={15} aria-hidden="true" />
-                  </button>}
+                  </button> : <span className="tt-canvas-objects__slot" aria-hidden="true" />}
                 </span>
                 <CardRowMeta row={object} />
               </li>)}
