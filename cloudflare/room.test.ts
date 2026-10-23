@@ -20,6 +20,7 @@ import type { TableAssistantResponse } from './table-assistant.js';
 import { CURSOR_MIN_INTERVAL_MS } from '../src/tabletop/shared/cursor-protocol.js';
 import { ReasonedDomainError } from './model-failure.js';
 import { ModelProviderClosed, ModelRequestTimeout } from '../server/providers/deepseek-changes.js';
+import { MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_TEXT_CHARS, MAX_JOB_SEARCH_TITLE_CHARS } from '../src/tabletop/shared/model-job-progress.js';
 
 vi.mock('./ai.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./ai.js')>();
@@ -67,8 +68,8 @@ interface TestModelJob {
   autoApply?: 'applied' | 'needs-review';
   autoApplyReasons?: string[];
   failureCode?: string;
-  /** F045: live counters while the draft runs; F050 adds the bounded thinking tail. */
-  progress?: { receivedChars: number; reasoningChars: number; thinkingTail?: string; updatedAt: number };
+  /** F045: live counters while the draft runs; F050 adds the bounded thinking tail, F064 the search line. */
+  progress?: { receivedChars: number; reasoningChars: number; thinkingTail?: string; search?: { phase: 'searching' | 'reading' | 'done'; query: string; resultsCount: number; topTitle?: string }; updatedAt: number };
   /** F045: the configured whole-job deadline the draft runs under. */
   limitMs?: number;
   /** F045: bounded, redacted stop evidence for a failed draft. */
@@ -2808,6 +2809,74 @@ describe('Cloudflare room Durable Object', () => {
     // The live tail is redacted on the way into the row, exactly like the failure details.
     expect(liveProgress?.thinkingTail).not.toContain(owner.name);
     expect(liveProgress?.thinkingTail).not.toContain(owner.id);
+    await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
+  });
+
+  it('streams a bounded, identity-redacted search line and keeps it for the whole draft (F064)', async () => {
+    const owner = newActor('Live search owner');
+    await saveActor(owner);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+    const longQuery = `VAT ${owner.name} ${owner.id} ${'q'.repeat(400)}`;
+    const longTitle = `ประกาศ ${owner.name} ${'t'.repeat(400)}`;
+    let providerStarted = false;
+    let plainTickSent = false;
+    let releaseProvider = () => {};
+    let releasePlainTick = () => {};
+    const providerWait = new Promise<void>((resolve) => { releaseProvider = resolve; });
+    const plainTickWait = new Promise<void>((resolve) => { releasePlainTick = resolve; });
+    vi.mocked(proposeChange).mockImplementation(async (_environment, request, _fetchImpl, onProgress) => {
+      onProgress?.({ receivedChars: 0, reasoningChars: 0, search: { phase: 'searching', query: longQuery, resultsCount: 0 } });
+      // The closing line is written even though the throttle window is still open.
+      onProgress?.({ receivedChars: 0, reasoningChars: 0, search: { phase: 'done', query: longQuery, resultsCount: 3, topTitle: longTitle } });
+      providerStarted = true;
+      await providerWait;
+      // A later draft tick carries counters but no search event: the stored line must survive it.
+      await new Promise<void>((resolve) => setTimeout(resolve, 950));
+      onProgress?.({ receivedChars: 12, reasoningChars: 0 });
+      plainTickSent = true;
+      await plainTickWait;
+      return modelResult(request);
+    });
+    const input = {
+      commandId: randomUUID(), expectedRevision: workspace.revision, expectedEpoch: workspace.epoch,
+      prompt: 'Suggest a lending rule.', consent: true,
+    };
+    const jobId = modelJobId(roomId, workspace.epoch, owner.id, input.commandId);
+    const accepted = await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model`, owner, {
+      method: 'POST', body: input, mutation: true,
+    });
+    expect(accepted.response.status).toBe(202);
+    await waitForCondition(() => providerStarted);
+    let live: TestModelJob['progress'];
+    for (let attempt = 0; attempt < 40 && live?.search?.phase !== 'done'; attempt += 1) {
+      live = (await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner)).body.progress;
+      if (live?.search?.phase !== 'done') await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    expect(live?.search?.phase).toBe('done');
+    expect(live?.search?.resultsCount).toBe(3);
+    // Redacted before clamping, exactly like the live thinking tail.
+    expect(JSON.stringify(live)).not.toContain(owner.name);
+    expect(JSON.stringify(live)).not.toContain(owner.id);
+    expect(live?.search?.query.length).toBeLessThanOrEqual(MAX_JOB_SEARCH_QUERY_CHARS);
+    expect(live?.search?.topTitle?.length ?? 0).toBeLessThanOrEqual(MAX_JOB_SEARCH_TITLE_CHARS);
+    expect((live?.search?.query.length ?? 0) + (live?.search?.topTitle?.length ?? 0))
+      .toBeLessThanOrEqual(MAX_JOB_SEARCH_TEXT_CHARS);
+
+    releaseProvider();
+    // The mock waits out the 900 ms throttle window before its plain tick, so allow more than it.
+    for (let attempt = 0; attempt < 200 && !plainTickSent; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+    expect(plainTickSent).toBe(true);
+    let afterTick: TestModelJob['progress'];
+    for (let attempt = 0; attempt < 40 && afterTick?.receivedChars !== 12; attempt += 1) {
+      afterTick = (await call<TestModelJob>(stub, `/api/workspaces/${roomId}/model/${jobId}`, owner)).body.progress;
+      if (afterTick?.receivedChars !== 12) await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+    // The draft moved on but the card still says what the research used.
+    expect(afterTick?.receivedChars).toBe(12);
+    expect(afterTick?.search).toMatchObject({ phase: 'done', resultsCount: 3 });
+    releasePlainTick();
     await waitForModelJob(stub, jobId, owner.id, roomId, workspace.epoch);
   });
 

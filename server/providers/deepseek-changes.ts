@@ -4,6 +4,7 @@ import { TABLE_SCHEMA_GUIDE, TABLE_COMPUTE_SCHEMA_GUIDE } from './table-schema-g
 import type { ComputeRuntimeCapabilities } from '../../src/tabletop/shared/compute-runtime-profiles.js';
 import { encounterRuleSchema, physicsParamsSchema } from '../../src/tabletop/domain/index.js';
 import { parseTableChangeSalvagingCanvas, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES } from '../../src/tabletop/domain/table.js';
+import { MAX_CHANGE_REQUEST_BYTES, TABLE_AI_INPUT_BYTES, TABLE_REQUEST_TOKEN_MARGIN } from '../../src/tabletop/shared/ai-request-limits.js';
 import { normalizeGeneratedTableChange } from '../../src/tabletop/domain/id-normalization.js';
 import { applyTablePatch, isTablePatch, tablePatchSchema } from '../../src/tabletop/domain/table-patch.js';
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type ChangeSet } from '../../src/tabletop/shared/contracts.js';
@@ -16,6 +17,7 @@ import {
   headWithin,
   tailWithin,
   type ModelFailureDetails,
+  type ModelJobSearchProgress,
 } from '../../src/tabletop/shared/model-job-progress.js';
 import { expressionWithinBounds } from '../../src/tabletop/runtime/generative/index.js';
 
@@ -23,8 +25,7 @@ const ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const MODEL = 'deepseek-flash';
 const MAX_KEY_CHARS = 4096;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
-export const MAX_CHANGE_REQUEST_BYTES = 64_000;
-export const TABLE_REQUEST_TOKEN_MARGIN = 1_000;
+export { MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN };
 const MAX_REPAIR_ISSUES = 4;
 const MAX_REPAIR_ISSUE_CHARS = 1_000;
 const MAX_UNION_DIAGNOSTIC_BRANCHES = 2;
@@ -37,7 +38,7 @@ const MAX_RESPONSE_BYTES = 1_048_576;
 const MAX_STREAM_BYTES = 16 * 1024 * 1024;
 const MAX_OUTPUT_CHARS = 256_000;
 const MAX_OUTPUT_TOKENS = 512;
-const MAX_TABLE_INPUT_BYTES = 48_000;
+const MAX_TABLE_INPUT_BYTES = TABLE_AI_INPUT_BYTES;
 const MAX_TABLE_OUTPUT_TOKENS = 32_768;
 const MAX_TIMEOUT_MS = 300_000;
 const TABLE_CHANGE_JSON_SCHEMA = TABLE_SCHEMA_GUIDE;
@@ -144,6 +145,11 @@ export interface DeepSeekChangeProgress {
    * model is doing instead of only counting characters. The caller redacts it before storing.
    */
   thinkingTail?: string;
+  /**
+   * F064: the latest web-research step that ran before this attempt, carried on the same channel.
+   * The research step happens outside this provider, so it only rides along here.
+   */
+  search?: ModelJobSearchProgress;
 }
 
 /** Provider progress plus the bounded text that is worth keeping as evidence. */

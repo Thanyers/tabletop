@@ -1,6 +1,6 @@
 import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, tailWithin, type ModelFailureDetails, type ModelTimeoutSource } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, tailWithin, type ModelFailureDetails, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
 import { classifyChatIntent } from '../shared/chat-intent';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
@@ -299,4 +299,22 @@ export function liveThinkingLine(tail: string | undefined, maxChars = LIVE_THINK
   const space = window.indexOf(' ');
   const kept = space > 0 && space < 60 ? window.slice(space + 1) : window;
   return `…${kept.trimStart()}`;
+}
+
+/** F064: how much of the search query the waiting card shows as one line. */
+export const LIVE_SEARCH_QUERY_CHARS = 160;
+
+/**
+ * F064: one line saying what the research step is doing: what it searches, what it found, and then
+ * what the draft actually used. Re-bounded here as well, so a hostile or older job row cannot grow
+ * the card. Returns null when there is nothing worth showing (no search, or no query text yet).
+ */
+export function liveSearchLine(search: ModelJobSearchProgress | undefined, maxQueryChars = LIVE_SEARCH_QUERY_CHARS): string | null {
+  if (!search) return null;
+  if (search.phase === 'done') return `✓ ใช้ ${search.resultsCount} แหล่ง`;
+  const query = headWithin(search.query.replace(/\s+/gu, ' ').trim(), maxQueryChars).trim();
+  if (!query) return null;
+  return search.phase === 'reading'
+    ? `🔎 กำลังค้น: ${query} · เจอ ${search.resultsCount}`
+    : `🔎 กำลังค้น: ${query}`;
 }

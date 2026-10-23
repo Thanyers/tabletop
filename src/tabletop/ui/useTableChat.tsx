@@ -12,7 +12,7 @@ import { MAX_CHAT_CARD_REFERENCES, chatReferencePrompt, followUpPrompt, parseRef
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
+import { draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchLine, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard } from './table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -914,8 +914,13 @@ function ChatCardContent({ card, view, readOnly, retryDisabled, busy, onOpenObje
     // The thinking tail exists only on the rule-draft job, never on an answer job.
     const liveThinkingTail = card.kind === 'draft' ? card.modelJob?.progress?.thinkingTail : undefined;
     const liveThinking = liveThinkingTail ? liveThinkingLine(liveThinkingTail) : null;
+    // F064: the research step runs before the draft, and its closing line stays while it drafts.
+    const liveSearch = card.kind === 'draft' ? liveSearchLine(card.modelJob?.progress?.search) : null;
     return <div className="tt-chat-card tt-chat-card--working" role="status" data-testid="table-chat-answer" data-phase={card.phase}>
       <p className="tt-chat-card__pending tt-chat-card__pending--working"><span className="tt-chat-dots" aria-hidden="true"><i /><i /><i /></span><span className="tt-chat-card__shimmer">{pendingText}</span><ElapsedLabel startedAt={card.job?.createdAt ?? card.createdAt} kind={card.kind} limitMs={card.kind === 'draft' ? card.modelJob?.limitMs : undefined} chars={progress?.receivedChars} reasoningChars={progress?.reasoningChars} /></p>
+      {liveSearch && <div className="tt-chat-card__search" data-testid="draft-live-search" data-search-phase={card.modelJob?.progress?.search?.phase}>
+        <p className="tt-chat-card__search-line" aria-live="off">{liveSearch}</p>
+      </div>}
       {liveThinking && <div className="tt-chat-card__thinking" data-testid="draft-live-thinking" data-thinking-chars={progress?.reasoningChars}>
         <p className="tt-chat-card__thinking-line" aria-live="off">{liveThinking}</p>
         {liveThinkingTail && liveThinkingTail.length > liveThinking.length && <details className="tt-chat-card__thinking-full">

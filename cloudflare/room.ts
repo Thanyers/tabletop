@@ -15,7 +15,7 @@ import { createIdentityReplacements, redactString, respondToTablePrompt, type Id
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
-import { headWithin, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { headWithin, tailWithin, MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_RESULTS, MAX_JOB_SEARCH_TITLE_CHARS, MAX_JOB_THINKING_TAIL_CHARS, parseModelFailureDetails, parseModelJobProgress, type ModelFailureDetails, type ModelJobProgress, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
@@ -407,6 +407,29 @@ function boundedFailureDetails(details: ModelFailureDetails, replacements: Ident
     ...base,
     ...(partialContent ? { partialContent } : {}),
     ...(thinkingTail ? { thinkingTail } : {}),
+  };
+}
+
+/**
+ * F064: one research event, redacted then clamped so a stored search line never exceeds its budget.
+ * `null` replacements mean the identity set could not be built, so the event is dropped unseen.
+ */
+function boundedSearchProgress(
+  search: ModelJobSearchProgress | undefined,
+  replacements: IdentityReplacement[] | null,
+): ModelJobSearchProgress | undefined {
+  if (!search || replacements === null) return undefined;
+  const query = headWithin(redactString(search.query, replacements), MAX_JOB_SEARCH_QUERY_CHARS).trim();
+  if (!query) return undefined;
+  const topTitle = search.topTitle
+    ? headWithin(redactString(search.topTitle, replacements), MAX_JOB_SEARCH_TITLE_CHARS).trim() : '';
+  const resultsCount = Number.isSafeInteger(search.resultsCount) && search.resultsCount >= 0
+    ? Math.min(search.resultsCount, MAX_JOB_SEARCH_RESULTS) : 0;
+  return {
+    phase: search.phase,
+    query,
+    resultsCount,
+    ...(topTitle ? { topTitle } : {}),
   };
 }
 
@@ -1402,21 +1425,30 @@ export class Room extends DurableObject<Env> {
 
       // Store live counters at most once per interval; the final status always wins afterwards.
       // F050: the bounded thinking tail rides along so the waiting card can show the live text.
+      // F064: the last research event is re-sent with every tick, so "✓ used N sources" stays on the
+      // card for the whole draft instead of vanishing on the next progress write.
       let lastProgressWrite = 0;
+      let lastSearch: ModelJobSearchProgress | undefined;
       const onProgress = (progress: DeepSeekChangeProgress) => {
         const now = Date.now();
-        if (now - lastProgressWrite < 900) return;
+        // A finished research step is never throttled: dropping it would leave the card saying
+        // "searching…" until the draft ends, which is the one line this feature exists to replace.
+        const searchDone = progress.search?.phase === 'done';
+        if (!searchDone && now - lastProgressWrite < 900) return;
         lastProgressWrite = now;
         // Redact before clamping, and drop the text entirely when the identity set cannot be built.
         const thinkingTail = progress.thinkingTail && progressReplacements
           ? tailWithin(redactString(progress.thinkingTail, progressReplacements), MAX_JOB_THINKING_TAIL_CHARS)
           : '';
+        const search = boundedSearchProgress(progress.search, progressReplacements);
+        if (search) lastSearch = search;
         void this.repository.updateModelJobProgress(
           input.jobId, input.workspaceId, input.expectedEpoch, input.actorId,
           {
             receivedChars: progress.receivedChars,
             reasoningChars: progress.reasoningChars,
             ...(thinkingTail ? { thinkingTail } : {}),
+            ...(lastSearch ? { search: lastSearch } : {}),
             updatedAt: now,
           },
         ).catch(() => undefined);

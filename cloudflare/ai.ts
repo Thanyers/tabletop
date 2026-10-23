@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
 import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { MAX_REQUEST_INPUT_TOKENS, TABLE_AI_INPUT_BYTES } from '../src/tabletop/shared/ai-request-limits.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
 import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch } from '../server/providers/deepseek-research.js';
+import type { ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
 import type { Env } from './contracts.js';
 import { aiTableDeadlineMs } from './ai-deadline.js';
@@ -17,10 +19,11 @@ import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLI
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_INVOICE_INPUT_BYTES = 48_000;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
-const MAX_TABLE_INPUT_BYTES = 48_000;
+const MAX_TABLE_INPUT_BYTES = TABLE_AI_INPUT_BYTES;
 const PROVIDER_OVERHEAD_BYTES = 8_000;
 const MAX_STANDARD_PROVIDER_INPUT_TOKENS = 56_000;
-const MAX_PROVIDER_INPUT_TOKENS = 65_000;
+// A request is measured in bytes and one byte is at most one token, so the reservation covers the largest request.
+const MAX_PROVIDER_INPUT_TOKENS = MAX_REQUEST_INPUT_TOKENS;
 const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
 const CHANGE_MAX_OUTPUT_TOKENS = 512;
 const TABLE_MAX_OUTPUT_TOKENS = 32_768;
@@ -393,6 +396,14 @@ export async function markAIUsageUncertain(env: Env, binding: AIBillingBinding):
 }
 
 /**
+ * F064: research reports progress on F050's channel so a waiting card needs no second transport.
+ * The counters stay at zero because the draft itself has not started streaming yet.
+ */
+export function searchChangeProgress(event: ModelJobSearchProgress): DeepSeekChangeProgress {
+  return { receivedChars: 0, reasoningChars: 0, search: event };
+}
+
+/**
  * Returns a validated proposal only. The room authority must recheck its current session,
  * membership, epoch, and revision before committing `change` as evolve.propose.
  */
@@ -418,6 +429,7 @@ export async function proposeChange(
         apiKey: env.DEEPSEEK_KEY!,
         fetchImpl,
         timeoutMs: 30_000,
+        onProgress: (event) => onProgress?.(searchChangeProgress(event)),
       });
       if (research.sources.length > 0) {
         researchBlock = {

@@ -16,6 +16,8 @@ import { computeInputBindingSchema, computeProgramProblems, computeRunRecordSche
 
 export const TABLE_FILE_BYTES = 32 * 1024;
 export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
+// F066: kept in a leaf module so Worker startup can never read it before it is set.
+export { TABLE_AI_INPUT_BYTES } from '../shared/ai-request-limits';
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
 export const MAX_TABLE_NOTES = 20;
 export const MAX_NOTE_TEXT = 500;

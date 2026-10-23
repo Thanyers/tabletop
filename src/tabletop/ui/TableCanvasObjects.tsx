@@ -112,7 +112,7 @@ function TableSources({ view, state, busy, onTableImport, onCommand, expanded = 
         <small>CSV, JSON, TXT or Markdown · 32 KiB each</small>
         <button type="button" className="tt-button tt-button--quiet" onClick={() => inputRef.current?.click()} disabled={busy !== null || importing}>Choose files</button>
         <input ref={inputRef} type="file" accept=".csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown" multiple hidden onChange={onInput} aria-label="Choose table source files" />
-        <details><summary>File limits</summary><small>UTF-8 text · four files, 64 KiB total. PDF and images are not supported. AI requests have a separate 48 KiB input limit including your prompt and current rules.</small></details>
+        <details><summary>File limits</summary><small>UTF-8 text · four files, 64 KiB total. PDF and images are not supported. AI rule requests can carry 128 KiB: your message, these files (files the rules already cite go by name only), the current rules and rows.</small></details>
       </div> : <p className="tt-table-limit-note">{state.sources.length >= MAX_SOURCE_FILES ? 'All four source file slots are in use.' : totalBytes >= MAX_SOURCE_BYTES ? 'The 64 KiB source limit has been reached.' : 'Files cannot be added here.'}</p>}
     </>}
     {error && <p className="tt-table-error" role="alert"><AlertCircle size={14} />{error}</p>}

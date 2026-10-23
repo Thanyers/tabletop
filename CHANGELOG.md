@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+- แก้ Worker ไม่ขึ้นหลัง F066 (`TABLE_AI_INPUT_BYTES is not defined`): ย้ายค่าเพดานคำขอ AI ไปไฟล์ที่ไม่ import อะไร (`shared/ai-request-limits.ts`) เพื่อไม่ให้ลำดับโหลด module ทำให้ค่ายังไม่ถูกตั้ง · unit test ไม่เจอเพราะ vitest โหลด module คนละลำดับกับ bundle ของ Worker
+
+- **เพดานคำขอร่างกฎเป็น 128 KiB (F066, MINOR):** สัมพันธ์กับเพดานไฟล์ 64 KiB (ไฟล์เต็มโควตา + อีก 64 KiB ให้กฎและข้อมูล) · เดิม 48 KB ซึ่งน้อยกว่าไฟล์ที่โต๊ะรับได้ จึงแนบไฟล์ได้แต่ร่างกฎไม่ได้ · เพดานทั้งคำขอและการจอง token ของ billing คำนวณจากค่าเดียวกัน · แชทถามตอบยังเป็นเพดานเดิม
+
 - **AI แก้โต๊ะใหญ่ได้เร็วและไม่ทำของเดิมหาย (F065, MINOR):** ตอนแก้โต๊ะที่มีอยู่ AI ส่งมาเฉพาะส่วนที่เพิ่ม/แก้/ลบ (table-patch) แล้วระบบรวมเข้ากับกฎเดิมก่อนตรวจครบทุกขั้นเหมือนเดิม · เดิม AI ต้องเขียนทั้งโต๊ะใหม่ทุกครั้ง โต๊ะใหญ่จึงช้าจนเกินเวลา หรือ AI ทิ้ง action เดิมไปเพื่อย่อคำตอบ · การสร้างโต๊ะใหม่ยังเหมือนเดิม
 
+- **F064 สไลซ์ A — เห็นสดระหว่างรอร่างว่า "กำลังค้นอะไร เจออะไร" (MINOR):** research provider ส่ง `onProgress({phase, query, resultsCount, topTitle})` (searching → reading → done) แบบ best-effort (listener โยน error ไม่ทำให้ค้นหรือร่างล้ม) · worker ใช้ช่อง progress เดิมของ F050: redact ด้วย `redactString` + `createIdentityReplacements` **ก่อน** clamp (query ≤180 + topTitle ≤120 = ≤300 ตัวอักษร), throttle 900 ms เดิม, ไม่ throttle event `done` และแนบ event ล่าสุดไปกับทุก tick ถัดไป บรรทัด "ใช้ N แหล่ง" จึงอยู่ตลอดร่าง · การ์ดร่างแสดง `🔎 กำลังค้น: … · เจอ N` แล้วจบด้วย `✓ ใช้ N แหล่ง`; คำขอที่ไม่ค้นไม่มีบรรทัดนี้ · ไม่มี migration/secret/binding; rollback = revert branch · ผลตรวจ Node 22.23.2: unit **760 passed / 1 skipped**, `test:cloudflare` **160/160**, `build` ผ่าน, `lint` 0 error / 105 warning
 - **CI: เทสต์บนเบราว์เซอร์หลัง merge เข้า dev (CI007):** push เข้า `dev` รันชุดเต็มโดยไม่บล็อกการ merge · ถ้าล้มจะเปิด/อัปเดต issue ให้เห็นทันที ไม่ต้องรอไปเจอตอน release
 - **Objects panel: ปุ่มเครื่องมือเรียงเป็นคอลัมน์เดียว และคลิกชื่อการ์ดเพื่อพาไปหาการ์ด (F054-T9):** ทุกแถวจอง 4 ช่องเท่ากัน (star / rename / eye / delete) โดยช่องที่ไม่มีสิทธิ์แสดงเป็นช่องว่าง ไอคอนจึงตรงกันทุกแถวไม่ว่าจะชื่อสั้นหรือยาว · เอาปุ่ม go-to ออก เพราะคลิกที่ชื่อการ์ดเปิดการ์ดและ fit กล้องให้แล้ว (aria-label บอกชัดว่า Open and go to) · ลบโค้ด pending-locate ที่ไม่ใช้แล้ว · ไม่มี migration/secret/binding; rollback = revert branch
 

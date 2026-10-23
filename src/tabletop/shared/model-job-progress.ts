@@ -12,6 +12,32 @@ export const MAX_JOB_STREAM_CHARS = 1_000_000;
 export const MODEL_TIMEOUT_SOURCES = ['server', 'provider'] as const;
 export type ModelTimeoutSource = (typeof MODEL_TIMEOUT_SOURCES)[number];
 
+/** F064: the phases a native web-research step reports while a rule draft waits. */
+export const SEARCH_PROGRESS_PHASES = ['searching', 'reading', 'done'] as const;
+export type SearchProgressPhase = (typeof SEARCH_PROGRESS_PHASES)[number];
+/** F064: the search query kept on a running job, measured after redaction and clamping. */
+export const MAX_JOB_SEARCH_QUERY_CHARS = 180;
+/** F064: the top result title kept on a running job, measured after redaction and clamping. */
+export const MAX_JOB_SEARCH_TITLE_CHARS = 120;
+/** F064: both search text fields together, so one event can never grow a job row past F050's budget. */
+export const MAX_JOB_SEARCH_TEXT_CHARS = MAX_JOB_SEARCH_QUERY_CHARS + MAX_JOB_SEARCH_TITLE_CHARS;
+/** F064: a search answers with at most 50 rows and keeps at most 10; this is the stored ceiling. */
+export const MAX_JOB_SEARCH_RESULTS = 100;
+
+/**
+ * F064: what the research step is doing right now. The query and top title come from the model and
+ * the public web, so the worker redacts them like any other provider text before storing.
+ */
+export interface ModelJobSearchProgress {
+  phase: SearchProgressPhase;
+  /** The query the model asked for, redacted and bounded. */
+  query: string;
+  /** Results the provider returned (`reading`) or sources the draft kept (`done`). */
+  resultsCount: number;
+  /** Title of the top-ranked result, redacted and bounded. */
+  topTitle?: string;
+}
+
 /** Live provider progress for one model job; refreshed about once a second. */
 export interface ModelJobProgress {
   /** Answer characters received so far. */
@@ -20,6 +46,8 @@ export interface ModelJobProgress {
   reasoningChars: number;
   /** Last characters of the model's thinking, already redacted by the server. */
   thinkingTail?: string;
+  /** F064: the latest web-research step (phase, query, count), already redacted by the server. */
+  search?: ModelJobSearchProgress;
   updatedAt: number;
 }
 
@@ -76,6 +104,30 @@ function boundedText(value: unknown, maxChars: number): string | undefined {
   return text.length ? text : undefined;
 }
 
+function isSearchPhase(value: unknown): value is SearchProgressPhase {
+  return typeof value === 'string' && (SEARCH_PROGRESS_PHASES as readonly string[]).includes(value);
+}
+
+/** F064: rebuild one stored search event, dropping anything an older or hostile row could carry. */
+export function parseModelJobSearchProgress(value: unknown): ModelJobSearchProgress | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (!isSearchPhase(record.phase)) return undefined;
+  const query = boundedText(record.query, MAX_JOB_SEARCH_QUERY_CHARS);
+  if (!query) return undefined;
+  const count = record.resultsCount;
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0 || count > MAX_JOB_SEARCH_RESULTS) {
+    return undefined;
+  }
+  const topTitle = boundedText(record.topTitle, MAX_JOB_SEARCH_TITLE_CHARS);
+  return {
+    phase: record.phase,
+    query,
+    resultsCount: count,
+    ...(topTitle ? { topTitle } : {}),
+  };
+}
+
 /** Rebuild a stored progress record, dropping anything an older or hostile row could carry. */
 export function parseModelJobProgress(value: unknown): ModelJobProgress | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
@@ -83,10 +135,12 @@ export function parseModelJobProgress(value: unknown): ModelJobProgress | null {
   if (!isCount(record.receivedChars) || !isCount(record.reasoningChars)) return null;
   if (typeof record.updatedAt !== 'number' || !Number.isSafeInteger(record.updatedAt) || record.updatedAt < 0) return null;
   const thinkingTail = boundedText(record.thinkingTail, MAX_JOB_THINKING_TAIL_CHARS);
+  const search = parseModelJobSearchProgress(record.search);
   return {
     receivedChars: record.receivedChars,
     reasoningChars: record.reasoningChars,
     ...(thinkingTail ? { thinkingTail } : {}),
+    ...(search ? { search } : {}),
     updatedAt: record.updatedAt,
   };
 }
