@@ -58,3 +58,5 @@ Build/typecheck, lint ไฟล์ที่แก้, public-file scan, หน�
 ผู้ใช้ขอให้ทำวิธีนี้เป็นกติกาประจำโปรเจกต์ จึงเพิ่ม [Markdown merge conflicts](../../AGENTS.md#markdown-merge-conflicts) เป็นแหล่งเดียวและชี้จาก `CLAUDE.md`/`PLAN.md` กรณีเพิ่มรายการอิสระให้ resolve/commit/push ต่อเอง; ข้อความที่ขัดกันจริงให้ตรวจแหล่งเจ้าของเรื่องก่อนตัดสิน
 
 ตรวจหลังรวมบน Node 22.23.2: `npm run typecheck` ผ่าน, `npm test` 710 passed / 1 skipped, public-file scan 657 files ไม่พบ finding และ `git diff --check` ผ่าน ผลนี้ไม่ยกเลิก FAIL/SKIP ของ browser/UI gate ที่บันทึกไว้ข้างบน
+
+ตรวจลิงก์ภายในของเอกสารที่เกี่ยวข้อง 118 จุด พบลิงก์ SEO เก่าใน `PLAN.md` ชี้ชื่อ F053 ที่ไม่มีไฟล์ จึงแก้ให้ชี้เอกสารเจ้าของเรื่อง F051 หลังแก้พบเป้าหมายครบ 118/118

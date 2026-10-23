@@ -45,7 +45,7 @@
 | F047 | ลดการปฏิเสธร่างที่เกิดจากชื่อ/เพดานที่ไม่ได้บอก: normalize id, guide จากค่าคงที่เดียว, classifier 4 intent | `review` | [F047](docs/features/F047-generation-reliability.md) |
 | F048 | ลูกเต๋าที่ server ทอยให้เป็น parameter ของ action: `table.roll` + pending roll อายุ 10 นาทีผูก `dataRevision` + ใช้ครั้งเดียว + เก็บหน้าเต๋า/ผลลง event | `review` | [F048](docs/features/F048-roll-parameter.md) |
 
-| F053 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F053](docs/features/F053-seo-baseline.md) |
+| F053 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F051](docs/features/F051-seo-baseline.md) |
 | F049 | ลูกเต๋าบนการ์ด controls: stepper จำนวน/หน้า + ปุ่ม ทอย + หน้าลูกเต๋า/ผลรวม และค่าที่ทอยได้ส่งต่อให้การ์ดอื่นที่ bind parameter เดียวกัน (v1 สุ่มฝั่ง client, visual-only; server roll = F048) · prompt guide ให้ drafter เขียน dice ได้ | `review` | [F049](docs/features/F049-dice-visual.md) |
 | F052 | Landing ภาษาอังกฤษ + รูปแชร์ใหม่ (การ์ดแบรนด์) | `doing` | [F052](docs/features/F052-english-landing.md) |
 | F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `review` | [F050](docs/features/F050-live-thinking.md) |
