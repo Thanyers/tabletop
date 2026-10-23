@@ -17,7 +17,9 @@ import { NoteCard } from './NoteCard';
 import { autoMapping, buildImportRows, parseCsv } from './table-row-import';
 import { RollParameterControl } from './RollParameterControl';
 import { serverRollFor, useServerRollsTick } from './roll-store';
+import { describeProgramDiff, diffProgram, ruleBadge, type ProgramDiff, type RuleBadge } from './rules-summary';
 import './record-actions.css';
+import './rules-card.css';
 
 interface TableCanvasObjectProps {
   view: WorkspaceView;
@@ -184,36 +186,54 @@ function TableRules({ view, state, onCommand, busy, expanded = false, onEditRule
     void onCommand('evolve.propose', { change: parsed });
   };
 
+  const reviewingProposal = Boolean(candidateChange) && state.candidate?.status !== 'active';
+  const diff = useMemo<ProgramDiff | null>(() => {
+    if (!candidateChange) return null;
+    const startingRows = Object.values(candidateChange.initialRecords).reduce((sum, rows) => sum + rows.length, 0);
+    return diffProgram(state.program, candidateChange.program, { startingRows });
+  }, [candidateChange, state.program]);
+  const diffLine = diff ? describeProgramDiff(diff) : '';
+  const ruleCount = program ? program.actions.length + program.invariants.length : 0;
+
   return <div className="tt-canvas-inline tt-table-rules">
-    <div className="tt-canvas-inline__heading"><span className="tt-kicker">{isOwner ? 'OWNER REVIEW · SHARED ACTIVE RULES' : 'SHARED ACTIVE RULES'}</span><strong>{program?.title ?? 'Rules and proposal'}</strong><small>{program ? `Active r${state.ruleRevision}` : 'No active program'}</small></div>
+    <div className="tt-canvas-inline__heading"><span className="tt-kicker">{isOwner ? 'OWNER REVIEW · SHARED ACTIVE RULES' : 'SHARED ACTIVE RULES'}</span><strong>{program?.title ?? 'Rules and proposal'}</strong><small>{program ? `Active r${state.ruleRevision}` : candidateChange ? 'Proposed, not active' : 'No active program'}</small></div>
     {isOwner && program && onEditRules && <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" disabled={busy !== null || readOnly || Boolean(state.candidate && state.candidate.status !== 'active')} onClick={onEditRules}><Pencil size={13} />Edit rules</button></div>}
-    {!expanded ? <p className="tt-canvas-inline__note">{program ? `${program.collections.length} collections · ${program.actions.length} actions · open to inspect rules, evidence and changes.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
-      {program ? candidateChange && state.candidate?.status !== 'active'
-        ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /></details>
-        : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} onRemove={canRemove && busy === null ? requestRemoval : undefined} />
+    {!expanded ? <p className="tt-canvas-inline__note">{program ? `${ruleCount} ${ruleCount === 1 ? 'rule' : 'rules'} on ${program.collections.length} ${program.collections.length === 1 ? 'table' : 'tables'} · open to read them.` : 'Add source files, then describe the table you want. No active rules yet.'}</p> : <>
+      {reviewingProposal && candidateChange ? <>
+        <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title">
+          <span className="tt-kicker">NOT ACTIVE YET</span>
+          <h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3>
+          {diffLine && <p className="tt-table-proposal__changes">{diffLine}</p>}
+          <ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} diff={diff} />
+          {isOwner && candidateState?.program?.canvas?.views.length ? <details className="tt-table-private-preview"><summary>Private preview</summary><DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /></details> : null}
+        </section>
+        {isOwner && <div className="tt-card-cta tt-table-proposal__apply">
+          <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
+          {applying && <p className="tt-canvas-inline__note" role="status">Simulating and checking this proposal before activation.</p>}
+          {applyFeedback && <p className="tt-table-error" role="alert">{applyFeedback}</p>}
+        </div>}
+      </> : null}
+
+      {program
+        ? reviewingProposal
+          ? <details className="tt-table-current-setup"><summary>Current setup</summary><ProgramOverview program={program} state={state} label="Current active rules" members={view.members} /></details>
+          : <ProgramOverview program={program} state={state} label="Current active rules" members={view.members} onRemove={canRemove && busy === null ? requestRemoval : undefined} />
         : !candidateChange && <div className="tt-canvas-inline__empty"><Database size={15} /> Describe the table you want, or add a source file.</div>}
+
       {pendingRemoval && <div className="tt-table-remove-confirm" role="alertdialog" aria-label={`Remove ${pendingRemoval.title}`}>
         <p>Remove the table <strong>{pendingRemoval.title}</strong>? Its {state.records[pendingRemoval.id]?.length ?? 0} rows are deleted too. You can bring the rules back from history, but not the rows.</p>
         <div className="tt-inline-action-row"><button type="button" className="tt-button tt-button--quiet" onClick={() => setPendingRemoval(null)}>Cancel</button><button type="button" className="tt-button tt-button--danger" onClick={() => void removeRule(pendingRemoval)}><Trash2 size={13} />Remove table and rows</button></div>
       </div>}
       {removeFeedback && <p className="tt-table-error" role="alert">{removeFeedback}</p>}
+
       <details className="tt-table-capabilities"><summary>What this table can do</summary>
         <p className="tt-table-inline-hint">{TABLE_CAPABILITIES.supported.length} capabilities · {TABLE_CAPABILITIES.gaps.length} known gaps · limits: {TABLE_CAPABILITY_LIMITS.collections} collections, {TABLE_CAPABILITY_LIMITS.fieldsPerCollection} fields, {TABLE_CAPABILITY_LIMITS.rowsPerCollection} rows per collection, {TABLE_CAPABILITY_LIMITS.canvasViews} views, {TABLE_CAPABILITY_LIMITS.computedColumns} computed columns</p>
         <ul className="tt-table-capability-list">{TABLE_CAPABILITIES.supported.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul>
         <details className="tt-table-capability-gaps"><summary>Known gaps ({TABLE_CAPABILITIES.gaps.length})</summary><ul className="tt-table-capability-list">{TABLE_CAPABILITIES.gaps.map((item) => <li key={item.id}><strong>{item.title}</strong> — {item.detail}</li>)}</ul></details>
       </details>
-      {candidateChange && state.candidate?.status !== 'active' && <section className="tt-table-proposal" aria-labelledby="tt-table-proposal-title"><span className="tt-kicker">NOT ACTIVE YET</span><h3 id="tt-table-proposal-title">{candidateChange.program.title}</h3><ProgramOverview program={candidateChange.program} state={state} label="Proposed rules" change={candidateChange} members={view.members} />
-        {isOwner && candidateState?.program?.canvas?.views.length ? <details className="tt-table-private-preview"><summary>Private preview</summary><DraftCanvasPreview key={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} candidateKey={`${state.candidate?.id ?? 'candidate'}:${state.candidate?.hash ?? 'draft'}`} view={view} initialState={candidateState} busy={busy} /></details> : null}
-      </section>}
       {isOwner && state.candidate && <details className={state.candidate.status === 'active' ? 'tt-table-history' : 'tt-table-advanced-checks'}><summary>{state.candidate.status === 'active' ? 'History and restore' : 'Advanced checks'}</summary><CandidateLifecycle view={view} onCommand={onCommand} busy={busy} readOnly={readOnly} /></details>}
       {isOwner && !readOnly && <details className="tt-table-manual-editor"><summary>Advanced manual rule change</summary><p>Paste a prepared table change only if needed. Normal requests can be written in plain language in the AI draft assistant.</p><form onSubmit={proposeManual}><label htmlFor="tt-table-manual-change">Table change</label><textarea id="tt-table-manual-change" rows={7} value={manualChange} onChange={(event) => { setManualChange(event.target.value); setManualError(''); }} placeholder={'{"kind":"table","program":{...},"initialRecords":{...}}'} spellCheck={false} /><small>New tables include initial records. Changes to an active table must preserve its collections and current records.</small>{manualError && <span role="alert" className="tt-table-error">{manualError}</span>}<button className="tt-button tt-button--quiet" type="submit" disabled={busy !== null || manualChange.trim().length === 0}>Propose manual change</button></form></details>}
       {!isOwner && <p className="tt-canvas-inline__note">Proposals and review controls are private to the owner. Files, active rules and records are shared with this table.</p>}
-      {/* The main call to action stays pinned to the bottom of the card however long the proposal is. */}
-      {isOwner && candidateChange && state.candidate?.status !== 'active' && <div className="tt-card-cta tt-table-proposal__apply">
-        <button type="button" className="tt-button tt-button--primary" disabled={busy !== null || readOnly || applying} onClick={() => void applyProposal()}>{applying ? 'Applying…' : 'Apply to table'}</button>
-        {applying && <p className="tt-canvas-inline__note" role="status">Simulating and checking this proposal before activation.</p>}
-        {applyFeedback && <p className="tt-table-error" role="alert">{applyFeedback}</p>}
-      </div>}
     </>}
   </div>;
 }
@@ -283,38 +303,116 @@ function RemoveRuleButton({ removal, onRemove }: { removal: RuleRemoval; onRemov
   return <button type="button" className="tt-table-rule-remove" aria-label={`Remove ${removal.title}`} title="Remove from the rules" onClick={() => onRemove(removal)}><Trash2 size={13} /></button>;
 }
 
-function ProgramOverview({ program, state, label, change, members, onRemove }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void }) {
+function RuleBadgeMark({ badge }: { badge?: RuleBadge }) {
+  if (!badge) return null;
+  return <span className={`tt-rule-badge tt-rule-badge--${badge}`}>{badge === 'new' ? 'New' : badge === 'changed' ? 'Edited' : 'Removed'}</span>;
+}
+
+/**
+ * The heart of the Rules card: what rules exist, how each one works, and what it
+ * applies to. Every rule answers the same three questions in the same order, so a
+ * new rule can be read the same way as an old one.
+ */
+function ProgramOverview({ program, state, label, change, members, onRemove, diff = null }: { program: TableProgram; state: TableState; label: string; change?: TableChange; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void; diff?: ProgramDiff | null }) {
   const sources = new Map(state.sources.map((source) => [source.id, source.filename]));
   const evidence = program.evidence ?? [];
   const views = program.canvas?.views ?? [];
+  // A proposal already states its size in the change line; repeating the counts
+  // right under it is the kind of noise this card is meant to lose.
+  const changeLine = diff ? describeProgramDiff(diff) : '';
   return <section className="tt-table-program" aria-label={label}>
-    <div className="tt-table-program__summary"><span><small>Tables</small><strong>{program.collections.length}</strong></span><span><small>Actions</small><strong>{program.actions.length}</strong></span><span><small>Checks</small><strong>{program.invariants.length}</strong></span></div>
+    {changeLine ? null : <p className="tt-table-program__summary"><span><strong>{program.actions.length}</strong> {program.actions.length === 1 ? 'rule' : 'rules'}</span><span><strong>{program.collections.length}</strong> {program.collections.length === 1 ? 'table' : 'tables'}</span><span><strong>{program.invariants.length}</strong> {program.invariants.length === 1 ? 'check' : 'checks'}</span></p>}
     {program.description && <p className="tt-table-program__description">{program.description}</p>}
-    <details className="tt-table-rule-details"><summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>{program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} onRemove={onRemove} />)}</details>
-    <details className="tt-table-rule-details"><summary>Actions · {program.actions.length}</summary>{program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} onRemove={onRemove} />)}</details>
-    {onRemove && views.length > 0 && <details className="tt-table-rule-details"><summary>Views · {views.length}</summary><ul>{views.map((descriptor) => <li key={descriptor.id}>{descriptor.title} <small>({descriptor.kind})</small><RemoveRuleButton removal={{ kind: 'view', id: descriptor.id, title: descriptor.title }} onRemove={onRemove} /></li>)}</ul></details>}
-    {change && program.collections.map((collection) => <ProposedRecords key={`proposed-${collection.id}`} collection={collection} records={change.initialRecords[collection.id] ?? []} members={members} />)}
-    {program.invariants.length > 0 && <details className="tt-table-rule-details"><summary>Data checks · {program.invariants.length}</summary><ul>{program.invariants.map((invariant) => <li key={invariant.id}>{invariant.message} <small>({invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(' + ')})</small><RemoveRuleButton removal={{ kind: 'invariant', id: invariant.id, title: invariant.message }} onRemove={onRemove} /></li>)}</ul></details>}
+
+    <details className="tt-table-rule-details" open>
+      <summary>Actions · {program.actions.length}</summary>
+      {program.actions.length === 0
+        ? <p className="tt-table-inline-hint">No rule yet. Describe what should happen when someone uses this table.</p>
+        : program.actions.map((action) => <ActionDefinition key={action.id} action={action} program={program} members={members} onRemove={onRemove} badge={ruleBadge(diff, 'action', action.id)} />)}
+    </details>
+
+    {program.invariants.length > 0 && <details className="tt-table-rule-details" open>
+      <summary>Data checks · {program.invariants.length}</summary>
+      <ul className="tt-table-check-list">{program.invariants.map((invariant) => <li key={invariant.id}>
+        <div className="tt-table-check-list__body"><strong>{invariant.message}</strong><small>{onLabel(program, invariant.collection)} · {invariant.fields.map((fieldId) => fieldLabel(program, invariant.collection, fieldId)).join(', ')}</small></div>
+        <RuleBadgeMark badge={ruleBadge(diff, 'check', invariant.id)} />
+        <RemoveRuleButton removal={{ kind: 'invariant', id: invariant.id, title: invariant.message }} onRemove={onRemove} />
+      </li>)}</ul>
+    </details>}
+
+    <details className="tt-table-rule-details">
+      <summary>Data fields · {program.collections.length} {program.collections.length === 1 ? 'collection' : 'collections'}</summary>
+      {program.collections.map((collection) => <CollectionDefinition key={collection.id} collection={collection} onRemove={onRemove} badge={ruleBadge(diff, 'table', collection.id)} />)}
+    </details>
+
+    {onRemove && views.length > 0 && <details className="tt-table-rule-details"><summary>Views · {views.length}</summary><ul className="tt-table-view-list">{views.map((descriptor) => <li key={descriptor.id}><span><strong>{descriptor.title}</strong><small>{descriptor.kind}</small></span><RuleBadgeMark badge={ruleBadge(diff, 'view', descriptor.id)} /><RemoveRuleButton removal={{ kind: 'view', id: descriptor.id, title: descriptor.title }} onRemove={onRemove} /></li>)}</ul></details>}
+
     {program.turnOrder.length > 0 && <p className="tt-table-turn-order">Turn order: {program.turnOrder.map((seat) => seat === 'host' ? 'Owner' : seat.replace('member-', 'Member ')).join(' → ')}</p>}
+    {change && program.collections.filter((collection) => (change.initialRecords[collection.id] ?? []).length > 0).map((collection) => <ProposedRecords key={`proposed-${collection.id}`} collection={collection} records={change.initialRecords[collection.id] ?? []} members={members} />)}
     {evidence.length > 0 && <details className="tt-table-rule-details"><summary>Source evidence · {evidence.length}</summary><ul>{evidence.map((item, index) => <li key={`${item.sourceId}-${index}`}><strong>{sources.get(item.sourceId) ?? 'Source file'}</strong><blockquote>{item.quote}</blockquote></li>)}</ul></details>}
-      {program.assumptions.length > 0 && <section className="tt-table-assumptions"><h4>Assumptions to review</h4><ul>{program.assumptions.map((assumption, index) => <li key={index}>{assumption}</li>)}</ul><p>Structural checks do not confirm these assumptions match your policy. The owner should review them and the cited evidence before approval.</p></section>}
-      {program.assumptions.length === 0 && label === 'Proposed rules' && <p className="tt-table-owner-review">Structural checks do not confirm source-policy fit. The owner should review the cited evidence before approval.</p>}
+    {program.assumptions.length > 0 && <section className="tt-table-assumptions"><h4>Assumptions to review</h4><ul>{program.assumptions.map((assumption, index) => <li key={index}>{assumption}</li>)}</ul><p>Structural checks do not confirm these assumptions match your policy. The owner should review them and the cited evidence before approval.</p></section>}
+    {program.assumptions.length === 0 && label === 'Proposed rules' && <p className="tt-table-owner-review">Structural checks do not confirm source-policy fit. The owner should review the cited evidence before approval.</p>}
     {change && <p className="tt-canvas-inline__note">{Object.values(change.initialRecords).reduce((sum, rows) => sum + rows.length, 0)} starting rows in this proposal. Active records remain unchanged until activation.</p>}
   </section>;
 }
 
-function CollectionDefinition({ collection, onRemove }: { collection: TableCollection; onRemove?: (removal: RuleRemoval) => void }) {
-  return <section className="tt-table-program__group"><h4>{collection.title}<RemoveRuleButton removal={{ kind: 'collection', id: collection.id, title: collection.title }} onRemove={onRemove} /></h4><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · required' : ' · optional'}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul></section>;
+/** The table a rule points at, by the name people see on the canvas. */
+function onLabel(program: TableProgram, collectionId: string): string {
+  return program.collections.find((collection) => collection.id === collectionId)?.title ?? collectionId;
 }
 
-function ActionDefinition({ action, program, members, onRemove }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void }) {
+function CollectionDefinition({ collection, onRemove, badge }: { collection: TableCollection; onRemove?: (removal: RuleRemoval) => void; badge?: RuleBadge }) {
+  return <section className="tt-table-program__group"><header className="tt-rule-head"><h4>{collection.title}</h4><RuleBadgeMark badge={badge} /><RemoveRuleButton removal={{ kind: 'collection', id: collection.id, title: collection.title }} onRemove={onRemove} /></header><ul className="tt-table-field-list">{collection.fields.map((field) => <li key={field.id}><strong>{field.label}</strong><span>{fieldTypeLabel(field)}{field.required ? ' · required' : ' · optional'}{field.min !== undefined ? ` · min ${field.min}` : ''}{field.max !== undefined ? ` · max ${field.max}` : ''}{field.choices?.length ? ` · ${field.choices.join(', ')}` : ''}</span></li>)}</ul></section>;
+}
+
+function ActionDefinition({ action, program, members, onRemove, badge }: { action: TableAction; program: TableProgram; members?: WorkspaceView['members']; onRemove?: (removal: RuleRemoval) => void; badge?: RuleBadge }) {
   const effects = action.effects.map((effect) => {
     const param = action.parameters.find((item) => item.id === effect.record);
-    return `${param?.label ?? 'Selected record'} → ${fieldLabel(program, param?.collection ?? '', effect.field)} ${effect.op === 'add' ? 'adds' : 'sets'} ${operandLabel(effect.value, action, program, members)}`;
+    const collection = param?.collection;
+    const target = collection ? `${onLabel(program, collection)} · ${fieldLabel(program, collection, effect.field)}` : (param?.label ?? 'The selected row');
+    const written = collection ? fieldLabel(program, collection, effect.field) : '';
+    // "Completion note becomes Completion note" is noise: say what the person supplies instead.
+    let value: string;
+    if ('input' in effect.value) {
+      const inputId = effect.value.input;
+      const supplied = action.parameters.find((item) => item.id === inputId);
+      value = supplied && supplied.label !== written ? `the ${supplied.label} you type` : 'what you type';
+    } else {
+      value = operandLabel(effect.value, action, program, members);
+    }
+    return `${target} ${effect.op === 'add' ? 'gains' : 'becomes'} ${value}`;
   });
-  return <section className="tt-table-program__group"><h4>{action.title}<RemoveRuleButton removal={{ kind: 'action', id: action.id, title: action.title }} onRemove={onRemove} /></h4><p>{action.description}</p><small>Available to {action.roles.map((role) => role === 'owner' ? 'owner' : 'members').join(' and ')}{action.requireTurn ? ' · follows turn order' : ''}{action.advanceTurn ? ' · advances turn' : ''}</small>
-    {action.conditions.length > 0 && <ul className="tt-table-rule-list">{action.conditions.map((condition, index) => <li key={index}><strong>{operandLabel(condition.left, action, program, members)} {conditionOperator(condition.op)} {operandLabel(condition.right, action, program, members)}</strong><span>{condition.message}</span></li>)}</ul>}
-    {effects.length > 0 && <ul className="tt-table-effect-list">{effects.map((effect, index) => <li key={index}>{effect}</li>)}</ul>}
+  // What the rule touches: the tables whose rows it changes, with the fields it writes.
+  const targets = new Map<string, Set<string>>();
+  const noteTarget = (collectionId: string, fieldId?: string) => {
+    const title = onLabel(program, collectionId);
+    const fields = targets.get(title) ?? new Set<string>();
+    if (fieldId) fields.add(fieldLabel(program, collectionId, fieldId));
+    targets.set(title, fields);
+  };
+  for (const effect of action.effects) {
+    const param = action.parameters.find((item) => item.id === effect.record);
+    if (param?.collection) noteTarget(param.collection, effect.field);
+  }
+  for (const create of action.creates ?? []) noteTarget(create.collection);
+  const appliesTo = targets.size === 0
+    ? 'No shared row changes'
+    : [...targets].map(([title, fields]) => fields.size ? `${title} · ${[...fields].join(', ')}` : title).join(' · ');
+  const who = action.roles.includes('owner') && action.roles.includes('participant') ? 'Owner and members' : action.roles.includes('owner') ? 'Owner only' : 'Members';
+  const flags = [action.requireTurn ? 'follows the turn order' : '', action.advanceTurn ? 'advances the turn' : ''].filter(Boolean).join(' · ');
+  return <section className="tt-table-program__group">
+    <header className="tt-rule-head"><h4>{action.title}</h4><RuleBadgeMark badge={badge} /><RemoveRuleButton removal={{ kind: 'action', id: action.id, title: action.title }} onRemove={onRemove} /></header>
+    {action.description && <p className="tt-rule-description">{action.description}</p>}
+    <dl className="tt-rule-anatomy">
+      <div><dt>When</dt><dd>{action.conditions.length > 0
+        ? <ul className="tt-table-rule-list">{action.conditions.map((condition, index) => <li key={index}><strong>{operandLabel(condition.left, action, program, members)} {conditionOperator(condition.op)} {operandLabel(condition.right, action, program, members)}</strong><span>{condition.message}</span></li>)}</ul>
+        : <p className="tt-rule-plain">someone uses it</p>}</dd></div>
+      <div><dt>Then</dt><dd>{effects.length > 0
+        ? <ul className="tt-table-effect-list">{effects.map((effect, index) => <li key={index}>{effect}</li>)}</ul>
+        : <p className="tt-rule-plain">nothing changes</p>}</dd></div>
+      <div><dt>Applies to</dt><dd className="tt-rule-applies">{appliesTo}</dd></div>
+    </dl>
+    <p className="tt-rule-meta">{who}{flags ? ` · ${flags}` : ''}</p>
   </section>;
 }
 
