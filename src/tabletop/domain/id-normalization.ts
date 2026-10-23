@@ -53,6 +53,7 @@ export interface RenameContext {
   parameterCollections: Map<string, Map<string, string>>;
   invariants: Map<string, string>;
   views: Map<string, string>;
+  computedColumns: Map<string, string>;
   /** old collection id -> (old row id -> new id) */
   rows: Map<string, Map<string, string>>;
 }
@@ -165,6 +166,7 @@ export function normalizeGeneratedTableChange(value: unknown): unknown {
   const collections = objects(program.collections);
   const actions = objects(program.actions);
   const invariants = objects(program.invariants);
+  const computedColumns = objects(program.computedColumns);
   const canvas = isObject(program.canvas) ? program.canvas : null;
   const views = canvas ? objects(canvas.views) : [];
   const records = isObject(value.initialRecords) ? value.initialRecords : {};
@@ -177,6 +179,7 @@ export function normalizeGeneratedTableChange(value: unknown): unknown {
     parameterCollections: new Map(),
     invariants: new Map(),
     views: new Map(),
+    computedColumns: new Map(),
     rows: new Map(),
   };
 
@@ -212,6 +215,9 @@ export function normalizeGeneratedTableChange(value: unknown): unknown {
   const invariantMap = renameMap(invariants.map(invariant => invariant.id));
   if (!invariantMap) return value;
   context.invariants = invariantMap;
+  const computedColumnMap = renameMap(computedColumns.map(column => column.id));
+  if (!computedColumnMap) return value;
+  context.computedColumns = computedColumnMap;
   const viewMap = renameMap(views.map(view => view.id));
   if (!viewMap) return value;
   context.views = viewMap;
@@ -272,6 +278,13 @@ export function normalizeGeneratedTableChange(value: unknown): unknown {
     }
   }
 
+  for (const column of objects(nextProgram.computedColumns)) {
+    const oldCollection = typeof column.collection === 'string' ? column.collection : '';
+    column.id = renameIn(context.computedColumns, column.id);
+    column.collection = context.collections.get(oldCollection) ?? column.collection;
+    rewriteExpression(column.expression, undefined, oldCollection, context);
+  }
+
   const nextCanvas = isObject(nextProgram.canvas) ? nextProgram.canvas : null;
   if (nextCanvas) {
     for (const view of objects(nextCanvas.views)) {
@@ -330,7 +343,9 @@ export function normalizeGeneratedTableChange(value: unknown): unknown {
         nextRow.id = renameIn(context.rows.get(collection), nextRow.id);
         if (isObject(nextRow.values)) {
           const values: Json = {};
-          for (const [key, cell] of Object.entries(nextRow.values)) values[fields?.get(key) ?? key] = cell;
+          for (const [key, cell] of Object.entries(nextRow.values)) {
+            values[fields?.get(key) ?? context.computedColumns.get(key) ?? key] = cell;
+          }
           nextRow.values = values;
         }
         return nextRow;

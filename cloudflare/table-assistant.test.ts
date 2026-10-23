@@ -152,8 +152,110 @@ async function billingRow(jobId: string): Promise<{ status: string; max_input_to
 }
 
 describe('Cloudflare table assistant', () => {
+  it('answers PD035 library availability from enabled compute capabilities without a draft or data change', async () => {
+    const input = await assistantInput(createWorkspace(), {
+      prompt: 'ถ้าฉันขอให้ใช้ Polars แทน pandas บนระบบนี้ ทำได้จริงไหม มี library นี้ให้ใช้อยู่แล้วหรือไม่ ขอคำตอบตามความสามารถที่เปิดจริง ไม่ต้องสร้างร่างหรือแก้ข้อมูล',
+    });
+    const assistantEnv: Env = {
+      ...testEnv,
+      DEEPSEEK_KEY: testEnv.DEEPSEEK_KEY ?? 'test-provider-key',
+      COMPUTE_LOADER: undefined,
+      TABLE_COMPUTE_PYTHON: undefined,
+    };
+    const before = JSON.stringify(input.workspace.domain);
+    const rejectedLibraryReply = providerFetch({ kind: 'explanation', text: 'Polars is installed and ready.' });
+    let providerCalls = 0;
+    const provider: typeof fetch = (url, init) => {
+      providerCalls += 1;
+      return rejectedLibraryReply(url, init);
+    };
+
+    const response = await respondToTablePrompt(assistantEnv, input, provider);
+
+    expect(response.result.kind).toBe('explanation');
+    if (response.result.kind !== 'explanation') throw new Error('Expected a capability explanation.');
+    expect(response.result.text).toContain('Polars');
+    expect(response.result.text).toContain('pandas');
+    expect(response.result.text).toContain('ไม่รองรับ Polars');
+    expect(response.result.text).toMatch(/JavaScript|Python/u);
+    expect(response.result.references).toEqual([]);
+    expect(providerCalls).toBe(0);
+    expect(response.usage).toEqual({ promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 });
+    expect(JSON.stringify(input.workspace.domain)).toBe(before);
+    expect(await billingRow(input.jobId)).toBeUndefined();
+  });
+
+  it.each([
+    'Create a dashboard using the available pandas package.',
+    'ใช้ Python ที่มีอยู่แล้ว สร้างตารางยอดขายให้หน่อย',
+    'Is Polars supported? Build a dashboard with it.',
+  ])('does not intercept a positive request to build with a library: %s', async (prompt) => {
+    const input = await assistantInput(createWorkspace(), { prompt });
+    let providerCalls = 0;
+    const provider: typeof fetch = (url, init) => {
+      providerCalls += 1;
+      return providerFetch({ kind: 'build-request', text: 'We can prepare an equipment summary form for review.' })(url, init);
+    };
+
+    const response = await respondToTablePrompt(testEnv, input, provider);
+
+    expect(response.result).toEqual({ kind: 'build-request', text: 'We can prepare an equipment summary form for review.' });
+    expect(providerCalls).toBe(1);
+  });
+
+  it('leaves table availability questions for the table assistant', async () => {
+    const input = await assistantInput(createWorkspace(), { prompt: 'Which records are available in this system?' });
+    let providerCalls = 0;
+    const provider: typeof fetch = (url, init) => {
+      providerCalls += 1;
+      return providerFetch({ kind: 'explanation', text: 'The table rules and records determine availability.', references: [] })(url, init);
+    };
+
+    const response = await respondToTablePrompt(testEnv, input, provider);
+
+    expect(response.result.kind).toBe('explanation');
+    expect(providerCalls).toBe(1);
+  });
+
+  it('does not treat GeoPandas as pandas when answering the enabled package list', async () => {
+    const input = await assistantInput(createWorkspace(), { prompt: 'Is GeoPandas available on this system?' });
+    const assistantEnv: Env = {
+      ...testEnv,
+      DEEPSEEK_KEY: testEnv.DEEPSEEK_KEY ?? 'test-provider-key',
+      COMPUTE_LOADER: undefined,
+      TABLE_COMPUTE_PYTHON: 'enabled',
+    };
+
+    const response = await respondToTablePrompt(assistantEnv, input, providerFetch({ kind: 'refusal', text: 'The provider should not be called.' }));
+
+    expect(response.result.kind).toBe('explanation');
+    if (response.result.kind !== 'explanation') throw new Error('Expected a capability explanation.');
+    expect(response.result.text).toContain('pandas 2.3.3');
+    expect(response.result.text).toContain('GeoPandas is not listed');
+    expect(response.result.text).toContain('pandas is a separate package');
+    expect(response.usage).toEqual({ promptTokens: 0, completionTokens: 0, cacheHitTokens: 0, cacheMissTokens: 0 });
+  });
+
+  it('recommends pandas only when the Python runtime is enabled', async () => {
+    const input = await assistantInput(createWorkspace(), { prompt: 'Is Polars supported here?' });
+    const assistantEnv: Env = {
+      ...testEnv,
+      DEEPSEEK_KEY: testEnv.DEEPSEEK_KEY ?? 'test-provider-key',
+      COMPUTE_LOADER: undefined,
+      TABLE_COMPUTE_PYTHON: 'enabled',
+    };
+
+    const response = await respondToTablePrompt(assistantEnv, input, providerFetch({ kind: 'refusal', text: 'The provider should not be called.' }));
+
+    expect(response.result.kind).toBe('explanation');
+    if (response.result.kind !== 'explanation') throw new Error('Expected a capability explanation.');
+    expect(response.result.text).toContain('Polars is not supported');
+    expect(response.result.text).toContain('pandas is listed and available to use instead');
+  });
+
   it('sends only current public table context, redacts member identities, and enriches references from active state', async () => {
     const input = await assistantInput();
+    const assistantEnv: Env = { ...testEnv, COMPUTE_LOADER: undefined, TABLE_COMPUTE_PYTHON: 'enabled' };
     const raw = {
       kind: 'explanation',
       text: 'The borrow action requires available equipment.',
@@ -164,13 +266,18 @@ describe('Cloudflare table assistant', () => {
       ],
     };
     const stateBefore = JSON.stringify(input.workspace.domain);
-    const response = await respondToTablePrompt(testEnv, input, providerFetch(raw, (content, body) => {
+    const response = await respondToTablePrompt(assistantEnv, input, providerFetch(raw, (content, body) => {
       expect(body.max_tokens).toBe(32768);
       expect(new TextEncoder().encode(JSON.stringify(body)).byteLength).toBeLessThanOrEqual(48 * 1024);
       const user = JSON.parse(content) as { kind: string; prompt: string; context: Record<string, unknown> };
       expect(user.kind).toBe('table-assistant');
       expect(user.prompt).toBe(input.prompt);
-      expect(Object.keys(user.context).sort()).toEqual(['conversation', 'notes', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(Object.keys(user.context).sort()).toEqual(['computeCapabilities', 'conversation', 'notes', 'program', 'records', 'role', 'seat', 'turn']);
+      expect(user.context.computeCapabilities).toEqual({
+        profile: 'tabletop-compute-1',
+        runtimes: ['python'],
+        pythonLibraries: ['Python standard library', 'pandas 2.3.3', 'numpy 2.3.4', 'scipy 1.16.3', 'openpyxl 3.1.5', 'python-dateutil 2.9.0.post0'],
+      });
       expect(user.context.notes).toEqual([]);
       expect(user.context.role).toBe('owner');
       expect(user.context.seat).toBe('host');

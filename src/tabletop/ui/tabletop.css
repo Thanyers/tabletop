@@ -1386,4 +1386,3 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
 .tt-invite-choose--compact > .tt-kicker, .tt-invite-choose--compact > p { grid-column: 1 / -1; }
 .tt-invite-choose--compact > button { min-height: 34px; padding: 5px 8px; }
 .tt-invite-choose--compact > button small { display: none; }
-

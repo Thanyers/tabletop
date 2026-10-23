@@ -130,6 +130,18 @@ export function computedColumnProblems(columns: readonly ComputedColumn[], progr
   return problems;
 }
 
+/** Program-owned formulas must not shadow a stored field; that keeps references and imports unambiguous. */
+export function computedProgramColumnProblems(columns: readonly ComputedColumn[], program: TableProgram): string[] {
+  const problems = computedColumnProblems(columns, program);
+  for (const column of columns) {
+    const collection = program.collections.find((item) => item.id === column.collection);
+    if (collection?.fields.some((field) => field.id === column.id)) {
+      problems.push(`Computed field "${column.id}" must not share an id with a stored field.`);
+    }
+  }
+  return problems;
+}
+
 /** Drops definitions whose collection or fields no longer exist after a rule edit. */
 export function retainComputedColumns(columns: readonly ComputedColumn[] | undefined, program: TableProgram | null): ComputedColumn[] {
   if (!columns?.length || !program) return [];
