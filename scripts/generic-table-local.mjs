@@ -5,7 +5,7 @@ import { readFile, mkdir, writeFile, copyFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { parseEnv } from 'node:util';
 import { resolve } from 'node:path';
-import { tableScenarioSources, equipmentChange, shiftsChange, gameChange } from '../src/tabletop/testing/table-scenarios.ts';
+import { tableScenarioSources, equipmentChange, shiftsChange, gameChange, vendorChange } from '../src/tabletop/testing/table-scenarios.ts';
 
 const port = Number(process.env.GENERIC_FIXTURE_PORT ?? '4313');
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error('Invalid loopback port');
@@ -80,10 +80,10 @@ const mf = new Miniflare(convertV4MiniflareOptions({
         return response;
       }
       const input = JSON.stringify(body);
-      const name = input.includes('team-shifts.json') ? 'shifts' : input.includes('river-race.txt') ? 'game' : 'equipment';
+      const name = input.includes('team-shifts.json') ? 'shifts' : input.includes('river-race.txt') ? 'game' : input.includes('vendor-contract.txt') ? 'vendor' : 'equipment';
       const source = input.match(/source_[a-f0-9]{32}/)?.[0];
       if (!source) throw Error('Fixture expected an imported source identifier');
-      const change = ({ equipment: equipmentChange, shifts: shiftsChange, game: gameChange })[name](source);
+      const change = ({ equipment: equipmentChange, shifts: shiftsChange, game: gameChange, vendor: vendorChange })[name](source);
       return Response.json({ model: 'deepseek-flash', choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(change) } }], usage: { prompt_tokens: 40, completion_tokens: 30, prompt_cache_hit_tokens: 0, prompt_cache_miss_tokens: 40 } });
     },
     assets: { directory: resolve('dist'), binding: 'ASSETS', run_worker_first: ['/api/*', '/__fixture*', '/healthz', '/readyz', '/internal/*'], routerConfig: { has_user_worker: true }, assetConfig: { not_found_handling: 'single-page-application' } },

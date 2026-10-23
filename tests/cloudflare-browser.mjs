@@ -91,7 +91,10 @@ const mf = new Miniflare(convertV4MiniflareOptions({
       if (assistantGate) await assistantGate;
     } else if (input.kind === 'table') {
       if (!tableAIReply) throw new Error('Unexpected table model request without an armed synthetic response.');
-      if (tableAIReply.expectedSources) expect(input.sources).toEqual(tableAIReply.expectedSources);
+      if (tableAIReply.expectedSources) {
+        expect(input.sources).toEqual(tableAIReply.expectedSources);
+        expect((input.importedSources ?? []).map(({ id, filename }) => ({ id, filename }))).toEqual(tableAIReply.expectedImportedSources ?? []);
+      }
       else {
         expect(input.sources).toHaveLength(1);
         expect(input.sources[0].filename).toBe(tableAIReply.expectedFilename);

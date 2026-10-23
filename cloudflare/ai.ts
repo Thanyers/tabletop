@@ -225,10 +225,15 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     if (!parsed.success) fail('AI_CONTEXT_INVALID', 'The current table state is invalid.');
     const sourceBytes = parsed.data.sources.reduce((total, source) => total + new TextEncoder().encode(source.text).byteLength, 0);
     if (sourceBytes > TABLE_TOTAL_SOURCE_BYTES) fail('MODEL_PROVIDER_INPUT_TOO_LARGE', 'The table sources exceed the allowed proposal size.');
+    // Files the active rules already cite were imported earlier: their rows are in records and their quotes are
+    // checked against the stored text, so only their names travel. A large table can keep growing this way.
+    const cited = new Set((parsed.data.program?.evidence ?? []).map((item) => item.sourceId));
+    const imported = parsed.data.sources.filter((source) => cited.has(source.id));
     const providerInput: DeepSeekChangeInput = {
       kind: 'table',
       prompt,
-      sources: parsed.data.sources.map(({ id, filename, text }) => ({ id, filename, text })),
+      sources: parsed.data.sources.filter((source) => !cited.has(source.id)).map(({ id, filename, text }) => ({ id, filename, text })),
+      ...(imported.length ? { importedSources: imported.map(({ id, filename }) => ({ id, filename, note: IMPORTED_SOURCE_NOTE })) } : {}),
       program: structuredClone(parsed.data.program),
       records: structuredClone(parsed.data.records),
       turn: parsed.data.turn,
@@ -253,6 +258,9 @@ function prepareInput(request: AIProposalRequest): PreparedInput {
     maximumInputBytes: MAX_CHANGE_INPUT_BYTES,
   };
 }
+
+/** Read by the model next to each omitted file, so the system prompt stays within its size budget. */
+const IMPORTED_SOURCE_NOTE = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 
 function mapUsage(usage: DeepSeekUsage): BillingUsage {
   return {

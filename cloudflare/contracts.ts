@@ -30,6 +30,10 @@ export interface DirectoryReference {
 }
 
 export const GOOGLE_CALLBACK_PATH = '/api/auth/google/callback';
+/** Room → Worker: last activity time of a table, read by the session table list (F053). */
+export const UPDATED_AT_HEADER = 'x-tabletop-updated-at';
+/** Room → Worker: encoded name of the member who made that change; absent before the first one (F053). */
+export const UPDATED_BY_HEADER = 'x-tabletop-updated-by';
 export const SESSION_IDLE_MS = 24 * 60 * 60 * 1000;
 export const SESSION_HARD_MS = 7 * 24 * 60 * 60 * 1000;
 export const OAUTH_TTL_MS = 10 * 60 * 1000;

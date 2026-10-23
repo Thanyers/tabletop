@@ -44,8 +44,7 @@ export function shiftsChange(sourceId: string): TableChange {
     { id: 'cy', values: { name: 'Cy', seat: 'member-2', slot: 'night', available: ['night'] } },
   ] } };
 }
-export function gameChange(sourceId: string): TableChange {
-  const program = baseProgram('River Race', sourceId, 'On your turn, advance your own boat by 2 points and then pass the turn.');
+export function gameChange(sourceId: string): TableChange {  const program = baseProgram('River Race', sourceId, 'On your turn, advance your own boat by 2 points and then pass the turn.');
   program.collections = [{ id: 'boats', title: 'Boats and scores', fields: [textField('seat'), { id: 'score', label: 'Score', type: 'number', required: true, min: 0, max: 20 }] }];
   const advance = baseAction('advance'); advance.title = 'Advance boat'; advance.parameters = [{ id: 'boat', label: 'Your boat', type: 'record', collection: 'boats' }];
   advance.conditions = [{ left: record('boat', 'seat'), op: 'eq', right: { system: 'seat' }, message: 'Choose your own boat.' }];
@@ -110,4 +109,30 @@ export function rollDiceCardChange(sourceId?: string): TableChange {
     }],
   });
   return change;
+}
+
+/**
+ * F055: the vendor shipping contract fixture. The table has no formula baked in; a person
+ * writes it as a computed column so the local proof exercises the same path as production.
+ */
+export function vendorChange(sourceId: string): TableChange {
+  const quote = 'ค่าธรรมเนียมพื้นที่ห่างไกล 7.50 บาทต่อออเดอร์';
+  const program = baseProgram('Vendor shipping audit', sourceId, quote);
+  program.collections = [{ id: 'orders', title: 'Orders', fields: [
+    textField('order_id'),
+    textField('zone'),
+    { id: 'weight_kg', label: 'Weight (kg)', type: 'number', required: false },
+    { id: 'goods_total', label: 'Goods total', type: 'number', required: true },
+    { id: 'declared_shipping', label: 'Declared shipping', type: 'number', required: true },
+  ] }];
+  const setWeight = baseAction('set_weight');
+  setWeight.title = 'Set weight';
+  setWeight.parameters = [
+    { id: 'order', label: 'Order', type: 'record', collection: 'orders' },
+    { id: 'weight', label: 'Weight (kg)', type: 'number', min: 0, max: 1000 },
+  ];
+  setWeight.effects = [{ record: 'order', field: 'weight_kg', op: 'set', value: { input: 'weight' } }];
+  program.actions = [setWeight];
+  program.assumptions = ['The contract and orders are fictional test data.'];
+  return { kind: 'table', program, initialRecords: { orders: [] } };
 }

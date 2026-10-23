@@ -197,14 +197,8 @@
 .tt-app .tt-review-details, .tt-app .tt-review-checks { margin-block: 10px; font-size: 13px; }
 .tt-app .tt-review-details > summary, .tt-app .tt-review-checks > summary, .tt-app .tt-rollback > summary { cursor: pointer; padding-block: 6px; color: var(--tt-muted); }
 .tt-app .tt-table-rule-details { padding-block: var(--tt-space-1); border-bottom: 1px solid color-mix(in srgb, var(--tt-line), transparent 45%); }
-.tt-app .tt-table-rule-details > summary { min-height: 32px; color: var(--tt-ink); font-size: 13px; cursor: pointer; }
-.tt-app .tt-table-rules .tt-table-proposal { padding: 0; border: 0; background: transparent; }
-.tt-app .tt-table-rules .tt-table-program__summary { display: flex; flex-wrap: wrap; gap: var(--tt-space-4); padding-block: var(--tt-space-2); }
-.tt-app .tt-table-rules .tt-table-program__summary > span { display: flex; align-items: baseline; gap: var(--tt-space-2); padding: 0; border: 0; border-radius: 0; background: transparent; }
-.tt-app .tt-table-rules .tt-table-program__summary strong { font-size: 16px; font-weight: 650; }
-.tt-app .tt-table-rules .tt-table-program__summary small { font-size: 12px; }
-.tt-app .tt-table-rules .tt-table-proposal > h3 { margin-block: 4px; font-size: 20px; font-weight: 650; }
-.tt-app .tt-table-rules .tt-table-program__description { color: var(--tt-muted); font-size: 13px; }
+.tt-app .tt-table-rule-details > summary { min-height: 40px; color: var(--tt-ink); font-size: var(--tt-type-body); cursor: pointer; }
+/* Rules-card body styles live with the card: ui/rules-card.css. */
 .tt-app .tt-table-proposal__apply { display: grid; justify-items: start; gap: var(--tt-space-2); padding-top: var(--tt-space-2); }
 .tt-app .tt-table-proposal__apply > p { margin: 0; }
 .tt-app .tt-table-private-preview > summary, .tt-app .tt-table-advanced-checks > summary, .tt-app .tt-table-history > summary { min-height: 40px; padding-block: var(--tt-space-2); color: var(--tt-muted); cursor: pointer; }
@@ -372,9 +366,12 @@
 .tt-app .tt-canvas-objects__list li > button:first-child { flex: 1 1 auto; min-width: 0; }
 /* F054: a listed card is a two-line grid — name, then its meta line — so three actions still fit at 280px. */
 .tt-app .tt-canvas-objects__list li.tt-canvas-objects__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 2px; border-radius: 6px; }
+/* Every row reserves the same four action columns (star, rename, eye, delete) so the
+   glyphs line up down the panel even when a card cannot be renamed or deleted. */
+.tt-app .tt-canvas-objects__actions { display: grid; grid-template-columns: repeat(4, 32px); align-items: center; justify-content: end; gap: 2px; }
+.tt-app .tt-canvas-objects__slot { width: 32px; min-height: 32px; }
+.tt-app .tt-canvas-objects__row .tt-canvas-objects__meta { grid-column: 1 / -1; }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 32px; padding: 0; color: var(--tt-muted); }
-.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus { display: inline-grid; flex: 0 0 auto; place-items: center; width: 32px; min-height: 36px; padding: 0; color: var(--tt-muted); }
-.tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__focus:hover:not(:disabled) { border-color: #d9e6df; color: var(--tt-moss); background: #eaf3ee; }
 .tt-app .tt-flow-wrap .tt-canvas-objects__list .tt-canvas-objects__eye[aria-pressed='true'] { color: var(--tt-moss); }
 
 /* A notification's action button (e.g. View rules after new rules went into use). */
@@ -437,6 +434,25 @@
   .tt-app .tt-flow-wrap .tt-canvas-objects__list li:not(:hover):not(:focus-within) .tt-canvas-objects__star[aria-pressed='false'] { opacity: .35; }
 }
 
+/* F053: table list search and last-updated time. */
+.tt-chooser .tt-existing-tables__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.tt-chooser .tt-existing-tables__head h2 { margin: 0; }
+.tt-chooser .tt-table-search { display: flex; flex: 0 1 240px; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid var(--tt-line); border-radius: 9px; color: var(--tt-muted); background: var(--tt-paper); }
+.tt-chooser .tt-table-search:focus-within { border-color: var(--tt-moss, #356e5d); }
+.tt-chooser .tt-table-search input { flex: 1; min-width: 0; border: 0; outline: 0; color: var(--tt-ink); background: transparent; font: inherit; font-size: 13px; }
+.tt-chooser .tt-existing-tables__times { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--tt-muted); font-size: 12px; line-height: 1.3; text-align: right; white-space: nowrap; }
+.tt-chooser .tt-existing-tables__updated { display: flex; flex-direction: column; align-items: flex-end; }
+.tt-chooser .tt-existing-tables__updated b { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; color: var(--tt-ink); font-weight: 600; }
+.tt-chooser .tt-existing-tables__created { color: var(--tt-muted); font-size: 11px; }
+.tt-chooser .tt-existing-tables__empty { margin: 4px 0 0; color: var(--tt-muted); font-size: 13px; }
+@media (max-width: 520px) {
+  .tt-chooser .tt-table-search { flex-basis: 100%; }
+  .tt-chooser .tt-existing-tables > button { flex-wrap: wrap; }
+  .tt-chooser .tt-existing-tables__times { order: 3; width: 100%; align-items: flex-start; padding-left: 43px; text-align: left; }
+  .tt-chooser .tt-existing-tables__updated { align-items: flex-start; }
+  .tt-chooser .tt-existing-tables__updated b { max-width: none; }
+}
+
 /* Shift+click group: a dashed ring on each picked card; right-click acts on all of them. */
 .tt-app .tt-flow-wrap .tt-canvas-node.is-multi-selected { outline: 2px dashed var(--tt-moss, #2f6f5e); outline-offset: 3px; }
 .tt-app .tt-canvas-context-menu__note { margin: 2px 10px 6px; color: var(--tt-muted); font-size: 12px; }
@@ -446,3 +462,20 @@
 @media (hover: hover) {
   .tt-app .tt-flow-wrap .tt-canvas-node:not(:hover):not(:focus-within) .tt-canvas-node__rename { opacity: 0; }
 }
+
+/* The group bar: what a Shift+click / Shift+drag group can do at once. */
+.tt-app .tt-canvas-selection-bar { position: absolute; z-index: 40; top: 12px; left: 50%; display: flex; align-items: center; gap: 4px; max-width: calc(100% - 24px); padding: 6px 6px 6px 14px; transform: translateX(-50%); border: 1px solid var(--tt-line); border-radius: 999px; background: var(--tt-paper); box-shadow: 0 10px 30px #303d3a22; pointer-events: auto; font-size: 13px; color: var(--tt-muted); }
+.tt-app .tt-canvas-selection-bar > span { margin-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-app .tt-canvas-selection-bar b { color: var(--tt-ink); }
+.tt-app .tt-canvas-selection-bar button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--tt-ink); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.tt-app .tt-canvas-selection-bar button:hover:not(:disabled) { background: var(--tt-canvas); }
+.tt-app .tt-canvas-selection-bar__clear { width: 32px; padding: 0 !important; justify-content: center; color: var(--tt-muted) !important; }
+@media (max-width: 640px) { .tt-app .tt-canvas-selection-bar > span { display: none; } }
+
+/* /tables: filters under the search, and a visible date on each row (F053). */
+.tt-chooser .tt-table-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 6px; }
+.tt-chooser .tt-table-filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--tt-muted); font-size: 12px; }
+.tt-chooser .tt-table-filters select { min-height: 30px; padding: 0 8px; border: 1px solid var(--tt-line); border-radius: 8px; background: var(--tt-paper, #fff); color: var(--tt-ink); font: inherit; font-size: 13px; }
+.tt-chooser .tt-table-filters__clear { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-moss, #356e5d); font: inherit; font-size: 13px; cursor: pointer; }
+.tt-chooser .tt-table-filters__clear:hover { background: var(--tt-canvas); }
+.tt-chooser .tt-table-filters__count { margin-left: auto; color: var(--tt-muted); font-size: 12px; }

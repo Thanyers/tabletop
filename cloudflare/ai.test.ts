@@ -289,6 +289,26 @@ describe('Cloudflare AI proposal helper', () => {
     expect(calls).toBe(0);
   });
 
+  it('leaves out the text of files the active rules already cite, so a grown table can still be edited', async () => {
+    const input = request('table');
+    const table = input.workspace.domain;
+    if (table.kind !== 'table') throw new Error('Expected table fixture.');
+    const change = proposal('table');
+    if (change.kind !== 'table') throw new Error('Expected a table change.');
+    table.program = change.program;
+    table.records = change.initialRecords;
+    table.sources.push({ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n', sha256: 'b'.repeat(64), createdAt: 1 });
+    expect(change.program.evidence.some((item) => item.sourceId === 'source_fixture')).toBe(true);
+    let sent: { sources: Array<{ id: string; text: string }>; importedSources?: Array<{ id: string; filename: string }> } | undefined;
+    await proposeChange(testEnv, input, providerFetch({ ...change, initialRecords: {} }, (content) => {
+      sent ??= JSON.parse(content) as typeof sent;
+    })).catch((error: unknown) => { if (!sent) throw error; });
+    expect(sent?.sources).toEqual([{ id: 'source_new', filename: 'new.csv', text: 'date,commits\n2026-10-22,5\n' }]);
+    expect(sent?.importedSources).toMatchObject([{ id: 'source_fixture', filename: tableScenarioSources.equipment.filename }]);
+    expect(sent?.importedSources?.[0]).toHaveProperty('note');
+    expect(JSON.stringify(sent)).not.toContain(tableScenarioSources.equipment.text.slice(0, 40));
+  });
+
   it('rejects complete table source sets above the bounded model input before reserving or calling the provider', async () => {
     const input = request('table');
     const domain = input.workspace.domain;

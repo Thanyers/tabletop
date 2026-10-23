@@ -769,11 +769,21 @@ describe('tabletop server authority', () => {
     const list = await call<SessionView>(base, '/api/session', { session: owner });
     expect(list.response.status).toBe(200);
     expect((list.body as SessionView).workspaces.map((workspace) => workspace.id)).toEqual(expect.arrayContaining([first.id, second.id]));
+    // F053: a fresh table carries its created time, no separate change time and no editor yet.
+    const firstRow = (list.body as SessionView).workspaces.find((workspace) => workspace.id === first.id);
+    expect(firstRow?.createdAt).toEqual(expect.any(Number));
+    expect(firstRow?.updatedAt).toBe(firstRow?.createdAt);
+    expect(firstRow?.updatedBy).toBeUndefined();
 
     const firstCurrentView = await call<WorkspaceView>(base, `/api/workspaces/${first.id}`, { session: owner });
     const note = await command(base, owner, firstCurrentView.body as WorkspaceView, 'teaching.saveNote', { text: 'Still the first room.' });
     expect(note.response.status).toBe(200);
     expect((note.body as CommandAck).workspace.id).toBe(first.id);
+    // F053: the first committed change moves the time and names the member who made it.
+    const afterNote = await call<SessionView>(base, '/api/session', { session: owner });
+    const changedRow = (afterNote.body as SessionView).workspaces.find((workspace) => workspace.id === first.id);
+    expect(changedRow?.updatedAt).toBeGreaterThanOrEqual(firstRow?.updatedAt ?? 0);
+    expect(changedRow?.updatedBy).toBe('Owner');
 
     const guest = await createSession(base, 'Guest');
     const invitation = await invite(base, owner, first.id, 'learner-1');

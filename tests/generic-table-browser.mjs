@@ -332,6 +332,16 @@ async function verifyPendingChatMotion(owner, draftNode, draftCard) {
   expect(offset.y, JSON.stringify(offset)).toBeLessThanOrEqual(2);
 }
 
+// Dev #194: a rule request sends the full text only of files the active rules do not cite yet.
+// Cited files travel by id and name as importedSources; their rows are already in the table.
+function expectedModelSources(domain) {
+  const cited = new Set((domain.program?.evidence ?? []).map(item => item.sourceId));
+  return {
+    expectedSources: domain.sources.filter(item => !cited.has(item.id)).map(item => ({ id: item.id, filename: item.filename, text: item.text })),
+    expectedImportedSources: domain.sources.filter(item => cited.has(item.id)).map(item => ({ id: item.id, filename: item.filename })),
+  };
+}
+
 async function requestProposal(owner, tableId, source, change, setTableReply, api, { failDraftRefresh = false, getProviderCalls, expectConsent = true, observePending = false, streamThinking = false } = {}) {
   const stepLabel = `Table draft: ${change.program.title}`;
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
@@ -389,7 +399,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
   const streamReasoning = streamThinking
     ? Array.from({ length: 24 }, (_, index) => `Checking source columns and drafting rule ${index + 1}. `)
     : undefined;
-  setTableReply({ change, gate, streamReasoning, expectedSources: before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text })) });
+  setTableReply({ change, gate, streamReasoning, ...expectedModelSources(before.domain) });
   let modelAccepted = false;
   let failedDraftRefresh = false;
   let workspaceRefreshRequests = 0;
@@ -563,7 +573,7 @@ async function requestProposal(owner, tableId, source, change, setTableReply, ap
 // Picking an answer sends a new rule request at once under the table consent.
 async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
-  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
+  const modelSources = expectedModelSources(before.domain);
   const expectUnchanged = async () => {
     const current = (await api(owner, `/api/workspaces/${tableId}`)).body;
     expect(current.revision).toBe(before.revision);
@@ -583,7 +593,7 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   const clarifyPrompt = 'Make a shift table.';
   const clarification = { question: 'Who must agree before two people swap shifts?', options: ['Both people', 'Only the owner', 'Nobody'] };
   await prompt.fill(clarifyPrompt);
-  setTableReply({ change: { kind: 'clarify', ...clarification }, expectedSources });
+  setTableReply({ change: { kind: 'clarify', ...clarification }, ...modelSources });
   const firstPost = owner.waitForResponse(response => response.url().endsWith(`/api/workspaces/${tableId}/model`) && response.request().method() === 'POST');
   await chat.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(consent).toBeVisible();
@@ -618,7 +628,7 @@ async function requestClarifyingQuestion(owner, tableId, setTableReply, api) {
   // The follow-up job completes with neither a candidate nor a clarification (the poll response is stripped),
   // so its card must offer the message again instead of Review rules.
   const answeredPrompt = `${clarifyPrompt}\n\n${clarification.question} ${clarification.options[1]}`;
-  setTableReply({ change: { kind: 'clarify', question: 'Which shifts exist?', options: ['Morning and evening', 'Three shifts', 'I will attach a file'] }, expectedSources });
+  setTableReply({ change: { kind: 'clarify', question: 'Which shifts exist?', options: ['Morning and evening', 'Three shifts', 'I will attach a file'] }, ...modelSources });
   const pollUrl = `**/api/workspaces/${tableId}/model/*`;
   const stripClarification = async route => {
     if (route.request().method() !== 'GET') { await route.continue(); return; }
@@ -1617,19 +1627,23 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
   let active = await inspectAppliedRules(owner, room.id, api, expectedRules.game);
   expect(active.domain.turn).toBe('host');
 
-  // F017: the owner defines a computed column; the table shows it without a model call.
+  // F017/F055: the owner writes a formula; the table shows the server-computed value without a model call.
   const boatsEditor = await openCanvasObject(owner, 'table.collection.boats');
   await boatsEditor.getByRole('button', { name: 'Add computed column', exact: true }).click();
   const computedSection = boatsEditor.getByRole('region', { name: 'Computed columns for Boats and scores', exact: true });
   await computedSection.getByRole('button', { name: 'Add row', exact: true }).click();
   await computedSection.getByLabel('Label', { exact: true }).fill('Score plus 5');
-  await computedSection.getByLabel('Number', { exact: true }).fill('5');
+  await computedSection.getByLabel('Formula', { exact: true }).fill('score + 5');
   await computedSection.getByRole('button', { name: 'Save computed columns', exact: true }).click();
   const computedState = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
   expect(computedState.computedColumns).toHaveLength(1);
   expect(computedState.computedColumns[0].collection).toBe('boats');
   await expect(boatsEditor.getByRole('columnheader', { name: /Score plus 5/u })).toBeVisible();
   await expect(boatsEditor.getByRole('cell', { name: '5', exact: true })).toHaveCount(2);
+  // F055: the authority computes the column and ships the values in the projection.
+  const projected = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
+  expect(projected.computedValues?.values.boats).toBeDefined();
+  expect(Object.values(projected.computedValues.values.boats).map((values) => values.calc1).sort((a, b) => a - b)).toEqual([5, 5]);
 
   // F019: the rules card explains what the table can and cannot do.
   const capabilityRules = await openCanvasObject(owner, 'table.rules');
@@ -1780,6 +1794,16 @@ async function gameScenario({ owner, member, newPage, api, setTableReply, setAss
 
   await removeActionFromRules(owner, room.id, api, { actionTitle: 'Advance boat', actionId: 'advance', collectionTitle: 'Boats and scores' });
   mark('Generic table: an AI draft goes into use on its own, and the owner removes one action from the Rules card as a new rule revision (F039)');
+  // F055: importing new data recomputes the stored formula on the authority, with no model call.
+  const lateBoats = await openCanvasObject(owner, 'table.collection.boats');
+  const callsBeforeImport = getProviderCalls();
+  await lateBoats.getByRole('button', { name: 'Import rows', exact: true }).click();
+  await lateBoats.getByLabel('Or paste CSV').fill('seat,score\nmember-2,10');
+  await lateBoats.getByRole('button', { name: /Import 1 rows?/u }).click();
+  await expect(lateBoats.getByRole('cell', { name: '15', exact: true })).toBeVisible();
+  expect(getProviderCalls()).toBe(callsBeforeImport);
+  const recomputed = (await api(owner, `/api/workspaces/${room.id}`)).body.domain;
+  expect(Object.values(recomputed.computedValues?.values.boats ?? {}).map((values) => values.calc1)).toContain(15);
 }
 
 // Evidence screenshot of the page with one canvas card opened in view.
@@ -1799,7 +1823,7 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 async function verifyParallelRequests({ owner, member, tableId, api, setTableReply, setAssistantReply, getProviderCalls, mark }) {
   const before = (await api(owner, `/api/workspaces/${tableId}`)).body;
   const ownerName = before.actor.name;
-  const expectedSources = before.domain.sources.map(item => ({ id: item.id, filename: item.filename, text: item.text }));
+  const modelSources = expectedModelSources(before.domain);
   const draftChange = (description) => {
     const program = structuredClone(before.domain.program);
     program.description = description;
@@ -1824,7 +1848,7 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
   const gate = new Promise(resolve => { releaseFirst = resolve; });
   try {
     const callsBefore = getProviderCalls();
-    setTableReply({ change: draftChange('F038 first queued-draft check.'), gate, expectedSources });
+    setTableReply({ change: draftChange('F038 first queued-draft check.'), gate, ...modelSources });
     await prompt.fill(firstPrompt);
     await send.click();
     // The provider received the first draft and is held by the gate.
@@ -1877,7 +1901,7 @@ async function verifyParallelRequests({ owner, member, tableId, api, setTableRep
     expect(modelPosts).toHaveLength(1);
 
     // Release the first draft: it completes, then the queued draft starts on its own and completes.
-    setTableReply({ change: draftChange('F038 second queued-draft check.'), expectedSources });
+    setTableReply({ change: draftChange('F038 second queued-draft check.'), ...modelSources });
     releaseFirst();
     // F039 + dev #157: both drafts go into use and leave the canvas; each becomes a success notice.
     await expect.poll(async () => (await api(owner, `/api/workspaces/${tableId}`)).body.domain.ruleRevision, { timeout: 30_000 })

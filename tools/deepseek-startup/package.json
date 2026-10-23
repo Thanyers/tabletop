@@ -1,0 +1,11 @@
+{
+  "name": "@local/tabletop-task-startup",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "engines": { "dsh": ">=0.2.0 <0.3.0" },
+  "peerDependencies": { "@deepseek-ai/dsh-llm": "*" },
+  "devDependencies": { "@deepseek-ai/dsh-llm": "*" },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+}

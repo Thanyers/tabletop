@@ -7,7 +7,7 @@
 
 1. **ก่อนหยิบงาน:** ดูตารางด้านล่าง แล้วรัน `gh pr list -R Thanyers/tabletop --state open` ว่าไม่มี PR ที่ชื่อขึ้นต้นด้วย ID เดียวกัน
 2. **จองงาน:** แตก branch จาก `dev` (`feat/<ID>-<ชื่อสั้น>`) แก้แถวของงานนั้นในไฟล์นี้ (สถานะ `doing`, ผู้รับผิดชอบ, branch) แล้ว **เปิด draft PR ทันที** ชื่อ PR ขึ้นต้นด้วย ID เช่น `F001-T4: ...` · draft PR คือการจองที่ทุกคนเห็น
-3. **แก้เฉพาะแถวของตัวเอง** อย่าจัดรูปแบบหรือเรียงตารางใหม่ จะได้ไม่ชนกับคนอื่น
+3. **แก้เฉพาะแถวของตัวเอง** อย่าจัดรูปแบบหรือเรียงตารางใหม่ จะได้ไม่ชนกับคนอื่น ยกเว้นบล็อกที่ต้องรวมจาก merge/rebase ให้ทำตาม [กติกา Markdown merge conflicts](AGENTS.md#markdown-merge-conflicts)
 4. **ดูคอลัมน์ "พื้นที่ที่แตะ":** ถ้างานที่ `doing` อยู่แตะไฟล์เดียวกับงานที่จะหยิบ ให้รอ หรือคุยกันก่อน · งานที่มี "ต้องรอ" ห้ามเริ่มจนงานนั้น `done`
 5. **จบงาน:** PR พร้อม review → เปลี่ยนสถานะเป็น `review` · merge แล้ว (คนหรือ AI) → `done` (แก้ใน PR ถัดไปของคุณได้)
 6. งานใหม่ที่ยังไม่มีใครจอง ให้เพิ่มไว้ใน feature doc ก่อน แล้วค่อยเพิ่มแถวที่นี่
@@ -24,6 +24,9 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F064 | โหลดกติกา dev ล่าสุดอัตโนมัติเมื่อเริ่มงานในสี่ harness | `review` | [F064](docs/features/F064-agent-startup-hooks.md) |
+| F063 | เริ่มงานจาก dev ล่าสุดและอ่านกติกากลางข้าม harness | `review` | [F063](docs/features/F063-shared-agent-startup.md) |
+| F061 | Landing page ตามคุณค่าและเรื่องเล่า README | `review` | [F061](docs/features/F061-readme-landing.md) |
 | F043 | README อธิบายทำอะไร ทำไม และปัญหาที่ช่วยแก้ | `review` | [F043](docs/features/F043-readme-purpose.md) |
 | F001 | เริ่มโต๊ะใหม่ด้วยคำถาม + การ์ดเดโม + AI ช่วยเลือก + แชทแบบ island | `doing` (T1–T2 review) | [F001](docs/features/F001-guided-table-start.md) |
 | F003 | ลิงก์เชิญเข้าโต๊ะแบบใช้ซ้ำได้ + เอาสมาชิกออก | `todo` (ต้อง security review ก่อน T3) | [F003](docs/features/F003-reusable-invite-link.md) |
@@ -44,18 +47,28 @@
 | F047 | ลดการปฏิเสธร่างที่เกิดจากชื่อ/เพดานที่ไม่ได้บอก: normalize id, guide จากค่าคงที่เดียว, classifier 4 intent | `review` | [F047](docs/features/F047-generation-reliability.md) |
 | F048 | ลูกเต๋าที่ server ทอยให้เป็น parameter ของ action: `table.roll` + pending roll อายุ 10 นาทีผูก `dataRevision` + ใช้ครั้งเดียว + เก็บหน้าเต๋า/ผลลง event | `review` | [F048](docs/features/F048-roll-parameter.md) |
 
-| F053 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F053](docs/features/F053-seo-baseline.md) |
+| F053 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F051](docs/features/F051-seo-baseline.md) |
+| F051 | SEO พื้นฐาน: preview ตอนแชร์ลิงก์, noindex หน้าในแอป, 404 จริง, robots/sitemap | `review` | [F051](docs/features/F051-seo-baseline.md) |
 | F049 | ลูกเต๋าบนการ์ด controls: stepper จำนวน/หน้า + ปุ่ม ทอย + หน้าลูกเต๋า/ผลรวม และค่าที่ทอยได้ส่งต่อให้การ์ดอื่นที่ bind parameter เดียวกัน (v1 สุ่มฝั่ง client, visual-only; server roll = F048) · prompt guide ให้ drafter เขียน dice ได้ | `review` | [F049](docs/features/F049-dice-visual.md) |
 | F052 | Landing ภาษาอังกฤษ + รูปแชร์ใหม่ (การ์ดแบรนด์) | `doing` | [F052](docs/features/F052-english-landing.md) |
 | F050 | เห็น "กำลังคิดอะไร" แบบสดระหว่างรอร่างกฎ: thinking tail (≤600, redact แล้ว) ไหลมากับ progress และการ์ดแสดงบรรทัดล่าสุด | `review` | [F050](docs/features/F050-live-thinking.md) |
 | F054 | เวลา+ที่มาของการ์ดบน Objects panel + sort by created/updated + ปุ่มพาไปหาการ์ด โดยคง panel เดิม | `review` | [F054](docs/features/F054-object-metadata-and-focus.md) |
-| F060 | การ์ด dice ที่ผูก `roll` parameter ใช้ `table.roll` ของ server: แสดงหน้าเต๋า/ผลรวมจาก roll-store, ไม่เขียน shared draft และไม่ใช้ client RNG · dice ที่ผูก `number` ยัง client-side/visual-only · ไม่เปลี่ยน wire contract | `review` | [F053](docs/features/F060-server-dice.md) |
+| F053 | วันที่สร้าง/วันที่แก้ล่าสุดพร้อมชื่อคนแก้ + สลับการเรียง updated/created + search/filter ในหน้า `/tables` | `review` | [F053](docs/features/F053-tables-search.md) |
+| F060 | การ์ด dice ที่ผูก `roll` parameter ใช้ `table.roll` ของ server: แสดงหน้าเต๋า/ผลรวมจาก roll-store, ไม่เขียน shared draft และไม่ใช้ client RNG · dice ที่ผูก `number` ยัง client-side/visual-only · ไม่เปลี่ยน wire contract | `review` | [F060](docs/features/F060-server-dice.md) |
+| F062 | การ์ด Rules อ่านเป็น When → Then → Applies to + เส้น canvas อ้อมการ์ดทุกใบยกเว้น post-it, แยกเลนไม่ทับกัน และเปิดช่องที่จุดตัดให้เห็นว่าอันไหนอยู่บน | `done` (#198) | [F062](docs/features/F062-rules-card-canvas-lines.md) |
 
 ## งาน
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F064-T1 | สคริปต์กลางและ native startup adapters | `review` | Codex | `feat/F064-agent-startup-hooks` / #202 | `scripts/agent-startup*`, `scripts/setup-agent-startup.mjs`, native configs, `tools/deepseek-startup/`, public-file gate, CI, AGENTS/agent docs, `spec.md`, `MEMORY.md`, `package.json` | — | fetch/read เท่านั้น; ไม่ checkout/merge หรือแก้งานค้างอัตโนมัติ |
+| F063-T1 | กติกาเริ่ม/รับช่วงงานและ Claude import | `review` | Codex | `docs/F063-shared-agent-startup` / #200 | `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_WORKFLOW.md`, `docs/README.md`, `docs/features/F063-shared-agent-startup.md`, `spec.md` | — | เอกสารเท่านั้น; Codex, Claude Code, OpenCode, DeepSeek Harness |
+| F061-T1 | ปรับหน้าแรกเฉพาะเนื้อหา ภาพ และ layout | `review` | Codex | `feat/F061-readme-landing` / #197 | `ui/PublicWelcome.tsx`, `ui/public-welcome.css`, ภาพ landing, `docs/features/F061-readme-landing.md`, `spec.md`, `CHANGELOG.md` | — | รักษา account/route/demo เดิม; ไม่รวม draft #180 |
 | F043-T1 | ปรับเรื่องเล่า README และทางไปหลักฐาน | `review` | Codex | `docs/F043-readme-purpose` / #142 | `README.md`, `docs/GENERATIVE_CANVAS_ACCEPTANCE.md`, `docs/README.md`, `docs/USER_GUIDE_TH.md`, `spec.md`, `docs/features/F043-readme-purpose.md` | — | เอกสารเท่านั้น ไม่เปลี่ยน runtime |
+| F053-T1 | Room → Worker: `SessionView` มี `createdAt`, `updatedAt`, `updatedBy` | `review` | lead (AI) | `feat/tables-search-filter` / #196 | `cloudflare/{contracts,index,room,room-repository,room.test}.ts`, `src/tabletop/shared/contracts.ts` | — | header เท่านั้น ไม่มี migration/schema change |
+| F053-T2 | Node runtime ส่งฟิลด์ชุดเดียวกันจาก Postgres | `review` | lead (AI) | 〃 | `server/repository.ts`, `server/authority.test.ts` | — | `events` + `memberships` |
+| F053-T3 | หน้า `/tables`: Created, `Updated by …`, Sort สลับ updated/created และคง search/filter | `review` | lead (AI) | 〃 | `src/tabletop/TabletopApp.tsx`, `src/tabletop/ui/table-list-filter.ts`, `.test.ts`, `ui/calm-workspace.css` | T1 | เรียง updated เป็นค่าเริ่มต้น, จำ Sort ใน localStorage |
+| F053-T4 | เอกสารเจ้าของเรื่อง + CHANGELOG + PLAN | `review` | lead (AI) | 〃 | `docs/features/F053-tables-search.md`, `CHANGELOG.md`, `PLAN.md` | T1–T3 | |
 | F054-T1 | `cardMeta` model + schema + stamp ตอน activation/command + prune/cap | `review` | lead (AI) | `feat/F054-object-metadata-and-focus` | `shared/table-contracts.ts`, `domain/table-card-meta.ts` (ใหม่), `domain/table.ts`, `domain/evolution.ts`, tests | — | unit 21 ผ่าน + typecheck |
 | F054-T2 | backfill resolver + projection tests | `review` | lead (AI) | 〃 | `domain/table-card-meta.ts`, `domain/projections.ts`, tests | T1 | legacy backfill + private projection ผ่าน |
 | F054-T3 | panel meta rows + sort + persistence | `review` | lead (AI) | 〃 | `src/tabletop/ui/CanvasWorkspace.tsx`, CSS, tests | T1, T2 | unit 20/20, UI Lab 320/280 |
@@ -64,6 +77,7 @@
 | F054-T6 | browser regression | `todo` | lead (AI) | 〃 | `tests/*-browser.mjs` | T3–T5 | ตาม CI005 รันตอน release PR; PR นี้ใช้ UI Lab |
 | F054-T7 | spec/PLAN/verification docs | `doing` | lead (AI) | 〃 | `spec.md`, docs | T1–T6 | อัปเดตแล้ว เหลือ PR |
 | F054-T8 | AI origin provenance (auto/reviewed/pasted/rollback) | `todo` | — | — | `shared/contracts.ts`, `domain/evolution.ts`, `cloudflare/room.ts` | v1 | เลื่อนหลัง v1 |
+| F054-T9 | Objects panel: ปุ่มเครื่องมือเรียงเป็นคอลัมน์เดียว + เอา locate ออก ให้คลิกชื่อการ์ดพาไปหาการ์ด | `doing` | lead (AI) | `feat/objects-panel-tools` | `src/tabletop/ui/CanvasWorkspace.tsx`, `calm-workspace.css` | F054-T4 | typecheck/unit/build; PR ยังไม่เปิด |
 | F046-T1 | semantic view salvage + link cleanup ใน domain (ไม่แตะ provider ที่ F045 ถือ) | `review` | lead (AI) | `feat/F046-view-salvage` | `src/tabletop/domain/table.ts`, `table-canvas-salvage.test.ts`, เอกสาร | — | ไม่เปลี่ยนสัญญา JSON/จำนวนครั้งที่เรียกโมเดล |
 | F047-T1 | normalize id ที่โมเดลตั้ง + เขียน reference ใหม่ทั้ง program/records/views | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/id-normalization.ts` (ใหม่), `server/providers/deepseek-changes.ts` | — | ชื่อชนกัน = ยกเลิกทั้งก้อน |
 | F047-T2 | `TABLE_LIMITS` เป็นแหล่งเดียว + guide interpolate + drift test | `review` | lead (AI) | `feat/F047-generation-reliability` | `src/tabletop/domain/table.ts`, `server/providers/table-schema-guide.ts` (+ test) | — | ปิดช่อง manifestNodes/depth |
@@ -132,3 +146,4 @@
 | F050-T1..T3 | provider ส่ง thinking tail มากับ progress · worker redact/เก็บ · การ์ดแสดงบรรทัด live thinking | `doing` | lead (AI) | `feat/F050-live-thinking` | `server/providers/deepseek-changes.ts`, `cloudflare/room.ts`, `ui/table-chat-state.ts`, `ui/useTableChat.tsx`, `ui/table-chat.css` | — | ต้องไม่แก้ `table-assistant-contracts.ts` (assistant เป็น strictObject) |
 | F050-T4..T5 | fixture stream reasoning + browser check + เอกสาร/spec/CHANGELOG | `done` | lead (AI) | `feat/F050-live-thinking` (#173) | `tests/cloudflare-browser.mjs`, `tests/generic-table-browser.mjs`, `docs/features/F050-live-thinking.md`, `spec.md`, `CHANGELOG.md` | F050-T1..T3 | browser ผ่าน 2 รอบติดบน `dev` @ `9ff8dd4` |
 | F050-T6 | แก้ locator ของ browser test ที่ผูกกับ "ชื่อการ์ด": หลัง 1f21aeb ชื่อการ์ด = บรรทัดแรกของคำขอ การ์ดคำถามกับคำตอบจึงชื่อซ้ำกัน → หาการ์ดด้วย `data-canvas-object="table.chat.<jobId>"` แทน | `review` | lead (AI) | `fix/browser-clarify-card-locator` | `tests/generic-table-browser.mjs` | — | ทำให้ browser suite เขียวบน `dev` ปัจจุบัน |
+| F055-T1..T3 | "ตารางคำนวณจริง" แบบ Excel: parser (IF/CEIL/ROUND/MIN/MAX/AND/OR/compare/text), type-check, server คำนวณใน projectDomain เป็น computedValues (projection-only), UI ช่องสูตร + validation, local proof | `review` | lead (AI) | `feat/F055-computed-formulas` | `src/tabletop/shared/{computed-formula.ts,computed-columns.ts,table-contracts.ts}`, `src/tabletop/domain/projections.ts`, `src/tabletop/ui/TableCanvasObjects.tsx`, `tests/`, `docs/features/F055-computed-formulas.md` | — | ไม่แตะ schema/migration/AI; projection-only · [PR #203](https://github.com/Thanyers/tabletop/pull/203) |
