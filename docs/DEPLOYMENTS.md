@@ -1,18 +1,31 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **22 ตุลาคม 2569 เวลา 19:59 (Asia/Bangkok)** ทั้งสอง environment รายงาน **5.1.0 / 8a6611e** จาก annotated tag [v5.1.0](https://github.com/Thanyers/tabletop/releases/tag/v5.1.0)
+ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 เวลา 00:00 (Asia/Bangkok)** ทั้งสอง environment รายงาน **6.0.0 / 195b84c** จาก annotated tag [v6.0.0](https://github.com/Thanyers/tabletop/releases/tag/v6.0.0)
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [8a6611e](https://github.com/Thanyers/tabletop/commit/8a6611eadc046102e205303453801023aa3468c2) — PR #152 | commit และ build เดียวกัน |
-| Release | v5.1.0 / 5.1.0 | v5.1.0 / 5.1.0 |
+| Source | [195b84c](https://github.com/Thanyers/tabletop/commit/195b84c89fdc162f9c3bc93e984379d858e72c45) — PR #191 | commit และ build เดียวกัน |
+| Release | v6.0.0 / 6.0.0 | v6.0.0 / 6.0.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 6.0.0 (22 ตุลาคม 2569)
+
+Release 6.0.0 (**MAJOR**) ผ่าน pipeline CD001 ([run 39818503916](https://github.com/Thanyers/tabletop/actions/runs/39818503916)) — [PR #191](https://github.com/Thanyers/tabletop/pull/191) จาก `dev` @ `9d2ee5e` · เลขและเหตุผล MAJOR โดย Thanyers: F048/F060 (server dice / dice ผูก `roll`) และที่นั่ง `member-8..12` ทำให้ย้อนไป 5.1.0 ไม่สะอาด → **ห้าม rollback ทั้งระบบ แก้ไปข้างหน้าเป็น 6.0.x**
+
+- แก้ใน release branch ระหว่างรอ CI: `e01ad24` (Thanyers, Workers suite ตาม auto-apply notice), `33db3f0` (Thanyers, pan gesture ไม่โดนแผง Objects), `a193b4d` (บั๊ก client: บันทึกผังร่วมครั้งแรกถูกทิ้งเมื่อการ์ดหายจาก canvas ระหว่างรอ + helper ลาก canvas ผิดทิศ) · บรรทัด CHANGELOG ของ `a193b4d` อยู่ใต้ `Unreleased` (ไม่แทรกหัวข้อที่ตัดแล้ว)
+- CI ของ PR รอบสุดท้าย (`a193b4d`) ผ่านทุก job · Validate บน merge commit รันชุดเต็มขนาน (CI006) **5 นาที** — ยังไม่ได้ใช้ผล PR ซ้ำ เพราะ API `commits/{sha}/pulls` คืน body ว่างสำหรับ merge commit นี้ (fail-safe ทำงานถูก)
+- Tag `v6.0.0` (annotated) → `195b84c`; build ครั้งเดียว `6.0.0 / 195b84c` (`built_at` 2026-10-22T16:58:47Z) ใช้ร่วม staging และ production
+- D1: `no pending D1 migrations` ทั้ง staging และ production
+- Staging: Worker version `16956b15-dbc1-4002-8012-0f7d5ca2621b`, smoke PASS
+- Production: Worker version `a6cc5f70-405c-4a98-a6c6-c0d53157c0eb`, smoke PASS
+- `/version` ทั้งสอง environment = `6.0.0 / 195b84c` (ตรวจซ้ำด้วยมือ 23 ต.ค. 00:00 น.)
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-6.0.0`
 
 ## ผลตรวจ deploy 5.1.0 (22 ตุลาคม 2569)
 

@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — ตรวจ UI แล้วฟิลด์ใหม่ไม่ขึ้น ทั้งที่ typecheck/build ผ่าน เพราะพอร์ต 4310 เป็นของ checkout อื่น
+- **What happened:** เปิด Playwright ตรวจหน้า `/tables` หลังเพิ่ม `createdAt`/`updatedAt`/`updatedBy` แล้ว `/api/session` ยังคืนเฉพาะ id/title/kind/role · log ของ server ที่เพิ่งสตาร์ทมี `EADDRINUSE` แต่ตรวจ `/api/capabilities` ได้ 200 จึงดูเหมือนปกติ
+- **Root cause:** มี process `node --import tsx server/bootstrap.ts` จากอีก checkout จับ `127.0.0.1:4310` อยู่ก่อน (สร้าง 09:04) · `vite.config.ts` proxy `/api` ไป 4310 ตายตัว จึงคุยกับโค้ดเก่า ไม่ใช่โค้ดที่เพิ่งแก้ · อีกสองกับดักที่เจอพร้อมกัน: Playwright ใน repo คาด chromium รุ่นที่ไม่ติดตั้ง (ใช้ `channel:'msedge'`) และ `waitUntil:'networkidle'` timeout กับ Vite dev เพราะ HMR websocket
+- **Correct behavior:** ก่อนตรวจ UI ให้รัน `Get-NetTCPConnection -LocalPort 4310 -State Listen` แล้วดู `OwningProcess`/`CreationDate` ว่าเป็น process ของเราหรือไม่ · ถ้าไม่ใช่ ให้สตาร์ท server แยกด้วย `startTabletopServer({ port, dataDir, staticDir: 'dist' })` (หรือ `TABLETOP_PORT` ถ้ามี) บนพอร์ตอื่น แล้วยิง Playwright ตรงที่พอร์ตนั้น ไม่ผ่าน Vite · ใช้ `chromium.launch({ channel: 'msedge' })` และ `waitUntil: 'domcontentloaded'` + `waitForSelector` แทน `networkidle`
+
 ### 2026-10-22 — browser test ที่หาการ์ดด้วย "ชื่อการ์ด" แดงทั้งที่แอปถูก
 - **What happened:** หลัง merge `dev` (1f21aeb "tidy titles of referenced chat cards") browser suite แดงที่ `requestClarifyingQuestion`: `expect(questionArticle).toHaveCount(0)` ได้ 1 · ดูเหมือน "การ์ดคำถามไม่ถูกแทนหลังตอบ" แต่ตรวจ DOM + localStorage พบว่าการ์ดเก่าถูก dismiss จริง (`dismissed: [<job เดิม>]`) เหลือการ์ดใบเดียวคือ job ใหม่
 - **Root cause:** `chatCardTitle` ตัดชื่อการ์ดเหลือ **บรรทัดแรก** ของ prompt หลัง 1f21aeb · การ์ดคำถาม ("Make a shift table.") กับการ์ดคำตอบ (prompt เดิม + คำถาม clarify + คำตอบ) จึงมีชื่อเดียวกัน ⇒ locator `getByRole('article', { name: 'Make a shift table.' })` ไปจับการ์ดใบใหม่ ไม่ใช่ใบเก่า
