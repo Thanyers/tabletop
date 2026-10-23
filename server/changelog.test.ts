@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cutRelease, fragmentProblems, orderFragments, type Fragment } from './changelog';
+import { cutRelease, fragmentProblems, orderFragments, releaseNotes, type Fragment } from './changelog';
 
 const base = `# Changelog
 
@@ -69,5 +69,11 @@ MINOR: earlier release.
     expect(() => cutRelease({ ...args, version: '1.3', summary: 'PATCH' })).toThrow(/not X\.Y\.Z/u);
     expect(() => cutRelease({ ...args, version: '1.3.0', fragments: [fragment('a.md', 'prose', 1)] })).toThrow(/Fix these fragments/u);
     expect(() => cutRelease({ ...args, version: '1.3.0', changelog: base.replace('- legacy line still under Unreleased\n', ''), fragments: [] })).toThrow(/Nothing to release/u);
+  });
+
+  it('extracts one cut section as release notes, or null when it is missing', () => {
+    expect(releaseNotes(base, '1.2.0')).toBe('MINOR: earlier release.\n\n- shipped before');
+    expect(releaseNotes(base, '1.3.0')).toBeNull();
+    expect(releaseNotes(base, '1.2')).toBeNull();
   });
 });
