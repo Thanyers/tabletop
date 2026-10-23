@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { invoiceChangeSchema, encounterRuleSchema, physicsParamsSchema } from '../src/tabletop/domain/index.js';
-import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_AI_INPUT_BYTES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { tableChangeIssues, tableChangeSchema, tableProgramSchema, tableRecordsSchema, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../src/tabletop/domain/table.js';
+import { MAX_REQUEST_INPUT_TOKENS, TABLE_AI_INPUT_BYTES } from '../src/tabletop/shared/ai-request-limits.js';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
 import type { ModelInput } from '../server/model.js';
-import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
+import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch } from '../server/providers/deepseek-research.js';
 import type { ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { priceMicroUsd, type BillingRequestBinding, type BillingUsage } from './billing.js';
@@ -21,7 +22,7 @@ const MAX_TABLE_INPUT_BYTES = TABLE_AI_INPUT_BYTES;
 const PROVIDER_OVERHEAD_BYTES = 8_000;
 const MAX_STANDARD_PROVIDER_INPUT_TOKENS = 56_000;
 // A request is measured in bytes and one byte is at most one token, so the reservation covers the largest request.
-const MAX_PROVIDER_INPUT_TOKENS = MAX_CHANGE_REQUEST_BYTES + TABLE_REQUEST_TOKEN_MARGIN;
+const MAX_PROVIDER_INPUT_TOKENS = MAX_REQUEST_INPUT_TOKENS;
 const INVOICE_MAX_OUTPUT_TOKENS = 2_048;
 const CHANGE_MAX_OUTPUT_TOKENS = 512;
 const TABLE_MAX_OUTPUT_TOKENS = 32_768;

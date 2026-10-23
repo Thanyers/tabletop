@@ -1,11 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
-import { MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN } from '../server/providers/deepseek-changes.js';
+import { MAX_REQUEST_INPUT_TOKENS } from '../src/tabletop/shared/ai-request-limits.js';
 import { z } from 'zod';
 import type { Env } from './contracts.js';
 
 // F066: the largest AI request (bytes, one byte at most one token) plus the reservation margin; derived from
 // the same constants as the request cap so the two cannot drift apart.
-const MAX_INPUT_TOKENS = MAX_CHANGE_REQUEST_BYTES + TABLE_REQUEST_TOKEN_MARGIN;
+const MAX_INPUT_TOKENS = MAX_REQUEST_INPUT_TOKENS;
 const MAX_OUTPUT_TOKENS = 32_768;
 const RESERVED_OUTPUT_TOKENS = 16_384;
 const MAX_BODY_BYTES = 16_384;
