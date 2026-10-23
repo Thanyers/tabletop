@@ -1,18 +1,26 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 เวลา 16:53 (Asia/Bangkok)**: production รายงาน **8.0.0 / 89a604e** จาก annotated tag [v8.0.0](https://github.com/Thanyers/tabletop/releases/tag/v8.0.0); staging รายงาน **0.0.0-dev / 7b28376** จากการ merge [PR #238](https://github.com/Thanyers/tabletop/pull/238)
+ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 (Asia/Bangkok)**: production รายงาน **9.0.1 / f2f1629** จาก [v9.0.1](https://github.com/Thanyers/tabletop/releases/tag/v9.0.1); staging รายงาน **0.0.0-dev / 16de683** หลัง [PR #254](https://github.com/Thanyers/tabletop/pull/254) และ retry deploy ด้วย SHA เดิมสำเร็จ
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [89a604e](https://github.com/Thanyers/tabletop/commit/89a604e0f308c715349e58d35f479d84e535ffe3) — PR #224 | [7b28376](https://github.com/Thanyers/tabletop/commit/7b2837664ae74f458c19c0f09bb04984da22f896) — PR #238 |
-| Release | v8.0.0 / 8.0.0 | dev / 0.0.0-dev |
-| แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
-| เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
+| Source | [f2f1629](https://github.com/Thanyers/tabletop/commit/f2f16296efc7ccc2bd8d08b9fd36fec75ee9f403) — PR #256 | [16de683](https://github.com/Thanyers/tabletop/commit/16de683032a6a79e0c757675f158d6db7c26a065) — PR #254 |
+| Release | v9.0.1 / 9.0.1 | dev / 0.0.0-dev |
+| แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
+| เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## ผลตรวจ deploy 9.0.0 / 9.0.1 และ hosted compute (23 ตุลาคม 2569)
+
+- **9.0.0:** [PR #249](https://github.com/Thanyers/tabletop/pull/249), main49f2dd7, [deploy39962089610](https://github.com/Thanyers/tabletop/actions/runs/39962089610) ผ่าน; built_at2026-10-23T13:33:24Z เปิด JavaScript/Python พร้อม profile `tabletop-compute-1` และ libraries ที่ pin ไว้ มี typed executions จริงจาก hosted QA ไม่ยืนยันจาก flag อย่างเดียว
+- **9.0.1 PATCH:** [PR #256](https://github.com/Thanyers/tabletop/pull/256), mainf2f1629, [deploy39973772263](https://github.com/Thanyers/tabletop/actions/runs/39973772263) ผ่าน; built_at2026-10-23T14:56:01Z [release CI39971674579](https://github.com/Thanyers/tabletop/actions/runs/39971674579) ผ่านครบ Node22.23.2: unit901passed/5skipped, Workers197passed, browser3suites และ real local Worker Loader/Container2checks ผ่าน ไม่มี schema migration หรือ binding/credential ใหม่จาก9.0.0; rollback target9.0.0
+- **Staging:** [run39970589793](https://github.com/Thanyers/tabletop/actions/runs/39970589793) fullvalidationผ่าน; attempt1 deployล้มหลังimageuploadด้วยCloudflare internal error, attempt2 retry failedjobด้วย16de683เดิมผ่านและ smokeผ่าน `/version`built_at2026-10-23T14:42:14Z ปิด auto failure [issue255](https://github.com/Thanyers/tabletop/issues/255) หลังตรวจการกู้คืน ไม่เรียกattempt1ว่าPASS
+- รายละเอียดรายเคสและขอบเขตผลตรวจอยู่ใน [รายงาน48เคส](testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) และ [F066](features/F066-reusable-compute-rules.md); acceptanceของรุ่น9เริ่มจาก9.0.0และแก้/ตรวจซ้ำบน9.0.1 หลายบัญชี8เคสคงBLOCKEDตามผู้ใช้ ผลschema-valid/build/smokeไม่ใช่หลักฐานว่าแต่ละโจทย์AIถูกทุกครั้ง
+- Snapshotนี้ยืนยันรุ่นตามเวลาตรวจข้างต้น; mergeเอกสารกลับdevอาจทำให้ staging deploy commitใหม่โดยอัตโนมัติ ไม่เปลี่ยน production9.0.1
 
 ## ผลตรวจ staging หลัง merge license (23 ตุลาคม 2569)
 

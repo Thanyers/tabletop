@@ -7,7 +7,7 @@ import type { ComputedColumn, TableProgram, TableState } from '../../src/tableto
 import type { PlanNode } from '../../src/tabletop/runtime';
 import { TableCanvasObject } from '../../src/tabletop/ui/TableCanvasObjects';
 import { TableChat } from '../../src/tabletop/ui/TableChat';
-import { chatReferencePrompt, onChatCardReference, type ChatCardReference } from '../../src/tabletop/ui/canvas-object-finder';
+import { chatReferencePrompt, matchCanvasObjects, onChatCardReference, registerCanvasObjectFinder, type ChatCardReference } from '../../src/tabletop/ui/canvas-object-finder';
 import '../../src/tabletop/ui/tabletop-tokens.css';
 import '../../src/tabletop/ui/tabletop.css';
 import '../../src/tabletop/ui/calm-workspace.css';
@@ -116,7 +116,11 @@ const ordersNode: PlanNode = { id: 'table.collection.orders', capability: 'Table
 const summaryNode: PlanNode = { id: 'table.collection.summary', capability: 'TableRowsV1', title: 'Order summary', position: { x: 0, y: 0 }, inputs: {}, visibility: 'shared', version: 1 };
 
 declare global {
-  interface Window { __f066Commands?: Array<{ type: string; payload: unknown }> }
+  interface Window {
+    __f066Commands?: Array<{ type: string; payload: unknown }>;
+    __f066SentMessages?: string[];
+    __f066OpenedObjects?: string[];
+  }
 }
 
 function Harness() {
@@ -128,6 +132,13 @@ function Harness() {
   const [outgoingPrompt, setOutgoingPrompt] = useState('');
   const [lastEdit, setLastEdit] = useState('');
   const view = makeView(actor, initialState);
+
+  useEffect(() => registerCanvasObjectFinder((_verb, query) => {
+    const match = matchCanvasObjects([{ id: 'table.rules', title: 'Rules' }], query)[0];
+    if (!match) return { handled: false };
+    (window.__f066OpenedObjects ??= []).push(match.id);
+    return { handled: true, message: `Opened “${match.title}”.` };
+  }), []);
 
   useEffect(() => onChatCardReference((reference) => {
     setReferences((current) => current.some((item) => item.id === reference.id) ? current : [...current, reference].slice(-5));
@@ -176,7 +187,12 @@ function Harness() {
       placeholder="Ask about this table…" aiEnabled canAttach={false} busy={false} explicitRuleEdit={editMode}
       focusKey={focusKey} prefill={prefill} onCancelRuleEdit={() => setEditMode(false)}
       onAttach={async () => undefined}
-      onSend={async (message) => { setOutgoingPrompt(chatReferencePrompt(references, message)); return false; }}
+      onSend={async (message) => {
+        const prompt = chatReferencePrompt(references, message);
+        (window.__f066SentMessages ??= []).push(prompt);
+        setOutgoingPrompt(prompt);
+        return false;
+      }}
       onMessageChange={setOutgoingPrompt}
       cardReferences={references}
       onRemoveCardReference={(id) => setReferences((current) => current.filter((reference) => reference.id !== id))}

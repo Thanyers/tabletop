@@ -43,9 +43,11 @@
 
 ## ติดตาม release 9
 
-F066-T8 ทำผล acceptance ต่อใน `docs/F066-release9-acceptance` พร้อมนำ main กลับ dev: production **9.0.0 / 49f2dd7** deploy สำเร็จจาก [PR #249](https://github.com/Thanyers/tabletop/pull/249), [pipeline 39962089610](https://github.com/Thanyers/tabletop/actions/runs/39962089610) ประกาศ JS/Python profile `tabletop-compute-1` แล้ว การตรวจ production แบบล็อกอินและใช้ AI ยังอยู่ระหว่างดำเนินการ; staging rehearsals และ local controlled cases แยกจาก production PASS หลายบัญชี 8 เคสคง BLOCKED ตามผู้ใช้
+F066-T8 actual campaignเริ่ม9.0.0และตรวจซ้ำ9.0.1/f2f1629จาก [PR #256](https://github.com/Thanyers/tabletop/pull/256), [deploy39973772263](https://github.com/Thanyers/tabletop/actions/runs/39973772263) สำเร็จ JS/Pythonรันจริง; [รายงาน48เคส](../testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) ตอน9.0.1มี36PASS/1FAIL/10BLOCKED/1SKIP เหลือPD027: modeAskแก้แล้วแต่canvasnavigationยังรับก่อนonSend ต้อง9.0.2 หลายบัญชี8เคสคงBLOCKED ไม่ใช่ทุกเคสรันใหม่บน9.0.1
 
 ## การตัดสินใจ
+
+- F066-T13: ถ้าผู้ใช้เลือกอ้างการ์ด/กฎหรืออยู่ใน explicit Change ให้ส่งข้อความตามบริบท Ask/Change ก่อน ห้าม canvas navigation รับคำว่า "ตรงไหน"/"open" ไปเปิดการ์ดแทน การพิมพ์คำสั่งค้นหาโดยไม่มีบริบทยังคงทำงานเดิม
 
 - F066-T12: Replace ที่มีฟอร์มอ้างแถวแบบ fixed ต้องมีการจับคู่รายการเดิมด้วยฟิลด์ที่ผู้ใช้เห็นและยืนยัน ไม่ใช้ลำดับแถวและไม่เดา identity เงียบ ๆ backend ตรวจค่าไม่ซ้ำ/ครบและ validate ผลทั้งหมดก่อนเขียน; raw data กับ revision ต้องไม่เปลี่ยนเมื่อจับคู่กำกวม/ขาดรายการที่ถูกอ้าง คำถาม capability แบบมีเงื่อนไขและคำสั่งห้ามติดตั้งเพิ่มต้องตอบจาก runtime profile โดยไม่ตีความคำว่าเพิ่มในข้อห้ามว่าให้สร้างฟีเจอร์; Ask ของกฎที่ถามว่ารับอะไรหรือผลเปลี่ยนตรงไหนต้องคงเป็นคำถาม ส่วน Change this rule และคำสั่งแก้จริงต้องคงเป็น draft; prompt ของโต๊ะที่ไม่มีไฟล์ต้องย้ำ evidence ว่างและไม่ให้ตัวอย่างชื่อ source สมมติ โดยคง validator ปฏิเสธ citation ที่ไม่มีจริง
 
@@ -61,9 +63,13 @@ F066-T8 ทำผล acceptance ต่อใน `docs/F066-release9-acceptance` 
 
 ## ผลตรวจ
 
+### F066-T13 — referenced chatมีpriorityก่อนlocalnavigation
+
+Rendered real TableChat + finderให้exactThaiAskเปิดRulesและไม่ส่งก่อนแก้ (RED) เพิ่มguardเมื่อมีreferencesหรือexplicitRuleEditแล้วGREEN: Askส่งพร้อมcompute rule marker, Changeมี/ไม่มีrefsถึงonSend, unreferencedopenrulesยังlocal Node22.23.2 unit901passed/5skipped Workers197passed lint0errors111warnings build/typecheckผ่าน Independent reviewไม่มีP1/P2 รอ9.0.2CI/deploy/hostedretest ไม่แก้parseraliasหรือscene/camera
+
 ### F066-T12 — candidate หลังพบปัญหาบน production9
 
-Node22.23.2: unit901passed/5skipped, Workers197/197, import35/35, routing55/55, capability28/28, provider24/24; typecheck/build/Worker dry-runผ่าน lint0errors111warnings Rendered importer280/320/390/414pxไม่มีpage/paneloverflowหรือปุ่มทับกันและตรวจpayload Append/Replaceจริง Fullui-gateยัง15PASS/1FAIL/4SKIPจากRulesbuttonsนอกimporter ไม่อ้างall-PASS Independentreviewพบ3P2(Appendguard/action-onlyrefs/คำสั่งหลังห้ามติดตั้ง) มีred→greenและrereviewไม่เหลือP1/P2 PATCHและactualproductionretestยังpending หลายบัญชี8เคส/humanreadbackBLOCKED
+Node22.23.2: unit901passed/5skipped, Workers197/197, import35/35, routing55/55, capability28/28, provider24/24; typecheck/build/Worker dry-runผ่าน lint0errors111warnings Rendered importer280/320/390/414pxไม่มีpage/paneloverflowหรือปุ่มทับกันและตรวจpayload Append/Replaceจริง Fullui-gateยัง15PASS/1FAIL/4SKIPจากRulesbuttonsนอกimporter ไม่อ้างall-PASS Independentreviewพบ3P2(Appendguard/action-onlyrefs/คำสั่งหลังห้ามติดตั้ง) มีred→greenและrereviewไม่เหลือP1/P2 PATCH9.0.1และactualPD008/016/035/018ผ่านแล้ว; PD027เหลือcanvasnavigatorตามT13 หลายบัญชี8เคส/humanreadbackBLOCKED
 
 
 รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)

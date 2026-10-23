@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-23 — คำถามอ้างกฎถูกค้นหาการ์ดรับไปก่อนส่ง
+- **What happened:** Askรายกฎล้างข้อความแต่ไม่มีassistant job; exactคำถามลงท้ายตรงไหนเปิดRulesแทน
+- **Root cause:** TableChat.submitเรียกcanvas object finderก่อนonSend และfinderตี WHERE_TH+aliasกฎเป็นnavigationโดยไม่ดูselected references; ไม่ใช่หลักฐานว่าproviderค้างหรือการทดสอบหลายแท็บเป็นสาเหตุ
+- **Correct behavior:** ให้references/explicit Changeมีpriorityเหนือlocalnavigation ตรวจrenderedsubmit/onSendกับfinderจริงและfreshassistantGET ไม่ใช้composerclearเป็นหลักฐานว่าserverรับงาน; เก็บordinaryunreferencedopenrulesให้ทำงานเดิม
+
 ### 2026-10-23 — Cloudflare Containers prepare ตอบ internal error ชั่วคราว
 - **What happened:** full validation ของ dev ผ่าน แต่ staging deploy หลังอัปโหลด image ล้มด้วย Cloudflare internal error
 - **Root cause:** ยังไม่ยืนยันสาเหตุภายในบริการ; ไม่มีหลักฐานว่าเกิดจาก source/config ของ candidate

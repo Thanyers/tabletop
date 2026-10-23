@@ -22,7 +22,7 @@
 
 - [GENERATIVE_CANVAS_RUNTIME](GENERATIVE_CANVAS_RUNTIME.md): candidate ที่กำลังทดสอบสำหรับภาพ/สูตร/เครื่องมือใหม่บน Canvas, ทดลองร่าง, layout ร่วมกัน และการค้นบทสนทนาเดิม
 - [REUSABLE_COMPUTE](REUSABLE_COMPUTE.md): โปรแกรม JavaScript/Python ที่เก็บไว้คำนวณซ้ำ, typed input/output, run lineage, Rules และการเตรียม runtime ก่อน release
-- [F066 post-deploy test pack](testing/f066-post-deploy/README_TH.md): 48 เคส พร้อมข้อมูลสมมติ ผลอ้างอิง และแบบบันทึกผล; acceptance ทุกเคสยัง NOT_RUN รอรอบหลัง deploy
+- [F066 post-deploy test pack](testing/f066-post-deploy/README_TH.md): 48 เคส พร้อมข้อมูลสมมติ/ผลอ้างอิง; [ผลจริง release9 และตรวจซ้ำ9.0.1](testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) แยกจาก template48NOT_RUN และผลrelease8
 - [GENERATIVE_CANVAS_ACCEPTANCE](GENERATIVE_CANVAS_ACCEPTANCE.md): หลักฐานและขอบเขตของ candidate แยกโมเดลจำลอง, AI จริง และ hosted release
 - [GENERATIVE_CANVAS_PLAN_TH](GENERATIVE_CANVAS_PLAN_TH.md): แผนจากโจทย์สู่เครื่องมือ/scene ใหม่บน Canvas, algorithm จัดการ์ดตามความสัมพันธ์, multiplayer/memory และต้นทุน — ดู runtime/acceptance สำหรับส่วนที่ทำแล้ว
 - [GENERATIVE_CANVAS_RESEARCH_2026-10-20](GENERATIVE_CANVAS_RESEARCH_2026-10-20.md): แหล่งต้นทางเรื่อง generative UI, sandbox/QuickJS/Dynamic Workers, sync และ animation พร้อมข้อจำกัดที่ยังไม่พิสูจน์
