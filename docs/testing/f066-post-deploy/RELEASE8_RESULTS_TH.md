@@ -6,7 +6,7 @@
 
 ## ผลรวม
 
-ก่อนจบรอบ production ยังเป็น **8.0.0 / 89a604e** ส่วน staging เปลี่ยนเป็น **0.0.0-dev / 927acb3** ระหว่างงาน ทั้งสองยังรายงาน runtimes ว่าง ผล UI ทั้งหมดในรายงานนี้รันบน production8.0.0; staging ใช้ตรวจ capability แบบอ่านอย่างเดียว ไม่เอาผล dev มาปนกับ release8 หลักฐานรุ่นช่วงท้ายอยู่ใน ignored `preflight-end.json`
+ตรวจซ้ำหลังรอบ UI: production ยังเป็น **8.0.0 / 89a604e** ส่วน staging เปลี่ยนเป็น **0.0.0-dev / c1125ea** ระหว่างงาน ทั้งสองยังรายงาน runtimes ว่าง ผล UI ทั้งหมดในรายงานนี้รันบน production8.0.0; staging ใช้ตรวจ capability แบบอ่านอย่างเดียว ไม่เอาผล dev มาปนกับ release8 หลักฐานรุ่นตามเวลาที่ตรวจอยู่ใน ignored `preflight-end.json`
 
 | สถานะ | จำนวน | ความหมาย |
 | --- | ---: | --- |
@@ -20,13 +20,13 @@
 
 ## สิ่งที่รันจริง
 
-- **PD-001:** GET /version ตรงกับ merge ของ release8 ทั้งสอง environment; preflight แยก intended JavaScript+Python จาก observed runtimes ว่าง
+- **PD-001:** GET /version ตอน preflight เริ่มตรงกับ merge ของ release8 ทั้งสอง environment; preflight แยก intended JavaScript+Python จาก observed runtimes ว่าง
 - **PD-004:** ข้อมูลสองแถว quantity/price =3×25 และ5×30 คำถามอย่างเดียวตอบ75+150=225; raw rows/data revision1 และ active rule revision1 ไม่เปลี่ยน หลักฐานเป็น UI state + history readback ไม่ใช่ database audit
-- **PD-006:** โจทย์กำกวมได้หนึ่งคำถาม/สามตัวเลือกก่อน activation; ตอบเองเรื่อง quantity×unit_price แล้วสร้างเครื่องมือเดิมต่อได้ นำข้อมูลสองแถวเข้าโดย map product→item ได้ metric225; sale_id/branch ถูก ignore เพราะโจทย์ย่อยนี้ใช้เพียงชื่อรายการ/จำนวน/ราคา
-- **PD-007:** ใช้สูตรจริงได้225→202.50 เมื่อส่วนลด10%; เปลี่ยนส่วนลดของแต่ละรายการเป็น20% ได้195หลังรายการแรกและ180เมื่อครบสองรายการ; reloadยัง180 ไม่ใช้ generated-code engine
+- **PD-006:** โจทย์กำกวมได้หนึ่งคำถาม/สามตัวเลือกก่อน activation รอบเก็บหลักฐานเพิ่มมีทั้งตัวเลือกเช็กลิสต์และคำตอบเองเรื่อง quantity×unit_price ถูกเลือกอยู่ จึงได้ทั้งตารางงานและยอดขาย ไม่อ้างว่าเลือกคำตอบเองอย่างเดียว มี snapshot ก่อนส่งคำตอบ/หลังสร้าง และ preview mapping product→สินค้า/รายการ ก่อนนำเข้าสองแถวได้ metric225; sale_id/branch ถูก ignore เพราะส่วนยอดขายใช้เพียงชื่อรายการ/จำนวน/ราคา
+- **PD-007:** ใช้สูตรจริงได้225→202.50 เมื่อส่วนลด10%; เปลี่ยนส่วนลดของแต่ละรายการเป็น20% ได้180เมื่อครบสองรายการ; raw rows ยืนยันส่วนลด20ทั้งคู่; reloadยัง180 ไม่ใช้ generated-code engine
 - **PD-029:** เลือกกฎร่วมกับการ์ดจนห้ารายการ แล้วเพิ่มรายการที่หก; chip เก่าสุดหลุด เหลือห้ารายการล่าสุด คำตอบอ้าง sales/total-sales/sale-count/sales-by-branch/entry-form ตรงกับที่เลือก ห้องทดสอบนี้ยัง raw0/rule revision2
 - **PD-046:** นำเข้าespresso3นาที/tea5นาที กดจบแยกกันได้3→8; กดจบงานเดิมซ้ำไม่สะสมเพิ่ม ขอ AI เพิ่ม metric งานค้าง แล้ว reloadยังสองรายการ done, นาที8 และค้าง0
-- **PD-048:** server roll2d6 ได้หน้า3/6 รวม9; ใช้ผ่าน Actionsแล้วคะแนน9 และคอลัมน์score+5=14; ผลถูกล้างและปุ่มส่งปิดจนมีผลทอยใหม่; reloadยัง9/14 ไม่ได้ทดสอบ forged-token replay หรืออ้างว่าครบ security negative cases
+- **PD-048:** รอบเก็บหลักฐานเพิ่มเริ่มscore0: server roll2d6 ได้หน้า3/4 รวม7ก่อนใช้ผล; ใช้ผ่าน Actionsแล้วคะแนน7 และคอลัมน์score+5=12; ผลถูกล้างและปุ่มส่งปิดจนมีผลทอยใหม่; reloadยัง7/12 (รอบก่อนหน้าที่ได้9/14เก็บไฟล์ไว้แยก ไม่ใช้แทนpre/postrollหลักฐานรอบนี้) ไม่ได้ทดสอบ forged-token replay หรืออ้างว่าครบ security negative cases
 
 ## สิ่งที่ไม่ผ่าน
 
@@ -39,7 +39,7 @@
 - **29 เคส** ติด engine ที่ต้องใช้; รวม source/version/derived wiring, no-AI rerun, stale/error/timing, typed outputs และ fresh execution ต้องรันใหม่เมื่อเปิด runtime แล้ว ผลสูตรเดิมข้างบนใช้แทนผลเหล่านี้ไม่ได้
 - **PD-025:** เห็นชื่อ/คำอธิบาย/input/ปลายทางก่อนAdvanced แต่ยังไม่มี no-code human readback จึงไม่ยืนยันว่าเด็กหรือคนไม่ได้เขียนโปรแกรมเข้าใจ; ห้องแรกยังมีข้อความเรื่องCSV/requiredที่ชวนสับสน
 - **PD-030:** วัด viewport320×800 และdocument width320ได้ KeyboardเปิดAdvanced, PageDown, Ask/Changeและกลับcomposerได้ แต่ภาพ/ตำแหน่งการ์ดหลังเปลี่ยนviewportตรวจซ้ำไม่สม่ำเสมอ ภาพบางรอบอยู่นอกจอ จึงBLOCKED ไม่อ้างmobilePASSหรือสรุปว่าเป็นproductbugจากautomationเพียงอย่างเดียว คืนviewportแล้ว ไม่มีforce-clickหรือแก้scene/camera
-- **PD-037/041/044/045/047:** มี authenticated QA actor เพียงหนึ่งคน ไม่มีบัญชีที่สอง/สามสำหรับ Viewer, outsider, teacher/learner, encounter หรือผลัดturn; สองแท็บบัญชีเดียวไม่ใช้แทนหลายactor
+- **PD-037/041/044/045/047:** ผู้ใช้ยืนยันว่ายังไม่มีบัญชีทดสอบที่สองและให้บันทึกBLOCKED มี authenticated QA actor เพียงหนึ่งคน จึงยังตรวจ Viewer, outsider, teacher/learner, encounter หรือผลัดturnไม่ได้; สองแท็บบัญชีเดียวไม่ใช้แทนหลายactor
 - **PD-043:** เปิดpreparedInvoiceได้ แต่hosted legacy uploadปิด จึงข้ามcanonicalrate-change155ตามเงื่อนไขในcase การเปิดseed4แถวไม่ใช่ผลของเคส155
 - ไม่มีการอ้าง0providercallsหรือpersistentcomputeจากผลexpression และไม่มีการเปลี่ยนruntime/config, SQL/schema, credentials หรือdeployจากเครื่องในงานตรวจนี้
 
@@ -60,7 +60,7 @@ Actual/evidenceอยู่ในignored `test-results/post-deploy/release8-2026
 | F066-PD-003 | Python capability และ image พร้อมใช้งานจริง | **FAIL** | ต้องใช้ python; runtimes ว่าง จึงไม่เริ่ม execution |
 | F066-PD-004 | ถามข้อมูลอย่างเดียวไม่แก้กฎหรือข้อมูล | **PASS** | Question-only path; before/after raw values, data revision1 and active rule revision1 unchanged. |
 | F066-PD-005 | เริ่มจากโจทย์โดยไม่มีไฟล์ แล้วเติมข้อมูลทีหลัง | **FAIL** | First generated schema requires the total input; canonical CSV without total is rejected. Later repair was kept separate and did not remove that requirement. |
-| F066-PD-006 | ถามเพิ่มเมื่อโจทย์ไม่พอและเก็บบริบทคำตอบ | **PASS** | One clarification question and three substantive choices before activation. Own answer preserved context; generated expression tool imports mapped product/item and computes225. |
+| F066-PD-006 | ถามเพิ่มเมื่อโจทย์ไม่พอและเก็บบริบทคำตอบ | **PASS** | Evidence rerun has one clarification question and three substantive choices before activation. Checklist and own sales answer are both selected; generated tool preserves the sales answer plus a task table. Explicit product→สินค้า/รายการ mapping prepares2 rows and computes225. No claim only the own answer was selected. |
 | F066-PD-007 | งานเล็กใช้สูตรและเปลี่ยนส่วนลดได้ | **PASS** | Expressions remain usable with runtimes disabled. Discount is per record: set both records to20%; no generated-code engine used. |
 | F066-PD-008 | JavaScript คำนวณคะแนนเกมที่ไม่ได้ใช้ pandas | **BLOCKED** | ต้องใช้ javascript; runtimes ว่าง จึงไม่เริ่ม execution |
 | F066-PD-009 | pandas เตรียมข้อมูลสิบขั้นพร้อมสรุปสาขา | **BLOCKED** | ต้องใช้ python; runtimes ว่าง จึงไม่เริ่ม execution |
@@ -100,6 +100,6 @@ Actual/evidenceอยู่ในignored `test-results/post-deploy/release8-2026
 | F066-PD-043 | Invoice เดิม: rate change และยอด155 | **SKIPPED_SCOPE** | Hosted legacy upload is disabled per capability. Prepared Invoice opened with seed data, but that is not the canonical155 rate-change run. |
 | F066-PD-044 | Teaching เดิม: shared lesson กับ local experiment | **BLOCKED** | ยังมีบัญชีQAเดียว; ไม่ใช้สองแท็บแทนหลายactor |
 | F066-PD-045 | Encounter เดิม: shield/HP/AP | **BLOCKED** | ยังมีบัญชีQAเดียว; ไม่ใช้สองแท็บแทนหลายactor |
-| F066-PD-046 | ร้านกาแฟเดิม: กดจบงานทีละรายการ | **PASS** | Imported espresso3/tea5, completed separately3→8 minutes; repeat completion leaves8. Added pending-count metric through AI rule edit; reload retains both done rows, minutes8 and pending0. |
+| F066-PD-046 | ร้านกาแฟเดิม: กดจบงานทีละรายการ | **PASS** | Imported espresso3/tea5, completed separately3→8 minutes; repeat completion leaves8 and data revision3 unchanged. Added pending-count metric through AI rule edit; reload retains both done rows, minutes8 and pending0. |
 | F066-PD-047 | เกมแบ่งน้ำเดิม: turn และผลรวมคงที่ | **BLOCKED** | ยังมีบัญชีQAเดียว; ไม่ใช้สองแท็บแทนหลายactor |
-| F066-PD-048 | เกมเดิม: server dice และ computed column | **PASS** | Actual server roll3+6=9, applied once through existing Actions; score9, computed score+5=14. Roll clears and submit disables without a fresh roll. Reload preserves9/14. No forged-token replay performed. |
+| F066-PD-048 | เกมเดิม: server dice และ computed column | **PASS** | Evidence rerun reset score0; visible server roll3+4=7 before applying, then score7/score+5=12. Roll clears and submit disables without a fresh roll. Reload preserves7/12. Original9/14 files retained separately. No forged-token replay performed. |

@@ -57,7 +57,7 @@
 
 [รายงานรายเคส](../testing/f066-post-deploy/RELEASE8_RESULTS_TH.md): production/staging ตอน preflight ตรง **8.0.0 / 89a604e** แต่ `runtimes: []`, `pythonLibraries: []` จึงยังไม่พร้อมทั้ง JavaScript/Python ตาม scope ที่ผู้ใช้ขอตรวจ ประเมิน 48 เคสเป็น **7 PASS / 4 FAIL / 36 BLOCKED / 1 SKIPPED_SCOPE**; 29 เคสติด engine ไม่ได้เริ่ม execution ไม่มีการนับผลสูตรเดิมแทน generated compute
 
-รันบนเว็บจริงด้วยข้อมูลสมมติ: ถามยอดไม่เปลี่ยนข้อมูล225, clarificationหนึ่งคำถาม/สามตัวเลือกและทำต่อได้, สูตรส่วนลด225→202.50→180, refsสูงสุด5, กาแฟ3→8/pending0หลังเพิ่มmetricและreload, server2d6=3+6→score9/score+5=14และreloadคงเดิม ร่างแรก no-file/file-later ติด total required; คำถามเรื่องPolarsจบด้วย MODEL_PROVIDER_OUTPUT_REJECTED จึงไม่ผ่าน ยังมีข้อจำกัดมือถือ/humanreadback/หลายบัญชีและlegacyuploadที่รายงานตามจริง
+รันบนเว็บจริงด้วยข้อมูลสมมติ: ถามยอดไม่เปลี่ยนข้อมูล225, clarificationหนึ่งคำถาม/สามตัวเลือกและทำต่อได้, สูตรส่วนลด225→202.50→180, refsสูงสุด5, กาแฟ3→8/pending0หลังเพิ่มmetricและreload, server2d6=3+4→score7/score+5=12และreloadคงเดิม ร่างแรก no-file/file-later ติด total required; คำถามเรื่องPolarsจบด้วย MODEL_PROVIDER_OUTPUT_REJECTED จึงไม่ผ่าน ยังมีข้อจำกัดมือถือ/humanreadback/หลายบัญชีและlegacyuploadที่รายงานตามจริง
 
 หลักฐานดิบอยู่ ignored `test-results/post-deploy/release8-20261023/`; ไม่มี IDs จริงหรือภาพส่วนตัวในรายงานสาธารณะ ตรวจชุดเตรียมด้วย Node22.23.2: 48definitions/15fixtures/38goldenchecks ผ่าน ผลนี้ไม่ใช่จำนวน runtime PASS งานตรวจนี้ไม่แก้ runtime/config, SQL/schema, credentials หรือสั่ง deploy
 
