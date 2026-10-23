@@ -1,4 +1,10 @@
 import { matchCitations, searchWeb, type Citation, type WebSearchOptions, type WebSearchResult } from './web-search.js';
+import {
+  MAX_JOB_SEARCH_QUERY_CHARS,
+  MAX_JOB_SEARCH_TITLE_CHARS,
+  headWithin,
+  type ModelJobSearchProgress,
+} from '../../src/tabletop/shared/model-job-progress.js';
 
 /**
  * F064 — native research step.
@@ -66,6 +72,11 @@ export interface ResearchOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   search?: Partial<Omit<WebSearchOptions, 'apiKey' | 'fetchImpl' | 'signal'>>;
+  /**
+   * F064: reports what the research step is doing, so a waiting card can show it. Display only:
+   * an exception thrown here never stops the search or the draft that follows it.
+   */
+  onProgress?: (event: ModelJobSearchProgress) => void;
 }
 
 export class ResearchError extends Error {
@@ -135,6 +146,26 @@ function parseFinal(content: string): { brief: string; sourceUrls: string[] } {
   }
 }
 
+/**
+ * F064: one bounded display event. The query and title are collapsed and cut here so a waiting card
+ * never receives more than the job row is willing to keep; the worker re-clamps after redaction.
+ */
+function searchProgress(
+  phase: ModelJobSearchProgress['phase'],
+  query: string,
+  resultsCount: number,
+  topTitle?: string,
+): ModelJobSearchProgress {
+  const boundedQuery = headWithin(query.replace(/\s+/gu, ' ').trim(), MAX_JOB_SEARCH_QUERY_CHARS);
+  const title = topTitle ? headWithin(topTitle.replace(/\s+/gu, ' ').trim(), MAX_JOB_SEARCH_TITLE_CHARS) : '';
+  return {
+    phase,
+    query: boundedQuery,
+    resultsCount,
+    ...(title ? { topTitle: title } : {}),
+  };
+}
+
 /** Runs the bounded research loop. Never throws for model misbehaviour, only for transport faults. */
 export async function runResearch(request: string, options: ResearchOptions): Promise<ResearchOutcome> {
   if (typeof options.apiKey !== 'string' || options.apiKey.length === 0) {
@@ -156,6 +187,16 @@ export async function runResearch(request: string, options: ResearchOptions): Pr
   const queries: string[] = [];
   const usage = { promptTokens: 0, completionTokens: 0 };
   let rounds = 0;
+
+  // F064: progress is display-only. A listener that throws must never break the search or the draft.
+  const notify = (event: ModelJobSearchProgress): void => {
+    if (!event.query) return;
+    try {
+      options.onProgress?.(event);
+    } catch {
+      // Ignore: the card loses one line, the draft still gets its evidence.
+    }
+  };
 
   const callModel = async (withTools: boolean): Promise<ChatTurn> => {
     const controller = new AbortController();
@@ -219,6 +260,7 @@ export async function runResearch(request: string, options: ResearchOptions): Pr
       })),
     });
     for (const call of turn.toolCalls) {
+      notify(searchProgress('searching', call.query, 0));
       const outcome = await searchWeb(call.query, {
         apiKey: options.apiKey,
         fetchImpl,
@@ -226,6 +268,7 @@ export async function runResearch(request: string, options: ResearchOptions): Pr
         timeoutMs: Math.min(15_000, timeoutMs),
         ...options.search,
       });
+      notify(searchProgress('reading', outcome.query, outcome.results.length, outcome.results[0]?.title));
       queries.push(outcome.query);
       for (const result of outcome.results) {
         if (seen.has(result.normalizedUrl) || collected.length >= 50) continue;
@@ -259,6 +302,10 @@ export async function runResearch(request: string, options: ResearchOptions): Pr
   const { brief, sourceUrls } = parseFinal(turn.content);
   const citations: Citation[] = sourceUrls.map((url) => ({ url }));
   const report = matchCitations(citations, ranked);
+  // Only a request that actually searched gets a closing line, so a file-only draft shows nothing.
+  if (queries.length > 0) {
+    notify(searchProgress('done', queries[queries.length - 1] ?? '', ranked.length, ranked[0]?.title));
+  }
   return {
     usedSearch: queries.length > 0,
     queries,
