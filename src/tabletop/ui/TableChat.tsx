@@ -219,7 +219,8 @@ export function TableChat({
   const submit = () => {
     // F076: with pictures waiting, Send pins them (the message becomes their caption); nothing goes to the AI.
     if (pinningImages) { void pinImages(); return; }
-    if (trimmed.length > 0 && !controlsBusy) {
+    // Selected context belongs to Ask/Change, even when its wording resembles card navigation.
+    if (trimmed.length > 0 && !controlsBusy && cardReferences.length === 0 && !explicitRuleEdit) {
       const command = runCanvasObjectCommand(trimmed);
       if (command.handled) {
         setObjectNotice(command.message);

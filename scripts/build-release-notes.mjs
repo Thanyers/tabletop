@@ -14,7 +14,7 @@ const out = resolve(root, outArg > 0 ? process.argv[outArg + 1] : 'test-results/
 export function parseChangelog(text) {
   const sections = [];
   let current = null;
-  for (const line of text.split('\n')) {
+  for (const line of text.split(/\r?\n/u)) {
     const heading = /^## (.+)$/.exec(line);
     if (heading) { current = { head: heading[1].trim(), items: [], notes: [] }; sections.push(current); continue; }
     if (!current) continue;

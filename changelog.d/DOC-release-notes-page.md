@@ -1,1 +1,0 @@
-- **หน้า Release Notes อัปเดตทุกครั้งที่ออก release:** `node scripts/build-release-notes.mjs` สร้างหน้าเว็บสรุปแต่ละรุ่นจาก `CHANGELOG.md` + `changelog.d/` (บรรทัดเดียวต่อรายการ กดดรอปดาวน์ดูรายละเอียด ค้นหาและกรอง MAJOR/MINOR/PATCH) · เพิ่มเป็นข้อ 7 ของขั้น release ใน [AGENT_OPERATIONS §5](docs/AGENT_OPERATIONS.md#5-ออก-release) ให้เผยแพร่ทับลิงก์เดิม

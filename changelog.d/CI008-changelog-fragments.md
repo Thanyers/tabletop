@@ -1,1 +1,0 @@
-- **CHANGELOG ไม่ชนกันอีก (CI008):** งานแต่ละ PR เขียนบรรทัด changelog เป็นไฟล์ใน `changelog.d/` แทนการแก้ `CHANGELOG.md` · ตอนออก release รัน `npx tsx server/changelog.ts cut X.Y.Z --summary "…"` รวมเข้าหัวข้อรุ่นให้เอง · CI ตรวจรูปแบบไฟล์ในเช็คเร็ว
