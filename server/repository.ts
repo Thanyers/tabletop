@@ -99,6 +99,11 @@ export interface WorkspaceReference {
   title: string;
   kind: CaseKind;
   role: Role;
+  /** F053: created time, and the newest committed change (equal before the first one). */
+  createdAt: number;
+  updatedAt: number;
+  /** F053: name of the member behind that change; absent before the first one. */
+  updatedBy?: string;
 }
 
 export interface WorkspaceCreation {
@@ -570,19 +575,34 @@ export class SqlWorkspaceRepository implements WorkspaceRepository {
                 THEN COALESCE(NULLIF(BTRIM(w.domain_state #>> '{program,title}'), ''), w.title)
                 ELSE w.title
               END AS title,
-              w.kind, m.role
+              w.kind, m.role, w.created_at,
+              COALESCE((SELECT MAX(e.created_at) FROM events e
+                         WHERE e.workspace_id = w.id AND e.epoch = w.epoch), w.created_at) AS updated_at,
+              (SELECT m2.actor_name
+                 FROM events e2
+                 LEFT JOIN memberships m2 ON m2.workspace_id = e2.workspace_id AND m2.epoch = e2.epoch
+                   AND m2.actor_id = e2.actor_id
+                WHERE e2.workspace_id = w.id AND e2.epoch = w.epoch
+                ORDER BY e2.created_at DESC, e2.workspace_sequence DESC LIMIT 1) AS updated_by
        FROM workspaces w
        JOIN memberships m ON m.workspace_id = w.id AND m.epoch = w.epoch
        WHERE m.actor_id = $1 AND m.revoked_at IS NULL AND w.expires_at > $2
        ORDER BY w.created_at DESC`,
       [actorId, now, defaultWorkspaceTitle('table')],
     );
-    return result.rows.map((row) => ({
-      id: readString(row.id, 'id'),
-      title: readString(row.title, 'title'),
-      kind: mapKind(row.kind),
-      role: mapRole(row.role),
-    }));
+    return result.rows.map((row) => {
+      const createdAt = readNumber(row.created_at, 'created_at');
+      const updatedBy = row.updated_by === null || row.updated_by === undefined ? undefined : readString(row.updated_by, 'updated_by');
+      return {
+        id: readString(row.id, 'id'),
+        title: readString(row.title, 'title'),
+        kind: mapKind(row.kind),
+        role: mapRole(row.role),
+        createdAt,
+        updatedAt: row.updated_at === null || row.updated_at === undefined ? createdAt : readNumber(row.updated_at, 'updated_at'),
+        ...(updatedBy === undefined ? {} : { updatedBy }),
+      };
+    });
   }
 
   async createWorkspace(creation: WorkspaceCreation, now: number): Promise<void> {
