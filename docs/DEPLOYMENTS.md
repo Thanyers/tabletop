@@ -1,18 +1,32 @@
 # Deployment ปัจจุบัน
 
-ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 เวลา 14:21 (Asia/Bangkok)** ทั้งสอง environment รายงาน **7.0.0 / c250a60** จาก annotated tag [v7.0.0](https://github.com/Thanyers/tabletop/releases/tag/v7.0.0)
+ตรวจออนไลน์ล่าสุด **23 ตุลาคม 2569 เวลา 14:45 (Asia/Bangkok)** ทั้งสอง environment รายงาน **8.0.0 / 89a604e** จาก annotated tag [v8.0.0](https://github.com/Thanyers/tabletop/releases/tag/v8.0.0)
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [c250a60](https://github.com/Thanyers/tabletop/commit/c250a60241ccb34c91bdd9b211767b8b3d9294b3) — PR #206 | commit และ build เดียวกัน |
-| Release | v7.0.0 / 7.0.0 | v7.0.0 / 7.0.0 |
+| Source | [89a604e](https://github.com/Thanyers/tabletop/commit/89a604e0f308c715349e58d35f479d84e535ffe3) — PR #224 | commit และ build เดียวกัน |
+| Release | v8.0.0 / 8.0.0 | v8.0.0 / 8.0.0 |
 | แผน | Workers Free | Free บัญชีเดียวกัน; quota บางส่วนใช้ร่วม |
 | เพดาน AI | USD1/วัน UTC, USD10/เดือน UTC | USD0.20/วัน UTC, USD0.20/เดือน UTC |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge `release/*` / `hotfix/*` เข้า `main` จะ deploy staging → production อัตโนมัติ ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)); merge เอกสารหรือ branch อื่นไม่เปลี่ยน Worker
+
+## ผลตรวจ deploy 8.0.0 (23 ตุลาคม 2569)
+
+Release 8.0.0 (**MAJOR**) ผ่าน pipeline CD001 ([run 39919542374](https://github.com/Thanyers/tabletop/actions/runs/39919542374)) — [PR #224](https://github.com/Thanyers/tabletop/pull/224) จาก `dev` @ `910b0a3` · ออกตามหลัง 7.0.0 ทันทีเพราะ 7.0.0 ตัดจาก `dev` @ `a731a84` (#204) จึงไม่มีงานที่ merge หลังจากนั้น (#205–#220) · เหตุผล MAJOR: F066 เพิ่ม contract `compute` ที่บันทึกใน state ของห้อง ซึ่ง build 7.0.0 อ่านไม่ได้ → **ห้าม rollback ทั้งระบบหลังมีห้องบันทึก compute** (ก่อนหน้านั้น deploy `v7.0.0` กลับได้) · ไม่มี D1 migration
+
+- CI ของ PR #224 รอบสุดท้ายผ่านทุก job (Node 22.23.2): fast-checks 3m8s, generated 3m34s, Workers 8m24s, persona 9m49s, `local-validation` PASS · รอบแรก Workers ล้มเพราะ merge เอา fixture ของ main (#194) มาปนกับ mock ของ dev (`MODEL_PROVIDER_HTTP_ERROR`) และ generated ล้มแบบ flaky (`exerciseAction:933`) → คงชุดเทสต์ของ dev ทั้งชุด (`c932bda`) แล้วผ่าน
+- Validate บน merge commit **16 วินาที** — CI006 ใช้ผลชุดเต็มของ PR ซ้ำ (tree ของ merge commit ตรงกับ head)
+- Tag `v8.0.0` (annotated) → `89a604e`; build ครั้งเดียว `8.0.0 / 89a604e` (`built_at` 2026-10-23T07:42:56Z)
+- D1: `no pending D1 migrations` ทั้ง staging และ production
+- Staging: Worker version `97d1d29a-41f8-4fb9-b616-99d2df7c8646`, smoke PASS
+- Production: Worker version `90b81e2a-d7f6-429c-96e7-a98e37396a28`, smoke PASS
+- `/version` ทั้งสอง environment = `8.0.0 / 89a604e` (ตรวจซ้ำด้วยมือ 14:45 น.)
+- ข้อจำกัดที่ยังเปิด: binding `worker_loaders` (`COMPUTE_LOADER`) และ `TABLE_COMPUTE_PYTHON` ยังไม่อยู่ใน `WRANGLER_CONFIG_*` — capability JavaScript/Python compute รายงานปิดจนกว่า operator จะเติม config ตาม [REUSABLE_COMPUTE](REUSABLE_COMPUTE.md) (ระบบไม่ crash เพราะ gate ด้วย capability)
+- `dev` รับ release คืนผ่าน PR `chore/sync-main-8.0.0`
 
 ## ผลตรวจ deploy 7.0.0 (23 ตุลาคม 2569)
 
