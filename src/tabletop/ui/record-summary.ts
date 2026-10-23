@@ -27,10 +27,21 @@ export function recordSummary(record: TableRecord, collection?: TableCollection,
   return parts.length ? cut(parts.join(' · '), MAX_LABEL_CHARS) : record.id;
 }
 
-/** F075: summaries for a picker; rows that read the same keep their id as a tie-breaker (it is often a readable name). */
+/** True when the row has a text value (usually its name) among the parts a summary shows. */
+function hasName(record: TableRecord, collection?: TableCollection): boolean {
+  return (collection?.fields ?? []).slice(0, MAX_PARTS + 2).some((field) => field.type === 'text' && typeof record.values[field.id] === 'string' && record.values[field.id] !== '');
+}
+
+/**
+ * F075: summaries for a picker. The row id is kept as a tie-breaker when rows read the same, and when a row has no
+ * text value at all (a bare "0" says nothing about which row it is); ids are often readable names like team-south.
+ */
 export function recordChoiceLabels(records: readonly TableRecord[], collection?: TableCollection, members?: readonly Member[]): Map<string, string> {
-  const summaries = records.map((record) => [record.id, recordSummary(record, collection, members)] as const);
+  const summaries = records.map((record) => [record, recordSummary(record, collection, members)] as const);
   const totals = new Map<string, number>();
   for (const [, summary] of summaries) totals.set(summary, (totals.get(summary) ?? 0) + 1);
-  return new Map(summaries.map(([id, summary]) => [id, (totals.get(summary) ?? 0) > 1 && summary !== id ? `${summary} · ${id}` : summary]));
+  return new Map(summaries.map(([record, summary]) => {
+    const needsId = summary !== record.id && ((totals.get(summary) ?? 0) > 1 || !hasName(record, collection));
+    return [record.id, needsId ? `${summary} · ${record.id}` : summary];
+  }));
 }
