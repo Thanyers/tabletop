@@ -530,7 +530,7 @@ export class Room extends DurableObject<Env> {
       onWorkspaceChanged: () => this.scheduleOutboxDrain(),
       computeRunner: createCloudflareComputeRunner({
         loader: env.COMPUTE_LOADER,
-        ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? { container: this.ctx.container } : {}),
+        ...(env.TABLE_COMPUTE_PYTHON === 'enabled' ? { getContainer: () => this.ctx.container } : {}),
       }),
       scheduleBackground: task => this.ctx.waitUntil(task),
       onComputeWorkScheduled: () => this.ctx.waitUntil(

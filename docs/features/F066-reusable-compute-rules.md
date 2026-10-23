@@ -122,3 +122,19 @@ UI-gate ต้องใช้ skill ที่ติดตั้งในเค�
 ช่องใหม่ที่ optional และมี default ต้องเติมค่าให้แถวเดิมเหมือนเดิม; แยก guard ย้อนสูตรที่ต้องรักษาค่าประวัติและห้าม default กลบค่าที่ไม่ตรง มี red→green regression ของ discount=10 และ domain tests 25/25 ผ่าน รวม required/default/rollback; typecheck/scoped lint ผ่านบน Node22.23.2 และ independent review ไม่มี P1/P2
 
 F075@f79b45f คืนชื่อแถวที่ไม่มี text ให้มี ID เช่น 0 · team-south จึงคง assertion ชื่อเดิมและเพิ่มตรวจ selected record ID และ strict assistant mock ให้รับ computeCapabilities พร้อมตรวจ disabled engine profile ของ fixture คง privacy assertions ทั้งหมด Local browser ก่อน sync dev ล่าสุด: generative 4 rooms/8 synthetic calls/0 errors; Workers 35 checks/37 synthetic calls/0 errors ผลนี้ไม่ใช่ hosted acceptance
+
+### F066-T10/T11 — release gate และ actual hosted runtime
+
+ผู้ใช้อนุญาตแก้เฉพาะสาเหตุของ generated-scene case ที่บล็อก deploy โดยคง assertions ทุกข้อ งานต่อใน PR #252 ก่อนรวมกลับ release #249 ไม่ขยายไปแก้ scene/camera ทั่วไป
+
+Staging dev4c4ce93 deploy ผ่านแล้วและประกาศ JS/Python พร้อม libraries ทั้งห้า; actual AI สร้างสอง modules กับ raw value10 ได้ JavaScript metric42ปรากฏ แต่ Python บันทึก COMPUTE_UNAVAILABLE ซ้ำ22ครั้ง inputเดิมและเคยมี queued/runningค้าง จึงยังไม่ถือว่า hosted Pythonพร้อม นโยบายแก้: failureของ inputเดิมไม่ควร autoqueueซ้ำทุกalarm; explicit Run เป็นทาง retry และ diagnostics บอกเฉพาะ guard reasonโดยไม่ใส่ identifiers/credentials
+
+เคส no-file แยกห้องบน staging ผ่าน: เริ่มraw salesว่าง, program.computedColumns total=quantity×unit_price, CSVสองแถวมีเฉพาะraw fields; authorityอ่านกลับ dataRevision1/ruleRevision1, raw2แถวไม่มีtotal และ computedValues75/150; metric225, quantity8, chart2points ไม่ใช้ engine ผลนี้เป็น staging ไม่แทน production acceptance
+
+Candidate PR #252: Python runnerรับgetContainer providerและresolveเมื่อถึงคิวexecutionแทนconstructor; regressionจำลองcontainerไม่มีตอนสร้างrunnerแต่มีตอนrunเป็นred→green รองรับcontainer objectเดิมและรักษาserial/destroy/noInternet/timeout ExplicitRunยังretryได้หลังfailure; runner/Room68/68และorchestrator6/6ผ่าน, typecheck/lintผ่านบนNode22.23.2 ยังไม่ยืนยันว่าgetterแก้existingRoomบนplatformจนกว่าจะretestหลังpipeline
+
+FreshRoomหลังdeploy: actual Python imports pandas/numpy/scipy/openpyxl/dateutil; raw10→10+10, outputs42→82, succeededทั้งสองrunsและinputHashเปลี่ยน; source/version/ruleRevision1คงเดิม modeljob1รายการIDเดิม จึงรายงาน NO_NEW_MODEL_JOB; providerCalls UNVERIFIEDเพราะไม่มีserverledger
+
+Scene gateเป็นtest scheduling raceที่พิสูจน์ได้: บังคับfocusfitก่อนdownทำให้pointermiss/0actions/ค่าคง20,10; normalfixtureหยุดclockไว้75msหลังfocusclickก่อนrealpointerdown(<90ms focusthreshold) แล้วresume ตรวจพิกัด40,20ภายใน±0.001, oneaction, independentshadowและcameraเดิมครบ Fulllocal4rooms8syntheticcalls0errorsผ่าน ไม่มีproduction scene/camera edits Independentreviewไม่มีP1/P2; ปรับfailurediagnosticให้อ่านด้วยshadowownerแทนcafeowner
+
+APIอ้างอิง: [Cloudflare Durable Object Container API](https://developers.cloudflare.com/containers/api/durable-object-container/) และ [Scheduling Policies](https://developers.cloudflare.com/containers/configuration/scheduling-policy/) ยืนยันnamedimage/startcontract; ไม่ใช้metadatareadyแทนactualexecution

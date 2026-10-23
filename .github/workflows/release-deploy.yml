@@ -128,6 +128,18 @@ jobs:
           echo "STAGE=done" >> "$GITHUB_ENV"
           echo "Released v$VERSION ($SHA) to production." >> "$GITHUB_STEP_SUMMARY"
 
+      # A GitHub Release is what "Watch → Releases" notifies about. Production is already live
+      # here, so a failure only warns and never opens a deploy-failure issue.
+      - name: Publish GitHub Release v${{ env.VERSION }}
+        if: env.SKIP != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then echo "Release v$VERSION already exists"; exit 0; fi
+          npx tsx server/changelog.ts notes "$VERSION" > release-notes.md || echo "See CHANGELOG.md for v$VERSION." > release-notes.md
+          gh release create "v$VERSION" --verify-tag --title "Tabletop v$VERSION" --notes-file release-notes.md \
+            || echo "::warning::Could not publish the GitHub Release for v$VERSION; production is deployed."
+
       - name: Remove deploy configs
         if: always()
         run: rm -f wrangler.production.json
