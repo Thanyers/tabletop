@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+## 9.0.2 — 2026-10-23
+
+PATCH: preserve referenced Ask/Change before canvas navigation; rollback to v9.0.1 is safe
+
+- **F066:** Ask/Change ของการ์ดหรือกฎที่เลือกจะส่งข้อความพร้อมบริบท แทนถูกตัวค้นหาการ์ดรับคำว่า “ตรงไหน” ไปเปิด Rules; คำสั่งเปิดการ์ดที่ไม่มีบริบทยังคงทำงานเดิม
+
 ## 9.0.1 — 2026-10-23
 
 PATCH: fix linked-row replacement, rule questions, and source-free drafting; rollback to 9.0.0 without a schema change.
