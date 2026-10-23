@@ -79,10 +79,10 @@ function createFixture() {
       Object.assign(state, decision.state);
       revision += 1;
     },
-    async queueRun(): Promise<void> {
+    async queueRun(runId = RUN_ID): Promise<void> {
       const decision = decideDomain(state, {
         type: 'table.compute.run',
-        payload: { moduleId: 'total_score', runId: RUN_ID },
+        payload: { moduleId: 'total_score', runId },
       }, actorContext('owner'));
       Object.assign(state, decision.state);
       revision += 1;
@@ -105,6 +105,40 @@ function runnerFor(requests: Array<ComputeTableValue>): ComputeRunner {
 }
 
 describe('table compute orchestration', () => {
+  it('does not requeue an unavailable computation on later alarms but permits an explicit retry', async () => {
+    const fixture = createFixture();
+    let invocations = 0;
+    const orchestrator = new TableComputeOrchestrator({
+      runner: {
+        async run() {
+          invocations += 1;
+          throw new Error('COMPUTE_UNAVAILABLE');
+        },
+      },
+      getSnapshot: async (_workspaceId, actorId) => fixture.snapshot(actorId),
+      executeTrusted: (actorId, _workspaceId, type, payload) => fixture.executeTrusted(actorId, type, payload),
+    });
+    try {
+      await fixture.queueRun();
+      await orchestrator.schedule(WORKSPACE_ID, 1);
+      expect(invocations).toBe(1);
+      expect(fixture.state.computeRuns).toMatchObject([{ runId: RUN_ID, status: 'failed', errorCode: 'COMPUTE_UNAVAILABLE' }]);
+
+      await orchestrator.schedule(WORKSPACE_ID, 1);
+      await orchestrator.schedule(WORKSPACE_ID, 1);
+      expect(fixture.state.computeRuns).toHaveLength(1);
+      expect(invocations).toBe(1);
+
+      await fixture.queueRun('44444444-4444-4444-8444-444444444444');
+      await orchestrator.schedule(WORKSPACE_ID, 1);
+      expect(fixture.state.computeRuns).toHaveLength(2);
+      expect(fixture.state.computeRuns?.[0]).toMatchObject({ status: 'failed', errorCode: 'COMPUTE_UNAVAILABLE' });
+      expect(invocations).toBe(2);
+    } finally {
+      await orchestrator.close();
+    }
+  });
+
   it('rechecks a workspace changed while an empty drain is finishing', async () => {
     const fixture = createFixture();
     const computeProgram = fixture.state.program?.compute;

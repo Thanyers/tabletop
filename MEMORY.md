@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-23 — พิกัดเทสต์ลากหมดอายุระหว่าง pending focus
+- **What happened:** CI scene dragไม่ถึง40/20แม้localผ่าน; forcedwindowยืนยันpointermoveโดนlightแต่focusfitก่อนdownทำให้downพลาด/0actions/ค่าคง20,10
+- **Root cause:** เทสต์วัดgetScreenCTMก่อนpointerdownแต่ปล่อยfocus90msทำงานระหว่างคำสั่งbrowser ทำให้พิกัดscreenเก่าไม่ตรงฉาก
+- **Correct behavior:** ใช้clockควบคุมpendingwindowก่อนrealdownและยืนยันevent-timehit/viewport; คงexactcoordinates/actioncount/independentshadow/cameraassertions และเก็บforcedredmodeเพื่อยืนยันrace ห้ามลดassertionsหรือแก้productioncameraจากสมมติฐาน
+
+### 2026-10-23 — unavailable inputถูกautoqueueซ้ำทุกalarm
+- **What happened:** actualstagingPythonสะสม22failedrunsของinputเดิมจนUIbusyและraweditชนrevision
+- **Root cause:** orchestratorยกเว้นCOMPUTE_UNAVAILABLEจากfailedSameInputหลังจบdrain จึงqueueใหม่เมื่อมีscheduleรอบถัดไป
+- **Correct behavior:** failureของinputHash/moduleversion/profile/data/rulerevisionเดิมต้องterminalสำหรับautorun; retryผ่านexplicitRunหรือinput/versionใหม่ และเพิ่มregressionเรียกscheduleหลายรอบแล้วยังมีหนึ่งrun
+
 ### 2026-10-23 — guard ย้อนสูตรทำให้ optional default ถูกข้าม
 - **What happened:** ช่อง optional ใหม่ที่มี default ไม่เติมค่าให้แถวเดิมหลังเพิ่ม formula rollback guard
 - **Root cause:** ใช้ validValue กับ undefined เพื่อข้ามแถวก่อนเติม default ทั้งที่ optional ยอมรับ undefined ได้
