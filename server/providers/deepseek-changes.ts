@@ -16,6 +16,7 @@ import {
   headWithin,
   tailWithin,
   type ModelFailureDetails,
+  type ModelJobSearchProgress,
 } from '../../src/tabletop/shared/model-job-progress.js';
 import { expressionWithinBounds } from '../../src/tabletop/runtime/generative/index.js';
 
@@ -138,6 +139,11 @@ export interface DeepSeekChangeProgress {
    * model is doing instead of only counting characters. The caller redacts it before storing.
    */
   thinkingTail?: string;
+  /**
+   * F064: the latest web-research step that ran before this attempt, carried on the same channel.
+   * The research step happens outside this provider, so it only rides along here.
+   */
+  search?: ModelJobSearchProgress;
 }
 
 /** Provider progress plus the bounded text that is worth keeping as evidence. */

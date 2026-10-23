@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails } from '../shared/model-job-progress';
+import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails, type ModelJobSearchProgress } from '../shared/model-job-progress';
 import {
   canApplyWorkspaceRefresh, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
   draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftStopReason, draftThinkingLabel, historyCard,
-  LIVE_THINKING_LINE_CHARS, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
+  LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
 } from './table-chat-state';
 
 const job = (patch: Partial<TableAssistantJob> = {}): TableAssistantJob => ({
@@ -233,6 +233,34 @@ describe('live thinking line while a draft runs (F050)', () => {
   it('is bounded by the job tail, never by an unbounded provider reply', () => {
     const line = liveThinkingLine('x'.repeat(MAX_JOB_THINKING_TAIL_CHARS));
     expect(line).toHaveLength(LIVE_THINKING_LINE_CHARS + 1);
+  });
+});
+
+describe('live search line while a draft runs (F064)', () => {
+  const search = (patch: Partial<ModelJobSearchProgress> = {}): ModelJobSearchProgress =>
+    ({ phase: 'searching', query: 'VAT ไทย 2569', resultsCount: 0, ...patch });
+
+  it('returns null when no research ran, so a file-only draft shows no extra line', () => {
+    expect(liveSearchLine(undefined)).toBeNull();
+    expect(liveSearchLine(search({ query: '   ' }))).toBeNull();
+  });
+
+  it('names the query while searching and the count once results are in', () => {
+    expect(liveSearchLine(search())).toBe('🔎 กำลังค้น: VAT ไทย 2569');
+    expect(liveSearchLine(search({ phase: 'reading', resultsCount: 4 })))
+      .toBe('🔎 กำลังค้น: VAT ไทย 2569 · เจอ 4');
+  });
+
+  it('ends on what the draft actually used instead of repeating the query', () => {
+    expect(liveSearchLine(search({ phase: 'done', resultsCount: 3 }))).toBe('✓ ใช้ 3 แหล่ง');
+  });
+
+  it('re-bounds the query and collapses whitespace, so an oversized row cannot widen the card', () => {
+    const line = liveSearchLine(search({ query: `${'  very\nlong  '}${'q'.repeat(MAX_JOB_SEARCH_QUERY_CHARS * 2)}` }));
+    expect(line).not.toBeNull();
+    expect(line).not.toContain('  ');
+    expect(line).not.toContain('\n');
+    expect(line?.length).toBeLessThanOrEqual(LIVE_SEARCH_QUERY_CHARS + '🔎 กำลังค้น: '.length);
   });
 });
 
