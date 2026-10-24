@@ -1,13 +1,13 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 (Asia/Bangkok; snapshot ก่อนรวม F078-T3)**: production รายงาน **9.0.2 / 8e2c7e1** จาก [v9.0.2](https://github.com/Thanyers/tabletop/releases/tag/v9.0.2); staging รายงาน **0.0.0-dev / 4e9e197** หลัง [PR #260](https://github.com/Thanyers/tabletop/pull/260) และ [pipeline ชุดเต็ม/deploy/smoke](https://github.com/Thanyers/tabletop/actions/runs/40073104615) สำเร็จ
+ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 14:46 น. (Asia/Bangkok; snapshot ก่อนรวม F078-T3a)**: production รายงาน **9.0.2 / 8e2c7e1** จาก [v9.0.2](https://github.com/Thanyers/tabletop/releases/tag/v9.0.2); staging รายงาน **0.0.0-dev / 78c6002** หลัง [PR #261](https://github.com/Thanyers/tabletop/pull/261) และ [pipeline ชุดเต็ม/deploy/smoke](https://github.com/Thanyers/tabletop/actions/runs/40074184030) สำเร็จ ส่วน T3 `694d556` ผ่าน validation แต่ staging เป็น SKIPPED ตามหลักฐานด้านล่าง
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [8e2c7e1](https://github.com/Thanyers/tabletop/commit/8e2c7e131fdca3f947fc7bbff5963b207e26e398) — PR #257 | [4e9e197](https://github.com/Thanyers/tabletop/commit/4e9e1970f5997c135e96037800b20a2ba8d6b533) — PR #260 |
+| Source | [8e2c7e1](https://github.com/Thanyers/tabletop/commit/8e2c7e131fdca3f947fc7bbff5963b207e26e398) — PR #257 | [78c6002](https://github.com/Thanyers/tabletop/commit/78c60025d7b83240fb02ca40e91c7540665bd6e4) — PR #261 |
 | Release | v9.0.2 / 9.0.2 | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
@@ -17,8 +17,9 @@
 ## F078 development validation snapshot (24 ตุลาคม 2569)
 
 - T0/#264 และ T1/#260 ผ่าน required PR validation; merge dev ที่ `1ec4e61` และ `4e9e197` ผ่าน full browser suites ทั้งสาม, compute checks และ staging deploy/smoke ([T0 run](https://github.com/Thanyers/tabletop/actions/runs/40072711919), [T1 run](https://github.com/Thanyers/tabletop/actions/runs/40073104615)).
-- Readback: staging `0.0.0-dev / 4e9e197`, built_at `2026-10-24T07:18:41Z`; production `9.0.2 / 8e2c7e1`, built_at `2026-10-23T15:58:39Z`. No release branch, tag or production deploy was created for F078.
-- T4/#263 และ T2/#261 merge dev แล้วและมี validation/deploy ถัดไปอยู่ในคิวตามเวลาตรวจ; snapshot นี้ไม่ยืนยัน deployment ของ commit ที่ยังรันไม่จบ ผลสุดท้ายให้ดู run และ `/version` หลัง pipeline จบ ไม่ใช้การผ่าน PR แทนการ deploy สำเร็จ
+- Readback at `2026-10-24T07:46:48Z`: staging `0.0.0-dev / 78c6002`, built_at `2026-10-24T07:33:19Z`; production `9.0.2 / 8e2c7e1`, built_at `2026-10-23T15:58:39Z`. No release branch, tag or production deploy was created for F078.
+- T4/#263 และ T2/#261 ผ่าน full validation/deploy แล้ว ([T4 run](https://github.com/Thanyers/tabletop/actions/runs/40073659100), [T2 run](https://github.com/Thanyers/tabletop/actions/runs/40074184030)).
+- T3/#262 dev `694d556` ผ่าน full validation รวม browser3 ([run40074892319](https://github.com/Thanyers/tabletop/actions/runs/40074892319)) แต่ staging เป็น **SKIPPED** จาก transitive optional-job skips; ไม่ใช่ deploy PASS. [T3a/#265](https://github.com/Thanyers/tabletop/pull/265) แก้เฉพาะ status condition โดยคง successful-validation/push/dev guards; ต้องตรวจ hosted staging และ `/version` ของ merge นั้นหลัง pipeline จบ Snapshot นี้ไม่ยืนยัน deployment ของ fix ล่วงหน้า
 
 ## ผลตรวจ deploy 9.0.0 / 9.0.1 / 9.0.2 และ hosted compute (23 ตุลาคม 2569)
 
