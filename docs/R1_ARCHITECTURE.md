@@ -1,12 +1,14 @@
 # R1 implementation boundaries
 
+> For the implemented capability and policy map, start at [Current architecture](CURRENT_ARCHITECTURE.md). This page retains the identity/authority/storage foundations and original case-specific behavior; deployment and acceptance claims are dated evidence, not a live status check.
+
 > **Visibility policy (F034, 2026-10-21):** tables currently run with `VISIBILITY_POLICY = 'open'` ([`visibility.ts`](../src/tabletop/shared/visibility.ts)): every member receives the whole table state (drafts, notes, hidden values, other learners' answers) and can read every member's AI chat. Only the asker can confirm their chat's action proposal, and the AI context still uses only the asker's own recent exchanges. Statements below about owner-private drafts, hidden values and actor-private conversations describe the retained `'private'` policy. See [F034](features/F034-open-visibility.md).
 
-This document describes the shared runtime and original three workflows. The deployed file-driven `table` and its private assistant are detailed in [Generic table design](GENERIC_TABLE_DESIGN.md). See [current deployments](DEPLOYMENTS.md) and [acceptance](GENERIC_TABLE_ACCEPTANCE.md) for current release evidence; the [initial release record](CLOUDFLARE_RELEASE.md) and [master plan](../handoff/Final/planning-review/TABLETOP_R1_MASTER_PLAN.md) retain their historical scope.
+This document describes the shared runtime and original three workflows. The original file-driven `table` and assistant are detailed in [Generic table design](GENERIC_TABLE_DESIGN.md), with later extensions linked there. See [current deployments](DEPLOYMENTS.md) and [acceptance](GENERIC_TABLE_ACCEPTANCE.md) for dated release evidence; the [initial release record](CLOUDFLARE_RELEASE.md) and [master plan](../handoff/Final/planning-review/TABLETOP_R1_MASTER_PLAN.md) retain their historical scope.
 
 ## Shared application and domain
 
-The React client renders invoice, teaching, encounter and generic table workspaces. The original workflows use a typed capability registry and manifest compiler. The compiler checks ports, required inputs, versions, visibility, duplicate IDs, limits, and cycles before evaluating a plan. It returns no partial plan on failure. Generic tables add a bounded data-only interpreter for typed collections, records, actions, conditions and atomic effects. Components are curated application code; the application does not execute model-generated JavaScript.
+The React client renders invoice, teaching, encounter and generic table workspaces. The original workflows use a typed capability registry and manifest compiler. The compiler checks ports, required inputs, versions, visibility, duplicate IDs, limits, and cycles before evaluating a plan. It returns no partial plan on failure. Generic tables add a bounded data-only interpreter for typed collections, records, actions, conditions and atomic effects. Client renderers remain curated application code. The later [reusable compute extension](REUSABLE_COMPUTE.md) executes accepted JavaScript/Python in isolated host runners and validates typed results before authority commit.
 
 `src/tabletop/shared/contracts.ts` defines the contracts. `src/tabletop/domain/` contains deterministic decisions and role projections. `src/tabletop/runtime/` calculates displays from an authorized projection. `server/authority.ts` applies the same command rules through either the PostgreSQL/PGlite repository or the Cloudflare room repository.
 
@@ -48,7 +50,7 @@ The admin panel exposes room metadata such as title, owner/members, kind, and st
 
 `cloudflare/ai.ts` dispatches DeepSeek Flash with explicit consent. Invoice requests include the selected verified source excerpt and relevant rules; teaching and encounter requests include bounded rule parameters. Private answers, DM notes, unrelated files, and event histories are excluded. Structured output is validated before creating a draft. The model cannot approve or activate it.
 
-The Billing Durable Object reserves a conservative peak-price maximum before a provider call, limits concurrency and per-actor activity, and permits one dispatch per stable job ID. Valid usage settles once, including cached input charges. Unknown outcomes retain the reservation. Positive daily/monthly budgets and a provider key are required; defaults are zero. This ledger does not cover other applications using the key or Cloudflare infrastructure charges.
+The Billing Durable Object reserves a conservative peak-price maximum before a provider call, limits concurrency and per-actor activity, and permits one dispatch per stable job ID. Valid usage settles once, including cached input charges. Unknown outcomes retain the reservation. F036 deliberately removed monetary caps while retaining usage accounting, token/concurrency/job-count guards and the provider-key requirement; see [billing implementation](../cloudflare/billing.ts). This ledger does not cover other applications using the key or Cloudflare infrastructure charges.
 
 Room jobs recheck epoch, revision, role, and session before committing. Duplicate commands do not redial the provider. Reset scrubs old job payloads. A failed completion-status write is reconciled against the command receipt, preserving a successfully committed draft. Uncertain provider outcomes after a restart are not automatically retried.
 
@@ -68,6 +70,6 @@ The alternate Node container requires external PostgreSQL, HTTPS, and explicitly
 
 ## Release limits
 
-CI uses pinned actions, read-only repository permissions, synthetic credentials, and no deployment step. It checks publication paths, dependencies, types, domain/server tests, local D1/DO tests, browser behavior, and Worker dry-run bundling.
+Validation uses pinned actions and synthetic credentials for tests, and checks publication paths, dependencies, types, domain/server tests, local D1/DO tests, browser behavior and Worker dry-run bundling. The current workflow also has a separately authorized staging deployment job after full dev validation; see [CI and deployment operations](AGENT_OPERATIONS.md). This is distinct from production release deployment.
 
 The testing release completed its approved resource/schema changes, hosted Google setup, asset parity, bounded live AI and two-account staging checks. Current evidence and remaining gates are listed in [Generic table acceptance](GENERIC_TABLE_ACCEPTANCE.md). Two physical devices, load/soak, live budget-negative tests and coordinated D1/Room/Billing restore are not fully verified. Durable storage alone does not prove an application-wide backup. The legacy `?legacy-demo=1` experience and local Component Lab remain separate.
