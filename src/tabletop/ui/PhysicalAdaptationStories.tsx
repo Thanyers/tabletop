@@ -5,7 +5,6 @@ type Stories = LandingCopy['why']['stories'];
 
 export function PhysicalAdaptationStories({ language, copy }: { language: LandingLanguage; copy: Stories }) {
   const stage = language === 'en' ? 'BEFORE' : 'ก่อนปรับ';
-  const add = language === 'en' ? 'ADD' : 'เพิ่ม';
   const after = language === 'en' ? 'AFTER' : 'หลังปรับ';
 
   return <div className="tt-adaptation-stories" role="group" aria-label={language === 'en' ? 'Two examples of tools adapted to a person and a workplace' : 'ตัวอย่างเครื่องมือที่ปรับให้เข้ากับคนและหน้างาน'}>
@@ -22,10 +21,8 @@ export function PhysicalAdaptationStories({ language, copy }: { language: Landin
         </figure>
       </div>
       <div className="tt-adaptation-story__copy">
-        <p className="tt-adaptation-story__eyebrow">{copy.hammer.name}<span aria-hidden="true"> · </span>{add} {language === 'en' ? 'a grip' : 'กริป'}</p>
         <h3>{copy.hammer.title}</h3>
         <p>{copy.hammer.body}</p>
-        <p className="tt-adaptation-story__result"><span aria-hidden="true">↗</span>{copy.hammer.result}</p>
       </div>
     </article>
 
@@ -42,10 +39,8 @@ export function PhysicalAdaptationStories({ language, copy }: { language: Landin
         </figure>
       </div>
       <div className="tt-adaptation-story__copy">
-        <p className="tt-adaptation-story__eyebrow">{copy.chair.name}<span aria-hidden="true"> · </span>{add} {language === 'en' ? 'support' : 'ที่รองรับ'}</p>
         <h3>{copy.chair.title}</h3>
         <p>{copy.chair.body}</p>
-        <p className="tt-adaptation-story__result"><span aria-hidden="true">↗</span>{copy.chair.result}</p>
       </div>
     </article>
   </div>;

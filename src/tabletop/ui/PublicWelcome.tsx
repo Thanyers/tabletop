@@ -1,6 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, BookOpen, FileText, Pause, Play, UsersRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import { landingCopy, landingLanguages, languageOptionLabel, productThesis, readLandingLanguage, saveLandingLanguage, type LandingCopy, type LandingLanguage } from './landing-copy';
+import { landingCopy, landingLanguages, languageOptionLabel, readLandingLanguage, saveLandingLanguage, type LandingCopy, type LandingLanguage } from './landing-copy';
 import { NarrativeSalesDemo } from './NarrativeSalesDemo';
 import { PhysicalAdaptationStories } from './PhysicalAdaptationStories';
 import storyGif from '../../../docs/showcase/hero-evolution-th.gif';
@@ -69,8 +69,8 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
         <span>tabletop<span>.</span></span>
       </a>
       <nav className="tt-public-welcome__nav" aria-label={copy.header.navigation}>
+        <a href="#why">{copy.header.why}</a>
         <a href="#board">{copy.header.board}</a>
-        <a href="#film">{copy.header.film}</a>
         <a href="#examples">{copy.header.examples}</a>
       </nav>
       <div className="tt-public-welcome__language" role="group" aria-label={copy.header.languageGroup}>
@@ -83,14 +83,12 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
       <div className="tt-public-welcome__content">
       <section className="tt-public-welcome__hero" id="top" aria-labelledby="tt-public-welcome-title">
         <div className="tt-public-welcome__hero-copy">
-          <p className="tt-public-welcome__eyebrow"><span aria-hidden="true" />{copy.hero.eyebrow}</p>
           <h1 id="tt-public-welcome-title">{copy.hero.title}</h1>
           <p className="tt-public-welcome__promise">{copy.hero.promise}</p>
           <div className="tt-public-welcome__hero-actions">
             <a className="tt-public-welcome__primary-link" href={primaryHref}>{copy.hero.primary} <ArrowUpRight size={16} aria-hidden="true" /></a>
             <a className="tt-public-welcome__secondary-link" href="#film">{copy.hero.secondary} <ArrowDownRight size={15} aria-hidden="true" /></a>
           </div>
-          <p className="tt-public-welcome__scope"><span aria-hidden="true">✓</span>{copy.hero.scope}</p>
         </div>
         <figure className="tt-public-welcome__hero-story">
           <img src={storySource} width={960} height={540} loading="eager" decoding="async" alt={copy.process.storyAlt} />
@@ -100,48 +98,27 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
         </figure>
       </section>
 
-      <NarrativeSalesDemo language={language} />
-
-      <section className="tt-public-welcome__film" id="film" aria-labelledby="tt-public-welcome-film-title">
-        <div className="tt-public-welcome__film-heading">
-          <div>
-            <p className="tt-public-welcome__eyebrow"><span aria-hidden="true" />{copy.film.eyebrow}</p>
-            <h2 id="tt-public-welcome-film-title">{copy.film.title}</h2>
-          </div>
-          <p>{copy.film.aside}</p>
-        </div>
-        <figure className="tt-public-welcome__film-frame">
-          <video controls playsInline preload="metadata" poster="/narrative/tabletop-story-poster.png" aria-label={copy.film.alt}>
-            <source src="/narrative/tabletop-story.mp4" type="video/mp4" />
-            <track kind="captions" src="/narrative/tabletop-story-en.vtt" srcLang="en" label="English captions" default />
-            {copy.film.unavailable}
-          </video>
-          <figcaption>{copy.film.caption}</figcaption>
-        </figure>
-      </section>
-
       <section className="tt-public-welcome__why" id="why" aria-labelledby="tt-public-welcome-why-title">
         <div className="tt-public-welcome__why-heading">
-          <p className="tt-public-welcome__eyebrow"><span aria-hidden="true" />{copy.why.eyebrow}</p>
           <h2 id="tt-public-welcome-why-title">{copy.why.title}</h2>
         </div>
         <div className="tt-public-welcome__why-copy">
           <p>{copy.why.body}</p>
-          <div className="tt-public-welcome__thesis">
-            <span>{copy.why.thesisLabel}</span>
-            <p lang="en">{productThesis}</p>
-          </div>
         </div>
         <PhysicalAdaptationStories language={language} copy={copy.why.stories} />
+        <div className="tt-public-welcome__bridge">
+          <h3>{copy.why.bridgeTitle}</h3>
+          <div><p>{copy.why.problem}</p><p>{copy.why.solution}</p></div>
+        </div>
       </section>
+
+      <NarrativeSalesDemo language={language} />
 
       <section className="tt-public-welcome__use-cases" id="examples" aria-labelledby="tt-public-welcome-use-cases-title">
         <div className="tt-public-welcome__section-heading">
           <div>
-            <p className="tt-public-welcome__eyebrow"><span aria-hidden="true" />{copy.useCases.eyebrow}</p>
             <h2 id="tt-public-welcome-use-cases-title">{copy.useCases.title}</h2>
           </div>
-          <p>{copy.useCases.aside}</p>
         </div>
 
         <div className="tt-public-welcome__use-case-list">
@@ -167,9 +144,24 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
         <p className="tt-public-welcome__demo-note">{copy.useCases.demoNote}</p>
       </section>
 
+      <section className="tt-public-welcome__film" id="film" aria-labelledby="tt-public-welcome-film-title">
+        <div className="tt-public-welcome__film-heading">
+          <div>
+            <h2 id="tt-public-welcome-film-title">{copy.film.title}</h2>
+          </div>
+        </div>
+        <figure className="tt-public-welcome__film-frame">
+          <video controls playsInline preload="metadata" poster="/narrative/tabletop-story-poster.png" aria-label={copy.film.alt}>
+            <source src="/narrative/tabletop-story.mp4" type="video/mp4" />
+            <track kind="captions" src="/narrative/tabletop-story-en.vtt" srcLang="en" label="English captions" default />
+            {copy.film.unavailable}
+          </video>
+          <figcaption>{copy.film.caption}</figcaption>
+        </figure>
+      </section>
+
       <section className={'tt-public-welcome__start' + (children ? '' : ' tt-public-welcome__start--solo')} aria-labelledby="tt-public-welcome-start-title">
         <div className="tt-public-welcome__start-copy">
-          <p className="tt-public-welcome__eyebrow"><span aria-hidden="true" />{copy.start.eyebrow}</p>
           <h2 id="tt-public-welcome-start-title">{copy.start.title}</h2>
           <p>{copy.start.body}</p>
         </div>
@@ -184,7 +176,6 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
           <span className="tt-brand__mark" aria-hidden="true"><i /><i /><i /><i /></span>
           <span>tabletop<span>.</span></span>
         </a>
-        <span className="tt-public-welcome__footer-note">{copy.footer}</span>
         <nav className="tt-public-welcome__footer-links" aria-label={language === 'en' ? 'Photo credits' : 'เครดิตภาพ'}>
           <a href="/narrative/SOURCES.md" target="_blank" rel="noopener noreferrer">{copy.header.photoCredits} <ArrowUpRight size={12} aria-hidden="true" /></a>
         </nav>

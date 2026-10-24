@@ -33,7 +33,8 @@ const en = {
     yourTables: 'Your tables',
     languageGroup: 'Language',
     navigation: 'Page sections',
-    board: 'Example board',
+    why: 'Why Tabletop',
+    board: 'Try an example',
     film: 'Story',
     examples: 'Examples',
     photoCredits: 'Photo credits',
@@ -50,8 +51,11 @@ const en = {
   },
   why: {
     eyebrow: 'WHY TABLETOP',
-    title: 'Physical tools adapt to people. Software often asks people to adapt to it.',
-    body: 'A handle that slips needs a grip shaped around the fingers. A workbench chair that sits too low needs a cushion and a footrest made from an offcut. Keep the tool; add what lets it fit the person and the work.',
+    title: 'A tool becomes yours through use.',
+    body: 'Use it, notice what does not fit, and change it. The tool stays. Its fit becomes personal.',
+    bridgeTitle: 'The same should be true of software.',
+    problem: 'When your work changes, you often switch apps, rebuild a spreadsheet, or copy the same data again.',
+    solution: 'Tabletop keeps the conversation, data, and controls together. Ask for what is missing, use it, and build on the same table.',
     thesisLabel: 'THE IDEA',
     stories: {
       hammer: {
@@ -81,7 +85,7 @@ const en = {
     title: 'See Tabletop on the canvas.',
     aside: 'A narrated concept film · play when ready',
     alt: 'A concept film showing Tabletop tools and work on a canvas, with English narration.',
-    caption: 'Concept film · illustrative data · English narration and sound',
+    caption: 'The café story, with English narration and illustrative examples.',
     unavailable: 'Your browser cannot play this video.',
   },
   process: {
@@ -103,21 +107,21 @@ const en = {
   },
   useCases: {
     eyebrow: 'ONE CANVAS · MANY KINDS OF WORK',
-    title: 'The same space can hold different work.',
+    title: 'For work, learning, and play.',
     aside: 'Explore a prepared example, then start your own table.',
     items: [
-      { title: 'Your Table', body: "Check invoice discrepancies and follow the related evidence without redoing the work you've already done." },
-      { title: 'A Table for Learning', body: 'Adjust force and mass to see how the motion changes.' },
-      { title: 'Our Tables', body: 'Take turns in a cooperative scenario and use a shield to help a teammate.' },
+      { title: 'Work', body: "Check invoice discrepancies and follow the related evidence without redoing the work you've already done." },
+      { title: 'Learning', body: 'Adjust force and mass to see how the motion changes.' },
+      { title: 'Play', body: 'Take turns in a cooperative scenario and use a shield to help a teammate.' },
     ],
     physics: {
       alt: 'Screenshot from the prepared Physics demo: a car moves 4 m in 2 s with 10 N force and 5 kg mass, calculating acceleration of 2 m/s².',
-      hint: 'Force-and-mass lesson demo · simulated data',
+      hint: 'Experiment with force and mass',
       open: 'Open the Physics demo',
     },
     encounter: {
       alt: 'Screenshot from the prepared cooperative Encounter demo, showing two characters, turns, and a shield action.',
-      hint: 'Cooperative play demo · simulated players',
+      hint: 'Take turns and help a teammate',
       open: 'Open the Encounter demo',
     },
     demoNote: 'Real screenshots from the public demo · simulated data and players',
@@ -162,7 +166,8 @@ const th: LandingCopy = {
     yourTables: 'โต๊ะของฉัน',
     languageGroup: 'ภาษา',
     navigation: 'ส่วนต่าง ๆ ของหน้า',
-    board: 'กระดานตัวอย่าง',
+    why: 'ทำไมต้อง Tabletop',
+    board: 'ลองตัวอย่าง',
     film: 'เรื่องราว',
     examples: 'ตัวอย่าง',
     photoCredits: 'เครดิตภาพ',
@@ -179,8 +184,11 @@ const th: LandingCopy = {
   },
   why: {
     eyebrow: 'ทำไมต้อง TABLETOP',
-    title: 'เครื่องมือทั่วไปปรับให้เข้ากับคนใช้ แต่ซอฟต์แวร์มักให้เราปรับตัวเข้าหามัน',
-    body: 'ถ้าด้ามค้อนลื่นมือ ก็เพิ่มวัสดุพันให้พอดีมือ ถ้าเก้าอี้ต่ำกว่าโต๊ะงาน ก็เพิ่มเบาะเพื่อยกที่นั่ง และทำที่พักเท้าจากเศษไม้ ใช้เครื่องมือเดิม แล้วเพิ่มสิ่งที่ทำให้เข้ากับคนและงาน',
+    title: 'เครื่องมือค่อย ๆ เป็นของคุณผ่านการใช้งาน',
+    body: 'เริ่มใช้ สังเกตตรงที่ไม่พอดี แล้วค่อยปรับ เครื่องมือชิ้นเดิม แต่เข้ากับคนใช้มากขึ้น',
+    bridgeTitle: 'ซอฟต์แวร์ก็ควรปรับแบบนั้นได้',
+    problem: 'พองานเปลี่ยน เรามักต้องย้ายแอป สร้างตารางใหม่ หรือคัดลอกข้อมูลเดิมไปมา',
+    solution: 'Tabletop รวมบทสนทนา ข้อมูล และเครื่องมือไว้ด้วยกัน บอกสิ่งที่ยังขาด ลองใช้ แล้วต่อยอดบนโต๊ะเดิม',
     thesisLabel: 'แนวคิด',
     stories: {
       hammer: {
@@ -210,7 +218,7 @@ const th: LandingCopy = {
     title: 'ดู Tabletop บน Canvas',
     aside: 'เรื่องราวพร้อมเสียงบรรยาย · กดเล่นเมื่อพร้อม',
     alt: 'ภาพยนตร์แนวคิดที่แสดงเครื่องมือและงานบน Canvas ของ Tabletop พร้อมเสียงบรรยายภาษาอังกฤษ',
-    caption: 'ภาพยนตร์แนวคิด · ข้อมูลตัวอย่าง · เสียงบรรยายและเสียงประกอบภาษาอังกฤษ',
+    caption: 'เรื่องราวจากร้านกาแฟ พร้อมเสียงบรรยายภาษาอังกฤษและตัวอย่างประกอบ',
     unavailable: 'เบราว์เซอร์นี้เล่นวิดีโอไม่ได้',
   },
   process: {
@@ -232,21 +240,21 @@ const th: LandingCopy = {
   },
   useCases: {
     eyebrow: 'หนึ่ง Canvas · งานหลายแบบ',
-    title: 'พื้นที่เดียวรองรับงานได้หลายแบบ',
+    title: 'ใช้กับงาน การเรียนรู้ และการเล่น',
     aside: 'ลองดูตัวอย่างที่เตรียมไว้ แล้วเริ่มโต๊ะของคุณเอง',
     items: [
-      { title: 'โต๊ะของคุณ', body: 'ตรวจความต่างของใบแจ้งหนี้ แล้วตามหลักฐานที่เกี่ยวข้องได้ โดยไม่ต้องเริ่มงานที่ทำไว้ใหม่' },
-      { title: 'โต๊ะสำหรับเรียนรู้', body: 'ปรับแรงและมวลเพื่อดูว่าการเคลื่อนที่เปลี่ยนอย่างไร' },
-      { title: 'โต๊ะของเรา', body: 'ผลัดกันเล่นในสถานการณ์ร่วมมือ และใช้โล่ช่วยเพื่อนร่วมทีม' },
+      { title: 'งาน', body: 'ตรวจความต่างของใบแจ้งหนี้ แล้วตามหลักฐานที่เกี่ยวข้องได้ โดยไม่ต้องเริ่มงานที่ทำไว้ใหม่' },
+      { title: 'การเรียนรู้', body: 'ปรับแรงและมวลเพื่อดูว่าการเคลื่อนที่เปลี่ยนอย่างไร' },
+      { title: 'การเล่น', body: 'ผลัดกันเล่นในสถานการณ์ร่วมมือ และใช้โล่ช่วยเพื่อนร่วมทีม' },
     ],
     physics: {
       alt: 'ภาพหน้าจอจากเดโม Physics ที่เตรียมไว้: รถเคลื่อนที่ 4 m ใน 2 s ด้วยแรง 10 N และมวล 5 kg คำนวณความเร่งได้ 2 m/s²',
-      hint: 'เดโมบทเรียนแรงและมวล · ข้อมูลจำลอง',
+      hint: 'ทดลองปรับแรงและมวล',
       open: 'เปิดเดโม Physics',
     },
     encounter: {
       alt: 'ภาพหน้าจอจากเดโม Encounter แบบร่วมมือที่เตรียมไว้ มีตัวละครสองตัว ลำดับตา และการกระทำกางโล่',
-      hint: 'เดโมเล่นร่วมกัน · ผู้เล่นจำลอง',
+      hint: 'ผลัดกันเล่นและช่วยเพื่อนร่วมทีม',
       open: 'เปิดเดโม Encounter',
     },
     demoNote: 'ภาพหน้าจอจริงจากเดโมสาธารณะ · ใช้ข้อมูลและผู้เล่นจำลอง',

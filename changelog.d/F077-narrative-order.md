@@ -1,0 +1,1 @@
+- Reorder the homepage and English README so the tool-adaptation idea and software problem come before the café example; remove repeated slogans and authoring labels while retaining one clear sample note. The accepted film and all media remain unchanged.
