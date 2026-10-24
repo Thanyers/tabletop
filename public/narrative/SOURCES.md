@@ -1,6 +1,6 @@
 # Physical tool photo sources
 
-The R5 concept film uses the writing-hand, hammer-hand, and office-chair
+The R5 concept film and its R6 pacing edit use the writing-hand, hammer-hand, and office-chair
 photographs below. No AI-generated images or video are used.
 
 | File | Source and author | License | Use |

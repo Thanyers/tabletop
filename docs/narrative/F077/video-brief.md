@@ -1,6 +1,8 @@
 # Tabletop film — Tools that adapt to you
 
-Revision5 · English female narration · ElevenLabs Laura / eleven_v3 · measured speech with room for actions and results; no fixed minute limit.
+Revision6 · English female narration · ElevenLabs Laura / eleven_v3 · the accepted R5 film with tighter section-specific pacing, 93.23 seconds. Physical tools play at approximately 1.20×, software friction 1.18×, Tabletop reversal 1.15×, and board scenes 1.10–1.11×. The close keeps its natural pace. Pitch-preserving retiming keeps narration, sounds and pictures together; captions follow the same mapping. No new speech generation.
+
+The script and measured slots below document the original R5 source. Final R6 timings and reproduction are in [the retime manifest](media/tabletop-narrative-r6-retime.json) and [motion README](motion/README.md).
 
 ## Story and visual direction
 

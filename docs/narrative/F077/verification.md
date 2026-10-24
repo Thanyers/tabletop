@@ -1,3 +1,26 @@
+# F077 — Revision 6 verification
+
+24 October 2026 · Node 22.23.2 · Python 3.12 · FFmpeg 8.1.2
+
+The user accepted the R5 story, imagery and voice, requested a tighter intro and selected explanatory sections, and authorized publication when complete. R6 keeps that approved content and uses section-specific, pitch-preserving retiming from the frozen R5 render. The homepage and review page now use R6. README remains a proposed draft.
+
+- [Final film](media/tabletop-narrative-r6.mp4): 93.233333 seconds, 2,797 frames, 1280×720/30 fps, H.264/AAC stereo 48 kHz, 4,233,279 bytes.
+- SHA-256: `5B1A53F7D79A4115A21AB3B335C794C8FFFDC9688870E68D0090239CDC6BF5A0`.
+- Tools 1.20×, friction 1.18×, reversal 1.15×, board sections 1.10–1.11×, close 1.00×. Actual frame-rounded rates and boundaries are in the [retime manifest](media/tabletop-narrative-r6-retime.json).
+- Existing Laura voice and original picture/sound sequence; no new TTS/provider call. Original R5 source is retained and hash-guarded. The retime script rerun produced the identical R6 video hash.
+
+| Check | Result | Evidence and limit |
+| --- | --- | --- |
+| Media and captions | PASS | Full FFmpeg decode; 58 caption cues retained and mapped through the same piecewise timings, no invalid duration/overlap; public MP4/poster/VTT hashes match source outputs. |
+| Audio | PASS measured | Independent readback: -15.8 LUFS integrated / -1.5 dBFS true peak. FFmpeg atempo preserves pitch; final caption ends at 91.807s, leaving about 1.43s of logo-only hold. |
+| Source and picture review | PASS within scope | Main inspected all eight R6 contact-sheet frames; reviewer checked baseline guard, contiguous mapping, source/output separation, intro/reversal/applied-20% stills and white logo poster. No open blocker. |
+| App verification on dev 0f97b79 | PASS | `npm test -- --reporter=dot`: 955 passed / 5 skipped; `npm run lint`: 0 errors / 111 existing warnings; `npm run build`, `npm run test:cloudflare` (204 passed), `npm run build:cloudflare` dry-run passed. |
+| Release readiness | PASS for preflight | No migration, Wrangler/binding or new deployment-secret changes from current production. Normal release includes the already merged F078 work on dev, as required by the repository release workflow. |
+| Hosted validation and deploy | PENDING at this source snapshot | Exact-commit PR/full-release CI and production readback are tracked in PRs and deployment evidence; historical passes below do not certify R6. |
+| Human listening/comprehension | NOT RUN | User accepted the R5 voice/story direction. Technical audio and image checks do not establish first-time audience comprehension. |
+
+## Revision 5 evidence (historical)
+
 # F077 — Revision 5 verification
 
 24 October 2026 · Node 22.23.2 · Python 3.12 · FFmpeg 8.1.2

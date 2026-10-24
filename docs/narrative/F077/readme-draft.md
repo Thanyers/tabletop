@@ -10,9 +10,9 @@ Tabletop คือพื้นที่ทำงานร่วมกันบ�
 
 **[เริ่มโต๊ะของคุณ](https://tabletop.ptchrr.workers.dev/) · [ลองเดโมโดยไม่ต้องล็อกอิน](https://tabletop.ptchrr.workers.dev/demo)**
 
-[![จากโต๊ะว่างสู่เครื่องมือที่ปรับตามงาน](media/tabletop-narrative-poster.png)](media/tabletop-narrative-draft.mp4)
+[![จากโต๊ะว่างสู่เครื่องมือที่ปรับตามงาน](media/tabletop-narrative-r6-poster.png)](media/tabletop-narrative-r6.mp4)
 
-*วิดีโออธิบายแนวคิดพร้อมเสียงอังกฤษ 104.4 วินาที สร้างด้วยโค้ดและข้อมูลตัวอย่าง · [อ่านเรื่องแบบภาพนิ่งและข้อความ](video-brief.md) · [ที่มาและขอบเขตของสื่อ](evidence.md)*
+*วิดีโออธิบายแนวคิดพร้อมเสียงอังกฤษ 93.2 วินาที สร้างด้วยโค้ดและข้อมูลตัวอย่าง · [อ่านเรื่องแบบภาพนิ่งและข้อความ](video-brief.md) · [ที่มาและขอบเขตของสื่อ](evidence.md)*
 
 ## เครื่องมือที่ค่อย ๆ พอดีมือ
 

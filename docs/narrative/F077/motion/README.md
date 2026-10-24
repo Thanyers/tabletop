@@ -33,6 +33,40 @@ visual and sound cues, typing, review, apply, and result timing.
 | 01:35.57–01:39.87 | Hold the completed canvas while the closing narration lands. |
 | 01:39.87–01:44.43 | Fade to the white logo-only end card and hold. |
 
+## R6 shortened cut
+
+The current delivery is a measured, piecewise retime of the frozen R5 render,
+not a newly generated narration or a re-rendered animation. It keeps the same
+visual sequence, Laura voice, effects, and causal request → review → apply →
+result order while tightening the opening and explanatory passages. Each
+scene's picture and mixed audio are retimed together; FFmpeg `atempo` preserves
+the voice pitch. The closing passage and logo hold remain at their original
+speed. The R5 beat table above describes the source; R6 uses these segment
+rates: tools 1.20×, friction 1.18×, reversal 1.15×, table/quick-request/chart/
+discounts 1.11×, quick-use 1.10×, close 1.00×. R6 is 93.23 seconds (2,797
+frames at 30 fps).
+
+The R5 source is deliberately left unchanged. `retime-r6.mjs` reads only that
+frozen R5 MP4 and the matching English VTT, checks the expected source hash,
+then writes the R6 MP4, mapped captions, poster, eight MP4-derived stills, and
+a JSON timing map. Re-running the script always starts from R5, so it cannot
+compound the speed change. It does not call Remotion, speech services, or the
+network. FFmpeg and FFprobe must be available on `PATH`; set
+`F077_FFMPEG_EXECUTABLE` or `F077_FFPROBE_EXECUTABLE` to override either binary.
+
+From this directory, after the checked-in R5 source files are present:
+
+```powershell
+node retime-r6.mjs
+```
+
+The script also refreshes `public/narrative/tabletop-story.mp4`,
+`tabletop-story-poster.png`, and `tabletop-story-en.vtt`; a review copy is
+written to ignored `test-results/f077/tabletop-story-r6.mp4`. The media folder
+also receives `tabletop-narrative-r6-poster.png`, eight `scene-XX-r6.png`
+stills extracted from the R6 MP4, and `tabletop-narrative-r6-retime.json` with
+the exact frame map.
+
 The “Keep shaping” step begins with the spoken “Then” and remains through the
 end of that phrase; the canvas begins at frame 1,023. The quick-sale buttons
 finish entering at frame 1,660, the Coffee click lands at frame 1,672, and the
