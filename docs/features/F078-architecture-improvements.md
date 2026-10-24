@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` (T0–T4 merged; T3a closes staging scheduling; T5–T9 tracked separately) |
+| สถานะ | `doing` (T0–T4 + T3a merged; T5a–T9 in progress, one PR each) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — documentation, validation and internal refactors; evaluate each task separately |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F078-T*` |
@@ -34,13 +34,26 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T2 | [PR #261](https://github.com/Thanyers/tabletop/pull/261): Disposable local authority/storage/performance baseline | — | Repeatable bounded synthetic workload, raw samples + summary, source/environment labels, no shared/remote writes |
 | T3 | [PR #262](https://github.com/Thanyers/tabletop/pull/262): Risk-targeted pre-merge integration gates | T1 | Real Worker startup checked before merge; selection has negative fixtures and preserves full-suite requirements |
 | T4 | [PR #263](https://github.com/Thanyers/tabletop/pull/263): Shared repository conformance scenarios | T1 | Same duplicate/CAS/atomicity cases run against SQL and Room adapters without changing application semantics |
-| T5 | Workspace command/navigation extraction | T2–T4; file ownership available | Existing create/attach/Ask/Change/ack/readback/switch paths pass; no domain mutation in UI |
-| T6 | Room job coordination extraction | T2–T4; file ownership available | Same public job transitions, revision/epoch/receipt guards and recovery behavior |
-| T7 | Storage lifecycle and recovery contract/rehearsal | T2, T4 | Measured growth, explicit receipt horizon and disposable restore checks; no saved-data deletion |
-| T8 | Exhaustive built-in Canvas view registration | T3, T5 | Contract/schema/semantic/evaluation/render coverage; core does not import React |
-| T9 | Extended load/soak and capacity comparison | T2, T5–T7 | Compare measured baseline before making capacity changes |
+| T5a | Workspace command/readback extraction (`TabletopApp` → typed client seam) | T2–T4; ownership resolved | Create/file-later attach/ack/readback/same-command retry/stale-conflict/workspace switch keep current behavior; no domain mutation in UI |
+| T5b | Navigation/focus lifecycle extraction (composition root keeps wiring) | T5a | URL/back/forward, create/open/switch and late async results keep current behavior; no UI redesign |
+| T6a | Room job view/progress seam (server-only) | T2–T4; ownership resolved | Public status/response/redaction/visibility unchanged |
+| T6b | Room job coordination seam (draft/assistant/reconcile/recovery), one path at a time | T6a | Retry/epoch/revision/revoked-member/late-result/uncertain-billing/auto-apply guards unchanged; conformance + relevant Room tests + full dev suite pass |
+| T7a | Storage lifecycle and recovery contract + bounded growth measurement on disposable fixtures | T2, T4 | Every store and owner named, receipt replay horizon recorded as an open question, recovery manifest/schema/writer/epoch/revision/directory sequence/billing reconciliation described; nothing deleted |
+| T7b | Disposable recovery rehearsal | T7a | Multiple revisions, revoked member, pending/uncertain jobs, exact retry after restore, state hash/cursor/receipt/billing agreement; model RPO/RTO measured with hosted-restore limits stated |
+| T8 | Typed built-in Canvas view registration | T3, T5 | Compiler/tests catch a missing kind, malformed descriptors reject, valid schema→semantic→evaluation→render passes; wire contract preserved; core does not import React |
+| T9 | Extended load/soak and capacity comparison | T2, T5–T7 | Success/stale latency, queue/job age, failure/reconnect/outbox lag and storage curve across rooms compared against the recorded baseline before any capacity change |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
+
+### Ownership resolution before T5/T6 (2026-10-24)
+
+PLAN still listed `doing` rows for F037, F050-T1..T3 and F054-T9 that name the UI and Room hotspots. Checked against remote state before touching them, not assumed:
+
+- `origin/feat/F050-live-thinking`, `origin/feat/F054-object-metadata-and-focus` and `origin/feat/objects-panel-tools` are all ancestors of `origin/dev` (`git merge-base --is-ancestor`), and no open PR carries their IDs. Their edits are already on dev; the `doing` labels are stale bookkeeping, not active work in those files.
+- No `origin/feat/F037-note-cards` branch exists, and its PLAN note already records that the UI part was not started. F037 keeps its `doing` row but holds no branch or PR in the files T5a/T5b touch.
+- The only open PRs are #250 (CI provider mock diagnostics, `tests/cloudflare-browser.mjs`) and #259 (F077 story docs). Neither file is touched by T5a/T5b/T6.
+
+So T5a may change `src/tabletop/TabletopApp.tsx` and a new client module, and T6 may change `cloudflare/room.ts`, without overwriting another active change. `tests/cloudflare-browser.mjs` stays untouched while #250 is open.
 
 ## คำถามเปิด
 
@@ -62,3 +75,7 @@ T1 candidate: [PR #260](https://github.com/Thanyers/tabletop/pull/260). Node v22
 ## First delivery group status (2026-10-24)
 
 T0/#264, T1/#260, T4/#263, T2/#261 and T3/#262 are merged into dev. T3's full dev run passed, but its staging job was SKIPPED after optional focused jobs were skipped. [T3a](F078-T3a-staging-skip.md) closes that scheduling regression before this delivery group is declared complete. All behavior-preserving refactors remain separate later tasks with their test and ownership prerequisites; none is represented as implemented by the foundation PRs. Independent review closed the baseline provenance/default assertions and the focused browser timing issue. Production release remains out of scope.
+
+### T3a closing status (2026-10-24)
+
+T3a/#265 merged as `d374e7051350237354d2055982cc383040c8e402`. Its dev run [40075882571](https://github.com/Thanyers/tabletop/actions/runs/40075882571) finished **success** with `Deploy tabletop-staging` **success** — the hosted deployment the scheduling fix existed for — while the three focused PR-only jobs stayed SKIPPED by design and are not counted as passes. Reading `/version` back returned staging `0.0.0-dev / d374e70` (`built_at` `2026-10-24T07:59:41Z`) and production unchanged at `9.0.2 / 8e2c7e1`. So the scheduling regression is closed by a real staging deployment, not by the overall run conclusion alone.
