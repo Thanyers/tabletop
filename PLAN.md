@@ -74,6 +74,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F078-T3 | Risk-targeted pre-merge integration gates | `doing` | Codex | `feat/F078-T3-integration-gates` | new scripts/integration-gate*.mjs; validate.yml; gate tests/docs | F078-T1 before integration | Boot the actual Worker artifact for relevant PRs before merge; preserve existing full-suite requirements and security/fixture behavior. Do not edit tests/cloudflare-browser.mjs (open PR #250). |
 | F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
 | F066-T8 | เปิด hosted JS/Python แก้เคสไม่ผ่าน และตรวจหลัง deploy | `review` | Codex | `docs/F066-release902-results` | F066 acceptance/feature/spec, DEPLOYMENTS, PLAN, release-notes CRLF parser และ main กลับ dev | — | production9.0.2/8e2c7e1; 37PASS/10BLOCKED/1SKIP; fullCI901/197+browser3ผ่าน; หลายบัญชี8/human/mobileBLOCKED; actualretest/reportและmainbackmergeในPR #258 |
 | F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |
