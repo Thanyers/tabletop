@@ -1,0 +1,1 @@
+- Added a bounded local SQL-authority baseline using synthetic workspaces and in-memory PGlite, with separate successful/stale command timings and per-table row/byte measurements. No production behavior or storage policy changed.

@@ -30,10 +30,10 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | ID | Separate PR scope | Prerequisite | Acceptance |
 | --- | --- | --- | --- |
 | T0 | Compatible security patches unblock existing dependency validation | — | Clean install, audit, existing unit/Worker/build checks; separate PR #264 |
-| T1 | Current contract, capability map and this sequence | — | Source-linked policies and runtime differences agree; document links/public scan pass |
-| T2 | Disposable local authority/storage/performance baseline | — | Repeatable bounded synthetic workload, raw samples + summary, source/environment labels, no shared/remote writes |
-| T3 | Risk-targeted pre-merge integration gates | T1 | Real Worker startup checked before merge; selection has negative fixtures and preserves full-suite requirements |
-| T4 | Shared repository conformance scenarios | T1 | Same duplicate/CAS/atomicity cases run against SQL and Room adapters without changing application semantics |
+| T1 | [PR #260](https://github.com/Thanyers/tabletop/pull/260): Current contract, capability map and this sequence | — | Source-linked policies and runtime differences agree; document links/public scan pass |
+| T2 | [PR #261](https://github.com/Thanyers/tabletop/pull/261): Disposable local authority/storage/performance baseline | — | Repeatable bounded synthetic workload, raw samples + summary, source/environment labels, no shared/remote writes |
+| T3 | [PR #262](https://github.com/Thanyers/tabletop/pull/262): Risk-targeted pre-merge integration gates | T1 | Real Worker startup checked before merge; selection has negative fixtures and preserves full-suite requirements |
+| T4 | [PR #263](https://github.com/Thanyers/tabletop/pull/263): Shared repository conformance scenarios | T1 | Same duplicate/CAS/atomicity cases run against SQL and Room adapters without changing application semantics |
 | T5 | Workspace command/navigation extraction | T2–T4; file ownership available | Existing create/attach/Ask/Change/ack/readback/switch paths pass; no domain mutation in UI |
 | T6 | Room job coordination extraction | T2–T4; file ownership available | Same public job transitions, revision/epoch/receipt guards and recovery behavior |
 | T7 | Storage lifecycle and recovery contract/rehearsal | T2, T4 | Measured growth, explicit receipt horizon and disposable restore checks; no saved-data deletion |
@@ -58,3 +58,7 @@ Each implementation PR owns its code and test files. Shared status documents are
 ## Verification
 
 T1 candidate: [PR #260](https://github.com/Thanyers/tabletop/pull/260). Node v22.23.2; local Markdown targets checked, changelog fragment validation and public-file scan passed; whitespace check passed. Application/unit/browser suites are SKIPPED locally because this PR changes documentation only. Required CI initially failed on the unchanged dependency tree; T0 is a separate prerequisite, not a bypass or a PASS for that attempt. Final CI evidence is recorded in spec and the PR.
+
+## First delivery group status (2026-10-24)
+
+T0/#264, T1/#260, T4/#263 and T2/#261 are merged into dev. T3/#262 is the final gate PR in this group. All behavior-preserving refactors remain separate later tasks with their test and ownership prerequisites; none is represented as implemented by the foundation PRs. Independent review closed the baseline provenance/default assertions and the focused browser timing issue. Production release remains out of scope.
