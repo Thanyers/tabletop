@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (first group T0–T4) | [F078](docs/features/F078-architecture-improvements.md) |
 | F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
@@ -74,7 +75,9 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F078-T1 | Current architecture contract และลำดับ PR ที่รักษา behavior | `review` | Codex | `feat/F078-architecture-foundation` / #260 | `docs/CURRENT_ARCHITECTURE.md`, architecture/product docs, feature/spec/PLAN | F078-T0 before integration | docs only; local link/fragment/public checks passed; no production release |
+| F078-T4 | SQL and Room repository conformance | `review` | Codex | `feat/F078-T4-repository-contract` | new shared conformance scenarios; new server/cloudflare test entrypoints / #263 | F078-T0/T1 before integration | Same duplicate, conflict and transaction rollback cases against real disposable adapters. Preserve application behavior and do not change persistent schema. |
+| F078-T0 | Compatible security patches unblock existing validation | `review` | Codex | `fix/F078-T0-validation-dependencies` / #264 | package/lock, feature/spec/PLAN, changelog fragment | — | audit0, unit901/5skip, CF197, build/typecheck/dry-run pass; no production release |
+| F078-T1 | Current architecture contract และลำดับ PR ที่รักษา behavior | `done` | Codex | `feat/F078-architecture-foundation` / #260 | `docs/CURRENT_ARCHITECTURE.md`, architecture/product docs, feature/spec/PLAN | — | docs only; local link/fragment/public checks passed; no production release |
 | F078-T5..T9 | Incremental UI/Room extraction, recovery design, view registration and load comparison | `todo` | Codex | — | see `docs/features/F078-architecture-improvements.md` | F078-T2..T4 + ownership available | no retention mutation or production release |
 | F078-T0 | Compatible security patches unblock existing validation | `done` | Codex | `fix/F078-T0-validation-dependencies` / #264 | package/lock, feature/spec/PLAN, changelog fragment | — | audit0, unit901/5skip, CF197, build/typecheck/dry-run pass; no production release |
 | F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
