@@ -1,13 +1,14 @@
-# F066 — ผลตรวจหลัง deploy 9.0.0 และตรวจซ้ำ 9.0.1
+# F066 — ผลตรวจหลัง deploy 9.0.0 และตรวจซ้ำถึง 9.0.2
 
 วันที่ตรวจ: 23 ตุลาคม 2569 (Asia/Bangkok) · ข้อมูลสมมติในห้อง QA · [ชุด48เคส](cases.json) · [ผลอ้างอิง](expected.json)
 
-ผล ณ9.0.1: **36 PASS / 1 FAIL / 10 BLOCKED / 1 SKIPPED_SCOPE** ครบ48เคสโดยไม่มีNOT_RUN เหลือPD027ที่กำลังแก้และเตรียม9.0.2 รายงานจะเพิ่มactualretestหลังdeploy
+ผลรอบนี้: **37 PASS / 10 BLOCKED / 1 SKIPPED_SCOPE** ครบ48เคส ไม่มีFAIL/NOT_RUNในตารางเคส (UI-gateแยกยังมีFAILตามด้านล่าง) รวม7รหัสที่ตรวจในcontrolled local CI; ไม่ใช่37เคสที่รันใหม่ทั้งหมดบนproduction9.0.2
 
 ## รุ่นและขอบเขตหลักฐาน
 
 - เริ่มตรวจบน **9.0.0 / 49f2dd7**, built_at2026-10-23T13:33:24Z จาก [PR249](https://github.com/Thanyers/tabletop/pull/249), [deploy39962089610](https://github.com/Thanyers/tabletop/actions/runs/39962089610) สำเร็จ
 - แก้เคสที่พบด้วย [PR254](https://github.com/Thanyers/tabletop/pull/254) แล้วออก **9.0.1 / f2f1629**, built_at2026-10-23T14:56:01Z จาก [PR256](https://github.com/Thanyers/tabletop/pull/256), [deploy39973772263](https://github.com/Thanyers/tabletop/actions/runs/39973772263) สำเร็จ และตรวจ /version ซ้ำหลังทดสอบ ไม่ใช่การรันทุกเคสใหม่บน9.0.1
+- **9.0.2 / 8e2c7e1**, built_at2026-10-23T15:58:39Z จาก [PR257](https://github.com/Thanyers/tabletop/pull/257), [deploy39982761764](https://github.com/Thanyers/tabletop/actions/runs/39982761764) สำเร็จ; ตรวจซ้ำเฉพาะAskPD027และfreshJavaScriptRun ส่วนfreshPythonRunใหม่บน9.0.2ได้8วัน/sourcev1และraw3แถวเดิม รุ่น9.0.1ยังมีcanvasnavigationรับคำถามก่อนonSend จึงต้องPATCHอีกครั้ง
 - เปิด **JavaScript และ Python**, profile tabletop-compute-1; Python standard library, pandas2.3.3, NumPy2.3.4, SciPy1.16.3, openpyxl3.1.5, python-dateutil2.9.0.post0 ใช้ได้จากexecutionจริง Polarsไม่ได้ติดตั้ง ไม่มีการติดตั้งเพิ่มระหว่างรัน
 - PASSของ PD022/023/024/033/034/036/042 เป็น controlled local HTTP authority + isolate/Docker ในCI; ไม่ใช่ production fault injection ทั้ง7รหัสมี8ผลย่อยและ17executions (PD042แยกJS/Python)
 - ผลดิบอยู่ใน ignored test-results/post-deploy/release9-20261023/results.json และไฟล์หลักฐานรายเคส; รายงานpublicนี้ตัดroom/accountIDsและข้อมูลเข้าสู่ระบบออก templateเดิมยัง48NOT_RUN และผลrelease8คงเป็นประวัติเดิม
@@ -22,7 +23,7 @@ Replaceที่กฎอ้างแถวเดิมต้องเลือ�
 
 | เคส | สิ่งที่ตรวจ | ผล | หลักฐาน/ขอบเขต |
 | --- | --- | --- | --- |
-| F066-PD-001 | ยืนยัน build และขอบเขต release ที่จะทดสอบ | **PASS** | รุ่นและ capability ตรง production; อ่าน9.0.1/f2f1629ซ้ำหลัง PATCH |
+| F066-PD-001 | ยืนยัน build และขอบเขต release ที่จะทดสอบ | **PASS** | รุ่นและ capability ตรง production; อ่าน9.0.2/8e2c7e1ซ้ำหลัง PATCH |
 | F066-PD-002 | JavaScript capability ตรงกับสิ่งที่เปิดใช้ | **PASS** | 9.0.1: JS succeeded จริงและ Rules แสดง reusable calculations |
 | F066-PD-003 | Python capability และ image พร้อมใช้งานจริง | **PASS** | Python imports/runs จริงครบรายการ; Run ใหม่บน9.0.1ได้8วัน |
 | F066-PD-004 | ถามข้อมูลอย่างเดียวไม่แก้กฎหรือข้อมูล | **PASS** | ตอบ225จาก75+150; raw/program/revisionsคงเดิม |
@@ -33,7 +34,7 @@ Replaceที่กฎอ้างแถวเดิมต้องเลือ�
 | F066-PD-009 | pandas เตรียมข้อมูลสิบขั้นพร้อมสรุปสาขา | **PASS** | pandas10ขั้น ยอด300 North200/South100 paid3; แก้เปอร์เซ็นต์จากfractionsเป็น66.67/33.33ก่อนผ่าน |
 | F066-PD-010 | NumPy คำนวณหลายสถิติจาก input เดียว | **PASS** | NumPy n4/sum20/mean5/variance5/std2.236068; ใช้Rulesหลังแชทปฏิเสธรอบแรก |
 | F066-PD-011 | SciPy ทำ linear regression และส่งผลให้หลายการ์ด | **PASS** | SciPy slope2/intercept1; x5ได้11→x6ได้13; รอบแรกถูกcitation guard ปฏิเสธแล้วจึงแก้ร่าง |
-| F066-PD-012 | openpyxl และ dateutil ใช้ได้จริงภายในตัวรัน | **PASS** | openpyxl BytesIO write/read + dateutil; วันที่3รายการ ช่วง7→8วัน;9.0.1 explicit Run ใหม่สำเร็จ |
+| F066-PD-012 | openpyxl และ dateutil ใช้ได้จริงภายในตัวรัน | **PASS** | openpyxl BytesIO write/read + dateutil; วันที่3รายการ ช่วง7→8วัน;9.0.1และ9.0.2 explicit Run ใหม่สำเร็จด้วยsourcev1/raw3เดิม |
 | F066-PD-013 | metric อ่านผล backend เดียวกับการ์ดคำนวณ | **PASS** | metricอ่านtyped JS result225→405; raw2แถว |
 | F066-PD-014 | กราฟอ่าน derived table ไม่ค้างตัวเลขตัวอย่าง | **PASS** | pandas derived table/chart75+150→105+300 รวม225→405 |
 | F066-PD-015 | join สอง inputs แล้วส่งตารางผล | **PASS** | pandas joinสองตาราง3แถว ได้100/75/80 รวม255; missing/duplicate0 |
@@ -48,7 +49,7 @@ Replaceที่กฎอ้างแถวเดิมต้องเลือ�
 | F066-PD-024 | กด Run ซ้ำขณะ module เดียวกันยัง pending | **PASS** | local CI: runซ้ำระหว่างpendingถูกกัน |
 | F066-PD-025 | Rules อธิบายงานโดยไม่ต้องอ่าน source | **BLOCKED** | ยังไม่มีคนno-codeอิสระอ่านแล้วอธิบายกลับ; labelsไม่ใช่หลักฐานความเข้าใจ |
 | F066-PD-026 | Advanced ดูภาษา version และ source ได้ตามสิทธิ์ | **PASS** | Advancedแสดงภาษา/version/profile/ports; sourceตรงauthority byte-for-byte |
-| F066-PD-027 | Ask รายกฎได้คำตอบอ้างกฎที่เลือก | **FAIL** | 9.0.1: modeเป็นAskถูกต้อง แต่คำว่าตรงไหนถูกcanvas navigatorรับก่อนonSend เปิดRulesและไม่สร้างassistantjob; guardแก้แล้วเฉพาะlocal รอ9.0.2 |
+| F066-PD-027 | Ask รายกฎได้คำตอบอ้างกฎที่เลือก | **PASS** | 9.0.2 PASS: คำถามเดิมตอบdiscount_10/inputgross/output2ค่า/ส่งต่อvat_7; raw/program/computeRuns/data-rule-actionrevisionsเดิม มีเฉพาะlayoutการ์ดคำตอบใหม่เปลี่ยน |
 | F066-PD-028 | Change this rule แก้เฉพาะกฎที่ระบุ | **PASS** | แก้เฉพาะdiscount10→20 ได้202.50→180; gross module/version/rawเดิม |
 | F066-PD-029 | อ้างหลายการ์ด/กฎร่วมกันและไม่เกินห้ารายการ | **PASS** | อ้าง6รายการเหลือ5ล่าสุด; คำตอบอิง5รายการและไม่แก้ข้อมูล |
 | F066-PD-030 | Rules บนจอแคบและใช้คีย์บอร์ด | **BLOCKED** | desktop keyboardผ่าน; วัด319/413pxไม่ล้น แต่ยังไม่ได้exact320px |
@@ -73,7 +74,7 @@ Replaceที่กฎอ้างแถวเดิมต้องเลือ�
 
 ## ความล้มเหลวเดิมและข้อจำกัดที่ยังต้องเห็น
 
-- 9.0.0: PD008 Replaceทำให้fixed refsใช้ไม่ได้, PD016ร่างอ้างsourceที่ไม่มีจริง, PD027คำถามถูกตีเป็นedit และPD035คำถามlibraryถูกปฏิเสธ เก็บรอบแรกไว้แล้วตรวจซ้ำหลัง9.0.1 ไม่เปลี่ยนให้เป็นfirst-pass
+- 9.0.0: PD008 Replaceทำให้fixed refsใช้ไม่ได้, PD016ร่างอ้างsourceที่ไม่มีจริง, PD027คำถามถูกตีเป็นedit และPD035คำถามlibraryถูกปฏิเสธ เก็บรอบแรกไว้แล้วตรวจซ้ำหลัง9.0.1 ไม่เปลี่ยนให้เป็นfirst-pass; PD027บน9.0.1ยังถูกcanvasnavigatorรับคำว่าตรงไหนก่อนส่ง จึงแก้priorityของselected references/explicitChangeและผ่านจริงบน9.0.2
 - PD009ต้องแก้เปอร์เซ็นต์; PD010ใช้Rulesหลังแชทปฏิเสธ; PD011แก้citation/evidenceก่อนผ่าน; PD048แก้actionให้ใช้serverrollครั้งเดียวภายในactionเดียว ไม่มีการรับรองว่าAIร่างถูกตั้งแต่ครั้งแรกทุกโจทย์
 - PD009trim behaviorยังUNVERIFIEDเพราะimportertrimก่อนส่งเข้าmodule แม้sourceมีstr.strip; PD048ยังมีpending fields/metricที่ไม่ได้ใช้ ไม่รับรองว่าล้างส่วนเกินสำเร็จ
 - model-job IDsคงเดิมยืนยันได้ว่าไม่มีงานร่างใหม่ แต่ **providerCalls=UNVERIFIED** เมื่อไม่มีledgerฝั่งserver
@@ -83,13 +84,17 @@ Replaceที่กฎอ้างแถวเดิมต้องเลือ�
 
 ## CI และ deployment
 
+9.0.2: [fullreleaseCI39980581719](https://github.com/Thanyers/tabletop/actions/runs/39980581719) ของcandidate9e0aaf7ผ่านครบ Node22.23.2 unit901passed/5skipped, Workers197passed, browser3suites, realWorkerLoader/Container2checks และcontrolledlocal8ผลย่อย/17executions Main8e2c7e1ใช้ผลจากtreeเดียวกันแล้วdeploy39982761764/smokeสำเร็จ AnnotatedtagและGitHubRelease [v9.0.2](https://github.com/Thanyers/tabletop/releases/tag/v9.0.2) เผยแพร่แล้ว
+
+Staging9e7a66b: [run39979203280](https://github.com/Thanyers/tabletop/actions/runs/39979203280) ชุดเต็ม+deploy/smokeผ่าน และactualAskคำถามเดียวกันตอบกฎส่วนลดได้ก่อนขึ้นproduction การติดตั้งbrowserรอนานจากแพ็กเกจUbuntuแต่สุดท้ายผ่าน ไม่ใช่FAIL/retry
+
 [Full release CI39971674579](https://github.com/Thanyers/tabletop/actions/runs/39971674579) ของcandidate d19c786: Node22.23.2; unit901passed/5skipped, Workers197passed, browserครบ3suites และreal local Worker Loader/Container2checksผ่าน Main f2f1629ใช้ผลfullCIจากtreeเดียวกันตามCI006แล้วproductiondeploy/smokeสำเร็จ
 
 Staging16de683: [run39970589793](https://github.com/Thanyers/tabletop/actions/runs/39970589793) validationผ่าน แต่deployattempt1ล้มด้วยCloudflare internal errorหลังimageupload Retryเฉพาะfailedjobด้วยSHAเดิมattempt2ผ่านและ/versionตรงเป้าหมาย; ปิด[issue255](https://github.com/Thanyers/tabletop/issues/255)หลังตรวจผล สาเหตุภายในบริการยังไม่ยืนยัน ไม่มีการเรียกattempt1ว่าPASS
 
-ในเครื่อง Node22.23.2: node scripts/check-f066-post-deploy-pack.mjs ผ่าน48definitions/15fixtures/38goldenchecks; ลิงก์localใหม่ของรายงาน3รายการและตาราง48แถวตรวจครบ; node scripts/build-release-notes.mjs อ่าน26releases/latest9.0.1/0unreleased; การตรวจpackนี้ไม่ใช่acceptance execution
+ในเครื่อง Node22.23.2: node scripts/check-f066-post-deploy-pack.mjs ผ่าน48definitions/15fixtures/38goldenchecks; ลิงก์localใหม่ของรายงาน3รายการและตาราง48แถวตรวจครบ; node scripts/build-release-notes.mjs อ่าน27releases/latest9.0.2/0unreleased; การตรวจpackนี้ไม่ใช่acceptance execution
 
-Independent read-only review เทียบผลดิบ/CI/git treeแล้วไม่พบmaterial mismatchในขอบเขตรายงานที่ตรวจ; PD018มีtypedproofเพิ่มเติม; PD027มีrenderedregressionแดงก่อนแก้และเขียวหลังguard แต่ยังไม่ถือว่าhostedPASS
+Independent read-only review เทียบผลดิบ/CI/git treeแล้วไม่พบmaterial mismatchในขอบเขตรายงานที่ตรวจ; PD018มีtypedproofเพิ่มเติม; PD027มีrenderedregressionแดงก่อนแก้และเขียวหลังguard และhostedคำตอบจริงบนstaging/production9.0.2
 
 ไม่มีmanual SQL/schema migration หรือmanual deployในรอบนี้ Sceneแก้เฉพาะtest schedulingที่ผู้ใช้อนุญาตเพื่อปลดreleasegate โดยคงassertionsเดิม ไม่แก้production scene/camera
 

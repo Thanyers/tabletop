@@ -30,6 +30,7 @@
 
 | ID | งาน | เกณฑ์เสร็จ |
 | --- | --- | --- |
+| F066-T13 | ให้บริบทAsk/Changeมีpriorityก่อนคำสั่งค้นหาการ์ด | exactThaiAskไปassistant/อ้างdiscount_10ถูกตัวบน9.0.2; raw/program/revisionsเดิม; navigationที่ไม่มีrefsยังlocal |
 | F066-T12 | ซ่อม linked-row Replace, conditional library questions และ Ask รายกฎหลัง production9 | จับคู่ identity แบบผู้ใช้ยืนยัน รักษา row IDs/controls เมื่อเรียงใหม่; ambiguous/missing rejectแบบatomic; PD035 exact promptตอบcapabilityจริง; PD027 behavior questionยังเป็นAsk/คำสั่งแก้ยังเป็นdraft; PATCHผ่านCI/deploy/actualretest |
 | F066-T1 | contracts, persistent definitions/runs และ revision links | reload/reconnect, isolation, stale result และ permission tests |
 | F066-T2 | isolated runner, generation/invocation และการคำนวณซ้ำ | ใช้โปรแกรมเดิมกับข้อมูลสองชุดโดยไม่เรียก AI ซ้ำ; failure ไม่ทำลายผลเดิม |
@@ -43,7 +44,7 @@
 
 ## ติดตาม release 9
 
-F066-T8 actual campaignเริ่ม9.0.0และตรวจซ้ำ9.0.1/f2f1629จาก [PR #256](https://github.com/Thanyers/tabletop/pull/256), [deploy39973772263](https://github.com/Thanyers/tabletop/actions/runs/39973772263) สำเร็จ JS/Pythonรันจริง; [รายงาน48เคส](../testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) ตอน9.0.1มี36PASS/1FAIL/10BLOCKED/1SKIP เหลือPD027: modeAskแก้แล้วแต่canvasnavigationยังรับก่อนonSend ต้อง9.0.2 หลายบัญชี8เคสคงBLOCKED ไม่ใช่ทุกเคสรันใหม่บน9.0.1
+F066-T8 actualcampaignเริ่ม9.0.0 ตรวจซ้ำ9.0.1 และปิดAskบน **9.0.2/8e2c7e1** จาก [PR #257](https://github.com/Thanyers/tabletop/pull/257), [deploy39982761764](https://github.com/Thanyers/tabletop/actions/runs/39982761764) สำเร็จ [รายงาน48เคส](../testing/f066-post-deploy/RELEASE9_RESULTS_TH.md): **37PASS/10BLOCKED/1SKIP** รวมlocalcontrolled7รหัส; ไม่ใช่ทุกเคสrerunบน9.0.2 หลายบัญชี8เคส/human/mobileยังBLOCKEDและrawUIgateยัง15PASS/1FAIL/4SKIP
 
 ## การตัดสินใจ
 
@@ -65,11 +66,11 @@ F066-T8 actual campaignเริ่ม9.0.0และตรวจซ้ำ9.0.1/f
 
 ### F066-T13 — referenced chatมีpriorityก่อนlocalnavigation
 
-Rendered real TableChat + finderให้exactThaiAskเปิดRulesและไม่ส่งก่อนแก้ (RED) เพิ่มguardเมื่อมีreferencesหรือexplicitRuleEditแล้วGREEN: Askส่งพร้อมcompute rule marker, Changeมี/ไม่มีrefsถึงonSend, unreferencedopenrulesยังlocal Node22.23.2 unit901passed/5skipped Workers197passed lint0errors111warnings build/typecheckผ่าน Independent reviewไม่มีP1/P2 รอ9.0.2CI/deploy/hostedretest ไม่แก้parseraliasหรือscene/camera
+Rendered real TableChat + finderให้exactThaiAskเปิดRulesและไม่ส่งก่อนแก้ (RED) เพิ่มguardเมื่อมีreferencesหรือexplicitRuleEditแล้วGREEN: Askส่งพร้อมcompute rule marker, Changeมี/ไม่มีrefsถึงonSend, unreferencedopenrulesยังlocal Node22.23.2 unit901passed/5skipped Workers197passed lint0errors111warnings build/typecheckผ่าน Independent reviewไม่มีP1/P2 [fullreleaseCI39980581719](https://github.com/Thanyers/tabletop/actions/runs/39980581719) ผ่านครบและ9.0.2deployแล้ว actualstaging/productionAskตอบdiscount_10และinput/output/downstreamถูกตัว โปรแกรม/raw/computeRuns/data-rule-actionrevisionsไม่เปลี่ยน มีเฉพาะlayoutการ์ดคำตอบใหม่เปลี่ยน ไม่แก้parseraliasหรือscene/camera
 
 ### F066-T12 — candidate หลังพบปัญหาบน production9
 
-Node22.23.2: unit901passed/5skipped, Workers197/197, import35/35, routing55/55, capability28/28, provider24/24; typecheck/build/Worker dry-runผ่าน lint0errors111warnings Rendered importer280/320/390/414pxไม่มีpage/paneloverflowหรือปุ่มทับกันและตรวจpayload Append/Replaceจริง Fullui-gateยัง15PASS/1FAIL/4SKIPจากRulesbuttonsนอกimporter ไม่อ้างall-PASS Independentreviewพบ3P2(Appendguard/action-onlyrefs/คำสั่งหลังห้ามติดตั้ง) มีred→greenและrereviewไม่เหลือP1/P2 PATCH9.0.1และactualPD008/016/035/018ผ่านแล้ว; PD027เหลือcanvasnavigatorตามT13 หลายบัญชี8เคส/humanreadbackBLOCKED
+Node22.23.2: unit901passed/5skipped, Workers197/197, import35/35, routing55/55, capability28/28, provider24/24; typecheck/build/Worker dry-runผ่าน lint0errors111warnings Rendered importer280/320/390/414pxไม่มีpage/paneloverflowหรือปุ่มทับกันและตรวจpayload Append/Replaceจริง Fullui-gateยัง15PASS/1FAIL/4SKIPจากRulesbuttonsนอกimporter ไม่อ้างall-PASS Independentreviewพบ3P2(Appendguard/action-onlyrefs/คำสั่งหลังห้ามติดตั้ง) มีred→greenและrereviewไม่เหลือP1/P2 PATCH9.0.1และactualPD008/016/035/018ผ่านแล้ว; PD027พบcanvasnavigatorและปิดด้วย9.0.2ตามT13 หลายบัญชี8เคส/humanreadbackBLOCKED
 
 
 รายละเอียด contract, ขอบเขต และ operator setup อยู่ใน [REUSABLE_COMPUTE](../REUSABLE_COMPUTE.md)

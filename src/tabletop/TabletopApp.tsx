@@ -18,7 +18,8 @@ import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
 import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
-import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from './ui/table-chat-state';
+import type { AddableWebSource } from './ui/table-chat-state';
+import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistoryWrite, pageForPath, pathForProjection, shouldApplyLateOpen, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
@@ -26,8 +27,10 @@ import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHA
 import { DEFAULT_CANVAS_AUXILIARY_IDS } from './ui/CanvasWorkspace';
 import type { ExecutablePlan } from './ui/types';
 import { summarize } from './ui/types';
-import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './ui/table-candidate-apply';
 import { recordServerRoll } from './ui/roll-store';
+import { createWorkspaceCommandSession, sameWorkspaceActor, type ProjectionClock, type UploadKind } from './workspace/command-session';
+import { errorText } from './workspace/error-text';
+import { fileToBase64 } from './workspace/source-file';
 import { LoadingScreen } from '../loading/LoadingScreen';
 import './ui/tabletop.css';
 import './ui/calm-workspace.css';
@@ -50,31 +53,6 @@ const caseInfo: Record<CaseKind, { title: string; subtitle: string; icon: typeof
   encounter: { title: starterFor('encounter').title, subtitle: starterFor('encounter').summary, icon: Users },
   table: { title: 'Shared data table', subtitle: 'Build collections and actions from your own files.', icon: Table2 },
 };
-
-function errorText(error: unknown): string {
-  if (error instanceof ApiFailure) {
-    if (error.status === 401) return 'Your sign-in session has expired. Sign in again to continue.';
-    if (error.status === 403 && error.code === 'TABLE_READ_ONLY') return 'Editing this shared table is temporarily paused. You can still inspect its current records and rules.';
-    if (error.status === 403) return 'This table is not available to the current session. Open a new invitation or choose another table.';
-    if (error.status === 404) return 'This table or invitation is no longer available. Choose another table or ask for a fresh invitation.';
-    if (error.status === 413 && error.code === 'TABLE_LIMIT') return 'A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.';
-    if (error.status === 413 && error.code === 'TABLE_FILE_SIZE') return 'Each table source file must be 32 KiB or smaller.';
-    if (error.status === 413) return 'That file is larger than the table limit. Choose a smaller file.';
-    if (error.status === 415 && error.code === 'TABLE_FILE') return 'Use a UTF-8 CSV, JSON, TXT or Markdown file. PDF and binary files are not supported.';
-    if (error.status === 415) return 'This file type is not supported. Use a shipment CSV or a text PDF.';
-    if (error.status === 0) return error.message;
-    return error.message;
-  }
-  return error instanceof Error ? error.message : 'The table could not be updated. Try again.';
-}
-
-function sameWorkspaceActor(current: WorkspaceView | null, expected: WorkspaceView): boolean {
-  return current !== null
-    && current.id === expected.id
-    && current.epoch === expected.epoch
-    && current.actor.actorId === expected.actor.actorId
-    && current.kind === expected.kind;
-}
 
 function isTableWorkspaceView(view: WorkspaceView): view is WorkspaceView & { kind: 'table'; domain: TableState } {
   return view.kind === 'table' && view.domain.kind === 'table';
@@ -134,13 +112,7 @@ function accountForHeader(authStatus: AuthStatus | null, session: SessionView): 
   return authStatus.user ?? { id: session.actorId, name: session.name, email: '', isAdmin: false };
 }
 
-type AppPage = 'landing' | 'tables' | 'new';
-
-/** Where to land after Google sign-in: the page asked for, or the table list when it was the landing page. */
-function rememberReturnPath(path: string): void {
-  saveReturnPath(parseRoute(path)?.name === 'landing' ? routePath({ name: 'tables' }) : path);
-}
-
+/** The composition root: projection state, notices and the rendered UI. Decisions live in modules. */
 export default function TabletopApp() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [capabilities, setCapabilities] = useState<TabletopCapabilities>(localCapabilities);
@@ -177,7 +149,11 @@ export default function TabletopApp() {
   // How the next change of open table is written to the address bar: the first
   // sync after boot replaces, user navigation pushes, back/forward writes nothing.
   const urlSyncRef = useRef<'replace' | 'push' | 'none'>('replace');
-  const projectionSequenceRef = useRef(0);
+  // F078-T5a: the command/readback seam and this component share one projection clock. The
+  // setter below bumps it whenever a projection is applied, and readback compares the value
+  // captured before a command with the value afterwards to tell "nothing newer arrived" apart
+  // from "a newer projection already landed".
+  const projectionClock = useRef<ProjectionClock>({ value: 0 });
   const inspectorScrollRef = useRef<HTMLDivElement>(null);
   const noticeTimerRef = useRef<number | undefined>(undefined);
 
@@ -193,23 +169,21 @@ export default function TabletopApp() {
 
   const setWorkspace = useCallback((next: WorkspaceView | null) => {
     const previous = workspaceRef.current;
-    const changedTable = previous?.id !== next?.id || previous?.epoch !== next?.epoch || previous?.actor.actorId !== next?.actor.actorId;
+    const reset = tableChangeReset(previous, next);
     workspaceRef.current = next;
-    if (next) projectionSequenceRef.current += 1;
+    if (next) projectionClock.current.value += 1;
     setView(next);
-    if (changedTable) {
-      const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && viewerCan(next, 'rules.approve') && next.domain.candidate && next.domain.candidate.status !== 'active';
+    if (reset.changedTable) {
       // Chat-first tables open nothing until there is something to review (F006).
-      const startObject = pendingRules ? 'table.rules' : null;
-      setSelectedNodeId(startObject);
+      setSelectedNodeId(reset.startObject);
       setFocusNodeId(null);
-      setOpenedObjectId(startObject);
+      setOpenedObjectId(reset.startObject);
       setFocusSourceIds([]);
       setDraftPrompt('');
       setAiPrefill(undefined);
       setRenameDraft(null);
     }
-    if (previous?.id !== next?.id) {
+    if (reset.changedWorkspace) {
       setInviteState(null);
       setInviteSeat(null);
       setPreviousInvitesRevoked(false);
@@ -218,23 +192,6 @@ export default function TabletopApp() {
       saveLastWorkspace(next.id);
       setPage('tables');
     }
-  }, []);
-
-  const latestAfterAck = useCallback(async (ack: { duplicate: boolean; workspace: WorkspaceView }, workspaceId: string, requestSequence: number): Promise<WorkspaceView> => {
-    if (workspaceRef.current?.id && workspaceRef.current.id !== workspaceId) return workspaceRef.current;
-    if (!ack.duplicate && projectionSequenceRef.current === requestSequence) return ack.workspace;
-    let latest: WorkspaceView | null = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      if (workspaceRef.current?.id && workspaceRef.current.id !== workspaceId) return workspaceRef.current;
-      const sequenceBeforeRead = projectionSequenceRef.current;
-      latest = await tabletopClient.workspace(workspaceId);
-      if (workspaceRef.current?.id && workspaceRef.current.id !== workspaceId) return workspaceRef.current;
-      if (projectionSequenceRef.current === sequenceBeforeRead) return latest;
-    }
-    const received = workspaceRef.current;
-    if (received?.id === workspaceId) return received;
-    if (latest) return latest;
-    throw new ApiFailure('The action was accepted, but the latest table could not be refreshed. Refresh before repeating it.', 0);
   }, []);
 
   const showNotice = useCallback((text: string, tone: 'info' | 'error' | 'success' = 'info', action?: { label: string; run: () => void }) => {
@@ -324,7 +281,7 @@ export default function TabletopApp() {
             if (savePendingInvite(fragmentTicket)) clearInviteFragment();
             else showNotice('This tab could not save the invitation securely. Keep the invitation link and try again after signing in.', 'error');
           }
-          rememberReturnPath(returnPath ?? window.location.pathname);
+          saveReturnPath(signInReturnPath(returnPath ?? window.location.pathname));
           setSession(null);
           setWorkspace(null);
           return;
@@ -344,7 +301,7 @@ export default function TabletopApp() {
           showNotice('Feature access could not be checked. Uploads and AI requests are disabled until you refresh.', 'error');
           if (error instanceof ApiFailure && error.status === 401) {
             if (currentAuth?.mode === 'google') setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
-            rememberReturnPath(returnPath ?? window.location.pathname);
+            saveReturnPath(signInReturnPath(returnPath ?? window.location.pathname));
             return;
           }
         }
@@ -389,7 +346,7 @@ export default function TabletopApp() {
         }
       } catch (error) {
         if (error instanceof ApiFailure && error.status === 401 && currentAuth?.mode === 'google') {
-          rememberReturnPath(returnPath ?? window.location.pathname);
+          saveReturnPath(signInReturnPath(returnPath ?? window.location.pathname));
           setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
         }
         if (alive) showNotice(errorText(error), 'error');
@@ -403,12 +360,12 @@ export default function TabletopApp() {
 
   useEffect(() => {
     if (starting) return;
-    const target = routePath(view ? { name: 'table', id: view.id } : { name: page });
-    const mode = urlSyncRef.current;
-    urlSyncRef.current = 'push';
-    if (mode === 'none' || window.location.pathname === target) return;
+    const target = pathForProjection(view ? { id: view.id } : null, page);
+    const { write, nextMode } = nextHistoryWrite(urlSyncRef.current, target, window.location.pathname);
+    urlSyncRef.current = nextMode;
+    if (write === 'skip') return;
     // Pushed entries remember the app page before them, so "Your tables" can step back instead of stacking `/`.
-    if (mode === 'replace') window.history.replaceState(window.history.state, document.title, target);
+    if (write === 'replace') window.history.replaceState(window.history.state, document.title, target);
     else window.history.pushState({ tabletopFrom: window.location.pathname }, document.title, target);
   }, [view?.id, page, starting]);
 
@@ -417,12 +374,16 @@ export default function TabletopApp() {
       const route = parseRoute(window.location.pathname);
       if (route?.name === 'table') {
         if (workspaceRef.current?.id === route.id) return;
-        tabletopClient.workspace(route.id).then((opened) => {
+        const requestedId = route.id;
+        tabletopClient.workspace(requestedId).then((opened) => {
+          // The fetch can resolve after the member moved on; drawing it then would show the
+          // previous table under the new address. With nothing open, Forward must still open it.
+          if (!shouldApplyLateOpen(requestedId, workspaceRef.current?.id)) return;
           urlSyncRef.current = 'none';
           setWorkspace(opened);
         }, (error) => showNotice(errorText(error), 'error'));
       } else {
-        const nextPage: AppPage = route?.name === 'new' ? 'new' : route?.name === 'tables' ? 'tables' : 'landing';
+        const nextPage = pageForPath(window.location.pathname);
         if (!workspaceRef.current && pageRef.current === nextPage) return;
         urlSyncRef.current = 'none';
         setWorkspace(null);
@@ -512,156 +473,51 @@ export default function TabletopApp() {
     if (created) setAiPrefill({ text: description, key: Date.now() });
   }, [createWorkspace]);
 
-  const runCommand = useCallback(async (type: string, payload: unknown, expectedView?: WorkspaceView): Promise<WorkspaceView | null> => {
-    const current = workspaceRef.current;
-    if (!current) return null;
-    if (expectedView && !matchesExpectedTableCandidateView(current, expectedView)) return null;
-    const commandView = expectedView ?? current;
-    if (commandView.kind === 'table' && capabilitiesRef.current.tableReadOnly) {
-      showNotice('Editing this table is temporarily paused. You can still inspect its current records and rules.', 'info');
-      return null;
-    }
-    const requestSequence = projectionSequenceRef.current;
-    // Layout writes have their own queue and revision. Background placement must
-    // neither disable the composer nor clear a foreground command's busy state.
-    const blocksForeground = type !== 'canvas.layout';
-    if (blocksForeground) setBusy(type);
-    try {
-      const ack = await tabletopClient.command(commandView, type, payload);
-      // F048: keep the dice the authority just rolled for this member, keyed by action/parameter.
-      if (type === 'table.roll' && ack.roll) {
-        const request = payload as { actionId?: unknown; parameterId?: unknown } | null;
-        if (request && typeof request.actionId === 'string' && typeof request.parameterId === 'string') {
-          recordServerRoll(ack.workspace, request.actionId, request.parameterId, ack.roll);
-        }
-      }
-      if (expectedView && !sameTableCandidateScope(ack.workspace, expectedView)) return null;
-      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(commandView, workspaceRef.current))) return null;
-      const latest = await latestAfterAck(ack, commandView.id, requestSequence);
-      if (expectedView) {
-        const live = workspaceRef.current;
-        const liveIsPinned = matchesExpectedTableCandidateView(live, expectedView);
-        const liveIsAccepted = sameTableCandidateScope(live, expectedView) && live?.revision === ack.workspace.revision;
-        if (!sameTableCandidateScope(latest, expectedView)
-          || latest.revision !== ack.workspace.revision
-          || (!liveIsPinned && !liveIsAccepted)
-          || capabilitiesRef.current.tableReadOnly) return null;
-      }
-      if (type === 'canvas.layout' && (!workspaceRef.current
-        || !sameChatRequestScope(commandView, workspaceRef.current)
-        || !sameChatRequestScope(commandView, latest))) return null;
-      // Keep the pinned next stage current immediately; React state may render later.
-      if (expectedView) workspaceRef.current = latest;
-      setWorkspace(latest);
-      if (type === 'evolve.activate') showNotice(`The change is active at revision ${latest.domain.ruleRevision}.`, 'success');
-      else if (type === 'workspace.reset') {
-        setPreviousInvitesRevoked(true);
-        setInviteState((previous) => previous ? { seat: previous.seat, invite: previous.invite, url: '', revoked: true } : null);
-        showNotice('The table was reset. Previous member access and invitations were revoked.', 'success');
-      }
-      else if (type === 'teaching.answer') showNotice('Your answer was checked against the current lesson.', 'success');
-      else if (type === 'encounter.endTurn') showNotice('The server started the next turn and updated its action points.', 'success');
+  // F078-T5a: command submission and acknowledgement readback live in a typed seam
+  // (`workspace/command-session.ts`). This component stays the composition root: it owns the
+  // projection state, the busy marker, the notice copy and the invitation panels the seam calls
+  // back into. The dependency arrays below keep the identity semantics the component had before
+  // the extraction, so consumers that re-run on a changed callback re-run for the same reasons.
+  const commands = useMemo(() => createWorkspaceCommandSession({
+    client: tabletopClient,
+    readWorkspace: () => workspaceRef.current,
+    applyWorkspace: setWorkspace,
+    writeWorkspaceRef: (next) => { workspaceRef.current = next; },
+    projectionClock: projectionClock.current,
+    capabilities: () => capabilitiesRef.current,
+    setBusy,
+    notify: showNotice,
+    refreshSession,
+    encodeBase64: fileToBase64,
+    recordServerRoll,
+    onWorkspaceReset: () => {
+      setPreviousInvitesRevoked(true);
+      setInviteState((previous) => previous ? { seat: previous.seat, invite: previous.invite, url: '', revoked: true } : null);
+    },
+  }), [refreshSession, setWorkspace, showNotice]);
 
-      await refreshSession().catch(() => undefined);
-      if (expectedView && (!sameTableCandidateScope(workspaceRef.current, expectedView)
-        || workspaceRef.current?.revision !== latest.revision
-        || capabilitiesRef.current.tableReadOnly)) return null;
-      return latest;
-    } catch (error) {
-      if (expectedView && !sameTableCandidateScope(workspaceRef.current, expectedView)) return null;
-      if (type === 'canvas.layout' && (!workspaceRef.current || !sameChatRequestScope(commandView, workspaceRef.current))) return null;
-      if (error instanceof ApiFailure && error.conflict) {
-        try {
-          const sequenceBeforeRead = projectionSequenceRef.current;
-          const fresh = await tabletopClient.workspace(commandView.id);
-          if (canApplyWorkspaceRefresh(commandView, workspaceRef.current, fresh, sequenceBeforeRead, projectionSequenceRef.current)) setWorkspace(fresh);
-          await refreshSession().catch(() => undefined);
-          // Someone else moved a card; the Canvas retries quietly on the newer layout (F007).
-          if (error.code !== 'STALE_LAYOUT') showNotice('This table changed elsewhere. The latest version is loaded; review and repeat your edit if it still applies.', 'error');
-        } catch (refreshError) { showNotice(errorText(refreshError), 'error'); }
-      } else showNotice(errorText(error), 'error');
-      return null;
-    } finally { if (blocksForeground) setBusy(null); }
-  }, [latestAfterAck, refreshSession, setWorkspace, showNotice]);
+  const runCommand = useCallback(
+    (type: string, payload: unknown, expectedView?: WorkspaceView) => commands.runCommand(type, payload, expectedView),
+    [commands],
+  );
 
-  const upload = useCallback(async (kind: 'shipments' | 'invoice' | 'rate-card', file: File) => {
-    if (!capabilities.uploads) throw new Error('File uploads are disabled for this workspace service. Your existing rows and manual editing remain available.');
-    const current = workspaceRef.current;
-    if (!current) throw new Error('Choose an invoice table before adding a source file.');
-    setBusy(`upload.${kind}`);
-    try {
-      const dataBase64 = await fileToBase64(file);
-      const requestSequence = projectionSequenceRef.current;
-      const ack = await tabletopClient.upload(current, { filename: file.name, mime: file.type || inferredMime(file.name), kind, dataBase64 });
-      const latest = await latestAfterAck(ack, current.id, requestSequence);
-      setWorkspace(latest);
-      showNotice(`${file.name} was added to this table. Review its extracted text before using it.`, 'success');
-      await refreshSession().catch(() => undefined);
-    } catch (error) {
-      if (error instanceof ApiFailure && error.conflict) {
-        const fresh = await tabletopClient.workspace(current.id).catch(() => null);
-        if (fresh && workspaceRef.current?.id === current.id) setWorkspace(fresh);
-        showNotice('This table changed while the file was being prepared. The latest version is loaded; choose the file again if it still belongs here.', 'error');
-      }
-      throw new Error(errorText(error));
-    } finally { setBusy(null); }
-  }, [capabilities.uploads, latestAfterAck, refreshSession, setWorkspace, showNotice]);
+  const upload = useCallback(
+    (kind: UploadKind, file: File) => commands.upload(kind, file),
+    [commands],
+  );
 
-  const importTableFile = useCallback(async (targetView: WorkspaceView, file: File): Promise<WorkspaceView> => {
-    if (capabilities.tableReadOnly) throw new ApiFailure('Editing this table is temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY');
-    const identity = { id: targetView.id, epoch: targetView.epoch, actorId: targetView.actor.actorId };
-    const activeTarget = () => {
-      const current = workspaceRef.current;
-      return current && current.id === identity.id && current.epoch === identity.epoch && current.actor.actorId === identity.actorId && current.kind === 'table' && current.domain.kind === 'table' ? current : null;
-    };
-    if (!activeTarget()) throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
-    if (!/\.(csv|json|txt|md)$/iu.test(file.name)) throw new ApiFailure('Use a UTF-8 CSV, JSON, TXT or Markdown file. PDF and binary files are not supported.', 415, 'TABLE_FILE');
-    if (file.size < 1 || file.size > 32 * 1024) throw new ApiFailure('Each source file must contain between 1 byte and 32 KiB.', 413, 'TABLE_FILE_SIZE');
+  const importTableFile = useCallback(
+    (targetView: WorkspaceView, file: File) => commands.importTableFile(targetView, file),
+    [commands],
+  );
 
-    let text: string;
-    try { text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
-    catch { throw new ApiFailure('This file is not valid UTF-8 text. Save it as UTF-8 and try again.', 415, 'TABLE_FILE'); }
-    const current = activeTarget();
-    if (!current || current.domain.kind !== 'table') throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
-    const nextBytes = new TextEncoder().encode(text).byteLength;
-    const existingBytes = current.domain.sources.reduce((sum, source) => sum + new TextEncoder().encode(source.text).byteLength, 0);
-    if (current.domain.sources.length >= 4 || existingBytes + nextBytes > 64 * 1024) throw new ApiFailure('A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.', 413, 'TABLE_LIMIT');
+  const addWebSources = useCallback(
+    (targetView: WorkspaceView, sources: AddableWebSource[]) => commands.addWebSources(targetView, sources),
+    [commands],
+  );
 
-    const requestSequence = projectionSequenceRef.current;
-    setBusy('table.import');
-    try {
-      const ack = await tabletopClient.importTableSource(current, file.name, text);
-      if (!activeTarget()) throw new ApiFailure(`${file.name} was added to ${targetView.title}, but the current table changed before it finished. The current view was left alone.`, 0);
-      const latest = await latestAfterAck(ack, current.id, requestSequence);
-      const stillCurrent = activeTarget();
-      if (!stillCurrent) throw new ApiFailure(`${file.name} was added to ${targetView.title}, but you switched tables before it finished. The current view was left alone.`, 0);
-      setWorkspace(latest);
-      showNotice(`${file.name} was added to ${targetView.title}. Review the source before using it in a rule change.`, 'success');
-      await refreshSession().catch(() => undefined);
-      return latest;
-    } catch (error) {
-      if (error instanceof ApiFailure && error.conflict) {
-        const fresh = await tabletopClient.workspace(current.id).catch(() => null);
-        if (fresh && activeTarget()) setWorkspace(fresh);
-        showNotice('This table changed while the file was being added. The latest version is loaded; choose the file again if it still belongs here.', 'error');
-      } else showNotice(errorText(error), 'error');
-      throw new Error(errorText(error));
-    } finally { setBusy(null); }
-  }, [capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
-
-  // F064 slice C: the sources stay `provided` until the owner reviews them; the callback owns the
-  // notice, so the chat card only disables its button while the command runs.
-  const addWebSources = useCallback(async (targetView: WorkspaceView, sources: AddableWebSource[]): Promise<void> => {
-    if (sources.length === 0) return;
-    try {
-      const latest = await runCommand('table.addWebSources', { sources });
-      if (!latest) return;
-      showNotice(`${sources.length} web source${sources.length === 1 ? '' : 's'} added to ${targetView.title}. Verify each one before asking AI to use it in a rule change.`, 'success');
-    } catch (error) {
-      showNotice(errorText(error), 'error');
-    }
-  }, [runCommand, showNotice]);
-
+  // The AI callbacks stay in the composition root: they decide whether this seat may ask at all
+  // and reject early with the same codes, while the server still validates every request.
   const requestAI = useCallback((targetView: WorkspaceView, prompt: string, sourceId: string | undefined, commandId: string): Promise<ModelJob> => {
     if (targetView.kind === 'table' && capabilities.tableReadOnly) return Promise.reject(new ApiFailure('AI proposals for shared tables are temporarily paused. Existing records and rules remain available to inspect.', 403, 'TABLE_READ_ONLY'));
     if (!capabilities.model.enabled) return Promise.reject(new ApiFailure('AI proposals are not enabled for this workspace.', 403));
@@ -671,6 +527,7 @@ export default function TabletopApp() {
   }, [capabilities.model.enabled, capabilities.tableReadOnly]);
 
   const pollAI = useCallback((workspaceId: string, jobId: string) => tabletopClient.modelJob(workspaceId, jobId), []);
+
   const requestTableAssistant = useCallback((targetView: WorkspaceView, prompt: string, commandId: ReturnType<typeof crypto.randomUUID>, sameCommandRetry = false): Promise<TableAssistantJob> => {
     const current = workspaceRef.current;
     if (!current || !sameWorkspaceActor(current, targetView) || current.actor.role !== targetView.actor.role || current.kind !== 'table' || !['owner', 'participant'].includes(current.actor.role)) {
@@ -694,69 +551,17 @@ export default function TabletopApp() {
     return tabletopClient.tableAssistantHistory(targetView.id, before, 20);
   }, []);
 
-  const confirmTableAssistantAction = useCallback(async (targetView: WorkspaceView, job: TableAssistantJob, commandId: ReturnType<typeof crypto.randomUUID>): Promise<void> => {
-    const current = workspaceRef.current;
-    if (!sameWorkspaceActor(current, targetView) || !current || current.kind !== 'table' || current.domain.kind !== 'table' || targetView.domain.kind !== 'table') {
-      throw new ApiFailure('This table seat changed. Open the current table before confirming an action.', 409, 'STALE_EPOCH');
-    }
-    if (capabilities.tableReadOnly) throw new ApiFailure('Actions for this table are temporarily paused.', 403, 'TABLE_READ_ONLY');
-    if (!['owner', 'participant'].includes(current.actor.role)) throw new ApiFailure('This seat cannot confirm table actions.', 403);
-    if (busy !== null) throw new ApiFailure('Finish the current table update, then review this proposal again.', 409, 'STALE_REVISION');
-    const proposal = job.result;
-    if (job.status !== 'completed' || proposal?.kind !== 'action-proposal' || !proposal.confirmationRequired) throw new ApiFailure('This assistant response does not contain a confirmable action.', 409, 'STALE_REVISION');
-    if (current.revision !== job.expectedRevision || current.epoch !== job.expectedEpoch || proposal.expectedRevision !== current.revision || proposal.expectedRuleRevision !== current.domain.ruleRevision || proposal.expectedActionRevision !== current.domain.actionRevision) {
-      const fresh = await tabletopClient.workspace(current.id).catch(() => null);
-      if (fresh && sameWorkspaceActor(workspaceRef.current, current)) setWorkspace(fresh);
-      throw new ApiFailure('The table changed after this proposal. Review the latest rules and ask again.', 409, 'STALE_REVISION');
-    }
-
-    const requestSequence = projectionSequenceRef.current;
-    setBusy('assistant.confirm');
-    try {
-      const ack = await tabletopClient.confirmTableAssistantAction(current.id, job.id, job.expectedRevision, job.expectedEpoch, commandId);
-      if (!sameWorkspaceActor(workspaceRef.current, current)) return;
-      const latest = await latestAfterAck(ack, current.id, requestSequence);
-      if (sameWorkspaceActor(workspaceRef.current, current)) setWorkspace(latest);
-      await refreshSession().catch(() => undefined);
-      showNotice('The confirmed action was applied to the shared table.', 'success');
-    } catch (error) {
-      if (error instanceof ApiFailure && error.conflict) {
-        const fresh = await tabletopClient.workspace(current.id).catch(() => null);
-        if (fresh && sameWorkspaceActor(workspaceRef.current, current)) setWorkspace(fresh);
-        showNotice('The table changed before this action could be confirmed. Its latest state is loaded; ask again if the action still applies.', 'error');
-      } else showNotice(errorText(error), 'error');
-      throw error;
-    } finally { setBusy(null); }
-  }, [busy, capabilities.tableReadOnly, latestAfterAck, refreshSession, setWorkspace, showNotice]);
+  const confirmTableAssistantAction = useCallback(
+    (targetView: WorkspaceView, job: TableAssistantJob, commandId: ReturnType<typeof crypto.randomUUID>) => commands.confirmTableAssistantAction(targetView, job, commandId, busy !== null),
+    [busy, commands],
+  );
 
   const loadAdminWorkspaces = useCallback((after?: string) => tabletopClient.adminWorkspaces(after), []);
 
-  const refreshWorkspaceProjection = useCallback(async (workspaceId: string) => {
-    const expected = workspaceRef.current;
-    if (!expected || expected.id !== workspaceId) throw new ApiFailure('The current table changed before it could be refreshed.', 409, 'STALE_EPOCH');
-    let newest: WorkspaceView | null = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const requestSequence = projectionSequenceRef.current;
-      const latest = await tabletopClient.workspace(workspaceId);
-      const current = workspaceRef.current;
-      if (!current || !sameChatRequestScope(expected, current) || !sameChatRequestScope(expected, latest)) {
-        throw new ApiFailure('The table or seat changed while refreshing. Open the current table before continuing.', 409, 'STALE_EPOCH');
-      }
-      if (canApplyWorkspaceRefresh(expected, current, latest, requestSequence, projectionSequenceRef.current)) {
-        setWorkspace(latest);
-        return;
-      }
-      // F025: a concurrent projection won the race; keep the freshest response and give it a moment to settle
-      // instead of failing a draft that is already ready.
-      newest = latest;
-      await new Promise((resolve) => setTimeout(resolve, draftRefreshBackoffMs(attempt)));
-    }
-    if (newest) {
-      setWorkspace(newest);
-      return;
-    }
-    throw new ApiFailure('The table kept changing while refreshing. Try the refresh again.', 409, 'STALE_REVISION');
-  }, [setWorkspace]);
+  const refreshWorkspaceProjection = useCallback(
+    (workspaceId: string) => commands.refreshWorkspaceProjection(workspaceId),
+    [commands],
+  );
 
   const download = useCallback(async (format: 'csv' | 'html') => {
     const current = workspaceRef.current;
@@ -819,21 +624,22 @@ export default function TabletopApp() {
   }, []);
 
   const requestCanvasFocus = useCallback((nodeId: string, open = true) => {
-    setSelectedNodeId(nodeId);
-    setFocusNodeId(nodeId);
+    const request = focusRequest(nodeId, open);
+    setSelectedNodeId(request.nodeId);
+    setFocusNodeId(request.nodeId);
     setFocusRequestKey((key) => key + 1);
-    if (open) setOpenedObjectId(nodeId);
+    if (request.open) setOpenedObjectId(request.nodeId);
   }, []);
 
   const focusEvidence = useCallback((sourceIds: string[]) => {
     if (!view || view.kind !== 'invoice') return;
     setFocusSourceIds(sourceIds);
-    requestCanvasFocus('invoice.source');
+    requestCanvasFocus(EVIDENCE_SOURCE_OBJECT);
   }, [requestCanvasFocus, view]);
 
   const backFromEvidence = useCallback(() => {
     setFocusSourceIds([]);
-    requestCanvasFocus('invoice.table');
+    requestCanvasFocus(EVIDENCE_TABLE_OBJECT);
   }, [requestCanvasFocus]);
 
   const selectCanvasNode = useCallback((nodeId: string | null) => {
@@ -1185,24 +991,6 @@ function seatLabel(seat: Seat): string {
   if (seat === 'mira') return 'Mira';
   if (seat === 'pip') return 'Pip';
   return `Member ${seat.slice('member-'.length)}`;
-}
-
-function inferredMime(filename: string): string {
-  return filename.toLowerCase().endsWith('.csv') ? 'text/csv' : filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' : filename.toLowerCase().endsWith('.txt') ? 'text/plain' : 'application/octet-stream';
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('The file could not be read from this device.'));
-    reader.onload = () => {
-      const value = typeof reader.result === 'string' ? reader.result : '';
-      const comma = value.indexOf(',');
-      if (comma < 0) reject(new Error('The file could not be prepared for upload.'));
-      else resolve(value.slice(comma + 1));
-    };
-    reader.readAsDataURL(file);
-  });
 }
 
 /** Table-wide display settings in the table options menu. Changes apply to everyone at this table. */

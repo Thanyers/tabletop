@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, GENERATIVE_LIMITS, type ControlDescriptor, type GenerativeCanvas, type GenerativeExpression, type GenerativeViewDescriptor, type ScenePrimitive } from '../../shared/generative-contracts';
+import type { GenerativeViewKind } from '../../shared/view-kinds';
 import { DICE_LIMITS } from '../../shared/dice';
 import type { TableValue } from '../../shared/table-contracts';
 
@@ -82,10 +83,20 @@ export const controlDescriptorSchema: z.ZodType<ControlDescriptor> = z.discrimin
   // F049: dice is additive; programs written before it existed still parse because they never use this branch.
   z.strictObject({ ...controlBase, kind: z.literal('dice'), parameter: generativeIdSchema, faces: z.number().int().min(DICE_LIMITS.minFaces).max(DICE_LIMITS.maxFaces), count: z.number().int().min(DICE_LIMITS.minCount).max(DICE_LIMITS.maxCount), modifier: z.number().int().min(-DICE_LIMITS.maxModifier).max(DICE_LIMITS.maxModifier).optional() }),
 ]);
-export const generativeViewDescriptorSchema: z.ZodType<GenerativeViewDescriptor> = z.discriminatedUnion('kind', [
-  z.strictObject({ id: generativeIdSchema, kind: z.literal('scene'), title: safeText, width: z.number().finite().positive().max(4096), height: z.number().finite().positive().max(4096), elements: z.array(scenePrimitiveSchema).max(GENERATIVE_LIMITS.sceneElements), relatedTo: relationsSchema }),
-  z.strictObject({ id: generativeIdSchema, kind: z.literal('chart'), title: safeText, chart: z.enum(['bar', 'line', 'scatter']), collection: generativeIdSchema, categoryField: generativeIdSchema, value: generativeExpressionSchema, color: generativePaintSchema.optional(), relatedTo: relationsSchema }),
-  z.strictObject({ id: generativeIdSchema, kind: z.literal('metric'), title: safeText, value: generativeExpressionSchema, format: z.enum(['number', 'percent', 'text']).optional(), relatedTo: relationsSchema }),
-  z.strictObject({ id: generativeIdSchema, kind: z.literal('controls'), title: safeText, controls: z.array(controlDescriptorSchema).max(GENERATIVE_LIMITS.controlsPerView), relatedTo: relationsSchema }),
-]);
+/**
+ * F078-T8: one wire schema per built-in view kind. Every branch stays a
+ * `z.strictObject` whose discriminator is the literal `kind`, so the wire
+ * contract is unchanged; the mapped record type is what makes a kind without a
+ * schema a compile error instead of an accidental rejection at runtime.
+ */
+const generativeViewSchemas = {
+  scene: z.strictObject({ id: generativeIdSchema, kind: z.literal('scene'), title: safeText, width: z.number().finite().positive().max(4096), height: z.number().finite().positive().max(4096), elements: z.array(scenePrimitiveSchema).max(GENERATIVE_LIMITS.sceneElements), relatedTo: relationsSchema }),
+  chart: z.strictObject({ id: generativeIdSchema, kind: z.literal('chart'), title: safeText, chart: z.enum(['bar', 'line', 'scatter']), collection: generativeIdSchema, categoryField: generativeIdSchema, value: generativeExpressionSchema, color: generativePaintSchema.optional(), relatedTo: relationsSchema }),
+  metric: z.strictObject({ id: generativeIdSchema, kind: z.literal('metric'), title: safeText, value: generativeExpressionSchema, format: z.enum(['number', 'percent', 'text']).optional(), relatedTo: relationsSchema }),
+  controls: z.strictObject({ id: generativeIdSchema, kind: z.literal('controls'), title: safeText, controls: z.array(controlDescriptorSchema).max(GENERATIVE_LIMITS.controlsPerView), relatedTo: relationsSchema }),
+} satisfies { readonly [K in GenerativeViewKind]: z.ZodType<Extract<GenerativeViewDescriptor, { kind: K }>> };
+
+/** Registry order, so branch order and error messages stay as they were; exported for the registration test. */
+export const generativeViewSchemaOptions = [generativeViewSchemas.scene, generativeViewSchemas.chart, generativeViewSchemas.metric, generativeViewSchemas.controls] as const;
+export const generativeViewDescriptorSchema: z.ZodType<GenerativeViewDescriptor> = z.discriminatedUnion('kind', generativeViewSchemaOptions);
 export const generativeCanvasSchema: z.ZodType<GenerativeCanvas> = z.strictObject({ version: z.literal(1), views: z.array(generativeViewDescriptorSchema).max(GENERATIVE_LIMITS.canvasViews) });

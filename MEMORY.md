@@ -5,6 +5,56 @@
 
 ## Lessons
 
+### 2026-10-24 — Accepted homepage copy left stale browser assertions
+- **What happened:** F077 passed fast PR checks but full dev/release validation failed while searching for the previous English homepage heading; the captured page showed the accepted new heading.
+- **Root cause:** the homepage review covered behavior and local illustration but did not update the existing Workers browser contract for English/Thai copy and learning-story markup.
+- **Correct behavior:** when landing copy or structure changes, search the existing browser suites for old strings/selectors, retain auth/language/navigation/reduced-motion assertions, and run the affected suite before release. Do not weaken assertions or change approved copy to satisfy an obsolete expectation.
+
+### 2026-10-24 — Release-cut marker assumed LF line endings
+- **What happened:** the release-cut script reported that CHANGELOG had no Unreleased heading on a Windows checkout, although the heading was present.
+- **Root cause:** its exact marker includes an LF newline and the working file used CRLF.
+- **Correct behavior:** before cutting on Windows, normalize only CHANGELOG line endings to LF, run the standard cut script, and verify the diff preserves all previously cut release sections. No release heading should be added manually as a workaround.
+
+### 2026-10-24 — Fixing an unclear metaphor erased the product thesis
+- **What happened:** replacing abstract tools with a cafe order-slip intro made F077 open on a use case and lost the original general story; technically valid TTS was judged flat by the user.
+- **Root cause:** optimized local clarity and measured audio timing without preserving the concept-to-problem-to-reversal arc or evaluating spoken delivery.
+- **Correct behavior:** establish tools adapting to people with recognizable additive examples, explain the software friction and Tabletop reversal, then show a case. Keep a separate delivery check for voice energy and naturalness; waveform checks cannot pass that criterion. Honor the explicit plain white/logo-only ending.
+
+### 2026-10-24 — Intro เครื่องมือและคลิปเงียบยังสื่อไม่ครบ
+- **What happened:** ผู้ใช้ไม่เข้าใจรูปเครื่องมือในintro F077และต้องอ่านทุกอย่างเองเพื่อเข้าใจคลิป
+- **Root cause:** ใช้รูปสัญลักษณ์แทนการกระทำ และจัดเวลาให้ครบ60วินาทีก่อนมีเสียงเล่าเรื่อง
+- **Correct behavior:** เปิดด้วยการใช้เครื่องมือและปัญหาที่มองเห็นได้ เขียนบทพูดก่อนจับเวลา ใช้เสียงจริงกำหนดจังหวะภาพและช่วงพักดูผล; ไม่บังคับความยาวเมื่อผู้ใช้ยกเลิกข้อจำกัดเวลา
+
+
+### 2026-10-24 — UI gate ผ่านแต่ Send/Review ยัง throw
+- **What happened:** F077หน้าpreviewผ่านgenericUIgate แต่flowหลายขั้นของSend/Reviewมีnull-queryก่อนอัปเดตคำขอและผล
+- **Root cause:** HTMLdraft-summaryไม่มีspanภาษาไทย/อังกฤษที่renderคาดไว้; genericinteractiongateไม่ได้ทำครบห้าบท
+- **Correct behavior:** ตรวจflowจริงตั้งแต่คำขอ→ส่ง→ตรวจ→ใช้และconsoleerrors พร้อมอ่านผลทุกช่วงหลังแก้; แยกผลfullUIgateออกจากscenarioacceptanceเสมอ
+
+### 2026-10-24 — ภาพการ์ดเพิ่มไม่เท่ากับเรื่องเครื่องมือปรับเข้ากับคน
+- **What happened:** ร่าง F077 รอบ 2 มีบอร์ดที่เพิ่มการ์ดและเปลี่ยนตัวเลข แต่ผู้ชมไม่เห็นว่าคนเจอปัญหาอะไรหรือพิมพ์ขอให้ปรับอย่างไร
+- **Root cause:** วาง timeline จากรายการความสามารถและ transitions แทนเหตุการณ์ในชีวิตคนใช้; คำขอแรกค้างอยู่ ขณะที่การเปลี่ยนถัดไปเกิดเอง
+- **Correct behavior:** ก่อนทำแต่ละ beat เขียนสี่ช่องให้ครบ: ปัญหาหรือความต้องการ / ข้อความที่คนพิมพ์ / การเปลี่ยนเครื่องมือหลังส่งและตรวจ / การลงมือใช้ที่เห็นผล โดยของเดิมยังอยู่ ตรวจเฟรมก่อนส่งและหลังใช้คู่กัน; ห้ามนับการเพิ่มการ์ดโดยไม่มีคำขอเป็นหลักฐานว่าเล่า evolution ชัดแล้ว
+### 2026-10-24 — Optional skipped ancestors suppressed staging after successful validation
+- **What happened:** dev `694d556` passed full validation, but staging was SKIPPED after F078-T3 added optional focused jobs upstream of the final validation job.
+- **Root cause:** GitHub propagates skipped jobs through dependency chains; the downstream deployment condition had no explicit status function, so the default success evaluation suppressed it despite `local-validation` succeeding.
+- **Correct behavior:** use explicit non-cancelled status evaluation together with push/dev and successful validation guards on staging. Verify the hosted staging job is successful and read back its exact source SHA; a successful overall validation run alone does not prove deployment.
+
+### 2026-10-24 — Union merges retained conflicting task-status rows
+- **What happened:** integrating parallel F078 PRs left repeated PLAN rows with both review and done states for the same task.
+- **Root cause:** `merge=union` preserves independent additions but cannot reconcile task identity or newer status.
+- **Correct behavior:** after each merge, list the task IDs touched by both branches, keep one authoritative active row per ID, and remove completed rows according to PLAN's board rule. Preserve completion evidence in spec, the feature document and PRs before committing.
+
+### 2026-10-24 — Focused browser gate exposes an immediate prefill read race
+- **What happened:** the new F078-T3 Linux gate sometimes read `Change this rule` immediately after requesting the exact runtime-switch prompt, while the same code passed other runs.
+- **Root cause:** the test read the textarea before React applied the parent prefill effect. A fixture-only manual hold reproduced the old value and controlled release produced the exact requested prompt.
+- **Correct behavior:** await the exact expected textarea value, then assert the full prompt; preserve reference/onSend/navigation checks. Keep the controlled red/release probe in the synthetic fixture, avoid arbitrary sleeps and do not change production behavior to repair harness timing.
+
+### 2026-10-24 — npm peer resolver fails while adding narrow dependency overrides
+- **What happened:** npm 10/11 threw an internal `edgesOut` error when regenerating the lockfile for compatible F078-T0 patches; the old lock remained unchanged.
+- **Root cause:** the failure was inside npm's peer-set resolution; the exact internal cause is unverified. The same manifest resolved with npm 12.2.1.
+- **Correct behavior:** use a scoped compatible npm invocation to regenerate the lock without global configuration changes, inspect changed package versions, then verify ordinary project `npm ci`, audit, unit/Worker tests and build before committing. Do not use broad `audit fix --force` or bypass the advisory gate.
+
 ### 2026-10-23 — คำถามอ้างกฎถูกค้นหาการ์ดรับไปก่อนส่ง
 - **What happened:** Askรายกฎล้างข้อความแต่ไม่มีassistant job; exactคำถามลงท้ายตรงไหนเปิดRulesแทน
 - **Root cause:** TableChat.submitเรียกcanvas object finderก่อนonSend และfinderตี WHERE_TH+aliasกฎเป็นnavigationโดยไม่ดูselected references; ไม่ใช่หลักฐานว่าproviderค้างหรือการทดสอบหลายแท็บเป็นสาเหตุ

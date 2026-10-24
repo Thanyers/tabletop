@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Tabletop keeps your work and its tools together on one shared canvas.">
+  <title>Tabletop | Tools that keep adapting to you</title>
+  <link rel="icon" href="../../../public/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../../src/tabletop/ui/tabletop-tokens.css">
+  <link rel="stylesheet" href="review.css">
+  <script src="review.js" defer></script>
+</head>
+<body class="tt-account-gate" data-language="en">
+  <a class="skip-link" href="#main">
+    <span data-lang="th" lang="th">ข้ามไปยังเนื้อหา</span>
+    <span data-lang="en" lang="en">Skip to content</span>
+  </a>
+  <div class="site-shell" id="top">
+    <header class="site-header wrap">
+      <a class="brand" href="#top" aria-label="กลับหน้าแรก Tabletop" data-aria-label-th="กลับหน้าแรก Tabletop" data-aria-label-en="Tabletop home">
+        <span class="tt-brand__mark brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="brand-word">tabletop<span>.</span></span>
+      </a>
+      <nav class="site-nav" aria-label="ส่วนในหน้านี้" data-aria-label-th="ส่วนในหน้านี้" data-aria-label-en="Page sections">
+        <a href="#film"><span data-lang="th" lang="th">เรื่องราว</span><span data-lang="en" lang="en">Story</span></a>
+        <a href="#before-after"><span data-lang="th" lang="th">ก่อน · หลัง</span><span data-lang="en" lang="en">Before / after</span></a>
+        <a href="readme-draft.md"><span data-lang="th" lang="th">README ฉบับร่าง</span><span data-lang="en" lang="en">README draft</span></a>
+      </nav>
+      <div class="header-actions">
+        <div class="language-switch" role="group" aria-label="ภาษา / Language">
+          <button type="button" lang="th" data-language="th" aria-pressed="false">ไทย</button>
+          <button type="button" lang="en" data-language="en" aria-pressed="true">EN</button>
+        </div>
+        <a class="header-cta" href="https://tabletop.ptchrr.workers.dev/">
+          <span data-lang="th" lang="th">เปิด Tabletop</span>
+          <span data-lang="en" lang="en">Open Tabletop</span>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M10 5l5 5-5 5" /></svg>
+        </a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="eyebrow-mark" aria-hidden="true"></span>
+            <span data-lang="th" lang="th">TABLETOP · งานของคุณบน Canvas เดียวกัน</span>
+            <span data-lang="en" lang="en">TABLETOP · YOUR WORK ON ONE CANVAS</span>
+          </p>
+          <h1 id="hero-title">
+            <span data-lang="th" lang="th">เครื่องมือค่อย ๆ<br>ปรับให้เข้ากับคุณ</span>
+            <span data-lang="en" lang="en">Tools that keep<br>adapting to you.</span>
+          </h1>
+          <p class="hero-lede">
+            <span data-lang="th" lang="th">บอกสิ่งที่อยากทำ แล้วค่อยขอปรับเครื่องมือเมื่อเริ่มใช้</span>
+            <span data-lang="en" lang="en">Describe what you want to do, then ask to adjust your tools as you use them.</span>
+          </p>
+          <p class="hero-support">
+            <span data-lang="th" lang="th">งานหลายแบบ · เครื่องมือที่ต่อยอดได้</span>
+            <span data-lang="en" lang="en">Different work · tools you can extend.</span>
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://tabletop.ptchrr.workers.dev/">
+              <span data-lang="th" lang="th">เริ่มโต๊ะของคุณ</span>
+              <span data-lang="en" lang="en">Start your table</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M10 5l5 5-5 5" /></svg>
+            </a>
+            <a class="text-link" href="#film">
+              <span data-lang="th" lang="th">ดูเรื่องราวพร้อมเสียง</span>
+              <span data-lang="en" lang="en">Watch the narrated story</span>
+              <span class="text-link-arrow" aria-hidden="true">↘</span>
+            </a>
+          </div>
+          <p class="hero-scope">
+            <span data-lang="th" lang="th">ตรวจร่างก่อนใช้</span>
+            <span data-lang="en" lang="en">Review drafts before use.</span>
+          </p>
+        </div>
+
+        <section class="board-demo" id="board-demo" aria-labelledby="board-title" data-current-step="1">
+          <div class="board-intro">
+            <div>
+              <p class="board-kicker">
+                <span data-lang="th" lang="th">โต๊ะตัวอย่าง · ร้านกาแฟ</span>
+                <span data-lang="en" lang="en">EXAMPLE TABLE · SMALL CAFÉ</span>
+              </p>
+              <h2 id="board-title">
+                <span data-lang="th" lang="th">เริ่มจากจดขาย แล้วค่อยต่อยอด</span>
+                <span data-lang="en" lang="en">Start with sales. Build on the same table.</span>
+              </h2>
+            </div>
+            <span class="sample-label">
+              <span data-lang="th" lang="th">ภาพอธิบาย · ข้อมูลตัวอย่าง</span>
+              <span data-lang="en" lang="en">Illustrative · sample data</span>
+            </span>
+          </div>
+
+          <div class="canvas-window">
+            <div class="canvas-toolbar">
+              <div class="canvas-title">
+                <span class="canvas-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <span>
+                  <strong data-lang="th" lang="th">ยอดขายวันนี้</strong>
+                  <strong data-lang="en" lang="en">Today's sales</strong>
+                  <small data-lang="th" lang="th">โต๊ะตัวอย่าง · Revision 1</small>
+                  <small data-lang="en" lang="en">Example table · Revision 1</small>
+                </span>
+              </div>
+              <span class="canvas-mode">
+                <span data-lang="th" lang="th">พื้นที่ทำงาน</span>
+                <span data-lang="en" lang="en">WORKSPACE</span>
+              </span>
+            </div>
+
+            <div class="canvas-workspace">
+              <section class="request-composer" aria-labelledby="request-heading">
+                <div class="request-composer-top">
+                  <div>
+                    <p class="node-label" id="request-heading">
+                      <span data-lang="th" lang="th">คำขอตัวอย่าง</span>
+                      <span data-lang="en" lang="en">SAMPLE REQUEST</span>
+                    </p>
+                <p class="request-hint">
+                  <span data-lang="th" lang="th">เลือกบท แล้วส่งคำขอตัวอย่างด้วยตัวเอง</span>
+                  <span data-lang="en" lang="en">Choose a chapter, then send the sample request yourself.</span>
+                </p>
+                    <p class="request-context" id="request-context">
+                      <span data-context-language="th">เริ่มจากรายการขายกาแฟและเค้ก</span>
+                      <span data-context-language="en">Start with coffee and cake sales.</span>
+                    </p>
+                  </div>
+                    <span class="sample-label sample-label-quiet">
+                    <span data-lang="th" lang="th">ภาพจำลอง</span>
+                    <span data-lang="en" lang="en">LOCAL DEMO</span>
+                  </span>
+                </div>
+                <label class="visually-hidden" for="request-input">
+                  <span data-lang="th" lang="th">ข้อความคำขอตัวอย่างแบบอ่านอย่างเดียว</span>
+                  <span data-lang="en" lang="en">Read-only sample request text</span>
+                </label>
+                <textarea id="request-input" rows="2" readonly aria-label="ข้อความคำขอตัวอย่างแบบอ่านอย่างเดียว" data-aria-label-th="ข้อความคำขอตัวอย่างแบบอ่านอย่างเดียว" data-aria-label-en="Read-only sample request text" placeholder="เลือกบทด้านล่างเพื่อเริ่มพิมพ์คำขอ" data-placeholder-th="เลือกบทด้านล่างเพื่อเริ่มพิมพ์คำขอ" data-placeholder-en="Choose a chapter below to start typing a request" disabled></textarea>
+                <div class="request-controls">
+                  <p class="request-disclosure">
+                    <span data-lang="th" lang="th">บทที่เลือกกำหนดภาพจำลอง · ข้อความไม่ได้ถูกประมวลผล</span>
+                    <span data-lang="en" lang="en">The selected chapter controls the illustration · text is not interpreted.</span>
+                  </p>
+                  <div class="request-buttons">
+                    <button class="button button-secondary" id="cancel-typing" type="button" hidden>
+                      <span data-lang="th" lang="th">แสดงข้อความทันที</span><span data-lang="en" lang="en">Show request now</span>
+                    </button>
+                    <button class="button button-primary" id="send-request" type="button" disabled>
+                      <span data-lang="th" lang="th">ส่งคำขอตัวอย่าง</span><span data-lang="en" lang="en">Send sample request</span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <div class="canvas-flow">
+                <article class="board-node prompt-node" aria-labelledby="prompt-heading">
+                  <p class="node-label" id="prompt-heading">
+                    <span data-lang="th" lang="th">โจทย์</span>
+                    <span data-lang="en" lang="en">THE BRIEF</span>
+                  </p>
+                  <blockquote id="request-copy" aria-live="polite">
+                    <span data-lang="th" lang="th">คำขอที่ส่งจะแสดงตรงนี้</span>
+                    <span data-lang="en" lang="en">The sent request will appear here.</span>
+                  </blockquote>
+                  <p class="node-footnote">
+                    <span data-lang="th" lang="th">เริ่มจากเรื่องที่อยากทำ</span>
+                    <span data-lang="en" lang="en">Start with the work.</span>
+                  </p>
+                </article>
+                <span class="flow-arrow" aria-hidden="true">
+                  <svg viewBox="0 0 36 20"><path d="M2 10h29M24 3l7 7-7 7" /></svg>
+                </span>
+
+                <div class="table-slot">
+                  <article class="board-node empty-node" id="table-empty" aria-labelledby="empty-table-title">
+                    <p class="node-label">
+                      <span data-lang="th" lang="th">ข้อมูลบนโต๊ะ</span>
+                      <span data-lang="en" lang="en">ON THE TABLE</span>
+                    </p>
+                    <div class="empty-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
+                    <h3 id="empty-table-title">
+                      <span data-lang="th" lang="th">เริ่มจากโจทย์</span>
+                      <span data-lang="en" lang="en">Start with a prompt</span>
+                    </h3>
+                    <p>
+                      <span data-lang="th" lang="th">กดขั้นแรกเพื่อวางรายการขายลงบนโต๊ะ</span>
+                      <span data-lang="en" lang="en">Build the table from the brief.</span>
+                    </p>
+                  </article>
+
+                  <article class="board-node table-node" id="table-card" aria-labelledby="sales-table-title" hidden>
+                    <div class="table-node-head">
+                      <div>
+                        <p class="node-label">
+                          <span data-lang="th" lang="th">รายการขาย</span>
+                          <span data-lang="en" lang="en">SALES RECORDS</span>
+                        </p>
+                        <h3 id="sales-table-title">
+                          <span data-lang="th" lang="th">ยอดขายวันนี้</span>
+                          <span data-lang="en" lang="en">Today's sales</span>
+                        </h3>
+                      </div>
+                      <div class="table-meta">
+                        <span class="record-count" id="record-count">2</span>
+                        <span class="table-state" id="table-state"></span>
+                      </div>
+                    </div>
+                    <div class="table-scroll">
+                      <table class="sales-table">
+                        <caption>
+                          <span data-lang="th" lang="th">รายการตัวอย่างจากร้านกาแฟ</span>
+                          <span data-lang="en" lang="en">Sample café sales records</span>
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col"><span data-lang="th" lang="th">รายการ</span><span data-lang="en" lang="en">Item</span></th>
+                            <th scope="col"><span data-lang="th" lang="th">จำนวน</span><span data-lang="en" lang="en">Qty</span></th>
+                            <th scope="col"><span data-lang="th" lang="th">ราคา</span><span data-lang="en" lang="en">Price</span></th>
+                            <th scope="col"><span data-lang="th" lang="th">รวม</span><span data-lang="en" lang="en">Total</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <th scope="row"><span data-lang="th" lang="th">กาแฟ</span><span data-lang="en" lang="en">Coffee</span></th>
+                            <td id="coffee-qty">3</td>
+                            <td id="coffee-price">25</td>
+                            <td id="coffee-total">75</td>
+                          </tr>
+                          <tr>
+                            <th scope="row"><span data-lang="th" lang="th">เค้ก</span><span data-lang="en" lang="en">Cake</span></th>
+                            <td id="cake-qty">3</td>
+                            <td id="cake-price">50</td>
+                            <td id="cake-total">150</td>
+                          </tr>
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <th colspan="3" scope="row">
+                              <span data-lang="th" lang="th">ยอดก่อนลด</span>
+                              <span data-lang="en" lang="en">Gross total</span>
+                            </th>
+                            <td id="table-gross">225</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <div class="sales-actions" id="sales-actions" hidden>
+                      <p>
+                        <span data-lang="th" lang="th">เพิ่มยอดขายขณะให้บริการ</span>
+                        <span data-lang="en" lang="en">Quick-add during service</span>
+                      </p>
+                      <div>
+                        <button type="button" class="quick-sale" id="quick-coffee" disabled aria-label="เพิ่มกาแฟ 1 แก้ว" data-aria-label-th="เพิ่มกาแฟ 1 แก้ว" data-aria-label-en="Add one coffee">
+                          <span aria-hidden="true">+</span><span data-lang="th" lang="th">กาแฟ 1</span><span data-lang="en" lang="en">Coffee 1</span>
+                        </button>
+                        <button type="button" class="quick-sale" id="quick-cake" disabled aria-label="เพิ่มเค้ก 1 ชิ้น" data-aria-label-th="เพิ่มเค้ก 1 ชิ้น" data-aria-label-en="Add one cake">
+                          <span aria-hidden="true">+</span><span data-lang="th" lang="th">เค้ก 1</span><span data-lang="en" lang="en">Cake 1</span>
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <span class="flow-arrow" aria-hidden="true">
+                  <svg viewBox="0 0 36 20"><path d="M2 10h29M24 3l7 7-7 7" /></svg>
+                </span>
+
+                <div class="summary-lane">
+                  <article class="board-node result-node" aria-labelledby="result-title">
+                    <p class="node-label">
+                      <span data-lang="th" lang="th">ผลลัพธ์</span>
+                      <span data-lang="en" lang="en">RESULT</span>
+                    </p>
+                    <h3 id="result-title" tabindex="-1">
+                      <span data-lang="th" lang="th">สรุปวันนี้</span>
+                      <span data-lang="en" lang="en">Today's total</span>
+                    </h3>
+                    <dl class="result-list">
+                      <div>
+                        <dt><span data-lang="th" lang="th">ยอดก่อนลด</span><span data-lang="en" lang="en">Gross</span></dt>
+                        <dd><span id="gross-output">ยังไม่มีข้อมูล</span></dd>
+                      </div>
+                      <div>
+                        <dt><span data-lang="th" lang="th">ส่วนลด</span><span data-lang="en" lang="en">Discount</span></dt>
+                        <dd><span id="discount-output">ยังไม่ใช้</span></dd>
+                      </div>
+                      <div class="net-row">
+                        <dt><span data-lang="th" lang="th">ยอดสุทธิ</span><span data-lang="en" lang="en">Net</span></dt>
+                        <dd><strong id="net-output">ยังไม่คำนวณ</strong></dd>
+                      </div>
+                    </dl>
+                    <p class="result-note" id="result-note">
+                      <span data-lang="th" lang="th">ยังไม่มีวิธีคำนวณบนโต๊ะ</span>
+                      <span data-lang="en" lang="en">No calculation on the table yet.</span>
+                    </p>
+                  </article>
+
+                  <div class="branch-stack" id="branch-stack">
+                    <article class="board-node chart-node" id="sales-chart" aria-labelledby="sales-chart-title" hidden>
+                      <p class="node-label">
+                        <span data-lang="th" lang="th">จากรายการเดียวกัน</span>
+                        <span data-lang="en" lang="en">FROM THE SAME ROWS</span>
+                      </p>
+                      <h3 id="sales-chart-title"><span data-lang="th" lang="th">ยอดขายแยกตามสินค้า</span><span data-lang="en" lang="en">Sales by item</span></h3>
+                      <div class="chart-rows" id="chart-rows" role="group" aria-label="กราฟยอดขายแยกตามสินค้า" data-aria-label-th="กราฟยอดขายแยกตามสินค้า" data-aria-label-en="Sales by item chart">
+                        <div class="chart-row"><span class="chart-item-label"><span data-lang="th" lang="th">กาแฟ</span><span data-lang="en" lang="en">Coffee</span></span><span class="bar-track"><i id="coffee-bar"></i></span><strong id="coffee-bar-value">75</strong></div>
+                        <div class="chart-row"><span class="chart-item-label"><span data-lang="th" lang="th">เค้ก</span><span data-lang="en" lang="en">Cake</span></span><span class="bar-track"><i id="cake-bar"></i></span><strong id="cake-bar-value">150</strong></div>
+                      </div>
+                      <p class="chart-note"><span data-lang="th" lang="th">อัปเดตตามจำนวนบนโต๊ะ</span><span data-lang="en" lang="en">Updates with the table quantities.</span></p>
+                    </article>
+                    <article class="board-node rule-node" id="rule-10" aria-labelledby="rule-10-title" hidden>
+                      <div class="rule-heading">
+                        <div>
+                          <p class="node-label">
+                            <span data-lang="th" lang="th">วิธีคำนวณ</span>
+                            <span data-lang="en" lang="en">CALCULATION</span>
+                          </p>
+                          <h3 id="rule-10-title">
+                            <span data-lang="th" lang="th">ส่วนลด 10%</span>
+                            <span data-lang="en" lang="en">10% discount</span>
+                          </h3>
+                        </div>
+                        <span class="rule-state" id="rule-10-state"></span>
+                      </div>
+                      <code>net = gross × 0.90</code>
+                      <p class="rule-description">
+                        <span data-lang="th" lang="th">ยอดขายรวม × 90%</span>
+                        <span data-lang="en" lang="en">Gross sales × 90%</span>
+                      </p>
+                    </article>
+
+                    <article class="board-node rule-node rule-node-new" id="rule-20" aria-labelledby="rule-20-title" hidden>
+                      <div class="rule-heading">
+                        <div>
+                          <p class="node-label">
+                            <span data-lang="th" lang="th">กฎที่เสนอใหม่</span>
+                            <span data-lang="en" lang="en">PROPOSED CHANGE</span>
+                          </p>
+                          <h3 id="rule-20-title">
+                            <span data-lang="th" lang="th">ส่วนลด 20%</span>
+                            <span data-lang="en" lang="en">20% discount</span>
+                          </h3>
+                        </div>
+                        <span class="rule-state" id="rule-20-state"></span>
+                      </div>
+                      <code>net = gross × 0.80</code>
+                      <p class="rule-description">
+                        <span data-lang="th" lang="th">เปลี่ยนส่วนลดเฉพาะจุด</span>
+                        <span data-lang="en" lang="en">Change this rule only</span>
+                      </p>
+                    </article>
+                  </div>
+                </div>
+              </div>
+
+              <p class="demo-status" id="demo-status" role="status" aria-live="polite">
+                <span data-status-language="th">เริ่มจากโจทย์ แล้วสร้างโต๊ะตัวอย่าง</span>
+                <span data-status-language="en">Start with the brief to build the example table.</span>
+              </p>
+
+              <p class="draft-summary" id="draft-summary" aria-live="polite">
+                <span data-lang="th" lang="th"></span>
+                <span data-lang="en" lang="en"></span>
+              </p>
+              <div class="demo-controls">
+                <div class="step-track" role="group" aria-label="ตัวอย่าง 5 ช่วง" data-aria-label-th="ตัวอย่าง 5 ช่วง" data-aria-label-en="Five example chapters">
+                  <button class="step-button is-current" type="button" data-chapter="1" aria-current="step">
+                    <span class="step-number" aria-hidden="true">01</span><span class="step-copy"><strong data-lang="th" lang="th">ตั้งโต๊ะขาย</strong><strong data-lang="en" lang="en">Sales table</strong><small data-lang="th" lang="th">กาแฟ · เค้ก</small><small data-lang="en" lang="en">coffee · cake</small></span>
+                  </button>
+                  <button class="step-button" type="button" data-chapter="2" disabled>
+                    <span class="step-number" aria-hidden="true">02</span><span class="step-copy"><strong data-lang="th" lang="th">งานยุ่ง</strong><strong data-lang="en" lang="en">Busy service</strong><small data-lang="th" lang="th">กดเพิ่มยอด</small><small data-lang="en" lang="en">quick entry</small></span>
+                  </button>
+                  <button class="step-button" type="button" data-chapter="3" disabled>
+                    <span class="step-number" aria-hidden="true">03</span><span class="step-copy"><strong data-lang="th" lang="th">ดูสินค้าขายดี</strong><strong data-lang="en" lang="en">See top sellers</strong><small data-lang="th" lang="th">กราฟจากข้อมูล</small><small data-lang="en" lang="en">chart from rows</small></span>
+                  </button>
+                  <button class="step-button" type="button" data-chapter="4" disabled>
+                    <span class="step-number" aria-hidden="true">04</span><span class="step-copy"><strong data-lang="th" lang="th">โปรช่วงบ่าย</strong><strong data-lang="en" lang="en">Afternoon offer</strong><small data-lang="th" lang="th">ส่วนลด 10%</small><small data-lang="en" lang="en">10% discount</small></span>
+                  </button>
+                  <button class="step-button" type="button" data-chapter="5" disabled>
+                    <span class="step-number" aria-hidden="true">05</span><span class="step-copy"><strong data-lang="th" lang="th">ปรับกฎเดิม</strong><strong data-lang="en" lang="en">Change the rule</strong><small data-lang="th" lang="th">10% → 20%</small><small data-lang="en" lang="en">10% → 20%</small></span>
+                  </button>
+                </div>
+                <div class="review-actions">
+                  <button class="button button-secondary" id="review-change" type="button" hidden>
+                    <span data-lang="th" lang="th">ตรวจร่าง</span><span data-lang="en" lang="en">Review draft</span>
+                  </button>
+                  <button class="button button-primary" id="apply-change" type="button" hidden disabled>
+                    <span data-lang="th" lang="th">ใช้การเปลี่ยนแปลง</span><span data-lang="en" lang="en">Apply change</span>
+                  </button>
+                  <button class="reset-button" id="reset-example" type="button">
+                    <span data-lang="th" lang="th">เริ่มตัวอย่างใหม่</span><span data-lang="en" lang="en">Reset example</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="board-caption">
+            <span data-lang="th" lang="th">กระดานนี้คำนวณจากข้อมูลตัวอย่างในเบราว์เซอร์ ไม่เรียก AI และไม่บันทึกเข้าระบบ</span>
+            <span data-lang="en" lang="en">This browser-only board calculates sample data. It does not call AI or save to Tabletop.</span>
+          </p>
+        </section>
+      </section>
+
+      <section class="film-section" id="film" aria-labelledby="film-title">
+        <div class="wrap">
+          <div class="section-heading film-heading">
+            <div>
+              <p class="eyebrow">
+                <span class="eyebrow-mark" aria-hidden="true"></span>
+                <span data-lang="th" lang="th">TABLETOP · เสียงบรรยายอังกฤษ</span>
+                <span data-lang="en" lang="en">TABLETOP · ENGLISH NARRATION</span>
+              </p>
+              <h2 id="film-title">
+                <span data-lang="th" lang="th">ดูวิธีทำงานบน Canvas</span>
+                <span data-lang="en" lang="en">See Tabletop on the canvas.</span>
+              </h2>
+            </div>
+            <p class="film-length">
+              <span data-lang="th" lang="th">เรื่องราวพร้อมเสียงบรรยายอังกฤษ<br>กดเล่นเมื่อพร้อม</span>
+              <span data-lang="en" lang="en">A narrated concept film<br>Play when ready</span>
+            </p>
+          </div>
+          <figure class="film-frame">
+            <video id="tabletop-film" controls playsinline preload="metadata" poster="media/tabletop-narrative-r6-poster.png" aria-label="ภาพเคลื่อนไหวแนวคิดของ Tabletop พร้อมข้อมูลตัวอย่าง">
+              <source src="media/tabletop-narrative-r6.mp4" type="video/mp4">
+              <track kind="captions" src="media/tabletop-narrative-r6-en.vtt" srclang="en" label="English">
+              <span data-lang="th" lang="th">เบราว์เซอร์นี้เล่นวิดีโอไม่ได้</span>
+              <span data-lang="en" lang="en">Your browser cannot play this video.</span>
+            </video>
+            <figcaption class="film-caption">
+              <span data-lang="th" lang="th">ภาพเคลื่อนไหวอธิบายแนวคิด · ข้อมูลตัวอย่าง · เสียงบรรยายอังกฤษและเสียงประกอบ</span>
+              <span data-lang="en" lang="en">Concept animation · illustrative data · English narration + sound effects</span>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="fit-section wrap" aria-labelledby="fit-title">
+        <div class="fit-copy">
+          <p class="eyebrow">
+            <span class="eyebrow-mark" aria-hidden="true"></span>
+            <span data-lang="th" lang="th">ทำไมต้อง Tabletop</span>
+            <span data-lang="en" lang="en">WHY TABLETOP</span>
+          </p>
+          <h2 id="fit-title">
+            <span data-lang="th" lang="th">เครื่องมือควรช่วยให้<br>คุณทำสิ่งที่อยากทำ</span>
+            <span data-lang="en" lang="en">Tools should help you<br>do what you want to do.</span>
+          </h2>
+          <p>
+            <span data-lang="th" lang="th">เก้าอี้ให้เรานั่งคิด ปากกาให้ความคิดมีรูปร่าง ค้อนช่วยให้มันเป็นจริง เราอยากให้ซอฟต์แวร์ช่วยให้เราอยู่กับงานตรงหน้าแบบนั้น และปรับต่อได้เมื่องานเปลี่ยน</span>
+            <span data-lang="en" lang="en">A chair gives you a place to think. A pen gives an idea a shape. A hammer helps you build it. We want software to keep you close to your work, and adapt as that work changes.</span>
+          </p>
+          <p class="fit-bridge">
+            <span data-lang="th" lang="th">งานเปลี่ยนได้ เครื่องมือจึงควรปรับต่อได้</span>
+            <span data-lang="en" lang="en">Work changes. The tools should have room to change with it.</span>
+          </p>
+        </div>
+        <div class="tool-strip" role="group" aria-label="เก้าอี้ ปากกา และค้อน" data-aria-label-th="เก้าอี้ ปากกา และค้อน" data-aria-label-en="Chair, pen, and hammer">
+          <div class="tool-object">
+            <svg viewBox="0 0 120 110" aria-hidden="true"><path d="M38 22v38h44V22M36 60l4 32m43-32-4 32M34 60h53M42 42h37" /><path d="M37 23h46" /></svg>
+            <span data-lang="th" lang="th">นั่งให้พอดี</span>
+            <span data-lang="en" lang="en">Focus</span>
+          </div>
+          <div class="tool-object">
+            <svg viewBox="0 0 120 110" aria-hidden="true"><path d="m32 78 8-25 40-40 17 17-40 40-25 8Z" /><path d="m40 53 17 17m23-40 17 17M32 78l16-5" /><path d="m80 13 17 17" /></svg>
+            <span data-lang="th" lang="th">ขีดแนวคิด</span>
+            <span data-lang="en" lang="en">Sketch</span>
+          </div>
+          <div class="tool-object">
+            <svg viewBox="0 0 120 110" aria-hidden="true"><path d="m34 30 15-15 22 22-15 15M51 52l-6 6m-6 0 24 24m-20-20L28 83l10 10 22-15" /><path d="M71 37 47 61" /></svg>
+            <span data-lang="th" lang="th">ลงมือสร้าง</span>
+            <span data-lang="en" lang="en">Build</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="process-section" aria-labelledby="process-title">
+        <div class="wrap">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">
+                <span class="eyebrow-mark" aria-hidden="true"></span>
+                <span data-lang="th" lang="th">เริ่มใช้ แล้วค่อยปรับ</span>
+                <span data-lang="en" lang="en">REQUEST · REVIEW · APPLY</span>
+              </p>
+              <h2 id="process-title">
+                <span data-lang="th" lang="th">การเปลี่ยนแปลงที่คุณเลือก</span>
+                <span data-lang="en" lang="en">Changes stay in your hands.</span>
+              </h2>
+            </div>
+            <p>
+              <span data-lang="th" lang="th">ส่งคำขอ ตรวจร่าง และกดใช้เมื่อพร้อม</span>
+              <span data-lang="en" lang="en">Send a request, review the draft, and apply it when ready.</span>
+            </p>
+          </div>
+          <ol class="process-list">
+            <li>
+              <span class="process-number">01</span>
+              <div>
+                <h3><span data-lang="th" lang="th">เลือกคำขอ แล้วส่ง</span><span data-lang="en" lang="en">Choose and send a request</span></h3>
+                <p><span data-lang="th" lang="th">ตัวอย่างพิมพ์ให้เห็นทีละตัวอักษร · คุณกดส่งเอง</span><span data-lang="en" lang="en">The sample types visibly · you choose when to send.</span></p>
+              </div>
+            </li>
+            <li>
+              <span class="process-number">02</span>
+              <div>
+                <h3><span data-lang="th" lang="th">ตรวจผล ก่อนกดใช้</span><span data-lang="en" lang="en">Review before applying</span></h3>
+                <p><span data-lang="th" lang="th">ดูสิ่งที่จะเพิ่ม และคงข้อมูลเดิมไว้</span><span data-lang="en" lang="en">See what will change while keeping existing data.</span></p>
+              </div>
+            </li>
+            <li>
+              <span class="process-number">03</span>
+              <div>
+                <h3><span data-lang="th" lang="th">เห็นยอดจากข้อมูลชุดเดียวกัน</span><span data-lang="en" lang="en">Read totals from the same rows</span></h3>
+                <p><span data-lang="th" lang="th">จำนวน กราฟ ยอดก่อนลด และยอดสุทธิอัปเดตตามข้อมูลตัวอย่าง</span><span data-lang="en" lang="en">Quantities, chart, gross, and net follow the sample data.</span></p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="change-section wrap" id="before-after" aria-labelledby="change-title">
+        <div class="change-heading">
+          <p class="eyebrow">
+            <span class="eyebrow-mark" aria-hidden="true"></span>
+            <span data-lang="th" lang="th">รายการเดียวกัน · ผลลัพธ์ที่เชื่อมกัน</span>
+            <span data-lang="en" lang="en">SAME ROWS · CONNECTED RESULTS</span>
+          </p>
+          <h2 id="change-title">
+            <span data-lang="th" lang="th">กดเพิ่มหนึ่งครั้ง<br>แล้วเห็นผลทั้งโต๊ะ</span>
+            <span data-lang="en" lang="en">One quick sale.<br>Updated across the table.</span>
+          </h2>
+          <p>
+            <span data-lang="th" lang="th">ตัวอย่างนี้เริ่มจากกาแฟ 3 แก้วและเค้ก 3 ชิ้น จากนั้นกดเพิ่มกาแฟหนึ่งครั้ง ตัวเลขด้านล่างมาจากรายการจริงบนโต๊ะ</span>
+            <span data-lang="en" lang="en">Start with three coffees and three cakes, then add one coffee. The numbers below come from those sample rows.</span>
+          </p>
+        </div>
+        <div class="change-ledger">
+          <article class="change-entry">
+            <p class="change-label">
+              <span data-lang="th" lang="th">ยอดก่อนลด</span>
+              <span data-lang="en" lang="en">GROSS SALES</span>
+            </p>
+            <p class="change-number"><span>225</span><span class="change-arrow" aria-hidden="true">→</span><strong>250</strong></p>
+            <p>
+              <span data-lang="th" lang="th">หลังเพิ่มกาแฟ 1 แก้ว · 4×25 + 3×50</span>
+              <span data-lang="en" lang="en">After one coffee · 4×25 + 3×50</span>
+            </p>
+          </article>
+          <article class="change-entry">
+            <p class="change-label">
+              <span data-lang="th" lang="th">เปลี่ยนกฎส่วนลด</span>
+              <span data-lang="en" lang="en">CHANGE THE DISCOUNT RULE</span>
+            </p>
+            <p class="change-number"><span>10%</span><span class="change-arrow" aria-hidden="true">→</span><strong>20%</strong></p>
+            <p>
+              <span data-lang="th" lang="th">ยอดก่อนลด 250 คงเดิม · ยอดสุทธิ 225 → 200</span>
+              <span data-lang="en" lang="en">Gross stays at 250 · net changes from 225 to 200.</span>
+            </p>
+          </article>
+        </div>
+        <div class="change-foot">
+          <p>
+            <span data-lang="th" lang="th">ตัวอย่างประกอบคำอธิบาย · ค่าคำนวณมาจากข้อมูลสมมติ</span>
+            <span data-lang="en" lang="en">Illustrative example · calculated from sample data.</span>
+          </p>
+          <a class="text-link" href="#board-demo">
+            <span data-lang="th" lang="th">ลองเปลี่ยนบนโต๊ะตัวอย่าง</span>
+            <span data-lang="en" lang="en">Try the example board</span>
+            <span class="text-link-arrow" aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="uses-section" aria-labelledby="uses-title">
+        <div class="wrap">
+          <div class="uses-layout">
+            <div class="uses-copy">
+              <p class="eyebrow">
+                <span class="eyebrow-mark" aria-hidden="true"></span>
+                <span data-lang="th" lang="th">งาน · เรียนรู้ · เล่น</span>
+                <span data-lang="en" lang="en">WORK · LEARN · PLAY</span>
+              </p>
+              <h2 id="uses-title">
+                <span data-lang="th" lang="th">ทุกโต๊ะมีเหตุผลของมัน</span>
+                <span data-lang="en" lang="en">Every table has a reason to exist.</span>
+              </h2>
+              <ul class="uses-list">
+                <li>
+                  <strong><span data-lang="th" lang="th">งาน</span><span data-lang="en" lang="en">Work</span></strong>
+                  <span data-lang="th" lang="th">เก็บรายการ วิธีคำนวณ และผลลัพธ์ไว้ด้วยกัน</span>
+                  <span data-lang="en" lang="en">Keep records, calculations, and results together.</span>
+                </li>
+                <li>
+                  <strong><span data-lang="th" lang="th">เรียนรู้</span><span data-lang="en" lang="en">Learning</span></strong>
+                  <span data-lang="th" lang="th">เปลี่ยนแรงหรือมวล แล้วสังเกตผลจากการทดลอง</span>
+                  <span data-lang="en" lang="en">Change force or mass and see the experiment respond.</span>
+                </li>
+                <li>
+                  <strong><span data-lang="th" lang="th">เล่น</span><span data-lang="en" lang="en">Play</span></strong>
+                  <span data-lang="th" lang="th">เห็นกติกา ลำดับตา และผลจากการตัดสินใจ</span>
+                  <span data-lang="en" lang="en">Follow rules, turns, and the effects of decisions.</span>
+                </li>
+              </ul>
+              <a class="text-link demo-link" href="https://tabletop.ptchrr.workers.dev/demo" target="_blank" rel="noopener">
+                <span data-lang="th" lang="th">ลองเดโมที่เตรียมไว้</span>
+                <span data-lang="en" lang="en">Try the prepared demo</span>
+                <span class="text-link-arrow" aria-hidden="true">↗</span>
+              </a>
+              <p class="scope-note">
+                <span data-lang="th" lang="th">ข้อมูลและผู้เล่นจำลอง · เดโมที่เตรียมไว้</span>
+                <span data-lang="en" lang="en">Prepared demos · simulated data and players.</span>
+              </p>
+            </div>
+
+            <div class="showcase-gallery">
+              <figure class="story-still">
+                <div class="story-image-wrap">
+                  <img id="legacy-story-image"
+                       src="../../../docs/showcase/tabletop-story-poster.png"
+                       data-poster="../../../docs/showcase/tabletop-story-poster.png"
+                       data-animation="../../../docs/showcase/tabletop-story.gif"
+                       data-alt-th="ภาพแนวคิดโต๊ะบทเรียนเรื่องแรงและการเคลื่อนที่ พร้อมกฎและผลการทดลอง"
+                       data-alt-en="Concept illustration of a force-and-motion lesson table with a rule and experiment results."
+                       alt="ภาพแนวคิดโต๊ะบทเรียนเรื่องแรงและการเคลื่อนที่ พร้อมกฎและผลการทดลอง"
+                       width="960" height="540" loading="lazy" decoding="async">
+                </div>
+                <figcaption class="gallery-caption">
+                  <span>
+                    <strong data-lang="th" lang="th">ภาพเคลื่อนไหวเรื่องราวเดิม</strong>
+                    <strong data-lang="en" lang="en">Original Tabletop story animation</strong>
+                    <small data-lang="th" lang="th">แนวคิดการเรียนรู้เรื่องแรงและมวล · กดเพื่อเล่น</small>
+                    <small data-lang="en" lang="en">Force-and-motion learning concept · play on request</small>
+                  </span>
+                  <button class="animation-toggle" id="legacy-story-toggle" type="button" data-playing="false" aria-pressed="false" aria-label="เล่นภาพเคลื่อนไหวเดิม 20 วินาที">
+                    <span data-lang="th" lang="th" data-when="play">เล่นภาพเดิม</span>
+                    <span data-lang="en" lang="en" data-when="play">Play original</span>
+                    <span data-lang="th" lang="th" data-when="stop">หยุดภาพเคลื่อนไหว</span>
+                    <span data-lang="en" lang="en" data-when="stop">Stop animation</span>
+                  </button>
+                </figcaption>
+              </figure>
+
+              <div class="proof-stack">
+                <figure>
+                  <img src="../../../docs/showcase/physics.png"
+                       data-alt-th="ภาพหน้าจอจากเดโม Physics ที่เตรียมไว้: รถเคลื่อนที่ 4 เมตรใน 2 วินาที ด้วยแรง 10 นิวตันและมวล 5 กิโลกรัม คำนวณความเร่งได้ 2 เมตรต่อวินาทียกกำลังสอง"
+                       data-alt-en="Screenshot from the prepared Physics demo: a car moves 4 m in 2 s with 10 N force and 5 kg mass, calculating acceleration of 2 m/s²."
+                       alt="ภาพหน้าจอจากเดโม Physics ที่เตรียมไว้ แสดงการทดลองแรงและมวล"
+                       width="1652" height="928" loading="lazy" decoding="async">
+                  <figcaption class="gallery-caption">
+                    <span><strong>Physics</strong><small data-lang="th" lang="th">เดโมบทเรียนแรงและมวล · ข้อมูลจำลอง</small><small data-lang="en" lang="en">Force-and-mass lesson demo · simulated data</small></span>
+                    <a href="https://tabletop.ptchrr.workers.dev/demo" target="_blank" rel="noopener" aria-label="เปิดเดโม Physics ที่เตรียมไว้" data-aria-label-th="เปิดเดโม Physics ที่เตรียมไว้" data-aria-label-en="Open the prepared Physics demo">
+                      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 14 14 6M7 6h7v7" /></svg>
+                    </a>
+                  </figcaption>
+                </figure>
+                <figure>
+                  <img src="../../../docs/showcase/encounter.png"
+                       data-alt-th="ภาพหน้าจอจากเดโม Encounter แบบร่วมมือ แสดงตัวละครสองตัว ลำดับตา และการกระทำกางโล่"
+                       data-alt-en="Screenshot from the prepared cooperative Encounter demo, showing two characters, turns, and a shield action."
+                       alt="ภาพหน้าจอจากเดโม Encounter แบบร่วมมือ แสดงกระดานตัวละครและการกระทำ"
+                       width="1652" height="928" loading="lazy" decoding="async">
+                  <figcaption class="gallery-caption">
+                    <span><strong>Encounter</strong><small data-lang="th" lang="th">เดโมเล่นร่วมกัน · ผู้เล่นจำลอง</small><small data-lang="en" lang="en">Cooperative play demo · simulated players</small></span>
+                    <a href="https://tabletop.ptchrr.workers.dev/demo" target="_blank" rel="noopener" aria-label="เปิดเดโม Encounter ที่เตรียมไว้" data-aria-label-th="เปิดเดโม Encounter ที่เตรียมไว้" data-aria-label-en="Open the prepared Encounter demo">
+                      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 14 14 6M7 6h7v7" /></svg>
+                    </a>
+                  </figcaption>
+                </figure>
+              </div>
+            </div>
+          </div>
+          <p class="demo-provenance">
+            <span data-lang="th" lang="th">ภาพหน้าจอจากเดโมสาธารณะที่เตรียมไว้ · ข้อมูลและผู้เล่นจำลอง</span>
+            <span data-lang="en" lang="en">Screenshots from prepared public demos · simulated data and players.</span>
+          </p>
+        </div>
+      </section>
+
+      <section class="closing-section" aria-labelledby="closing-title">
+        <div class="wrap closing-content">
+          <div>
+            <p class="eyebrow">
+              <span class="eyebrow-mark" aria-hidden="true"></span>
+              <span data-lang="th" lang="th">โต๊ะของคุณเริ่มได้ตรงนี้</span>
+              <span data-lang="en" lang="en">START WITH YOUR WORK</span>
+            </p>
+            <h2 id="closing-title">
+                <span data-lang="th" lang="th">เริ่มจากเรื่องของคุณ<br>แล้วปรับโต๊ะให้เข้ากับวิธีทำงาน</span>
+                <span data-lang="en" lang="en">Start with your work.<br>Shape the table around how you work.</span>
+            </h2>
+            <p>
+                <span data-lang="th" lang="th">เริ่มจากเรื่องที่คุณอยากทำ แล้วค่อยต่อยอดเครื่องมือบน Canvas เดียวกัน</span>
+                <span data-lang="en" lang="en">Start with what you want to do, then extend your tools on the same canvas.</span>
+            </p>
+          </div>
+          <div class="closing-actions">
+            <a class="button button-light" href="https://tabletop.ptchrr.workers.dev/">
+              <span data-lang="th" lang="th">เริ่มโต๊ะของคุณ</span>
+              <span data-lang="en" lang="en">Start your table</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M10 5l5 5-5 5" /></svg>
+            </a>
+            <p class="closing-scope">
+              <span data-lang="th" lang="th">เครื่องมือทำงานภายในส่วนประกอบและระบบคำนวณที่รองรับ เครื่องมือที่ร่างไว้อาจต้องปรับก่อนใช้</span>
+              <span data-lang="en" lang="en">Tools work within supported components and compute runtimes. Drafts may need adjustment before use.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer wrap">
+      <a class="brand footer-brand" href="#top" aria-label="กลับหน้าแรก Tabletop" data-aria-label-th="กลับหน้าแรก Tabletop" data-aria-label-en="Tabletop home">
+        <span class="tt-brand__mark brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="brand-word">tabletop<span>.</span></span>
+      </a>
+      <p>
+        <span data-lang="th" lang="th">ชุดร่างสำหรับทบทวน · ยังไม่เปลี่ยนหน้าเว็บหรือ README ที่เผยแพร่</span>
+        <span data-lang="en" lang="en">Review draft · The published site and README have not changed.</span>
+      </p>
+      <nav class="source-links" aria-label="ไฟล์ประกอบการทบทวน" data-aria-label-th="ไฟล์ประกอบการทบทวน" data-aria-label-en="Supporting review files">
+        <a href="README.md"><span data-lang="th" lang="th">แผน</span><span data-lang="en" lang="en">Plan</span></a>
+        <a href="references.md"><span data-lang="th" lang="th">แหล่งอ้างอิง</span><span data-lang="en" lang="en">References</span></a>
+        <a href="landing-copy.md"><span data-lang="th" lang="th">ข้อความ</span><span data-lang="en" lang="en">Copy</span></a>
+        <a href="readme-draft.md"><span data-lang="th" lang="th">README</span><span data-lang="en" lang="en">README</span></a>
+        <a href="video-brief.md"><span data-lang="th" lang="th">Storyboard</span><span data-lang="en" lang="en">Storyboard</span></a>
+        <a href="evidence.md"><span data-lang="th" lang="th">ขอบเขตหลักฐาน</span><span data-lang="en" lang="en">Evidence limits</span></a>
+      </nav>
+    </footer>
+  </div>
+</body>
+</html>

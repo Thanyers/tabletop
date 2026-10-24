@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from 'react';
 import { recordChoiceLabels, recordSummary } from './record-summary';
 import { Pause, Play } from 'lucide-react';
 import type { ActorContext } from '../shared/contracts';
 import type { ControlDescriptor, GenerativeCanvas, GenerativeScalar, GenerativeViewDescriptor } from '../shared/generative-contracts';
+import type { GenerativeViewKind } from '../shared/view-kinds';
 import type { TableAction, TableParameter, TableState, TableValue } from '../shared/table-contracts';
 import { DICE_LIMITS, diceTotalFitsParameter, diePips, rollDice, type DiceRoll } from '../shared/dice';
 import { rollNotation } from '../shared/roll';
@@ -203,7 +204,7 @@ export function GeneratedCanvasObject({ view, state, descriptor, busy, onCommand
   </section>;
 }
 
-function GeneratedViewContent({ projected, actionProjected, descriptor, actionState, workspaceView, previewOnly, sandboxEnabled, previewStoreKey, busy, onSimulate, onCommit, onRoll }: {
+interface GeneratedViewProps {
   projected: EvaluatedGenerativeView;
   actionProjected?: EvaluatedGenerativeView;
   descriptor: GenerativeViewDescriptor;
@@ -216,15 +217,36 @@ function GeneratedViewContent({ projected, actionProjected, descriptor, actionSt
   onSimulate: (action: TableAction, inputs: Record<string, TableValue>, ownerId: string) => TableState | null;
   onCommit: (action: TableAction, inputs: Record<string, TableValue>, ownerId: string) => Promise<boolean>;
   onRoll: (actionId: string, parameterId: string) => Promise<boolean>;
-}) {
-  if (projected.kind === 'metric' && descriptor.kind === 'metric') return <MetricView projected={projected} />;
-  if (projected.kind === 'chart' && descriptor.kind === 'chart') return <ChartView projected={projected} expanded={previewOnly || false} />;
-  if (projected.kind === 'scene' && descriptor.kind === 'scene') return <SceneView projected={projected} actionProjected={actionProjected?.kind === 'scene' ? actionProjected : undefined} descriptor={descriptor} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} />;
-  if (projected.kind === 'controls' && descriptor.kind === 'controls') {
-    if (actionProjected?.kind !== 'controls') return <p className="tt-generated-canvas__error" role="status">Controls are unavailable until the committed table state can be evaluated.</p>;
-    return <ControlsView projected={actionProjected} state={actionState} workspaceView={workspaceView} previewOnly={previewOnly} sandboxEnabled={sandboxEnabled} previewStoreKey={previewStoreKey} busy={busy} onSimulate={onSimulate} onCommit={onCommit} onRoll={onRoll} />;
-  }
+}
+
+function GeneratedViewMismatch() {
   return <p className="tt-generated-canvas__error" role="status">The generated view type does not match its descriptor.</p>;
+}
+
+/**
+ * F078-T8: one renderer per registered Canvas view kind. The mapped record type
+ * makes a kind without a renderer a compile error instead of a silent fallback;
+ * the remaining fallback only covers a projected/descriptor kind mismatch.
+ */
+export const generatedViewRenderers: { readonly [K in GenerativeViewKind]: (props: GeneratedViewProps) => ReactElement } = {
+  metric: props => props.projected.kind === 'metric' && props.descriptor.kind === 'metric'
+    ? <MetricView projected={props.projected} />
+    : <GeneratedViewMismatch />,
+  chart: props => props.projected.kind === 'chart' && props.descriptor.kind === 'chart'
+    ? <ChartView projected={props.projected} expanded={props.previewOnly} />
+    : <GeneratedViewMismatch />,
+  scene: props => props.projected.kind === 'scene' && props.descriptor.kind === 'scene'
+    ? <SceneView projected={props.projected} actionProjected={props.actionProjected?.kind === 'scene' ? props.actionProjected : undefined} descriptor={props.descriptor} state={props.actionState} workspaceView={props.workspaceView} previewOnly={props.previewOnly} sandboxEnabled={props.sandboxEnabled} previewStoreKey={props.previewStoreKey} busy={props.busy} onSimulate={props.onSimulate} onCommit={props.onCommit} />
+    : <GeneratedViewMismatch />,
+  controls: props => {
+    if (props.projected.kind !== 'controls' || props.descriptor.kind !== 'controls') return <GeneratedViewMismatch />;
+    if (props.actionProjected?.kind !== 'controls') return <p className="tt-generated-canvas__error" role="status">Controls are unavailable until the committed table state can be evaluated.</p>;
+    return <ControlsView projected={props.actionProjected} state={props.actionState} workspaceView={props.workspaceView} previewOnly={props.previewOnly} sandboxEnabled={props.sandboxEnabled} previewStoreKey={props.previewStoreKey} busy={props.busy} onSimulate={props.onSimulate} onCommit={props.onCommit} onRoll={props.onRoll} />;
+  },
+};
+
+function GeneratedViewContent(props: GeneratedViewProps) {
+  return generatedViewRenderers[props.descriptor.kind](props);
 }
 
 function MetricView({ projected }: { projected: Extract<EvaluatedGenerativeView, { kind: 'metric' }> }) {
