@@ -80,6 +80,28 @@ Behavior that had to stay identical and is now pinned by tests: an acknowledgeme
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **927 passed / 5 skipped (932)** (baseline 912 + 15 seam tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan **830 files / 0 findings**, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally** for this client-only move; `src/tabletop/TabletopApp.tsx` is an explicitly uncovered path for the integration-gate planner, so the PR runs every focused gate (built Worker boot, F066 rules harness, compute checks, Linux container smoke) and the full dev run after merge covers the browser suites. No schema, retention, billing or visibility change.
 
+Required PR CI ([run40079154319](https://github.com/Thanyers/tabletop/actions/runs/40079154319)) passed `local-validation`, fast-checks, the built Worker startup probes, the **F066 composer/reference-routing browser harness** and the focused compute tests, with the three browser suites and staging correctly skipped on a pull request. Merged into `dev` as `90c0ad0`.
+
+### T5b — navigation/focus lifecycle (PR #268)
+
+Moved out of `TabletopApp` into `src/tabletop/navigation/workspace-navigation.ts` as pure decisions: `pageForPath`, `pathForProjection`, `nextHistoryWrite` (returns `skip` / `replace` / `push` plus the mode the next write starts from), `signInReturnPath`, `isSameOpenTable`, `tableChangeReset` with `pendingRulesObject`, and `focusRequest` with the invoice evidence object ids. The `AppPage` type moved with them.
+
+The component keeps every piece of React state — projection, page, selection, focus, opened card, draft prefill, rename and invitation panels — and only applies the returned decision. No route, history-entry count or visual behavior changed, and this is not a UI redesign.
+
+One behavior is deliberately tightened, and it is called out rather than hidden: the `popstate` handler now checks `isSameOpenTable` before applying a fetched table, so a back/forward fetch that resolves after the member switched tables no longer draws the previous table under the new address. The rule that a chat-first table opens nothing until there is a rule draft to review (F006) is now a named function, and a participant is taken to the review card because F035 gives participants the owner's permissions except delete/reset — the test states that rather than assuming opposite.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **937 passed / 5 skipped (942)** (927 from T5a + 10 navigation tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan clean, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: `src/tabletop/TabletopApp.tsx` is an explicitly uncovered planner path, so the PR selects every focused gate, and the three browser suites run in the full dev run after merge. No schema, retention, billing or visibility change.
+
+### T6a — Room job view/progress seam (PR #267)
+
+Moved out of `cloudflare/room.ts` into `cloudflare/room-job-view.ts`: `PublicModelJob`, the assistant confirmation message and job views, the draft job status/view functions, `publicClarification`, and the four redaction/clamping helpers (`draftIdentityReplacements`, `boundedFailureDetails`, `boundedSearchProgress`, `boundedResearch`). The token/cursor/prompt constants move with them so there is one definition.
+
+Every moved function is a free function with no `this`, storage, clock or alarm, and the module imports no React and no client code. The Room keeps routing, the `202`/`200` split, `ctx.waitUntil`, alarm scheduling and the open-vs-private scope selection, so a projection move cannot change when a job is polled or who may read it.
+
+Behavior that had to stay identical: JSON body shape **and key order**, absent-vs-undefined keys, the `revoked → failed` and `committing → running` collapses, the clarified-answer and auto-apply fields, failure messages, and the redaction-before-clamp bounds. A malformed stored row still throws `INTERNAL_ERROR` rather than degrading to a default view.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, Workers **204 passed / 0 failed** (unchanged from baseline, including the `room.test.ts` view/progress/redaction cases), `npm run build` passed, `npm run build:cloudflare` (Wrangler dry-run) passed, lint **0 errors** with the same three pre-existing `room.ts` warnings (`ModelProviderClosed`, `ModelRequestTimeout`, `empty`, all dead before this change and left alone to keep scope), public scan **830 files / 0 findings**, `changelog.ts check` 7 fragments, `git diff --check` clean. `cloudflare/room.ts` went from 1809 to 1489 lines with a 301-line `room-job-view.ts`. The unit/SQL suite is **SKIPPED by nature** (it covers `src/` and `server/`, neither touched) and browser suites run in the full dev run after merge. No schema, billing, retention or visibility change.
+
 ### T8 — typed built-in Canvas view registration (PR #270)
 
 `src/tabletop/shared/view-kinds.ts` is the new leaf module: `import type` only, no zod, and plain metadata per kind (`layoutRole`, `needsRows`, `needsActions`) declared `satisfies { readonly [K in GenerativeViewDescriptor['kind']]: GenerativeViewKindMetadata }`. `GenerativeViewDescriptor` stays in `generative-contracts.ts` as the source of truth and does not import the registry, so there is no new runtime import cycle and no module-scope constant read across one (the 2026-10-23 `TABLE_AI_INPUT_BYTES` lesson).
@@ -90,7 +112,7 @@ Wire contract, `GENERATIVE_LIMITS`, descriptor fields and product primitives are
 
 Controlled RED, twice, then reverted byte-identically (SHA-256 verified against the pre-probe files): (1) adding a fifth `timeline` kind to the wire union only makes `tsc` fail in 19 places, and compiling that leaf alone shows the first failure is the registry (`TS1360 … Property 'timeline' is missing`); (2) also registering it in the metadata satisfies the leaf alone, while the full program still fails in 14 places (schema, validation, evaluator, runtime index, renderer map and the typed test fixtures) and the registration tests fail 8 cases. After the revert, `npm run typecheck` and the touched suites are green again.
 
-Node `v22.23.2`: `npm run typecheck` (three configs) passed; `npm test` **939 passed / 5 skipped (944)** (baseline 927 / 5, +12 registration tests); lint **0 errors / 111 warnings** (same as baseline); `npm run build` passed; `node scripts/check-public-files.mjs` **0 findings**; `npx tsx server/changelog.ts check` 8 fragments; `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: this PR touches shared, client runtime, the canvas UI and one provider prompt module, not Worker, Room, transport or persistence code.
+Node `v22.23.2`: `npm run typecheck` (three configs) passed; `npm test` **949 passed / 5 skipped (954)** after merging dev `bad48d7` (dev was 937 / 5, plus the 12 registration tests); lint **0 errors / 111 warnings** (same as baseline); `npm run build` passed; `node scripts/check-public-files.mjs` **842 files / 0 findings**; `npx tsx server/changelog.ts check` 10 fragments; `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: this PR touches shared, client runtime, the canvas UI and one provider prompt module, not Worker, Room, transport or persistence code.
 
 ## First delivery group status (2026-10-24)
 
