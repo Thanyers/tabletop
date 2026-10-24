@@ -75,7 +75,7 @@ export function isSameOpenTable(requestedId: string, currentId: string | null | 
  * When a different table is open, the late result is dropped instead of replacing it.
  */
 export function shouldApplyLateOpen(requestedId: string, currentId: string | null | undefined): boolean {
-  return currentId === null || currentId === undefined || currentId === requestedId;
+  return currentId === null || currentId === undefined || isSameOpenTable(requestedId, currentId);
 }
 
 export interface TableChangeReset {
