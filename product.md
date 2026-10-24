@@ -32,14 +32,14 @@ Over time, useful interfaces, rules, and connections should grow from what peopl
 
 ### Current beta
 
-Today, a table owner can bring supported text files to a shared table, ask for bounded data and rule proposals, inspect them, and use them after the review and approval steps. Participants act through supported table controls; the server checks permissions and rules. Source-file consent, private owner drafts, and shared active records follow the current contracts in [Generic table design](docs/GENERIC_TABLE_DESIGN.md).
+Today, people can start a table from an intent and add supported files later. They can shape bounded data, rules and Canvas controls, inspect what was prepared, and use the accepted tools together. Reusable calculations can run again when inputs change. Participants act through supported controls; the server checks permissions and rules. The current visibility, consent and rule-activation policies are described in [Current architecture](docs/CURRENT_ARCHITECTURE.md); detailed data and execution contracts remain in [Generic table design](docs/GENERIC_TABLE_DESIGN.md) and [Reusable compute](docs/REUSABLE_COMPUTE.md).
 
 The public demos cover Invoice, Physics, and cooperative Encounter. They use prepared scenarios with deterministic behavior and make no AI provider call. The Helpdesk acceptance run demonstrates a file-based table created and reviewed in a local test environment; see [Calm Canvas acceptance](docs/CALM_CANVAS_ACCEPTANCE.md). Current URLs, release source, and evidence live in [Deployments](docs/DEPLOYMENTS.md).
 
 ### Outside the current beta
 
-- Arbitrary interface generation, generated code execution, or a general-purpose application builder.
-- Unreviewed changes to shared rules or automatic play on a person's behalf.
+- Unrestricted interface or code execution, or a general-purpose application builder. The current beta supports curated Canvas views, bounded expressions and isolated reusable compute.
+- Changes that bypass the server's permission, validation and activation checks, or automatic play on a person's behalf.
 - A complete D&D rules engine or automatic long-term campaign memory.
 
 Supported formats, limits, recovery behavior, and acceptance boundaries are maintained in the linked design, acceptance, and deployment records rather than duplicated here.
