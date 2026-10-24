@@ -40,7 +40,7 @@ export interface BaselineOptions {
   readonly staleSamples: number;
 }
 
-interface SourceMetadata {
+export interface SourceMetadata {
   readonly generatedAt: string;
   readonly sourceCommit: string;
   readonly sourceScriptSha256: string;
@@ -55,7 +55,7 @@ interface SourceMetadata {
   readonly pgliteVersion: string;
 }
 
-interface LatencySummary {
+export interface LatencySummary {
   readonly count: number;
   readonly unit: 'ms';
   readonly percentileMethod: 'nearest-rank';
@@ -95,7 +95,7 @@ export interface ArchitectureBaselineReport {
   readonly storage: readonly StorageMeasurement[];
 }
 
-interface StorageTableDefinition {
+export interface StorageTableDefinition {
   readonly name: string;
   readonly relation: `public.${string}`;
   readonly meaning: string;
@@ -106,7 +106,7 @@ interface RelationMeasurementRow extends Record<string, unknown> {
   readonly relation_bytes: number | string;
 }
 
-const STORAGE_TABLES: readonly StorageTableDefinition[] = [
+export const STORAGE_TABLES: readonly StorageTableDefinition[] = [
   { name: 'workspaces', relation: 'public.workspaces', meaning: 'Current workspace state rows.' },
   { name: 'snapshots', relation: 'public.snapshots', meaning: 'Stored state snapshots, one per committed revision.' },
   { name: 'events', relation: 'public.events', meaning: 'Committed domain event rows.' },
@@ -167,7 +167,7 @@ export function percentile(samples: readonly number[], fraction: number): number
   return sorted[Math.ceil(fraction * sorted.length) - 1]!;
 }
 
-function latencySummary(samples: readonly number[]): LatencySummary {
+export function latencySummary(samples: readonly number[]): LatencySummary {
   return {
     count: samples.length,
     unit: 'ms',
@@ -178,11 +178,11 @@ function latencySummary(samples: readonly number[]): LatencySummary {
   };
 }
 
-function syntheticRecordId(index: number): string {
+export function syntheticRecordId(index: number): string {
   return `record_${String(index + 1).padStart(recordIdWidth, '0')}`;
 }
 
-function createSyntheticChange(recordCount: number): TableChange {
+export function createSyntheticChange(recordCount: number): TableChange {
   return {
     kind: 'table',
     program: {
@@ -262,7 +262,7 @@ async function sourceFiles(): Promise<SourceFileContent[]> {
   return files;
 }
 
-async function sourceMetadata(): Promise<SourceMetadata> {
+export async function sourceMetadata(): Promise<SourceMetadata> {
   const [{ stdout: sourceCommit }, { stdout: status }, sourceContents, scriptContents, pglitePackageContents] = await Promise.all([
     executeFile('git', ['rev-parse', '--verify', 'HEAD'], { cwd: repositoryRoot, windowsHide: true }),
     executeFile('git', ['status', '--porcelain=v1'], { cwd: repositoryRoot, windowsHide: true }),
@@ -314,7 +314,7 @@ async function ensureDirectoryAtPath(path: string): Promise<void> {
   if (entry.isSymbolicLink() || !entry.isDirectory()) throw new Error('OUTPUT_PATH_NOT_SAFE');
 }
 
-export async function ensureBaselineOutputDirectory(rootDirectory: string): Promise<string> {
+export async function ensureBaselineOutputDirectory(rootDirectory: string, subdirectory = 'architecture-baseline'): Promise<string> {
   const root = await realpath(rootDirectory);
   const ignoreRules = await readFile(resolve(root, '.gitignore'), 'utf8');
   if (!ignoreRules.split(/\r?\n/u).includes('test-results/')) throw new Error('OUTPUT_DIRECTORY_NOT_IGNORED');
@@ -324,10 +324,10 @@ export async function ensureBaselineOutputDirectory(rootDirectory: string): Prom
   const resultsRoot = await realpath(resultsPath);
   if (relative(root, resultsRoot) !== 'test-results') throw new Error('OUTPUT_PATH_NOT_SAFE');
 
-  const expectedOutputRoot = resolve(resultsRoot, 'architecture-baseline');
+  const expectedOutputRoot = resolve(resultsRoot, subdirectory);
   await ensureDirectoryAtPath(expectedOutputRoot);
   const outputRoot = await realpath(expectedOutputRoot);
-  if (relative(root, outputRoot) !== join('test-results', 'architecture-baseline') || !isWithin(root, outputRoot)) {
+  if (relative(root, outputRoot) !== join('test-results', subdirectory) || !isWithin(root, outputRoot)) {
     throw new Error('OUTPUT_PATH_NOT_SAFE');
   }
   return outputRoot;
