@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — รอบ 6 ปรับ pace ก่อน release ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
+| สถานะ | `done` — production 9.1.0 / [release PR #274](https://github.com/Thanyers/tabletop/pull/274) |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชันที่คาด | homepage และคลิปที่ผู้ใช้ยอมรับ พร้อมปรับ pace ก่อน production release |
+| เวอร์ชัน | 9.1.0 — homepage และคลิป93.2sเผยแพร่แล้ว; READMEยังเป็นร่าง |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 |
 
 ## ทำไม

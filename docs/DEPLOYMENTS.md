@@ -1,18 +1,27 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 15:30 น. (Asia/Bangkok; snapshot หลังรวม F078-T3a)**: production รายงาน **9.0.2 / 8e2c7e1** จาก [v9.0.2](https://github.com/Thanyers/tabletop/releases/tag/v9.0.2); staging รายงาน **0.0.0-dev / d374e70** จาก [PR #265](https://github.com/Thanyers/tabletop/pull/265) และ [pipeline ชุดเต็ม/deploy/smoke](https://github.com/Thanyers/tabletop/actions/runs/40075882571) สำเร็จ รวม `Deploy tabletop-staging` เป็น success จริงหลังแก้ T3a
+ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 17:37 น. (Asia/Bangkok)**: production รายงาน **9.1.0 / 48d9b98** จาก [v9.1.0](https://github.com/Thanyers/tabletop/releases/tag/v9.1.0) และ [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40086302663) สำเร็จ รวม migrations/deploy/smoke; staging snapshot ยังเป็น **0.0.0-dev / d73262b** ขณะที่ [รอบ 1afe586](https://github.com/Thanyers/tabletop/actions/runs/40085989380) กำลัง deploy จึงไม่อ้าง staging ล่าสุดว่าเสร็จแล้ว
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [8e2c7e1](https://github.com/Thanyers/tabletop/commit/8e2c7e131fdca3f947fc7bbff5963b207e26e398) — PR #257 | [d374e70](https://github.com/Thanyers/tabletop/commit/d374e7051350237354d2055982cc383040c8e402) — PR #265 |
-| Release | v9.0.2 / 9.0.2 | dev / 0.0.0-dev |
+| Source | [48d9b98](https://github.com/Thanyers/tabletop/commit/48d9b98389dcf4b0657a266c3c9917624e798833) — PR #274 | [d73262b](https://github.com/Thanyers/tabletop/commit/d73262bdf9c61f201f0d92ac5b5d9a1710d4bbe9) — observed snapshot |
+| Release | v9.1.0 / 9.1.0 | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.1.0 — F077 homepage and paced film (24 October 2026)
+
+- [Release PR #274](https://github.com/Thanyers/tabletop/pull/274), main `48d9b98`, [full release CI](https://github.com/Thanyers/tabletop/actions/runs/40085660035) passed all three browser suites plus fast checks. [Main validation](https://github.com/Thanyers/tabletop/actions/runs/40086273497) reused the identical validated release tree.
+- [Production deploy](https://github.com/Thanyers/tabletop/actions/runs/40086302663) succeeded. Readback: `9.1.0 / 48d9b98`, `built_at=2026-10-24T10:33:10Z`; `/healthz` and `/readyz` returned 200. No new schema, binding or credential; rollback target 9.0.2.
+- Public homepage shows the accepted EN/TH story. The served MP4 matches R6 SHA-256 `5B1A53F7D79A4115A21AB3B335C794C8FFFDC9688870E68D0090239CDC6BF5A0`; served English captions match the checked-in file. Media is 93.233333 seconds; it remains a concept illustration, not live-AI proof.
+- Initial full validation caught stale homepage text assertions. [PR #275](https://github.com/Thanyers/tabletop/pull/275) repaired the browser contract without weakening auth/language/mobile/navigation gates; the local harness passed 34 checks. [PR #277](https://github.com/Thanyers/tabletop/pull/277) merged main back to dev at `5f40b33`.
+- The earlier dev `5281c4f` [staging run](https://github.com/Thanyers/tabletop/actions/runs/40083418488) timed out while Cloudflare prepared the container image. This is distinct from the successful production release above; no manual deploy or rollback was used.
+- Release Notes HTML was generated from the released changelog. This environment has no Claude Artifact publishing tool, so the existing private hosted notes page was not overwritten; the generated file is supplied for that separate publishing step.
 
 ## F078 development validation snapshot (24 ตุลาคม 2569)
 
