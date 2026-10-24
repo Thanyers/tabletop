@@ -20,7 +20,7 @@ import { tailWithin, MAX_JOB_THINKING_TAIL_CHARS, type ModelJobSearchProgress } 
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
 import { prepareWebEvidenceCommand } from './web-evidence.js';
-import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange, type RoomModelJob } from './room-repository.js';
+import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange } from './room-repository.js';
 import {
   boundedFailureDetails,
   boundedResearch,
@@ -32,6 +32,7 @@ import {
   PROJECTION_CURSOR_PATTERN,
   tableAssistantJobView,
 } from './room-job-view.js';
+import { createRoomJobRecovery, type RoomJobRecovery } from './room-job-recovery.js';
 import {
   tableAssistantConfirmationSchema,
   tableAssistantRequestSchema,
@@ -265,6 +266,7 @@ function parsePeerAttachment(value: unknown): PeerAttachment | null {
 export class Room extends DurableObject<Env> {
   readonly repository: RoomRepository;
   readonly authority: CommandAuthority;
+  private readonly jobRecovery: RoomJobRecovery;
   private directorySyncTail: Promise<void> = Promise.resolve();
   /** Last cursor relay per session (sockets are re-wrapped per event, so they cannot be keys). */
   private readonly cursorSentAt = new Map<string, number>();
@@ -276,6 +278,10 @@ export class Room extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.repository = new RoomRepository(ctx.storage);
+    this.jobRecovery = createRoomJobRecovery({
+      repository: this.repository,
+      modelRecoveryMs: () => this.modelRecoveryMs(),
+    });
     this.authority = new CommandAuthority({
       repository: this.repository,
       workspaceIdFactory: () => this.requireBoundRoomId(),
@@ -561,7 +567,7 @@ export class Room extends DurableObject<Env> {
         if (existing) {
           if (existing.data.kind !== undefined) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           if (existing.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
-          const reconciled = await this.reconcileModelJob(existing);
+          const reconciled = await this.jobRecovery.reconcileModelJob(existing);
           return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
             modelJobView(reconciled, limitMs), { 'x-request-id': requestId });
         }
@@ -580,7 +586,7 @@ export class Room extends DurableObject<Env> {
         if (!reservation.created) {
           if (reservation.job.data.kind !== undefined) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           if (reservation.job.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
-          const reconciled = await this.reconcileModelJob(reservation.job);
+          const reconciled = await this.jobRecovery.reconcileModelJob(reservation.job);
           return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
             modelJobView(reconciled, limitMs), { 'x-request-id': requestId });
         }
@@ -613,7 +619,7 @@ export class Room extends DurableObject<Env> {
           scope: VISIBILITY_POLICY === 'open' ? 'table' : 'actor',
           limit: 20,
         });
-        const items = await Promise.all(jobs.map(async (job) => modelJobView(await this.reconcileModelJob(job), limitMs)));
+        const items = await Promise.all(jobs.map(async (job) => modelJobView(await this.jobRecovery.reconcileModelJob(job), limitMs)));
         return json(200, { items }, { 'x-request-id': requestId });
       }
       if (request.method === 'GET' && suffix.startsWith('model/')) {
@@ -626,7 +632,7 @@ export class Room extends DurableObject<Env> {
           ? await this.repository.getTableModelJob(jobId, workspaceId, authorized.workspace.epoch)
           : await this.repository.getModelJob(jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch);
         if (!job || job.data.kind !== undefined) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
-        const reconciled = await this.reconcileModelJob(job);
+        const reconciled = await this.jobRecovery.reconcileModelJob(job);
         return json(reconciled.status === 'running' || reconciled.status === 'committing' ? 202 : 200,
           modelJobView(reconciled, limitMs), { 'x-request-id': requestId });
       }
@@ -645,7 +651,7 @@ export class Room extends DurableObject<Env> {
           scope: VISIBILITY_POLICY === 'open' ? 'table' : 'actor',
         });
         const items = await Promise.all(page.jobs.map(async (job) =>
-          tableAssistantJobView(await this.reconcileTableAssistantJob(job))));
+          tableAssistantJobView(await this.jobRecovery.reconcileTableAssistantJob(job))));
         const payload: TableAssistantHistoryPage = {
           items,
           nextBefore: page.hasMore ? (page.jobs.at(-1)?.id ?? null) : null,
@@ -691,7 +697,7 @@ export class Room extends DurableObject<Env> {
           if (existing.data.kind !== 'table-assistant' || existing.data.requestHash !== requestHash) {
             throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           }
-          const reconciled = await this.reconcileTableAssistantJob(existing);
+          const reconciled = await this.jobRecovery.reconcileTableAssistantJob(existing);
           const view = tableAssistantJobView(reconciled);
           return json(view.status === 'running' ? 202 : 200, view, { 'x-request-id': requestId });
         }
@@ -714,7 +720,7 @@ export class Room extends DurableObject<Env> {
         if (!reservation.created) {
           if (reservation.job.data.kind !== 'table-assistant'
               || reservation.job.data.requestHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
-          const reconciled = await this.reconcileTableAssistantJob(reservation.job);
+          const reconciled = await this.jobRecovery.reconcileTableAssistantJob(reservation.job);
           const view = tableAssistantJobView(reconciled);
           return json(view.status === 'running' ? 202 : 200, view, { 'x-request-id': requestId });
         }
@@ -740,7 +746,7 @@ export class Room extends DurableObject<Env> {
           ? await this.repository.getTableModelJob(jobId, workspaceId, authorized.workspace.epoch)
           : await this.repository.getModelJob(jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch);
         if (!job || job.data.kind !== 'table-assistant') throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
-        const reconciled = await this.reconcileTableAssistantJob(job);
+        const reconciled = await this.jobRecovery.reconcileTableAssistantJob(job);
         const view = tableAssistantJobView(reconciled);
         return json(view.status === 'running' ? 202 : 200, view, { 'x-request-id': requestId });
       }
@@ -761,7 +767,7 @@ export class Room extends DurableObject<Env> {
           jobId, authorized.session.record.actorId, workspaceId, authorized.workspace.epoch,
         );
         if (!job || job.data.kind !== 'table-assistant') throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
-        job = await this.reconcileTableAssistantJob(job);
+        job = await this.jobRecovery.reconcileTableAssistantJob(job);
         const result = tableAssistantResultSchema.safeParse(job.data.result);
         if (!result.success || result.data.kind !== 'action-proposal') throw new AuthorityError('COMMAND_NOT_ALLOWED');
         if (parsed.data.expectedEpoch !== job.epoch) throw new AuthorityError('STALE_EPOCH');
@@ -934,7 +940,7 @@ export class Room extends DurableObject<Env> {
   async alarm(): Promise<void> {
     try {
       if (this.repository.roomId) await this.authority.resumeTableCompute(this.repository.roomId);
-      await this.recoverStaleModelJobs();
+      await this.jobRecovery.recoverStaleModelJobs();
       await this.syncDirectory();
       await this.drainOutbox();
     } catch {
@@ -1188,47 +1194,6 @@ export class Room extends DurableObject<Env> {
     }
   }
 
-  private async reconcileTableAssistantJob(job: RoomModelJob): Promise<RoomModelJob> {
-    if (job.data.kind !== 'table-assistant' || (job.status !== 'running' && job.status !== 'committing')) return job;
-    const commandId = typeof job.data.confirmCommandId === 'string' ? job.data.confirmCommandId : '';
-    const proposalHash = typeof job.data.proposalHash === 'string' ? job.data.proposalHash : '';
-    const receipt = commandId && proposalHash
-      ? await this.repository.findCommandReceipt(job.workspaceId, job.epoch, job.actorId, commandId)
-      : null;
-    if (job.status === 'committing') {
-      if (receipt && receipt.payloadHash === proposalHash) {
-        await this.repository.completeTableAssistantConfirmation(
-          job.id, job.workspaceId, job.epoch, job.actorId, commandId,
-          { ...job.data, confirmationStatus: 'confirmed' },
-        );
-      } else {
-        const startedAt = typeof job.data.confirmationStartedAt === 'number'
-          && Number.isSafeInteger(job.data.confirmationStartedAt)
-          ? job.data.confirmationStartedAt : job.createdAt;
-        if (receipt || Date.now() - startedAt >= this.modelRecoveryMs()) {
-          await this.repository.settleTableAssistantConfirmationFailure({
-            id: job.id,
-            workspaceId: job.workspaceId,
-            epoch: job.epoch,
-            actorId: job.actorId,
-            commandId,
-            proposalHash,
-            confirmationStatus: 'rejected',
-            failure: 'CONFIRMATION_INTERRUPTED',
-          });
-        }
-      }
-      return (await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch)) ?? job;
-    }
-    if (Date.now() - job.createdAt >= this.modelRecoveryMs()) {
-      await this.repository.finishTableAssistantJob(
-        job.id, job.workspaceId, job.epoch, job.actorId, 'failed',
-        { ...job.data, failure: 'ASSISTANT_INTERRUPTED' },
-      );
-    }
-    return (await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch)) ?? job;
-  }
-
   /** F045: a running job is interrupted only after the configured whole-job deadline plus its grace. */
   private modelRecoveryMs(): number {
     return modelJobRecoveryMs(aiTableDeadlineMs(this.env));
@@ -1393,7 +1358,7 @@ export class Room extends DurableObject<Env> {
         );
         if (!job || job.status === 'completed' || job.status === 'failed' || job.status === 'revoked') return;
         if (commandMayHaveCommitted) {
-          const reconciled = await this.reconcileModelJob(job);
+          const reconciled = await this.jobRecovery.reconcileModelJob(job);
           if (reconciled.status === 'running' || reconciled.status === 'committing') {
             await this.scheduleAlarmAt(Date.now() + RETRY_DELAY_MS);
           }
@@ -1439,40 +1404,6 @@ export class Room extends DurableObject<Env> {
       // previewed, before any check result is stored, so the reason comes from the domain error.
       const reasons = error instanceof AuthorityError && (error.status === 409 || error.status === 422) ? cleanReasons([error.message]) : [];
       return { autoApply: 'needs-review', ...(reasons.length ? { autoApplyReasons: reasons } : {}) };
-    }
-  }
-
-  private async reconcileModelJob(job: RoomModelJob): Promise<RoomModelJob> {
-    if (job.status !== 'running' && job.status !== 'committing') return job;
-    const commandId = typeof job.data.commandId === 'string' ? job.data.commandId : '';
-    const proposalHash = typeof job.data.proposalHash === 'string' ? job.data.proposalHash : '';
-    const receipt = commandId
-      ? await this.repository.findCommandReceipt(job.workspaceId, job.epoch, job.actorId, commandId)
-      : null;
-    if (receipt && proposalHash && MODEL_JOB_ID_PATTERN.test(proposalHash)
-        && receipt.payloadHash === proposalHash) {
-      const candidateId = receipt.response.workspace.domain.candidate?.id;
-      await this.repository.finishModelJob(job.id, job.workspaceId, job.epoch, job.actorId, 'completed', {
-        ...job.data,
-        ...(candidateId ? { candidateId } : {}),
-      });
-    }
-    if (Date.now() - job.createdAt >= this.modelRecoveryMs()) {
-      const current = await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch);
-      if (current && (current.status === 'running' || current.status === 'committing')) {
-        await this.repository.failModelJobAfterReceiptCheck(
-          job.id, job.workspaceId, job.epoch, job.actorId, 'MODEL_JOB_INTERRUPTED',
-        );
-      }
-    }
-    return (await this.repository.getModelJob(job.id, job.actorId, job.workspaceId, job.epoch)) ?? job;
-  }
-
-  private async recoverStaleModelJobs(): Promise<void> {
-    const stale = await this.repository.listStaleRunningModelJobs(Date.now() - this.modelRecoveryMs());
-    for (const job of stale) {
-      if (job.data.kind === 'table-assistant') await this.reconcileTableAssistantJob(job);
-      else await this.reconcileModelJob(job);
     }
   }
 
