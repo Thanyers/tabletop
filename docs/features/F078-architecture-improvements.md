@@ -72,6 +72,14 @@ So T5a may change `src/tabletop/TabletopApp.tsx` and a new client module, and T6
 
 T1 candidate: [PR #260](https://github.com/Thanyers/tabletop/pull/260). Node v22.23.2; local Markdown targets checked, changelog fragment validation and public-file scan passed; whitespace check passed. Application/unit/browser suites are SKIPPED locally because this PR changes documentation only. Required CI initially failed on the unchanged dependency tree; T0 is a separate prerequisite, not a bypass or a PASS for that attempt. Final CI evidence is recorded in spec and the PR.
 
+### T5a — workspace command/readback seam (PR #266)
+
+Moved out of `TabletopApp` into `src/tabletop/workspace/command-session.ts`: acknowledgement readback, `runCommand`, the legacy upload, file-later attach, web-source attach, assistant-action confirmation and the projection refresh. The module is a factory over an explicit dependency list and imports no React; the component keeps the projection state, busy marker, notices and invitation panels the seam calls back into.
+
+Behavior that had to stay identical and is now pinned by tests: an acknowledgement is used directly only when no newer projection arrived; a duplicate acknowledgement forces a readback; a late acknowledgement never becomes the drawn projection after the member switched tables; a conflict reports once, refreshes and never resends; `STALE_LAYOUT` refreshes silently; layout writes never take the foreground busy marker; a read-only table refuses before sending; attach refuses an unsupported file or a replaced table before sending.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **927 passed / 5 skipped (932)** (baseline 912 + 15 seam tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan **830 files / 0 findings**, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally** for this client-only move; `src/tabletop/TabletopApp.tsx` is an explicitly uncovered path for the integration-gate planner, so the PR runs every focused gate (built Worker boot, F066 rules harness, compute checks, Linux container smoke) and the full dev run after merge covers the browser suites. No schema, retention, billing or visibility change.
+
 ## First delivery group status (2026-10-24)
 
 T0/#264, T1/#260, T4/#263, T2/#261 and T3/#262 are merged into dev. T3's full dev run passed, but its staging job was SKIPPED after optional focused jobs were skipped. [T3a](F078-T3a-staging-skip.md) closes that scheduling regression before this delivery group is declared complete. All behavior-preserving refactors remain separate later tasks with their test and ownership prerequisites; none is represented as implemented by the foundation PRs. Independent review closed the baseline provenance/default assertions and the focused browser timing issue. Production release remains out of scope.
