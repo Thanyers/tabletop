@@ -4,6 +4,26 @@
 
 ## Unreleased
 
+## 9.1.0 — 2026-10-24
+
+MINOR: English-first homepage with an evolving sample board and 93-second narrated story, plus tested internal architecture improvements. No schema, binding or secret changes; rollback target 9.0.2.
+
+- F078-T5b fix: a back/forward table open now applies when no table is open, so Forward from the table list draws the table the address names again. The late-result guard still drops a fetch whose table the member already navigated away from. Unit coverage added and the browser flow re-verified. No schema, retention or production change.
+- F078-T6b: extract the Room's job recovery and reconciliation out of `cloudflare/room.ts` into a server-only `cloudflare/room-job-recovery.ts` seam with an injected recovery window. Receipt-matched completion, confirmation timeout settlement, interrupted-job failure and stale-job sweeping keep their guards and ordering; the draft/assistant runners stay in the Room. No schema, billing, retention or production change.
+- F078-T8: register the four built-in Canvas view kinds in one dependency-free leaf module and make every layer (wire schema, semantic validation, evaluator, plan capability and its ports, canvas layout role, provider prose, React renderer selection) derive from it, so adding or dropping a kind fails to compile or fails a test instead of being ignored at runtime. Wire contract, limits and product primitives are unchanged; no React import enters shared, runtime, domain or server.
+- F078-T7a: document every persistent store, its owner and one-row meaning, the per-commit growth model, reset/scrub differences, the idempotency receipt replay horizon (recorded as an undecided open question) and a recovery manifest; add a bounded local PGlite measurement of relation bytes and row counts across several commit points and more than one workspace. Documentation and disposable measurement only: no data is deleted, compacted, expired or migrated, and no schema, retention default or runtime behavior changes.
+- F078-T5b: extract the client's navigation and canvas-focus lifecycle out of `TabletopApp` into a typed module (address-bar sync mode, back/forward route resolution, table-open late-result guard, per-table selection/focus reset and focus requests). Behavior, routes, history entries and rendered UI are unchanged; no schema, retention or production change.
+- F078-T6a: extract the Room's job view/progress projection and its redaction/clamping helpers out of `cloudflare/room.ts` into a server-only `cloudflare/room-job-view.ts` module. Public job status, response JSON shape and key order, redaction bounds, failure messages and open/private visibility selection are unchanged; the module keeps no storage, clock or alarm dependency. No schema, billing, retention or production change.
+- F078-T5a: extract the client's workspace command/readback orchestration out of `TabletopApp` into a typed, framework-agnostic seam (projection sequence, acknowledgement readback, command scope guards, file-later attach and assistant-action confirmation), with unit coverage for duplicate/stale/conflict/late-result and workspace-switch races. Behavior, HTTP contract, authority guards and rendered UI are unchanged; no schema, retention or production change.
+- **F078-T3a:** Preserve staging deployment after successful full dev validation when optional focused PR jobs are skipped; cancelled runs, other events/branches and unsuccessful validation remain ineligible.
+- Add path-selected Worker startup, composer/reference browser, and focused compute integration checks to PRs into `dev`, while preserving the existing full-suite triggers and `main` result reuse.
+- Make the F066 composer browser gate wait for its exact asynchronous prefill and add a controlled delayed-update probe; product behavior is unchanged.
+- Added a bounded local SQL-authority baseline using synthetic workspaces and in-memory PGlite, with separate successful/stale command timings and per-table row/byte measurements. No production behavior or storage policy changed.
+- Added a shared repository conformance suite for SQL and Room command receipts, revision conflicts, transaction rollback, stale epochs, and revoked memberships. Runtime behavior and persistent schema are unchanged.
+- F078-T0: patch Vitest to 4.1.12 and narrowly override Miniflare's Undici to 7.30.1 and the Cloudflare test plugin's Zod to 4.6.7, restoring dependency audit validation while retaining the existing Worker toolchain and application behavior.
+- F078-T1: document current architecture ownership, runtime capabilities and effective consent/visibility/auto-apply/billing policies; clarify historical contracts and split the behavior-preserving improvement work into separate PRs. No runtime or production change.
+- ปรับ homepage ภาษาอังกฤษเป็นฐานตามเรื่องเครื่องมือที่ปรับให้คน พร้อมบอร์ดตัวอย่างที่พิมพ์ ขอเพิ่มปุ่ม/กราฟ และตรวจใช้กฎส่วนลดบนโต๊ะเดิม; คงภาษาไทยและทางเข้าสู่แอปเดิม เพิ่มหนัง Remotion 93.2 วินาทีที่กระชับ intro และช่วงอธิบายพร้อมเสียงหญิง Laura, เสียงการกระทำและ captions ใช้ภาพถ่ายที่มี license, logo/animation เดิม และ white/logo-only outro; README ใหม่ยังเป็นร่าง และภาพตัวอย่างไม่ใช่หลักฐานการเรียก AI จริง
+
 ## 9.0.2 — 2026-10-23
 
 PATCH: preserve referenced Ask/Change before canvas navigation; rollback to v9.0.1 is safe

@@ -1,1 +1,0 @@
-- Added a shared repository conformance suite for SQL and Room command receipts, revision conflicts, transaction rollback, stale epochs, and revoked memberships. Runtime behavior and persistent schema are unchanged.
