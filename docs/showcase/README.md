@@ -6,6 +6,8 @@
 
 [`tabletop-story.gif`](tabletop-story.gif) และ [ภาพนิ่ง](tabletop-story-poster.png) ใช้บทเรียนแรงและมวล เริ่มจาก Canvas ว่าง → วางไฟล์ → AI ร่างกฎให้คนตรวจและเปิดใช้ → การ์ดปรับค่า ฉากรถ และกราฟค่อย ๆ งอกขึ้นมา → คนเพิ่มแรงและทดลองเอง เป็นแผนภาพที่สร้างด้วย Remotion ไม่ใช่การบันทึกหน้าแอปหรือหลักฐานว่า AI ร่างสำเร็จทุกครั้ง รูปร่างและจังหวะการ์ดใช้สื่อแนวคิด; ภาพหน้าจอเดโมจริงอยู่ด้านล่าง
 
+มี [ฉบับภาษาอังกฤษ](tabletop-story-en.gif) และ [ภาพนิ่งภาษาอังกฤษ](tabletop-story-en-poster.png) สำหรับหน้าแรกภาษาอังกฤษด้วย ฉบับนี้เป็นคำแปลที่เขียนจาก storyboard ภาษาไทยเดิม ใช้ฉาก ภาพเคลื่อนไหว โลโก้ ตัวเลข และจังหวะเดิม เปลี่ยนเฉพาะข้อความ และใช้เฟรมท้ายเดียวกับโปสเตอร์ภาษาไทย · ไฟล์ภาษาไทยเดิมไม่ถูกเขียนทับ
+
 - สร้างวันที่ 20 ตุลาคม 2026 จาก React / SVG / CSS ไม่มีการเรียกโมเดลสร้างวิดีโอหรือ API ภาพระหว่าง render
 - ขนาด 960×540, 12 fps, 240 frames / 20 วินาที เล่นทั้งหมดสามรอบแล้วหยุด
 - กรณีจำลองเริ่มจากหยุดนิ่งและไม่มีแรงเสียดทาน: มวล 5 kg, เวลา 2 s, แรง 10 → 20 N ให้ความเร่ง 2 → 4 m/s² และระยะทาง 4 → 8 m ตาม F = ma และ x = ½at²
@@ -17,7 +19,11 @@ render จาก root ของ repo:
 ```powershell
 npm ci --prefix docs/showcase/motion --ignore-scripts
 npm run render --prefix docs/showcase/motion
+npm run render --prefix docs/showcase/motion -- --locale=en
 ```
+
+คำสั่งแรกสร้างฉบับภาษาไทยตามเดิม ส่วน `--locale=en` สร้างไฟล์ English แยกโดยไม่แตะ GIF หรือโปสเตอร์ภาษาไทย
+ถ้าเครื่องมีเว็บเซิร์ฟเวอร์ที่ชนกับพอร์ตเริ่มต้นของ Remotion ให้ตั้ง `REMOTION_SERVER_PORT` เป็นพอร์ตว่างก่อน render
 
 เครื่องต้องมี Node.js ตาม [CONTRIBUTING](../../CONTRIBUTING.md) และ browser ที่ Remotion รองรับ ตัว renderer อาจดาวน์โหลด headless browser เมื่อยังไม่มี การ render ไม่ต้องใช้ GitHub, Cloudflare หรือ AI credentials
 

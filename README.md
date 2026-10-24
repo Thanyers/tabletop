@@ -1,97 +1,99 @@
+<img src="public/favicon.svg" alt="Tabletop mark" width="44" height="44">
+
 # tabletop.
 
-## The best tool is the one you don't have to think about.
+## Tools that keep adapting to you.
 
-คุณมีบางอย่างอยากทำให้สำเร็จ งานที่ต้องสะสาง เรื่องที่อยากเข้าใจ หรือเกมที่อยากเล่นกับเพื่อน
+Tabletop is a shared canvas where you and AI shape the tools you need for work, learning, and play. Describe what you want to do. Review the tables, buttons, charts, and rules AI prepares, then use them on the same table.
 
-Tabletop คือพื้นที่ทำงานร่วมกันบน Canvas ที่ให้คุณบอกสิ่งที่อยากทำ แล้วให้ AI ช่วยร่างเครื่องมือสำหรับเรื่องนั้น ทั้งตาราง ปุ่ม กราฟ และฉากทดลอง คุณตรวจและปรับสิ่งที่ได้ ก่อนลงมือใช้บนโต๊ะเดียวกัน
+Start with words. Add data when you are ready. When your needs change, build on the work already there.
 
-เมื่อโจทย์เปลี่ยน ก็ขอปรับเครื่องมือบนโต๊ะเดิม เพื่อทำต่อจากสิ่งที่มี ให้คุณได้อยู่กับงาน ความคิด และคนที่อยู่ร่วมโต๊ะ
-
-**[Bring your work to the table](https://tabletop.ptchrr.workers.dev/)** · **[See it in action — ไม่ต้องล็อกอิน](https://tabletop.ptchrr.workers.dev/demo)**
-
-## เครื่องมือที่ค่อย ๆ พอดีมือ
-
-ช่างพันด้ามเครื่องมือจนจับถนัด ครูเปลี่ยนวิธีอธิบายเมื่อเด็กยังไม่เข้าใจ เพื่อนกลุ่มหนึ่งปรับกติกาเกมจนกลายเป็นเกมในแบบของพวกเขา
-
-เราปรับเครื่องมือให้เข้ากับสิ่งที่ทำมาเสมอ
-
-แต่กับซอฟต์แวร์ งานง่าย ๆ กลับมีงานแทรก: ต้องเรียนรู้หน้าจอ หาทางอ้อมเมื่องานเปลี่ยน หรือทำเครื่องมือขึ้นมาอีกชิ้นก่อนจะเริ่มสิ่งที่ตั้งใจไว้ได้ ข้อมูลอยู่ในไฟล์หนึ่ง คำอธิบายอยู่ในแชทอีกที่ พออยากลองวิธีใหม่ ก็ต้องประกอบทุกอย่างเข้าด้วยกันอีกครั้ง
-
-Tabletop เกิดจากความคิดว่า งาน ข้อมูล กติกา และเครื่องมือที่ใช้กับมันควรอยู่ด้วยกัน และมีที่ให้เปลี่ยนตามสิ่งที่คุณกำลังทำ
-
-คุณควรได้ใช้สมาธิกับเรื่องที่มาที่นี่เพื่อทำ
-
-## Work defines what software becomes.
-
-เริ่มจากสิ่งที่อยากทำ จะพิมพ์ความคิดลงไปก่อน หรือนำไฟล์ที่มีมาเริ่มก็ได้
-
-ขอให้ AI ช่วยร่างเครื่องมือ ลองปรับค่า ตรวจวิธีคำนวณและกติกา แล้วเปิดใช้เมื่อตรงกับสิ่งที่ต้องการ ตารางให้กรอกข้อมูล ปุ่มให้ลงมือทำ กราฟและฉากช่วยให้เห็นผลของสิ่งที่เปลี่ยน
-
-เมื่ออยากลองอีกวิธี ก็ค่อยเพิ่มมุมมอง ตัวปรับค่า หรือแก้กฎบนโต๊ะเดิม โดยรักษาข้อมูลเดิมที่เข้ากับกฎใหม่ไว้ คนบนโต๊ะยังตรวจ ตัดสินใจ และเลือกลงมือเอง
-
-นี่คือวิธีคิดของ Tabletop: เริ่มจากงาน แล้วให้เครื่องมือเติบโตไปกับมัน
+**[Start your table](https://tabletop.ptchrr.workers.dev/)** · **[Try the demos without signing in](https://tabletop.ptchrr.workers.dev/demo)**
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/showcase/tabletop-story-poster.png">
-  <img src="docs/showcase/tabletop-story.gif" alt="ตัวอย่างเริ่มจากไฟล์บทเรียนบนโต๊ะ แล้วเพิ่มกฎที่คนตรวจ การ์ดปรับค่า ฉากรถ และกราฟ ก่อนคนเพิ่มแรงแล้วทดลองเอง" width="1000">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/showcase/tabletop-story-en-poster.png">
+  <img src="docs/showcase/tabletop-story-en.gif" alt="One learning table gains rules, adjustable values, a moving car, and a chart. The learner changes the force and sees the result." width="1000">
 </picture>
 
-<sub>ภาพอธิบายแนวคิดจากบทเรียนแรงและมวล · [ดูภาพนิ่ง](docs/showcase/tabletop-story-poster.png) · [ที่มาของภาพ](docs/showcase/README.md)</sub>
+<sub>Concept animation: a lesson becomes something you can experiment with. [Still image](docs/showcase/tabletop-story-en-poster.png) · [Animation sources](docs/showcase/README.md)</sub>
+
+## A tool becomes yours through use.
+
+Imagine a hammer that keeps slipping in your hand. You wrap its handle, build up the grip where your fingers rest, and try it again. The same hammer now fits the way you work.
+
+Or a chair at your workbench. The seat is too low and there is nowhere to rest your feet. You add a cushion and make a footrest from an offcut. Each change answers something you noticed while using it.
+
+We want software to leave room for that same process.
+
+Too often, changing the way you work means another spreadsheet, another app, or another round of copying instructions out of a chat. You spend time rebuilding the tool before you can get back to the task.
+
+Tabletop brings the conversation, data, rules, and controls together. Use something small. Notice what would help. Ask for a change. Keep going on the same table.
+
+**The best tool is the one you don't have to think about.**
+
+## Use it. Find what needs to change.
+
+Picture a small coffee stall. A sales table is enough to get started. Then the morning queue arrives.
+
+| What happens while you work | How the same table can grow |
+| --- | --- |
+| “I need to record coffee and cake sales.” | Start with a table of items, quantities, and totals. |
+| “I can't keep typing between customers.” | Ask for one-tap sale buttons beside the table. A tap updates the quantity and total. |
+| “What should I prepare more of tomorrow?” | Add a chart that uses the sales already recorded. |
+| “Let's try an afternoon discount.” | Add a discount rule, then ask to change that rule when the offer changes. |
+
+Each addition comes from using the tool. The table, its records, and the parts that still fit remain the starting point. Review a proposed change before putting it to work.
+
+[**Watch the narrated story**](https://tabletop.ptchrr.workers.dev/narrative/tabletop-story.mp4) · [English captions](public/narrative/tabletop-story-en.vtt)
+
+<sub>The film and coffee-stall walkthrough are authored illustrations with sample data, not recordings of live AI generation. [Media and evidence](docs/narrative/F077/evidence.md)</sub>
+
+## What you can do today
+
+- **Start from an idea.** Describe a task without uploading a file first. AI can prepare supported tables, forms, buttons, charts, and rules.
+- **Bring in data.** Add supported files or preview rows before importing them into a table.
+- **Use a calculation again.** Keep a calculation with your table and run it on new inputs. Connect its results to summaries, tables, or charts.
+- **Understand and change a rule.** Ask what a rule does, or request a change to that specific rule.
+- **Continue together.** Invite people to a room, work with its shared state, and return to saved work with the same account.
+
+The canvas is where you use the software you are shaping: enter a value, press a button, inspect a result, and decide what to change next.
 
 ## Every table has a story.
 
-งาน การเรียนรู้ และการเล่นพาเรามาที่โต๊ะด้วยเหตุผลต่างกัน สามเรื่องนี้แสดงให้เห็นว่าเครื่องมือที่เปลี่ยนตามโจทย์มีประโยชน์อย่างไร โดยมีเดโมให้ลองด้านล่าง
+**Your work.** An invoice total does not match. Put the items, calculations, and checks together so you can trace the difference.
 
-### Your Table
+**A lesson.** A learner needs more than an equation. Add a moving car and a chart, change the force or mass, and discuss what happens.
 
-ตัวเลขในบิลไม่ตรง คุณอยากรู้ว่าผิดตรงไหน การมีรายการ ตัวเลขที่คำนวณ และเงื่อนไขตรวจอยู่ด้วยกัน ช่วยให้ไล่ดูได้ว่าความต่างมาจากอะไร
+**A game with friends.** Keep the turn order, actions, and rules in view. Take turns and use a shield to help another player.
 
-ในเดโมตรวจบิล ลองตรวจยอดที่ต่างกันและดูรายการที่ยังต้องหาหลักฐานเพิ่ม เมื่อโจทย์ของงานจริงต้องมองข้อมูลอีกแบบ แนวคิดของโต๊ะคือให้เพิ่มมุมมองและเงื่อนไขต่อจากงานที่ทำไว้ได้
+<p>
+  <img src="docs/showcase/physics.png" alt="Prepared Physics demo with adjustable force, mass, and time, a moving car, and results" width="440">
+  <img src="docs/showcase/encounter.png" alt="Prepared cooperative Encounter demo with characters, turns, and a shield action" width="440">
+</p>
 
-### A Table for Learning
-
-เด็กคนหนึ่งเข้าใจจากสมการ อีกคนต้องเห็นรถเคลื่อนที่ ครูอาจเริ่มจากคำถามว่า “ถ้าออกแรงเท่าเดิม แต่รถหนักขึ้น จะเกิดอะไรขึ้น?” แล้วให้เด็กลองเปลี่ยนค่าเอง
-
-ในเดโมแรงและมวล ตัวปรับค่า ฉากรถ และกราฟอยู่บนโต๊ะเดียวกัน เด็กจึงเห็นความสัมพันธ์ระหว่างค่าที่เลือกกับผลที่เกิดขึ้น แล้วกลับไปคุยกันได้ว่าเพราะอะไร
-
-### Our Tables
-
-เกมร่วมมือมีทั้งกติกา ตัวเลข และการตัดสินใจของคนหลายคน โต๊ะช่วยให้ทุกคนเห็นว่าใครกำลังเล่น ทำอะไรได้ และการตัดสินใจนั้นเปลี่ยนสถานการณ์อย่างไร
-
-ในเดโมเกมโล่ ลองผลัดกันเล่นและใช้โล่ช่วยเพื่อน ส่วนโต๊ะที่สร้างเป็นห้องร่วมกันให้ชวนคนอื่นเข้ามา และกลับมาทำต่อจากสถานะที่บันทึกไว้ได้
-
-**คนต่างกัน งานต่างกัน เครื่องมือก็ควรมีที่ให้เปลี่ยนตาม**
+<sub>Screenshots of the prepared demos, using simulated data and players. [Open the demos](https://tabletop.ptchrr.workers.dev/demo), then pause to try the controls yourself.</sub>
 
 ## Bring your work to the table.
 
-- **เริ่มจากเรื่องของคุณ** — ล็อกอิน Google เปิดโต๊ะใหม่ แล้วพิมพ์สิ่งที่อยากทำ เช่น “ช่วยทำตารางติดตามงานพร้อมปุ่มบันทึกว่างานเสร็จแล้ว” หากมีไฟล์ข้อความหรือข้อมูล ก็นำมาเพิ่มได้ ให้ AI ช่วยร่าง แล้วคุณตรวจ อนุมัติ และเปิดใช้ ก่อนลงมือผ่านเครื่องมือบน Canvas
-- **ลองจากเรื่องที่เตรียมไว้** — [เปิดเดโมตรวจบิล ทดลองแรง หรือเกมโล่](https://tabletop.ptchrr.workers.dev/demo) ดูโต๊ะค่อย ๆ เกิดขึ้น แล้วกด **พักเดโม / ลองเอง** เพื่อเปลี่ยนค่าและเล่นต่อได้ทันที
-- **ทำต่อด้วยกัน** — เชิญคนมาที่ห้องเดียวกัน ใช้ข้อมูลและสถานะร่วมกัน ตั้งชื่อโต๊ะ แล้วกลับมาด้วยบัญชีเดิมเพื่อทำต่อ
-
-<p>
-  <img src="docs/showcase/physics.png" alt="เดโมบทเรียนแรงและมวลในแอปจริง แสดงรถและผลจากแรง มวล และเวลา" width="440">
-  <img src="docs/showcase/encounter.png" alt="เดโมเกมร่วมมือในแอปจริง แสดงตัวละคร เทิร์น และการใช้โล่ช่วยเพื่อน" width="440">
-</p>
-
-<sub>ภาพหน้าจอเดโมจริง ข้อมูลและผู้เล่นจำลอง · [วิธีใช้และวิธีเล่น](docs/USER_GUIDE_TH.md) · [ไฟล์ตัวอย่างสำหรับลอง](docs/examples/README.md)</sub>
+1. [Sign in and start a table](https://tabletop.ptchrr.workers.dev/).
+2. Describe what you want to do. Check the tools and rules AI prepares before using them.
+3. Add data, use the tools, and ask for changes as your work develops.
 
 <details>
-<summary>ก่อนเริ่มลอง</summary>
+<summary>Before you try it</summary>
 
-เครื่องมือเติบโตได้ภายในกฎและส่วนประกอบที่ระบบรองรับ สิ่งที่ AI ร่างอาจต้องปรับก่อนใช้ ควรตรวจการคำนวณและกติกาให้ตรงกับงานของคุณ
+Tabletop is a beta. AI drafts may need revision. Check calculations, rules, and compatibility with existing data before applying changes.
 
-- เริ่มจากข้อความได้ และเพิ่มไฟล์ตามชนิดและขนาดที่ระบุใน [คู่มือผู้ใช้](docs/USER_GUIDE_TH.md)
-- เดโมใช้เรื่องและข้อมูลที่เตรียมไว้ ไม่เรียก AI รีเฟรชแล้วเริ่มใหม่ ส่วนห้องที่ล็อกอินสร้างไว้บันทึกงานให้กลับมาทำต่อได้
-- การสร้างเครื่องมือยังมีขอบเขต ไม่รองรับการรันโค้ดอิสระทุกแบบหรือกติกา D&D เต็มระบบ
+- Tools use the views, controls, and calculation engines the current host supports. A prompt cannot produce any possible app or execute unrestricted code.
+- Prepared demos do not call AI and reset when refreshed. Rooms created after signing in save work for later.
+- The cooperative game is an example, not a complete D&D rules engine.
+- See the [user guide (Thai)](docs/USER_GUIDE_TH.md) for supported files, limits, and controls.
 
 </details>
 
-## More time doing what matters.
+**More time doing what matters.**
 
-**[Bring your work to the table.](https://tabletop.ptchrr.workers.dev/)**
-
-[คู่มือผู้ใช้](docs/USER_GUIDE_TH.md) · [เอกสารสำหรับทีมพัฒนาและหลักฐานการทดสอบ](docs/README.md)
+[Product principles](product.md) · [Documentation](docs/README.md) · [Development and build instructions](CONTRIBUTING.md)
 
 ## License
 

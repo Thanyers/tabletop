@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` (T0–T4 + T3a merged; T5a–T9 in progress, one PR each) |
+| สถานะ | `done` (T0–T9 merged into dev; T5a, T5b, T6a, T6b, T7a, T7b, T8 and T9 each shipped as its own PR) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — documentation, validation and internal refactors; evaluate each task separately |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F078-T*` |
@@ -125,6 +125,32 @@ Wire contract, `GENERATIVE_LIMITS`, descriptor fields and product primitives are
 Controlled RED, twice, then reverted byte-identically (SHA-256 verified against the pre-probe files): (1) adding a fifth `timeline` kind to the wire union only makes `tsc` fail in 19 places, and compiling that leaf alone shows the first failure is the registry (`TS1360 … Property 'timeline' is missing`); (2) also registering it in the metadata satisfies the leaf alone, while the full program still fails in 14 places (schema, validation, evaluator, runtime index, renderer map and the typed test fixtures) and the registration tests fail 8 cases. After the revert, `npm run typecheck` and the touched suites are green again.
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed; `npm test` **950 passed / 5 skipped (955)** after merging dev `58798fe` (dev was 938 / 5, plus the 12 registration tests); lint **0 errors / 111 warnings** (same as baseline); `npm run build` passed; `node scripts/check-public-files.mjs` **843 files / 0 findings**; `npx tsx server/changelog.ts check` 11 fragments; `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: this PR touches shared, client runtime, the canvas UI and one provider prompt module, not Worker, Room, transport or persistence code.
+
+### T9 — local load/soak comparison (PR #276)
+
+New `scripts/architecture-load.ts` drives several workspaces plus one hot room through the real `CommandAuthority` and `SqlWorkspaceRepository` on an in-memory PGlite, and reports per-room success and stale latency, hot-room latency, the storage curve and the outbox backlog. It reuses the baseline harness instead of copying it: `sourceMetadata`, `createSyntheticChange`, `syntheticRecordId`, `latencySummary` and `STORAGE_TABLES` are now exported, and the output-directory helper takes a subdirectory so each harness keeps its own ignored folder.
+
+Two properties are enforced rather than described. First, `--compare` prints deltas only when workload counts, source digest, Node/PGlite versions and platform all match; otherwise it reports NOT COMPARABLE and names the fields that differ. Second, signals the local runtime cannot observe are listed in `unmeasured` with a reason — outbox delivery lag (no dispatcher runs), AI queue wait and job age (no provider or model-job queue on the Node path), reservation rejections, reconnect count and hosted capacity. The outbox figure is labelled a backlog, not a lag.
+
+Reference capture (Windows x64, Node `v22.23.2`, PGlite `0.5.10`, 2 rooms, 6 samples and 3 stale attempts each, 12 hot-room commits, 20 records, 4 points): room 1 (hot) success p50/p95 **4.830 / 6.308 ms** and stale **2.075 / 2.259 ms**; room 2 **4.636 / 4.895 ms** and stale **1.775 / 2.146 ms**; hot-room successful **4.498 / 5.174 ms**; storage curve **622,592 → 655,360 → 679,936 → 737,280 → 761,856 bytes** across 12 → 24 commits; outbox 34 pending, 0 delivered. The raw capture stays in the ignored `test-results/architecture-load/`.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **961 passed / 5 skipped (966)** (dev 955 + 6 new), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan clean, `changelog.ts check` 15 fragments, `git diff --check` clean, and the existing baseline suite still passes 4/4. No infrastructure, concurrency, retention or schema change; these numbers are not hosted capacity.
+
+### T7b — disposable recovery rehearsal (PR #279)
+
+`scripts/recovery-rehearsal.ts` turns the T7a recovery contract into checks that run. It builds a room on a disposable on-disk PGlite, commits several revisions, revokes a member through the repository transaction, seeds queued `model_jobs` rows, snapshots, closes, restores by copying the directory, reopens, and re-verifies through the same `CommandAuthority`.
+
+Nine invariants are re-checked after the restore: state hash, epoch/revision, snapshot/event/receipt counts, outbox pending count, pending jobs still queued, revoked member still revoked, exact retry replaying the original receipt, that retry adding no event or receipt, and the revoked member being refused with `MEMBERSHIP_REVOKED`. The report carries the modelled RPO (0 commits, from a clean close) and the measured RTO (reopen plus verification, ~0.8–0.9 s here) next to the limits that stop those numbers being read as a hosted guarantee.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **963 passed / 5 skipped (968)**, lint **0 errors / 111 warnings** (baseline), `npm run build` passed, public scan clean, `changelog.ts check` passed, `git diff --check` clean, and the rehearsal suite passes 2/2. No schema, retention or production change; no shared or production database is touched.
+
+## Closing status (2026-10-24)
+
+All later tasks are merged: T5a/#266, T5b/#268 with the corrective T5b fix/#272, T6a/#267, T6b/#271, T7a/#269, T7b/#279, T8/#270 and T9/#276. dev `8e3bc7f` is the final merge; the full dev pipeline on that SHA passed every browser suite and `Deploy tabletop-staging` succeeded, and `/version` read back staging `0.0.0-dev / 8e3bc7f`.
+
+Two honest notes stay attached to this closure. First, the T5b extraction introduced a regression that the dev pipeline caught at `tests/cloudflare-browser.mjs:530` (Forward from the table list drew nothing); it was fixed the same day in #272 and the local Workers browser suite re-passed, including that exact check. Second, a later dev failure was not caused by this work at all: the F077 merge removed the landing heading that `tests/cloudflare-browser.mjs` asserts, which the pipeline recorded in issue #233 and another owner fixed in #275 before releasing.
+
+T9 and T7b are on dev and staging; production `9.1.0 / 48d9b98` is a release cut by the team from an earlier dev SHA, so it contains T5a through T8 but not T9 or T7b. F078 itself never issued a release.
 
 ## First delivery group status (2026-10-24)
 

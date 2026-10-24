@@ -1,6 +1,6 @@
 # Reusable compute — วิธีคำนวณที่เป็นของโต๊ะ
 
-สถานะ implementation และผลตรวจอยู่ใน [F066](features/F066-reusable-compute-rules.md) และ [spec.md](../spec.md) เอกสารนี้เป็น contract ของ candidate; ไม่ได้ยืนยันว่าเปิดบน production แล้ว
+เอกสารนี้เป็น contract ของ reusable compute สถานะ implementation และผลตรวจอยู่ใน [F066](features/F066-reusable-compute-rules.md) และ [spec.md](../spec.md) ผลตรวจ production ของรุ่น 9.0.0 อยู่ใน [Release 9 results](testing/f066-post-deploy/RELEASE9_RESULTS_TH.md); รุ่นที่กำลังให้บริการดู [Deployments](DEPLOYMENTS.md)
 
 ## แนวคิดและการใช้งาน
 

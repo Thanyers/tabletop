@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-24 — A thesis needs visible change, not generic object photos
+- **What happened:** the public homepage left the hero without a visual, opened its example on an empty board, and used ordinary tool photos to explain personal adaptation. The user could not see what had changed to fit the person.
+- **Root cause:** the copy described adaptation but the pictures only identified objects; navigation also sent visitors to README instead of completing the product story on the page.
+- **Correct behavior:** show the need, the added grip/support/control, and its effect together. Put a meaningful Canvas visual in the hero, start examples with useful context, and keep README on GitHub as its own complete entry point. Check the rendered first viewport before calling the narrative ready.
+
 ### 2026-10-24 — Accepted homepage copy left stale browser assertions
 - **What happened:** F077 passed fast PR checks but full dev/release validation failed while searching for the previous English homepage heading; the captured page showed the accepted new heading.
 - **Root cause:** the homepage review covered behavior and local illustration but did not update the existing Workers browser contract for English/Thai copy and learning-story markup.

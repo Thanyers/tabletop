@@ -1,3 +1,5 @@
+> Round 7: runtime copy in `src/tabletop/ui/landing-copy.ts` supersedes the earlier draft below. The homepage stands alone, has no README navigation, restores the original learning animation in the hero with localized English labels, and shows additions that make a hammer grip and workbench chair fit their user.
+
 # หน้าเว็บ — copy draft TH / EN
 
 รอบ 5: homepage ใช้ English เป็นฐานและมีปุ่มไทย ข้อความ runtime ล่าสุดอยู่ใน `src/tabletop/ui/landing-copy.ts`; เอกสารนี้เก็บชุดร่างตาม [แผน](README.md) ข้อความในตารางคือ copy สำหรับผู้ชม; หมายเหตุการจัดวางไม่ขึ้นหน้าเว็บ
