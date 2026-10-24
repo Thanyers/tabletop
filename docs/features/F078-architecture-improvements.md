@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` (T1; later tasks tracked separately) |
+| สถานะ | `doing` (T1 merged; later tasks tracked separately) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — documentation, validation and internal refactors; evaluate each task separately |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F078-T*` |
