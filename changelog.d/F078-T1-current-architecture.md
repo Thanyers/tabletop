@@ -1,0 +1,1 @@
+- F078-T1: document current architecture ownership, runtime capabilities and effective consent/visibility/auto-apply/billing policies; clarify historical contracts and split the behavior-preserving improvement work into separate PRs. No runtime or production change.

@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` |
+| สถานะ | `done` (merged dev `1ec4e61`; no production release) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — compatible dependency security patches |
 
