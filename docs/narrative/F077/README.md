@@ -1,8 +1,8 @@
 # Tabletop — แผนและชุดร่างสามสื่อ
 
-วันที่ 24 ตุลาคม 2026 · สถานะ: **homepageและคลิปรอบ6เผยแพร่ใน9.1.0; READMEยังเป็นร่าง** · ฐาน source `9efebab0c4c9` · production ล่าสุด `9.1.0 / 48d9b98` (ฐานก่อนเปลี่ยน9.0.2)
+วันที่ 24 ตุลาคม 2026 · รอบ 7 กำลังปรับ: root README ภาษาอังกฤษและภาพ homepage · production เดิม 9.1.0 / 48d9b98
 
-เปิด [หน้ารวมร่าง](review.html) เพื่อดูคลิปและข้อความ; [หน้าเว็บ TH/EN](landing-copy.md), [README ฉบับร่าง](readme-draft.md), [storyboard และ prompt ผลิตวิดีโอ](video-brief.md), [หลักฐานและขอบเขต](evidence.md)
+เปิด [หน้ารวมร่าง](review.html) เพื่อดูคลิปและข้อความ; [หน้าเว็บ TH/EN](landing-copy.md), [README ภาษาอังกฤษ](../../../README.md) ([ร่างเดิม](readme-draft.md)), [storyboard และ prompt ผลิตวิดีโอ](video-brief.md), [หลักฐานและขอบเขต](evidence.md)
 
 ผลตรวจชุดร่างและสิ่งที่ยังไม่ตรวจอยู่ใน [verification](verification.md)
 

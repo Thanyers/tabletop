@@ -1,3 +1,5 @@
+> Historical Thai draft. The English story is now maintained in the [root README](../../../README.md), including the revised hammer-grip and workbench-chair examples. This draft records the earlier wording and is not the current publication copy.
+
 <img src="../../../public/favicon.svg" alt="Tabletop mark" width="44" height="44">
 
 # tabletop.

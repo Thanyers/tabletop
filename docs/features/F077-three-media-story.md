@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — production 9.1.0 / [release PR #274](https://github.com/Thanyers/tabletop/pull/274) |
+| สถานะ | `review` — round 7 / [PR #280](https://github.com/Thanyers/tabletop/pull/280); round 6 remains production 9.1.0 |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.0 — homepage และคลิป93.2sเผยแพร่แล้ว; READMEยังเป็นร่าง |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 |
+| เวอร์ชัน | 9.1.0 — homepage และคลิป93.2sเผยแพร่แล้ว; round 7 applies the English README and corrects homepage visuals |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 และ F077-T2 |
 
 ## ทำไม
 
@@ -19,7 +19,9 @@
 
 รอบ 6 ผู้ใช้ยอมรับเรื่องและภาพ ขอเร่ง intro และบางช่วง พร้อมสั่งให้นำขึ้นเว็บเมื่อเสร็จ จึงรวม production release ตาม workflow ของ repo
 
-ไม่รวม: เปลี่ยนrootREADME, โมเดลสร้างวิดีโอ หรืออ้างภาพจำลองเป็นผลการใช้ระบบจริง
+รอบ 7: ผู้ใช้ให้ใช้ร่างกับ root README จริงเป็นภาษาอังกฤษ ปรับ hero ให้มีภาพที่สื่อความหมาย แสดงการปรับด้ามค้อน/เก้าอี้ให้เข้ากับคน และเอา README ออกจากทางเดินหน้าเว็บ หน้าเว็บต้องอธิบายและพาไปทดลองได้ในตัวเอง
+
+ไม่รวม: โมเดลสร้างวิดีโอ หรืออ้างภาพจำลองเป็นผลการใช้ระบบจริง
 
 ## งาน
 
@@ -27,6 +29,7 @@
 | --- | --- | --- |
 | 2026-10-24 | รอบ6: กระชับเวลาตามช่วง โดยคงเสียงหญิง บท ภาพ และจังหวะพิมพ์/ตรวจ/ใช้ที่ยอมรับ; นำขึ้นเว็บหลังผ่านการตรวจ | ผู้ใช้อนุมัติทิศทางรอบ5และขอเพิ่ม pace พร้อม release |
 | F077-T1 | ตรวจของเดิมและ reference; ร่างสามสื่อพร้อม animatic | เอกสารครบ ลิงก์ถูกต้อง render สำเร็จ ตรวจภาพและเนื้อหา independent review |
+| F077-T2 | Apply English README and improve homepage visual story | Hero shows a useful evolving table; physical additions visibly answer a person's need; no README navigation; language/auth/reduced-motion behavior retained |
 
 ## การตัดสินใจ
 
@@ -47,10 +50,10 @@
 
 ## ชุดส่ง review
 
-[แผนและเปรียบเทียบของเดิม](../narrative/F077/README.md) · [หน้า preview](../narrative/F077/review.html) · [copy หน้าเว็บ](../narrative/F077/landing-copy.md) · [README ร่าง](../narrative/F077/readme-draft.md) · [video brief/prompt](../narrative/F077/video-brief.md) · [ผลตรวจ](../narrative/F077/verification.md)
+[แผนและเปรียบเทียบของเดิม](../narrative/F077/README.md) · [หน้า preview](../narrative/F077/review.html) · [copy หน้าเว็บ](../narrative/F077/landing-copy.md) · [README ภาษาอังกฤษ](../../README.md) · [video brief/prompt](../narrative/F077/video-brief.md) · [ผลตรวจ](../narrative/F077/verification.md)
 
 รอบ 6 ใช้บทอังกฤษเดิมแต่กระชับเป็น 93.2 วินาที: เครื่องมือปรับเพื่อคน → software friction → Tabletop → คนขายค่อย ๆ พิมพ์ขอเครื่องมือเพิ่มและใช้ต่อบนโต๊ะเดิม เสียงหญิง Laura เป็นทิศทางที่ผู้ใช้ยอมรับ โลโก้และ loader motion มาจาก repo; outro พื้นขาวและโลโก้เท่านั้น ภาพถ่ายมี credits/license; ไม่มี AI สร้างวิดีโอหรือภาพ
 
-หน้า homepage จริงใช้ดีไซน์ที่ยอมรับและ English เป็นฐาน บอร์ดตัวอย่างทำงานใน browser โดยไม่เรียก AI หรือบันทึกข้อมูล runtime มีส่งคำขอ → Review → Apply ครบห้าบท; ข้อมูลเดิมและยอดที่ใช้อยู่ไม่เปลี่ยนระหว่างตรวจร่างส่วนลด README ยังอยู่ในชุดร่าง
+หน้า homepage จริงใช้ดีไซน์ที่ยอมรับและ English เป็นฐาน บอร์ดตัวอย่างทำงานใน browser โดยไม่เรียก AI หรือบันทึกข้อมูล runtime มีส่งคำขอ → Review → Apply ครบห้าบท; ข้อมูลเดิมและยอดที่ใช้อยู่ไม่เปลี่ยนระหว่างตรวจร่างส่วนลด รอบ 7 นำ README ภาษาอังกฤษไปใช้ใน root แล้ว
 
 สถานะการตรวจและข้อจำกัดล่าสุดอยู่ใน [verification](../narrative/F077/verification.md) ผลของรอบ 4 เก็บเป็นประวัติ ไม่ใช่ผลรับรองรอบ 5

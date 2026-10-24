@@ -2,15 +2,17 @@ import { ArrowDownRight, ArrowUpRight, BookOpen, FileText, UsersRound } from 'lu
 import { useEffect, useState, type ReactNode } from 'react';
 import { landingCopy, landingLanguages, languageOptionLabel, productThesis, readLandingLanguage, saveLandingLanguage, type LandingCopy, type LandingLanguage } from './landing-copy';
 import { NarrativeSalesDemo } from './NarrativeSalesDemo';
+import { PhysicalAdaptationStories } from './PhysicalAdaptationStories';
 import storyGif from '../../../docs/showcase/tabletop-story.gif';
 import storyPoster from '../../../docs/showcase/tabletop-story-poster.png';
+import storyGifEn from '../../../docs/showcase/tabletop-story-en.gif';
+import storyPosterEn from '../../../docs/showcase/tabletop-story-en-poster.png';
 import physicsImage from '../../../docs/showcase/physics.png';
 import encounterImage from '../../../docs/showcase/encounter.png';
 import './public-welcome.css';
 
 const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
 const useCaseIcons = [FileText, BookOpen, UsersRound];
-const repositoryReadme = 'https://github.com/Thanyers/tabletop#readme';
 
 /**
  * Shared public landing for signed-out and signed-in visitors. Account and invitation actions
@@ -59,13 +61,9 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
   };
 
   const copy = landingCopy[language];
-  const storySource = playStory ? `${storyGif}?replay=${replay}` : storyPoster;
-  const toolPhotos = [
-    { key: 'chair', source: '/narrative/office-chair-isolated.jpg', ...copy.why.tools.chair },
-    { key: 'pen', source: '/narrative/writing-hand.jpg', ...copy.why.tools.pen },
-    { key: 'hammer', source: '/narrative/hammer-hand.jpg', ...copy.why.tools.hammer },
-  ];
-
+  const localizedStoryGif = language === 'en' ? storyGifEn : storyGif;
+  const localizedStoryPoster = language === 'en' ? storyPosterEn : storyPoster;
+  const storySource = playStory ? `${localizedStoryGif}?replay=${replay}` : localizedStoryPoster;
   const toggleStory = () => {
     if (playStory) setPlayStory(false);
     else {
@@ -89,7 +87,6 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
         <a href="#board">{copy.header.board}</a>
         <a href="#film">{copy.header.film}</a>
         <a href="#examples">{copy.header.examples}</a>
-        <a href={repositoryReadme} target="_blank" rel="noopener noreferrer">{copy.header.readme}<ArrowUpRight size={12} aria-hidden="true" /></a>
       </nav>
       <div className="tt-public-welcome__language" role="group" aria-label={copy.header.languageGroup}>
         {landingLanguages.map((option) => <button key={option} type="button" lang={option} aria-pressed={option === language} onClick={() => chooseLanguage(option)}>{languageOptionLabel[option]}</button>)}
@@ -110,6 +107,21 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
           </div>
           <p className="tt-public-welcome__scope"><span aria-hidden="true">✓</span>{copy.hero.scope}</p>
         </div>
+        <figure className="tt-public-welcome__story tt-public-welcome__hero-story">
+          <div className="tt-public-welcome__hero-story-topline">
+            <span>{copy.process.storyCaption}</span>
+            <span>{language === 'en' ? 'ONE TABLE · GROWING WORK' : 'โต๊ะเดียว · งานค่อย ๆ เติบโต'}</span>
+          </div>
+          <div className="tt-public-welcome__story-frame">
+            <img key={playStory ? `story-${replay}` : 'poster'} src={storySource} width={960} height={540} loading="eager" decoding="async" alt={copy.process.storyAlt} />
+          </div>
+          <figcaption>
+            <span>{copy.process.storyNote}</span>
+            <button type="button" onClick={toggleStory} aria-label={playStory ? copy.process.showStillLabel : copy.process.replayLabel} aria-pressed={playStory}>
+              {playStory ? copy.process.showStill : copy.process.replay}
+            </button>
+          </figcaption>
+        </figure>
       </section>
 
       <NarrativeSalesDemo language={language} />
@@ -139,47 +151,12 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
         </div>
         <div className="tt-public-welcome__why-copy">
           <p>{copy.why.body}</p>
-          <div className="tt-public-welcome__tools" role="group" aria-label={language === 'en' ? 'Chair, pen, and hammer' : 'เก้าอี้ ปากกา และค้อน'}>
-            {toolPhotos.map((tool) => <figure key={tool.key}>
-              <div className="tt-public-welcome__tool-image"><img src={tool.source} loading="lazy" decoding="async" alt={tool.alt} /></div>
-              <figcaption><strong>{tool.title}</strong><span>{tool.body}</span></figcaption>
-            </figure>)}
-          </div>
           <div className="tt-public-welcome__thesis">
             <span>{copy.why.thesisLabel}</span>
             <p lang="en">{productThesis}</p>
           </div>
         </div>
-      </section>
-
-      <section className="tt-public-welcome__process" aria-labelledby="tt-public-welcome-process-title">
-        <div className="tt-public-welcome__section-heading">
-          <div>
-            <p className="tt-public-welcome__eyebrow"><span aria-hidden="true" />{copy.process.eyebrow}</p>
-            <h2 id="tt-public-welcome-process-title">{copy.process.title}</h2>
-          </div>
-          <p>{copy.process.aside}</p>
-        </div>
-        <div className="tt-public-welcome__process-layout">
-          <figure className="tt-public-welcome__story">
-            <div className="tt-public-welcome__story-frame">
-              <img key={playStory ? `story-${replay}` : 'poster'} src={storySource} width={960} height={540} loading="lazy" decoding="async" alt={copy.process.storyAlt} />
-            </div>
-            <figcaption>
-              <span>{copy.process.storyCaption}</span>
-              <button type="button" onClick={toggleStory} aria-label={playStory ? copy.process.showStillLabel : copy.process.replayLabel} aria-pressed={playStory}>
-                {playStory ? copy.process.showStill : reducedMotion ? copy.process.replay : copy.process.replayIdea}
-              </button>
-            </figcaption>
-            <p className="tt-public-welcome__story-note">{copy.process.storyNote}</p>
-          </figure>
-          <ol className="tt-public-welcome__steps">
-            {copy.process.steps.map((step, index) => <li key={index}>
-              <span className="tt-public-welcome__step-number">{String(index + 1).padStart(2, '0')}</span>
-              <div><h3>{step.title}</h3><p>{step.body}</p></div>
-            </li>)}
-          </ol>
-        </div>
+        <PhysicalAdaptationStories language={language} copy={copy.why.stories} />
       </section>
 
       <section className="tt-public-welcome__use-cases" id="examples" aria-labelledby="tt-public-welcome-use-cases-title">
@@ -232,8 +209,7 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
           <span>tabletop<span>.</span></span>
         </a>
         <span className="tt-public-welcome__footer-note">{copy.footer}</span>
-        <nav className="tt-public-welcome__footer-links" aria-label={language === 'en' ? 'Project links' : 'ลิงก์โครงการ'}>
-          <a href={repositoryReadme} target="_blank" rel="noopener noreferrer">{copy.header.readme} <ArrowUpRight size={12} aria-hidden="true" /></a>
+        <nav className="tt-public-welcome__footer-links" aria-label={language === 'en' ? 'Photo credits' : 'เครดิตภาพ'}>
           <a href="/narrative/SOURCES.md" target="_blank" rel="noopener noreferrer">{copy.header.photoCredits} <ArrowUpRight size={12} aria-hidden="true" /></a>
         </nav>
       </footer>
