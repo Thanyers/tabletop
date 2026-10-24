@@ -1,90 +1,80 @@
-# Tabletop — video brief, storyboard และ production prompt
+# Tabletop film — เครื่องมือค่อย ๆ ปรับให้เข้ากับคุณ
 
-สถานะ: **Draft 02 / concept film** · 60 วินาที · 1280×720 / 30fps · ภาษาไทยในภาพ · ทำด้วยโค้ดทั้งหมด · สถานะเสียงและผล render ดู [verification](verification.md)
+Draft 03 · 60 วินาที · Remotion/React/SVG/CSS · ไม่มีโมเดลสร้างวิดีโอ · [หลักฐานและขอบเขต](evidence.md)
 
-[ดู MP4](media/tabletop-narrative-draft.mp4) · [poster](media/tabletop-narrative-poster.png) · [source/render](motion/README.md) · [references](references.md)
+## แกนเรื่องที่แก้
 
-## แกนเรื่อง
+รอบ 2 แสดงการ์ดเพิ่มและตัวเลขเปลี่ยน แต่ยังไม่มีเหตุจากคนใช้ รอบ 3 ต้องเห็น **คนเจอความต้องการ → พิมพ์คำขอ → ส่ง → เห็นร่าง → ตรวจ/ใช้ → ลงมือใช้เครื่องมือที่ปรับแล้ว** วนต่อบนโต๊ะเดิม
 
-เก้าอี้ช่วยให้เรานั่งคิด ปากกาช่วยให้ความคิดมีรูปร่าง ค้อนช่วยให้สิ่งที่คิดประกอบเป็นของจริง เครื่องมือที่ดีทำให้เราอยู่กับสิ่งที่อยากทำ และเมื่อสิ่งที่อยากทำเปลี่ยน เครื่องมือควรปรับตามได้
+ตัวเอกคือคนขายกาแฟและเค้ก เขาไม่ได้รู้ตั้งแต่แรกว่าต้องการ dashboard หรือระบบโปรโมชัน เขาเริ่มจากจดขาย พอใช้แล้วจึงรู้ว่าตรงไหนควรปรับ ซอฟต์แวร์ค่อย ๆ กลายเป็นเครื่องมือของเขาผ่านคำขอเหล่านั้น
 
-เล่าต่อด้วยร้านกาแฟเล็ก ๆ เพียงเคสเดียว: เริ่มจากคำขอ เห็นตารางและกฎให้ตรวจ เปิดใช้ แล้วค่อยเพิ่มผลสรุป กราฟ ข้อมูลรอบใหม่ และกฎส่วนลด ทุกชิ้นอยู่บนโต๊ะเดียวกัน โต๊ะเติบโตโดยไม่ล้างสิ่งที่สร้างไว้
+ชื่อและตัวเลขร้านเป็นเรื่องสมมติ ภาพเป็น authored concept animation; ไม่ใช่ recording หรือสัญญาว่า AI จะสร้างทุกคำขอได้ในเวลาตามคลิป
 
-เก้าอี้ ปากกา ค้อน เป็นคำเปรียบเทียบที่ร่างใหม่ ไม่ใช่ประวัติผู้ก่อตั้งที่ยืนยันแล้ว ภาพการใช้งานเป็นภาพอธิบายพร้อมข้อมูลตัวอย่าง ไม่ใช่การบันทึกคำขอ AI จริง
+## ลำดับ 60 วินาที
 
-## Storyboard 60 วินาที
-
-| เวลา | ภาพ / การกระทำ | ข้อความหลัก | การต่อภาพ |
+| เวลา | ความต้องการของคน | ข้อความที่เห็นพิมพ์ | การเปลี่ยนที่เห็นและการใช้ |
 | --- | --- | --- | --- |
-| 0–9 | เก้าอี้เข้ามา ตามด้วยปากกาที่เพิ่มรอยเขียน และค้อนที่เพิ่มตะปู; วัตถุเดิมคงอยู่ | เครื่องมือที่ดี ให้เราอยู่กับสิ่งที่อยากทำ | วางเพิ่มทีละชิ้น; ไม่มีวัตถุเปลี่ยนชนิด ไม่มี morph |
-| 9–14 | ข้อความ “ช่วยทำโต๊ะสรุปยอดขายวันนี้” อยู่บนพื้นที่ว่าง | เริ่มจากสิ่งที่อยากทำ | เลื่อนกรอบภาพเข้าสู่โต๊ะ; ให้เวลาอ่านคำขอ |
-| 14–22 | ตารางกาแฟ/เค้กและช่องกรอกข้อมูลเข้ามาทีละใบ | เติมเครื่องมือที่งานต้องใช้ | เคลื่อนเข้า 12–18 frames แล้วพัก; การ์ดตั้งตำแหน่งถาวร |
-| 22–29 | เพิ่มกฎยอดรวม มีช่วงตรวจข้อเสนอ แล้วกดใช้ | ตรวจ แล้วเปิดใช้ | กล้องเข้าใกล้กฎ; สถานะเปลี่ยนหลัง Apply เท่านั้น |
-| 29–36 | ตัวเลข 225 และกราฟงอกจากกฎผ่านเส้นเชื่อม | ต่อผลลัพธ์ออกไป | เส้นวาดจาก source ไป output; ตาราง/กฎเดิมยังอยู่ |
-| 36–42 | ราคา/จำนวนใหม่เข้าตาราง ยอดและกราฟเปลี่ยนเป็น 405 | ข้อมูลใหม่ ใช้วิธีคิดเดิม | เน้นเฉพาะเซลล์ที่เปลี่ยน แล้วส่งต่อไปผล |
-| 42–50 | เลือกกฎส่วนลด ดูข้อเสนอ 10%→20% แล้วกดใช้ | เปลี่ยนกฎ เมื่อวิธีทำงานเปลี่ยน | ข้อเสนออยู่ข้างกฎเดิม ไม่แทนผลก่อนกดใช้ |
-| 50–55 | แตกผลหลังลดเป็น 324; gross 405 คงอยู่ | โต๊ะเดิม ทำได้มากขึ้น | เพิ่มแขนงใหม่ แยกยอดก่อนลด/หลังลดชัดเจน |
-| 55–58 | กล้องถอยให้เห็นภาพรวมบอร์ดเดียวที่สร้างมาตลอด | ค่อย ๆ เพิ่ม ค่อย ๆ ปรับ ค่อย ๆ เติบโต | ไม่รื้อบอร์ดหรือรีเซ็ตไปต้นเรื่อง |
-| 58–60 | โลโก้/wordmark เดิม พร้อม CTA สั้น | tabletop. — เริ่มจากงานของคุณ | ใช้ motion ของ repo; end hold อ่านชื่อและที่ไปต่อ |
+| 0–5s | เครื่องมือควรพอดีกับคนและงาน | เกริ่นสั้น: เครื่องมือที่ดี ต้องพอดีกับคุณ | เก้าอี้ ปากกา ค้อนแยกชิ้นอยู่ร่วมกัน เติมเบาะ/รอยเขียน/ตะปู ไม่มี morph; เชื่อมเข้าโต๊ะของคนขาย |
+| 5–14s | อยากเริ่มจดขาย | ช่วยทำโต๊ะจดขายกาแฟกับเค้ก | พิมพ์ → ส่ง → ร่าง/ตรวจ/ใช้ → ตาราง 2 รายการและยอด225ปรากฏ; ยังไม่มีปุ่มขายหรือกราฟ |
+| 14–28s | ลูกค้าเยอะ กรอกไม่ทัน | เพิ่มปุ่มขาย กดครั้งเดียวเพิ่มจำนวน | ปุ่มกาแฟ+1/เค้ก+1งอกข้างตารางหลังตรวจ/ใช้; กดกาแฟหนึ่งครั้ง จำนวน3→4 ยอด225→250 ให้เห็นว่าเครื่องมือใหม่ช่วยจุดที่ติด |
+| 28–38s | อยากรู้ว่าอะไรขายดี | เพิ่มกราฟยอดขายแยกตามสินค้า | พิมพ์ → ส่ง → ตรวจ/ใช้ → กราฟงอกจากข้อมูลเดิม กาแฟ100/เค้ก150 ตารางและปุ่มยังอยู่ |
+| 38–46s | จะลองโปรช่วงบ่าย | เพิ่มส่วนลด 10% | ขอวิธีคิดเพิ่ม → ตรวจ/ใช้ → การ์ดกฎและยอดสุทธิ225 โดยยอดก่อนลด250ไม่เปลี่ยน |
+| 46–55s | อยากลองโปรแรงขึ้น | เปลี่ยนกฎนี้เป็น 20% | เลือกการ์ดส่วนลดก่อนพิมพ์ → ร่าง20%แยกจาก10%ที่ใช้อยู่ → ตรวจ/ใช้ → ยอดสุทธิ200 ข้อมูลและกราฟยังเดิม |
+| 55–58s | ได้โต๊ะที่เข้ากับวิธีขายของตัวเอง | เริ่มจากจดขาย ค่อย ๆ ปรับจนพอดีมือ | พักให้เห็นโต๊ะเดียวครบ: ตาราง ปุ่ม กราฟ กฎ ผลลัพธ์; ย้อนให้จำว่าทุกชิ้นมีเหตุจากคำขอ |
+| 58–60s | พร้อมเริ่มเรื่องของตัวเอง | tabletop. · เครื่องมือที่ค่อย ๆ ปรับให้เข้ากับคุณ | โลโก้เดิมและ URL พักอ่าน ไม่เปิดฉากใหม่ |
 
-กรอบเวลาเป็น contract ของการผลิต จังหวะย่อยที่ปรับเพื่ออ่านทันต้องบันทึกไว้ใน motion README และรักษาความยาวรวม 60 วินาที ช่วง 14–58 ต้องใช้ world/canvas เดียว ไม่เป็นชุดสไลด์ที่ลบของเดิมออก
+เวลาย่อยจริงอยู่ใน [motion README](motion/README.md) ให้เวลาคนอ่านคำขอที่พิมพ์ครบอย่างน้อย0.6–1s และดูผลหลังใช้ประมาณ1.5s ถ้าแน่นให้ตัดคำและกราฟิกเสริม ห้ามตัดเหตุจากคนหรือทำให้ส่งคำขอกับผลเกิดพร้อมกัน
 
-## ข้อมูลตัวอย่างเดียวกันทุกสื่อ
+## สิ่งที่ต้องเห็น ไม่ใช่แค่ข้อความบอก
 
-| ช่วง | Coffee | Cake | Gross | Discount | Net |
+1. มีช่องพิมพ์และ cursor; ข้อความค่อย ๆ ปรากฏเป็น grapheme ภาษาไทย ไม่ตัดสระ/วรรณยุกต์ออกจากตัวอักษร
+2. คำขอแต่ละช่วงเปลี่ยนจริง มี Send และสถานะร่าง/ตรวจ/ใช้ แยกจากการพิมพ์
+3. การ์ดใหม่ยังไม่เกิดก่อนส่ง และผลที่ใช้อยู่ไม่เปลี่ยนก่อน Apply
+4. ปุ่มขายที่เพิ่งขอต้องถูกกด แล้วจำนวนและยอดเปลี่ยนจากข้อมูลเดียวกัน นี่คือจังหวะที่คนเห็นว่าได้เครื่องมือไว้ใช้ ไม่ใช่แค่ภาพหน้าจอเพิ่ม
+5. ตารางและปุ่มเดิมยังอยู่เมื่อขอกราฟ ต่อด้วยกฎส่วนลด กรอบ/ตำแหน่งคงที่เท่าที่พื้นที่ภาพรองรับ
+6. ตอนแก้20%ต้องชี้กฎที่เลือก พร้อมคง10%ที่ทำงานอยู่จนกดใช้; หลังใช้gross250ยังอยู่ แต่net225→200
+7. ข้อความบอกปัญหาของคนสั้นและมาก่อนคำขอ เช่น “ลูกค้าเยอะ กรอกไม่ทัน” ห้ามแทนด้วยชื่อfeature เช่น “Action system”
+
+## ตัวเลขชุดเดียว
+
+| จังหวะ | กาแฟ | เค้ก | ก่อนลด | กฎที่ใช้ | สุทธิ |
 | --- | --- | --- | --- | --- | --- |
-| ก่อนแก้ข้อมูล | 3 × 25 = 75 | 3 × 50 = 150 | 225 | ไม่แสดง | ไม่แสดง |
-| หลังแก้ราคา/จำนวน | 3 × 35 = 105 | 6 × 50 = 300 | 405 | ไม่แสดง | ไม่แสดง |
-| ก่อนแก้กฎ | ข้อมูลชุดเดิม | ข้อมูลชุดเดิม | 405 | 10% | 364.50 |
-| หลังแก้กฎ | ข้อมูลชุดเดิม | ข้อมูลชุดเดิม | 405 | 20% | 324 |
+| เริ่ม | 3×25=75 | 3×50=150 | 225 | ไม่มี | ไม่แสดง |
+| กดกาแฟ+1 | 4×25=100 | 3×50=150 | 250 | ไม่มี | ไม่แสดง |
+| เพิ่ม10%แล้วใช้ | เดิม | เดิม | 250 | 10% | 225 |
+| กำลังเสนอ20% | เดิม | เดิม | 250 | ยัง10% | 225; preview200แยกชัด |
+| ตรวจแล้วใช้20% | เดิม | เดิม | 250 | 20% | 200 |
 
-ยอดเหล่านี้เป็นตัวอย่างที่คำนวณตรวจได้ ไม่ใช่ยอดร้านจริงหรือbusiness KPI การกำหนดCoffee/Cakeและลำดับนี้เป็นเรื่องที่แต่งเพื่อสื่อสาร รองรับความสามารถด้วยผลทดสอบรายเคสตาม [evidence](evidence.md) แต่ไม่ได้อ้างว่าร้านนี้เคยใช้ระบบจริง
+หน้าเว็บให้กดขายได้หลายครั้ง จึงคำนวณจากจำนวนจริงในหน้า ตัวเลข250/225/200เป็นเส้นเรื่องมาตรฐานเมื่อกดกาแฟหนึ่งครั้ง ไม่บังคับทับข้อมูลคนทดลอง
 
-## เสียงบรรยายที่เตรียมไว้ — ไทย
+## บทพากย์ไทยที่เตรียมไว้
 
-> เก้าอี้ ให้เรานั่งคิด ปากกา ให้ความคิดมีรูปร่าง ค้อน ช่วยให้มันเป็นจริง เครื่องมือที่ดีทำให้เราอยู่กับสิ่งที่อยากทำ แล้วถ้าซอฟต์แวร์ปรับตามงานเราได้ล่ะ? บอก Tabletop ว่าอยากทำอะไร เริ่มจากตาราง เติมวิธีคำนวณ ตรวจ แล้วเปิดใช้ ต่อเป็นตัวเลขสรุปและกราฟ เมื่อข้อมูลใหม่เข้ามา ใช้วิธีคิดเดิม เมื่อวิธีทำงานเปลี่ยน เลือกกฎที่ต้องแก้ ตรวจ แล้วใช้ต่อ ข้อมูลเดิมยังอยู่ เครื่องมือใหม่ค่อย ๆ งอกขึ้นบนโต๊ะเดียวกัน Tabletop เริ่มจากงาน ให้เครื่องมือโตไปด้วยกัน
+> เครื่องมือที่ดี ต้องพอดีกับคุณ แล้วซอฟต์แวร์ล่ะ? เริ่มจากเรื่องเล็ก ๆ อยากมีโต๊ะจดขายกาแฟกับเค้ก พิมพ์บอก ตรวจ แล้วเริ่มใช้ พอลูกค้าเยอะ กรอกไม่ทัน ก็ขอปุ่มขาย กดครั้งเดียว รายการกับยอดก็เปลี่ยน อยากรู้ว่าอะไรขายดี ขอกราฟเพิ่มจากข้อมูลเดิม ช่วงบ่ายอยากลองโปร ก็เพิ่มส่วนลดสิบเปอร์เซ็นต์ ลองแล้วอยากเปลี่ยนเป็นยี่สิบ เลือกกฎนั้น ขอแก้ ตรวจ แล้วใช้ต่อ ตารางเดิมยังอยู่ เครื่องมือค่อย ๆ เข้ากับวิธีทำงานของคุณ Tabletop
 
-เป็น script ที่ยังไม่บันทึกเสียง ต้องอ่านจับเวลาจริงก่อนนำเข้าคลิป ไม่อ้างว่าทดสอบเวลาเสียงแล้ว ข้อความในภาพควรสั้นกว่าเสียงเสมอ
+ยังไม่บันทึกเสียงและยังไม่จับเวลาการอ่านจริง คลิปส่งรอบนี้เงียบ ต้องเข้าใจเรื่องได้จากภาพและข้อความโดยไม่พึ่งเสียง
 
-## Voiceover draft — English
+## English voiceover draft
 
-> A chair gives you a place to think. A pen gives an idea a shape. A hammer helps you build it. Good tools keep you close to what you want to do. What if software could adapt to your work, too? Tell Tabletop what you need. Start with a table. Add a calculation. Review it, then put it to use. Connect a total and a chart. New data, same calculation. A new plan? Change the rule. Review, apply, and keep going. The work stays. The tools grow. Tabletop. Start with your work.
+> Good tools fit the person using them. What about software? Start small: a table for coffee and cake sales. Type what you need. Review it and put it to work. The shop gets busy. Entering every sale is too slow. Ask for a sales button. One tap updates the quantity and total. Want to know what sells? Add a chart from the same data. Try an afternoon offer with ten percent off. Want to make it twenty? Select that rule, request the change, review it, and apply. Your work stays. Your tools keep fitting you better. Tabletop.
 
-แยก export ภาษาในรอบ final; ไม่ใส่สองเสียงทับกัน และไม่เปิดเสียงเองบนเว็บ
-
-## กติกา motion และเสียง
-
-- ใช้ logo/wordmark เดิมและแปลง loader animation จาก repo เป็น deterministic frame timing ตาม [asset map](references.md) ไม่ทำโลโก้ใหม่
-- ใช้ translate, reveal mask, draw-on และ camera movement; ห้าม interpolate SVG path ให้เก้าอี้กลายเป็นโต๊ะ ปากกากลายเป็นค้อน หรือการ์ดกลายเป็นวัตถุอีกชนิด
-- ช่วงเปลี่ยนภาพประมาณ 0.4–0.6s; ภาพที่มีคำอธิบายต้องมีเวลาอ่านหลัง transition อย่างน้อย 2.2s ตัวเลขสำคัญหยุดให้เห็นครบ
-- วางข้อเสนอและผลที่ใช้อยู่ให้ต่างกัน ก่อน Apply ผลเดิมยังอยู่; หลัง Apply จึงเปลี่ยนผล
-- ป้าย “ภาพอธิบาย · ข้อมูลตัวอย่าง” อ่านได้ตลอดคลิป ไม่มี loading ปลอมที่ตีความเป็น latency จริง
-- เสียงประกอบทำจากโค้ดได้ แต่ต้องเบาและมีเจตนา ไม่ใส่ whoosh ทุกใบ ไม่คัดลอกเพลงจาก reference
-- ElevenLabs เป็นทางเลือกสำหรับ TTS หลังเลือกเสียงที่มีสิทธิ์ใช้ รอบนี้ไม่ต้องใช้ key และไม่เรียก API เสียเงิน
-- ภาพ 16:9 เป็น master; อย่าครอปเป็น 9:16 แล้วตัดข้อความสำคัญ การทำ portrait ต้องจัดภาพใหม่
-
-## Production prompt สำหรับ coding agent
+## Production prompt
 
 ```text
-Build a 60-second Tabletop product film with Remotion, React, SVG, CSS and local repository assets. Do not generate video or images with AI. Read the repository instructions and this brief. Preserve app runtime behavior and work only in the assigned draft media package.
+Revise the existing Tabletop Remotion film to 60 seconds. Code every frame with React, SVG and CSS. No AI-generated video or images. Use the original repository logo geometry, lowercase wordmark, loader timing and existing opening objects. No morphing.
 
-The central idea is accumulation: a useful canvas grows around a person's work. Keep one spatially continuous board from 14s to 58s. Existing cards retain positions. Add new cards, change selected values or one selected rule, then branch new outputs. The camera may pan and zoom. Do not build a slide carousel.
+Tell a person-led story, not a feature carousel. A fictional coffee seller starts with a simple sales table, discovers friction while using it, and types follow-up requests that change the SAME workspace. For every beat show need → typing with a visible caret → Send → draft → review/apply → use/result. Keep completed request text visible long enough to read. Segment Thai by grapheme. A new tool cannot appear before its request. A proposed rule cannot change applied results before Apply.
 
-Use the exact canonical Tabletop four-piece mark, round gold lower-right tile, lowercase tabletop. wordmark, and the loader animation in src/loading/loading-screen.css. Port its 2.4s tilt and 1.2s staggered tile pulses to frame math. Reuse existing showcase animation/motion where appropriate and record provenance. Do not reuse the incorrect all-square uppercase mark from Draft 01.
+Follow the exact requests and arithmetic in this brief. The major adaptation is quick-sale buttons requested because the seller cannot keep typing during a rush. Show the new Coffee+1 button being clicked once, changing quantity3→4 and gross225→250. Then request a per-item sales chart. Next request a10%discount (net225), then select that rule and type a request for20% (net200). Gross250 and prior rows/chart/buttons remain. Render source-derived values consistently; no arbitrary rolling numbers.
 
-Opening 0–9s: introduce a chair, a pen and a hammer as separate objects. The pen adds a drawn mark, the hammer adds a nail, and the chair stays a chair. Keep prior objects. Transition to the canvas by a cut, mask or camera move. NO MORPH between objects, paths, logos or UI types.
+Keep a readable composer or conversation rail throughout the working sequence. The expanded composer guides attention to what the person asks, then settles as the precise board object changes. Each scene has one causal action. Preserve existing card positions; new objects grow into available space. Keep text legible at720p. Use restrained transitions and pauses, not simultaneous motion everywhere.
 
-Follow the 60s storyboard in this brief. Use readable Thai captions; avoid simultaneous paragraphs. Make entrances 12–18 frames with a purposeful ease, then hold the content. Existing brand motion has its original duration. The discount proposal is not applied until explicit review and apply.
-
-Arithmetic is fixed: Coffee 3x25=75, Cake 3x50=150, total225. New data Coffee3x35=105 and Cake6x50=300, total405. Discount10% gives364.50; discount20% gives324. Gross405 remains unchanged when discount changes. Keep chart and table values consistent. The shop is fictional illustrative data.
-
-Render at1280x720,30fps,1800frames,H.264. Every visual state must be deterministic from frame and props. No network calls during rendering, no wall-clock CSS animation, no invented performance numbers. Persistent readable label: ภาพอธิบาย · ข้อมูลตัวอย่าง. This is concept animation, not a product screen recording.
-
-Deliver MP4, poster, eight MP4-derived stills, editable source, render script and asset provenance. Verify arithmetic, continuity, selected-rule before/after, readable safe areas, typography, duration and media playback. Report actual audio status and any skipped checks. Do not call paid voice APIs or copy a reference soundtrack. Keep current public page and root README unchanged until integration is requested.
+1280x720,30fps,1800frames,H.264,silent. Persistent small disclosure: ภาพอธิบาย · ข้อมูลตัวอย่าง. No productAPI, paidvoice, or model call. Deliver edited source,MP4,poster,eightMP4-derivedstills and an explicit timeline. Inspect request/result pairs and the coffee-button click, not only finalboards. FinalwebsiteandrootREADMEremainunchanged.
 ```
+
+## ตรวจความเข้าใจจากภาพ
+
+เมื่อหยุดหลังแต่ละช่วง ผู้ตรวจต้องตอบจากเฟรมได้ว่า คนติดอะไร พิมพ์อะไร สิ่งใดเปลี่ยน และใช้แล้วได้อะไร ตรวจคู่เฟรมคำขอ/ผลอย่างน้อย5คู่ รวมเฟรมก่อนและหลังกดกาแฟ และก่อน/หลังApply20% การตรวจนี้เป็นการตรวจโดยทีมผู้ทำ ไม่แทนการทดสอบคนใหม่
 
 ## Proof clip แยกจาก film
 
-คลิป 60–90 วินาทีจาก QA ต้องเริ่มห้องว่าง ส่ง prompt จริง ตรวจและเปิดใช้ เพิ่ม CSV เปลี่ยนข้อมูล รันวิธีคำนวณเดิม ขอแก้กฎเฉพาะใบ และ reload พร้อมอ่านผลกลับ ระบุช่วงที่ตัดหรือเร่งเวลา ไม่เติมผลสำเร็จที่ไม่เกิดจริงด้วย motion
-
-ความสามารถมีหลักฐานรายเคสใน [evidence](evidence.md) แต่ยังต้องบันทึกเส้นเรื่องต่อเนื่องนี้ใหม่ ตัวเลขที่เปลี่ยนจากโค้ดใน film ไม่ใช่การทำ proof ขั้นนี้
+เส้นเรื่องนี้ต้องบันทึกจากผลิตภัณฑ์จริงต่างหากก่อนอ้างเป็น runtime proof: ห้องใหม่ → promptจริง → ตรวจ/ใช้ → ขอaction → กดและอ่านผลกลับ → ขอchart → ขอdiscount → เลือกกฎแก้ → reloadตรวจผล ไม่มีการเติมผลสำเร็จด้วยmotion หากruntimeทำไม่ได้ต้องรายงาน ไม่ใช้conceptแทนผลจริง

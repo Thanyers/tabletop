@@ -1,30 +1,35 @@
 # F077 narrative animatic
 
-Standalone Remotion source for a 60-second, silent, code-authored concept film. It is an explanatory animation with illustrative data, not a recording of Tabletop or proof of runtime behavior. The Thai provenance label `ภาพอธิบาย • ข้อมูลตัวอย่าง` stays visible throughout.
+Standalone Remotion source for a 60-second, silent, code-authored concept film. It follows a fictional coffee seller as successive requests adapt one canvas to a changing workday. This is an illustrative animation, not a recording of Tabletop or proof of runtime behavior. The Thai disclosure `ภาพอธิบาย · ข้อมูลตัวอย่าง` stays visible throughout.
 
-The opening keeps the chair, pen, hammer, nail, cushion, and book as separate drawn objects. At 00:09 the story moves to a no-file request, then to one continuous sales canvas. Cards stay in place as the table, saved discount rule, gross metric, bar chart, updated rows, review/apply steps, and net result appear. The example arithmetic is consistent: 3 × ฿25 + 3 × ฿50 = ฿225; after changing the coffee price to ฿35 and cake quantity to 6, 3 × ฿35 + 6 × ฿50 = ฿405. Applying a 20% discount to ฿405 yields ฿324; the gross amount remains ฿405.
+The opening uses separate chair, pen, and hammer drawings: a cushion and book join the chair, the pen draws a mark, and the hammer adds a nail. The working sequence keeps the seller's conversation and the same sales table visible while each new request is typed, sent, reviewed, and applied. The accepted quick-sale buttons are used once before the seller asks for the next change.
 
 ## Story beats
 
-- 00:00–00:09 — a chair, pen, and hammer arrive separately; the pen makes a mark and the hammer adds a nail, then a cushion and book join the chair.
-- 00:09–00:14 — the request “ช่วยทำโต๊ะสรุปยอดขายวันนี้” appears without a file.
-- 00:14–00:22 — the coffee-and-cake sales table takes shape on the canvas.
-- 00:22–00:29 — review the saved row-sum/discount rule, then apply it.
-- 00:29–00:36 — the gross metric and per-item chart branch from that same table.
-- 00:36–00:42 — sample inputs change and the gross total updates from ฿225 to ฿405.
-- 00:42–00:50 — a 20% discount is proposed, reviewed, and applied; the before/after net amounts remain visible.
-- 00:50–00:58 — show ฿324 net beside ฿405 gross, then reveal the full board.
-- 00:58–01:00 — the lowercase Tabletop lockup and URL fade in, then hold.
+- 00:00–00:05 — separate objects arrive and are adapted; a coffee seller and a changing workday set the human context.
+- 00:05–00:14 — type `ช่วยทำโต๊ะจดขายกาแฟกับเค้ก`, send it, review the proposed table, and apply it.
+- 00:14–00:28 — after the rush makes entry too slow, request `เพิ่มปุ่มขาย กดครั้งเดียวเพิ่มจำนวน`; review and apply two +1 buttons, then click Coffee once.
+- 00:28–00:38 — request `เพิ่มกราฟยอดขายแยกตามสินค้า`; apply a chart from the same rows.
+- 00:38–00:46 — request and apply a 10% discount rule.
+- 00:46–00:55 — select that rule, request `เปลี่ยนกฎนี้เป็น 20%`, review the preview, and apply the change.
+- 00:55–00:58 — hold the completed canvas; 00:58–01:00 — hold the Tabletop mark, wordmark, and URL.
 
-Within the single canvas section, the camera moves from the sales table to the selected rule, widens to the metric/chart, then focuses on the rule/net comparison before widening back to the whole board. Cards keep their board coordinates as the camera moves.
+Each message types by Thai grapheme, then holds before Send. Drafting, Review, and Apply are distinct frame-driven states. A feature appears only after its request is applied. The table stays in place while the new controls, chart, and discount are added.
+
+## Example data
+
+- Start: 3 × ฿25 Coffee + 3 × ฿50 Cake = ฿225 gross.
+- One Coffee +1 click: 4 × ฿25 + 3 × ฿50 = ฿250 gross; chart shows Coffee ฿100 and Cake ฿150.
+- Applied 10% discount: ฿225 net on ฿250 gross.
+- Proposed 20% discount: the current 10% remains applied until Apply; the preview is ฿200 net.
+- After Apply: ฿200 net, with ฿250 gross unchanged.
 
 ## Source and motion provenance
 
-- The lowercase `tabletop.` wordmark and four-tile mark use the geometry and colors in `src/tabletop/ui/tabletop.css` (`.tt-brand__mark`).
-- The recurring mark tilt and staggered tile pulses port the timing from `src/loading/LoadingScreen.tsx` and `src/loading/loading-screen.css`: a 2.4-second rotation loop and 1.2-second tile-pulse loop with 0.15-second stagger. The timing is evaluated from Remotion's current frame, without browser timers.
+- The lowercase `tabletop.` wordmark and four-tile mark follow the existing logo geometry and colors in `src/tabletop/ui/tabletop.css` (`.tt-brand__mark`).
+- The mark's tilt and staggered tile pulses port the timing from `src/loading/LoadingScreen.tsx` and `src/loading/loading-screen.css`: a 2.4-second rotation loop and 1.2-second tile-pulse loop with a 0.15-second stagger. The movement is evaluated from Remotion's current frame, without browser timers.
 - Fonts are bundled from the pinned `@fontsource/manrope` and `@fontsource/noto-sans-thai` packages with their licenses. No remote/reference media or generated video, image, voice, or audio is used.
-
-All remaining graphics are authored React, SVG, and CSS. No product API, AI provider, or external service is called. The render is silent by design.
+- All remaining scenes and interface graphics are authored React, SVG, and CSS. No product API, AI provider, or external service is called. The render is silent by design.
 
 ## Render
 
@@ -38,4 +43,4 @@ npm run render
 
 The browser path is machine-specific. Omit the environment variable when Remotion can find a local browser on its own. The renderer uses port 41739 by default; set `F077_REMOTION_PORT` if that port is occupied.
 
-The composition is 1280 × 720 at 30 fps for 1800 frames (60 seconds). The script writes `../media/tabletop-narrative-draft.mp4`, `tabletop-narrative-poster.png`, and eight sample stills. The stills are extracted from the finished MP4 with Remotion's bundled FFmpeg, so they represent the playable render exactly. Their sample times are 00:08, 00:12, 00:21, 00:27.5, 00:34, 00:39, 00:49.2, and 00:56.5; the poster uses 00:59. To re-extract stills from a video already rendered, run `node render.mjs --extract-stills-only`.
+The composition is 1280 × 720 at 30 fps for 1800 frames (60 seconds). The script writes `../media/tabletop-narrative-draft.mp4`, `tabletop-narrative-poster.png`, and eight sample stills. Still times are 00:07.6, 00:11, 00:18, 00:23.8, 00:31.7, 00:35.3, 00:49.9, and 00:51.7. The poster uses 00:59. Still images are extracted from the finished MP4, so they match the playable render. To re-extract them from a rendered video, run `node render.mjs --extract-stills-only`.

@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — ร่างรอบ 2 ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
+| สถานะ | `review` — รอบ 3 ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | เอกสารและสื่อร่าง; ไม่มี production release |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 |
@@ -27,6 +27,7 @@
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-24 | รอบ 3 เล่าคนขายที่ค่อย ๆ ขอปรับโต๊ะ: จดขาย → ปุ่มขายเร็ว → กราฟ → โปรโมชัน → แก้กฎ | ผู้ใช้ชี้ว่ารอบ 2 ยังไม่มีจังหวะพิมพ์และไม่เห็นเครื่องมือปรับให้เข้ากับคน; ทุกการเพิ่มต้องตามหลังคำขอและเห็นการใช้จริงในตัวอย่าง |
 | 2026-10-24 | รอบ 2 ใช้บอร์ดเดียวค่อย ๆ เพิ่ม แก้ และแตกแขนงในคลิป 60s; ห้าม morph วัตถุ | ผู้ใช้ต้องการเห็นวิวัฒนาการของโต๊ะชัด ๆ และมีเวลาอ่านผล |
 | 2026-10-24 | ใช้ mark/wordmark และ loader animation จาก repo; เปิดเรื่องด้วยเก้าอี้ ปากกา ค้อนที่แยกเป็นวัตถุ | รักษาอัตลักษณ์และขยายคำเปรียบเทียบให้เห็นเครื่องมือหลายแบบ |
 | 2026-10-24 | หน้าเว็บร่างใช้บอร์ดที่กดเพิ่ม/แก้ได้เป็นภาพหลัก และย้ายเครื่องมือ review ลงชั้นรอง | ผู้ใช้เห็นว่าหน้าแรกของร่างเดิมน่าเบื่อ; ต้องให้ประโยชน์ปรากฏเป็นการกระทำ |
@@ -40,10 +41,8 @@
 
 [แผนและเปรียบเทียบของเดิม](../narrative/F077/README.md) · [หน้า preview](../narrative/F077/review.html) · [copy หน้าเว็บ](../narrative/F077/landing-copy.md) · [README ร่าง](../narrative/F077/readme-draft.md) · [video brief/prompt](../narrative/F077/video-brief.md) · [ผลตรวจ](../narrative/F077/verification.md)
 
-รอบ 2 มี MP4 เงียบ 60 วินาที 1280×720/30fps, poster และภาพนิ่ง 8 ฉาก พร้อม Remotion source/lockfile ใช้ logo/loader motion เดิม; เก้าอี้ ปากกา ค้อนเป็นวัตถุแยกไม่ morph และค่อยเพิ่ม/แก้บนบอร์ดเดิม สร้างด้วยโค้ดทั้งหมด ไม่มีโมเดลสร้างวิดีโอหรือ API เสียง
+รอบ 3 มี MP4 เงียบ 60 วินาที 1280×720/30fps, poster และภาพนิ่ง 8 ฉาก พร้อม Remotion source/lockfile ใช้ logo/loader เดิมและวัตถุเก้าอี้ ปากกา ค้อนแยกกัน ทุกเครื่องมือเกิดหลังคนขายพิมพ์คำขอ: จดขาย → ปุ่มขายเร็ว → กราฟ → ส่วนลด10% → แก้กฎเดิม20% เห็นการกดขายและผลจากข้อมูลเดิม สร้างด้วยโค้ดทั้งหมด
 
-หน้าเว็บร่าง TH/EN ใช้บอร์ดที่กดเพิ่มกฎ ตรวจ/ใช้ เปลี่ยนข้อมูล และแก้ส่วนลดได้ แยกผลที่ใช้จริงในตัวอย่างออกจากข้อเสนอที่ยังไม่ใช้ รักษา animation เรื่องเดิมแบบกดเล่น และมี reference/before-after ประกอบ
+หน้าเว็บร่าง TH/EN ใช้ readonly preset ที่พิมพ์ให้เห็นตามบท แล้วกดส่ง/ตรวจ/ใช้ ปุ่มขายเพิ่มจำนวนและคำนวณกราฟ/ยอดใหม่ได้จริงใน state ของหน้า README และ copy ใช้เรื่องเดียวกัน โดยไม่อ้างเป็น product runtime proof
 
-Independent review ปิด 4 web findings และ 1 motion timing finding จาก source; reviewerไม่ได้ตรวจ MP4 สุดท้ายซ้ำ ผู้ทำ motion ตรวจ 8 stills และ main ตรวจ 4 critical stills จากไฟล์สุดท้าย Motion package audit 0 vulnerabilities; root dependency audit เป็นข้อจำกัด CI เดิมที่แยกไว้
-
-ผลตรวจ Node 22.23.2: render 1,800 frames และ FFmpeg decode สำเร็จ; คำนวณ 5/5; ลิงก์ 75/75; full UI gate ผ่าน 16/16 measured และข้าม 4 รายการ; browser flow/focus/back-navigation/ภาษา/asset เดิมผ่าน; MP4 เล่นและหยุดได้ ส่วน keyboard seek ไม่ยืนยัน; changelog check ผ่าน 1 fragment; public scan 0 finding และ whitespace check ผ่าน รายละเอียดใน verification ไม่ถือเป็นการตรวจ production runtime ใหม่
+Node 22.23.2: render/decodeครบ1,800frames; คำนวณ8/8; ลิงก์67/67; full UI gate16/16measured+4SKIP; browser5บทพร้อมภาษา/reset/ใช้ต่อผ่านหลังแก้null-query; independent source reviewปิด3/3P2; publicscan0finding; changelog1fragmentและwhitespaceผ่าน Mainตรวจ5ภาพสำคัญจากMP4 และ browserยืนยันเล่น60sได้ไม่มีmediaerror ไม่ยืนยันpause/seekรอบนี้ รายละเอียดและข้อจำกัดใน verification; humancomprehensionยังไม่ตรวจ

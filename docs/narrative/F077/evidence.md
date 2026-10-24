@@ -14,6 +14,7 @@
 | เริ่มไม่มีไฟล์+เติมCSV | [Release9 PD005/006](../../testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) | production QAรายเคส, ไม่ใช่ทุกpromptผ่านครั้งแรก |
 | คำนวณและส่งผลmetric/chart | รายงานเดียวกัน PD013–019 | source/versionคงเดิม; model-job IDsคงเดิม แต่ providerCallsยังUNVERIFIED |
 | ถาม/แก้กฎเฉพาะใบ | รายงานเดียวกัน PD027/028 | ถามกฎdiscountที่เลือก, แก้discountโดยไม่แก้gross/raw |
+| ปุ่ม/action เปลี่ยนข้อมูล | รายงานเดียวกัน PD046/048 | มีหลักฐาน actions ที่ตรวจรับและอ่านผลกลับ; ไม่ใช่หลักฐาน exact prompt “เพิ่มปุ่มขาย” หรือ film เส้นเรื่องนี้ |
 | กลับมาเปิดโต๊ะเดิม | รายงานเดียวกัน PD020 | บัญชีเดิม; ไม่พิสูจน์หลายบัญชีด้วยตัวมันเอง |
 | สูตร/JS/Python | รายงานเดียวกัน PD002/003/007–017 | runtime/librariesที่เปิดใช้ตามprofile; ไม่ใช่arbitrarysoftware |
 
@@ -24,7 +25,7 @@
 - หลายบัญชี/permissions8เคสของF066ยังBLOCKED; humanreadbackและmobileบางขอบเขตยังไม่ครบ ไม่ขึ้นbadge“production proven”แบบครอบจักรวาล
 - ผล37PASS/10BLOCKED/1SKIPPED_SCOPEรวมcontrolledlocal7รหัส ไม่ใช่37เคสรันใหม่ทั้งหมดบนproduction9.0.2 และrawUIgateยังมีFAILแยก
 - Coffee/Cakeและตัวอย่างร้านเป็นเรื่องสมมติ ไม่มีบุคคล/ธุรกิจจริง ไม่มีข้อมูลส่วนบุคคลในสื่อ
-- ตัวเลข225→405ในmotionเป็นค่าคำนวณจากinputที่กำหนด ไม่ได้อ่านจากproduction; ส่วนลด10→20%บนgross405เป็นลำดับเล่าใหม่ ไม่อ้างเป็นrecordingของเคสPD028เดิมที่gross225
+- รอบ3ใช้225→250จากปุ่มกาแฟ+1 และส่วนลด10→20%บนgross250 (net225→200) เป็นเรื่องสมมติและค่าคำนวณในmotion ไม่ได้อ่านจากproductionหรือบันทึกเคสPD028เดิม; ปุ่มขายและpromptทั้งห้าต้องบันทึกใช้งานจริงก่อนอ้างว่าเส้นเรื่องนี้ผ่านproductionครบ
 - product.mdส่วนcurrentbetaยังเน้นเริ่มจากไฟล์ และoutsidebetaมีคำว่าgeneratedcodeexecutionกว้างเกินจริงเมื่อเทียบรุ่น9 ควรปรับเอกสารเจ้าของเรื่องในงานintegrationโดยแยกboundedcomputeออกจากarbitraryexecution; ชุดร่างนี้ยังไม่แก้sourceดังกล่าว
 - [GENERIC_TABLE_DESIGN](../../GENERIC_TABLE_DESIGN.md) ยังเรียก prompt-only Generative Canvas ว่า unreleased candidate ซึ่งตามหลังผล production ใน F066; งาน integration ต้องปรับสถานะเอกสารนี้พร้อม product.md ก่อนเผยแพร่ copy ใหม่
 

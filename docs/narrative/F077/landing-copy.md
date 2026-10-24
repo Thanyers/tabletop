@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Header note | พื้นที่สำหรับงาน การเรียนรู้ และการเล่น | A place for work, learning, and play |
 | Eyebrow | TABLETOP · เริ่มจากเรื่องของคุณ | TABLETOP · START WITH YOUR WORK |
-| H1 | เริ่มจากงาน ให้เครื่องมือโตไปด้วยกัน | Start with your work. Let your tools grow. |
+| H1 | เครื่องมือที่ค่อย ๆ ปรับให้เข้ากับคุณ | Tools that keep adapting to you. |
 | Promise | บอกโจทย์ แล้วให้ AI ช่วยร่างตาราง แบบฟอร์ม ปุ่ม กราฟ และวิธีคำนวณบนโต๊ะเดียวกัน คุณตรวจและเปิดใช้ แล้วปรับต่อได้เมื่องานเปลี่ยน | Describe what you want to do. AI helps draft tables, forms, buttons, charts, and calculations on one canvas. Review them, put them to use, and adapt them as your work changes. |
 | Support | เริ่มจากข้อความได้เลย เพิ่มข้อมูลเมื่อพร้อม | Start with words. Add data when you are ready. |
 | Primary CTA | เริ่มโต๊ะของคุณ | Start your table |
@@ -16,7 +16,7 @@
 | Video caption | ภาพเคลื่อนไหวอธิบายแนวคิด · ข้อมูลตัวอย่าง | Concept animation · illustrative data |
 | Video alt / poster | เก้าอี้ ปากกา และค้อนวางเพิ่มทีละชิ้น ก่อนตัดเข้าสู่โต๊ะยอดขายที่ค่อย ๆ เพิ่มและปรับเครื่องมือ | A chair, pen, and hammer arrive one by one, followed by a sales canvas that gains tools and adapts to data and rules. |
 
-Hero รอบ 2 ใช้บอร์ดตัวอย่างที่กดเพิ่ม/แก้ได้ และวาง film เป็น section ถัดไป ไม่จำกัดเป็น poster ข้างข้อความ จัดH1เป็น2–3บรรทัดตามพื้นที่ ไม่บังคับ line break ในจอแคบ Bodyจำกัดความกว้างอ่านง่าย ปุ่มหลักใช้ `primaryHref` เดิม ปุ่มรองเชื่อม `#tabletop-film` ที่ sectionวิดีโอใหม่ ไม่ผูกกับproviderหรือรุ่นrelease
+Hero รอบ 3 ใช้บอร์ดตัวอย่างที่กดเพิ่ม/แก้ได้ และวาง film เป็น section ถัดไป ไม่จำกัดเป็น poster ข้างข้อความ จัดH1เป็น2–3บรรทัดตามพื้นที่ ไม่บังคับ line break ในจอแคบ Bodyจำกัดความกว้างอ่านง่าย ปุ่มหลักใช้ `primaryHref` เดิม ปุ่มรองเชื่อม `#tabletop-film` ที่ sectionวิดีโอใหม่ ไม่ผูกกับproviderหรือรุ่นrelease
 
 ## Why — เก้าอี้ ปากกา ค้อน
 
@@ -42,21 +42,23 @@ H2 EN: **Put it to work. Make it fit.**
 | 02 | **ตรวจ แล้วลงมือใช้** — ให้ AI ร่างเครื่องมือและกฎ ตรวจและปรับก่อนเปิดใช้ | **Review and use** — Let AI draft tools and rules. Check and adjust them before applying them. |
 | 03 | **เปลี่ยนไปพร้อมงาน** — เพิ่มข้อมูล ใช้วิธีคำนวณเดิม หรือขอแก้กฎบนโต๊ะที่ใช้อยู่ | **Adapt as you go** — Add data, reuse a calculation, or change a rule on the table you already use. |
 
-## ตัวอย่างหลัก — หนึ่งโต๊ะ สองการเปลี่ยนแปลง
+## ตัวอย่างหลัก — จากจดขาย สู่โต๊ะที่พอดีกับร้านคุณ
 
-H2 TH: **วันนี้สรุปยอดขาย พรุ่งนี้ลองส่วนลดแบบใหม่**
+H2 TH: **เริ่มใช้ แล้วค่อยรู้ว่าต้องปรับอะไร**
 
-H2 EN: **Today's sales. Tomorrow's new discount.**
+H2 EN: **Use it. Find what needs to change.**
 
-| ช่อง | ไทย | English |
+| เหตุการณ์ | ข้อความไทย | English |
 | --- | --- | --- |
-| Intro | ร้านเล็กเริ่มด้วย “ช่วยสรุปยอดขายวันนี้” แล้วเติมข้อมูลกาแฟและเค้ก เมื่อราคาหรือจำนวนเปลี่ยนก็ใช้วิธีคำนวณเดิม เมื่อต้องการลองส่วนลดใหม่ก็ขอปรับกฎเฉพาะจุด | A small shop starts with “Help me track today's sales.” Add coffee and cake sales. Reuse the calculation when prices or quantities change. Adjust one rule to try a new discount. |
-| Data change | **225 → 405** เปลี่ยนข้อมูลแล้วใช้วิธีคำนวณที่เก็บไว้ ตัวเลขสรุปและกราฟใช้ผลรอบใหม่ | **225 → 405** Change the data and reuse the saved calculation. The total and chart reflect the new result. |
-| Rule change | **ส่วนลด 10% → 20%** ถามกฎที่เลือก แล้วขอเปลี่ยนเฉพาะวิธีคิดส่วนลด | **10% → 20% discount** Ask about a rule, then request a change to that calculation. |
-| Outcome | ยอดก่อนลด 405 ยังเท่าเดิม ยอดหลังลดเปลี่ยนจาก 364.50 เป็น 324 | The gross total stays 405. The discounted total changes from 364.50 to 324. |
-| Caption | ตัวอย่างประกอบคำอธิบาย · การร่างและแก้กฎต้องตรวจและเปิดใช้ | Illustrative example · review and apply drafted rules and changes. |
+| เริ่มเล็ก ๆ | **อยากมีที่จดขาย** — “ช่วยทำโต๊ะจดขายกาแฟกับเค้ก” ตรวจตารางที่ร่าง แล้วเริ่มใช้ | **A place to track sales** — “Make a sales table for coffee and cake.” Review the draft and use it. |
+| พบจุดติด | **ลูกค้าเยอะ กรอกไม่ทัน** — “เพิ่มปุ่มขาย กดครั้งเดียวเพิ่มจำนวน” ตรวจแล้วใช้ปุ่มที่เพิ่มขึ้น กดกาแฟหนึ่งครั้ง จำนวน3→4 ยอด225→250 | **The shop gets busy** — “Add sales buttons. One tap adds one item.” Review and apply, then tap Coffee+1. Quantity3→4; total225→250. |
+| อยากเห็นเพิ่ม | **อยากรู้ว่าอะไรขายดี** — “เพิ่มกราฟยอดขายแยกตามสินค้า” กราฟมาอยู่ข้างตารางและปุ่มเดิม | **See what sells** — “Add a chart of sales by item.” The chart joins the table and buttons you already use. |
+| ลองวิธีใหม่ | **ช่วงบ่ายอยากลองโปร** — “เพิ่มส่วนลด10%” ตรวจแล้วใช้ ได้ยอดสุทธิ225จากยอดก่อนลด250 | **Try an afternoon offer** — “Add a10%discount.” Review and apply. Net225 from gross250. |
+| ปรับเฉพาะจุด | **อยากเพิ่มเป็น20%** — เลือกกฎแล้วพิมพ์ “เปลี่ยนกฎนี้เป็น20%” ตรวจข้อเสนอก่อนใช้ ยอดสุทธิเปลี่ยนเป็น200 ข้อมูลเดิมยังอยู่ | **Make it20%** — Select the rule and type “Change this rule to20%.” Review before applying. Net becomes200; the sales data stays. |
+| ความหมาย | โต๊ะค่อย ๆ เข้ากับวิธีทำงานของคุณ จากสิ่งที่พบระหว่างใช้ | Your tools adapt to how you work, one request at a time. |
+| Caption | เส้นเรื่องและข้อมูลตัวอย่าง · ไม่เรียก AI หรือบันทึกเข้าระบบ | Illustrative story and data · no AI call or saved workspace. |
 
-เว้นวรรคตัวเลขใน UIตามlocale; เนื้อหาข้างบนไม่ใช่live widgetอ่านproduction เลือกทำแผนภาพหรือภาพจากmotionพร้อมcaption ภายหลังแทนได้ด้วยคลิปจริงที่ตรวจreadbackแล้ว
+Hero มี composer เห็นการพิมพ์คำขอก่อนส่ง และปุ่มตรวจ/ใช้แยกกัน การ์ดใหม่ยังไม่ปรากฏก่อนใช้ สามารถกดขายเพิ่มได้จริงในหน้าและทุกยอด/กราฟคำนวณจากจำนวนที่กำลังเห็น คำว่า250/225/200เป็นเส้นเรื่องเริ่มต้นเมื่อกดกาแฟหนึ่งครั้ง ไม่บังคับทับค่าที่คนทดลองเอง
 
 ## Use cases — คงความกว้างของผลิตภัณฑ์
 
@@ -81,4 +83,4 @@ H2 EN: **Today's sales. Tomorrow's new discount.**
 | Scope | เครื่องมือทำงานภายในส่วนประกอบและระบบคำนวณที่รองรับ สิ่งที่ AI ร่างอาจต้องปรับก่อนใช้ | Tools work within supported components and compute runtimes. AI drafts may need adjustment before use. |
 | Thesis | Work defines what software becomes. | Work defines what software becomes. |
 
-คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอรอบ 2 ใช้ TH เป็นหลัก; เสียง/ซับ EN เป็น export แยกใน final
+คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอรอบ 3 ใช้ TH เป็นหลัก; เสียง/ซับ EN เป็น export แยกใน final

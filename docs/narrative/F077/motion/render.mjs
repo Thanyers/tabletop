@@ -29,14 +29,14 @@ const compositorPackage = (() => {
 const compositorDir = require(compositorPackage).dir;
 const ffmpegExecutable = resolve(compositorDir, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
 const stills = [
-  [240, 'scene-01.png'],
-  [360, 'scene-02.png'],
-  [630, 'scene-03.png'],
-  [825, 'scene-04.png'],
-  [1020, 'scene-05.png'],
-  [1170, 'scene-06.png'],
-  [1476, 'scene-07.png'],
-  [1695, 'scene-08.png'],
+  [228, 'scene-01.png'],
+  [330, 'scene-02.png'],
+  [540, 'scene-03.png'],
+  [714, 'scene-04.png'],
+  [950, 'scene-05.png'],
+  [1060, 'scene-06.png'],
+  [1498, 'scene-07.png'],
+  [1550, 'scene-08.png'],
 ];
 
 async function extractFrame(frame, output) {

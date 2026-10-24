@@ -1,42 +1,41 @@
-# F077 — ผลตรวจชุดร่างรอบ 2
+# F077 — ผลตรวจรอบ 3
 
-24 ตุลาคม 2026 · Node.js 22.23.2 · ขอบเขต: เอกสาร หน้าร่าง และสื่ออธิบาย ไม่ใช่การรับรอง production runtime
+24 ตุลาคม 2026 · Node.js 22.23.2 · ขอบเขต: สื่อร่างและตัวอย่างในหน้า ไม่ใช่ production runtime
 
-## ผลรอบ 2
+## เหตุที่ต้องแก้รอบนี้
 
-| การตรวจ | ผล | หลักฐาน / ขอบเขต |
+ผู้ใช้ดูรอบ2แล้วระบุว่าไม่เห็นเครื่องมือปรับเข้ากับคนและไม่เห็นการพิมพ์คำขอต่อเนื่อง **เกณฑ์เรื่องเล่ารอบ2ไม่ผ่าน** แม้ผล UI gate 16/16 และตัวเลขจะผ่าน จึงไม่ใช้ผลตรวจเทคนิคอ้างว่าคนดูเข้าใจ
+
+รอบ3เปลี่ยนเป็นความต้องการของคนขาย → พิมพ์ → ส่ง → ร่าง → ตรวจ/ใช้ → ลงมือใช้ แล้วขอปรับต่อบนโต๊ะเดิม
+
+## ผลที่ตรวจใหม่
+
+| การตรวจ | ผล | สิ่งที่ตรวจจริง |
 | --- | --- | --- |
-| คำนวณตัวอย่าง | PASS 5/5 | 3×25+3×50=225; 3×35+6×50=405; net ที่ 10% เป็น202.50/364.50; net ที่20% เป็น324 |
-| ลิงก์ภายใน | PASS 75/75 | ตรวจปลายทาง Markdown และ HTML href/src/poster/srcset ด้วย Python pathlib; ไม่รวม URL ภายนอก |
-| Prose review | PASS ในขอบเขตตรวจ | แก้ alt ที่ยังบอกว่าเก้าอี้แปลงเป็นโต๊ะ; แยก concept/proof และ baseline/งานแข่งไว้เหมือนเดิม |
-| UI gate | PASS 16/16 measured; SKIP 4 | 13 render checks ผ่าน รวม contrast, 280/320/414px overflow, axe, targets, reduced motion, keyboard, clipping, media และ interaction; อีก3static checksผ่าน; theme-variable resolution, DTCG tokens, semantic token pairs และ dialog focus trap ไม่ได้รันเพราะไม่มี theme/tokens argument หรือ dialog selector |
-| Browser: ลำดับการใช้ | PASS | ใช้10%แล้ว net202.50; เปลี่ยนข้อมูลได้gross405/net364.50; Review20%ยังไม่เปลี่ยนผล; Apply20%ได้net324/gross405; กฎเดิมยังเห็นเป็นประวัติ |
-| Browser: ย้อนขั้น/โฟกัส | PASS | หลัง Apply10% โฟกัสไปขั้นเปลี่ยนข้อมูล; หลัง Apply20% ไปหัวข้อผลลัพธ์; ย้อนขั้น2แล้วยังรายงาน20%/324ถูกต้อง; ปุ่ม Apply10% ไม่กลับมาเอง |
-| Browser: ภาษา/animationเดิม | PASS ในขอบเขตตรวจ | สลับTH/ENแล้วข้อมูลและสถานะยังเดิม; กดเล่น GIFเดิมใช้assetในrepoและหยุดกลับเป็นposter; aria labels เปลี่ยนตามภาษา |
-| Logo/source reuse | PASS source review | ใช้ mark4ชิ้น/วงกลมทองและlowercasewordmark; film port loader timingเป็นframes; เว็บใช้keyframes/easing/delayเดิมแบบเล่นเข้าเพียงหนึ่งรอบ2.4sและหยุดเมื่อreduced-motion |
-| JavaScript syntax | PASS | `node --check docs/narrative/F077/review.js`; JSXผ่านการbundle/renderจริง |
-| ESLint เฉพาะไฟล์ร่าง | SKIPPED BY CONFIG | เรียก4ไฟล์แล้วrootESLintรายงานignoredทั้ง4; ไม่ตีความexit0เป็นlint4ไฟล์ผ่าน |
-| Render / metadata | PASS | H.264, 60.00s, 1280×720, 30fps, 1,800 decoded frames; MP4 2,099,183 bytes ไม่มีaudio stream; FFmpeg decodeครบexit0; posterและ8stillsดึงจากMP4สุดท้าย |
-| Browser: final MP4 | PASS playback / seek NOT VERIFIED | เบราว์เซอร์อ่านduration60s/1280×720; กดเล่นแล้วเวลาเดินจาก0.22ถึง17.74s และหยุดได้; media errorเป็นnull; keyboard seekไม่ได้เปลี่ยนเวลา จึงไม่นับว่าเลื่อนเวลาผ่าน |
-| Independent review รอบ2 | CLOSED 5/5 findings | ปิด4web findingsและ1motion timing findingจากsource; reviewerไม่ได้ตรวจMP4สุดท้ายซ้ำ; ผู้ทำmotionตรวจ8stillsและmainตรวจ4criticalstillsจากไฟล์สุดท้าย |
-| Motion dependency audit | PASS | `npm audit --audit-level=high` ในแพ็กเกจmotionรายงาน0 vulnerabilities; ไม่แก้dependenciesแอปหลัก |
-| Production proof clip | NOT RUN | มีแผนแยกในvideo-brief.md; filmไม่ใช่screen recordingของคำขอAI |
-| Human comprehension | NOT RUN | ยังไม่มีคนใหม่ดูแล้วตอบคำถามความเข้าใจ |
-| Voiceover / subtitle tracks | NOT PRODUCED | script TH/ENเตรียมไว้; MP4เงียบ ไม่เรียกAPIเสียง |
-| App runtime regression | NOT RUN LOCALLY | ไม่มีการแก้sourceแอป, rootREADME, auth หรือbackend |
+| เรื่อง/README | PASS ในขอบเขต independent prose review | ทุกการเพิ่มมีเหตุจากคน; ปุ่มขายถูกกดจริงในเรื่อง; chart/ruleต่อจากข้อมูลเดิม; ระบุภาพสมมติ |
+| คำนวณตัวอย่าง | PASS 8/8 | gross225; coffee100; cake150; gross250;10%net225;20%net200; extraCakegross300;20%net240 |
+| Browser 5 บท | PASS หลังแก้ | พิมพ์/ส่ง/ตรวจ/ใช้ครบ; คำขอส่งแล้วแสดงบนโต๊ะ; previewมีป้ายร่าง; ปุ่มขายยังdisabledก่อนApply; กดกาแฟ3→4ได้gross250; chart100/150 |
+| Browser กฎและใช้ต่อ | PASS | Review20%ยังใช้10%net225/gross250; Applyแล้วใช้20%; กดเค้กเพิ่มต่อได้gross300/net240/chart100/200; ย้อนบท3ไม่ล้างกฎหรือข้อมูล |
+| Browser ภาษา/หยุด/รีเซ็ต | PASS | หยุดพิมพ์แสดงคำขอครบเพื่อส่ง; สลับENระหว่างพิมพ์แปลpresetและรักษายอด/กฎ; resetหยุดtimerและคืนโต๊ะเริ่มต้น |
+| Browser runtime error | RED → GREEN | พบdraft-summaryว่างแต่renderหาspanไทย/อังกฤษ ทำให้Send/Reviewthrow; เติมspanแล้วรันครบ5บทใหม่ ไม่พบconsoleerrorใหม่ในช่วงตรวจ |
+| Independent source review | CLOSED 3/3 P2 | เปลี่ยนeditablepromptที่ผลไม่อ่านเป็นreadonlypreset; ไม่มีcustomtextถูกทับเมื่อเปลี่ยนภาษา; ปิดnull-queryในdraftsummary; motion sourceลำดับคำขอ/ผลและตัวเลขสอดคล้อง |
+| Motion legibility review | แก้ตามภาพ preview | Mainพบคำขอเล็กเกินไปในภาพ1280×720 จึงขยายช่วงพิมพ์เป็นภาพหลักและแก้pointerซ้อนก่อนrenderสุดท้าย |
+| Full UI gate รอบ3 | PASS 16/16 measured; SKIP 4 | รัน--fullหลังแก้sourceครบ:13render+3staticผ่าน; theme resolution, DTCG, token contrast, dialog focus trapข้ามเพราะไม่มีargument/selector; ผลจริงในignored test-results/f077/ui-gate-full.log |
+| MP4 รอบ3 / decoded frames | PASS | H.264 60s/1280×720/30fps; full decode 1,800 frames; workerตรวจ8stills+poster; mainตรวจภาพคำขอปุ่มขาย/ผลคลิก/คำขอ10%/ข้อเสนอ20%/ใช้20%จากMP4; browserเวลา3.85→15.22sและerror=null; pause/seekรอบ3ไม่ยืนยัน |
+| ลิงก์ภายใน | PASS 67/67 | Python pathlibตรวจMarkdown/HTML targets; excludeexternalURLs/node_modules/.remotion-bundle |
+| Public files / changelog / whitespace | PASS | public scan0findings; changelog1fragment; git diff --checkผ่านก่อนcommit |
+| JavaScript syntax | PASS | node --check review.js และmotion/render.mjs; JSXผ่านbundlepreview |
+| ESLint draft coverage | SKIPPED BY CONFIG | rootESLintไม่ได้ครอบไฟล์draftทั้งหมด; hookไม่ใช่หลักฐานlintครบ |
+| Human comprehension รอบ3 | NOT RUN | ยังไม่มีผลให้คนใหม่ดูแล้วเล่าเรื่องกลับ และยังไม่ได้รับuseracceptance |
+| Actual product proof | NOT RUN | exact5requests/quick-sale/storyนี้ยังไม่ได้บันทึกจากproductจริง |
+| เสียง | NOT PRODUCED | MP4เงียบ; เตรียมบทTH/ENไว้ ไม่เรียกAPIเสียง |
 
-Full UI gate เรียก `node <ui-gate-skill>/gate.mjs docs/narrative/F077/review.html --full` (pathของskillขึ้นกับเครื่อง) เก็บผลterminalจริงในignored `test-results/f077/ui-gate-full.log` ผล16/16เฉพาะรายการที่วัดไม่ใช่20/20 และไม่ใช่ผลตัดสินความสวย
+ตัวอย่างบนเว็บเป็นreadonlypresetที่เลือกบทแล้วเล่นเรื่องต่อ กดปุ่มขายได้จริงเฉพาะstateในหน้า ไม่ได้ตีความข้อความอิสระหรือเรียกAI ภาพวิดีโอสร้างจากโค้ดและข้อมูลสมมติทั้งหมด
 
-ภาพหน้าร่างตรวจผ่านเบราว์เซอร์ที่เปิดบนlocalhost ไม่ใช้ภาพpreviewแทนการทดสอบstate ผลscreen captureเก็บแยกในignored test-results ไม่เผยแพร่ข้อมูลเครื่องหรือบัญชี
+## ขอบเขตเก่าและ CI
 
-Final MP4 SHA-256: `9198e8852be7998441f81873c11adb1a26bdc9e55ac2f7f345ca969a2bf1fc34`
+รอบ1เป็น36s; รอบ2เป็น60s hash `9198e8852be7998441f81873c11adb1a26bdc9e55ac2f7f345ca969a2bf1fc34` ผลเหล่านั้นไม่ใช่ผลตรวจartifactรอบ3
 
-## ประวัติและ CI
+[CIรอบ2ของ31ac96f](https://github.com/Thanyers/tabletop/actions/runs/40068985937) failedที่ `Check dependency advisories` (4 moderate/3 high) ทำให้local-validationFAIL; งานนี้ไม่แก้rootdependenciesและคง [draft PR259](https://github.com/Thanyers/tabletop/pull/259) ผลcurrentheadต้องอ่านใหม่หลังpush ไม่มีmergeหรือdeploy
 
-รอบแรกเป็นMP4เงียบ36s SHA-256 `6d381e728b1c0c7df216cad126f66532230969be6a9b22f7932019a4aa60cef0` พร้อมหน้ารวม4panels; ผลmobile/fullUIgateรอบนั้นเป็นSKIPPED รอบ2แทนที่สื่อดังกล่าวด้วยfilm60sและหน้าร่างใหม่ ผลตรวจรอบแรกไม่ถูกนับเป็นการตรวจรอบ2
-
-[CI run 40066679080](https://github.com/Thanyers/tabletop/actions/runs/40066679080) ของร่างแรกcommit `dfdaf14` มี `local-validation` FAIL จากdependency auditของrootpackageเดิม เช่นเดียวกับ [runตอนจองงาน](https://github.com/Thanyers/tabletop/actions/runs/40064265190) (4 moderate / 3 high) ซึ่งเกิดก่อนเพิ่มmotion package งานนี้ไม่แก้rootdependencies และยังคงเป็นdraft PR; ผลCIของcommitที่ส่งล่าสุดต้องดูจาก [PR259](https://github.com/Thanyers/tabletop/pull/259)
-
-ตรวจ `node scripts/check-public-files.mjs`, `npx tsx server/changelog.ts check` และ `git diff --check` ก่อนcommit โดยไม่ข้ามhook
-
-คำว่าPASSอ้างเฉพาะขอบเขตแต่ละแถว ไม่ครอบหลายบัญชี ความปลอดภัย หรือผลการใช้งานจริงของผลิตภัณฑ์
+MP4 รอบ3: 1,395,144 bytes; SHA-256 `a3b7809a90f752a8a03822e5bd971ee16cba9f4496f35d1c4f136b6446ba77b0`. รวมMP4/poster/8stills 2,871,261 bytes.

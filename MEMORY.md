@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-24 — UI gate ผ่านแต่ Send/Review ยัง throw
+- **What happened:** F077หน้าpreviewผ่านgenericUIgate แต่flowหลายขั้นของSend/Reviewมีnull-queryก่อนอัปเดตคำขอและผล
+- **Root cause:** HTMLdraft-summaryไม่มีspanภาษาไทย/อังกฤษที่renderคาดไว้; genericinteractiongateไม่ได้ทำครบห้าบท
+- **Correct behavior:** ตรวจflowจริงตั้งแต่คำขอ→ส่ง→ตรวจ→ใช้และconsoleerrors พร้อมอ่านผลทุกช่วงหลังแก้; แยกผลfullUIgateออกจากscenarioacceptanceเสมอ
+
+### 2026-10-24 — ภาพการ์ดเพิ่มไม่เท่ากับเรื่องเครื่องมือปรับเข้ากับคน
+- **What happened:** ร่าง F077 รอบ 2 มีบอร์ดที่เพิ่มการ์ดและเปลี่ยนตัวเลข แต่ผู้ชมไม่เห็นว่าคนเจอปัญหาอะไรหรือพิมพ์ขอให้ปรับอย่างไร
+- **Root cause:** วาง timeline จากรายการความสามารถและ transitions แทนเหตุการณ์ในชีวิตคนใช้; คำขอแรกค้างอยู่ ขณะที่การเปลี่ยนถัดไปเกิดเอง
+- **Correct behavior:** ก่อนทำแต่ละ beat เขียนสี่ช่องให้ครบ: ปัญหาหรือความต้องการ / ข้อความที่คนพิมพ์ / การเปลี่ยนเครื่องมือหลังส่งและตรวจ / การลงมือใช้ที่เห็นผล โดยของเดิมยังอยู่ ตรวจเฟรมก่อนส่งและหลังใช้คู่กัน; ห้ามนับการเพิ่มการ์ดโดยไม่มีคำขอเป็นหลักฐานว่าเล่า evolution ชัดแล้ว
+
 ### 2026-10-23 — คำถามอ้างกฎถูกค้นหาการ์ดรับไปก่อนส่ง
 - **What happened:** Askรายกฎล้างข้อความแต่ไม่มีassistant job; exactคำถามลงท้ายตรงไหนเปิดRulesแทน
 - **Root cause:** TableChat.submitเรียกcanvas object finderก่อนonSend และfinderตี WHERE_TH+aliasกฎเป็นnavigationโดยไม่ดูselected references; ไม่ใช่หลักฐานว่าproviderค้างหรือการทดสอบหลายแท็บเป็นสาเหตุ

@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F077-T1 | ร่างเรื่องเล่าสามสื่อ + Remotion animatic | `review` | Codex · [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) · ร่างรอบ 2 ตรวจแล้ว: บอร์ดค่อย ๆ เติบโต, logo/animation เดิม, คลิป 60s และหน้าเว็บใหม่; ไม่เปลี่ยน landing/README ที่เผยแพร่ |
+| F077-T1 | ร่างเรื่องเล่าสามสื่อ + Remotion animatic | `review` | Codex · [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) · รอบ 3: ปัญหาของคนใช้ → พิมพ์คำขอ → ตรวจ/ใช้ → เครื่องมือปรับให้พอดี; แก้เว็บ/คลิปและเรื่องเล่าร่วมกัน; ไม่เปลี่ยน landing/README ที่เผยแพร่ |
 | F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
