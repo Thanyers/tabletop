@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` ([PR #265](https://github.com/Thanyers/tabletop/pull/265)) |
+| สถานะ | `done` ([PR #265](https://github.com/Thanyers/tabletop/pull/265), merge `d374e70`) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — CI scheduling only |
 | งานในกระดาน | [PLAN](../../PLAN.md) แถว F078-T3a |
@@ -23,10 +23,12 @@ GitHub documents the transitive skip behavior under [job dependencies](https://d
 
 ## Acceptance
 
-- [x] Staging has explicit non-cancelled status evaluation after validation, instead of the implicit transitive success guard. Hosted confirmation remains below.
+- [x] Staging has explicit non-cancelled status evaluation after validation, instead of the implicit transitive success guard. Hosted confirmation is recorded below.
 - [x] PR/manual/main events, cancelled runs and failed validation remain ineligible for staging by the preserved explicit guard.
-- [ ] Latest PR `local-validation` passes before merge; final dev full validation and staging succeed, with version readback at that merge SHA.
-- [ ] Production version/main stay unchanged; no new architecture refactor starts before handoff.
+- [x] Latest PR `local-validation` passed before merge; final dev full validation and staging succeeded, with version readback at that merge SHA.
+- [x] Production version/main stayed unchanged; no new architecture refactor started before handoff.
+
+Hosted closing evidence (2026-10-24): dev run [40075882571](https://github.com/Thanyers/tabletop/actions/runs/40075882571) finished success with `Deploy tabletop-staging` **success** for merge `d374e7051350237354d2055982cc383040c8e402`; the three focused PR-only jobs stayed **SKIPPED** by design and are not counted as passes. `/version` readback returned staging `0.0.0-dev / d374e70` (`built_at` `2026-10-24T07:59:41Z`) and production `9.0.2 / 8e2c7e1`. Remote `main` remained `8e2c7e1`.
 
 ## Verification
 
