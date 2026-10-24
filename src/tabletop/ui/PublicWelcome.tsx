@@ -1,12 +1,12 @@
-import { ArrowDownRight, ArrowUpRight, BookOpen, FileText, UsersRound } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, BookOpen, FileText, Pause, Play, UsersRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { landingCopy, landingLanguages, languageOptionLabel, productThesis, readLandingLanguage, saveLandingLanguage, type LandingCopy, type LandingLanguage } from './landing-copy';
 import { NarrativeSalesDemo } from './NarrativeSalesDemo';
 import { PhysicalAdaptationStories } from './PhysicalAdaptationStories';
-import storyGif from '../../../docs/showcase/tabletop-story.gif';
-import storyPoster from '../../../docs/showcase/tabletop-story-poster.png';
-import storyGifEn from '../../../docs/showcase/tabletop-story-en.gif';
-import storyPosterEn from '../../../docs/showcase/tabletop-story-en-poster.png';
+import storyGif from '../../../docs/showcase/hero-evolution-th.gif';
+import storyPoster from '../../../docs/showcase/hero-evolution-th-poster.png';
+import storyGifEn from '../../../docs/showcase/hero-evolution-en.gif';
+import storyPosterEn from '../../../docs/showcase/hero-evolution-en-poster.png';
 import physicsImage from '../../../docs/showcase/physics.png';
 import encounterImage from '../../../docs/showcase/encounter.png';
 import './public-welcome.css';
@@ -25,26 +25,18 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
   primaryHref?: string;
 }) {
   const [language, setLanguage] = useState<LandingLanguage>(readLandingLanguage);
+  const [storyPaused, setStoryPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia(reducedMotionQuery).matches);
-  const [playStory, setPlayStory] = useState(false);
-  const [replay, setReplay] = useState(0);
 
   useEffect(() => {
     const media = window.matchMedia(reducedMotionQuery);
     const updatePreference = (event: MediaQueryListEvent) => {
       setReducedMotion(event.matches);
-      if (event.matches) setPlayStory(false);
     };
     setReducedMotion(media.matches);
     media.addEventListener('change', updatePreference);
     return () => media.removeEventListener('change', updatePreference);
   }, []);
-
-  useEffect(() => {
-    if (!playStory) return;
-    const timer = window.setTimeout(() => setPlayStory(false), 20_000);
-    return () => window.clearTimeout(timer);
-  }, [playStory, replay]);
 
   // The document language follows the landing so screen readers and fonts pick Thai; the
   // app behind sign-in is English, so the previous value comes back when the landing unmounts.
@@ -63,14 +55,7 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
   const copy = landingCopy[language];
   const localizedStoryGif = language === 'en' ? storyGifEn : storyGif;
   const localizedStoryPoster = language === 'en' ? storyPosterEn : storyPoster;
-  const storySource = playStory ? `${localizedStoryGif}?replay=${replay}` : localizedStoryPoster;
-  const toggleStory = () => {
-    if (playStory) setPlayStory(false);
-    else {
-      setReplay((current) => current + 1);
-      setPlayStory(true);
-    }
-  };
+  const storySource = reducedMotion || storyPaused ? localizedStoryPoster : localizedStoryGif;
 
   return <div className="tt-account-gate tt-public-welcome" lang={language}>
     <a className="tt-public-welcome__skip" href="#main-content">{language === 'en' ? 'Skip to content' : 'ข้ามไปยังเนื้อหา'}</a>
@@ -107,20 +92,11 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
           </div>
           <p className="tt-public-welcome__scope"><span aria-hidden="true">✓</span>{copy.hero.scope}</p>
         </div>
-        <figure className="tt-public-welcome__story tt-public-welcome__hero-story">
-          <div className="tt-public-welcome__hero-story-topline">
-            <span>{copy.process.storyCaption}</span>
-            <span>{language === 'en' ? 'ONE TABLE · GROWING WORK' : 'โต๊ะเดียว · งานค่อย ๆ เติบโต'}</span>
-          </div>
-          <div className="tt-public-welcome__story-frame">
-            <img key={playStory ? `story-${replay}` : 'poster'} src={storySource} width={960} height={540} loading="eager" decoding="async" alt={copy.process.storyAlt} />
-          </div>
-          <figcaption>
-            <span>{copy.process.storyNote}</span>
-            <button type="button" onClick={toggleStory} aria-label={playStory ? copy.process.showStillLabel : copy.process.replayLabel} aria-pressed={playStory}>
-              {playStory ? copy.process.showStill : copy.process.replay}
-            </button>
-          </figcaption>
+        <figure className="tt-public-welcome__hero-story">
+          <img src={storySource} width={960} height={540} loading="eager" decoding="async" alt={copy.process.storyAlt} />
+          {!reducedMotion && <button className="tt-public-welcome__motion-toggle" type="button" onClick={() => setStoryPaused((paused) => !paused)} aria-label={storyPaused ? (language === 'en' ? 'Resume animation' : 'เล่นภาพเคลื่อนไหวต่อ') : (language === 'en' ? 'Pause animation' : 'หยุดภาพเคลื่อนไหวชั่วคราว')}>
+            {storyPaused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+          </button>}
         </figure>
       </section>
 

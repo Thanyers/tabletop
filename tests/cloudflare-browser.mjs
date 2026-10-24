@@ -238,14 +238,14 @@ try {
   await expect(anonymous.locator('.tt-canvas-panel')).toHaveCount(0);
   await expect(anonymous.getByRole('heading', { name: 'Physical tools adapt to people. Software often asks people to adapt to it.', exact: true })).toBeVisible();
   for (const scene of ['hammer', 'chair']) {
-    const before = anonymous.locator(`svg[data-scene="${scene}"][data-adapted="false"]`);
-    const after = anonymous.locator(`svg[data-scene="${scene}"][data-adapted="true"]`);
+    const before = anonymous.locator(`img[data-scene="${scene}"][data-adapted="false"]`);
+    const after = anonymous.locator(`img[data-scene="${scene}"][data-adapted="true"]`);
     await expect(before).toHaveCount(1);
     await expect(after).toHaveCount(1);
-    await expect(before).toHaveAttribute('viewBox', '0 0 480 270');
-    await expect(after).toHaveAttribute('viewBox', '0 0 480 270');
-    await expect(before).toHaveAttribute('aria-label', /same|bare|before|ด้ามเปล่า|เก้าอี้เดิม/i);
-    await expect(after).toHaveAttribute('aria-label', /grip|wrap|cushion|offcut|กริป|เบาะ|เศษไม้/i);
+    await expect(before).toHaveAttribute('src', `/narrative/adaptations/${scene}-custom-fit.png`);
+    await expect(after).toHaveAttribute('src', `/narrative/adaptations/${scene}-custom-fit.png`);
+    await expect(before).toHaveAttribute('alt', /same|bare|before|ด้ามเปล่า|เก้าอี้เดิม/i);
+    await expect(after).toHaveAttribute('alt', /grip|wrap|cushion|offcut|กริป|เบาะ|เศษไม้/i);
   }
   await expect(anonymous.getByRole('heading', { name: 'See Tabletop on the canvas.', exact: true })).toBeVisible();
   await expect(anonymous.getByText('A narrated concept film · play when ready', { exact: true })).toBeVisible();
@@ -253,12 +253,19 @@ try {
   await expect(conceptFilm).toHaveAttribute('poster', '/narrative/tabletop-story-poster.png');
   await expect(conceptFilm.locator('source')).toHaveAttribute('src', '/narrative/tabletop-story.mp4');
   await expect(conceptFilm.locator('track')).toHaveAttribute('src', '/narrative/tabletop-story-en.vtt');
-  const conceptImage = anonymous.locator('.tt-public-welcome__story-frame img');
-  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-en-poster[^/]*\.png$/);
-  await anonymous.getByRole('button', { name: 'Replay the concept animation', exact: true }).click();
-  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-en[^/]*\.gif\?replay=1$/);
-  await anonymous.getByRole('button', { name: 'Show the still illustration', exact: true }).click();
-  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-en-poster[^/]*\.png$/);
+  const conceptImage = anonymous.locator('.tt-public-welcome__hero-story img');
+  await expect(conceptImage).toHaveAttribute('src', /hero-evolution-en-poster[^/]*\.png$/);
+  await expect(anonymous.locator('.tt-public-welcome__hero-story button')).toHaveCount(0);
+  await expect(anonymous.locator('.tt-public-welcome__hero-story figcaption')).toHaveCount(0);
+  await expect(anonymous.locator('.tt-public-welcome__hero-story .tt-public-welcome__story-frame')).toHaveCount(0);
+  await anonymous.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(conceptImage).toHaveAttribute('src', /hero-evolution-en[^/]*\.gif$/);
+  await anonymous.getByRole('button', { name: 'Pause animation', exact: true }).click();
+  await expect(conceptImage).toHaveAttribute('src', /hero-evolution-en-poster[^/]*\.png$/);
+  await anonymous.getByRole('button', { name: 'Resume animation', exact: true }).click();
+  await expect(conceptImage).toHaveAttribute('src', /hero-evolution-en[^/]*\.gif$/);
+  await anonymous.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(conceptImage).toHaveAttribute('src', /hero-evolution-en-poster[^/]*\.png$/);
 
   // The prefilled sample stays live through the five explicit request/review/apply steps.
   const sampleTable = anonymous.locator('.tt-sales-demo__table');
@@ -321,15 +328,15 @@ try {
   await languages.getByRole('button', { name: 'ไทย', exact: true }).focus();
   await anonymous.keyboard.press('Enter');
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
-  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-poster[^/]*\.png$/);
+  await expect(conceptImage).toHaveAttribute('src', /hero-evolution-th-poster[^/]*\.png$/);
   await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingTh);
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toHaveAttribute('href', '/api/auth/google/start');
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'ไทย', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
-  await anonymous.getByRole('button', { name: 'เล่นภาพเคลื่อนไหวของแนวคิดอีกครั้ง', exact: true }).click();
-  await expect(conceptImage).toHaveAttribute('src', /tabletop-story[^/]*\.gif\?replay=2$/);
-  await anonymous.getByRole('button', { name: 'แสดงภาพประกอบแบบภาพนิ่ง', exact: true }).click();
+  await anonymous.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(conceptImage).toHaveAttribute('src', /hero-evolution-th[^/]*\.gif$/);
+  await anonymous.emulateMedia({ reducedMotion: 'reduce' });
   await anonymous.reload();
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
   await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingTh);
