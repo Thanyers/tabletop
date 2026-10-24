@@ -20,6 +20,16 @@
 - **What happened:** ร่าง F077 รอบ 2 มีบอร์ดที่เพิ่มการ์ดและเปลี่ยนตัวเลข แต่ผู้ชมไม่เห็นว่าคนเจอปัญหาอะไรหรือพิมพ์ขอให้ปรับอย่างไร
 - **Root cause:** วาง timeline จากรายการความสามารถและ transitions แทนเหตุการณ์ในชีวิตคนใช้; คำขอแรกค้างอยู่ ขณะที่การเปลี่ยนถัดไปเกิดเอง
 - **Correct behavior:** ก่อนทำแต่ละ beat เขียนสี่ช่องให้ครบ: ปัญหาหรือความต้องการ / ข้อความที่คนพิมพ์ / การเปลี่ยนเครื่องมือหลังส่งและตรวจ / การลงมือใช้ที่เห็นผล โดยของเดิมยังอยู่ ตรวจเฟรมก่อนส่งและหลังใช้คู่กัน; ห้ามนับการเพิ่มการ์ดโดยไม่มีคำขอเป็นหลักฐานว่าเล่า evolution ชัดแล้ว
+### 2026-10-24 — Union merges retained conflicting task-status rows
+- **What happened:** integrating parallel F078 PRs left repeated PLAN rows with both review and done states for the same task.
+- **Root cause:** `merge=union` preserves independent additions but cannot reconcile task identity or newer status.
+- **Correct behavior:** after each merge, list the task IDs touched by both branches, keep one authoritative active row per ID, and remove completed rows according to PLAN's board rule. Preserve completion evidence in spec, the feature document and PRs before committing.
+
+### 2026-10-24 — Focused browser gate exposes an immediate prefill read race
+- **What happened:** the new F078-T3 Linux gate sometimes read `Change this rule` immediately after requesting the exact runtime-switch prompt, while the same code passed other runs.
+- **Root cause:** the test read the textarea before React applied the parent prefill effect. A fixture-only manual hold reproduced the old value and controlled release produced the exact requested prompt.
+- **Correct behavior:** await the exact expected textarea value, then assert the full prompt; preserve reference/onSend/navigation checks. Keep the controlled red/release probe in the synthetic fixture, avoid arbitrary sleeps and do not change production behavior to repair harness timing.
+
 ### 2026-10-24 — npm peer resolver fails while adding narrow dependency overrides
 - **What happened:** npm 10/11 threw an internal `edgesOut` error when regenerating the lockfile for compatible F078-T0 patches; the old lock remained unchanged.
 - **Root cause:** the failure was inside npm's peer-set resolution; the exact internal cause is unverified. The same manifest resolved with npm 12.2.1.

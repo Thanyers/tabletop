@@ -38,11 +38,20 @@ jobs:
     outputs:
       full_suite: ${{ steps.plan.outputs.full_suite }}
       reuse: ${{ steps.plan.outputs.reuse }}
+      worker_gate: ${{ steps.integration.outputs.worker }}
+      ui_gate: ${{ steps.integration.outputs.ui }}
+      compute_gate: ${{ steps.integration.outputs.compute }}
+      compute_container_gate: ${{ steps.integration.outputs.compute_container }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 2
+          # The gate planner must resolve both event SHAs and the PR's merge base.
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
       - name: Choose checks
         id: plan
         env:
@@ -86,6 +95,13 @@ jobs:
           echo "full_suite=$full" >> "$GITHUB_OUTPUT"
           echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
           echo "full_suite=$full reuse=$reuse"
+      - name: Select risk-targeted gates for PRs into dev
+        id: integration
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'dev' }}
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/integration-gate-plan.mjs --base "$PR_BASE_SHA" --head "$PR_HEAD_SHA"
 
   fast-checks:
     needs: plan
@@ -112,6 +128,8 @@ jobs:
         run: npm run lint
       - name: Agent startup adapters and instruction budget
         run: npm run test:agents
+      - name: Risk-targeted gate planner and Worker red proof
+        run: node --test scripts/integration-gate-plan.test.mjs scripts/integration-gate-worker-startup.test.mjs
       - name: Unit and local SQL integration tests
         run: npm test -- --reporter=default --reporter=json --outputFile=test-results/unit-report.json
       - name: Legacy local Component Lab regression tests
@@ -153,6 +171,89 @@ jobs:
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore
+
+  worker-startup:
+    name: Built Worker startup and health probes
+    needs: [plan]
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'dev' && needs.plan.outputs.worker_gate == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Build local assets
+        env:
+          DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
+        run: npm run build
+      - name: Build the Worker artifact without publishing
+        env:
+          WRANGLER_SEND_METRICS: false
+        run: npm run build:cloudflare
+      - name: Start the built Worker with synthetic bindings
+        run: node scripts/integration-gate-worker-startup.mjs
+
+  focused-ui:
+    name: F066 composer and reference-routing browser harness
+    needs: [plan]
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'dev' && needs.plan.outputs.ui_gate == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Build the F066 browser harness
+        run: node scripts/build-f066-rules-harness.mjs
+      - name: Install Chromium
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Verify composer references and routing
+        run: node tests/ui/f066-rules-browser.mjs
+
+  focused-compute:
+    name: Focused compute tests
+    needs: [plan]
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'dev' && needs.plan.outputs.compute_gate == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Compute contracts and server orchestration tests
+        run: >-
+          npm test --
+          src/tabletop/shared/table-compute.test.ts
+          src/tabletop/shared/computed-formula.test.ts
+          src/tabletop/shared/computed-columns.test.ts
+          src/tabletop/domain/table-compute.test.ts
+          src/tabletop/domain/table-computed.test.ts
+          src/tabletop/domain/computed-projection.test.ts
+          src/tabletop/ui/table-compute-ui.test.ts
+          server/table-compute-orchestrator.test.ts
+          server/compute-runner.test.ts
+          server/compute-wire.test.ts
+          server/compute-deploy-config.test.ts
+      - name: Cloudflare compute runner tests
+        run: npm run test:cloudflare -- cloudflare/compute-runner.test.ts
+      - name: Workers Container API smoke for Docker image changes
+        if: needs.plan.outputs.compute_container_gate == 'true'
+        run: node scripts/compute-cloudflare-local.mjs
 
   # CI006: the browser suites run as parallel jobs next to the fast checks instead of one
   # after another. Each builds what its fixture serves (dist/, worker-build/).
@@ -305,7 +406,7 @@ jobs:
   # The rulesets require a check named `local-validation` on main and dev, so this job keeps
   # the name and passes only when every job that ran passed (skipped jobs are fine).
   local-validation:
-    needs: [plan, fast-checks, browser-node, browser-workers, browser-generated]
+    needs: [plan, fast-checks, browser-node, browser-workers, browser-generated, worker-startup, focused-ui, focused-compute]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
