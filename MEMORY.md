@@ -14,6 +14,10 @@
 - **What happened:** ร่าง F077 รอบ 2 มีบอร์ดที่เพิ่มการ์ดและเปลี่ยนตัวเลข แต่ผู้ชมไม่เห็นว่าคนเจอปัญหาอะไรหรือพิมพ์ขอให้ปรับอย่างไร
 - **Root cause:** วาง timeline จากรายการความสามารถและ transitions แทนเหตุการณ์ในชีวิตคนใช้; คำขอแรกค้างอยู่ ขณะที่การเปลี่ยนถัดไปเกิดเอง
 - **Correct behavior:** ก่อนทำแต่ละ beat เขียนสี่ช่องให้ครบ: ปัญหาหรือความต้องการ / ข้อความที่คนพิมพ์ / การเปลี่ยนเครื่องมือหลังส่งและตรวจ / การลงมือใช้ที่เห็นผล โดยของเดิมยังอยู่ ตรวจเฟรมก่อนส่งและหลังใช้คู่กัน; ห้ามนับการเพิ่มการ์ดโดยไม่มีคำขอเป็นหลักฐานว่าเล่า evolution ชัดแล้ว
+### 2026-10-24 — npm peer resolver fails while adding narrow dependency overrides
+- **What happened:** npm 10/11 threw an internal `edgesOut` error when regenerating the lockfile for compatible F078-T0 patches; the old lock remained unchanged.
+- **Root cause:** the failure was inside npm's peer-set resolution; the exact internal cause is unverified. The same manifest resolved with npm 12.2.1.
+- **Correct behavior:** use a scoped compatible npm invocation to regenerate the lock without global configuration changes, inspect changed package versions, then verify ordinary project `npm ci`, audit, unit/Worker tests and build before committing. Do not use broad `audit fix --force` or bypass the advisory gate.
 
 ### 2026-10-23 — คำถามอ้างกฎถูกค้นหาการ์ดรับไปก่อนส่ง
 - **What happened:** Askรายกฎล้างข้อความแต่ไม่มีassistant job; exactคำถามลงท้ายตรงไหนเปิดRulesแทน

@@ -1,0 +1,1 @@
+- F078-T0: patch Vitest to 4.1.12 and narrowly override Miniflare's Undici to 7.30.1 and the Cloudflare test plugin's Zod to 4.6.7, restoring dependency audit validation while retaining the existing Worker toolchain and application behavior.
