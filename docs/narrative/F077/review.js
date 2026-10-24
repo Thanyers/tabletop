@@ -51,7 +51,7 @@
   };
 
   function language() {
-    return body.dataset.language === "en" ? "en" : "th";
+    return body.dataset.language === "th" ? "th" : "en";
   }
 
   function setStatus(th, en) {
@@ -549,6 +549,6 @@
   }
 
   input.disabled = true;
-  setLanguage(body.dataset.language || "th");
+  setLanguage(body.dataset.language || "en");
   render();
 })();

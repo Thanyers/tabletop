@@ -1,0 +1,1780 @@
+{
+  "fps": 30,
+  "durationInFrames": 3133,
+  "timingStatus": "MEASURED_AUDIO",
+  "sourceNarration": "narration-r5.json",
+  "segments": [
+    {
+      "id": "tools",
+      "startFrame": 12,
+      "endFrame": 385,
+      "voiceStartFrame": 12,
+      "voiceEndFrame": 365,
+      "words": [
+        {
+          "text": "Good",
+          "startFrame": 18,
+          "endFrame": 19,
+          "estimated": false
+        },
+        {
+          "text": "tools",
+          "startFrame": 22,
+          "endFrame": 38,
+          "estimated": false
+        },
+        {
+          "text": "fit",
+          "startFrame": 40,
+          "endFrame": 46,
+          "estimated": false
+        },
+        {
+          "text": "us.",
+          "startFrame": 49,
+          "endFrame": 64,
+          "estimated": false
+        },
+        {
+          "text": "A",
+          "startFrame": 68,
+          "endFrame": 72,
+          "estimated": false
+        },
+        {
+          "text": "pen",
+          "startFrame": 74,
+          "endFrame": 82,
+          "estimated": false
+        },
+        {
+          "text": "gets",
+          "startFrame": 84,
+          "endFrame": 94,
+          "estimated": false
+        },
+        {
+          "text": "a",
+          "startFrame": 97,
+          "endFrame": 100,
+          "estimated": false
+        },
+        {
+          "text": "grip.",
+          "startFrame": 101,
+          "endFrame": 115,
+          "estimated": false
+        },
+        {
+          "text": "A",
+          "startFrame": 116,
+          "endFrame": 118,
+          "estimated": false
+        },
+        {
+          "text": "hammer",
+          "startFrame": 119,
+          "endFrame": 130,
+          "estimated": false
+        },
+        {
+          "text": "gets",
+          "startFrame": 131,
+          "endFrame": 137,
+          "estimated": false
+        },
+        {
+          "text": "a",
+          "startFrame": 138,
+          "endFrame": 139,
+          "estimated": false
+        },
+        {
+          "text": "handle.",
+          "startFrame": 141,
+          "endFrame": 160,
+          "estimated": false
+        },
+        {
+          "text": "A",
+          "startFrame": 163,
+          "endFrame": 166,
+          "estimated": false
+        },
+        {
+          "text": "chair",
+          "startFrame": 168,
+          "endFrame": 180,
+          "estimated": false
+        },
+        {
+          "text": "gets",
+          "startFrame": 181,
+          "endFrame": 187,
+          "estimated": false
+        },
+        {
+          "text": "a",
+          "startFrame": 188,
+          "endFrame": 190,
+          "estimated": false
+        },
+        {
+          "text": "backrest,",
+          "startFrame": 192,
+          "endFrame": 214,
+          "estimated": false
+        },
+        {
+          "text": "armrests,",
+          "startFrame": 216,
+          "endFrame": 242,
+          "estimated": false
+        },
+        {
+          "text": "wheels!",
+          "startFrame": 245,
+          "endFrame": 269,
+          "estimated": false
+        },
+        {
+          "text": "We",
+          "startFrame": 282,
+          "endFrame": 283,
+          "estimated": false
+        },
+        {
+          "text": "keep",
+          "startFrame": 285,
+          "endFrame": 290,
+          "estimated": false
+        },
+        {
+          "text": "shaping",
+          "startFrame": 292,
+          "endFrame": 302,
+          "estimated": false
+        },
+        {
+          "text": "tools",
+          "startFrame": 305,
+          "endFrame": 319,
+          "estimated": false
+        },
+        {
+          "text": "around",
+          "startFrame": 321,
+          "endFrame": 331,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 332,
+          "endFrame": 334,
+          "estimated": false
+        },
+        {
+          "text": "people",
+          "startFrame": 335,
+          "endFrame": 343,
+          "estimated": false
+        },
+        {
+          "text": "who",
+          "startFrame": 344,
+          "endFrame": 348,
+          "estimated": false
+        },
+        {
+          "text": "use",
+          "startFrame": 350,
+          "endFrame": 355,
+          "estimated": false
+        },
+        {
+          "text": "them.",
+          "startFrame": 357,
+          "endFrame": 365,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "friction",
+      "startFrame": 385,
+      "endFrame": 710,
+      "voiceStartFrame": 385,
+      "voiceEndFrame": 690,
+      "words": [
+        {
+          "text": "So",
+          "startFrame": 388,
+          "endFrame": 390,
+          "estimated": false
+        },
+        {
+          "text": "why",
+          "startFrame": 391,
+          "endFrame": 395,
+          "estimated": false
+        },
+        {
+          "text": "does",
+          "startFrame": 396,
+          "endFrame": 402,
+          "estimated": false
+        },
+        {
+          "text": "software",
+          "startFrame": 403,
+          "endFrame": 414,
+          "estimated": false
+        },
+        {
+          "text": "so",
+          "startFrame": 416,
+          "endFrame": 421,
+          "estimated": false
+        },
+        {
+          "text": "often",
+          "startFrame": 423,
+          "endFrame": 431,
+          "estimated": false
+        },
+        {
+          "text": "work",
+          "startFrame": 432,
+          "endFrame": 438,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 439,
+          "endFrame": 443,
+          "estimated": false
+        },
+        {
+          "text": "other",
+          "startFrame": 444,
+          "endFrame": 450,
+          "estimated": false
+        },
+        {
+          "text": "way",
+          "startFrame": 452,
+          "endFrame": 457,
+          "estimated": false
+        },
+        {
+          "text": "around?",
+          "startFrame": 459,
+          "endFrame": 483,
+          "estimated": false
+        },
+        {
+          "text": "Pick",
+          "startFrame": 486,
+          "endFrame": 495,
+          "estimated": false
+        },
+        {
+          "text": "an",
+          "startFrame": 496,
+          "endFrame": 498,
+          "estimated": false
+        },
+        {
+          "text": "app.",
+          "startFrame": 500,
+          "endFrame": 517,
+          "estimated": false
+        },
+        {
+          "text": "Learn",
+          "startFrame": 519,
+          "endFrame": 527,
+          "estimated": false
+        },
+        {
+          "text": "its",
+          "startFrame": 528,
+          "endFrame": 534,
+          "estimated": false
+        },
+        {
+          "text": "menus.",
+          "startFrame": 537,
+          "endFrame": 559,
+          "estimated": false
+        },
+        {
+          "text": "Bend",
+          "startFrame": 561,
+          "endFrame": 567,
+          "estimated": false
+        },
+        {
+          "text": "your",
+          "startFrame": 569,
+          "endFrame": 577,
+          "estimated": false
+        },
+        {
+          "text": "workflow",
+          "startFrame": 578,
+          "endFrame": 589,
+          "estimated": false
+        },
+        {
+          "text": "to",
+          "startFrame": 590,
+          "endFrame": 591,
+          "estimated": false
+        },
+        {
+          "text": "fit.",
+          "startFrame": 594,
+          "endFrame": 608,
+          "estimated": false
+        },
+        {
+          "text": "And",
+          "startFrame": 611,
+          "endFrame": 620,
+          "estimated": false
+        },
+        {
+          "text": "when",
+          "startFrame": 621,
+          "endFrame": 625,
+          "estimated": false
+        },
+        {
+          "text": "your",
+          "startFrame": 625,
+          "endFrame": 627,
+          "estimated": false
+        },
+        {
+          "text": "needs",
+          "startFrame": 629,
+          "endFrame": 637,
+          "estimated": false
+        },
+        {
+          "text": "change...",
+          "startFrame": 639,
+          "endFrame": 666,
+          "estimated": false
+        },
+        {
+          "text": "start",
+          "startFrame": 667,
+          "endFrame": 673,
+          "estimated": false
+        },
+        {
+          "text": "again.",
+          "startFrame": 675,
+          "endFrame": 690,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "reversal",
+      "startFrame": 710,
+      "endFrame": 1037,
+      "voiceStartFrame": 710,
+      "voiceEndFrame": 1017,
+      "words": [
+        {
+          "text": "What",
+          "startFrame": 712,
+          "endFrame": 713,
+          "estimated": false
+        },
+        {
+          "text": "if",
+          "startFrame": 714,
+          "endFrame": 717,
+          "estimated": false
+        },
+        {
+          "text": "your",
+          "startFrame": 718,
+          "endFrame": 722,
+          "estimated": false
+        },
+        {
+          "text": "tools",
+          "startFrame": 724,
+          "endFrame": 734,
+          "estimated": false
+        },
+        {
+          "text": "could",
+          "startFrame": 735,
+          "endFrame": 741,
+          "estimated": false
+        },
+        {
+          "text": "change",
+          "startFrame": 743,
+          "endFrame": 751,
+          "estimated": false
+        },
+        {
+          "text": "with",
+          "startFrame": 752,
+          "endFrame": 758,
+          "estimated": false
+        },
+        {
+          "text": "you?",
+          "startFrame": 760,
+          "endFrame": 778,
+          "estimated": false
+        },
+        {
+          "text": "That's",
+          "startFrame": 781,
+          "endFrame": 792,
+          "estimated": false
+        },
+        {
+          "text": "Tabletop.",
+          "startFrame": 794,
+          "endFrame": 825,
+          "estimated": false
+        },
+        {
+          "text": "Describe",
+          "startFrame": 827,
+          "endFrame": 837,
+          "estimated": false
+        },
+        {
+          "text": "what",
+          "startFrame": 838,
+          "endFrame": 842,
+          "estimated": false
+        },
+        {
+          "text": "you",
+          "startFrame": 843,
+          "endFrame": 844,
+          "estimated": false
+        },
+        {
+          "text": "need.",
+          "startFrame": 847,
+          "endFrame": 865,
+          "estimated": false
+        },
+        {
+          "text": "Review",
+          "startFrame": 866,
+          "endFrame": 873,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 874,
+          "endFrame": 876,
+          "estimated": false
+        },
+        {
+          "text": "change.",
+          "startFrame": 878,
+          "endFrame": 898,
+          "estimated": false
+        },
+        {
+          "text": "Put",
+          "startFrame": 900,
+          "endFrame": 904,
+          "estimated": false
+        },
+        {
+          "text": "it",
+          "startFrame": 906,
+          "endFrame": 909,
+          "estimated": false
+        },
+        {
+          "text": "to",
+          "startFrame": 910,
+          "endFrame": 912,
+          "estimated": false
+        },
+        {
+          "text": "work,",
+          "startFrame": 914,
+          "endFrame": 928,
+          "estimated": false
+        },
+        {
+          "text": "right",
+          "startFrame": 930,
+          "endFrame": 938,
+          "estimated": false
+        },
+        {
+          "text": "on",
+          "startFrame": 940,
+          "endFrame": 943,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 944,
+          "endFrame": 948,
+          "estimated": false
+        },
+        {
+          "text": "canvas.",
+          "startFrame": 950,
+          "endFrame": 975,
+          "estimated": false
+        },
+        {
+          "text": "Then",
+          "startFrame": 977,
+          "endFrame": 984,
+          "estimated": false
+        },
+        {
+          "text": "keep",
+          "startFrame": 985,
+          "endFrame": 991,
+          "estimated": false
+        },
+        {
+          "text": "shaping",
+          "startFrame": 993,
+          "endFrame": 1005,
+          "estimated": false
+        },
+        {
+          "text": "it.",
+          "startFrame": 1008,
+          "endFrame": 1017,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "table",
+      "startFrame": 1037,
+      "endFrame": 1373,
+      "voiceStartFrame": 1037,
+      "voiceEndFrame": 1339,
+      "words": [
+        {
+          "text": "Let's",
+          "startFrame": 1041,
+          "endFrame": 1044,
+          "estimated": false
+        },
+        {
+          "text": "start",
+          "startFrame": 1046,
+          "endFrame": 1054,
+          "estimated": false
+        },
+        {
+          "text": "small.",
+          "startFrame": 1056,
+          "endFrame": 1078,
+          "estimated": false
+        },
+        {
+          "text": "A",
+          "startFrame": 1083,
+          "endFrame": 1087,
+          "estimated": false
+        },
+        {
+          "text": "coffee",
+          "startFrame": 1088,
+          "endFrame": 1095,
+          "estimated": false
+        },
+        {
+          "text": "stand.",
+          "startFrame": 1097,
+          "endFrame": 1120,
+          "estimated": false
+        },
+        {
+          "text": "Type:",
+          "startFrame": 1122,
+          "endFrame": 1133,
+          "estimated": false
+        },
+        {
+          "text": "Make",
+          "startFrame": 1136,
+          "endFrame": 1147,
+          "estimated": false
+        },
+        {
+          "text": "me",
+          "startFrame": 1149,
+          "endFrame": 1152,
+          "estimated": false
+        },
+        {
+          "text": "a",
+          "startFrame": 1153,
+          "endFrame": 1155,
+          "estimated": false
+        },
+        {
+          "text": "sales",
+          "startFrame": 1156,
+          "endFrame": 1164,
+          "estimated": false
+        },
+        {
+          "text": "table",
+          "startFrame": 1166,
+          "endFrame": 1174,
+          "estimated": false
+        },
+        {
+          "text": "for",
+          "startFrame": 1175,
+          "endFrame": 1179,
+          "estimated": false
+        },
+        {
+          "text": "coffee",
+          "startFrame": 1180,
+          "endFrame": 1191,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 1192,
+          "endFrame": 1195,
+          "estimated": false
+        },
+        {
+          "text": "cake.",
+          "startFrame": 1198,
+          "endFrame": 1221,
+          "estimated": false
+        },
+        {
+          "text": "Review",
+          "startFrame": 1222,
+          "endFrame": 1234,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 1234,
+          "endFrame": 1236,
+          "estimated": false
+        },
+        {
+          "text": "draft,",
+          "startFrame": 1239,
+          "endFrame": 1258,
+          "estimated": false
+        },
+        {
+          "text": "apply",
+          "startFrame": 1260,
+          "endFrame": 1270,
+          "estimated": false
+        },
+        {
+          "text": "it,",
+          "startFrame": 1271,
+          "endFrame": 1284,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 1285,
+          "endFrame": 1289,
+          "estimated": false
+        },
+        {
+          "text": "you're",
+          "startFrame": 1290,
+          "endFrame": 1294,
+          "estimated": false
+        },
+        {
+          "text": "ready",
+          "startFrame": 1295,
+          "endFrame": 1299,
+          "estimated": false
+        },
+        {
+          "text": "to",
+          "startFrame": 1300,
+          "endFrame": 1303,
+          "estimated": false
+        },
+        {
+          "text": "log",
+          "startFrame": 1306,
+          "endFrame": 1313,
+          "estimated": false
+        },
+        {
+          "text": "sales.",
+          "startFrame": 1316,
+          "endFrame": 1339,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "quick-request",
+      "startFrame": 1373,
+      "endFrame": 1606,
+      "voiceStartFrame": 1373,
+      "voiceEndFrame": 1572,
+      "words": [
+        {
+          "text": "Now",
+          "startFrame": 1379,
+          "endFrame": 1380,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 1381,
+          "endFrame": 1385,
+          "estimated": false
+        },
+        {
+          "text": "rush",
+          "startFrame": 1387,
+          "endFrame": 1397,
+          "estimated": false
+        },
+        {
+          "text": "hits.",
+          "startFrame": 1399,
+          "endFrame": 1411,
+          "estimated": false
+        },
+        {
+          "text": "Typing",
+          "startFrame": 1416,
+          "endFrame": 1433,
+          "estimated": false
+        },
+        {
+          "text": "every",
+          "startFrame": 1435,
+          "endFrame": 1445,
+          "estimated": false
+        },
+        {
+          "text": "sale",
+          "startFrame": 1447,
+          "endFrame": 1457,
+          "estimated": false
+        },
+        {
+          "text": "is",
+          "startFrame": 1459,
+          "endFrame": 1464,
+          "estimated": false
+        },
+        {
+          "text": "slowing",
+          "startFrame": 1465,
+          "endFrame": 1474,
+          "estimated": false
+        },
+        {
+          "text": "you",
+          "startFrame": 1474,
+          "endFrame": 1476,
+          "estimated": false
+        },
+        {
+          "text": "down.",
+          "startFrame": 1479,
+          "endFrame": 1491,
+          "estimated": false
+        },
+        {
+          "text": "So",
+          "startFrame": 1499,
+          "endFrame": 1515,
+          "estimated": false
+        },
+        {
+          "text": "you",
+          "startFrame": 1516,
+          "endFrame": 1519,
+          "estimated": false
+        },
+        {
+          "text": "ask",
+          "startFrame": 1521,
+          "endFrame": 1527,
+          "estimated": false
+        },
+        {
+          "text": "for",
+          "startFrame": 1528,
+          "endFrame": 1531,
+          "estimated": false
+        },
+        {
+          "text": "quick-sale",
+          "startFrame": 1533,
+          "endFrame": 1548,
+          "estimated": false
+        },
+        {
+          "text": "buttons.",
+          "startFrame": 1550,
+          "endFrame": 1572,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "quick-use",
+      "startFrame": 1606,
+      "endFrame": 1867,
+      "voiceStartFrame": 1606,
+      "voiceEndFrame": 1834,
+      "words": [
+        {
+          "text": "Review.",
+          "startFrame": 1618,
+          "endFrame": 1623,
+          "estimated": false
+        },
+        {
+          "text": "Apply.",
+          "startFrame": 1626,
+          "endFrame": 1652,
+          "estimated": false
+        },
+        {
+          "text": "Click",
+          "startFrame": 1653,
+          "endFrame": 1661,
+          "estimated": false
+        },
+        {
+          "text": "Coffee...",
+          "startFrame": 1664,
+          "endFrame": 1692,
+          "estimated": false
+        },
+        {
+          "text": "four",
+          "startFrame": 1694,
+          "endFrame": 1700,
+          "estimated": false
+        },
+        {
+          "text": "coffees,",
+          "startFrame": 1702,
+          "endFrame": 1721,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 1724,
+          "endFrame": 1731,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 1731,
+          "endFrame": 1733,
+          "estimated": false
+        },
+        {
+          "text": "total",
+          "startFrame": 1735,
+          "endFrame": 1743,
+          "estimated": false
+        },
+        {
+          "text": "updates.",
+          "startFrame": 1745,
+          "endFrame": 1764,
+          "estimated": false
+        },
+        {
+          "text": "Same",
+          "startFrame": 1767,
+          "endFrame": 1779,
+          "estimated": false
+        },
+        {
+          "text": "table.",
+          "startFrame": 1781,
+          "endFrame": 1793,
+          "estimated": false
+        },
+        {
+          "text": "Less",
+          "startFrame": 1797,
+          "endFrame": 1810,
+          "estimated": false
+        },
+        {
+          "text": "work.",
+          "startFrame": 1812,
+          "endFrame": 1824,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "chart",
+      "startFrame": 1867,
+      "endFrame": 2131,
+      "voiceStartFrame": 1867,
+      "voiceEndFrame": 2097,
+      "words": [
+        {
+          "text": "What's",
+          "startFrame": 1871,
+          "endFrame": 1874,
+          "estimated": false
+        },
+        {
+          "text": "selling?",
+          "startFrame": 1876,
+          "endFrame": 1895,
+          "estimated": false
+        },
+        {
+          "text": "Add",
+          "startFrame": 1897,
+          "endFrame": 1903,
+          "estimated": false
+        },
+        {
+          "text": "a",
+          "startFrame": 1907,
+          "endFrame": 1910,
+          "estimated": false
+        },
+        {
+          "text": "chart.",
+          "startFrame": 1911,
+          "endFrame": 1926,
+          "estimated": false
+        },
+        {
+          "text": "Review",
+          "startFrame": 1927,
+          "endFrame": 1934,
+          "estimated": false
+        },
+        {
+          "text": "it,",
+          "startFrame": 1936,
+          "endFrame": 1946,
+          "estimated": false
+        },
+        {
+          "text": "apply",
+          "startFrame": 1948,
+          "endFrame": 1958,
+          "estimated": false
+        },
+        {
+          "text": "it,",
+          "startFrame": 1960,
+          "endFrame": 1968,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 1968,
+          "endFrame": 1970,
+          "estimated": false
+        },
+        {
+          "text": "it",
+          "startFrame": 1972,
+          "endFrame": 1975,
+          "estimated": false
+        },
+        {
+          "text": "reads",
+          "startFrame": 1977,
+          "endFrame": 1985,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 1985,
+          "endFrame": 1987,
+          "estimated": false
+        },
+        {
+          "text": "sales",
+          "startFrame": 1989,
+          "endFrame": 1999,
+          "estimated": false
+        },
+        {
+          "text": "already",
+          "startFrame": 2000,
+          "endFrame": 2009,
+          "estimated": false
+        },
+        {
+          "text": "here.",
+          "startFrame": 2011,
+          "endFrame": 2021,
+          "estimated": false
+        },
+        {
+          "text": "No",
+          "startFrame": 2026,
+          "endFrame": 2037,
+          "estimated": false
+        },
+        {
+          "text": "copying.",
+          "startFrame": 2040,
+          "endFrame": 2061,
+          "estimated": false
+        },
+        {
+          "text": "No",
+          "startFrame": 2063,
+          "endFrame": 2066,
+          "estimated": false
+        },
+        {
+          "text": "starting",
+          "startFrame": 2068,
+          "endFrame": 2078,
+          "estimated": false
+        },
+        {
+          "text": "over.",
+          "startFrame": 2081,
+          "endFrame": 2097,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "discount10",
+      "startFrame": 2131,
+      "endFrame": 2474,
+      "voiceStartFrame": 2131,
+      "voiceEndFrame": 2441,
+      "words": [
+        {
+          "text": "Time",
+          "startFrame": 2135,
+          "endFrame": 2143,
+          "estimated": false
+        },
+        {
+          "text": "for",
+          "startFrame": 2144,
+          "endFrame": 2148,
+          "estimated": false
+        },
+        {
+          "text": "an",
+          "startFrame": 2149,
+          "endFrame": 2153,
+          "estimated": false
+        },
+        {
+          "text": "afternoon",
+          "startFrame": 2154,
+          "endFrame": 2169,
+          "estimated": false
+        },
+        {
+          "text": "offer.",
+          "startFrame": 2172,
+          "endFrame": 2186,
+          "estimated": false
+        },
+        {
+          "text": "Add",
+          "startFrame": 2191,
+          "endFrame": 2205,
+          "estimated": false
+        },
+        {
+          "text": "a",
+          "startFrame": 2207,
+          "endFrame": 2208,
+          "estimated": false
+        },
+        {
+          "text": "ten-percent",
+          "startFrame": 2209,
+          "endFrame": 2225,
+          "estimated": false
+        },
+        {
+          "text": "discount.",
+          "startFrame": 2227,
+          "endFrame": 2257,
+          "estimated": false
+        },
+        {
+          "text": "Review,",
+          "startFrame": 2259,
+          "endFrame": 2270,
+          "estimated": false
+        },
+        {
+          "text": "apply...",
+          "startFrame": 2274,
+          "endFrame": 2306,
+          "estimated": false
+        },
+        {
+          "text": "gross",
+          "startFrame": 2308,
+          "endFrame": 2316,
+          "estimated": false
+        },
+        {
+          "text": "stays",
+          "startFrame": 2317,
+          "endFrame": 2325,
+          "estimated": false
+        },
+        {
+          "text": "at",
+          "startFrame": 2327,
+          "endFrame": 2330,
+          "estimated": false
+        },
+        {
+          "text": "two",
+          "startFrame": 2331,
+          "endFrame": 2335,
+          "estimated": false
+        },
+        {
+          "text": "hundred",
+          "startFrame": 2336,
+          "endFrame": 2342,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 2344,
+          "endFrame": 2349,
+          "estimated": false
+        },
+        {
+          "text": "fifty.",
+          "startFrame": 2351,
+          "endFrame": 2373,
+          "estimated": false
+        },
+        {
+          "text": "Net:",
+          "startFrame": 2376,
+          "endFrame": 2393,
+          "estimated": false
+        },
+        {
+          "text": "two",
+          "startFrame": 2393,
+          "endFrame": 2395,
+          "estimated": false
+        },
+        {
+          "text": "hundred",
+          "startFrame": 2396,
+          "endFrame": 2405,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 2406,
+          "endFrame": 2409,
+          "estimated": false
+        },
+        {
+          "text": "twenty-five.",
+          "startFrame": 2410,
+          "endFrame": 2441,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "discount20",
+      "startFrame": 2474,
+      "endFrame": 2867,
+      "voiceStartFrame": 2474,
+      "voiceEndFrame": 2834,
+      "words": [
+        {
+          "text": "Actually...",
+          "startFrame": 2486,
+          "endFrame": 2500,
+          "estimated": false
+        },
+        {
+          "text": "make",
+          "startFrame": 2501,
+          "endFrame": 2505,
+          "estimated": false
+        },
+        {
+          "text": "that",
+          "startFrame": 2507,
+          "endFrame": 2512,
+          "estimated": false
+        },
+        {
+          "text": "twenty",
+          "startFrame": 2514,
+          "endFrame": 2524,
+          "estimated": false
+        },
+        {
+          "text": "percent.",
+          "startFrame": 2527,
+          "endFrame": 2544,
+          "estimated": false
+        },
+        {
+          "text": "Select",
+          "startFrame": 2548,
+          "endFrame": 2577,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 2578,
+          "endFrame": 2580,
+          "estimated": false
+        },
+        {
+          "text": "rule,",
+          "startFrame": 2582,
+          "endFrame": 2599,
+          "estimated": false
+        },
+        {
+          "text": "ask",
+          "startFrame": 2601,
+          "endFrame": 2608,
+          "estimated": false
+        },
+        {
+          "text": "for",
+          "startFrame": 2609,
+          "endFrame": 2611,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 2611,
+          "endFrame": 2613,
+          "estimated": false
+        },
+        {
+          "text": "change,",
+          "startFrame": 2616,
+          "endFrame": 2640,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 2641,
+          "endFrame": 2644,
+          "estimated": false
+        },
+        {
+          "text": "check",
+          "startFrame": 2646,
+          "endFrame": 2652,
+          "estimated": false
+        },
+        {
+          "text": "the",
+          "startFrame": 2653,
+          "endFrame": 2656,
+          "estimated": false
+        },
+        {
+          "text": "preview.",
+          "startFrame": 2658,
+          "endFrame": 2680,
+          "estimated": false
+        },
+        {
+          "text": "Apply.",
+          "startFrame": 2684,
+          "endFrame": 2702,
+          "estimated": false
+        },
+        {
+          "text": "Net:",
+          "startFrame": 2707,
+          "endFrame": 2724,
+          "estimated": false
+        },
+        {
+          "text": "two",
+          "startFrame": 2726,
+          "endFrame": 2733,
+          "estimated": false
+        },
+        {
+          "text": "hundred.",
+          "startFrame": 2735,
+          "endFrame": 2757,
+          "estimated": false
+        },
+        {
+          "text": "The",
+          "startFrame": 2760,
+          "endFrame": 2767,
+          "estimated": false
+        },
+        {
+          "text": "table,",
+          "startFrame": 2768,
+          "endFrame": 2779,
+          "estimated": false
+        },
+        {
+          "text": "buttons,",
+          "startFrame": 2780,
+          "endFrame": 2791,
+          "estimated": false
+        },
+        {
+          "text": "and",
+          "startFrame": 2791,
+          "endFrame": 2793,
+          "estimated": false
+        },
+        {
+          "text": "chart",
+          "startFrame": 2796,
+          "endFrame": 2808,
+          "estimated": false
+        },
+        {
+          "text": "stay",
+          "startFrame": 2809,
+          "endFrame": 2815,
+          "estimated": false
+        },
+        {
+          "text": "put.",
+          "startFrame": 2818,
+          "endFrame": 2834,
+          "estimated": false
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "startFrame": 2867,
+      "endFrame": 3133,
+      "voiceStartFrame": 2867,
+      "voiceEndFrame": 3090,
+      "words": [
+        {
+          "text": "Start",
+          "startFrame": 2873,
+          "endFrame": 2874,
+          "estimated": false
+        },
+        {
+          "text": "with",
+          "startFrame": 2875,
+          "endFrame": 2879,
+          "estimated": false
+        },
+        {
+          "text": "what",
+          "startFrame": 2880,
+          "endFrame": 2884,
+          "estimated": false
+        },
+        {
+          "text": "you",
+          "startFrame": 2885,
+          "endFrame": 2889,
+          "estimated": false
+        },
+        {
+          "text": "need.",
+          "startFrame": 2891,
+          "endFrame": 2911,
+          "estimated": false
+        },
+        {
+          "text": "Use",
+          "startFrame": 2914,
+          "endFrame": 2922,
+          "estimated": false
+        },
+        {
+          "text": "it.",
+          "startFrame": 2925,
+          "endFrame": 2932,
+          "estimated": false
+        },
+        {
+          "text": "Change",
+          "startFrame": 2935,
+          "endFrame": 2953,
+          "estimated": false
+        },
+        {
+          "text": "it.",
+          "startFrame": 2955,
+          "endFrame": 2961,
+          "estimated": false
+        },
+        {
+          "text": "Keep",
+          "startFrame": 2964,
+          "endFrame": 2977,
+          "estimated": false
+        },
+        {
+          "text": "going.",
+          "startFrame": 2979,
+          "endFrame": 2992,
+          "estimated": false
+        },
+        {
+          "text": "Tabletop.",
+          "startFrame": 2996,
+          "endFrame": 3035,
+          "estimated": false
+        },
+        {
+          "text": "Tools",
+          "startFrame": 3037,
+          "endFrame": 3049,
+          "estimated": false
+        },
+        {
+          "text": "that",
+          "startFrame": 3050,
+          "endFrame": 3054,
+          "estimated": false
+        },
+        {
+          "text": "adapt",
+          "startFrame": 3056,
+          "endFrame": 3066,
+          "estimated": false
+        },
+        {
+          "text": "to",
+          "startFrame": 3068,
+          "endFrame": 3071,
+          "estimated": false
+        },
+        {
+          "text": "you.",
+          "startFrame": 3073,
+          "endFrame": 3090,
+          "estimated": false
+        }
+      ]
+    }
+  ],
+  "cues": {
+    "tools.pen.arrive": 12,
+    "tools.pen.grip": 101,
+    "tools.hammer.arrive": 119,
+    "tools.hammer.handle": 141,
+    "tools.chair.arrive": 168,
+    "tools.chair.backrest": 192,
+    "tools.chair.armrests": 216,
+    "tools.chair.wheels": 245,
+    "tools.recap": 292,
+    "friction.question": 403,
+    "friction.app": 500,
+    "friction.menus": 537,
+    "friction.workflow": 578,
+    "friction.restart": 675,
+    "reversal.idea": 743,
+    "reversal.brand": 794,
+    "reversal.describe": 827,
+    "reversal.review": 866,
+    "reversal.apply": 900,
+    "reversal.canvas": 950,
+    "table.typeStart": 1122,
+    "table.send": 1195,
+    "table.review": 1222,
+    "table.apply": 1260,
+    "table.result": 1295,
+    "quick.typeStart": 1499,
+    "quick.send": 1572,
+    "quick.review": 1618,
+    "quick.apply": 1626,
+    "quick.click": 1664,
+    "quick.result": 1745,
+    "chart.typeStart": 1897,
+    "chart.send": 1926,
+    "chart.review": 1927,
+    "chart.apply": 1948,
+    "chart.result": 1977,
+    "discount10.typeStart": 2191,
+    "discount10.send": 2257,
+    "discount10.review": 2259,
+    "discount10.apply": 2274,
+    "discount10.result": 2376,
+    "discount20.select": 2548,
+    "discount20.typeStart": 2601,
+    "discount20.send": 2640,
+    "discount20.review": 2646,
+    "discount20.apply": 2684,
+    "discount20.result": 2707,
+    "close.logoStart": 2996,
+    "quick.buttonsReady": 1644,
+    "quick.salesUpdated": 1745,
+    "intro.start": 12,
+    "intro.end": 1037,
+    "board.start": 818,
+    "board.end": 2996,
+    "close.start": 2867
+  },
+  "requests": [
+    {
+      "id": "table",
+      "message": "Make me a sales table for coffee and cake.",
+      "title": "Sales table · coffee + cake",
+      "detail": "Coffee and cake with quantities, prices, and line totals.",
+      "typeStart": 1122,
+      "send": 1195,
+      "draftEnd": 1216,
+      "reviewed": 1222,
+      "applyStart": 1253,
+      "apply": 1260,
+      "result": 1295,
+      "letters": [
+        "M",
+        "a",
+        "k",
+        "e",
+        " ",
+        "m",
+        "e",
+        " ",
+        "a",
+        " ",
+        "s",
+        "a",
+        "l",
+        "e",
+        "s",
+        " ",
+        "t",
+        "a",
+        "b",
+        "l",
+        "e",
+        " ",
+        "f",
+        "o",
+        "r",
+        " ",
+        "c",
+        "o",
+        "f",
+        "f",
+        "e",
+        "e",
+        " ",
+        "a",
+        "n",
+        "d",
+        " ",
+        "c",
+        "a",
+        "k",
+        "e",
+        "."
+      ],
+      "completeAt": 1187,
+      "typingStep": 1.5476190476190477
+    },
+    {
+      "id": "quick",
+      "message": "Add quick-sale buttons.",
+      "title": "One-click sale buttons",
+      "detail": "Coffee +1 and Cake +1.",
+      "typeStart": 1499,
+      "send": 1572,
+      "draftEnd": 1599,
+      "reviewed": 1618,
+      "applyStart": 1629,
+      "apply": 1636,
+      "result": 1648,
+      "letters": [
+        "A",
+        "d",
+        "d",
+        " ",
+        "q",
+        "u",
+        "i",
+        "c",
+        "k",
+        "-",
+        "s",
+        "a",
+        "l",
+        "e",
+        " ",
+        "b",
+        "u",
+        "t",
+        "t",
+        "o",
+        "n",
+        "s",
+        "."
+      ],
+      "completeAt": 1564,
+      "typingStep": 2.8260869565217392
+    },
+    {
+      "id": "chart",
+      "message": "Add a chart by item.",
+      "title": "Sales by item",
+      "detail": "Coffee ฿100 · Cake ฿150 from the same rows.",
+      "typeStart": 1897,
+      "send": 1926,
+      "draftEnd": 1938,
+      "reviewed": 1944,
+      "applyStart": 1955,
+      "apply": 1962,
+      "result": 1986,
+      "letters": [
+        "A",
+        "d",
+        "d",
+        " ",
+        "a",
+        " ",
+        "c",
+        "h",
+        "a",
+        "r",
+        "t",
+        " ",
+        "b",
+        "y",
+        " ",
+        "i",
+        "t",
+        "e",
+        "m",
+        "."
+      ],
+      "completeAt": 1918,
+      "typingStep": 1.05
+    },
+    {
+      "id": "discount10",
+      "message": "Add a 10% discount.",
+      "title": "10% discount rule",
+      "detail": "฿250 × 90% = ฿225 net.",
+      "typeStart": 2191,
+      "send": 2257,
+      "draftEnd": 2269,
+      "reviewed": 2275,
+      "applyStart": 2286,
+      "apply": 2293,
+      "result": 2376,
+      "letters": [
+        "A",
+        "d",
+        "d",
+        " ",
+        "a",
+        " ",
+        "1",
+        "0",
+        "%",
+        " ",
+        "d",
+        "i",
+        "s",
+        "c",
+        "o",
+        "u",
+        "n",
+        "t",
+        "."
+      ],
+      "completeAt": 2249,
+      "typingStep": 3.0526315789473686
+    },
+    {
+      "id": "discount20",
+      "message": "Change this rule to 20%.",
+      "title": "Change the selected rule to 20%",
+      "detail": "฿250 × 80% = ฿200 net.",
+      "typeStart": 2601,
+      "send": 2640,
+      "draftEnd": 2652,
+      "reviewed": 2658,
+      "applyStart": 2677,
+      "apply": 2684,
+      "result": 2708,
+      "letters": [
+        "C",
+        "h",
+        "a",
+        "n",
+        "g",
+        "e",
+        " ",
+        "t",
+        "h",
+        "i",
+        "s",
+        " ",
+        "r",
+        "u",
+        "l",
+        "e",
+        " ",
+        "t",
+        "o",
+        " ",
+        "2",
+        "0",
+        "%",
+        "."
+      ],
+      "completeAt": 2632,
+      "typingStep": 1.2916666666666667
+    }
+  ]
+}

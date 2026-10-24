@@ -1,5 +1,9 @@
 import React from 'react';
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
+import timeline from '../timeline.json';
+import { BrandMark } from './BrandMark.jsx';
+import { ThesisIntro } from './ThesisIntro.jsx';
+import './ThesisIntro.css';
 
 const C = {
   paper: '#faf8f0',
@@ -30,249 +34,37 @@ const mix = (value, from, to, a, b) => interpolate(value, [from, to], [a, b], {
 });
 
 const money = (value) => '฿' + value.toLocaleString('en-US');
-const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-const graphemes = (text) => Array.from(segmenter.segment(text), ({ segment }) => segment);
-
-const REQUESTS = [
-  {
-    id: 'table',
-    title: 'Sales table · coffee + cake',
-    label: 'Sales table',
-    detail: 'Coffee and cake with quantities, prices, and line totals.',
-    message: 'Make me a sales table for coffee and cake.',
-    typeStart: 346,
-    typingStep: 1.7,
-    send: 441,
-    draftEnd: 465,
-    reviewed: 512,
-    applyStart: 524,
-    apply: 536,
-    result: 555,
-  },
-  {
-    id: 'quick',
-    title: 'One-click sale buttons',
-    label: 'Quick-sale buttons',
-    detail: 'Coffee +1 and Cake +1.',
-    message: 'Add buttons so I can record a sale with one click.',
-    typeStart: 814,
-    typingStep: 1.5,
-    send: 911,
-    draftEnd: 917,
-    reviewed: 924,
-    applyStart: 930,
-    apply: 936,
-    result: 958,
-  },
-  {
-    id: 'chart',
-    title: 'Sales by item',
-    label: 'Sales chart',
-    detail: 'Coffee ฿100 · Cake ฿150 from the same rows.',
-    message: 'Add a chart by item.',
-    typeStart: 1270,
-    typingStep: 1.2,
-    send: 1317,
-    draftEnd: 1326,
-    reviewed: 1339,
-    applyStart: 1345,
-    apply: 1352,
-    result: 1362,
-  },
-  {
-    id: 'discount10',
-    title: '10% discount rule',
-    label: '10% discount',
-    detail: '฿250 × 90% = ฿225 net.',
-    message: 'Add a 10% discount.',
-    typeStart: 1622,
-    typingStep: 1.2,
-    send: 1664,
-    draftEnd: 1672,
-    reviewed: 1679,
-    applyStart: 1686,
-    apply: 1694,
-    result: 1710,
-  },
-  {
-    id: 'discount20',
-    title: 'Change the selected rule to 20%',
-    label: '20% discount',
-    detail: '฿250 × 80% = ฿200 net.',
-    message: 'Change this to 20%.',
-    typeStart: 1962,
-    typingStep: 1.2,
-    send: 2010,
-    draftEnd: 2018,
-    reviewed: 2026,
-    applyStart: 2064,
-    apply: 2074,
-    result: 2091,
-  },
-].map((request) => ({ ...request, letters: graphemes(request.message) }));
-
-const QUICK_CLICK = 1055;
-const QUICK_UPDATE = 1074;
-const RULE_SELECT = 1929;
-
-function Mark({ frame, size = 30, staticMark = false }) {
-  // Canonical four-tile mark and frame-based port of the existing loader motion.
-  const tiltFrame = ((frame % 72) + 72) % 72;
-  const animatedTilt = interpolate(tiltFrame, [0, 36, 72], [-5, 85, -5], {
-    easing: Easing.bezier(0.65, 0, 0.35, 1),
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const tilt = staticMark ? -5 : animatedTilt;
-  const offsets = [0, 4.5, 13.5, 9];
-  const colors = ['#243548', '#24796b', '#6f8190', '#d49a47'];
-
-  return <span className="brand-mark" style={{
-    width: size,
-    height: size,
-    gridTemplateColumns: `repeat(2, ${(size - size * 0.28) / 2}px)`,
-    gap: size * 0.14,
-    transform: `rotate(${tilt}deg)`,
-  }} aria-hidden="true">
-    {colors.map((color, index) => {
-      const phase = ((frame - offsets[index]) % 36 + 36) % 36;
-      const animatedScale = phase <= 14.4
-        ? interpolate(phase, [0, 14.4], [1, 0.62], { easing: Easing.bezier(0.45, 0, 0.55, 1) })
-        : interpolate(phase, [14.4, 36], [0.62, 1], { easing: Easing.bezier(0.45, 0, 0.55, 1) });
-      const animatedOpacity = phase <= 14.4
-        ? interpolate(phase, [0, 14.4], [1, 0.45], { easing: Easing.bezier(0.45, 0, 0.55, 1) })
-        : interpolate(phase, [14.4, 36], [0.45, 1], { easing: Easing.bezier(0.45, 0, 0.55, 1) });
-      const scale = staticMark ? 1 : animatedScale;
-      const opacity = staticMark ? 1 : animatedOpacity;
-      return <i key={color} style={{
-        width: (size - size * 0.28) / 2,
-        height: (size - size * 0.28) / 2,
-        borderRadius: index === 3 ? '50%' : size * 0.11,
-        background: color,
-        transform: `scale(${scale})`,
-        opacity,
-      }} />;
-    })}
-  </span>;
-}
+const REQUESTS = timeline.requests;
+const QUICK_CLICK = timeline.cues['quick.click'];
+const QUICK_UPDATE = timeline.cues['quick.salesUpdated'];
+const RULE_SELECT = timeline.cues['discount20.select'];
 
 function Chrome({ frame }) {
-  const dark = frame >= 2415;
-  return <header className={`chrome${dark ? ' chrome--dark' : ''}`}>
-    <div className="brand-lockup"><Mark frame={frame} size={30} /><span>tabletop<span className="brand-period">.</span></span></div>
+  return <header className="chrome">
+    <div className="brand-lockup"><BrandMark frame={frame} size={30} /><span>tabletop<span className="brand-period">.</span></span></div>
     <div className="provenance">
       <strong>Concept animation · illustrative data</strong>
     </div>
   </header>;
 }
 
-function WritingPen({ frame }) {
-  const strokes = [
-    { start: 26, end: 55, x0: 58, x1: 468, y: 173 },
-    { start: 59, end: 88, x0: 58, x1: 468, y: 235 },
-    { start: 99, end: 125, x0: 118, x1: 382, y: 306 },
-    { start: 128, end: 143, x0: 408, x1: 492, y: 380 },
-  ];
-  const stroke = strokes.find(({ start, end }) => frame >= start && frame <= end);
-  if (!stroke) return null;
-  const pointX = mix(frame, stroke.start, stroke.end, stroke.x0, stroke.x1);
-  const opacity = clamp(frame, stroke.start, stroke.start + 3)
-    * (1 - clamp(frame, stroke.end - 3, stroke.end));
-  return <svg className="manual-pen" viewBox="0 0 184 42" aria-hidden="true" style={{
-    left: pointX - 184,
-    top: stroke.y - 20,
-    opacity,
-  }}>
-    <path d="M13 11 Q8 21 13 31 L150 29 Q159 28 165 21 L150 13Z" fill={C.green} stroke="#234a3f" strokeWidth="2" />
-    <path d="M30 14 L136 15" stroke="#a9cbb5" strokeWidth="3" strokeLinecap="round" />
-    <path d="M165 15 L183 21 L165 27Z" fill={C.ochre} />
-    <path d="M179 20 L184 21 L179 22Z" fill={C.ink} />
-    <path d="M31 12 V5 Q31 2 35 2 H85" fill="none" stroke={C.ink} strokeWidth="3" strokeLinecap="round" />
-  </svg>;
-}
-
-function OrderSlip({ frame }) {
-  const enter = clamp(frame, 0, 18);
-  const coffee = clamp(frame, 22, 55);
-  const cake = clamp(frame, 56, 89);
-  const addition = clamp(frame, 99, 125);
-  const wrongTotal = clamp(frame, 119, 123);
-  const correctionLine = clamp(frame, 127, 138);
-  const correctedTotal = clamp(frame, 138, 149);
-  const clipWritten = (progress) => ({
-    clipPath: `inset(0 ${100 - progress * 100}% 0 0)`,
-    opacity: progress > 0 ? 1 : 0,
-  });
-
-  return <div className="order-slip" style={{
-    opacity: enter,
-    transform: `translateY(${(1 - enter) * 44}px) rotate(-1deg)`,
-  }}>
-    <div className="slip-holes"><i /><i /><i /><i /><i /></div>
-    <div className="slip-topline"><b>THE CORNER POP-UP</b><span>DAILY ORDER · 001</span></div>
-    <div className="slip-title">Sales note <small>coffee &amp; cake</small></div>
-    <div className="slip-rule" />
-    <div className="slip-columns"><span>ITEM</span><span>COUNT × PRICE</span><span>LINE TOTAL</span></div>
-    <div className="slip-row slip-row--coffee" style={clipWritten(coffee)}>
-      <strong><i className="slip-dot slip-dot--green" />Coffee</strong><span>3 × ฿25</span><b>฿75</b>
-    </div>
-    <div className="slip-row slip-row--cake" style={clipWritten(cake)}>
-      <strong><i className="slip-dot slip-dot--ochre" />Cake</strong><span>3 × ฿50</span><b>฿150</b>
-    </div>
-    <div className="slip-addition" style={clipWritten(addition)}>
-      <span>ADD THE LINE TOTALS</span><b>฿75 + ฿150</b><i>=</i>
-    </div>
-    <div className="slip-total">
-      <span className="slip-total-label">DAILY TOTAL</span>
-      <div className="slip-total-values">
-        <span className="slip-total-old" style={{ opacity: wrongTotal }}>
-          ฿275<i style={{ width: `${correctionLine * 72}px` }} />
-        </span>
-        <b className="slip-total-correct" style={{ opacity: correctedTotal }}>฿225</b>
-      </div>
-    </div>
-    <div className="slip-recheck" style={{ opacity: correctedTotal }}>Checked again</div>
-    <div className="slip-footer">PAPER ORDER · ILLUSTRATIVE EXAMPLE</div>
-    <WritingPen frame={frame} />
-  </div>;
-}
-
-function OrderStack({ frame }) {
-  const reveal = clamp(frame, 120, 142);
-  if (!reveal) return null;
-  return <div className="order-stack" style={{ opacity: reveal }} aria-hidden="true">
-    <div className="stack-slip stack-slip--back"><b>ORDER 003</b><i /><i /><i /></div>
-    <div className="stack-slip stack-slip--front"><b>ORDER 002</b><i /><i /><i /></div>
-  </div>;
-}
+const segmentStart = (id) => timeline.segments.find((segment) => segment.id === id).startFrame;
 
 function Intro({ frame }) {
-  const transition = clamp(frame, 282, 300);
-  const question = clamp(frame, 188, 204);
-  const title = clamp(frame, 8, 24);
-  return <AbsoluteFill className="intro-scene" style={{ transform: `translateX(${-1280 * transition}px)` }}>
-    <div className="intro-rule" style={{ transform: `scaleX(${title})`, transformOrigin: 'left center' }} />
-    <div className="intro-copy" style={{ opacity: title, transform: `translateY(${(1 - title) * 12}px)` }}>
-      <div className="intro-eyebrow">THE CORNER POP-UP · A BUSY DAY</div>
-      <h1>
-        <span className="intro-message" style={{ opacity: 1 - question }}>Write it down. <em>Add it up again.</em></span>
-        <span className="intro-message" style={{ opacity: question }}>Could the tool <em>fit your work?</em></span>
-      </h1>
-      <p>Every order starts with a note. Every total needs checking.</p>
-    </div>
-    <div className="intro-note"><i />A SMALL SHOP · A BUSY AFTERNOON</div>
-    <OrderStack frame={frame} />
-    <OrderSlip frame={frame} />
-  </AbsoluteFill>;
+  const phase = frame < segmentStart('friction')
+    ? 'tools'
+    : frame < segmentStart('reversal')
+      ? 'friction'
+      : 'reversal';
+  return <ThesisIntro frame={frame} phase={phase} cues={timeline.cues} />;
 }
 
 const chapterFor = (frame) => {
-  if (frame < 297) return ['COULD THIS TOOL FIT YOUR WORK?', 'THE CORNER POP-UP'];
-  if (frame < 655) return ['START WITH TODAY’S NEED', 'THE CORNER POP-UP'];
-  if (frame < 1205) return ['MAKE A BUSY MOMENT EASIER', 'ONE CANVAS · ONE CLICK'];
-  if (frame < 1549) return ['ASK FOR A CLEARER VIEW', 'SALES BY ITEM'];
-  if (frame < 1869) return ['TRY AN AFTERNOON OFFER', 'GROSS STAYS THE SAME'];
-  if (frame < 2274) return ['CHANGE THE RULE', 'REVIEW → APPLY'];
+  if (frame < segmentStart('quick-request')) return ['START WITH TODAY’S NEED', 'THE CORNER POP-UP'];
+  if (frame < segmentStart('chart')) return ['MAKE A BUSY MOMENT EASIER', 'ONE CANVAS · ONE CLICK'];
+  if (frame < segmentStart('discount10')) return ['ASK FOR A CLEARER VIEW', 'SALES BY ITEM'];
+  if (frame < segmentStart('discount20')) return ['TRY AN AFTERNOON OFFER', 'GROSS STAYS THE SAME'];
+  if (frame < segmentStart('close')) return ['CHANGE THE RULE', 'REVIEW → APPLY'];
   return ['SHAPED BY THE WORK', 'THE CORNER POP-UP'];
 };
 
@@ -376,7 +168,7 @@ function CanvasBoard({ frame }) {
   const discount10Visible = frame >= REQUESTS[3].result;
   const discount20Visible = frame >= REQUESTS[4].result;
   const discountSelected = frame >= RULE_SELECT;
-  const cardReveal = (result) => clamp(frame, result, result + 18);
+  const cardReveal = (result, duration = 18) => clamp(frame, result, result + duration);
   const chartDraw = clamp(frame, REQUESTS[2].result, REQUESTS[2].result + 26);
   const rate = discount20Visible ? 20 : 10;
   const net = Math.round(gross * (1 - rate / 100));
@@ -407,7 +199,7 @@ function CanvasBoard({ frame }) {
           <b>A canvas begins with a request.</b>
           <small>No file needed to ask.</small>
         </div>}
-      <QuickSale frame={frame} visible={quickVisible} reveal={cardReveal(REQUESTS[1].result)} />
+      <QuickSale frame={frame} visible={quickVisible} reveal={cardReveal(REQUESTS[1].result, 12)} />
       <SalesChart visible={chartVisible} reveal={cardReveal(REQUESTS[2].result)} coffeeTotal={coffeeTotal} />
       <DiscountCard
         visible={discount10Visible}
@@ -424,14 +216,17 @@ function CanvasBoard({ frame }) {
 
 function RequestState({ frame, request }) {
   const sent = frame >= request.send;
+  const beforeTyping = frame < request.typeStart;
   const drafting = sent && frame < request.draftEnd;
   const reviewed = frame >= request.reviewed;
   const applying = frame >= request.apply && frame < request.result;
   const applied = frame >= request.result;
-  const composerSettle = sent ? clamp(frame, request.send, request.send + 18) : 0;
+  const composerSettle = beforeTyping ? 1 : sent ? clamp(frame, request.send, request.send + 18) : 0;
   const visibleLetters = sent
     ? request.letters.length
-    : Math.max(0, Math.min(request.letters.length, Math.floor((frame - request.typeStart) / request.typingStep) + 1));
+    : beforeTyping
+      ? 0
+      : Math.max(0, Math.min(request.letters.length, Math.floor((frame - request.typeStart) / request.typingStep) + 1));
   const typed = sent ? '' : request.letters.slice(0, visibleLetters).join('');
   const reviewPointer = frame >= request.reviewed - 10 && frame < request.reviewed;
   const applyPointerStart = Math.max(request.reviewed + 18, request.applyStart - 8);
@@ -502,7 +297,7 @@ function ConversationPanel({ frame }) {
   }
   const request = REQUESTS[index];
   const accepted = REQUESTS.slice(0, index).filter((item) => frame >= item.result);
-  const composing = frame < request.send;
+  const composing = frame >= request.typeStart && frame < request.send;
   return <div className={`conversation-panel${composing ? ' conversation-panel--composing' : ''}`}>
     <div className="conversation-header">
       <span className="conversation-avatar">C</span>
@@ -528,27 +323,24 @@ function Workspace({ frame }) {
 }
 
 function EndLockup({ frame }) {
-  const reveal = clamp(frame, 2415, 2427);
-  return <AbsoluteFill className="end-scene" style={{ opacity: reveal }}>
-    <div className="end-band" />
-    <div className="end-orbit end-orbit--one" /><div className="end-orbit end-orbit--two" />
-    <div className="end-lockup" style={{ transform: `translateY(${(1 - reveal) * 14}px)` }}>
-      <Mark frame={frame} size={90} staticMark />
+  const logoStart = timeline.cues['close.logoStart'];
+  const reveal = clamp(frame, logoStart, logoStart + 14);
+  return <AbsoluteFill className="end-scene">
+    <div className="end-lockup" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 10}px)` }}>
+      <BrandMark frame={frame - logoStart} size={76} />
       <div className="end-wordmark">tabletop<span>.</span></div>
-      <div className="end-url">tabletop.ptchrr.workers.dev</div>
-      <div className="end-tagline">Tools that keep adapting to you.</div>
     </div>
-    <div className="end-draft">CONCEPT FILM · DRAFT 04</div>
   </AbsoluteFill>;
 }
 
 export function NarrativeAnimatic() {
   const frame = useCurrentFrame();
-  const transition = clamp(frame, 282, 300);
+  const boardStart = timeline.cues['board.start'];
+  const logoStart = timeline.cues['close.logoStart'];
   return <AbsoluteFill className="film-frame">
-    {frame < 300 && <Intro frame={frame} />}
-    {frame >= 282 && frame < 2427 && <AbsoluteFill style={{ transform: `translateX(${1280 * (1 - transition)}px)` }}><Workspace frame={frame} /></AbsoluteFill>}
-    {frame >= 2415 && <EndLockup frame={frame} />}
-    <Chrome frame={frame} />
+    {frame < boardStart && <Intro frame={frame} />}
+    {frame >= boardStart && frame < logoStart && <Workspace frame={frame} />}
+    {frame >= logoStart && <EndLockup frame={frame} />}
+    {frame >= boardStart && frame < logoStart && <Chrome frame={frame} />}
   </AbsoluteFill>;
 }

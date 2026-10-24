@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-24 — Fixing an unclear metaphor erased the product thesis
+- **What happened:** replacing abstract tools with a cafe order-slip intro made F077 open on a use case and lost the original general story; technically valid TTS was judged flat by the user.
+- **Root cause:** optimized local clarity and measured audio timing without preserving the concept-to-problem-to-reversal arc or evaluating spoken delivery.
+- **Correct behavior:** establish tools adapting to people with recognizable additive examples, explain the software friction and Tabletop reversal, then show a case. Keep a separate delivery check for voice energy and naturalness; waveform checks cannot pass that criterion. Honor the explicit plain white/logo-only ending.
+
 ### 2026-10-24 — Intro เครื่องมือและคลิปเงียบยังสื่อไม่ครบ
 - **What happened:** ผู้ใช้ไม่เข้าใจรูปเครื่องมือในintro F077และต้องอ่านทุกอย่างเองเพื่อเข้าใจคลิป
 - **Root cause:** ใช้รูปสัญลักษณ์แทนการกระทำ และจัดเวลาให้ครบ60วินาทีก่อนมีเสียงเล่าเรื่อง

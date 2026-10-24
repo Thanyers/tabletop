@@ -1,82 +1,67 @@
-# Tabletop film — Tools that keep adapting to you
+# Tabletop film — Tools that adapt to you
 
-Revision 4 · English-first · 84.7 seconds / 2,541 frames / 30 fps · code-authored visuals, synthetic narration and procedural sound effects
+Revision5 · English female narration · ElevenLabs Laura / eleven_v3 · measured speech with room for actions and results; no fixed minute limit.
 
-## Direction
+## Story and visual direction
 
-The user removed the one-minute limit and requested English first. Pace follows the measured narration, action and result; do not speed up speech to meet an arbitrary duration. Revision 3 relied too much on reading, and its chair/pen/hammer drawings did not communicate a useful opening.
+The opening must establish the product thesis before the seller example. Show recognizable physical tools: a pen grip, a hammer handle, then a chair gaining its backrest, armrests and wheels in stages. We shape tools around people. Next show the broad software friction: choose an app, learn its menus, bend work to fit, repeat when needs change. Reverse that relationship with Tabletop: describe the need, review the change, use the tools on the canvas, and keep shaping them.
 
-Open on a real action: a pen writes coffee and cake orders on a paper slip; the seller adds and corrects a manual total. Slide the paper out and the empty digital canvas in as separate objects. The film then follows the same seller through five typed requests. Each new need leads to a request, a proposed change, review/application, and use. The table and accepted tools stay on the same canvas.
+Only then enter the coffee-stand example. Preserve all five typed requests and visible consequences on one board. Every addition follows an explicit request and approval. Old data and accepted tools remain. Keep the distinction between gross and net clear.
 
-The original Tabletop logo and loader timing remain. No AI-generated video or images. The persistent disclosure reads “Concept animation · illustrative data.” The exact sequence is an authored example, not a product recording or a runtime guarantee.
+Use the original logo and loader animation. Use licensed real photographs for the tools, with intentional crops/masks and source attribution; no object morphing and no AI image/video generation. One focal action per spoken clause. Show changes rather than making the viewer read paragraphs. The user-provided motion brief informed word-led timing, editorial focus, and checking stills before full rendering; its pixel palette, external editors, vertical format and alternative-version workflow are not adopted.
 
-## Voice-led edit
+The ending is pure white with the original logo/wordmark only. No tagline, cards, chips, grid, buttons or disclosure on that final lockup. Keep the concept/sample disclosure on the illustrative UI scenes.
 
-| Time | Story | Visible result |
-| --- | --- | --- |
-| 0–9.9s | Pen, paper, and growing orders | Write entries, add/correct a manual total, then move to the canvas; no object morphing |
-| 9.9–21.83s | Ask for a coffee-and-cake sales table | Type request, send, review and apply; initial total225 |
-| 21.83–40.17s | Entering every sale is too slow | Ask for quick-sale buttons; apply; click Coffee at the spoken cue; quantity3→4, total225→250 |
-| 40.17–51.63s | See what is selling | Request and approve a chart using the same rows: Coffee100 / Cake150 |
-| 51.63–62.3s | Try an afternoon offer | Add/approve10%; gross250, net225 |
-| 62.3–75.8s | Change the offer without starting again | Select the existing rule, type20%; proposed200 while active10% remains225; apply then show200; retain all tools |
-| 75.8–84.7s | Start small, use it, shape it | Hold completed canvas, then original logo and final line |
+## Spoken script and measured slots
 
-Exact action frames are owned by [sound cues](motion/sound-cues.json) and the motion source. Exact narration starts, durations and text are in [narration.json](motion/narration.json). Allow the completed request to settle before Send. Do not let narration and sound effects imply an applied change while the board still shows a draft.
+**tools** · 0.40–12.83s
 
-## Recorded English narration
+Good tools fit us. A pen gets a grip. A hammer gets a handle. A chair gets a backrest, armrests, wheels. We keep shaping tools around the people who use them.
 
-**intro** (0.4s)
+**friction** · 12.83–23.67s
 
-Imagine a cafe starting with pen and paper. Then orders pile up. What if its tools could grow with the work?
+So why does software so often work the other way around? Pick an app. Learn its menus. Bend your workflow to fit. And when your needs change... start again.
 
-**table** (9.9s)
+**reversal** · 23.67–34.57s
 
-Start with a request: Make me a sales table for coffee and cake. Tabletop drafts it. Review it, apply it, and start using it.
+What if your tools could change with you? That's Tabletop. Describe what you need. Review the change. Put it to work, right on the canvas. Then keep shaping it.
 
-**quick-request** (21.83s)
+**table** · 34.57–45.77s
 
-Now the shop gets busy. Entering every sale is too slow. Add buttons so I can record a sale with one click.
+Let's start small. A coffee stand. Type: Make me a sales table for coffee and cake. Review the draft, apply it, and you're ready to log sales.
 
-**quick-use** (31.93s)
+**quick-request** · 45.77–53.53s
 
-The buttons join the same canvas. Click Coffee: the count goes up, and the total updates.
+Now the rush hits. Typing every sale is slowing you down. So you ask for quick-sale buttons.
 
-**chart** (40.17s)
+**quick-use** · 53.53–62.23s
 
-Want to see what's selling? Ask for a chart. Once approved, it reads the same sales data. There's nothing to enter again.
+Review. Apply. Click Coffee... four coffees, and the total updates. Same table. Less work.
 
-**discount10** (51.63s)
+**chart** · 62.23–71.03s
 
-Trying an afternoon offer? Add and approve a ten-percent discount. The rule calculates the net total from today's sales.
+What's selling? Add a chart. Review it, apply it, and it reads the sales already here. No copying. No starting over.
 
-**discount20** (62.3s)
+**discount10** · 71.03–82.47s
 
-Change your mind? Select that rule and ask for twenty percent. Review the new result, then apply it. Your table, buttons, and chart stay in place.
+Time for an afternoon offer. Add a ten-percent discount. Review, apply... gross stays at two hundred and fifty. Net: two hundred and twenty-five.
 
-**close** (75.8s)
+**discount20** · 82.47–95.57s
 
-Tabletop. Start small, use it, and shape it as you go. Tools that keep adapting to you.
+Actually... make that twenty percent. Select the rule, ask for the change, and check the preview. Apply. Net: two hundred. The table, buttons, and chart stay put.
 
-## Sound direction and provenance
+**close** · 95.57–104.43s
 
-- Narration: Microsoft Edge TTS voice `en-US-AriaNeural`, normal rate, via [edge-tts](https://github.com/rany2/edge-tts). The authored public script is sent only by an explicit generation command. No personal voice imitation or credential is used. Previously tested Thai narration is not included in this export.
-- Effect sounds are synthesized locally in [mix-audio.py](motion/mix-audio.py): short quiet keys during visible typing, soft send swishes, discrete review/apply clicks, and a gentle tonal arrival when a tool becomes usable. The Coffee click is distinct. Pen/contact sounds support the opening. No downloaded sound library or generated music.
-- Narration stays centered; subtle effect positioning follows the action. No continuous music bed. Normalize the final mix to approximately-16LUFS with true-peak target-1.5dBTP; inspect actual output before reporting measured levels.
-- Cached audio is used for ordinary rendering; no TTS call occurs during render. Optional English captions come from word-boundary timing and remain selectable, not forced over the interface.
+Start with what you need. Use it. Change it. Keep going. Tabletop. Tools that adapt to you.
 
-## Production prompt
+## Direction for the voice
 
-```text
-Revise the existing Tabletop film with authored React/SVG/CSS scenes. Use the supplied English narration and action cues. Let the story breathe for84.7seconds at30fps; do not force60seconds. Show a pen writing real order entries and the manual tally burden, then slide into the digital canvas without morphing objects. Keep Tabletop's original logo and loader animation.
+The user rejected Aria and the Emma/Andrew auditions. They liked the energetic ElevenLabs Liam direction and requested a female voice; Laura follows that direction. Use a curious, warm storyteller, with energy on the reversal and action words. Vary pace and emphasis. Do not shout every line or accelerate a flat reading. Delivery tags belong to synthesis only, not captions. API credentials remain in ignored local configuration and are never included in the asset package.
 
-Show five explicit typed requests on the same canvas: sales table, quick-sale buttons, chart,10% discount, change selected rule to20%. Explain why the seller needs each change. Align Coffee click and Apply moments to the narration. Keep table values and old tools visible. The quick button must actually update quantity and total in the illustrative animation. Before applying20%, active10%/net225 remains; preview200 is separate. After Apply, net200 and gross250 stay clear.
+Exact text and measured voice windows: [narration-r5.json](motion/narration-r5.json). Word-aligned events, board actions and endcard timing: [timeline.json](motion/timeline.json). Sound effects follow the same events. Cached files allow repeat rendering without provider calls. Captions remain optional.
 
-Use the final cached soundtrack, quiet action SFX and optional English captions. Maintain legible English UI, clear draft/applied states, deliberate pauses and persistent concept/sample disclosure. Deliver H.264/AAC MP4, poster, eight final-MP4 stills, captions, source and verification. No productAPI, production mutation, AI image/video generation, or private data. Keep rootREADME and deployed homepage unchanged.
-```
+## Picture and sound acceptance
 
-## Verification boundaries
+Inspect before/during/after frames for the pen grip, hammer handle, each chair addition, software friction, the Tabletop reversal, every typed request, tool arrival and applied result. The completed chair must remain physically legible. Quick-sale buttons must exist before Coffee is clicked. A complete request must be readable before Send. The20% proposal must remain separate from the active10% rule until Apply. Final frame: white and logo only.
 
-Verify timing against the actual decoded audio, all video/audio frames, voice-window overlap, final loudness/peak, typing/SFX intervals, request/result pairs and Coffee/20% changes. Inspect the intro, transition and completed board. Technical checks and team review do not establish first-time viewer comprehension or prove real product behavior. A human listening pass remains distinct from waveform/metadata checks.
-
-A separate product proof clip would need real prompts, real actions and readback/reload evidence. Do not present this illustration as that proof.
+Check speech against the script, full decode, measured levels, safe margins, frame/cue order, and clean ending. Technical audio checks do not certify naturalness. User feedback on audition direction is separate from full-film listening and first-time comprehension. The example is authored illustrative data, not a recording of product behavior.

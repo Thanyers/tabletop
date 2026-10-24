@@ -1,3 +1,14 @@
+# F077 — Revision5 verification in progress
+
+24October2026 · Node22.23.2 · Python3.12 · English-first homepage and revised concept film
+
+- User accepted the website design and requested English as its base. Fresh browser load shows English title/lang/body, controls and dynamic sample text; Thai switch still works. English first request→review→apply produces225.
+- User rejected R4 story opening and voice, then Emma/Andrew auditions. ElevenLabs Liam direction accepted with female requested; Laura chosen, all10segments generated and decoded. Measured windows total104.433s/3133frames before final visual review.
+- Actual homepage source integration is authorized in this revision. It is not a production release/deploy request.
+- Picture/word match, final render/mix, homepage build/browser and independent review: IN PROGRESS. Earlier revision results below are historical and do not pass these new checks.
+
+## Revision4 evidence (historical)
+
 # F077 — ผลตรวจรอบ4: English narration + action sound
 
 24 ตุลาคม2026 · Node22.23.2 · Python3.12 · English-first · ความยาวตามเรื่อง ไม่บังคับ60s
