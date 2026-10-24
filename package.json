@@ -73,10 +73,18 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "8.72.0",
     "vite": "^6.3.0",
-    "vitest": "4.1.11",
+    "vitest": "4.1.12",
     "wrangler": "4.151.1"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": "eslint"
+  },
+  "overrides": {
+    "miniflare": {
+      "undici": "7.30.1"
+    },
+    "@cloudflare/vitest-plugin": {
+      "zod": "4.6.7"
+    }
   }
 }
