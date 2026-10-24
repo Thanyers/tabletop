@@ -218,7 +218,8 @@ validated by a strict pattern; the content is not in SQL. `server/bootstrap.ts:1
 One commit writes **current state + one full snapshot + one event + one receipt + one outbox row** (§2.3,
 §5). Rows accumulate until a reset (Room) or a reset/expiry (Node). Consequently:
 
-- Stored bytes grow with `commits × snapshot size`, not with the number of visible runs, records or images.
+- Stored bytes grow with `commits × snapshot size`. Caps on the number of visible runs, records or images do
+  not bound that volume.
 - `room_snapshots`/`snapshots` and receipts both scale with state size, because receipts store the full
   response and events store their payload.
 - Delivered outbox rows and revoked model jobs are retained, so they also grow per commit/job.
@@ -259,7 +260,7 @@ identical.
 4. Rewrite `model_jobs` rows with `epoch < new epoch` to `status = 'revoked'`, `revoked_at` set, and scrub
    `data` to `{"kind":"table-assistant","failure":"ROOM_RESET"}` for assistant jobs or `{}` otherwise.
 5. Delete **all** `room_memberships` rows and insert the reset owner at the new epoch.
-6. Write the new workspace row, one snapshot, one event, the reset receipt and one outbox row.
+6. Update the workspace row, then write one snapshot, one event, the reset receipt and one outbox row.
 
 `room_artifact_cleanup` rows are not deleted by the reset; they are left for a consumer. At this commit
 `listPendingArtifactCleanup` has **no caller in `cloudflare/`**; only the Node `bootstrap.ts` drains its queue.
@@ -278,7 +279,8 @@ would then accumulate rows.
 4. Delete sessions bound to the workspace except the resetting session token
    (`server/repository.ts:959-963`).
 5. Rewrite `model_jobs` for `epoch < new epoch` to `revoked` with `data = '{}'` (§ above).
-6. Insert the reset owner membership, then write the new workspace row, snapshot, event, receipt and outbox row.
+6. Insert the reset owner membership, then update the workspace row and write the snapshot, event, receipt and
+   outbox row.
 
 ### Expiry
 
@@ -375,8 +377,10 @@ A restore should carry at least:
 
 - Exactly one `room_workspaces` row per room; its `epoch`/`revision`/`state_hash` must match the snapshot for
   that revision.
-- For every retained receipt, an event with the same `event_id` exists in the same `(workspace, epoch)`; every
-  event sequence is unique and dense enough that `MAX + 1` is the next sequence.
+- For every retained pre-reset receipt, an event with the same `event_id` exists in the same
+  `(workspace, epoch)`. The reset receipt is the explicit exception: its receipt row keeps the pre-reset epoch
+  while its event is written in the new epoch, so a restore must identify it rather than reject the pair as
+  corrupt. Every event sequence is unique and dense enough that `MAX + 1` is the next sequence.
 - `room_identity.room_id` is the room being restored, or the restore target is empty.
 - No `billing_jobs` row with a charged or settled outcome may be replayed to a dispatchable state. Billing
   restore must never lead to dispatching an already-charged request twice; `uncertain` is the correct
