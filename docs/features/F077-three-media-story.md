@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` — รอบ 5 ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
+| สถานะ | `review` — รอบ 5 ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชันที่คาด | เอกสารและสื่อร่าง; ไม่มี production release |
+| เวอร์ชันที่คาด | homepage และสื่อร่าง; ไม่มี production release |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 |
 
 ## ทำไม
@@ -46,8 +46,8 @@
 
 [แผนและเปรียบเทียบของเดิม](../narrative/F077/README.md) · [หน้า preview](../narrative/F077/review.html) · [copy หน้าเว็บ](../narrative/F077/landing-copy.md) · [README ร่าง](../narrative/F077/readme-draft.md) · [video brief/prompt](../narrative/F077/video-brief.md) · [ผลตรวจ](../narrative/F077/verification.md)
 
-รอบ 4 มี MP4 ภาษาอังกฤษพร้อมเสียงบรรยายสังเคราะห์และเสียงการกระทำ 84.7 วินาที 1280×720/30fps พร้อม captions, poster, ภาพนิ่ง 8 ฉาก และ source ที่ render ซ้ำได้จากเสียง cache ใช้ logo/loader เดิม เปิดด้วยปากกาจดออร์เดอร์และแก้ยอด ก่อนเลื่อนเข้าสู่ canvas ทุกเครื่องมือเกิดหลังคนขายพิมพ์คำขอ: จดขาย → ปุ่มขายเร็ว → กราฟ → ส่วนลด10% → แก้กฎเดิม20% ภาพและ sound effects สร้างด้วยโค้ดทั้งหมด
+รอบ 5 ใช้บทอังกฤษประมาณ 104.4 วินาที: เครื่องมือปรับเพื่อคน → software friction → Tabletop → คนขายค่อย ๆ พิมพ์ขอเครื่องมือเพิ่มและใช้ต่อบนโต๊ะเดิม เสียงหญิง Laura เป็นทิศทางที่ผู้ใช้ยอมรับ โลโก้และ loader motion มาจาก repo; outro พื้นขาวและโลโก้เท่านั้น ภาพถ่ายมี credits/license; ไม่มี AI สร้างวิดีโอหรือภาพ
 
-หน้าเว็บร่าง TH/EN และ README ใช้เรื่องเดียวกัน โดยไม่อ้างเป็น product runtime proof หน้า preview เล่นภาพยนตร์อังกฤษพร้อม optional caption ได้
+หน้า homepage จริงใช้ดีไซน์ที่ยอมรับและ English เป็นฐาน บอร์ดตัวอย่างทำงานใน browser โดยไม่เรียก AI หรือบันทึกข้อมูล runtime มีส่งคำขอ → Review → Apply ครบห้าบท; ข้อมูลเดิมและยอดที่ใช้อยู่ไม่เปลี่ยนระหว่างตรวจร่างส่วนลด README ยังอยู่ในชุดร่าง
 
-Node22.23.2/Python3.12/FFmpeg8.1.2: render/decode2541frames; voicecache8/8และช่วงเสียง8/8; causalcuechains5/5; VTT22ช่วง; internallinks70/70; publicscan876files/0findings; changelog4fragments; whitespaceผ่าน; independentaudio/source reviewไม่มีblocker Browserเล่นถึง84.7sและreplay/pauseได้ ไม่มีmediaerror MainตรวจภาพสำคัญจากMP4 ผลUIgateและinteraction5บทของรอบ3คงเป็นhistorical ไม่ได้รันซ้ำเพราะรอบนี้ไม่แก้logicหน้าเว็บ ยังไม่ได้humanlistening/comprehensionหรือเปิดCCผ่านplayer รายละเอียดใน verification
+สถานะการตรวจและข้อจำกัดล่าสุดอยู่ใน [verification](../narrative/F077/verification.md) ผลของรอบ 4 เก็บเป็นประวัติ ไม่ใช่ผลรับรองรอบ 5

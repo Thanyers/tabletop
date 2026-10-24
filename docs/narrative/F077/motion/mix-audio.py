@@ -43,7 +43,7 @@ def stamp(seconds):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ffmpeg', default='ffmpeg')
-    parser.add_argument('--script', default='narration.json')
+    parser.add_argument('--script', default='narration-r5.json')
     args = parser.parse_args()
     script = json.loads((HERE / args.script).read_text(encoding='utf-8'))
     cues = json.loads((HERE / 'sound-cues.json').read_text(encoding='utf-8'))

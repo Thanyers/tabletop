@@ -30,6 +30,7 @@ const cueSpec = {
   'reversal.review': ['reversal', 'Review', 'start', 0.57],
   'reversal.apply': ['reversal', 'Put', 'start', 0.67],
   'reversal.canvas': ['reversal', 'canvas', 'start', 0.75],
+  'reversal.keepShaping': ['reversal', 'Then', 'start', 0.81],
   'table.typeStart': ['table', 'Type', 'start', 0.26],
   'table.send': ['table', 'and', 'end', 0.48],
   'table.review': ['table', 'Review', 'start', 0.57],
@@ -41,7 +42,7 @@ const cueSpec = {
   'quick.apply': ['quick-use', 'Apply', 'start', 0.17],
   'quick.click': ['quick-use', 'Coffee', 'start', 0.31],
   'quick.result': ['quick-use', 'updates', 'start', 0.67],
-  'chart.typeStart': ['chart', 'Add', 'start', 0.18],
+  'chart.typeStart': ['chart', "What's", 'start', 0.02],
   'chart.send': ['chart', 'chart', 'end', 0.31],
   'chart.review': ['chart', 'Review', 'start', 0.39],
   'chart.apply': ['chart', 'apply', 'start', 0.48],
@@ -52,7 +53,6 @@ const cueSpec = {
   'discount10.apply': ['discount10', 'apply', 'start', 0.61],
   'discount10.result': ['discount10', 'Net', 'start', 0.78],
   'discount20.select': ['discount20', 'Select', 'start', 0.29],
-  'discount20.typeStart': ['discount20', 'ask', 'start', 0.39],
   'discount20.send': ['discount20', 'change', 'end', 0.49],
   'discount20.review': ['discount20', 'check', 'start', 0.62],
   'discount20.apply': ['discount20', 'Apply', 'start', 0.73],
@@ -127,13 +127,19 @@ const cues = Object.fromEntries(Object.entries(cueSpec).map(([name, [segment, to
   name,
   findWord(segment, token, edge, fallback),
 ]));
+const frameAfter = (frame, amount) => Math.min(narration.durationFrames - 1, frame + amount);
 // The photographed writing hand is the opening visual and stays in view as the
 // narration names the first tool; only its grip highlight waits for that word.
 cues['tools.pen.arrive'] = segmentById.get('tools').startFrame;
+// Start the last prompt just after the saved rule is selected so it has a
+// natural typing window while the narrator describes the change.
+cues['discount20.typeStart'] = frameAfter(cues['discount20.select'], 18);
 // The quick-sale buttons must be in place before the later, narrated click.
-cues['quick.buttonsReady'] = cues['quick.apply'] + 18;
-cues['quick.salesUpdated'] = cues['quick.result'];
-const frameAfter = (frame, amount) => Math.min(narration.durationFrames - 1, frame + amount);
+cues['quick.buttonsReady'] = cues['quick.apply'] + 12;
+// Let the buttons finish settling as the narrator reaches "Coffee", then
+// register the click and update the same table a short beat later.
+cues['quick.click'] = frameAfter(cues['quick.click'], 8);
+cues['quick.salesUpdated'] = frameAfter(cues['quick.click'], 10);
 const request = (id, message, title, detail, typeStartCue, sendCue, reviewCue, applyCue, resultCue, options = {}) => {
   const { minimumResultAfterApply = 24, ...requestOptions } = options;
   const typeStart = cues[typeStartCue];
@@ -158,11 +164,11 @@ const request = (id, message, title, detail, typeStartCue, sendCue, reviewCue, a
 };
 
 const requests = [
-  request('table', 'Make me a sales table for coffee and cake.', 'Sales table · coffee + cake', 'Coffee and cake with quantities, prices, and line totals.', 'table.typeStart', 'table.send', 'table.review', 'table.apply', 'table.result'),
-  request('quick', 'Add quick-sale buttons.', 'One-click sale buttons', 'Coffee +1 and Cake +1.', 'quick.typeStart', 'quick.send', 'quick.review', 'quick.apply', 'quick.buttonsReady', { minimumResultAfterApply: 12 }),
-  request('chart', 'Add a chart by item.', 'Sales by item', 'Coffee ฿100 · Cake ฿150 from the same rows.', 'chart.typeStart', 'chart.send', 'chart.review', 'chart.apply', 'chart.result'),
-  request('discount10', 'Add a 10% discount.', '10% discount rule', '฿250 × 90% = ฿225 net.', 'discount10.typeStart', 'discount10.send', 'discount10.review', 'discount10.apply', 'discount10.result'),
-  request('discount20', 'Change this rule to 20%.', 'Change the selected rule to 20%', '฿250 × 80% = ฿200 net.', 'discount20.typeStart', 'discount20.send', 'discount20.review', 'discount20.apply', 'discount20.result'),
+  request('table', 'Make me a sales table for coffee and cake.', 'Sales table · coffee + cake', 'Coffee and cake with quantities, prices, and line totals.', 'table.typeStart', 'table.send', 'table.review', 'table.apply', 'table.result', { label: 'Sales table' }),
+  request('quick', 'Add quick-sale buttons.', 'One-click sale buttons', 'Coffee +1 and Cake +1.', 'quick.typeStart', 'quick.send', 'quick.review', 'quick.apply', 'quick.buttonsReady', { minimumResultAfterApply: 12, label: 'Quick-sale buttons' }),
+  request('chart', 'Add a chart.', 'Sales by item', 'Coffee ฿100 · Cake ฿150 from the same rows.', 'chart.typeStart', 'chart.send', 'chart.review', 'chart.apply', 'chart.result', { label: 'Sales chart' }),
+  request('discount10', 'Add a 10% discount.', '10% discount rule', '฿250 × 90% = ฿225 net.', 'discount10.typeStart', 'discount10.send', 'discount10.review', 'discount10.apply', 'discount10.result', { label: '10% discount' }),
+  request('discount20', 'Change this rule to 20%.', 'Change the selected rule to 20%', '฿250 × 80% = ฿200 net.', 'discount20.typeStart', 'discount20.send', 'discount20.review', 'discount20.apply', 'discount20.result', { label: '20% discount' }),
 ];
 const letters = (text) => Array.from(new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text), ({ segment }) => segment);
 for (const item of requests) {
@@ -171,7 +177,12 @@ for (const item of requests) {
   item.typingStep = (item.completeAt - item.typeStart) / item.letters.length;
 }
 
-const boardStart = frameAfter(cues['reversal.canvas'], 12);
+const reversalWords = segmentById.get('reversal').words;
+const lastReversalIt = [...reversalWords].reverse().find((word) =>
+  word.text.toLocaleLowerCase('en').replace(/[^\p{L}\p{N}]/gu, '') === 'it',
+);
+cues['reversal.keepShapingEnd'] = lastReversalIt?.endFrame ?? frameAfter(cues['reversal.keepShaping'], 40);
+const boardStart = frameAfter(cues['reversal.keepShapingEnd'], 6);
 const timeline = {
   fps,
   durationInFrames: narration.durationFrames,
@@ -199,8 +210,9 @@ const soundCues = {
   apply: requests.map(({ apply }) => apply),
   result: requests.map(({ result }) => result),
   coffeeClick: cues['quick.click'],
+  coffeeUpdate: cues['quick.salesUpdated'],
   introPencil: [{ start: cues['tools.pen.arrive'], end: frameAfter(cues['tools.pen.grip'], 20) }],
-  introClicks: [cues['tools.hammer.handle'], cues['tools.chair.backrest'], cues['tools.chair.armrests'], cues['tools.chair.wheels']],
+  introClicks: [cues['tools.hammer.handle'], cues['tools.chair.arrive'], cues['tools.chair.backrest'], cues['tools.chair.armrests'], cues['tools.chair.wheels']],
   transition: [segments[1].startFrame, segments[2].startFrame, boardStart, cues['close.logoStart']],
 };
 

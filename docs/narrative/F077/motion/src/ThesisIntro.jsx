@@ -1,5 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, Img, interpolate, staticFile } from 'remotion';
+import { BrandMark } from './BrandMark.jsx';
 
 const clamp = (frame, start, end) => interpolate(frame, [start, end], [0, 1], {
   extrapolateLeft: 'clamp',
@@ -14,9 +15,9 @@ const rise = (frame, start, end, distance = 24) => ({
 function ChairStage({ frame, cues }) {
   const parts = [
     { id: 'seat', cue: cues['tools.chair.arrive'], mask: 'inset(47% 23% 34% 22%)', label: 'SEAT' },
-    { id: 'backrest', cue: cues['tools.chair.backrest'], mask: 'inset(9% 28% 54% 30%)', label: 'BACKREST' },
+    { id: 'backrest', cue: cues['tools.chair.backrest'], mask: 'inset(9% 28% 46% 30%)', label: 'BACKREST' },
     { id: 'armrests', cue: cues['tools.chair.armrests'], mask: 'inset(43% 12% 38% 10%)', label: 'ARMRESTS' },
-    { id: 'wheels', cue: cues['tools.chair.wheels'], mask: 'inset(78% 2% 2% 18%)', label: 'WHEELS' },
+    { id: 'wheels', cue: cues['tools.chair.wheels'], mask: 'inset(63% 2% 2% 18%)', label: 'WHEELS' },
   ];
   const labelVisible = (cue) => frame >= cue;
   const completeReveal = clamp(frame, cues['tools.chair.wheels'] + 13, cues['tools.chair.wheels'] + 27);
@@ -77,7 +78,7 @@ function ToolsScene({ frame, cues }) {
       <div className="hammer-photo">
         <Img src={staticFile('objects/hammer-hand.jpg')} />
         <span className="hammer-handle-mark" style={{ opacity: handle, transform: `scaleY(${0.7 + handle * 0.3})` }} />
-        <span className="tool-callout tool-callout--hammer" style={rise(frame, cues['tools.hammer.handle'], cues['tools.hammer.handle'] + 12, 8)}>
+      <span className="tool-callout tool-callout--hammer" style={rise(frame, cues['tools.hammer.handle'], cues['tools.hammer.handle'] + 12, 8)}>
           <i />A handle to hold
         </span>
       </div>
@@ -85,7 +86,7 @@ function ToolsScene({ frame, cues }) {
 
     <ChairStage frame={frame} cues={cues} />
     <div className="tools-summary" style={rise(frame, cues['tools.recap'], cues['tools.recap'] + 16, 12)}>
-      <span className="summary-mark"><i /><i /><i /><i /></span>
+      <BrandMark frame={frame - cues['tools.recap']} size={19} staticMark />
       <span>We keep shaping tools around the people who use them.</span>
     </div>
   </AbsoluteFill>;
@@ -147,7 +148,7 @@ function ReversalScene({ frame, cues }) {
       <h1>What if tools could <em>change with you?</em></h1>
     </div>
     <div className="reversal-answer" style={{ opacity: wordmark, transform: `translateY(${(1 - wordmark) * 18}px)` }}>
-      <span className="answer-mark"><i /><i /><i /><i /></span>
+      <BrandMark frame={frame - cues['reversal.brand']} size={48} />
       <div className="answer-name">tabletop<span>.</span></div>
       <div className="answer-steps">
         <span style={{ opacity: clamp(frame, cues['reversal.describe'], cues['reversal.describe'] + 8) }}>Describe</span>
@@ -156,7 +157,7 @@ function ReversalScene({ frame, cues }) {
         <i style={{ opacity: clamp(frame, cues['reversal.review'] + 8, cues['reversal.review'] + 14) }}>→</i>
         <span style={{ opacity: clamp(frame, cues['reversal.apply'], cues['reversal.apply'] + 8) }}>Apply</span>
         <i style={{ opacity: clamp(frame, cues['reversal.apply'] + 8, cues['reversal.apply'] + 14) }}>→</i>
-        <b style={{ opacity: clamp(frame, cues['reversal.canvas'], cues['reversal.canvas'] + 8) }}>Keep shaping</b>
+        <b style={{ opacity: clamp(frame, cues['reversal.keepShaping'], cues['reversal.keepShaping'] + 8) }}>Keep shaping</b>
       </div>
     </div>
   </AbsoluteFill>;

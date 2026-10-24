@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowRight, Check, RotateCcw, Send } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { LandingLanguage } from './landing-copy';
 import './narrative-sales-demo.css';
 
@@ -72,6 +72,23 @@ const chapterNames: Record<LandingLanguage, { title: string; detail: string }[]>
     { title: 'โปรช่วงบ่าย', detail: 'ส่วนลด 10%' },
     { title: 'ปรับกฎเดิม', detail: '10% → 20%' },
   ],
+};
+
+const chapterContexts: Record<LandingLanguage, Record<Chapter, string>> = {
+  en: {
+    1: 'Start with coffee and cake sales.',
+    2: 'It is busy at the counter; entry takes too long.',
+    3: 'I want to see which item sells more.',
+    4: 'Try an afternoon offer.',
+    5: 'The existing discount rule needs an update.',
+  },
+  th: {
+    1: 'เริ่มจากรายการขายกาแฟและเค้ก',
+    2: 'ช่วงร้านยุ่ง กรอกยอดไม่ทัน',
+    3: 'อยากรู้ว่าสินค้าไหนขายดีกว่า',
+    4: 'ลองโปรช่วงบ่าย',
+    5: 'อยากปรับกฎส่วนลดเดิม',
+  },
 };
 
 function formatAmount(amount: number): string {
@@ -177,6 +194,22 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
     setState((current) => ({ ...current, phase: 'sent', requestIsPreset: true, notice: 'sent' }));
   };
 
+  const showRequestNow = () => {
+    if (state.phase !== 'typing') return;
+    typeToken.current += 1;
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    focusAfterUpdate.current = () => sendRef.current?.focus();
+    setState((current) => ({ ...current, request: requests[language][current.chapter], phase: 'ready', notice: 'ready' }));
+  };
+
+  const handleRequestKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Escape' && state.phase === 'typing') {
+      event.preventDefault();
+      showRequestNow();
+    }
+  };
+
   const reviewDraft = () => {
     if (state.phase !== 'sent') return;
     focusAfterUpdate.current = () => applyRef.current?.focus();
@@ -271,7 +304,7 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
 
     <div className="tt-sales-demo__canvas" data-chapter={state.chapter}>
       <div className="tt-sales-demo__canvas-head">
-        <div className="tt-sales-demo__canvas-name"><span className="tt-sales-demo__canvas-mark" aria-hidden="true"><i /><i /><i /><i /></span>{text('Today’s sales', 'ยอดขายวันนี้')}</div>
+        <div className="tt-sales-demo__canvas-name">{text('Today’s sales', 'ยอดขายวันนี้')}</div>
         <span className="tt-sales-demo__canvas-state"><span aria-hidden="true" />{state.tableApplied ? text('On canvas', 'อยู่บนโต๊ะ') : tableVisible ? text('Draft · review', 'ร่าง · รอตรวจ') : text('Ready to begin', 'พร้อมเริ่ม')}</span>
       </div>
 
@@ -279,7 +312,8 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
         <div className="tt-sales-demo__request-heading">
           <div>
             <p>{text('SAMPLE REQUEST', 'คำขอตัวอย่าง')}</p>
-            <span>{text('Choose a chapter, then send the sample request yourself.', 'เลือกบท แล้วส่งคำขอตัวอย่างด้วยตัวเอง')}</span>
+          <span>{text('Choose a chapter, then send the sample request yourself.', 'เลือกบท แล้วส่งคำขอตัวอย่างด้วยตัวเอง')}</span>
+          <strong className="tt-sales-demo__request-context">{chapterContexts[language][state.chapter]}</strong>
           </div>
           <span className="tt-sales-demo__local-label">{text('LOCAL ILLUSTRATION', 'ภาพจำลอง')}</span>
         </div>
@@ -290,14 +324,19 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
           rows={2}
           readOnly
           disabled={state.phase === 'idle'}
+          placeholder={state.phase === 'idle' ? text('Choose a chapter below to start typing a request.', 'เลือกบทด้านล่างเพื่อเริ่มพิมพ์คำขอ') : ''}
           value={state.request}
           aria-describedby="tt-sales-request-note"
+          onKeyDown={handleRequestKeyDown}
         />
         <div className="tt-sales-demo__request-foot">
           <p id="tt-sales-request-note">{text('The selected chapter controls the illustration · text is not interpreted.', 'บทที่เลือกกำหนดภาพจำลอง · ข้อความไม่ได้ถูกประมวลผล')}</p>
-          <button className="tt-sales-demo__send" ref={sendRef} type="button" onClick={sendRequest} disabled={state.phase !== 'ready'}>
-            <Send size={15} aria-hidden="true" />{text('Send sample request', 'ส่งคำขอตัวอย่าง')}
-          </button>
+          <div className="tt-sales-demo__request-buttons">
+            {state.phase === 'typing' && <button className="tt-sales-demo__show-now" type="button" onClick={showRequestNow}>{text('Show request now', 'แสดงข้อความทันที')}</button>}
+            <button className="tt-sales-demo__send" ref={sendRef} type="button" onClick={sendRequest} disabled={state.phase !== 'ready'}>
+              <Send size={15} aria-hidden="true" />{text('Send sample request', 'ส่งคำขอตัวอย่าง')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -332,7 +371,7 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
               </table>
             </div>
             {(state.quickActionsApplied || quickPreview) && <div className="tt-sales-demo__quick-actions">
-              <p>{text('Quick-add during service', 'เพิ่มยอดขายขณะให้บริการ')}</p>
+              <p><span>{text('Quick-add during service', 'เพิ่มยอดขายขณะให้บริการ')}</span>{quickPreview && <small>{text('Draft · review', 'ร่าง · รอตรวจ')}</small>}</p>
               <div>
                 <button ref={coffeeRef} type="button" onClick={() => addSale('coffee')} disabled={!state.quickActionsApplied} aria-label={text('Add one coffee', 'เพิ่มกาแฟ 1 แก้ว')}><span aria-hidden="true">+</span>{text('Coffee +1', 'กาแฟ +1')}</button>
                 <button type="button" onClick={() => addSale('cake')} disabled={!state.quickActionsApplied} aria-label={text('Add one cake', 'เพิ่มเค้ก 1 ชิ้น')}><span aria-hidden="true">+</span>{text('Cake +1', 'เค้ก +1')}</button>
@@ -366,7 +405,7 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
 
           <div className="tt-sales-demo__branches">
             {chartVisible && <article className="tt-sales-demo__node tt-sales-demo__chart">
-              <p className="tt-sales-demo__node-label">{text('FROM THE SAME ROWS', 'จากรายการเดียวกัน')}</p>
+              <p className="tt-sales-demo__node-label">{text('FROM THE SAME ROWS', 'จากรายการเดียวกัน')}{pending(3) && <span>{text('Draft · review', 'ร่าง · รอตรวจ')}</span>}</p>
               <h3>{text('Sales by item', 'ยอดขายแยกตามสินค้า')}</h3>
               <div role="group" aria-label={text('Sales by item chart', 'กราฟยอดขายแยกตามสินค้า')}>
                 <div className="tt-sales-demo__chart-row"><span>{text('Coffee', 'กาแฟ')}</span><span className="tt-sales-demo__bar"><i style={{ width: percentage(coffeeTotal) }} /></span><strong>{formatAmount(coffeeTotal)}</strong></div>

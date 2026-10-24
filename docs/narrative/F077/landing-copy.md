@@ -1,6 +1,6 @@
 # หน้าเว็บ — copy draft TH / EN
 
-ใช้กับโครง `PublicWelcome` เดิมตาม [แผน](README.md) ข้อความในตารางคือ copy สำหรับผู้ชม; หมายเหตุการจัดวางไม่ขึ้นหน้าเว็บ
+รอบ 5: homepage ใช้ English เป็นฐานและมีปุ่มไทย ข้อความ runtime ล่าสุดอยู่ใน `src/tabletop/ui/landing-copy.ts`; เอกสารนี้เก็บชุดร่างตาม [แผน](README.md) ข้อความในตารางคือ copy สำหรับผู้ชม; หมายเหตุการจัดวางไม่ขึ้นหน้าเว็บ
 
 ## Header และ Hero
 
@@ -12,7 +12,7 @@
 | Promise | บอกโจทย์ แล้วให้ AI ช่วยร่างตาราง แบบฟอร์ม ปุ่ม กราฟ และวิธีคำนวณบนโต๊ะเดียวกัน คุณตรวจและเปิดใช้ แล้วปรับต่อได้เมื่องานเปลี่ยน | Describe what you want to do. AI helps draft tables, forms, buttons, charts, and calculations on one canvas. Review them, put them to use, and adapt them as your work changes. |
 | Support | เริ่มจากข้อความได้เลย เพิ่มข้อมูลเมื่อพร้อม | Start with words. Add data when you are ready. |
 | Primary CTA | เริ่มโต๊ะของคุณ | Start your table |
-| Secondary CTA | ดูเรื่องราวใน 60 วินาที | Meet Tabletop in 60 seconds |
+| Secondary CTA | ดูเรื่องราวพร้อมเสียงบรรยาย | Watch the narrated story |
 | Video caption | ภาพเคลื่อนไหวอธิบายแนวคิด · ข้อมูลตัวอย่าง | Concept animation · illustrative data |
 | Video alt / poster | เก้าอี้ ปากกา และค้อนวางเพิ่มทีละชิ้น ก่อนตัดเข้าสู่โต๊ะยอดขายที่ค่อย ๆ เพิ่มและปรับเครื่องมือ | A chair, pen, and hammer arrive one by one, followed by a sales canvas that gains tools and adapts to data and rules. |
 
@@ -24,7 +24,7 @@ Hero รอบ 3 ใช้บอร์ดตัวอย่างที่กด
 | --- | --- | --- |
 | Eyebrow | เครื่องมือที่พอดี | TOOLS THAT FIT |
 | H2 | เครื่องมือที่พอดี ให้คุณอยู่กับสิ่งที่อยากทำ | Good tools keep you close to what you want to do. |
-| Body | เก้าอี้ให้เรานั่งคิด ปากกาให้ความคิดมีรูปร่าง ค้อนช่วยให้มันเป็นจริง เราอยากให้ซอฟต์แวร์ช่วยให้เราอยู่กับงานตรงหน้าแบบนั้น และปรับต่อได้เมื่องานเปลี่ยน | A chair gives you a place to think. A pen gives an idea a shape. A hammer helps you build it. We want software to keep you close to your work, and adapt as that work changes. |
+| Body | ปากกามีส่วนจับที่พอดีมือ ค้อนมีด้ามให้ควบคุม เก้าอี้มีพนัก แขน และล้อ เราปรับเครื่องมือให้เข้ากับคน Tabletop ใช้แนวคิดเดียวกันกับซอฟต์แวร์ที่เปลี่ยนตามงาน | A comfortable pen grip, a balanced hammer handle, a chair back with arms and wheels: each makes the tool fit the person using it. Tabletop is built on the same idea—tools can change as your work changes. |
 | Bridge | แต่งานเปลี่ยนได้ เครื่องมือจึงควรมีที่ให้ปรับตาม | Work changes. The tools should have room to change with it. |
 | Belief | เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน | The best tool is the one you don't have to think about. |
 
@@ -83,4 +83,4 @@ Hero มี composer เห็นการพิมพ์คำขอก่อ�
 | Scope | เครื่องมือทำงานภายในส่วนประกอบและระบบคำนวณที่รองรับ สิ่งที่ AI ร่างอาจต้องปรับก่อนใช้ | Tools work within supported components and compute runtimes. AI drafts may need adjustment before use. |
 | Thesis | Work defines what software becomes. | Work defines what software becomes. |
 
-คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอรอบ4ใช้Englishทั้งภาพ/เสียง พร้อมcaptionENที่เลือกเปิดได้; ไม่ล็อกความยาว60s
+คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอรอบ5ใช้Englishทั้งภาพ/เสียง พร้อมcaptionENที่เลือกเปิดได้; ไม่ล็อกความยาว60s

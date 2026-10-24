@@ -33,10 +33,12 @@ visual and sound cues, typing, review, apply, and result timing.
 | 01:35.57–01:39.87 | Hold the completed canvas while the closing narration lands. |
 | 01:39.87–01:44.43 | Fade to the white logo-only end card and hold. |
 
-The coffee click at frame 1,664 follows the quick-sale buttons settling at frame
-1,648; the Coffee quantity and gross total update later at frame 1,745. Request
-letters use measured word-alignment timing and grapheme-safe steps. Review and
-Apply remain distinct human-visible states.
+The “Keep shaping” step begins with the spoken “Then” and remains through the
+end of that phrase; the canvas begins at frame 1,023. The quick-sale buttons
+finish entering at frame 1,660, the Coffee click lands at frame 1,672, and the
+Coffee quantity and gross total update at frame 1,682. Request letters use
+measured word-alignment timing and grapheme-safe steps, with an eight-frame
+hold before Send. Review and Apply remain distinct human-visible states.
 
 ## Brand and media provenance
 
@@ -72,7 +74,7 @@ npm run render
 To render selected source preview frames without rendering the full film:
 
 ```powershell
-node render.mjs --preview 155 272 660 850 1295 1648 1664 1745 1986 2708 2996
+node render.mjs --preview 132 192 216 245 272 675 985 1023 1187 1222 1295 1660 1672 1682 1918 1944 1986 2249 2275 2376 2632 2658 2708 2996
 ```
 
 Preview images are written to the ignored `.remotion-bundle/previews/`
@@ -89,3 +91,5 @@ To re-extract stills from the existing MP4 without rendering video again:
 ```powershell
 node render.mjs --extract-stills-only
 ```
+
+R5 Laura narration was generated while the project account had an active paid Starter plan (verified before synthesis). No account identifiers or credentials are included. The cached narration accompanies the authored concept film; ordinary rendering makes no provider requests.

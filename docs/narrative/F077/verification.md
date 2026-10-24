@@ -1,11 +1,40 @@
-# F077 — Revision5 verification in progress
+# F077 — Revision 5 verification
 
-24October2026 · Node22.23.2 · Python3.12 · English-first homepage and revised concept film
+24 October 2026 · Node 22.23.2 · Python 3.12 · FFmpeg 8.1.2
 
-- User accepted the website design and requested English as its base. Fresh browser load shows English title/lang/body, controls and dynamic sample text; Thai switch still works. English first request→review→apply produces225.
-- User rejected R4 story opening and voice, then Emma/Andrew auditions. ElevenLabs Liam direction accepted with female requested; Laura chosen, all10segments generated and decoded. Measured windows total104.433s/3133frames before final visual review.
-- Actual homepage source integration is authorized in this revision. It is not a production release/deploy request.
-- Picture/word match, final render/mix, homepage build/browser and independent review: IN PROGRESS. Earlier revision results below are historical and do not pass these new checks.
+## Candidate and scope
+
+The accepted website design is now in the actual shared homepage, English by default with a Thai switch. The film restores physical tools → software friction → Tabletop → the evolving café canvas. Laura is the female voice direction accepted by the user. The final lockup is white with the original logo only. README remains a draft; no production release/deploy was requested or performed.
+
+- MP4: [concept film](media/tabletop-narrative-draft.mp4), 1280×720, 30 fps, 3,133 frames, 104.433333 seconds, H.264/AAC stereo 48 kHz, 4,455,384 bytes.
+- SHA-256: `901380ADBFB2096F96C8B73098990D7A523F7F9ECA58364AFFB780FD8205672C`.
+- Homepage media copies live under `public/narrative/`. The authored film and sample board are explanatory illustrations, not a recording or proof of successful AI execution.
+- Photographs and adaptations: [credits/license](motion/public/objects/SOURCES.md). Laura was generated while the project had an active paid Starter plan, verified before synthesis. Credentials remain ignored and absent from tracked files.
+
+## Checks
+
+| Check | Result | Evidence and limit |
+| --- | --- | --- |
+| Fresh dependencies | PASS | `npm ci --no-fund`: 327 packages audited, 0 vulnerabilities. An initial test attempt with stale installed dependencies was stopped and is not counted. |
+| Unit/SQL | PASS | `npm test -- --reporter=dot`: 927 passed, 5 skipped; 123 files passed, 2 skipped. Skips remain skips. |
+| Lint | PASS | `npm run lint`: 0 errors, 111 existing warnings; scoped homepage lint also passed after review fixes. |
+| App build/types | PASS | `npm run build`: public demo 9 scenarios/55 steps, three typecheck configurations and Vite build. Final `npx vite build` packages the media. Existing chunk-size/dependency annotation warnings remain. |
+| Worker tests/bundle | PASS | `npm run test:cloudflare`: 204/204; `npm run build:cloudflare` dry run passes. An earlier run before building assets failed 3 asset tests; rerun after build passed all 204. |
+| Voice/cache/alignment | PASS | All 10 local MP3s decode and fit measured windows. 58 VTT cues have no overlap; delivery directions are excluded. Ordinary mix/render uses cache without provider calls. |
+| Mix and encoded audio | PASS | `python docs/narrative/F077/motion/mix-audio.py`; 10/10 windows, no premix clipping. Final MP4 measured -15.78 LUFS integrated / -1.51 dBTP. |
+| Cue causality | PASS | All 5 chains preserve typing → complete text hold ≥8 frames → Send → draft → Review → Apply → result. Buttons settle 12 frames before Coffee click; rows update 10 frames after click. |
+| Render/decode | PASS | `node render.mjs`, then full FFmpeg decode. Duration matches soundtrack within one frame. Source syntax checks passed. |
+| Picture/script review | PASS for inspected frames | Main inspected physical-tool stages, corrected grip highlight, hammer callout clipping, chair mask gaps, reversal steps, completed typed requests, quick-sale update, 20% pending/10% active, and white logo ending. Worker inspected all extracted stills. |
+| Actual homepage flow | PASS | Browser exercised all 5 chapters with mouse and again with keyboard: 225 → Coffee +1/gross250 → chart → 10% net225 → pending20% retains225 → Apply net200. Buttons remain disabled before Apply. |
+| English/Thai and motion | PASS | Fresh English content, Thai/English keyboard switch, immediate full request under reduced motion, original animation retained with reduced-motion poster. |
+| Responsive populated states | PASS | 280/320/414/1280 CSS-pixel views: document width equals viewport for initial and populated boards. Fixed intrinsic table overflow and narrow-screen heading/label stacking found during review. |
+| Landmarks | PASS | One focusable main; global header/footer outside main; home scroll respects reduced motion. |
+| Independent review | PASS, no open source blocker | Audio/credential/rights review and homepage state/auth/route/language review; landmark and reduced-motion findings fixed and rechecked. Final media targets supplied after render. |
+| Hosted CI | PENDING | Read the latest PR commit checks; historical CI does not certify this candidate. |
+| Human full-film listening/comprehension | NOT RUN | The user approved the voice direction. Automated audio checks and picture review do not establish naturalness or first-time audience understanding. |
+| Production release/deploy | NOT RUN | Work stays on the F077 branch/draft PR. |
+
+The initial app preview lacked its local API; starting the repository's loopback local API resolved it. Mobile screenshots required the browser's mobile viewport override and full-page capture path to avoid a display-scaling capture artifact; actual DOM widths were checked separately. This is not a full accessibility audit or a new hosted product acceptance run.
 
 ## Revision4 evidence (historical)
 

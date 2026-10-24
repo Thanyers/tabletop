@@ -13,7 +13,7 @@
 }
 .thesis-kicker { display: block; color: #667268; font-size: 13px; font-weight: 800; letter-spacing: .16em; }
 .thesis-headline { position: absolute; z-index: 5; left: 72px; top: 45px; }
-.thesis-headline h1, .friction-headline h1, .reversal-question h1 { margin: 9px 0 0; color: #303d3a; font-size: 46px; font-weight: 700; letter-spacing: -.075em; line-height: 1.08; }
+.thesis-headline h1, .friction-headline h1, .reversal-question h1 { margin: 9px 0 0; color: #303d3a; font-size: 46px; font-weight: 700; letter-spacing: -.035em; line-height: 1.08; }
 .thesis-headline h1 em, .friction-headline h1 em, .reversal-question h1 em { color: #356e5d; font-style: normal; }
 .tool-horizon { position: absolute; left: 60px; right: 60px; bottom: 91px; height: 1px; background: linear-gradient(90deg, transparent, #dfe5dc 10%, #dfe5dc 90%, transparent); }
 .physical-card { position: absolute; z-index: 2; color: #303d3a; }
@@ -22,7 +22,7 @@
 .physical-card--pen { left: 65px; top: 177px; width: 354px; height: 407px; }
 .pen-photo { position: relative; width: 100%; height: 286px; overflow: hidden; border: 1px solid #e6e8e1; border-radius: 17px; background: #f7f8f5; box-shadow: 0 12px 26px #303d3a12; }
 .pen-photo > img { width: 100%; height: 100%; object-fit: cover; object-position: 54% 53%; }
-.pen-grip-ring { position: absolute; left: 52%; top: 48%; width: 70px; height: 70px; border: 3px solid #d49a47; border-radius: 50%; box-shadow: 0 0 0 7px #fffdf7a8, 0 3px 14px #303d3a30; transform-origin: center; }
+.pen-grip-ring { position: absolute; left: 45%; top: 31%; width: 70px; height: 70px; border: 3px solid #d49a47; border-radius: 50%; box-shadow: 0 0 0 7px #fffdf7a8, 0 3px 14px #303d3a30; transform-origin: center; }
 .tool-callout { position: absolute; display: flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid #e2e7de; border-radius: 999px; color: #303d3a; background: #fff; box-shadow: 0 4px 12px #303d3a15; font-size: 13px; font-weight: 700; white-space: nowrap; }
 .tool-callout i { width: 7px; height: 7px; border-radius: 50%; background: #356e5d; }
 .tool-callout--pen { left: 40%; bottom: 16px; }
@@ -30,7 +30,7 @@
 .hammer-photo { position: relative; width: 100%; height: 395px; overflow: hidden; border-radius: 16px; background: #fff; }
 .hammer-photo > img { width: 100%; height: 100%; object-fit: contain; object-position: 50% 50%; }
 .hammer-handle-mark { position: absolute; left: 44%; top: 40%; width: 15%; height: 48%; border: 3px solid #d49a47; border-radius: 20px; background: #d49a4718; transform-origin: top center; }
-.tool-callout--hammer { right: -4px; bottom: 33px; }
+.tool-callout--hammer { right: 14px; bottom: 33px; }
 .physical-card--chair { left: 827px; top: 153px; width: 370px; height: 482px; }
 .chair-photo { position: relative; width: 100%; height: 424px; overflow: hidden; background: #fff; }
 .chair-photo-part { position: absolute; inset: 0; overflow: hidden; transform-origin: center; }
@@ -91,8 +91,6 @@
 .reversal-question .thesis-kicker { color: #667268; }
 .reversal-question h1 { margin-top: 16px; font-size: 60px; }
 .reversal-answer { position: absolute; left: 0; right: 0; top: 390px; display: flex; align-items: center; flex-direction: column; }
-.answer-mark { display: grid; grid-template-columns: repeat(2, 21px); gap: 7px; transform: rotate(-5deg); }
-.answer-mark i { width: 21px; height: 21px; border-radius: 5px; background: #243548; }.answer-mark i:nth-child(2) { background: #24796b; }.answer-mark i:nth-child(3) { background: #6f8190; }.answer-mark i:nth-child(4) { border-radius: 50%; background: #d49a47; }
 .answer-name { margin-top: 13px; color: #303d3a; font-size: 47px; font-weight: 800; letter-spacing: -.08em; }
 .answer-name span { color: #356e5d; }
 .answer-steps { display: flex; align-items: center; gap: 13px; margin-top: 22px; color: #667268; font-size: 13px; font-weight: 700; }

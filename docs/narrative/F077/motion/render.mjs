@@ -30,7 +30,7 @@ const stills = [
   [850, 'scene-04.png'],
   [1222, 'scene-05.png'],
   [1745, 'scene-06.png'],
-  [1986, 'scene-07.png'],
+  [2020, 'scene-07.png'],
   [2708, 'scene-08.png'],
 ];
 const previewIndex = process.argv.indexOf('--preview');
