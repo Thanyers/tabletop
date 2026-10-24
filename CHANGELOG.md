@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+## 9.1.3 — 2026-10-24
+
+PATCH: Reorder the homepage and README story and remove redundant public copy. Accepted video and all media remain unchanged; no backend, schema, binding, secret or data changes. Rollback target 9.1.2.
+
+- Reorder the homepage and English README so the tool-adaptation idea and software problem come before the café example; remove repeated slogans and authoring labels while retaining one clear sample note. The accepted film and all media remain unchanged.
+- Record verified production 9.1.2 and close the scoped F077 hero/image correction with browser, motion and publication evidence. Documentation only.
+
 ## 9.1.2 — 2026-10-24
 
 PATCH: Limit homepage corrections to the looping prompt-first hero and realistic individually fitted tool images. No backend, data, schema, binding or secret changes; rollback target 9.1.1.

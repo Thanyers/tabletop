@@ -25,7 +25,7 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
-| F077-T4 | Reorder homepage and README story; remove repetitive or distracting public copy | `review` | Codex · `fix/F077-narrative-order` · public narrative only; accepted film/media preserved |
+| F077-T4 | Reorder homepage and README story; remove repetitive or distracting public copy | `done` | Codex · PR #288 / release #289 · homepage + README live at 9.1.3; deployment remains partial (#291); accepted film unchanged |
 | F077-T3 | Limit homepage correction to a looping prompt-first hero without nested frames, removed hero note and realistic hammer/chair images | `done` | Codex · PR #285, release #286 · production 9.1.2 / abe4aaf |
 | F077-T2 | Apply English README; restore visual hero; show tools adapting to people; remove homepage README navigation | `done` | Codex · PR #280, release #282 · production 9.1.1 / 3f8a06e; release evidence in docs/DEPLOYMENTS.md |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (first group T0–T4) | [F078](docs/features/F078-architecture-improvements.md) |
