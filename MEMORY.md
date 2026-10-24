@@ -5,6 +5,16 @@
 
 ## Lessons
 
+### 2026-10-24 — Accepted homepage copy left stale browser assertions
+- **What happened:** F077 passed fast PR checks but full dev/release validation failed while searching for the previous English homepage heading; the captured page showed the accepted new heading.
+- **Root cause:** the homepage review covered behavior and local illustration but did not update the existing Workers browser contract for English/Thai copy and learning-story markup.
+- **Correct behavior:** when landing copy or structure changes, search the existing browser suites for old strings/selectors, retain auth/language/navigation/reduced-motion assertions, and run the affected suite before release. Do not weaken assertions or change approved copy to satisfy an obsolete expectation.
+
+### 2026-10-24 — Release-cut marker assumed LF line endings
+- **What happened:** the release-cut script reported that CHANGELOG had no Unreleased heading on a Windows checkout, although the heading was present.
+- **Root cause:** its exact marker includes an LF newline and the working file used CRLF.
+- **Correct behavior:** before cutting on Windows, normalize only CHANGELOG line endings to LF, run the standard cut script, and verify the diff preserves all previously cut release sections. No release heading should be added manually as a workaround.
+
 ### 2026-10-24 — Fixing an unclear metaphor erased the product thesis
 - **What happened:** replacing abstract tools with a cafe order-slip intro made F077 open on a use case and lost the original general story; technically valid TTS was judged flat by the user.
 - **Root cause:** optimized local clarity and measured audio timing without preserving the concept-to-problem-to-reversal arc or evaluating spoken delivery.

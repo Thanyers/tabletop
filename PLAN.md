@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `review` | Codex · [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) · รอบ5: กลับสู่tools-adapt-to-peopleก่อนcase; voiceใหม่; white/logo outro;เว็บEnglishdefault; ปรับhomepageจริงตามร่างที่ยอมรับ; READMEยังเป็นร่าง; รอบ6เร่งpaceตามที่ยอมรับและเตรียมreleaseตามคำสั่งผู้ใช้ |
+| F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `doing` | Codex · [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) · รอบ5: กลับสู่tools-adapt-to-peopleก่อนcase; voiceใหม่; white/logo outro;เว็บEnglishdefault; ปรับhomepageจริงตามร่างที่ยอมรับ; READMEยังเป็นร่าง; รอบ6เร่งpaceตามที่ยอมรับและเตรียมreleaseตามคำสั่งผู้ใช้; แก้browsercontractเก่าที่fullCIพบก่อนrelease |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (first group T0–T4) | [F078](docs/features/F078-architecture-improvements.md) |
 | F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
