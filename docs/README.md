@@ -21,6 +21,7 @@
 
 รายละเอียดสถานะรุ่นอยู่ใน [Deployments](DEPLOYMENTS.md) ส่วนผลตรวจร้านกาแฟ แสงและเงา เกมแบ่งน้ำ และลิงก์ CI ที่เคยสรุปบน README ตามได้จาก [Generative Canvas acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md) และ [Release 2.0 acceptance](RELEASE_2_0_ACCEPTANCE.md) ทั้งสองเป็นบันทึกตามรอบตรวจของตัวเอง ไม่ใช่การยืนยันรุ่นปัจจุบัน
 
+- [STORAGE_LIFECYCLE](STORAGE_LIFECYCLE.md): เจ้าของและความหมายของทุก persistent store, โมเดลการเติบโตต่อ commit, semantics ของ reset/expiry ที่ต่างกัน, replay horizon ของ receipt และ recovery manifest/invariant — retention ยังไม่ตัดสิน
 - [GENERATIVE_CANVAS_RUNTIME](GENERATIVE_CANVAS_RUNTIME.md): candidate ที่กำลังทดสอบสำหรับภาพ/สูตร/เครื่องมือใหม่บน Canvas, ทดลองร่าง, layout ร่วมกัน และการค้นบทสนทนาเดิม
 - [REUSABLE_COMPUTE](REUSABLE_COMPUTE.md): โปรแกรม JavaScript/Python ที่เก็บไว้คำนวณซ้ำ, typed input/output, run lineage, Rules และการเตรียม runtime ก่อน release
 - [F066 post-deploy test pack](testing/f066-post-deploy/README_TH.md): 48 เคส พร้อมข้อมูลสมมติ/ผลอ้างอิง; [ผลจริง release9 และตรวจซ้ำถึง9.0.2](testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) แยกจาก template48NOT_RUN และผลrelease8
