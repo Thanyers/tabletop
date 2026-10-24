@@ -1,0 +1,1 @@
+- Add path-selected Worker startup, composer/reference browser, and focused compute integration checks to PRs into `dev`, while preserving the existing full-suite triggers and `main` result reuse.
