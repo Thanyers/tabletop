@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-24 — Focused browser gate exposes an immediate prefill read race
+- **What happened:** the new F078-T3 Linux gate sometimes read `Change this rule` immediately after requesting the exact runtime-switch prompt, while the same code passed other runs.
+- **Root cause:** the test read the textarea before React applied the parent prefill effect. A fixture-only manual hold reproduced the old value and controlled release produced the exact requested prompt.
+- **Correct behavior:** await the exact expected textarea value, then assert the full prompt; preserve reference/onSend/navigation checks. Keep the controlled red/release probe in the synthetic fixture, avoid arbitrary sleeps and do not change production behavior to repair harness timing.
+
 ### 2026-10-24 — npm peer resolver fails while adding narrow dependency overrides
 - **What happened:** npm 10/11 threw an internal `edgesOut` error when regenerating the lockfile for compatible F078-T0 patches; the old lock remained unchanged.
 - **Root cause:** the failure was inside npm's peer-set resolution; the exact internal cause is unverified. The same manifest resolved with npm 12.2.1.

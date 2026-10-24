@@ -31,10 +31,18 @@ new scripts/integration-gate*.mjs; validate.yml; gate tests/docs
 - `npm ci`: passed; npm reported 7 advisories on this base. The separate F078-T0 dependency fix owns those findings; this task did not edit package metadata or the lockfile.
 - `node --test scripts/integration-gate-plan.test.mjs scripts/integration-gate-worker-startup.test.mjs`: 13/13 passed, including malformed-module rejection and the unknown-path default.
 - Focused compute Vitest selection: 54/54 tests across 11 files; Cloudflare compute-runner selection: 7/7.
-- F066 browser harness: passed; no page errors and no horizontal overflow at 280, 320, 390, and 414 px.
+- F066 browser harness: passed normally and with a controlled delayed-prefill barrier; the latter held the old `Change this rule` value, released it, then verified the exact JavaScript prompt. Existing rule-reference and `onSend` assertions passed; no page errors or horizontal overflow at 280, 320, 390, and 414 px.
+- `F066_PREFILL_RACE_MODE=red node tests/ui/f066-rules-browser.mjs`: expected nonzero result at the former immediate prompt assertion, with `observedWhileHeld: "Change this rule"`; the probe screenshot is under ignored `test-results/`, and its diagnostic text is emitted to stdout. The controlled mode distinguishes a stale read from an incorrect final prompt without sleeps or production changes.
+- Diagnosis: GitHub Actions job `40073190268` / run `120810909412` read the textarea before `TableChat`'s `useEffect` applied the new prefill. The browser harness now waits on the exact textarea value before asserting it.
 - `npm run build`: passed; public demo check and all three TypeScript projects passed before Vite build.
 - `npm run build:cloudflare`: passed with Wrangler dry-run; no publish or deploy.
 - `node scripts/integration-gate-worker-startup.mjs`: passed against the built artifact; `/healthz`, `/readyz`, and `/api/capabilities` returned successfully, with model disabled and local migrations applied.
 - Planner CLI: the reserved base and head resolved and produced the expected documentation-only selection; a missing base commit exited nonzero with a fail-closed error.
-- The workflow YAML parsed locally, but no GitHub Actions run was started from this worktree. The Workers Container API smoke is Linux-only in its existing script and was not run on this Windows host; it is selected in CI only when a `compute/` file changes.
-- Branch HEAD at verification: `b6b4f3048974de7d1f11c1c3602c4a87aa1ce962`; implementation remained uncommitted in this worktree as requested. Parent integration must record the resulting candidate commit SHA before review. No production release.
+- The workflow YAML parsed locally, but no GitHub Actions run was started from this worktree. The Workers Container API smoke is Linux-only in its existing script and was not run on this Windows host; it is selected for `compute/` changes and fail-safe all-gate decisions (including workflow/package changes).
+- Re-verification started from branch HEAD `4a40ce30401f851a86cc63d9686deebe6c7d3a18`; the harness follow-up remains uncommitted in this worktree as requested. Parent integration must record the resulting candidate commit SHA before review. No production release.
+
+## Integrated candidate and CI evidence
+
+The reviewed gate implementation is committed in `ab78704` and integrated with dev/dependency prerequisites through `4a40ce3`. After patched `npm ci`, the 13 gate tests and actual Worker startup probe passed again. GitHub Linux job [120810909457](https://github.com/Thanyers/tabletop/actions/runs/40073190268/job/120810909457) passed the focused compute tests, Cloudflare runner tests and selected Container API smoke.
+
+The same CI run exposed an immediate-read race in the existing F066 fixture at the runtime-choice prompt. A query-gated manual prefill barrier reproduced the stale value in red mode; controlled release and normal browser runs passed with the exact full prompt. The browser test now awaits that exact DOM value before asserting it. Reference/onSend/navigation assertions remain, with no production UI change. Independent scoped review found no material findings. The failed CI attempt remains a failure; required validation must pass on the new candidate before merge.

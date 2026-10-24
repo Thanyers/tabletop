@@ -11,12 +11,18 @@ const systemBrowser = process.platform === 'win32'
     process.env.PROGRAMFILES && join(process.env.PROGRAMFILES, 'Microsoft/Edge/Application/msedge.exe'),
   ].find((path) => path && existsSync(path))
   : undefined;
+const prefillRaceMode = process.env.F066_PREFILL_RACE_MODE;
+if (prefillRaceMode && !['red', 'controlled'].includes(prefillRaceMode)) {
+  throw new Error('F066_PREFILL_RACE_MODE must be red or controlled.');
+}
 const browser = await chromium.launch({ headless: true, ...(systemBrowser ? { executablePath: systemBrowser } : {}) });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1050 }, deviceScaleFactor: 1 });
   const failures = [];
   page.on('pageerror', error => failures.push(error.message));
-  await page.goto(pathToFileURL(resolve('tests/ui/f066-rules.html')).href);
+  const fixtureUrl = new URL(pathToFileURL(resolve('tests/ui/f066-rules.html')));
+  if (prefillRaceMode) fixtureUrl.searchParams.set('f066-prefill-race', 'hold');
+  await page.goto(fixtureUrl.href);
   await page.getByRole('heading', { name: 'Weekend market' }).waitFor();
   await page.getByRole('heading', { name: 'Mark an order as paid' }).waitFor();
   await page.getByRole('heading', { name: 'Count orders' }).waitFor();
@@ -86,7 +92,27 @@ try {
   assert.match(await page.locator('.tt-compute-source pre').innerText(), /def run/u);
   await page.locator('.tt-compute-runtime-choice select').selectOption('javascript');
   await page.getByRole('button', { name: 'Ask to switch to JavaScript' }).click();
-  assert.match(await page.getByRole('textbox', { name: 'Message' }).inputValue(), /Change Count orders to use JavaScript/u);
+  const messageField = page.getByRole('textbox', { name: 'Message' });
+  const messageFieldId = await messageField.getAttribute('id');
+  assert.ok(messageFieldId, 'the message field has a stable DOM id for value-state waits');
+  const expectedRuntimePrompt = 'Change Count orders to use JavaScript. Keep its inputs and outputs the same.';
+  if (prefillRaceMode) {
+    await page.waitForFunction((expected) => window.__f066PendingPrefill === expected, expectedRuntimePrompt);
+    const observedWhileHeld = await messageField.inputValue();
+    console.log(JSON.stringify({ probe: 'F066 controlled prefill race', mode: prefillRaceMode, expected: expectedRuntimePrompt, observedWhileHeld }));
+    await page.screenshot({ path: resolve(`test-results/f066-prefill-race-${prefillRaceMode}.png`) });
+    if (prefillRaceMode === 'red') {
+      assert.match(observedWhileHeld, /Change Count orders to use JavaScript/u);
+    } else {
+      assert.equal(observedWhileHeld, 'Change this rule', 'the prior prompt remains visible while the synthetic prefill is held');
+      await page.evaluate(() => window.__f066ReleasePrefill?.());
+    }
+  }
+  await page.waitForFunction(({ id, expected }) => document.getElementById(id)?.value === expected, {
+    id: messageFieldId,
+    expected: expectedRuntimePrompt,
+  });
+  assert.equal(await messageField.inputValue(), expectedRuntimePrompt, 'the composer receives the exact selected runtime prompt');
 
   const runButton = computeRule.getByRole('button', { name: 'Run calculation' });
   await runButton.click();

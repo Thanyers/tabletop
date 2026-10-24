@@ -33,3 +33,9 @@ node scripts/integration-gate-worker-startup.mjs
 ```
 
 The Worker check proves that the built module starts and its unauthenticated health/readiness/capability probes work with synthetic local bindings. It does not prove hosted binding configuration, login or authorization behavior, external provider availability, Container API execution, deployment, or production behavior. The focused F066 browser harness checks its existing fixture interactions; it does not replace the full browser acceptance suites.
+
+## Browser timing regression proof
+
+The F066 harness applies selected prompts through React effects. The runtime-choice assertion waits for the exact textarea value before checking the full prompt. Its synthetic fixture supports `F066_PREFILL_RACE_MODE=red` (intentional failure while the update is held) and `controlled` (prove the old value while held, release manually, then require the exact new prompt). The normal mode uses the unchanged fixture path without a query flag. This avoids arbitrary sleeps and retains reference/send/navigation checks. These controls exist only in the test fixture.
+
+Container smoke is also selected by fail-safe all-gate decisions for planner/workflow/package or unknown path changes; it is not limited to changes under `compute/`. A Linux CI step has exercised this path; Windows local omission remains SKIPPED.
