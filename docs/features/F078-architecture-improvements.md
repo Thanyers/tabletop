@@ -80,6 +80,16 @@ Behavior that had to stay identical and is now pinned by tests: an acknowledgeme
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **927 passed / 5 skipped (932)** (baseline 912 + 15 seam tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan **830 files / 0 findings**, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally** for this client-only move; `src/tabletop/TabletopApp.tsx` is an explicitly uncovered path for the integration-gate planner, so the PR runs every focused gate (built Worker boot, F066 rules harness, compute checks, Linux container smoke) and the full dev run after merge covers the browser suites. No schema, retention, billing or visibility change.
 
+### T5b — navigation/focus lifecycle (PR #268)
+
+Moved out of `TabletopApp` into `src/tabletop/navigation/workspace-navigation.ts` as pure decisions: `pageForPath`, `pathForProjection`, `nextHistoryWrite` (returns `skip` / `replace` / `push` plus the mode the next write starts from), `signInReturnPath`, `isSameOpenTable`, `tableChangeReset` with `pendingRulesObject`, and `focusRequest` with the invoice evidence object ids. The `AppPage` type moved with them.
+
+The component keeps every piece of React state — projection, page, selection, focus, opened card, draft prefill, rename and invitation panels — and only applies the returned decision. No route, history-entry count or visual behavior changed, and this is not a UI redesign.
+
+One behavior is deliberately tightened, and it is called out rather than hidden: the `popstate` handler now checks `isSameOpenTable` before applying a fetched table, so a back/forward fetch that resolves after the member switched tables no longer draws the previous table under the new address. The rule that a chat-first table opens nothing until there is a rule draft to review (F006) is now a named function, and a participant is taken to the review card because F035 gives participants the owner's permissions except delete/reset — the test states that rather than assuming opposite.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **937 passed / 5 skipped (942)** (927 from T5a + 10 navigation tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan clean, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: `src/tabletop/TabletopApp.tsx` is an explicitly uncovered planner path, so the PR selects every focused gate, and the three browser suites run in the full dev run after merge. No schema, retention, billing or visibility change.
+
 ## First delivery group status (2026-10-24)
 
 T0/#264, T1/#260, T4/#263, T2/#261 and T3/#262 are merged into dev. T3's full dev run passed, but its staging job was SKIPPED after optional focused jobs were skipped. [T3a](F078-T3a-staging-skip.md) closes that scheduling regression before this delivery group is declared complete. All behavior-preserving refactors remain separate later tasks with their test and ownership prerequisites; none is represented as implemented by the foundation PRs. Independent review closed the baseline provenance/default assertions and the focused browser timing issue. Production release remains out of scope.

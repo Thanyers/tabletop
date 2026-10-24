@@ -19,6 +19,7 @@ import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
 import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
 import type { AddableWebSource } from './ui/table-chat-state';
+import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, isSameOpenTable, nextHistoryWrite, pageForPath, pathForProjection, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
@@ -111,13 +112,7 @@ function accountForHeader(authStatus: AuthStatus | null, session: SessionView): 
   return authStatus.user ?? { id: session.actorId, name: session.name, email: '', isAdmin: false };
 }
 
-type AppPage = 'landing' | 'tables' | 'new';
-
-/** Where to land after Google sign-in: the page asked for, or the table list when it was the landing page. */
-function rememberReturnPath(path: string): void {
-  saveReturnPath(parseRoute(path)?.name === 'landing' ? routePath({ name: 'tables' }) : path);
-}
-
+/** The composition root: projection state, notices and the rendered UI. Decisions live in modules. */
 export default function TabletopApp() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [capabilities, setCapabilities] = useState<TabletopCapabilities>(localCapabilities);
@@ -174,23 +169,21 @@ export default function TabletopApp() {
 
   const setWorkspace = useCallback((next: WorkspaceView | null) => {
     const previous = workspaceRef.current;
-    const changedTable = previous?.id !== next?.id || previous?.epoch !== next?.epoch || previous?.actor.actorId !== next?.actor.actorId;
+    const reset = tableChangeReset(previous, next);
     workspaceRef.current = next;
     if (next) projectionClock.current.value += 1;
     setView(next);
-    if (changedTable) {
-      const pendingRules = next?.kind === 'table' && next.domain.kind === 'table' && viewerCan(next, 'rules.approve') && next.domain.candidate && next.domain.candidate.status !== 'active';
+    if (reset.changedTable) {
       // Chat-first tables open nothing until there is something to review (F006).
-      const startObject = pendingRules ? 'table.rules' : null;
-      setSelectedNodeId(startObject);
+      setSelectedNodeId(reset.startObject);
       setFocusNodeId(null);
-      setOpenedObjectId(startObject);
+      setOpenedObjectId(reset.startObject);
       setFocusSourceIds([]);
       setDraftPrompt('');
       setAiPrefill(undefined);
       setRenameDraft(null);
     }
-    if (previous?.id !== next?.id) {
+    if (reset.changedWorkspace) {
       setInviteState(null);
       setInviteSeat(null);
       setPreviousInvitesRevoked(false);
@@ -288,7 +281,7 @@ export default function TabletopApp() {
             if (savePendingInvite(fragmentTicket)) clearInviteFragment();
             else showNotice('This tab could not save the invitation securely. Keep the invitation link and try again after signing in.', 'error');
           }
-          rememberReturnPath(returnPath ?? window.location.pathname);
+          saveReturnPath(signInReturnPath(returnPath ?? window.location.pathname));
           setSession(null);
           setWorkspace(null);
           return;
@@ -308,7 +301,7 @@ export default function TabletopApp() {
           showNotice('Feature access could not be checked. Uploads and AI requests are disabled until you refresh.', 'error');
           if (error instanceof ApiFailure && error.status === 401) {
             if (currentAuth?.mode === 'google') setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
-            rememberReturnPath(returnPath ?? window.location.pathname);
+            saveReturnPath(signInReturnPath(returnPath ?? window.location.pathname));
             return;
           }
         }
@@ -353,7 +346,7 @@ export default function TabletopApp() {
         }
       } catch (error) {
         if (error instanceof ApiFailure && error.status === 401 && currentAuth?.mode === 'google') {
-          rememberReturnPath(returnPath ?? window.location.pathname);
+          saveReturnPath(signInReturnPath(returnPath ?? window.location.pathname));
           setAuthStatus({ ...currentAuth, authenticated: false, user: undefined });
         }
         if (alive) showNotice(errorText(error), 'error');
@@ -367,12 +360,12 @@ export default function TabletopApp() {
 
   useEffect(() => {
     if (starting) return;
-    const target = routePath(view ? { name: 'table', id: view.id } : { name: page });
-    const mode = urlSyncRef.current;
-    urlSyncRef.current = 'push';
-    if (mode === 'none' || window.location.pathname === target) return;
+    const target = pathForProjection(view ? { id: view.id } : null, page);
+    const { write, nextMode } = nextHistoryWrite(urlSyncRef.current, target, window.location.pathname);
+    urlSyncRef.current = nextMode;
+    if (write === 'skip') return;
     // Pushed entries remember the app page before them, so "Your tables" can step back instead of stacking `/`.
-    if (mode === 'replace') window.history.replaceState(window.history.state, document.title, target);
+    if (write === 'replace') window.history.replaceState(window.history.state, document.title, target);
     else window.history.pushState({ tabletopFrom: window.location.pathname }, document.title, target);
   }, [view?.id, page, starting]);
 
@@ -381,12 +374,16 @@ export default function TabletopApp() {
       const route = parseRoute(window.location.pathname);
       if (route?.name === 'table') {
         if (workspaceRef.current?.id === route.id) return;
-        tabletopClient.workspace(route.id).then((opened) => {
+        const requestedId = route.id;
+        tabletopClient.workspace(requestedId).then((opened) => {
+          // The fetch can resolve after the member moved on; drawing it then would show the
+          // previous table under the new address.
+          if (!isSameOpenTable(requestedId, workspaceRef.current?.id)) return;
           urlSyncRef.current = 'none';
           setWorkspace(opened);
         }, (error) => showNotice(errorText(error), 'error'));
       } else {
-        const nextPage: AppPage = route?.name === 'new' ? 'new' : route?.name === 'tables' ? 'tables' : 'landing';
+        const nextPage = pageForPath(window.location.pathname);
         if (!workspaceRef.current && pageRef.current === nextPage) return;
         urlSyncRef.current = 'none';
         setWorkspace(null);
@@ -627,21 +624,22 @@ export default function TabletopApp() {
   }, []);
 
   const requestCanvasFocus = useCallback((nodeId: string, open = true) => {
-    setSelectedNodeId(nodeId);
-    setFocusNodeId(nodeId);
+    const request = focusRequest(nodeId, open);
+    setSelectedNodeId(request.nodeId);
+    setFocusNodeId(request.nodeId);
     setFocusRequestKey((key) => key + 1);
-    if (open) setOpenedObjectId(nodeId);
+    if (request.open) setOpenedObjectId(request.nodeId);
   }, []);
 
   const focusEvidence = useCallback((sourceIds: string[]) => {
     if (!view || view.kind !== 'invoice') return;
     setFocusSourceIds(sourceIds);
-    requestCanvasFocus('invoice.source');
+    requestCanvasFocus(EVIDENCE_SOURCE_OBJECT);
   }, [requestCanvasFocus, view]);
 
   const backFromEvidence = useCallback(() => {
     setFocusSourceIds([]);
-    requestCanvasFocus('invoice.table');
+    requestCanvasFocus(EVIDENCE_TABLE_OBJECT);
   }, [requestCanvasFocus]);
 
   const selectCanvasNode = useCallback((nodeId: string | null) => {
