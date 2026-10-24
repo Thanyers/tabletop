@@ -2,7 +2,7 @@
 
 > **Visibility policy (F034, 2026-10-21):** tables currently run with `VISIBILITY_POLICY = 'open'` ([`visibility.ts`](../src/tabletop/shared/visibility.ts)): every member receives the whole table state (drafts, notes, hidden values, other learners' answers) and can read every member's AI chat. Only the asker can confirm their chat's action proposal, and the AI context still uses only the asker's own recent exchanges. Statements below about owner-private drafts, hidden values and actor-private conversations describe the retained `'private'` policy. See [F034](features/F034-open-visibility.md).
 
-The unreleased Generative Canvas candidate extends this base contract with prompt-only creation, bounded expressions, generated scenes/controls, shared layout and bounded private-history retrieval. See [the current extension contract](GENERATIVE_CANVAS_RUNTIME.md). The deployment and acceptance statements below describe the earlier file-driven release.
+The Generative Canvas extension adds prompt-only creation, bounded expressions, generated scenes/controls, shared layout and bounded history retrieval. See [the extension contract](GENERATIVE_CANVAS_RUNTIME.md) and [Current architecture](CURRENT_ARCHITECTURE.md) for effective policies and runtime differences. The deployment and acceptance statements below describe the earlier file-driven release; current environment evidence belongs to [Deployments](DEPLOYMENTS.md).
 
 Status: implemented and deployed as a testing release on 19 October 2026. [Acceptance](GENERIC_TABLE_ACCEPTANCE.md) records CI, real-provider/two-account staging checks and the approved production migration; [Deployments](DEPLOYMENTS.md) identifies the active source/version. The gates below remain requirements for changes to these paths.
 

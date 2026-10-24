@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` (T1; later tasks tracked separately) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — documentation, validation and internal refactors; evaluate each task separately |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F078-T*` |
@@ -29,6 +29,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 
 | ID | Separate PR scope | Prerequisite | Acceptance |
 | --- | --- | --- | --- |
+| T0 | Compatible security patches unblock existing dependency validation | — | Clean install, audit, existing unit/Worker/build checks; separate PR #264 |
 | T1 | Current contract, capability map and this sequence | — | Source-linked policies and runtime differences agree; document links/public scan pass |
 | T2 | Disposable local authority/storage/performance baseline | — | Repeatable bounded synthetic workload, raw samples + summary, source/environment labels, no shared/remote writes |
 | T3 | Risk-targeted pre-merge integration gates | T1 | Real Worker startup checked before merge; selection has negative fixtures and preserves full-suite requirements |
@@ -56,4 +57,4 @@ Each implementation PR owns its code and test files. Shared status documents are
 
 ## Verification
 
-Pending implementation and recorded checks per PR.
+T1 candidate: [PR #260](https://github.com/Thanyers/tabletop/pull/260). Node v22.23.2; local Markdown targets checked, changelog fragment validation and public-file scan passed; whitespace check passed. Application/unit/browser suites are SKIPPED locally because this PR changes documentation only. Required CI initially failed on the unchanged dependency tree; T0 is a separate prerequisite, not a bypass or a PASS for that attempt. Final CI evidence is recorded in spec and the PR.
