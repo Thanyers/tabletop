@@ -1,5 +1,6 @@
-import { GENERATIVE_FORBIDDEN_IDENTIFIERS, GENERATIVE_LIMITS, type ControlInputBinding, type GenerativeExpression } from '../../shared/generative-contracts';
+import { GENERATIVE_FORBIDDEN_IDENTIFIERS, GENERATIVE_LIMITS, type ControlInputBinding, type GenerativeExpression, type GenerativeViewDescriptor } from '../../shared/generative-contracts';
 import type { TableAction, TableField, TableProgram, TableRecord, TableValue } from '../../shared/table-contracts';
+import { assertNeverViewKind, type GenerativeViewKind } from '../../shared/view-kinds';
 import { validateDiceSpec } from '../../shared/dice';
 
 export type GenerativeStaticType = 'number' | 'text' | 'boolean' | 'list' | 'null' | 'rows' | 'unknown';
@@ -291,108 +292,134 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
     for (const view of canvas.views) {
       for (const relatedId of view.relatedTo?.views ?? []) assert(knownViewIds.has(relatedId), 'A view relates to an unknown view.');
       for (const relatedId of view.relatedTo?.collections ?? []) assert(collectionIds.has(relatedId), 'A view relates to an unknown collection.');
-      if (view.kind === 'metric') {
-        const expressionIssues = validateGenerativeExpression(view.value, program, undefined, records);
-        for (const issue of expressionIssues) addIssue(issue);
-        if (expressionIssues.length === 0) assert(isScalar(getGenerativeExpressionType(view.value, program, undefined, records)), 'Metric views must return a scalar.');
-      }
-      if (view.kind === 'chart') {
-        const collection = program.collections.find(item => item.id === view.collection);
-        assert(collection, 'Chart refers to an unknown collection.');
-        const category = fieldFor(program, view.collection, view.categoryField);
-        assert(category.type === 'text' || category.type === 'number', 'Chart categories must be text or numeric fields.');
-        const scope = new Map<string, ScopeBinding>([['row', { kind: 'row', collection: view.collection }]]);
-        const expressionIssues = validateGenerativeExpression(view.value, program, undefined, records, scope);
-        for (const issue of expressionIssues) addIssue(issue);
-        if (expressionIssues.length === 0) assert(getGenerativeExpressionType(view.value, program, undefined, records, scope) === 'number', 'Chart values must be numeric.');
-      }
-      if (view.kind === 'scene') {
-        const elementIds = view.elements.map(element => element.id);
-        assert(new Set(elementIds).size === elementIds.length, 'Scene element identifiers must be unique.');
-        for (const element of view.elements) {
-          for (const [key, value] of Object.entries(element)) {
-            if (key === 'id' || key === 'shape' || key === 'fill' || key === 'stroke' || key === 'drag' || key === 'motion' || key === 'points' || key === 'text') continue;
-            validateSceneValue(value, program, records, addIssue);
-          }
-          if (element.shape === 'polygon') for (const point of element.points) {
-            validateSceneValue(point.x, program, records, addIssue); validateSceneValue(point.y, program, records, addIssue);
-          }
-          if (element.shape === 'text' && typeof element.text !== 'string') {
-            const textIssues = validateGenerativeExpression(element.text, program, undefined, records);
-            for (const issue of textIssues) addIssue(issue);
-            if (textIssues.length === 0) assert(getGenerativeExpressionType(element.text, program, undefined, records) === 'text', 'Scene text expressions must return text.');
-          }
-          // F040: motion is an object, not a scene value expression, so it is validated here instead.
-          const motion = element.shape === 'rect' || element.shape === 'circle' || element.shape === 'text' ? element.motion : undefined;
-          if (motion) {
-            assert(!element.drag, 'A scene element cannot both drag and move on its own.');
-            validateSceneValue(motion.from, program, records, addIssue);
-            validateSceneValue(motion.to, program, records, addIssue);
-            validateSceneValue(motion.speed, program, records, addIssue);
-            if (typeof motion.from === 'number' && typeof motion.to === 'number') assert(motion.from !== motion.to, 'Scene motion must travel between two different positions.');
-            const staticSpeed = typeof motion.speed === 'number' ? motion.speed
-              : motion.speed.op === 'literal' && typeof motion.speed.value === 'number' ? motion.speed.value : undefined;
-            if (staticSpeed !== undefined) assert(staticSpeed > 0, 'Scene motion speed must be a positive number.');
-          }
-          if (element.drag) {
-            const action = program.actions.find(item => item.id === element.drag?.actionId);
-            assert(action, 'Scene drag refers to an unknown action.');
-            const xParameter = action.parameters.find(item => item.id === element.drag?.xParameter);
-            const yParameter = element.drag.yParameter ? action.parameters.find(item => item.id === element.drag?.yParameter) : undefined;
-            assert(xParameter?.type === 'number' && (!element.drag.yParameter || yParameter?.type === 'number'), 'Scene drag coordinates must bind numeric action inputs.');
-            const coordinateParameters: Record<string, GenerativeStaticType> = { [element.drag.xParameter]: 'number' };
-            if (element.drag.yParameter) {
-              assert(element.drag.yParameter !== element.drag.xParameter, 'Scene drag must bind separate coordinate inputs.');
-              coordinateParameters[element.drag.yParameter] = 'number';
-            }
-            assertControlBinding(action, program, element.drag.inputs, records, coordinateParameters);
-          }
-        }
-      }
-      if (view.kind === 'controls') {
-        const controlIds = view.controls.map(control => control.id);
-        assert(new Set(controlIds).size === controlIds.length, 'Control identifiers must be unique within a view.');
-        for (const control of view.controls) {
-          const action = program.actions.find(item => item.id === control.actionId);
-          assert(action, 'A control refers to an unknown action.');
-          let interactiveType: GenerativeStaticType | undefined;
-          if (control.kind === 'slider') {
-            assert(control.min <= control.max && (control.step === undefined || control.step > 0), 'Slider bounds are invalid.');
-            const parameter = action.parameters.find(item => item.id === control.parameter && item.type === 'number');
-            assert(parameter && (parameter.min === undefined || control.min >= parameter.min) && (parameter.max === undefined || control.max <= parameter.max), 'Slider bounds exceed the action parameter bounds.');
-            interactiveType = 'number';
-          } else if (control.kind === 'toggle') {
-            assert(action.parameters.some(item => item.id === control.parameter && item.type === 'boolean'), 'Toggle must bind a boolean action parameter.');
-            interactiveType = 'boolean';
-          } else if (control.kind === 'select') {
-            const parameter = action.parameters.find(item => item.id === control.parameter);
-            assert(parameter && parameter.type !== 'record' && parameter.type !== 'roll', 'Select must bind a scalar action parameter.');
-            assert(control.options.every(option => actionInputType(action, control.parameter) === valueType(option.value) && (!parameter.choices || parameter.choices.includes(String(option.value)))), 'Select options do not match the action parameter.');
-            interactiveType = actionInputType(action, control.parameter);
-          } else if (control.kind === 'dice') {
-            // F060: dice may bind a number parameter (client-side, visual-only) or a roll parameter
-            // (the server rolls the program's roll spec). The card's own faces/count stay valid but
-            // are not authoritative for a roll parameter.
-            const parameter = action.parameters.find(item => item.id === control.parameter);
-            assert(parameter && (parameter.type === 'number' || parameter.type === 'roll'), 'Dice must bind a number or roll action parameter.');
-            const diceIssues = validateDiceSpec(control);
-            assert(diceIssues.length === 0, diceIssues[0] ?? 'Dice control limits are invalid.');
-            interactiveType = 'number';
-          }
-          const interactiveParameters: Record<string, GenerativeStaticType> = control.kind === 'form'
-            ? Object.fromEntries(Object.entries(control.inputs).filter(([, binding]) => binding.kind === 'control').map(([parameter]) => [parameter, actionInputType(action, parameter)]))
-            : interactiveType && 'parameter' in control ? { [control.parameter]: interactiveType } : {};
-          assertControlBinding(action, program, control.inputs, records, interactiveParameters);
-          if ('value' in control && control.value) {
-            const expressionIssues = validateGenerativeExpression(control.value, program, undefined, records);
-            for (const issue of expressionIssues) addIssue(issue);
-            if (expressionIssues.length === 0 && 'parameter' in control) assert(isCompatible(actionInputType(action, control.parameter), getGenerativeExpressionType(control.value, program, undefined, records)), 'Control value expression has the wrong type.');
-          }
-        }
-      }
+      validateCanvasView(view, { program, records, addIssue });
     }
   } catch (error) { addIssue(error instanceof Error ? error.message : 'Generated table program is invalid.'); }
   return issues;
+}
+
+interface ViewValidationContext {
+  readonly program: TableProgram;
+  readonly records: Records | undefined;
+  readonly addIssue: (message: string) => void;
+}
+type ViewValidator<K extends GenerativeViewKind> = (view: Extract<GenerativeViewDescriptor, { kind: K }>, context: ViewValidationContext) => void;
+
+/**
+ * F078-T8: one validator per kind. The mapped record type makes a kind without a
+ * validator a compile error, and a missing dispatch case reaches
+ * `assertNeverViewKind`, which only accepts `never`.
+ */
+const viewValidators: { readonly [K in GenerativeViewKind]: ViewValidator<K> } = {
+  metric: (view, { program, records, addIssue }) => {
+    const expressionIssues = validateGenerativeExpression(view.value, program, undefined, records);
+    for (const issue of expressionIssues) addIssue(issue);
+    if (expressionIssues.length === 0) assert(isScalar(getGenerativeExpressionType(view.value, program, undefined, records)), 'Metric views must return a scalar.');
+  },
+  chart: (view, { program, records, addIssue }) => {
+    const collection = program.collections.find(item => item.id === view.collection);
+    assert(collection, 'Chart refers to an unknown collection.');
+    const category = fieldFor(program, view.collection, view.categoryField);
+    assert(category.type === 'text' || category.type === 'number', 'Chart categories must be text or numeric fields.');
+    const scope = new Map<string, ScopeBinding>([['row', { kind: 'row', collection: view.collection }]]);
+    const expressionIssues = validateGenerativeExpression(view.value, program, undefined, records, scope);
+    for (const issue of expressionIssues) addIssue(issue);
+    if (expressionIssues.length === 0) assert(getGenerativeExpressionType(view.value, program, undefined, records, scope) === 'number', 'Chart values must be numeric.');
+  },
+  scene: (view, { program, records, addIssue }) => {
+    const elementIds = view.elements.map(element => element.id);
+    assert(new Set(elementIds).size === elementIds.length, 'Scene element identifiers must be unique.');
+    for (const element of view.elements) {
+      for (const [key, value] of Object.entries(element)) {
+        if (key === 'id' || key === 'shape' || key === 'fill' || key === 'stroke' || key === 'drag' || key === 'motion' || key === 'points' || key === 'text') continue;
+        validateSceneValue(value, program, records, addIssue);
+      }
+      if (element.shape === 'polygon') for (const point of element.points) {
+        validateSceneValue(point.x, program, records, addIssue); validateSceneValue(point.y, program, records, addIssue);
+      }
+      if (element.shape === 'text' && typeof element.text !== 'string') {
+        const textIssues = validateGenerativeExpression(element.text, program, undefined, records);
+        for (const issue of textIssues) addIssue(issue);
+        if (textIssues.length === 0) assert(getGenerativeExpressionType(element.text, program, undefined, records) === 'text', 'Scene text expressions must return text.');
+      }
+      // F040: motion is an object, not a scene value expression, so it is validated here instead.
+      const motion = element.shape === 'rect' || element.shape === 'circle' || element.shape === 'text' ? element.motion : undefined;
+      if (motion) {
+        assert(!element.drag, 'A scene element cannot both drag and move on its own.');
+        validateSceneValue(motion.from, program, records, addIssue);
+        validateSceneValue(motion.to, program, records, addIssue);
+        validateSceneValue(motion.speed, program, records, addIssue);
+        if (typeof motion.from === 'number' && typeof motion.to === 'number') assert(motion.from !== motion.to, 'Scene motion must travel between two different positions.');
+        const staticSpeed = typeof motion.speed === 'number' ? motion.speed
+          : motion.speed.op === 'literal' && typeof motion.speed.value === 'number' ? motion.speed.value : undefined;
+        if (staticSpeed !== undefined) assert(staticSpeed > 0, 'Scene motion speed must be a positive number.');
+      }
+      if (element.drag) {
+        const action = program.actions.find(item => item.id === element.drag?.actionId);
+        assert(action, 'Scene drag refers to an unknown action.');
+        const xParameter = action.parameters.find(item => item.id === element.drag?.xParameter);
+        const yParameter = element.drag.yParameter ? action.parameters.find(item => item.id === element.drag?.yParameter) : undefined;
+        assert(xParameter?.type === 'number' && (!element.drag.yParameter || yParameter?.type === 'number'), 'Scene drag coordinates must bind numeric action inputs.');
+        const coordinateParameters: Record<string, GenerativeStaticType> = { [element.drag.xParameter]: 'number' };
+        if (element.drag.yParameter) {
+          assert(element.drag.yParameter !== element.drag.xParameter, 'Scene drag must bind separate coordinate inputs.');
+          coordinateParameters[element.drag.yParameter] = 'number';
+        }
+        assertControlBinding(action, program, element.drag.inputs, records, coordinateParameters);
+      }
+    }
+  },
+  controls: (view, { program, records, addIssue }) => {
+    const controlIds = view.controls.map(control => control.id);
+    assert(new Set(controlIds).size === controlIds.length, 'Control identifiers must be unique within a view.');
+    for (const control of view.controls) {
+      const action = program.actions.find(item => item.id === control.actionId);
+      assert(action, 'A control refers to an unknown action.');
+      let interactiveType: GenerativeStaticType | undefined;
+      if (control.kind === 'slider') {
+        assert(control.min <= control.max && (control.step === undefined || control.step > 0), 'Slider bounds are invalid.');
+        const parameter = action.parameters.find(item => item.id === control.parameter && item.type === 'number');
+        assert(parameter && (parameter.min === undefined || control.min >= parameter.min) && (parameter.max === undefined || control.max <= parameter.max), 'Slider bounds exceed the action parameter bounds.');
+        interactiveType = 'number';
+      } else if (control.kind === 'toggle') {
+        assert(action.parameters.some(item => item.id === control.parameter && item.type === 'boolean'), 'Toggle must bind a boolean action parameter.');
+        interactiveType = 'boolean';
+      } else if (control.kind === 'select') {
+        const parameter = action.parameters.find(item => item.id === control.parameter);
+        assert(parameter && parameter.type !== 'record' && parameter.type !== 'roll', 'Select must bind a scalar action parameter.');
+        assert(control.options.every(option => actionInputType(action, control.parameter) === valueType(option.value) && (!parameter.choices || parameter.choices.includes(String(option.value)))), 'Select options do not match the action parameter.');
+        interactiveType = actionInputType(action, control.parameter);
+      } else if (control.kind === 'dice') {
+        // F060: dice may bind a number parameter (client-side, visual-only) or a roll parameter
+        // (the server rolls the program's roll spec). The card's own faces/count stay valid but
+        // are not authoritative for a roll parameter.
+        const parameter = action.parameters.find(item => item.id === control.parameter);
+        assert(parameter && (parameter.type === 'number' || parameter.type === 'roll'), 'Dice must bind a number or roll action parameter.');
+        const diceIssues = validateDiceSpec(control);
+        assert(diceIssues.length === 0, diceIssues[0] ?? 'Dice control limits are invalid.');
+        interactiveType = 'number';
+      }
+      const interactiveParameters: Record<string, GenerativeStaticType> = control.kind === 'form'
+        ? Object.fromEntries(Object.entries(control.inputs).filter(([, binding]) => binding.kind === 'control').map(([parameter]) => [parameter, actionInputType(action, parameter)]))
+        : interactiveType && 'parameter' in control ? { [control.parameter]: interactiveType } : {};
+      assertControlBinding(action, program, control.inputs, records, interactiveParameters);
+      if ('value' in control && control.value) {
+        const expressionIssues = validateGenerativeExpression(control.value, program, undefined, records);
+        for (const issue of expressionIssues) addIssue(issue);
+        if (expressionIssues.length === 0 && 'parameter' in control) assert(isCompatible(actionInputType(action, control.parameter), getGenerativeExpressionType(control.value, program, undefined, records)), 'Control value expression has the wrong type.');
+      }
+    }
+  },
+};
+
+function validateCanvasView(view: GenerativeViewDescriptor, context: ViewValidationContext): void {
+  switch (view.kind) {
+    case 'scene': viewValidators.scene(view, context); return;
+    case 'chart': viewValidators.chart(view, context); return;
+    case 'metric': viewValidators.metric(view, context); return;
+    case 'controls': viewValidators.controls(view, context); return;
+    default: assertNeverViewKind(view);
+  }
 }
 
 function validateSceneValue(value: unknown, program: TableProgram, records: Records | undefined, addIssue: (message: string) => void): void {

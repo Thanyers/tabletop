@@ -3,6 +3,7 @@ import { viewerCan } from '../shared/permissions';
 import type { DomainState, EncounterState, InvoiceState, PhysicsParams, TeachingState, WorkspaceView } from '../shared/contracts';
 import type { TableState } from '../shared/table-contracts';
 import { GENERATIVE_LIMITS, type GenerativeCanvas, type GenerativeViewDescriptor } from '../shared/generative-contracts';
+import { GENERATIVE_VIEW_CAPABILITY_PREFIX, GENERATIVE_VIEW_KINDS, type GenerativeViewKind } from '../shared/view-kinds';
 import { calculatePhysics, reconcileInvoice } from '../domain';
 import { generativeCanvasSchema, generativeIdSchema, generativeViewDescriptorSchema } from './generative/schema';
 import { z } from 'zod';
@@ -37,6 +38,30 @@ const validators: Record<string, (value: unknown) => boolean> = {
 const identity = (key: string) => (inputs: Record<string, unknown>) => ({ [key]: inputs[key] });
 const identifierSchema = z.string().regex(/^[a-z][a-z0-9._-]{0,159}$/);
 const endpointSchema = z.strictObject({ node: identifierSchema, port: z.string().regex(/^[a-z][a-zA-Z0-9]{0,79}$/) });
+
+/** Capability id per registered view kind; the template literal type ties the suffix to the kind. */
+const generatedViewCapabilityIds = {
+  scene: `${GENERATIVE_VIEW_CAPABILITY_PREFIX}scene`,
+  chart: `${GENERATIVE_VIEW_CAPABILITY_PREFIX}chart`,
+  metric: `${GENERATIVE_VIEW_CAPABILITY_PREFIX}metric`,
+  controls: `${GENERATIVE_VIEW_CAPABILITY_PREFIX}controls`,
+} as const satisfies { readonly [K in GenerativeViewKind]: `table.generated-view.${K}` };
+
+interface GeneratedViewInputRequirement { readonly port: 'rows' | 'actions'; readonly message: string }
+
+/** The non-descriptor plan input each kind cannot be evaluated without, with its existing message. */
+const generatedViewInputRequirements = {
+  scene: undefined,
+  chart: { port: 'rows', message: 'Generated chart rows are unresolved.' },
+  metric: undefined,
+  controls: { port: 'actions', message: 'Generated table actions are unresolved.' },
+} as const satisfies { readonly [K in GenerativeViewKind]: GeneratedViewInputRequirement | undefined };
+
+/** Derived from the registry, so a kind cannot be registered in one layer only. */
+const generatedViewCapabilities: Readonly<Record<string, Capability>> = Object.fromEntries(
+  GENERATIVE_VIEW_KINDS.map(kind => [generatedViewCapabilityIds[kind], generatedViewCapability(kind)]),
+);
+
 const manifestSchema = z.strictObject({
   version: z.literal(1), kind: z.enum(['invoice', 'teaching', 'encounter', 'table']),
   nodes: z.array(z.strictObject({
@@ -55,10 +80,8 @@ export const capabilityRegistry: Readonly<Record<string, Capability>> = {
   'table.canvas': { version: 1, inputs: { canvas: port('GenerativeCanvasV1') }, outputs: { canvas: port('GenerativeCanvasV1') }, evaluate: identity('canvas') },
   // F037: a note is a leaf object; the card reads its text and colour from the table state by id.
   'table.note': { version: 1, inputs: {}, outputs: {}, evaluate: () => ({}) },
-  'table.generated-view.scene': generatedViewCapability('scene'),
-  'table.generated-view.chart': generatedViewCapability('chart'),
-  'table.generated-view.metric': generatedViewCapability('metric'),
-  'table.generated-view.controls': generatedViewCapability('controls'),
+  // F078-T8: one entry per registered kind, generated from the same metadata the Canvas uses.
+  ...generatedViewCapabilities,
   'invoice.source': { version: 1, inputs: { state: port('InvoiceStateV1', 'private') }, outputs: { invoice: port('InvoiceStateV1', 'private') }, evaluate: i => ({ invoice: i.state }) },
   'invoice.reconcile': { version: 1, inputs: { invoice: port('InvoiceStateV1', 'private') }, outputs: { result: port('InvoiceResultV1', 'private'), exceptions: port('ReviewItemV1[]', 'private'), surchargeExceptions: port('ReviewItemV1[]', 'private') }, evaluate: i => {
     const result = reconcileInvoice(i.invoice as InvoiceState);
@@ -97,12 +120,39 @@ function generatedViewCapability(kind: GenerativeViewDescriptor['kind']): Capabi
       const canvas = inputs.canvas as GenerativeCanvas;
       const descriptor = canvas.views.find(view => view.id === inputs.viewId);
       if (!descriptor || descriptor.kind !== kind) throw new Error('Generated view descriptor is missing or incompatible.');
-      if (descriptor.kind === 'chart' && !Array.isArray(inputs.rows)) throw new Error('Generated chart rows are unresolved.');
-      if (descriptor.kind === 'controls' && !Array.isArray(inputs.actions)) throw new Error('Generated table actions are unresolved.');
+      const requirement = generatedViewInputRequirements[kind];
+      if (requirement && !Array.isArray(inputs[requirement.port])) throw new Error(requirement.message);
       return { descriptor };
     },
   };
 }
+
+interface GeneratedViewBindingContext {
+  readonly descriptor: GenerativeViewDescriptor;
+  readonly nodeId: string;
+  readonly state: TableState;
+  readonly collectionNodeIds: ReadonlyMap<string, string>;
+  readonly bindings: Binding[];
+}
+
+/**
+ * F078-T8: the plan inputs a kind needs beyond the canvas descriptor, one entry
+ * per registered kind. A kind without an entry fails to compile instead of
+ * silently producing an unbound node.
+ */
+const generatedViewExtraBindings: { readonly [K in GenerativeViewKind]: (context: GeneratedViewBindingContext) => void } = {
+  scene: () => undefined,
+  chart: ({ descriptor, nodeId, collectionNodeIds, bindings }) => {
+    if (descriptor.kind !== 'chart' || bindings.length >= 96) return;
+    const sourceId = collectionNodeIds.get(descriptor.collection);
+    if (sourceId) bindings.push(binding(sourceId, 'rows', nodeId, 'rows', 'TableRowsV1'));
+  },
+  metric: () => undefined,
+  controls: ({ descriptor, nodeId, state, bindings }) => {
+    if (descriptor.kind !== 'controls' || !state.program || bindings.length >= 96) return;
+    bindings.push(binding('table.actions', 'actions', nodeId, 'actions', 'TableActionsV1'));
+  },
+};
 
 /** Compile a bounded, curated graph. A failure returns no partially executable plan. */
 export function compileManifest(rawManifest: unknown, registry: Readonly<Record<string, Capability>> = capabilityRegistry): Compilation {
@@ -211,15 +261,9 @@ export function manifestForWorkspace(view: WorkspaceView): Manifest {
           const position = positionForView(descriptor, index);
           viewPositions.set(descriptor.id, position);
           nodePositions.set(id, position);
-          nodes.push(node(id, `table.generated-view.${descriptor.kind}`, descriptor.title.slice(0, 160), position.x, position.y, { viewId: descriptor.id }));
+          nodes.push(node(id, generatedViewCapabilityIds[descriptor.kind], descriptor.title.slice(0, 160), position.x, position.y, { viewId: descriptor.id }));
           if (bindings.length < 96) bindings.push(binding(canvasNodeId, 'canvas', id, 'canvas', 'GenerativeCanvasV1'));
-
-          if (descriptor.kind === 'chart' && collectionNodeIds.has(descriptor.collection) && bindings.length < 96) {
-            bindings.push(binding(collectionNodeIds.get(descriptor.collection)!, 'rows', id, 'rows', 'TableRowsV1'));
-          }
-          if (descriptor.kind === 'controls' && state.program && bindings.length < 96) {
-            bindings.push(binding('table.actions', 'actions', id, 'actions', 'TableActionsV1'));
-          }
+          generatedViewExtraBindings[descriptor.kind]({ descriptor, nodeId: id, state, collectionNodeIds, bindings });
           for (const [relationIndex, collectionId] of (descriptor.relatedTo?.collections ?? []).entries()) {
             const sourceId = collectionNodeIds.get(collectionId);
             if (!sourceId || relationIndex >= 6 || bindings.length >= 96) continue;
