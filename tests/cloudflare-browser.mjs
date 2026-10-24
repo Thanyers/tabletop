@@ -202,15 +202,49 @@ try {
   const welcomeIdentityCounts = () => db.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM web_sessions) AS sessions, (SELECT COUNT(*) FROM oauth_states) AS oauth, (SELECT COUNT(*) FROM rooms) AS rooms').first();
   const beforeWelcome = await welcomeIdentityCounts();
   const anonymous = await newPage();
-  await expect(anonymous.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
+  const landingHeadingEn = 'Tools that keep adapting to you.';
+  const landingHeadingTh = 'เครื่องมือค่อย ๆ ปรับให้เข้ากับคุณ';
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingEn);
+  await expect(anonymous.getByRole('main')).toHaveAttribute('id', 'main-content');
+  await expect(anonymous.getByRole('main')).toHaveAttribute('tabindex', '-1');
+  await expect(anonymous.getByRole('banner')).toHaveCount(1);
+  await expect(anonymous.getByRole('contentinfo')).toHaveCount(1);
+  expect(await anonymous.evaluate(() => {
+    const main = document.querySelector('main');
+    return !main?.contains(document.querySelector('.tt-public-welcome__header'))
+      && !main?.contains(document.querySelector('.tt-public-welcome__footer'));
+  })).toBe(true);
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(1);
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/api/auth/google/start');
-  // Signed out there is no sign-in box (Google is the only way in); the hero's demo link is the demo entry point.
-  await expect(anonymous.getByRole('link', { name: /^See the prepared demo/ })).toHaveAttribute('href', '/demo');
-  await expect(anonymous.getByRole('link', { name: /^See the prepared demo/ })).toHaveAttribute('target', '_blank');
+  // The hero invites visitors to the narrated story; prepared demos remain available below.
+  await expect(anonymous.getByRole('link', { name: 'Start your table', exact: true })).toHaveAttribute('href', '/api/auth/google/start');
+  await expect(anonymous.getByRole('link', { name: 'Watch the narrated story', exact: true })).toHaveAttribute('href', '#film');
+  for (const name of ['Open the Physics demo', 'Open the Encounter demo']) {
+    await expect(anonymous.getByRole('link', { name, exact: true })).toHaveAttribute('href', '/demo');
+    await expect(anonymous.getByRole('link', { name, exact: true })).toHaveAttribute('target', '_blank');
+  }
+  await expect(anonymous.getByRole('heading', { name: 'Start with sales. Build on the same table.', exact: true })).toBeVisible();
+  await expect(anonymous.getByText('Illustrative · sample data', { exact: true })).toBeVisible();
   await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
   await expect(anonymous.locator('.tt-canvas-panel')).toHaveCount(0);
+  await expect(anonymous.getByRole('heading', { name: 'Physical tools adapt to people. Software often asks people to adapt to it.', exact: true })).toBeVisible();
+  for (const [alt, src] of [
+    ['An office chair with a back, arms, and wheels against a light background.', '/narrative/office-chair-isolated.jpg'],
+    ['A hand holding a pen comfortably while writing on paper.', '/narrative/writing-hand.jpg'],
+    ['A hand holding the handle of a hammer.', '/narrative/hammer-hand.jpg'],
+  ]) {
+    const photo = anonymous.getByRole('img', { name: alt, exact: true });
+    await expect(photo).toHaveAttribute('src', src);
+    await photo.scrollIntoViewIfNeeded();
+    await expect.poll(() => photo.evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true);
+  }
+  await expect(anonymous.getByRole('heading', { name: 'See Tabletop on the canvas.', exact: true })).toBeVisible();
+  await expect(anonymous.getByText('A narrated concept film · play when ready', { exact: true })).toBeVisible();
+  const conceptFilm = anonymous.locator('.tt-public-welcome__film-frame video');
+  await expect(conceptFilm).toHaveAttribute('poster', '/narrative/tabletop-story-poster.png');
+  await expect(conceptFilm.locator('source')).toHaveAttribute('src', '/narrative/tabletop-story.mp4');
+  await expect(conceptFilm.locator('track')).toHaveAttribute('src', '/narrative/tabletop-story-en.vtt');
   const conceptImage = anonymous.locator('.tt-public-welcome__story-frame img');
   await expect(conceptImage).toHaveAttribute('src', /\.png$/);
   await anonymous.getByRole('button', { name: 'Replay the concept animation', exact: true }).click();
@@ -224,7 +258,7 @@ try {
   await anonymous.evaluate(() => window.scrollTo(0, 0));
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toBeInViewport();
   await expect(anonymous.locator('.tt-public-welcome__auth')).toHaveCount(0);
-  await expect(anonymous.getByRole('link', { name: /^Start with your own work/ })).toHaveAttribute('href', '/api/auth/google/start');
+  await expect(anonymous.getByRole('link', { name: 'Start your table', exact: true })).toHaveAttribute('href', '/api/auth/google/start');
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 1440, height: 1000 });
   expect((await api(anonymous, '/api/session')).status).toBe(401);
@@ -237,14 +271,14 @@ try {
   await languages.getByRole('button', { name: 'ไทย', exact: true }).focus();
   await anonymous.keyboard.press('Enter');
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
-  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText('เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน');
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingTh);
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toHaveAttribute('href', '/api/auth/google/start');
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'ไทย', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
   await anonymous.reload();
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
-  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText('เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน');
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingTh);
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toBeVisible();
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop-th.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 375, height: 812 });
@@ -254,7 +288,7 @@ try {
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-th.png'), fullPage: true });
   await anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(anonymous.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
+  await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingEn);
   await anonymous.evaluate(() => window.scrollTo(0, 0));
   await anonymous.screenshot({ path: join(output, 'public-welcome-narrow-en-375.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 1440, height: 1000 });
@@ -270,7 +304,7 @@ try {
   await failedSignIn.goto(`${origin}/?auth_error=google_login_failed`);
   await failedSignIn.getByRole('button', { name: 'Already signed in? Check again', exact: true }).click();
   await expect(failedSignIn.getByRole('alert')).toHaveCount(0);
-  await expect(failedSignIn.getByRole('heading', { name: "The best tool is the one you don't have to think about.", exact: true })).toBeVisible();
+  await expect(failedSignIn.getByRole('heading', { level: 1 })).toHaveText(landingHeadingEn);
   expect(providerCalls).toBe(0);
   await failedSignIn.context().close();
   expect(await welcomeIdentityCounts()).toEqual(beforeWelcome);
@@ -382,6 +416,7 @@ try {
   });
   // F004: `/` is the landing page for everyone; a signed-in account gets "Your tables" instead of sign-in.
   await expect(dm).toHaveURL(`${origin}/`);
+  await expect(dm.getByRole('heading', { level: 1 })).toHaveText(landingHeadingEn);
   await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
   await expect(dm.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(dm.getByRole('link', { name: 'Your tables', exact: true })).toHaveCount(2);
@@ -389,9 +424,11 @@ try {
   await expect(dm.locator('.tt-canvas-panel')).toHaveCount(0);
   await expect(dm.getByRole('link', { name: /^Auto demo/ })).toHaveAttribute('href', '/demo');
   await dm.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'ไทย', exact: true }).click();
+  await expect(dm.getByRole('heading', { level: 1 })).toHaveText(landingHeadingTh);
   await expect(dm.getByRole('heading', { name: 'ยินดีต้อนรับกลับ DM', exact: true })).toBeVisible();
   await expect(dm.getByRole('link', { name: 'โต๊ะของฉัน', exact: true })).toHaveCount(2);
   await dm.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'English', exact: true }).click();
+  await expect(dm.getByRole('heading', { level: 1 })).toHaveText(landingHeadingEn);
   await expect(dm.getByRole('heading', { name: 'Welcome back, DM', exact: true })).toBeVisible();
   await dm.locator('.tt-public-welcome header').getByRole('link', { name: 'Your tables', exact: true }).click();
   await expect(dm).toHaveURL(`${origin}/tables`);

@@ -1,0 +1,1 @@
+- Align the Workers browser acceptance contract with the approved F077 homepage copy and layout while retaining language, sign-in, navigation, responsive and reduced-motion checks. No product behavior changes.
