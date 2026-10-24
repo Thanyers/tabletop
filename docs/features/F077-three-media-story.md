@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — round 7 / [PR #280](https://github.com/Thanyers/tabletop/pull/280); round 6 remains production 9.1.0 |
+| สถานะ | `done` — round 7 / [PR #280](https://github.com/Thanyers/tabletop/pull/280), [release #282](https://github.com/Thanyers/tabletop/pull/282); production 9.1.1 / 3f8a06e |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.0 — homepage และคลิป93.2sเผยแพร่แล้ว; round 7 applies the English README and corrects homepage visuals |
+| เวอร์ชัน | 9.1.1 — English README and corrected homepage visuals published; accepted R6 film unchanged |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 และ F077-T2 |
 
 ## ทำไม

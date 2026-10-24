@@ -1,18 +1,26 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 17:37 น. (Asia/Bangkok)**: production รายงาน **9.1.0 / 48d9b98** จาก [v9.1.0](https://github.com/Thanyers/tabletop/releases/tag/v9.1.0) และ [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40086302663) สำเร็จ รวม migrations/deploy/smoke; staging snapshot ยังเป็น **0.0.0-dev / d73262b** ขณะที่ [รอบ 1afe586](https://github.com/Thanyers/tabletop/actions/runs/40085989380) กำลัง deploy จึงไม่อ้าง staging ล่าสุดว่าเสร็จแล้ว
+ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 18:37 น. (Asia/Bangkok)**: production รายงาน **9.1.1 / 3f8a06e** จาก [v9.1.1](https://github.com/Thanyers/tabletop/releases/tag/v9.1.1); [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40090356750) สำเร็จ และ health/readiness ตอบ 200. Staging snapshot ที่ตรวจได้เป็น **0.0.0-dev / 99b0e92**; [รอบ ec32900](https://github.com/Thanyers/tabletop/actions/runs/40089724966) ยังทำงาน จึงไม่อ้างว่า staging รอบล่าสุดเสร็จแล้ว
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [48d9b98](https://github.com/Thanyers/tabletop/commit/48d9b98389dcf4b0657a266c3c9917624e798833) — PR #274 | [d73262b](https://github.com/Thanyers/tabletop/commit/d73262bdf9c61f201f0d92ac5b5d9a1710d4bbe9) — observed snapshot |
-| Release | v9.1.0 / 9.1.0 | dev / 0.0.0-dev |
+| Source | [3f8a06e](https://github.com/Thanyers/tabletop/commit/3f8a06e41aef8e3a66a708c9068aaf70cbb09810) — PR #282 | [99b0e92](https://github.com/Thanyers/tabletop/commit/99b0e92a7e18848611ec658a0d161e9ea7d52712) — observed snapshot |
+| Release | v9.1.1 / 9.1.1 | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.1.1 — English README and visual homepage correction (24 October 2026)
+
+- [Release PR #282](https://github.com/Thanyers/tabletop/pull/282), main `3f8a06e`, [full release CI](https://github.com/Thanyers/tabletop/actions/runs/40089761432) passed all three browser suites and fast checks. [Main validation](https://github.com/Thanyers/tabletop/actions/runs/40090333516) reused the identical validated release tree.
+- [Production deploy](https://github.com/Thanyers/tabletop/actions/runs/40090356750) succeeded. `/version`: `9.1.1 / 3f8a06e`, `built_at=2026-10-24T11:33:54Z`; `/healthz` and `/readyz` returned 200. No new schema, binding, secret or data-policy change; rollback target 9.1.0.
+- Public browser readback: original animation hero now has an English rendition, the sales illustration starts at 225, the same hammer/chair show useful additions, and README links are absent. Hero and lazy-loaded demo images loaded; no horizontal overflow at 1280/375px. The accepted R6 film is unchanged.
+- Local Workers browser acceptance: 35 PASS groups, exit 0, no browser errors (37 mocked provider requests). Local offline UI gate retains two documented findings and four skipped checks; see [F077 verification](narrative/F077/verification.md). No production account/data mutation or live AI invocation was used for this readback.
+- Release Notes HTML generated from the released changelog. Updating the existing private Claude artifact is unavailable to this agent; the ignored local HTML is the handoff, with no replacement public link created.
 
 ## Release 9.1.0 — F077 homepage and paced film (24 October 2026)
 
