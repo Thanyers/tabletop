@@ -10,6 +10,7 @@ import {
   pageForPath,
   pathForProjection,
   pendingRulesObject,
+  shouldApplyLateOpen,
   signInReturnPath,
   tableChangeReset,
 } from './workspace-navigation';
@@ -71,6 +72,17 @@ describe('navigation decisions', () => {
     expect(isSameOpenTable('room-a', 'room-a')).toBe(true);
     expect(isSameOpenTable('room-a', 'room-b')).toBe(false);
     expect(isSameOpenTable('room-a', null)).toBe(false);
+  });
+
+  it('still opens a forward-navigated table when nothing is open', () => {
+    // Forward from the table list: the address names a table and the app shows none, so the
+    // fetched table must be drawn. Treating "nothing open" as a mismatch broke this.
+    expect(shouldApplyLateOpen('room-a', null)).toBe(true);
+    expect(shouldApplyLateOpen('room-a', undefined)).toBe(true);
+    // The member stayed on the same table, or the result is for the table they are looking at.
+    expect(shouldApplyLateOpen('room-a', 'room-a')).toBe(true);
+    // The member switched tables while the fetch was in flight: drop it.
+    expect(shouldApplyLateOpen('room-a', 'room-b')).toBe(false);
   });
 });
 

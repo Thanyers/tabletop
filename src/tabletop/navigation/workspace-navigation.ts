@@ -67,6 +67,17 @@ export function isSameOpenTable(requestedId: string, currentId: string | null | 
   return currentId === requestedId;
 }
 
+/**
+ * Whether a fetched table may be drawn now.
+ *
+ * Correct in three cases only: nothing is open (Forward from the table list must open the table
+ * the address names), the requested table is already the visible one, or the member stayed put.
+ * When a different table is open, the late result is dropped instead of replacing it.
+ */
+export function shouldApplyLateOpen(requestedId: string, currentId: string | null | undefined): boolean {
+  return currentId === null || currentId === undefined || currentId === requestedId;
+}
+
 export interface TableChangeReset {
   /** The seat or table identity changed, so per-table UI state must be reset. */
   changedTable: boolean;
