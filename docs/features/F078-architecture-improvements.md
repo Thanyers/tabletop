@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` (T0/T1/T2/T4 merged; T3 in review; T5–T9 tracked separately) |
+| สถานะ | `doing` (T0–T4 merged; T3a closes staging scheduling; T5–T9 tracked separately) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — documentation, validation and internal refactors; evaluate each task separately |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F078-T*` |
@@ -61,4 +61,4 @@ T1 candidate: [PR #260](https://github.com/Thanyers/tabletop/pull/260). Node v22
 
 ## First delivery group status (2026-10-24)
 
-T0/#264, T1/#260, T4/#263 and T2/#261 are merged into dev. T3/#262 is the final gate PR in this group. All behavior-preserving refactors remain separate later tasks with their test and ownership prerequisites; none is represented as implemented by the foundation PRs. Independent review closed the baseline provenance/default assertions and the focused browser timing issue. Production release remains out of scope.
+T0/#264, T1/#260, T4/#263, T2/#261 and T3/#262 are merged into dev. T3's full dev run passed, but its staging job was SKIPPED after optional focused jobs were skipped. [T3a](F078-T3a-staging-skip.md) closes that scheduling regression before this delivery group is declared complete. All behavior-preserving refactors remain separate later tasks with their test and ownership prerequisites; none is represented as implemented by the foundation PRs. Independent review closed the baseline provenance/default assertions and the focused browser timing issue. Production release remains out of scope.
