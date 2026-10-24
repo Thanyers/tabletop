@@ -1,9 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { cp, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
-import { IncomingMessage } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { Socket } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { CommandAck, CommandEnvelope } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority, type AuthenticatedSession } from '../server/authority.js';
@@ -140,7 +138,6 @@ export async function runRecoveryRehearsal(options: RehearsalOptions): Promise<R
 
   let retryEnvelope: CommandEnvelope | null = null;
   let retryAck: CommandAck | null = null;
-  let workspaceId = '';
   // The revision the authority accepts is its opaque token, not the numeric manifest counter.
   let currentRevision: CommandEnvelope['expectedRevision'] | null = null;
   let currentEpoch = 0;
@@ -159,7 +156,6 @@ export async function runRecoveryRehearsal(options: RehearsalOptions): Promise<R
       const memberSession: AuthenticatedSession = { record: memberRecord, csrfToken: 'rehearsal-csrf', expiresAt: memberRecord.hardExpiresAt };
 
       let workspace = await authority.createWorkspace(ownerSession, { kind: 'table', title: 'Recovery rehearsal room' });
-      workspaceId = workspace.id;
 
       const setup: [string, unknown][] = [
         ['evolve.propose', { change: createSyntheticChange(2) }],

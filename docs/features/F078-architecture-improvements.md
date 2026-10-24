@@ -136,6 +136,14 @@ Reference capture (Windows x64, Node `v22.23.2`, PGlite `0.5.10`, 2 rooms, 6 sam
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **961 passed / 5 skipped (966)** (dev 955 + 6 new), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan clean, `changelog.ts check` 15 fragments, `git diff --check` clean, and the existing baseline suite still passes 4/4. No infrastructure, concurrency, retention or schema change; these numbers are not hosted capacity.
 
+### T7b — disposable recovery rehearsal (PR #279)
+
+`scripts/recovery-rehearsal.ts` turns the T7a recovery contract into checks that run. It builds a room on a disposable on-disk PGlite, commits several revisions, revokes a member through the repository transaction, seeds queued `model_jobs` rows, snapshots, closes, restores by copying the directory, reopens, and re-verifies through the same `CommandAuthority`.
+
+Nine invariants are re-checked after the restore: state hash, epoch/revision, snapshot/event/receipt counts, outbox pending count, pending jobs still queued, revoked member still revoked, exact retry replaying the original receipt, that retry adding no event or receipt, and the revoked member being refused with `MEMBERSHIP_REVOKED`. The report carries the modelled RPO (0 commits, from a clean close) and the measured RTO (reopen plus verification, ~0.8–0.9 s here) next to the limits that stop those numbers being read as a hosted guarantee.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **963 passed / 5 skipped (968)**, lint **0 errors / 111 warnings** (baseline), `npm run build` passed, public scan clean, `changelog.ts check` passed, `git diff --check` clean, and the rehearsal suite passes 2/2. No schema, retention or production change; no shared or production database is touched.
+
 ## First delivery group status (2026-10-24)
 
 T0/#264, T1/#260, T4/#263, T2/#261 and T3/#262 are merged into dev. T3's full dev run passed, but its staging job was SKIPPED after optional focused jobs were skipped. [T3a](F078-T3a-staging-skip.md) closes that scheduling regression before this delivery group is declared complete. All behavior-preserving refactors remain separate later tasks with their test and ownership prerequisites; none is represented as implemented by the foundation PRs. Independent review closed the baseline provenance/default assertions and the focused browser timing issue. Production release remains out of scope.
