@@ -6,7 +6,7 @@ import './narrative-sales-demo.css';
 type Chapter = 1 | 2 | 3 | 4 | 5;
 type Phase = 'idle' | 'typing' | 'ready' | 'sent' | 'reviewed' | 'applied';
 type Product = 'coffee' | 'cake';
-type Notice = 'choose' | 'typing' | 'ready' | 'sent' | 'reviewed' | 'table' | 'quick' | 'chart' | 'discount10' | 'discount20' | 'sale';
+type Notice = 'starting' | 'typing' | 'ready' | 'sent' | 'reviewed' | 'table' | 'quick' | 'chart' | 'discount10' | 'discount20' | 'sale';
 
 type DemoState = {
   chapter: Chapter;
@@ -41,19 +41,19 @@ const requests: Record<LandingLanguage, Record<Chapter, string>> = {
   },
 };
 
-const initialState = (): DemoState => ({
-  chapter: 1,
-  maxChapter: 1,
-  phase: 'idle',
-  request: '',
+const initialState = (language: LandingLanguage): DemoState => ({
+  chapter: 2,
+  maxChapter: 2,
+  phase: 'ready',
+  request: requests[language][2],
   requestIsPreset: true,
   quantities: { coffee: 3, cake: 3 },
-  tableApplied: false,
+  tableApplied: true,
   quickActionsApplied: false,
   chartApplied: false,
   discount: 0,
   savedTenPercent: false,
-  notice: 'choose',
+  notice: 'starting',
   lastSale: null,
 });
 
@@ -103,7 +103,7 @@ function graphemes(value: string, language: LandingLanguage): string[] {
 }
 
 export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) {
-  const [state, setState] = useState<DemoState>(initialState);
+  const [state, setState] = useState<DemoState>(() => initialState(language));
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sendRef = useRef<HTMLButtonElement>(null);
   const reviewRef = useRef<HTMLButtonElement>(null);
@@ -268,12 +268,12 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
     typeToken.current += 1;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
-    focusAfterUpdate.current = () => chapterRefs.current[0]?.focus();
-    setState(initialState());
+    focusAfterUpdate.current = () => chapterRefs.current[1]?.focus();
+    setState(initialState(language));
   };
 
   const noticeText: Record<Notice, string> = {
-    choose: text('Choose the first chapter to begin.', 'เลือกบทแรกเพื่อเริ่มตัวอย่าง'),
+    starting: text('The sample table is already on the canvas. Send the selected request to add a quick-sale action, or replay chapter 1.', 'วางโต๊ะตัวอย่างไว้บน Canvas แล้ว ส่งคำขอที่เลือกเพื่อเพิ่มปุ่มขาย หรือย้อนดูบทที่ 1'),
     typing: text('A sample request is appearing · you can wait or send it when ready.', 'กำลังแสดงคำขอตัวอย่าง · รอหรือส่งเมื่อพร้อมได้เลย'),
     ready: text('The request is ready · send it when you choose.', 'คำขอพร้อมแล้ว · กดส่งเมื่อคุณต้องการ'),
     sent: text('The request is in this illustration · review the draft before applying it.', 'คำขออยู่ในภาพจำลองนี้ · ตรวจร่างก่อนใช้การเปลี่ยนแปลง'),
@@ -296,8 +296,8 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
   return <section className="tt-sales-demo" id="board" aria-labelledby="tt-sales-demo-title">
     <div className="tt-sales-demo__intro">
       <div>
-        <p className="tt-sales-demo__kicker">{text('EXAMPLE TABLE · SMALL CAFÉ', 'โต๊ะตัวอย่าง · ร้านกาแฟ')}</p>
-        <h2 id="tt-sales-demo-title">{text('Start with sales. Build on the same table.', 'เริ่มจากจดขาย แล้วค่อยต่อยอด')}</h2>
+          <p className="tt-sales-demo__kicker">{text('ONE SAMPLE TABLE · A SMALL CAFÉ EXAMPLE', 'โต๊ะตัวอย่างเดียว · ตัวอย่างร้านกาแฟ')}</p>
+          <h2 id="tt-sales-demo-title">{text('A sales table that grows when the work changes.', 'โต๊ะขายที่ต่อยอดได้เมื่องานเปลี่ยน')}</h2>
       </div>
       <span className="tt-sales-demo__sample">{text('Illustrative · sample data', 'ภาพอธิบาย · ข้อมูลตัวอย่าง')}</span>
     </div>
