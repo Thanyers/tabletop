@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F077-T1 | ร่างเรื่องเล่าสามสื่อ + Remotion animatic | `doing` | Codex · `docs/F077-three-media-story` · `docs/narrative/F077/`, `docs/features/F077-three-media-story.md`, แถวตนเองใน PLAN/spec, changelog fragment; ไม่แตะ landing/README runtime |
 | F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
