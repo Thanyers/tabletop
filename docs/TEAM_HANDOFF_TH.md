@@ -1,5 +1,7 @@
 # ส่งมอบ Tabletop ให้ทีมวิศวกรรม
 
+> แผนที่ระบบและนโยบายปัจจุบัน: [Current architecture](CURRENT_ARCHITECTURE.md) · เนื้อหาสถานะและหลักฐาน release 2.0.0 ด้านล่างเป็นบันทึกของรอบนั้น ใช้ [Deployments](DEPLOYMENTS.md) ยืนยัน environment/source ปัจจุบัน และ [F078](features/F078-architecture-improvements.md) ดูลำดับงาน architecture ที่แยก PR
+
 สำหรับทีมที่รับช่วงพัฒนา: อ่าน [product.md](../product.md) เมื่อจำเป็นต้องเข้าใจเหตุผล ผู้ใช้ และขอบเขตผลิตภัณฑ์ จากนั้นเริ่มที่ [สถานะ deployment ล่าสุด](DEPLOYMENTS.md) เพื่อยืนยัน source และ environment ใช้ [CONTRIBUTING](../CONTRIBUTING.md) ตั้งเครื่องและรันในเครื่อง แล้วเปิดเอกสาร design/acceptance ที่ตรงกับส่วนที่จะแก้
 
 ## สถานะและลำดับงาน

@@ -25,6 +25,7 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F077-T1 | ร่างเรื่องเล่าสามสื่อ + Remotion animatic | `review` | Codex · [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) · รอบ 3: ปัญหาของคนใช้ → พิมพ์คำขอ → ตรวจ/ใช้ → เครื่องมือปรับให้พอดี; แก้เว็บ/คลิปและเรื่องเล่าร่วมกัน; ไม่เปลี่ยน landing/README ที่เผยแพร่ |
+| F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (first group T0–T4) | [F078](docs/features/F078-architecture-improvements.md) |
 | F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |
@@ -75,7 +76,11 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F078-T4 | SQL and Room repository conformance | `review` | Codex | `feat/F078-T4-repository-contract` | new shared conformance scenarios; new server/cloudflare test entrypoints / #263 | F078-T0/T1 before integration | Same duplicate, conflict and transaction rollback cases against real disposable adapters. Preserve application behavior and do not change persistent schema. |
 | F078-T0 | Compatible security patches unblock existing validation | `review` | Codex | `fix/F078-T0-validation-dependencies` / #264 | package/lock, feature/spec/PLAN, changelog fragment | — | audit0, unit901/5skip, CF197, build/typecheck/dry-run pass; no production release |
+| F078-T1 | Current architecture contract และลำดับ PR ที่รักษา behavior | `done` | Codex | `feat/F078-architecture-foundation` / #260 | `docs/CURRENT_ARCHITECTURE.md`, architecture/product docs, feature/spec/PLAN | — | docs only; local link/fragment/public checks passed; no production release |
+| F078-T5..T9 | Incremental UI/Room extraction, recovery design, view registration and load comparison | `todo` | Codex | — | see `docs/features/F078-architecture-improvements.md` | F078-T2..T4 + ownership available | no retention mutation or production release |
+| F078-T0 | Compatible security patches unblock existing validation | `done` | Codex | `fix/F078-T0-validation-dependencies` / #264 | package/lock, feature/spec/PLAN, changelog fragment | — | audit0, unit901/5skip, CF197, build/typecheck/dry-run pass; no production release |
 | F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
 | F066-T8 | เปิด hosted JS/Python แก้เคสไม่ผ่าน และตรวจหลัง deploy | `review` | Codex | `docs/F066-release902-results` | F066 acceptance/feature/spec, DEPLOYMENTS, PLAN, release-notes CRLF parser และ main กลับ dev | — | production9.0.2/8e2c7e1; 37PASS/10BLOCKED/1SKIP; fullCI901/197+browser3ผ่าน; หลายบัญชี8/human/mobileBLOCKED; actualretest/reportและmainbackmergeในPR #258 |
 | F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |

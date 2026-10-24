@@ -7,8 +7,7 @@
 
 ## ผลิตภัณฑ์
 
-Canvas ร่วมกันสำหรับสร้างงานหรือเกมจากข้อมูลและกติกา: ผู้ใช้นำไฟล์ข้อความเข้า → AI ร่างตาราง/กฎ/ปุ่มการกระทำ → คนตรวจ
-*Simulate → Validate → Approve → Activate* → เชิญคนอื่นมาเล่นบนสถานะเดียวกัน ห้องเป็นหน่วยบันทึกถาวร
+Canvas ร่วมกันสำหรับสร้างงานหรือเกมจากโจทย์ ข้อมูล และกติกา: เริ่มจากข้อความได้และเพิ่มไฟล์ภายหลัง → AI ร่างตาราง/กฎ/ปุ่มการกระทำ → authority ตรวจผ่านขั้น *Simulate → Validate → Approve → Activate* (รันอัตโนมัติเมื่อผ่าน guards หรือรอตรวจเมื่อไม่ผ่าน) → สมาชิกใช้สถานะเดียวกัน ห้องเป็นหน่วยบันทึกถาวร
 
 - คู่มือผู้ใช้: [docs/USER_GUIDE_TH.md](docs/USER_GUIDE_TH.md)
 - ภาพรวมระบบและจุดเริ่มในโค้ด: [docs/TEAM_HANDOFF_TH.md](docs/TEAM_HANDOFF_TH.md)
@@ -23,16 +22,20 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 | Authority | `server/authority.ts` | ตรวจ role/seat/turn/revision แล้ว commit แบบ atomic |
 | Cloudflare Worker + D1 | `cloudflare/index.ts`, `cloudflare/auth.ts` | Google OIDC, session, CSRF, ดัชนี My tables |
 | Room DO (SQLite) | `cloudflare/room.ts`, `room-repository.ts` | state/membership/receipts/events ต่อห้อง + WebSocket |
-| Billing DO + AI | `cloudflare/billing.ts`, `cloudflare/ai.ts` | จองงบก่อนเรียก DeepSeek, consent, structured output |
+| Billing DO + AI | `cloudflare/billing.ts`, `cloudflare/ai.ts` | จอง/บันทึก usage ก่อนเรียก DeepSeek, consent, structured output; money cap ปิดตาม F036 |
 | Node local runtime | `server/` | PGlite + guest session, AI ปิด (ใช้พัฒนา ไม่ใช่ production) |
 
-ขอบเขต contract: [GENERIC_TABLE_DESIGN](docs/GENERIC_TABLE_DESIGN.md) · auth/storage: [R1_ARCHITECTURE](docs/R1_ARCHITECTURE.md) · design system: [design.md](design.md)
+แผนที่ contract/capability ปัจจุบัน: [CURRENT_ARCHITECTURE](docs/CURRENT_ARCHITECTURE.md) · ข้อมูล/คำสั่ง: [GENERIC_TABLE_DESIGN](docs/GENERIC_TABLE_DESIGN.md) · auth/storage: [R1_ARCHITECTURE](docs/R1_ARCHITECTURE.md) · design system: [design.md](design.md)
 
 ## สถานะปัจจุบัน
 
 - **F077-T1 เรื่องเล่าสามสื่อ — `review`, [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) (2026-10-24):** [ร่างรอบ3](docs/narrative/F077/README.md) แก้ข้อเสนอแนะว่ารอบ2ไม่เห็นเครื่องมือปรับให้เข้ากับคน: คนขายพิมพ์5คำขอ → ตรวจ/ใช้ → ใช้เครื่องมือแล้วขอปรับต่อบนโต๊ะเดิม; จดขาย/ปุ่มขายเร็ว/กราฟ/ส่วนลด10%/แก้กฎ20%; เว็บTH/ENและREADMEเล่าเรื่องเดียวกัน · Remotion MP4เงียบ60s/1280×720/30fps ใช้logo/loaderเดิมและเก้าอี้+ปากกา+ค้อนไม่morph · Node22.23.2: render/decode1,800frames, คำนวณ8/8, ลิงก์67/67, full UI gate16/16measured+4SKIP, browser5บท/ภาษา/reset/ใช้ต่อผ่านหลังแก้null-query, independent source reviewปิด3P2, publicscan0finding, changelog1fragmentและwhitespaceผ่าน; finalMP4เล่นได้ไม่มีmediaerror · [ผลตรวจและข้อจำกัด](docs/narrative/F077/verification.md): ภาพจำลอง, humancomprehension/productionproofยังไม่ตรวจ, pause/seekรอบ3ไม่ยืนยัน; คงdraftไม่merge ไม่เปลี่ยนหน้าเว็บ/READMEที่เผยแพร่; CIcurrentheadอ่านหลังpush
 
-- **F078-T0 Validation dependency prerequisite — review, [PR #264](https://github.com/Thanyers/tabletop/pull/264) (2026-10-24):** ฐาน dev เดิมติด audit high ก่อนเริ่ม architecture; patch Vitest4.1.12 และ overrides เฉพาะ Miniflare→Undici7.30.1 / Cloudflare test plugin→Zod4.6.7 โดยคง Worker toolchain Node22.23.2: standard npm ci/audit0, unit901passed/5skipped, Workers197passed, build/typecheck/Worker dry-run ผ่าน, lint0errors/111warnings, browser-secret scan143/0findings ไม่มี runtime policy/schema change และไม่ release production
+- **F078-T0 Validation dependency prerequisite — merged dev `1ec4e61`, [PR #264](https://github.com/Thanyers/tabletop/pull/264) (2026-10-24):** ฐาน dev เดิมติด audit high ก่อนเริ่ม architecture; patch Vitest4.1.12 และ overrides เฉพาะ Miniflare→Undici7.30.1 / Cloudflare test plugin→Zod4.6.7 โดยคง Worker toolchain Node22.23.2: standard npm ci/audit0, unit901passed/5skipped, Workers197passed, build/typecheck/Worker dry-run ผ่าน, lint0errors/111warnings, browser-secret scan143/0findings ไม่มี runtime policy/schema change และไม่ release production
+
+- **F078-T1 Current architecture contract — merged dev `4e9e197`, [PR #260](https://github.com/Thanyers/tabletop/pull/260) (2026-10-24):** เพิ่ม [CURRENT_ARCHITECTURE](docs/CURRENT_ARCHITECTURE.md) เป็นแผนที่ ownership/capabilities/policies และ [ลำดับ PR](docs/features/F078-architecture-improvements.md); ปรับ product/spec และป้าย historical contract ให้ตรง no-file, isolated compute, open visibility, actor/epoch consent, guarded auto-apply และ no-money-cap เดิม Node22.23.2: Markdown local targets, changelog fragment, public scan และ whitespace checks ผ่าน; application/unit/browser ในเครื่อง SKIPPED (docs only) Required CI attempt แรกล้มที่ audit ของฐานเดิม แยก F078-T0/#264 แก้ dependency ก่อนรวม ไม่เปลี่ยน runtime/schema และไม่ release production
+
+- **F078-T4 Shared SQL/Room repository conformance — review, [PR #263](https://github.com/Thanyers/tabletop/pull/263) (2026-10-24):** Node22.23.2: SQL7/7 + Room7/7, scoped typecheck/lint pass; duplicate/mismatch/CAS/atomic rollback/epoch/revocation through real disposable adapters; tests only. Required CI waits for compatible dependency prerequisite F078-T0; no production release or persistent schema/retention change.
 
 - **F066-T13 Ask รายกฎ — ออก9.0.2แล้ว (2026-10-23):** [PR #257](https://github.com/Thanyers/tabletop/pull/257) main8e2c7e1/[deploy39982761764](https://github.com/Thanyers/tabletop/actions/runs/39982761764) สำเร็จ exactคำถาม "กฎนี้รับอะไรและเปลี่ยนผลตรงไหน" ส่งถึงassistantและตอบdiscount_10/inputgross/outputสองค่า/ส่งต่อvat_7ถูกตัวบนstagingและproduction โปรแกรม/raw/computeRuns/data-rule-actionrevisionsเดิม; เปลี่ยนเฉพาะlayoutการ์ดคำตอบใหม่ RenderedRED→GREENรักษาAsk, Changeมี/ไม่มีref และordinaryopenrules FullreleaseCI Node22.23.2 unit901passed/5skipped Workers197 browser3ครบผ่าน; independent reviewไม่มีP1/P2
 
@@ -143,10 +146,10 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ### ข้อจำกัดผลิตภัณฑ์ที่มีผล
 
-- ไฟล์โต๊ะทั่วไป: UTF-8 CSV/JSON/TXT/MD, 32 KiB/ไฟล์, 4 ไฟล์, รวม 64 KiB · ไม่รับ PDF/ภาพ/ไบนารี
-- AI context ของ candidate: สถานะปัจจุบัน + ≤6 คู่/16 KiB (สี่ช่วงล่าสุดและค้นได้อีกสองช่วงจาก 100 รายการของผู้ถาม/ห้อง/epoch เดียวกัน), table input ≤48,000 bytes และ provider request รวม ≤64,000 bytes, ≤500 assistant jobs/ห้อง · assistant ตอบได้ถึง 32,768 output tokens และ 256,000 ตัวอักษร (raw SSE guard 16 MiB) · ยังไม่มีการสรุปความจำระยะยาวอัตโนมัติ
-- ห้อง (Worker): เจ้าของ + สมาชิก ≤12 และไม่เกินเพดานที่โต๊ะตั้ง (Node runtime ≤7) · invite ใช้ครั้งเดียว หมดอายุ 10 นาที
-- F010 เพิ่ม collection ว่าง/field พร้อม default ได้ แต่ห้ามลบ collection/field เดิม เปลี่ยน definition เดิม หรือลบ invariant; ร่างแก้ไขไม่ใส่ initialRecords ทับข้อมูล ยังไม่เปิดใช้บน hosted environment
+- Source text, row import และ canvas images เป็นคนละเส้นทาง; ขีดจำกัดและ source ของค่าคงที่อยู่ใน [Current architecture → Limits](docs/CURRENT_ARCHITECTURE.md#limits-and-state-lifetime)
+- Rule drafting กับ assistant มีเพดาน request คนละชุด; อ่านค่าจากเจ้าของ contract ในหน้าเดียวกัน ไม่ใช้ limit ของ draft แทน assistant และยังไม่มีสรุปความจำระยะยาวอัตโนมัติ
+- ห้อง Worker/Node และ invite แบบโต๊ะทั่วไป/legacy ต่างกัน; ใช้ [capability matrix](docs/CURRENT_ARCHITECTURE.md#runtime-capability-matrix) และ contract ของแต่ละ flow
+- การแก้กฎต้องรักษาข้อมูลและ definitions ที่เข้ากันได้; รายละเอียด evolution/import/compute อยู่ใน [Generative runtime](docs/GENERATIVE_CANVAS_RUNTIME.md) และ [Reusable compute](docs/REUSABLE_COMPUTE.md) ส่วนสถานะ hosted อ้าง [Deployments](docs/DEPLOYMENTS.md)
 
 ### ยังไม่ได้พิสูจน์
 

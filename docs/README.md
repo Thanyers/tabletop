@@ -8,6 +8,7 @@
 | --- | --- |
 | [README](../README.md) | ต้องการภาพรวมและเรื่องราวผลิตภัณฑ์พร้อมภาพประกอบ |
 | [product.md](../product.md) | ต้องการแหล่งอ้างอิงเดียวของ WHY / WHO / WHERE, product intent และขอบเขต beta |
+| [CURRENT_ARCHITECTURE](CURRENT_ARCHITECTURE.md) | โครงสร้างและเจ้าของ state, capability ของแต่ละ runtime, นโยบายที่ใช้จริง และแผนที่ contract ปัจจุบัน |
 | [USER_GUIDE_TH](USER_GUIDE_TH.md) | ต้องการเปิดเดโม สร้างโต๊ะ เชิญสมาชิก เล่น และกลับมาใช้ห้องเดิม |
 | [TEAM_HANDOFF_TH](TEAM_HANDOFF_TH.md) | รับช่วงพัฒนา: สถานะล่าสุด แผนที่โค้ด สถาปัตยกรรม หลักฐาน และขอบเขต deploy |
 | [DEPLOYMENTS](DEPLOYMENTS.md) | ตรวจ URL, source/version, resources และผลตรวจ release ล่าสุด |
