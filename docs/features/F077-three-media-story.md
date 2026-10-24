@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — round 7 / [PR #280](https://github.com/Thanyers/tabletop/pull/280); round 6 remains production 9.1.0 |
+| สถานะ | `done` — round 7 / [PR #280](https://github.com/Thanyers/tabletop/pull/280), [release #282](https://github.com/Thanyers/tabletop/pull/282); production 9.1.1 / 3f8a06e |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.0 — homepage และคลิป93.2sเผยแพร่แล้ว; round 7 applies the English README and corrects homepage visuals |
+| เวอร์ชัน | 9.1.1 — English README and corrected homepage visuals published; accepted R6 film unchanged |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 และ F077-T2 |
 
 ## ทำไม
@@ -57,3 +57,9 @@
 หน้า homepage จริงใช้ดีไซน์ที่ยอมรับและ English เป็นฐาน บอร์ดตัวอย่างทำงานใน browser โดยไม่เรียก AI หรือบันทึกข้อมูล runtime มีส่งคำขอ → Review → Apply ครบห้าบท; ข้อมูลเดิมและยอดที่ใช้อยู่ไม่เปลี่ยนระหว่างตรวจร่างส่วนลด รอบ 7 นำ README ภาษาอังกฤษไปใช้ใน root แล้ว
 
 สถานะการตรวจและข้อจำกัดล่าสุดอยู่ใน [verification](../narrative/F077/verification.md) ผลของรอบ 4 เก็บเป็นประวัติ ไม่ใช่ผลรับรองรอบ 5
+
+## Round 8 — bounded hero and image correction
+
+The user explicitly limited visible edits to the hero animation/note/framing and the physical adaptation images. The new hero must type each request before its card appears, retain earlier cards, loop without a Play click, and have one flat canvas. Keep the existing README animation and accepted R6 film unchanged. Physical images must be realistic and show substantial individual fit (a hand-shaped hammer grip; a chair with seat/back/arm/foot supports), retaining the same object and person before/after. Generated image provenance and exact prompts live beside those image assets.
+
+Round 8 candidate: 18-second EN/TH infinitely looping GIFs, typed request then experiment/controls/chart, flat background matching the homepage. A small Pause/Resume icon provides motion control while autoplay remains the default; reduced motion receives a poster. Node 22.23.2 build/typecheck, Worker dry-run and scoped lint pass. Browser changed groups and four-width visual readback pass; full suite and release remain pending. The independent source review confirms unchanged README/film/sales content.
