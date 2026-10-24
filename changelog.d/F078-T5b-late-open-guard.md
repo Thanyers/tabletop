@@ -1,0 +1,1 @@
+- F078-T5b fix: a back/forward table open now applies when no table is open, so Forward from the table list draws the table the address names again. The late-result guard still drops a fetch whose table the member already navigated away from. Unit coverage added and the browser flow re-verified. No schema, retention or production change.

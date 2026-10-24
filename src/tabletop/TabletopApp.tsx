@@ -19,7 +19,7 @@ import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
 import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
 import type { AddableWebSource } from './ui/table-chat-state';
-import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, isSameOpenTable, nextHistoryWrite, pageForPath, pathForProjection, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
+import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistoryWrite, pageForPath, pathForProjection, shouldApplyLateOpen, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
@@ -377,8 +377,8 @@ export default function TabletopApp() {
         const requestedId = route.id;
         tabletopClient.workspace(requestedId).then((opened) => {
           // The fetch can resolve after the member moved on; drawing it then would show the
-          // previous table under the new address.
-          if (!isSameOpenTable(requestedId, workspaceRef.current?.id)) return;
+          // previous table under the new address. With nothing open, Forward must still open it.
+          if (!shouldApplyLateOpen(requestedId, workspaceRef.current?.id)) return;
           urlSyncRef.current = 'none';
           setWorkspace(opened);
         }, (error) => showNotice(errorText(error), 'error'));
