@@ -92,6 +92,8 @@ One behavior is deliberately tightened, and it is called out rather than hidden:
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **937 passed / 5 skipped (942)** (927 from T5a + 10 navigation tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan clean, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: `src/tabletop/TabletopApp.tsx` is an explicitly uncovered planner path, so the PR selects every focused gate, and the three browser suites run in the full dev run after merge. No schema, retention, billing or visibility change.
 
+Fix (PR #272): the guard shipped as `isSameOpenTable`, which returns false when nothing is open, so the `popstate` handler dropped a Forward-navigated table and the full dev run failed at `tests/cloudflare-browser.mjs:530`. It is now `shouldApplyLateOpen`, which applies when nothing is open, when the same table is open, or when the member stayed put, and still drops a fetch for a table they navigated away from. Navigation tests cover the null/undefined/switched cases.
+
 ### T6a — Room job view/progress seam (PR #267)
 
 Moved out of `cloudflare/room.ts` into `cloudflare/room-job-view.ts`: `PublicModelJob`, the assistant confirmation message and job views, the draft job status/view functions, `publicClarification`, and the four redaction/clamping helpers (`draftIdentityReplacements`, `boundedFailureDetails`, `boundedSearchProgress`, `boundedResearch`). The token/cursor/prompt constants move with them so there is one definition.
