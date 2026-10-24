@@ -28,6 +28,8 @@
 
 Final MP4:3,515,240bytes · SHA256 `409fc4a8c1e111783aeb8370518c154f06d2589d3af4eb3ad7a3da21323821b7`
 
+Sync before delivery: merged `origin/dev` at `694d556`; preserved F077 and independent F078 entries. Post-merge public scan888files/0findings, changelog6fragmentsOK, whitespace clean. Media and narrative source unchanged by this merge; earlier876files/4fragments are the pre-merge candidate checks.
+
 ## ประวัติรอบ3 (ก่อนเพิ่มเสียง)
 
 24 ตุลาคม 2026 · Node.js 22.23.2 · ขอบเขต: สื่อร่างและตัวอย่างในหน้า ไม่ใช่ production runtime
