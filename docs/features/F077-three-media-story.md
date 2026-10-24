@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — round 8 / [PR #285](https://github.com/Thanyers/tabletop/pull/285), [release #286](https://github.com/Thanyers/tabletop/pull/286); production 9.1.2 / abe4aaf |
+| สถานะ | `done` — round 9 content live at 9.1.3 / 4748689; [release #289](https://github.com/Thanyers/tabletop/pull/289); full deployment remains partial ([#291](https://github.com/Thanyers/tabletop/issues/291)) |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.2 — scoped hero motion and realistic adaptation imagery published; README and R6 film unchanged |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 และ F077-T2 |
+| เวอร์ชัน | 9.1.3 — homepage/README narrative order and copy cleanup; accepted film/media unchanged |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T4 |
 
 ## ทำไม
 
@@ -70,4 +70,4 @@ User scope: homepage and root README only; the accepted film stays unchanged. Es
 
 Remove repeated eyebrows and aphorisms, the THE IDEA callout, duplicated physical-example labels, LOCAL ILLUSTRATION and text-interpreted implementation notes. Keep one prepared-example disclosure next to the café heading. README moves the existing learning GIF into Learning, retains current capability qualifications and the exact AGPL section, and removes unrelated D&D/unrestricted-execution disclaimers.
 
-Node22.23.2 build/typecheck, Worker dry-run, scoped lint, 13 README local references and unchanged-license check pass. CUA verifies order and no overflow at 280/320/414/1280. Stable-content readback is identical with reduced motion and the poster loads. Full offline UI gate: 13 measured PASS, 3 FAIL, 4 SKIP; failures are shared CSS literals, index-based parity after a motion control is removed, and the already-selected English button. These findings are retained, not marked PASS. Browser changed groups pass; full local suite and hosted validation pending.
+Node22.23.2 build/typecheck, Worker dry-run, scoped lint, 13 README local references and unchanged-license check pass. CUA verifies order and no overflow at 280/320/414/1280. Stable-content readback is identical with reduced motion and the poster loads. Full offline UI gate: 13 measured PASS, 3 FAIL, 4 SKIP; failures are shared CSS literals, index-based parity after a motion control is removed, and the already-selected English button. These findings are retained, not marked PASS. Local browser suite: 35 groups; final-source full release CI passed. Public content is live; Container settings deployment remains incomplete (#291).

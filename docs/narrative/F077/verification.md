@@ -1,3 +1,19 @@
+# F077 — Revision 9 verification
+
+25 October 2026 · [PR #288](https://github.com/Thanyers/tabletop/pull/288) · [Release #289](https://github.com/Thanyers/tabletop/pull/289)
+
+- Scope: homepage and English root README order/copy only. The accepted film, captions, GIFs and physical images have no source-byte changes compared with production 9.1.2 (`abe4aaf`).
+- Reader order: product definition → physical-tool adaptation → software friction/solution → evolving café example → broader uses → optional film → start. README's learning animation now sits with Learning.
+- Cleanup: repeated hero/section eyebrows, THE IDEA callout, vague footer/README slogans, repeated physical labels, LOCAL ILLUSTRATION and text-interpreted implementation notes removed. One prepared-request/sample-data/no-live-AI disclosure remains near the café example. English/Thai copy is aligned.
+- Node22.23.2: local build/typecheck, Worker dry-run, scoped lint, public scan, 13 resolving README references and exact AGPL-section preservation passed. Local Workers suite: 35 PASS groups, no browser errors, using the built UI before final disclosure/Thai wording polish. [Full release CI](https://github.com/Thanyers/tabletop/actions/runs/40131202479) passed all three browser suites on final source. Main validation reused the identical validated tree.
+- CUA readback: DOM/header anchors follow the intended order; no overflow at 280/320/414/1280. Important headings/table content remains identical and visible under reduced motion, with the poster selected. Existing browser checks cover real language switching and the five-step café state/calculation flow.
+- Raw offline UI gate: 13 measured PASS / 3 FAIL / 4 SKIP. Findings retained: shared bundled CSS literals; generic reduced-motion parity indexes elements by position while removing Pause shifts later indices; generic interaction clicks already-selected English. Four skipped checks lack theme/token/dialog inputs. Raw failures are not relabelled PASS; focused content/language checks are separate evidence.
+- Production readback at 04:08 Asia/Bangkok: `/version` reports `9.1.3 / 4748689`, built_at `2026-10-24T21:02:51Z`; health/readiness 200. Actual homepage order and final prepared-example copy verified. Root README blob on GitHub main equals local main (`36d0eae6d3d19e6c1c7371ddddd7a721800c84a5`). Staging remains `0.0.0-dev / ac51767`, not the latest dev HEAD.
+- Deployment is **PARTIAL**: [first attempt](https://github.com/Thanyers/tabletop/actions/runs/40132004027) and [same-SHA retry](https://github.com/Thanyers/tabletop/actions/runs/40132413721) both failed applying Durable Object-managed Container settings after Worker publication. D1 migration steps succeeded; workflow smoke and GitHub Release publication were **SKIPPED**. Full deployment and compute completion remain **UNVERIFIED**; [incident #291](https://github.com/Thanyers/tabletop/issues/291) stays open. No backend, Wrangler/configuration or credential changes were attempted. Public readback is not a substitute for completed pipeline smoke or actual compute execution.
+- No production account/data write or live AI request was used for validation. Release Notes HTML was generated locally; updating the existing private Claude artifact is unavailable to this agent.
+
+## Revision 8 evidence (historical)
+
 # F077 — Revision 8 verification
 
 24 October 2026 · [PR #285](https://github.com/Thanyers/tabletop/pull/285) · [Release #286](https://github.com/Thanyers/tabletop/pull/286)

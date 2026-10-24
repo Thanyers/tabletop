@@ -1,6 +1,6 @@
 # Tabletop — แผนและชุดร่างสามสื่อ
 
-วันที่ 24 ตุลาคม 2026 · รอบ 8 เผยแพร่แล้ว: Hero พิมพ์แล้วเพิ่มกล่องและภาพเครื่องมือสมจริง · production 9.1.2 / abe4aaf · [ผล deploy](../../DEPLOYMENTS.md)
+วันที่ 25 ตุลาคม 2026 · รอบ 9: จัดลำดับหน้าเว็บและ README พร้อมตัดคำซ้ำ; เนื้อหาแสดงจริงที่ 9.1.3 / 4748689 · วิดีโอเดิมไม่เปลี่ยน · pipeline ยังติด Container settings ([สถานะ](../../DEPLOYMENTS.md))
 
 เปิด [หน้ารวมร่าง](review.html) เพื่อดูคลิปและข้อความ; [หน้าเว็บ TH/EN](landing-copy.md), [README ภาษาอังกฤษ](../../../README.md) ([ร่างเดิม](readme-draft.md)), [storyboard และ prompt ผลิตวิดีโอ](video-brief.md), [หลักฐานและขอบเขต](evidence.md)
 
