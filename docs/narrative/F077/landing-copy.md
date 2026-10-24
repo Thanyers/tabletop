@@ -8,27 +8,27 @@
 | --- | --- | --- |
 | Header note | พื้นที่สำหรับงาน การเรียนรู้ และการเล่น | A place for work, learning, and play |
 | Eyebrow | TABLETOP · เริ่มจากเรื่องของคุณ | TABLETOP · START WITH YOUR WORK |
-| H1 | เริ่มจากสิ่งที่อยากทำ ให้เครื่องมือค่อย ๆ พอดีกับงานของคุณ | Start with your work. Let the tools take shape. |
+| H1 | เริ่มจากงาน ให้เครื่องมือโตไปด้วยกัน | Start with your work. Let your tools grow. |
 | Promise | บอกโจทย์ แล้วให้ AI ช่วยร่างตาราง แบบฟอร์ม ปุ่ม กราฟ และวิธีคำนวณบนโต๊ะเดียวกัน คุณตรวจและเปิดใช้ แล้วปรับต่อได้เมื่องานเปลี่ยน | Describe what you want to do. AI helps draft tables, forms, buttons, charts, and calculations on one canvas. Review them, put them to use, and adapt them as your work changes. |
 | Support | เริ่มจากข้อความได้เลย เพิ่มข้อมูลเมื่อพร้อม | Start with words. Add data when you are ready. |
 | Primary CTA | เริ่มโต๊ะของคุณ | Start your table |
-| Secondary CTA | ดูเรื่องราวใน 36 วินาที | Meet Tabletop in 36 seconds |
+| Secondary CTA | ดูเรื่องราวใน 60 วินาที | Meet Tabletop in 60 seconds |
 | Video caption | ภาพเคลื่อนไหวอธิบายแนวคิด · ข้อมูลตัวอย่าง | Concept animation · illustrative data |
-| Video alt / poster | จากเก้าอี้และโต๊ะว่าง สู่เครื่องมือคำนวณยอดขายที่ปรับตามข้อมูลและกฎ | A chair becomes an empty table, then a sales workspace that adapts to data and rules. |
+| Video alt / poster | เก้าอี้ ปากกา และค้อนวางเพิ่มทีละชิ้น ก่อนตัดเข้าสู่โต๊ะยอดขายที่ค่อย ๆ เพิ่มและปรับเครื่องมือ | A chair, pen, and hammer arrive one by one, followed by a sales canvas that gains tools and adapts to data and rules. |
 
-จัดH1เป็น2–3บรรทัดตามพื้นที่ ไม่บังคับ line break ในจอแคบ Bodyจำกัดความกว้างอ่านง่าย ปุ่มหลักใช้ `primaryHref` เดิม ปุ่มรองเชื่อม `#tabletop-film` ที่ sectionวิดีโอใหม่ ไม่ผูกกับproviderหรือรุ่นrelease
+Hero รอบ 2 ใช้บอร์ดตัวอย่างที่กดเพิ่ม/แก้ได้ และวาง film เป็น section ถัดไป ไม่จำกัดเป็น poster ข้างข้อความ จัดH1เป็น2–3บรรทัดตามพื้นที่ ไม่บังคับ line break ในจอแคบ Bodyจำกัดความกว้างอ่านง่าย ปุ่มหลักใช้ `primaryHref` เดิม ปุ่มรองเชื่อม `#tabletop-film` ที่ sectionวิดีโอใหม่ ไม่ผูกกับproviderหรือรุ่นrelease
 
-## Why — เรื่องเก้าอี้
+## Why — เก้าอี้ ปากกา ค้อน
 
 | ส่วน | ไทย | English |
 | --- | --- | --- |
 | Eyebrow | เครื่องมือที่พอดี | TOOLS THAT FIT |
-| H2 | เก้าอี้ที่ดี ให้คุณมีสมาธิกับสิ่งที่อยู่ตรงหน้า | A good chair lets you focus on what is in front of you. |
-| Body | เวลานั่งบนเก้าอี้ที่พอดี เราแทบไม่ต้องคิดถึงมัน เราคิดถึงงาน เรื่องที่กำลังเรียน หรือคนที่กำลังคุยด้วย เราอยากให้ซอฟต์แวร์รู้สึกแบบนั้นด้วย | When a chair fits, you barely think about it. Your attention goes to the work, the lesson, or the person across the table. We want software to feel that way too. |
+| H2 | เครื่องมือที่พอดี ให้คุณอยู่กับสิ่งที่อยากทำ | Good tools keep you close to what you want to do. |
+| Body | เก้าอี้ให้เรานั่งคิด ปากกาให้ความคิดมีรูปร่าง ค้อนช่วยให้มันเป็นจริง เราอยากให้ซอฟต์แวร์ช่วยให้เราอยู่กับงานตรงหน้าแบบนั้น และปรับต่อได้เมื่องานเปลี่ยน | A chair gives you a place to think. A pen gives an idea a shape. A hammer helps you build it. We want software to keep you close to your work, and adapt as that work changes. |
 | Bridge | แต่งานเปลี่ยนได้ เครื่องมือจึงควรมีที่ให้ปรับตาม | Work changes. The tools should have room to change with it. |
 | Belief | เครื่องมือที่ดีที่สุด คือเครื่องมือที่คุณไม่ต้องคิดถึงมัน | The best tool is the one you don't have to think about. |
 
-ใช้ภาพเก้าอี้SVGขนาดเล็กที่สืบต่อจากmotion ไม่ทำเป็นภาพheroใหญ่จนคนเข้าใจว่าเป็นเว็บเฟอร์นิเจอร์ เรื่องนี้เป็นคำเปรียบเทียบที่ร่างใหม่ ไม่ติดป้ายว่าเป็นประวัติผู้ก่อตั้ง
+ใช้ภาพเก้าอี้ ปากกา ค้อน SVG ที่ค่อย ๆ เพิ่มเข้ามาตาม motion โดยไม่มี morph; วางเป็นแถว editorial สั้น ไม่ทำเป็นภาพheroใหญ่จนคนเข้าใจว่าเป็นเว็บเฟอร์นิเจอร์ เรื่องนี้เป็นคำเปรียบเทียบที่ร่างใหม่ ไม่ติดป้ายว่าเป็นประวัติผู้ก่อตั้ง
 
 ## Process — 3 ขั้น
 
@@ -81,4 +81,4 @@ H2 EN: **Today's sales. Tomorrow's new discount.**
 | Scope | เครื่องมือทำงานภายในส่วนประกอบและระบบคำนวณที่รองรับ สิ่งที่ AI ร่างอาจต้องปรับก่อนใช้ | Tools work within supported components and compute runtimes. AI drafts may need adjustment before use. |
 | Thesis | Work defines what software becomes. | Work defines what software becomes. |
 
-คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอdraftใช้ENเป็นหลัก ผู้ชมไทยมีคำบรรยายแยกใน final
+คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอรอบ 2 ใช้ TH เป็นหลัก; เสียง/ซับ EN เป็น export แยกใน final

@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — ชุดร่างใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
+| สถานะ | `review` — ร่างรอบ 2 ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | เอกสารและสื่อร่าง; ไม่มี production release |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 |
@@ -27,6 +27,9 @@
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-24 | รอบ 2 ใช้บอร์ดเดียวค่อย ๆ เพิ่ม แก้ และแตกแขนงในคลิป 60s; ห้าม morph วัตถุ | ผู้ใช้ต้องการเห็นวิวัฒนาการของโต๊ะชัด ๆ และมีเวลาอ่านผล |
+| 2026-10-24 | ใช้ mark/wordmark และ loader animation จาก repo; เปิดเรื่องด้วยเก้าอี้ ปากกา ค้อนที่แยกเป็นวัตถุ | รักษาอัตลักษณ์และขยายคำเปรียบเทียบให้เห็นเครื่องมือหลายแบบ |
+| 2026-10-24 | หน้าเว็บร่างใช้บอร์ดที่กดเพิ่ม/แก้ได้เป็นภาพหลัก และย้ายเครื่องมือ review ลงชั้นรอง | ผู้ใช้เห็นว่าหน้าแรกของร่างเดิมน่าเบื่อ; ต้องให้ประโยชน์ปรากฏเป็นการกระทำ |
 | 2026-10-24 | ใช้ Remotion/React/SVG และ deterministic frame timing | ผู้ใช้กำหนดให้ทำวิดีโอด้วยโค้ด ห้ามโมเดลสร้างวิดีโอ |
 | 2026-10-24 | แยกสื่อร่างจากไฟล์ public ที่กำลังใช้ | ผู้ใช้ขอวางแผนและร่างเพื่อดูสามสื่อร่วมกัน |
 | 2026-10-24 | เล่าเก้าอี้เป็นคำเปรียบเทียบที่ร่างใหม่ | ยังไม่พบต้นฉบับเรื่องเก้าอี้ใน source ที่ตรวจ |
@@ -37,8 +40,10 @@
 
 [แผนและเปรียบเทียบของเดิม](../narrative/F077/README.md) · [หน้า preview](../narrative/F077/review.html) · [copy หน้าเว็บ](../narrative/F077/landing-copy.md) · [README ร่าง](../narrative/F077/readme-draft.md) · [video brief/prompt](../narrative/F077/video-brief.md) · [ผลตรวจ](../narrative/F077/verification.md)
 
-ร่างนี้มี MP4 เงียบ 36 วินาที 1280×720/30fps, poster และภาพนิ่ง 8 ฉาก พร้อม Remotion source/lockfile สร้างด้วยโค้ดทั้งหมด ไม่มีการใช้โมเดลสร้างวิดีโอหรือเรียก API เสียง
+รอบ 2 มี MP4 เงียบ 60 วินาที 1280×720/30fps, poster และภาพนิ่ง 8 ฉาก พร้อม Remotion source/lockfile ใช้ logo/loader motion เดิม; เก้าอี้ ปากกา ค้อนเป็นวัตถุแยกไม่ morph และค่อยเพิ่ม/แก้บนบอร์ดเดิม สร้างด้วยโค้ดทั้งหมด ไม่มีโมเดลสร้างวิดีโอหรือ API เสียง
 
-Independent review ไม่พบ P1/P2 ใน prose และ motion/source/MP4; ปรับ font provenance, มาตราส่วนส่วนลด, ป้ายแนวคิด และดึงภาพนิ่งจาก MP4 โดยตรง Motion package ใช้ zod override 4.6.6 และ audit รายงาน 0 vulnerabilities; root dependency audit เป็นข้อจำกัด CI เดิมที่บันทึกแยกไว้
+หน้าเว็บร่าง TH/EN ใช้บอร์ดที่กดเพิ่มกฎ ตรวจ/ใช้ เปลี่ยนข้อมูล และแก้ส่วนลดได้ แยกผลที่ใช้จริงในตัวอย่างออกจากข้อเสนอที่ยังไม่ใช้ รักษา animation เรื่องเดิมแบบกดเล่น และมี reference/before-after ประกอบ
 
-ผลตรวจ Node 22.23.2: `npm run render --prefix docs/narrative/F077/motion` สำเร็จ; ตรวจคำนวณ 4/4; ลิงก์ภายในไม่มีปลายทางหาย; browser เปิดเล่น/เลื่อนเวลาและสลับ 4 panels ได้; `npx tsx server/changelog.ts check` ผ่าน 1 fragment; public-file scan และ whitespace check ก่อน commit ผ่าน รายละเอียด PASS/SKIPPED อยู่ใน verification ไม่ถือเป็นการตรวจ production runtime ใหม่
+Independent review ปิด 4 web findings และ 1 motion timing finding จาก source; reviewerไม่ได้ตรวจ MP4 สุดท้ายซ้ำ ผู้ทำ motion ตรวจ 8 stills และ main ตรวจ 4 critical stills จากไฟล์สุดท้าย Motion package audit 0 vulnerabilities; root dependency audit เป็นข้อจำกัด CI เดิมที่แยกไว้
+
+ผลตรวจ Node 22.23.2: render 1,800 frames และ FFmpeg decode สำเร็จ; คำนวณ 5/5; ลิงก์ 75/75; full UI gate ผ่าน 16/16 measured และข้าม 4 รายการ; browser flow/focus/back-navigation/ภาษา/asset เดิมผ่าน; MP4 เล่นและหยุดได้ ส่วน keyboard seek ไม่ยืนยัน; changelog check ผ่าน 1 fragment; public scan 0 finding และ whitespace check ผ่าน รายละเอียดใน verification ไม่ถือเป็นการตรวจ production runtime ใหม่

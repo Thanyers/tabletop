@@ -1,29 +1,33 @@
 # Tabletop — video brief, storyboard และ production prompt
 
-สถานะ: **Draft 01 / concept animatic** · 36วินาที · 1280×720/30fpsในรอบร่าง · ภาษาในภาพEN · ไม่มีเสียง · ทำด้วยโค้ดทั้งหมด
+สถานะ: **Draft 02 / concept film** · 60 วินาที · 1280×720 / 30fps · ภาษาไทยในภาพ · ทำด้วยโค้ดทั้งหมด · สถานะเสียงและผล render ดู [verification](verification.md)
 
-[ดู MP4](media/tabletop-narrative-draft.mp4) · [poster](media/tabletop-narrative-poster.png) · [source/render](motion/README.md) · [แผนสามสื่อ](README.md)
+[ดู MP4](media/tabletop-narrative-draft.mp4) · [poster](media/tabletop-narrative-poster.png) · [source/render](motion/README.md) · [references](references.md)
 
 ## แกนเรื่อง
 
-คนหนึ่งเปิดร้านเล็กและอยากรู้ยอดขาย เริ่มจากบอกสิ่งที่ต้องการ แล้วมีตาราง/แบบฟอร์ม/วิธีคำนวณให้ตรวจและใช้ เขาแก้ข้อมูล แล้วลองเปลี่ยนกฎส่วนลด โต๊ะเดิมจึงปรับไปพร้อมกับวิธีทำงาน
+เก้าอี้ช่วยให้เรานั่งคิด ปากกาช่วยให้ความคิดมีรูปร่าง ค้อนช่วยให้สิ่งที่คิดประกอบเป็นของจริง เครื่องมือที่ดีทำให้เราอยู่กับสิ่งที่อยากทำ และเมื่อสิ่งที่อยากทำเปลี่ยน เครื่องมือควรปรับตามได้
 
-เก้าอี้คือภาพเปิดของเครื่องมือที่ทำให้เรามีสมาธิ จากนั้นให้การกระทำและผลที่เปลี่ยนเป็นคนเล่าเรื่อง งาน/เรียน/เล่นเป็นภาพเปิดความเป็นไปได้ตอนท้าย ไม่แข่งขันแย่งความสนใจกับเคสหลัก
+เล่าต่อด้วยร้านกาแฟเล็ก ๆ เพียงเคสเดียว: เริ่มจากคำขอ เห็นตารางและกฎให้ตรวจ เปิดใช้ แล้วค่อยเพิ่มผลสรุป กราฟ ข้อมูลรอบใหม่ และกฎส่วนลด ทุกชิ้นอยู่บนโต๊ะเดียวกัน โต๊ะเติบโตโดยไม่ล้างสิ่งที่สร้างไว้
 
-## Storyboard 36 วินาที
+เก้าอี้ ปากกา ค้อน เป็นคำเปรียบเทียบที่ร่างใหม่ ไม่ใช่ประวัติผู้ก่อตั้งที่ยืนยันแล้ว ภาพการใช้งานเป็นภาพอธิบายพร้อมข้อมูลตัวอย่าง ไม่ใช่การบันทึกคำขอ AI จริง
 
-| เวลา | ภาพ / การเคลื่อนไหว | ข้อความหลักในภาพ | สิ่งที่ต้องเข้าใจ |
+## Storyboard 60 วินาที
+
+| เวลา | ภาพ / การกระทำ | ข้อความหลัก | การต่อภาพ |
 | --- | --- | --- | --- |
-| 0–4 | เส้นเก้าอี้เรียบ ๆ วาดขึ้น ที่นั่งขยายเป็นระนาบโต๊ะและCanvas | A good tool lets you focus. | เครื่องมือช่วยให้เราอยู่กับงาน |
-| 4–7 | ครีมตัดเข้าเขียวเข้ม ข้อความใหญ่; file/chat/form ที่แยกกันขยับมาจัดระเบียบ | But work changes. | งานไม่ได้อยู่ในรูปเดิมเสมอ |
-| 7–11 | กลับสู่โต๊ะว่าง พิมพ์ “Help me track today’s sales.” | Start with what you want to do. | เริ่มจากเจตนา ไม่ต้องหาไฟล์ก่อน |
-| 11–16 | ตารางCoffee/Cake แบบฟอร์ม และกฎยอดรวมเข้ามาตามลำดับ; Review→Applyให้เห็นชัด | Shape it. Review it. Use it. | AIร่าง คนตรวจและเลือกใช้ |
-| 16–22 | เติมข้อมูลตัวอย่าง ยอด225; แก้ราคาCoffeeและจำนวนCake ผลรวม405; กราฟอัปเดตตามค่า | New data. Same calculation. | วิธีคำนวณเดิมใช้กับข้อมูลใหม่ได้ |
-| 22–27 | เน้นกฎส่วนลดใบเดียว10%→20%, มีreview/apply; gross405คงเดิม ยอดหลังลด364.50→324 | Change one rule. | เปลี่ยนวิธีทำงานเฉพาะจุดบนโต๊ะเดิม |
-| 27–31 | โต๊ะเดิมคลี่เป็น3บริบท: ยอดขาย / แรงและมวล / turn-based play | For work. Learning. Play. | หลักคิดเดียวใช้ได้หลายบริบท |
-| 31–36 | เว้นจังหวะ ตัวอักษรใหญ่บนเขียวเข้ม เครื่องหมายสี่ช่อง Tabletop และURL | Work defines what software becomes. | จำชื่อและหลักคิดพร้อมที่ไปลอง |
+| 0–9 | เก้าอี้เข้ามา ตามด้วยปากกาที่เพิ่มรอยเขียน และค้อนที่เพิ่มตะปู; วัตถุเดิมคงอยู่ | เครื่องมือที่ดี ให้เราอยู่กับสิ่งที่อยากทำ | วางเพิ่มทีละชิ้น; ไม่มีวัตถุเปลี่ยนชนิด ไม่มี morph |
+| 9–14 | ข้อความ “ช่วยทำโต๊ะสรุปยอดขายวันนี้” อยู่บนพื้นที่ว่าง | เริ่มจากสิ่งที่อยากทำ | เลื่อนกรอบภาพเข้าสู่โต๊ะ; ให้เวลาอ่านคำขอ |
+| 14–22 | ตารางกาแฟ/เค้กและช่องกรอกข้อมูลเข้ามาทีละใบ | เติมเครื่องมือที่งานต้องใช้ | เคลื่อนเข้า 12–18 frames แล้วพัก; การ์ดตั้งตำแหน่งถาวร |
+| 22–29 | เพิ่มกฎยอดรวม มีช่วงตรวจข้อเสนอ แล้วกดใช้ | ตรวจ แล้วเปิดใช้ | กล้องเข้าใกล้กฎ; สถานะเปลี่ยนหลัง Apply เท่านั้น |
+| 29–36 | ตัวเลข 225 และกราฟงอกจากกฎผ่านเส้นเชื่อม | ต่อผลลัพธ์ออกไป | เส้นวาดจาก source ไป output; ตาราง/กฎเดิมยังอยู่ |
+| 36–42 | ราคา/จำนวนใหม่เข้าตาราง ยอดและกราฟเปลี่ยนเป็น 405 | ข้อมูลใหม่ ใช้วิธีคิดเดิม | เน้นเฉพาะเซลล์ที่เปลี่ยน แล้วส่งต่อไปผล |
+| 42–50 | เลือกกฎส่วนลด ดูข้อเสนอ 10%→20% แล้วกดใช้ | เปลี่ยนกฎ เมื่อวิธีทำงานเปลี่ยน | ข้อเสนออยู่ข้างกฎเดิม ไม่แทนผลก่อนกดใช้ |
+| 50–55 | แตกผลหลังลดเป็น 324; gross 405 คงอยู่ | โต๊ะเดิม ทำได้มากขึ้น | เพิ่มแขนงใหม่ แยกยอดก่อนลด/หลังลดชัดเจน |
+| 55–58 | กล้องถอยให้เห็นภาพรวมบอร์ดเดียวที่สร้างมาตลอด | ค่อย ๆ เพิ่ม ค่อย ๆ ปรับ ค่อย ๆ เติบโต | ไม่รื้อบอร์ดหรือรีเซ็ตไปต้นเรื่อง |
+| 58–60 | โลโก้/wordmark เดิม พร้อม CTA สั้น | tabletop. — เริ่มจากงานของคุณ | ใช้ motion ของ repo; end hold อ่านชื่อและที่ไปต่อ |
 
-ล่างภาพตลอดคลิป: **Concept animation · illustrative data** ขนาดอย่างน้อย16pxที่720p เวลาคำนวณไม่แสดงloadingปลอมหรืออ้างว่าเป็นlatencyจริง ภาพนี้เป็นauthoringจากโค้ด ไม่ใช่recordingของAI
+กรอบเวลาเป็น contract ของการผลิต จังหวะย่อยที่ปรับเพื่ออ่านทันต้องบันทึกไว้ใน motion README และรักษาความยาวรวม 60 วินาที ช่วง 14–58 ต้องใช้ world/canvas เดียว ไม่เป็นชุดสไลด์ที่ลบของเดิมออก
 
 ## ข้อมูลตัวอย่างเดียวกันทุกสื่อ
 
@@ -36,59 +40,51 @@
 
 ยอดเหล่านี้เป็นตัวอย่างที่คำนวณตรวจได้ ไม่ใช่ยอดร้านจริงหรือbusiness KPI การกำหนดCoffee/Cakeและลำดับนี้เป็นเรื่องที่แต่งเพื่อสื่อสาร รองรับความสามารถด้วยผลทดสอบรายเคสตาม [evidence](evidence.md) แต่ไม่ได้อ้างว่าร้านนี้เคยใช้ระบบจริง
 
+## เสียงบรรยายที่เตรียมไว้ — ไทย
+
+> เก้าอี้ ให้เรานั่งคิด ปากกา ให้ความคิดมีรูปร่าง ค้อน ช่วยให้มันเป็นจริง เครื่องมือที่ดีทำให้เราอยู่กับสิ่งที่อยากทำ แล้วถ้าซอฟต์แวร์ปรับตามงานเราได้ล่ะ? บอก Tabletop ว่าอยากทำอะไร เริ่มจากตาราง เติมวิธีคำนวณ ตรวจ แล้วเปิดใช้ ต่อเป็นตัวเลขสรุปและกราฟ เมื่อข้อมูลใหม่เข้ามา ใช้วิธีคิดเดิม เมื่อวิธีทำงานเปลี่ยน เลือกกฎที่ต้องแก้ ตรวจ แล้วใช้ต่อ ข้อมูลเดิมยังอยู่ เครื่องมือใหม่ค่อย ๆ งอกขึ้นบนโต๊ะเดียวกัน Tabletop เริ่มจากงาน ให้เครื่องมือโตไปด้วยกัน
+
+เป็น script ที่ยังไม่บันทึกเสียง ต้องอ่านจับเวลาจริงก่อนนำเข้าคลิป ไม่อ้างว่าทดสอบเวลาเสียงแล้ว ข้อความในภาพควรสั้นกว่าเสียงเสมอ
+
 ## Voiceover draft — English
 
-> A good tool lets you focus on your work. But work changes. Tell Tabletop what you want to do. Let AI help shape the tools, then review and use them. Add new data. Keep the calculation. When your plans change, change a rule on the same table. For work, learning, and play. Tabletop. Work defines what software becomes.
+> A chair gives you a place to think. A pen gives an idea a shape. A hammer helps you build it. Good tools keep you close to what you want to do. What if software could adapt to your work, too? Tell Tabletop what you need. Start with a table. Add a calculation. Review it, then put it to use. Connect a total and a chart. New data, same calculation. A new plan? Change the rule. Review, apply, and keep going. The work stays. The tools grow. Tabletop. Start with your work.
 
-ประมาณ59คำ ตั้งเป้าอ่านจริง30–33วินาที เว้นช่วงภาพ/ท้าย3–6วินาที จังหวะสุดท้ายต้องปรับตามเสียงที่ได้จริง ไม่ยืดเสียงหรือเร่งคำจนอ่านไม่รู้เรื่อง
+แยก export ภาษาในรอบ final; ไม่ใส่สองเสียงทับกัน และไม่เปิดเสียงเองบนเว็บ
 
-## Voiceover draft — ไทย
+## กติกา motion และเสียง
 
-> เครื่องมือที่ดี ให้เรามีสมาธิกับงานตรงหน้า แต่งานเปลี่ยนได้ บอก Tabletop ว่าอยากทำอะไร ให้ AI ช่วยร่างเครื่องมือ แล้วตรวจและลงมือใช้ เติมข้อมูลใหม่ ใช้วิธีคำนวณเดิม เมื่อวิธีทำงานเปลี่ยน ก็ปรับกฎบนโต๊ะที่ใช้อยู่ สำหรับงาน การเรียนรู้ และการเล่น Tabletop — ให้เครื่องมือเติบโตไปพร้อมกับงานของคุณ
+- ใช้ logo/wordmark เดิมและแปลง loader animation จาก repo เป็น deterministic frame timing ตาม [asset map](references.md) ไม่ทำโลโก้ใหม่
+- ใช้ translate, reveal mask, draw-on และ camera movement; ห้าม interpolate SVG path ให้เก้าอี้กลายเป็นโต๊ะ ปากกากลายเป็นค้อน หรือการ์ดกลายเป็นวัตถุอีกชนิด
+- ช่วงเปลี่ยนภาพประมาณ 0.4–0.6s; ภาพที่มีคำอธิบายต้องมีเวลาอ่านหลัง transition อย่างน้อย 2.2s ตัวเลขสำคัญหยุดให้เห็นครบ
+- วางข้อเสนอและผลที่ใช้อยู่ให้ต่างกัน ก่อน Apply ผลเดิมยังอยู่; หลัง Apply จึงเปลี่ยนผล
+- ป้าย “ภาพอธิบาย · ข้อมูลตัวอย่าง” อ่านได้ตลอดคลิป ไม่มี loading ปลอมที่ตีความเป็น latency จริง
+- เสียงประกอบทำจากโค้ดได้ แต่ต้องเบาและมีเจตนา ไม่ใส่ whoosh ทุกใบ ไม่คัดลอกเพลงจาก reference
+- ElevenLabs เป็นทางเลือกสำหรับ TTS หลังเลือกเสียงที่มีสิทธิ์ใช้ รอบนี้ไม่ต้องใช้ key และไม่เรียก API เสียเงิน
+- ภาพ 16:9 เป็น master; อย่าครอปเป็น 9:16 แล้วตัดข้อความสำคัญ การทำ portrait ต้องจัดภาพใหม่
 
-ทำเป็นอีกเสียง/อีกexport ไม่อ่านไทยและอังกฤษซ้อนใน36วินาที และไม่เปิดเสียงเองบนหน้าเว็บ
-
-## จังหวะภาพและเสียง
-
-- ใช้พื้นที่ว่างมากพอให้ข้อความใหญ่ทำงาน ตัดฉากสีเข้มเพียงช่วงfriction/end; ข้อมูลกราฟใช้สีตามบทบาทเดิม
-- การเคลื่อนไหวหลักใช้match transformจากระนาบเก้าอี้→โต๊ะ→canvas; การ์ดเข้าเป็นลำดับของเหตุและผล ไม่สุ่มกระเด้ง
-- เน้นผลรวมหนึ่งค่าต่อจังหวะ มีholdอ่านเลขและคำ ไม่ทำslideshowแปดฉากที่เข้าออกเหมือนกัน
-- Final exportอาจมีเสียงclick/soft pulse/whooshที่สังเคราะห์ด้วยโค้ดหรือเสียงที่มีสิทธิ์ใช้ งดคัดลอกเพลงจากreference
-- ElevenLabsใช้ได้เฉพาะTTSของscriptที่ตรวจแล้ว ผ่านkeyที่มีอยู่ในenvironment ไม่เขียนkeyลงsource/log; เลือกvoiceที่มีสิทธิ์ใช้ และอ่านdocs/ราคา ณ วันที่เรียกจริง รอบร่างนี้ไม่มีAPI callและค่าใช้จ่ายเสียง
-- Renderfinal1920×1080/30fps; จัดsafeareaสำหรับ9:16เป็นงานถัดไป ไม่cropทิ้งข้อความจาก16:9
-
-## Production prompt พร้อมใช้กับ coding agent
+## Production prompt สำหรับ coding agent
 
 ```text
-Build a code-rendered Tabletop product film from this repository, not an AI-generated video.
+Build a 60-second Tabletop product film with Remotion, React, SVG, CSS and local repository assets. Do not generate video or images with AI. Read the repository instructions and this brief. Preserve app runtime behavior and work only in the assigned draft media package.
 
-Read AGENTS.md, design.md, docs/CALM_CANVAS_DESIGN.md and this brief. Work in an authorized feature branch. Preserve existing runtime behavior. You own only the approved media package and integration files listed in the task.
+The central idea is accumulation: a useful canvas grows around a person's work. Keep one spatially continuous board from 14s to 58s. Existing cards retain positions. Add new cards, change selected values or one selected rule, then branch new outputs. The camera may pan and zoom. Do not build a slide carousel.
 
-Purpose: Help a new viewer understand Tabletop as a canvas where tools and reusable calculations take shape around a person's work, can be inspected, and can change as the work changes. Keep the human in control. The story is a small pop-up coffee shop seeking today's totals and later adjusting a discount rule.
+Use the exact canonical Tabletop four-piece mark, round gold lower-right tile, lowercase tabletop. wordmark, and the loader animation in src/loading/loading-screen.css. Port its 2.4s tilt and 1.2s staggered tile pulses to frame math. Reuse existing showcase animation/motion where appropriate and record provenance. Do not reuse the incorrect all-square uppercase mark from Draft 01.
 
-Make a 36-second 16:9 film with Remotion, React, SVG and CSS. Draft at1280x720, final at1920x1080, 30fps. Animation must be a deterministic function of frame/props. No setTimeout, random values, wall-clock animation, network calls during rendering, video-generation models, image-generation models, stock AI footage, copied reference assets, or fake screen recordings. Use a lockfile and repository-local assets.
+Opening 0–9s: introduce a chair, a pen and a hammer as separate objects. The pen adds a drawn mark, the hammer adds a nail, and the chair stays a chair. Keep prior objects. Transition to the canvas by a cut, mask or camera move. NO MORPH between objects, paths, logos or UI types.
 
-Reference direction: oversized kinetic typography, airy white/cream scenes, brief saturated-color beats, simple geometric transformations, one focal numeric result, and a restrained final wordmark. Translate that rhythm to Tabletop's warm paper, forest green, dark ink and ochre, using Manrope/Noto Sans Thai. Do not copy the reference brand, violet palette, performance numbers, words or soundtrack. This must not look like eight identical template slides.
+Follow the 60s storyboard in this brief. Use readable Thai captions; avoid simultaneous paragraphs. Make entrances 12–18 frames with a purposeful ease, then hold the content. Existing brand motion has its original duration. The discount proposal is not applied until explicit review and apply.
 
-Exact narrative timings:
-0-4: geometric chair → table plane → canvas. “A good tool lets you focus.”
-4-7: forest interstitial; separate file/chat/form fragments align. “But work changes.”
-7-11: empty canvas, prompt “Help me track today's sales.” No file gate. “Start with what you want to do.”
-11-16: table, form and total rule take shape. Explicit Review→Apply→In use. “Shape it. Review it. Use it.”
-16-22: data A has Coffee3x25=75 and Cake3x50=150, total225. Data B has Coffee3x35=105 and Cake6x50=300, total405. Table, two-bar chart and metric agree. “New data. Same calculation.”
-22-27: change only discount10%→20% with review/apply, gross remains405, net364.50→324. “Change one rule.”
-27-31: the same canvas expands into work / learning / play vignettes. Do not imply live multiplayer proof or arbitrary app generation. “For work. Learning. Play.”
-31-36: Tabletop four-square mark, “Work defines what software becomes.”, tabletop.ptchrr.workers.dev. Hold long enough to read.
+Arithmetic is fixed: Coffee 3x25=75, Cake 3x50=150, total225. New data Coffee3x35=105 and Cake6x50=300, total405. Discount10% gives364.50; discount20% gives324. Gross405 remains unchanged when discount changes. Keep chart and table values consistent. The shop is fictional illustrative data.
 
-Persistent visible label: “Concept animation · illustrative data”. At least16px at720p. UI is authored explanatory artwork. Do not label it a live capture or claim observed generation latency. A real QA recording is a separate deliverable requiring actual actions/readback and sanitized footage.
+Render at1280x720,30fps,1800frames,H.264. Every visual state must be deterministic from frame and props. No network calls during rendering, no wall-clock CSS animation, no invented performance numbers. Persistent readable label: ภาพอธิบาย · ข้อมูลตัวอย่าง. This is concept animation, not a product screen recording.
 
-Deliver a playable H.264 MP4, poster, eight scene stills, editable source, render script, asset provenance and review notes. Keep outputs small enough for repo policy. Include a static transcript. For final language variants, use the approved TH/EN scripts and timed subtitles, never both voiceovers at once. Silent draft must render without any API key. If ElevenLabs TTS is later requested, use an existing environment key without printing it, verify the selected voice/license and request parameters, and do not clone an unapproved voice.
-
-Verify all arithmetic, scene boundaries, fonts, legibility, safe margins, transition continuity and final dimensions/duration. Inspect rendered frames, not source only. Test MP4 playback and seeking. Report silent/voiced status and any unverified parts precisely. Preserve existing public page until integration scope is approved.
+Deliver MP4, poster, eight MP4-derived stills, editable source, render script and asset provenance. Verify arithmetic, continuity, selected-rule before/after, readable safe areas, typography, duration and media playback. Report actual audio status and any skipped checks. Do not call paid voice APIs or copy a reference soundtrack. Keep current public page and root README unchanged until integration is requested.
 ```
 
-## แผน proof clip แยกจาก motion
+## Proof clip แยกจาก film
 
-คลิป60–90วินาทีจากQAต้องเริ่มห้องว่าง ส่งpromptจริง ตรวจและเปิดใช้ เพิ่มCSV เปลี่ยนข้อมูล รันสูตร/โปรแกรมเดิม ขอแก้กฎเฉพาะใบ และreload พร้อมอ่านผลกลับจากระบบ ระบุช่วงที่ตัดหรือเร่งเวลา ไม่เติมผลสำเร็จที่ไม่ได้เกิดจริงด้วยmotion
+คลิป 60–90 วินาทีจาก QA ต้องเริ่มห้องว่าง ส่ง prompt จริง ตรวจและเปิดใช้ เพิ่ม CSV เปลี่ยนข้อมูล รันวิธีคำนวณเดิม ขอแก้กฎเฉพาะใบ และ reload พร้อมอ่านผลกลับ ระบุช่วงที่ตัดหรือเร่งเวลา ไม่เติมผลสำเร็จที่ไม่เกิดจริงด้วย motion
 
-ความสามารถดังกล่าวมีหลักฐานรายเคสแล้ว แต่ยังต้องบันทึกเส้นเรื่องนี้ต่อเนื่องใหม่ การใส่เลข225→405จากโค้ดในanimaticไม่ใช่การทำproofขั้นนี้
+ความสามารถมีหลักฐานรายเคสใน [evidence](evidence.md) แต่ยังต้องบันทึกเส้นเรื่องต่อเนื่องนี้ใหม่ ตัวเลขที่เปลี่ยนจากโค้ดใน film ไม่ใช่การทำ proof ขั้นนี้

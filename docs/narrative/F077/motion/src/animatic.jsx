@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-  AbsoluteFill,
-  Easing,
-  interpolate,
-  useCurrentFrame,
-} from 'remotion';
+import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
 
 const C = {
   paper: '#faf8f0',
@@ -20,526 +15,353 @@ const C = {
   ochre: '#89632f',
   ochreSoft: '#f7edda',
   clay: '#9a5c4e',
-  claySoft: '#f6e9e2',
 };
 
-const ramp = (frame, start, end, from = 0, to = 1) =>
-  interpolate(frame, [start, end], [from, to], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-    easing: Easing.inOut(Easing.cubic),
+const clamp = (value, from, to) => interpolate(value, [from, to], [0, 1], {
+  extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.inOut(Easing.cubic),
+});
+const mix = (value, from, to, a, b) => interpolate(value, [from, to], [a, b], {
+  extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.inOut(Easing.cubic),
+});
+const money = (value) => '฿' + Math.round(value).toLocaleString('en-US');
+
+function Mark({ frame, size = 30, staticMark = false }) {
+  // Port of the canonical 2×2 mark and loading motion: tabletop.css plus
+  // loading-screen.css (2.4s tilt, four staggered 1.2s tile pulses).
+  const tiltFrame = ((frame % 72) + 72) % 72;
+  const animatedTilt = interpolate(tiltFrame, [0, 36, 72], [-5, 85, -5], {
+    easing: Easing.bezier(0.65, 0, 0.35, 1), extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
+  const tilt = staticMark ? -5 : animatedTilt;
+  const offsets = [0, 4.5, 13.5, 9];
+  const colors = ['#243548', '#24796b', '#6f8190', '#d49a47'];
+  return <span className="brand-mark" style={{ width: size, height: size, gridTemplateColumns: `repeat(2, ${(size - size * 0.28) / 2}px)`, gap: size * 0.14, transform: `rotate(${tilt}deg)` }} aria-hidden="true">
+    {colors.map((color, index) => {
+      const phase = ((frame - offsets[index]) % 36 + 36) % 36;
+      const animatedScale = phase <= 14.4
+        ? interpolate(phase, [0, 14.4], [1, 0.62], { easing: Easing.bezier(0.45, 0, 0.55, 1) })
+        : interpolate(phase, [14.4, 36], [0.62, 1], { easing: Easing.bezier(0.45, 0, 0.55, 1) });
+      const animatedOpacity = phase <= 14.4
+        ? interpolate(phase, [0, 14.4], [1, 0.45], { easing: Easing.bezier(0.45, 0, 0.55, 1) })
+        : interpolate(phase, [14.4, 36], [0.45, 1], { easing: Easing.bezier(0.45, 0, 0.55, 1) });
+      const scale = staticMark ? 1 : animatedScale;
+      const opacity = staticMark ? 1 : animatedOpacity;
+      return <i key={color} style={{ width: (size - size * 0.28) / 2, height: (size - size * 0.28) / 2, borderRadius: index === 3 ? '50%' : size * 0.11, background: color, transform: `scale(${scale})`, opacity }} />;
+    })}
+  </span>;
+}
 
-const money = (value) => '฿' + value.toLocaleString('en-US');
+function Chrome({ frame }) {
+  const dark = frame >= 270 && frame < 420 || frame >= 1740;
+  const end = frame >= 1740;
+  return <>
+    <header className={`chrome${dark ? ' chrome--dark' : ''}${end ? ' chrome--end' : ''}`}>
+      <div className="brand-lockup"><Mark frame={frame} size={30} /><span>tabletop<span className="brand-period">.</span></span></div>
+      <div className="provenance">ภาพอธิบาย • ข้อมูลตัวอย่าง</div>
+    </header>
+  </>;
+}
 
-function TableMark({ size = 30, light = false }) {
-  const colors = light ? ['#d9efce', '#d9efce', '#d9efce', '#d9efce'] : [C.ink, C.green, C.blue, C.ochre];
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="2" y="2" width="12" height="12" rx="3" fill={colors[0]} />
-      <rect x="18" y="2" width="12" height="12" rx="3" fill={colors[1]} />
-      <rect x="2" y="18" width="12" height="12" rx="3" fill={colors[2]} />
-      <rect x="18" y="18" width="12" height="12" rx="3" fill={colors[3]} />
+function Chair({ frame }) {
+  const enter = clamp(frame, 8, 38);
+  return <svg className="chair-object" viewBox="0 0 340 410" style={{ opacity: enter, transform: `translate(${(1 - enter) * 60}px, ${(1 - enter) * 22}px)` }} aria-label="A wooden chair">
+    <ellipse cx="177" cy="380" rx="111" ry="13" fill={C.ink} opacity=".1" />
+    <path d="M98 74 Q98 62 111 62 H232 Q245 62 245 75 V229 H98Z" fill="#b9c8b6" stroke={C.green} strokeWidth="5" />
+    <path d="M117 84 H225 V210 H117Z" fill={C.paper} opacity=".62" />
+    <path d="M75 236 L268 236 Q279 236 279 249 V269 Q279 280 266 280 H78 Q66 280 66 269 V248 Q66 236 75 236Z" fill="#89632f" />
+    <path d="M88 278 L102 375 M257 278 L245 375 M83 270 L53 367 M264 270 L294 367" fill="none" stroke="#89632f" strokeWidth="14" strokeLinecap="round" />
+    <path d="M72 346 Q169 364 276 345" fill="none" stroke="#89632f" strokeWidth="8" strokeLinecap="round" />
+  </svg>;
+}
+
+function Cushion({ frame }) {
+  const enter = clamp(frame, 145, 171);
+  return <svg className="cushion-object" viewBox="0 0 210 56" style={{ opacity: enter, transform: `translateY(${(1 - enter) * 30}px) scale(${0.88 + enter * 0.12})` }} aria-hidden="true">
+    <path d="M16 14 Q18 6 29 7 H181 Q192 8 194 18 L188 42 Q186 50 175 49 H31 Q19 48 17 39Z" fill="#e8f0e4" stroke={C.green} strokeWidth="3" />
+    <path d="M37 17 Q105 12 174 18 M35 39 Q105 44 174 38" fill="none" stroke="#b9d3c1" strokeWidth="2" />
+  </svg>;
+}
+
+function Book({ frame }) {
+  const enter = clamp(frame, 177, 202);
+  return <svg className="book-object" viewBox="0 0 106 66" style={{ opacity: enter, transform: `translate(${(1 - enter) * 36}px, ${(1 - enter) * 16}px) rotate(-8deg)` }} aria-hidden="true">
+    <path d="M12 10 Q32 4 52 15 V56 Q32 46 12 53Z" fill="#fffdf7" stroke="#3e6c86" strokeWidth="3" />
+    <path d="M52 15 Q73 4 94 10 V53 Q74 46 52 56Z" fill="#eaf0f3" stroke="#3e6c86" strokeWidth="3" />
+    <path d="M20 21 Q34 17 45 23 M20 30 Q34 26 45 32 M60 23 Q75 17 86 21 M60 32 Q75 26 86 30" stroke="#9ab3c1" strokeWidth="2" />
+    <path d="M52 15V56" stroke="#3e6c86" strokeWidth="3" />
+  </svg>;
+}
+
+function Pen({ frame }) {
+  const enter = clamp(frame, 32, 56);
+  const draw = clamp(frame, 59, 102);
+  return <>
+    <svg className="pen-mark" viewBox="0 0 260 116" aria-hidden="true">
+      <path d="M16 72 C56 20 84 94 128 48 S202 40 245 64" fill="none" stroke={C.green} strokeWidth="4" strokeLinecap="round" pathLength="1" strokeDasharray={`${draw} 1`} />
+      <circle cx="245" cy="64" r="5" fill={C.green} opacity={draw} />
     </svg>
-  );
+    <svg className="pen-object" viewBox="0 0 170 42" style={{ opacity: enter, transform: `translate(${mix(frame, 32, 56, -70, 0)}px, ${mix(frame, 32, 56, -36, 0)}px) rotate(-36deg)` }} aria-label="A pen drawing a line">
+      <rect x="10" y="13" width="136" height="16" rx="8" fill="#356e5d" />
+      <rect x="18" y="16" width="90" height="3" rx="2" fill="#d7e8d6" opacity=".8" />
+      <path d="M145 13 L164 21 L145 29Z" fill="#89632f" />
+      <path d="M13 13 Q6 21 13 29" fill="none" stroke="#243548" strokeWidth="3" />
+      <path d="M46 13V6 Q46 1 52 1 H105" fill="none" stroke="#243548" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  </>;
 }
 
-function Header({ dark = false }) {
-  return (
-    <div className={'chrome' + (dark ? ' chrome--dark' : '')}>
-      <div className="brand-lockup">
-        <TableMark size={29} light={dark} />
-        <span>TABLETOP</span>
-      </div>
-      <div className="provenance">Concept animation · illustrative data</div>
-    </div>
-  );
-}
-
-function Shell({ children, dark = false, extraClass = '' }) {
-  return (
-    <AbsoluteFill className={'scene ' + (dark ? 'scene--forest ' : 'scene--paper ') + extraClass}>
-      <div className="scene-grain" />
-      {children}
-    </AbsoluteFill>
-  );
-}
-
-function PaperPiece({ children, className = '', style = {} }) {
-  return (
-    <div className={'paper-piece ' + className} style={style}>
-      {children}
-    </div>
-  );
-}
-
-function SceneOne({ frame }) {
-  const t = frame;
-  const reveal = ramp(t, 4, 20);
-  const morph = ramp(t, 28, 102);
-  const x = 210 - 155 * morph;
-  const width = 150 + 330 * morph;
-  const height = 28 + 34 * morph;
-  const y = 151;
-  const backHeight = 107 * (1 - morph);
-  const labelsOpacity = ramp(t, 76, 102);
-  const legStarts = [222, 338, 243, 317];
-  const legEnds = [86, 495, 159, 423];
-
-  return (
-    <Shell>
-      <div className="scene-kicker" style={{ opacity: reveal }}>MAKE ROOM FOR THE WORK</div>
-      <div className="hero-copy hero-copy--chair" style={{ opacity: reveal, transform: 'translateY(' + (1 - reveal) * 18 + 'px)' }}>
-        <div>A good tool</div>
-        <div className="hero-accent">lets you focus.</div>
-      </div>
-      <div className="chair-caption" style={{ opacity: labelsOpacity }}>ONE SURFACE · MANY USES</div>
-      <svg className="transforming-table" viewBox="0 0 560 360" role="img" aria-label="A chair seat expands into a table surface">
-        <ellipse cx={x + width * 0.52} cy="315" rx={122 + 90 * morph} ry="15" fill="#303d3a" opacity="0.08" />
-        <rect
-          x={x + 9}
-          y={y - backHeight}
-          width="17"
-          height={backHeight + 7}
-          rx="8"
-          fill={C.green}
-          opacity={1 - morph * 0.82}
-        />
-        {legStarts.map((startX, index) => {
-          const p = index < 2 ? morph : ramp(t, 42, 78);
-          const endX = legEnds[index];
-          const currentX = startX + (endX - startX) * morph;
-          const topX = currentX + (index < 2 ? 0 : (index === 2 ? -4 : 4));
-          const bottomX = currentX + (index === 0 || index === 2 ? -11 : 11) * (1 - morph);
-          const topY = y + height - 2;
-          const bottomY = 310;
-          return (
-            <g key={index} opacity={index < 2 ? 1 : p}>
-              <path
-                d={'M' + topX + ' ' + topY + ' L' + bottomX + ' ' + bottomY}
-                fill="none"
-                stroke={C.ochre}
-                strokeWidth={12 - 1 * morph}
-                strokeLinecap="round"
-              />
-            </g>
-          );
-        })}
-        <rect x={x + 5} y={y + 8} width={width} height={height} rx={5 + morph * 10} fill="#303d3a" opacity="0.06" />
-        <rect x={x} y={y} width={width} height={height} rx={4 + morph * 9} fill={C.white} stroke={C.edge} strokeWidth="2" />
-        <path d={'M' + (x + 28) + ' ' + (y + height * 0.52) + 'H' + (x + width - 28)} stroke={C.edge} strokeWidth="1.3" opacity={labelsOpacity} />
-        <g opacity={labelsOpacity}>
-          <circle cx={x + 35} cy={y + height * 0.52} r="4" fill={C.green} />
-          <text x={x + 48} y={y + height * 0.52 + 5} fill={C.muted} fontSize="13" fontFamily="Manrope, sans-serif" letterSpacing="2">CANVAS</text>
-        </g>
+function Hammer({ frame }) {
+  const enter = clamp(frame, 98, 121);
+  const strike = clamp(frame, 125, 150);
+  const settle = clamp(frame, 150, 168);
+  const rotation = frame < 125 ? -26 : frame < 151 ? mix(frame, 125, 151, -26, 24) : mix(frame, 151, 168, 24, 0);
+  return <>
+    <div className="nail-board" style={{ opacity: clamp(frame, 111, 132) }}>
+      <div className="wood-grain wood-grain--one" /><div className="wood-grain wood-grain--two" />
+      <svg viewBox="0 0 72 82" className="nail-svg" aria-hidden="true">
+        <path d={`M36 ${strike ? 13 + strike * 12 : 13}V69`} stroke="#6f8190" strokeWidth="6" strokeLinecap="round" />
+        <path d={`M23 ${strike ? 12 + strike * 12 : 12}H49`} stroke="#303d3a" strokeWidth="7" strokeLinecap="round" />
+        <path d="M30 70H42" stroke="#89632f" strokeWidth="4" strokeLinecap="round" opacity={settle} />
       </svg>
-      <div className="scene-footnote">A starting point should stay open to change.</div>
-    </Shell>
-  );
+      <span>NAIL</span>
+    </div>
+    <svg className="hammer-object" viewBox="0 0 170 130" style={{ opacity: enter, transform: `translate(${mix(frame, 98, 121, 48, 0)}px, ${mix(frame, 98, 121, -35, 0)}px) rotate(${rotation}deg)` }} aria-label="A hammer adding a nail">
+      <path d="M88 48 L132 96 Q138 103 131 111 Q124 118 117 110 L72 62Z" fill="#89632f" />
+      <path d="M42 22 Q51 12 63 21 L88 44 Q96 52 87 61 L79 69 Q70 77 62 69 L37 46 Q29 37 42 22Z" fill="#3e6c86" stroke="#243548" strokeWidth="4" />
+      <path d="M41 28 L25 14 Q17 8 11 16 Q5 24 13 30 L29 44Z" fill="#243548" />
+      <path d="M54 28 L78 50" stroke="#a9c2cb" strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  </>;
 }
 
-const fragments = [
-  { label: 'NOTES', x: 864, y: 136, tx: 748, ty: 233, w: 142, h: 48, angle: -13, color: C.ochreSoft, ink: C.ochre },
-  { label: 'FORM', x: 1108, y: 212, tx: 928, ty: 233, w: 132, h: 48, angle: 12, color: C.blueSoft, ink: C.blue },
-  { label: 'TABLE', x: 834, y: 536, tx: 748, ty: 321, w: 142, h: 62, angle: 8, color: C.greenSoft, ink: C.green },
-  { label: 'RULE', x: 1096, y: 504, tx: 928, ty: 321, w: 132, h: 62, angle: -9, color: C.claySoft, ink: C.clay },
-  { label: '฿225', x: 1008, y: 365, tx: 842, ty: 422, w: 104, h: 48, angle: 15, color: C.white, ink: C.ink },
-  { label: 'NEXT', x: 750, y: 371, tx: 1030, ty: 422, w: 98, h: 48, angle: -15, color: C.white, ink: C.green },
-];
-
-function SceneTwo({ frame }) {
-  const t = frame - 120;
-  const align = ramp(t, 12, 76);
-  const ring = ramp(t, 0, 38);
-  return (
-    <Shell dark>
-      <div className="forest-ring" style={{ opacity: 0.18 + ring * 0.16, transform: 'scale(' + (0.88 + ring * 0.12) + ')' }} />
-      <div className="hero-copy hero-copy--friction" style={{ opacity: ramp(t, 4, 19) }}>
-        <div>But work</div>
-        <div className="hero-light">changes.</div>
-      </div>
-      <div className="fragment-stage">
-        <svg className="fragment-lines" viewBox="0 0 1280 720" aria-hidden="true">
-          {fragments.map((item) => (
-            <line
-              key={item.label}
-              x1={item.x}
-              y1={item.y}
-              x2={item.tx + item.w / 2}
-              y2={item.ty + item.h / 2}
-              stroke={item.color}
-              strokeWidth="1.5"
-              strokeDasharray="4 9"
-              opacity={align * 0.5}
-            />
-          ))}
-        </svg>
-        {fragments.map((item) => {
-          const px = item.x + (item.tx - item.x) * align;
-          const py = item.y + (item.ty - item.y) * align;
-          const turn = item.angle * (1 - align);
-          return (
-            <div
-              key={item.label}
-              className="fragment"
-              style={{
-                left: px,
-                top: py,
-                width: item.w,
-                height: item.h,
-                color: item.ink,
-                backgroundColor: item.color,
-                transform: 'translate(-50%, -50%) rotate(' + turn + 'deg)',
-              }}
-            >
-              {item.label}
-            </div>
-          );
-        })}
-      </div>
-      <div className="forest-caption" style={{ opacity: ramp(t, 70, 88) }}>The work changes. The canvas can, too.</div>
-    </Shell>
-  );
+function Intro({ frame }) {
+  const title = clamp(frame, 6, 34);
+  return <AbsoluteFill className="intro-scene">
+    <div className="intro-eyebrow" style={{ opacity: title }}>A PLACE FOR WORK TO TAKE SHAPE</div>
+    <h1 className="intro-title" style={{ opacity: title, transform: `translateY(${(1 - title) * 18}px)` }}>เครื่องมือที่ดี<br /><em>ช่วยให้คุณจดจ่อ</em></h1>
+    <div className="intro-subtitle" style={{ opacity: clamp(frame, 48, 72) }}>พื้นที่หนึ่ง · สำหรับงานที่เปลี่ยนไป</div>
+    <div className="writing-sheet" style={{ opacity: clamp(frame, 42, 58) }}>
+      <div className="sheet-overline">IDEA / NOTE</div>
+      <div className="sheet-rule" />
+      <Pen frame={frame} />
+    </div>
+    <div className="nail-scene">
+      <Hammer frame={frame} />
+    </div>
+    <div className="chair-scene">
+      <Chair frame={frame} />
+      <Cushion frame={frame} />
+      <Book frame={frame} />
+    </div>
+    <div className="intro-hold-note" style={{ opacity: clamp(frame, 214, 236) }}>เริ่มจากสิ่งที่มี แล้วค่อยเพิ่มสิ่งที่ต้องใช้</div>
+  </AbsoluteFill>;
 }
 
-function SceneThree({ frame }) {
-  const t = frame - 210;
-  const textIn = ramp(t, 4, 18);
-  const cardIn = ramp(t, 20, 52);
-  return (
-    <Shell>
-      <div className="scene-kicker" style={{ opacity: textIn }}>BEGIN WITH INTENT</div>
-      <div className="hero-copy hero-copy--intent" style={{ opacity: textIn, transform: 'translateY(' + (1 - textIn) * 14 + 'px)' }}>
-        <div>Start with</div>
-        <div>what you want</div>
-        <div className="hero-accent">to do.</div>
-      </div>
-      <PaperPiece
-        className="intent-prompt"
-        style={{ opacity: cardIn, transform: 'translateX(' + (1 - cardIn) * 42 + 'px) rotate(' + (2 - cardIn * 2) + 'deg)' }}
-      >
-        <div className="piece-overline"><span className="piece-dot" />YOUR IDEA</div>
-        <div className="prompt-rule" />
-        <div className="prompt-text">Help me track<br />today’s sales.</div>
-        <div className="prompt-footer">
-          <span>Plain language is a starting place.</span>
-          <span className="prompt-arrow">↗</span>
-        </div>
-      </PaperPiece>
-      <div className="intent-scribble" style={{ opacity: cardIn * 0.8 }}>
-        <svg width="134" height="50" viewBox="0 0 134 50" aria-hidden="true">
-          <path d="M4 25C30 2 78 1 113 22" fill="none" stroke={C.green} strokeWidth="2" strokeDasharray="4 7" />
-          <path d="m105 14 11 9-13 4" fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    </Shell>
-  );
+function Intent({ frame }) {
+  const f = frame - 270;
+  const card = clamp(f, 12, 36);
+  const underline = clamp(f, 60, 82);
+  return <AbsoluteFill className="intent-scene">
+    <div className="intent-orbit intent-orbit--one" />
+    <div className="intent-orbit intent-orbit--two" />
+    <div className="intent-left">
+      <div className="intent-kicker">START WITH INTENT</div>
+      <div className="intent-title">เริ่มจากสิ่งที่<br />คุณอยากทำ</div>
+      <div className="intent-desc">ไม่ต้องมีไฟล์ก่อน</div>
+    </div>
+    <div className="intent-prompt" style={{ opacity: card, transform: `translateY(${(1 - card) * 26}px) scale(${0.96 + card * 0.04})` }}>
+      <div className="prompt-meta"><span className="prompt-dot" />YOUR IDEA</div>
+      <div className="prompt-thai">ช่วยทำโต๊ะสรุปยอดขายวันนี้</div>
+      <div className="prompt-underline" style={{ transform: `scaleX(${underline})` }} />
+      <div className="prompt-foot"><span>THE CORNER POP-UP · illustrative</span><span>↗</span></div>
+    </div>
+    <svg className="intent-arrow" viewBox="0 0 160 84" aria-hidden="true" style={{ opacity: card }}>
+      <path d="M8 53 C53 4 103 11 145 47" fill="none" stroke="#b9d3c1" strokeWidth="2" strokeDasharray={`${underline * 180} 180`} />
+      <path d="m132 36 15 12-18 5" fill="none" stroke="#b9d3c1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </AbsoluteFill>;
 }
 
-function SceneFour({ frame }) {
-  const t = frame - 330;
-  const headlineIn = ramp(t, 5, 21);
-  const formIn = ramp(t, 9, 33);
-  const tableIn = ramp(t, 23, 49);
-  const totalIn = ramp(t, 35, 60);
-  const railIn = ramp(t, 54, 76);
-  return (
-    <Shell>
-      <div className="scene-kicker" style={{ opacity: headlineIn }}>FROM IDEA TO WORKING SHAPE</div>
-      <div className="hero-copy hero-copy--shape" style={{ opacity: headlineIn }}>
-        <div>Shape it.</div>
-        <div className="shape-line">Review it.</div>
-        <div>Use it.</div>
+const captionFor = (frame) => {
+  if (frame < 660) return ['เริ่มจากสิ่งที่อยากทำ', 'START WITH INTENT'];
+  if (frame < 870) return ['ทบทวนกฎ ก่อนนำไปใช้', 'REVIEW → APPLY'];
+  if (frame < 1080) return ['ข้อมูลเดียวกัน มองได้หลายแบบ', 'ONE BOARD · CONNECTED VIEWS'];
+  if (frame < 1260) return ['ข้อมูลใหม่ กติกาเดิม', 'NEW INPUT · SAME CALCULATION'];
+  if (frame < 1500) return ['เสนอการเปลี่ยนกฎ แล้วให้คุณเลือก', 'PROPOSED CHANGE · HUMAN REVIEW'];
+  if (frame < 1650) return ['ยอดรวมเดิม · ยอดสุทธิใหม่', 'GROSS STAYS ฿405'];
+  return ['ทั้งโต๊ะ พร้อมให้ดูและปรับ', 'A TABLE THAT CAN GROW'];
+};
+
+function CanvasCaption({ frame }) {
+  const [thai, english] = captionFor(frame);
+  return <div className="canvas-caption"><span>{thai}</span><small>{english}</small></div>;
+}
+
+function PopUpTable({ frame }) {
+  const reveal = clamp(frame, 450, 500);
+  const input = clamp(frame, 1080, 1250);
+  const coffeeUnit = Math.round(25 + input * 10);
+  const cakeQty = Math.round(3 + input * 3);
+  const coffeeTotal = 3 * coffeeUnit;
+  const cakeTotal = cakeQty * 50;
+  const grandTotal = coffeeTotal + cakeTotal;
+  const flashCoffee = frame >= 1080 && frame < 1134 ? 1 - clamp(frame, 1080, 1134) : 0;
+  const flashCake = frame >= 1130 && frame < 1186 ? 1 - clamp(frame, 1130, 1186) : 0;
+  return <div className="sales-card paper-card" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 22}px)` }}>
+    <div className="card-topline"><span><i className="kind-dot kind-dot--green" />TODAY'S SALES</span><span className="sample-chip">EXAMPLE</span></div>
+    <div className="sales-column-head"><span>ITEM</span><span>QTY</span><span>UNIT PRICE</span><span>LINE TOTAL</span></div>
+    <div className="sales-row" style={{ backgroundColor: `rgba(232,240,228,${flashCoffee * 0.85})` }}>
+      <strong><i className="row-mark row-mark--green" />Coffee</strong><b>3</b><b>{money(coffeeUnit)}</b><b>{money(coffeeTotal)}</b>
+    </div>
+    <div className="sales-row" style={{ backgroundColor: `rgba(247,237,218,${flashCake * 0.85})` }}>
+      <strong><i className="row-mark row-mark--ochre" />Cake</strong><b>{cakeQty}</b><b>฿50</b><b>{money(cakeTotal)}</b>
+    </div>
+    <div className="table-equation"><span>{3} × {money(coffeeUnit)} <i>+</i> {cakeQty} × ฿50</span><b>{money(grandTotal)}</b></div>
+    <div className="table-foot"><span>Illustrative rows</span><span className="table-foot-bullet" />Recalculated together</div>
+  </div>;
+}
+
+function PromptChip({ frame }) {
+  const reveal = clamp(frame, 420, 454);
+  const compact = clamp(frame, 610, 655);
+  const size = mix(compact, 0, 1, 1, 0.94);
+  return <div className="workspace-prompt" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 12}px) scale(${size})` }}>
+    <span className="prompt-icon"><i /><i /><i /><i /></span>
+    <div><small>INTENT</small><b>ช่วยทำโต๊ะสรุปยอดขายวันนี้</b></div>
+    <span className="intent-check">✓</span>
+  </div>;
+}
+
+function RuleCard({ frame }) {
+  const reveal = clamp(frame, 660, 700);
+  const proposal = clamp(frame, 1260, 1360);
+  const proposing = frame >= 1260 && frame < 1474;
+  const applied = frame >= 822 && frame < 1260 || frame >= 1474;
+  const appliedRate = frame >= 1474 ? 20 : 10;
+  const rate = Math.round(10 + proposal * 10);
+  const reviewGlow = frame >= 720 && frame < 780 || frame >= 1340 && frame < 1400;
+  const applyGlow = frame >= 788 && frame < 832 || frame >= 1400 && frame < 1474;
+  const reviewed = frame >= 780 && frame < 1260 || frame >= 1400;
+  const sliderProgress = proposing ? proposal : appliedRate === 20 ? 1 : 0;
+  return <div className="rule-card paper-card" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 18}px)` }}>
+    <div className="card-topline"><span><i className="kind-dot kind-dot--ochre" />RULE</span><span className={`saved-chip ${applied ? 'saved-chip--applied' : ''}`}>{applied ? 'APPLIED' : proposing ? 'PROPOSED' : 'SAVED'}</span></div>
+    <div className="rule-name">รวมยอดแถว แล้วหักส่วนลด</div>
+    <div className="rule-state"><span>{proposing ? <>10% <i>→</i> <b>{rate}%</b></> : <b>{appliedRate}%</b>}</span><small>{proposing ? 'PROPOSED' : applied ? 'CURRENT' : 'SAVED'}</small></div>
+    <div className="rule-slider"><div className="rule-slider-range" /><div className="rule-slider-fill" style={{ width: `${sliderProgress * 100}%` }} /><div className="rule-slider-thumb" style={{ left: `${sliderProgress * 100}%` }} /><span>10%</span><span>20%</span></div>
+    <div className="rule-actions">
+      <div className={`rule-review ${reviewGlow ? 'rule-action--focus' : ''} ${reviewed ? 'rule-action--done' : ''}`}><i>{reviewed ? '✓' : '1'}</i><span>Review</span></div>
+      <div className={`rule-apply ${applyGlow ? 'rule-action--focus' : ''} ${applied ? 'rule-action--done' : ''}`}>{applied ? 'Applied ✓' : 'Apply'}</div>
+    </div>
+    {(frame >= 788 && frame <= 812 || frame >= 1418 && frame <= 1465) && <div className="pointer" style={{ left: frame < 1000 ? '82%' : `${74 + clamp(frame, 1418, 1465) * 14}%`, top: frame < 1000 ? '78%' : '82%' }}><svg width="27" height="34" viewBox="0 0 27 34"><path d="M4 2 23 18l-8 1 4 9-4 2-4-10-6 5Z" fill={C.ink} stroke={C.white} strokeWidth="2" strokeLinejoin="round" /></svg></div>}
+  </div>;
+}
+
+function MetricCard({ frame }) {
+  const reveal = clamp(frame, 870, 920);
+  const input = clamp(frame, 1080, 1250);
+  const total = 3 * Math.round(25 + input * 10) + Math.round(3 + input * 3) * 50;
+  return <div className="metric-card paper-card" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 18}px)` }}>
+    <div className="card-topline"><span><i className="kind-dot kind-dot--green" />GROSS TOTAL</span><span className="gross-chip">ROW SUM</span></div>
+    <div className="metric-number">{money(total)}</div>
+    <div className="metric-foot"><span>Gross = sum of line totals</span></div>
+  </div>;
+}
+
+function ChartCard({ frame }) {
+  const reveal = clamp(frame, 870, 925);
+  const input = clamp(frame, 1080, 1250);
+  const coffee = 3 * Math.round(25 + input * 10);
+  const cake = Math.round(3 + input * 3) * 50;
+  const coffeeHeight = Math.max(18, coffee / 300 * 118);
+  const cakeHeight = Math.max(18, cake / 300 * 118);
+  return <div className="chart-card paper-card" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 16}px)` }}>
+    <div className="card-topline"><span><i className="kind-dot kind-dot--blue" />LINE TOTALS</span><span className="chart-kind">BY ITEM</span></div>
+    <div className="chart-plot">
+      <div className="chart-grid chart-grid--one" /><div className="chart-grid chart-grid--two" /><div className="chart-baseline" />
+      <div className="chart-bar-unit chart-bar-unit--coffee">
+        <b style={{ bottom: coffeeHeight + 10 }}>{money(coffee)}</b><i style={{ height: coffeeHeight, background: C.green }} /><span>Coffee</span>
       </div>
+      <div className="chart-bar-unit chart-bar-unit--cake">
+        <b style={{ bottom: cakeHeight + 10 }}>{money(cake)}</b><i style={{ height: cakeHeight, background: C.ochre }} /><span>Cake</span>
+      </div>
+    </div>
+    <div className="chart-foot">Calculated from each row</div>
+  </div>;
+}
+
+function NetCard({ frame }) {
+  const reveal = clamp(frame, 1260, 1300);
+  const applied = frame >= 1474;
+  return <div className="net-card paper-card" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 16}px)` }}>
+    <div className="net-label"><i className="kind-dot kind-dot--clay" />NET AFTER DISCOUNT <span>GROSS ฿405</span></div>
+    <div className="net-content"><div><small>{applied ? '10% BEFORE' : '10% CURRENT'}</small><b>฿364.50</b></div><span className="net-arrow">→</span><div className="net-result"><small>{applied ? '20% APPLIED' : '20% PROPOSED'}</small><b>฿324.00</b></div></div>
+    <div className="net-foot">Gross stays ฿405 · same source rows</div>
+  </div>;
+}
+
+function Workspace({ frame }) {
+  const cameraFrames = [420, 435, 660, 675, 870, 885, 1260, 1275, 1500, 1515, 1740];
+  const cameraScale = [1, 1.1, 1.1, 1.12, 1.12, 1, 1, 1.08, 1.08, 0.96, 0.96];
+  const cameraX = [0, -26, -26, -60, -60, 0, 0, -78, -78, 26, 26];
+  const cameraY = [0, -22, -22, -33, -33, 0, 0, -5, -5, 15, 15];
+  const scale = interpolate(frame, cameraFrames, cameraScale, { easing: Easing.inOut(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const translateX = interpolate(frame, cameraFrames, cameraX, { easing: Easing.inOut(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const translateY = interpolate(frame, cameraFrames, cameraY, { easing: Easing.inOut(Easing.cubic), extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const caption = frame >= 420 && frame < 1740 ? <CanvasCaption frame={frame} /> : null;
+  const connector = (start, end) => {
+    const draw = clamp(frame, start, end);
+    return { strokeDasharray: `${draw} 1`, opacity: frame <= start ? 0 : 1 };
+  };
+  return <AbsoluteFill className="workspace-scene">
+    {caption}
+    <div className="board-camera" style={{ transform: `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})` }}>
       <div className="canvas-board">
         <div className="board-topline">
-          <span>SALES WORKSPACE</span>
-          <span className="board-status"><i /> DRAFT</span>
+          <div className="board-project"><span className="board-mini-mark"><i /><i /><i /><i /></span><span>THE CORNER POP-UP</span><small>SALES CANVAS</small></div>
+          <div className="board-status"><i /> ILLUSTRATIVE WORKSPACE</div>
         </div>
-        <PaperPiece className="form-piece" style={{ opacity: formIn, transform: 'translateY(' + (1 - formIn) * 20 + 'px)' }}>
-          <div className="piece-overline">FORM</div>
-          <div className="form-grid">
-            <div><span>Product</span><b>Coffee</b></div>
-            <div><span>Unit price</span><b>฿25</b></div>
-          </div>
-          <div className="form-input-line" />
-        </PaperPiece>
-        <PaperPiece className="table-piece" style={{ opacity: tableIn, transform: 'translateY(' + (1 - tableIn) * 20 + 'px)' }}>
-          <div className="piece-overline">TABLE</div>
-          <div className="mini-table-header"><span>ITEM</span><span>QTY</span><span>PRICE</span><span>TOTAL</span></div>
-          <div className="mini-table-row"><strong>Coffee</strong><b>3</b><b>฿25</b><b>฿75</b></div>
-          <div className="mini-table-row"><strong>Cake</strong><b>3</b><b>฿50</b><b>฿150</b></div>
-          <div className="table-rule" />
-          <div className="table-sum"><span>Illustrative total</span><b>฿225</b></div>
-        </PaperPiece>
-        <PaperPiece className="total-piece" style={{ opacity: totalIn, transform: 'translateY(' + (1 - totalIn) * 20 + 'px)' }}>
-          <div className="piece-overline">TOTAL</div>
-          <div className="total-value">฿225</div>
-          <div className="total-note">from the same rows</div>
-          <svg className="total-spark" viewBox="0 0 120 32" aria-hidden="true">
-            <path d="M2 26 23 20 42 23 61 10 82 14 101 4 118 8" fill="none" stroke={C.green} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </PaperPiece>
-        <div className="review-rail" style={{ opacity: railIn, transform: 'translateY(' + (1 - railIn) * 12 + 'px)' }}>
-          <div className="review-step"><span>1</span><b>Review</b></div>
-          <div className="review-arrow">→</div>
-          <div className="apply-action">Apply to Canvas <span>↗</span></div>
-        </div>
+        <PromptChip frame={frame} />
+        <svg className="board-connectors" viewBox="0 0 1188 548" aria-hidden="true">
+          <path d="M544 362 C566 362 569 344 590 344" pathLength="1" style={connector(870, 930)} />
+          <path d="M839 326 C858 326 849 190 870 190" pathLength="1" style={connector(870, 940)} />
+          <path d="M840 178 C863 190 849 354 870 372" pathLength="1" style={connector(1260, 1310)} />
+        </svg>
+        <PopUpTable frame={frame} />
+        <RuleCard frame={frame} />
+        <MetricCard frame={frame} />
+        <ChartCard frame={frame} />
+        <NetCard frame={frame} />
       </div>
-      <div className="canvas-caption">You choose what to apply.</div>
-    </Shell>
-  );
-}
-
-const dataTokens = [
-  { value: '3', sx: 784, sy: 235, ex: 830, ey: 202, color: C.greenSoft },
-  { value: '35', sx: 782, sy: 310, ex: 824, ey: 250, color: C.ochreSoft },
-  { value: '105', sx: 778, sy: 382, ex: 826, ey: 310, color: C.blueSoft },
-  { value: '6', sx: 782, sy: 452, ex: 832, ey: 372, color: C.claySoft },
-  { value: '50', sx: 786, sy: 516, ex: 832, ey: 434, color: C.greenSoft },
-];
-
-function SceneFive({ frame }) {
-  const t = frame - 480;
-  const inFrame = ramp(t, 3, 18);
-  const change = ramp(t, 22, 92);
-  const qtyA = 3;
-  const priceA = Math.round(25 + 10 * change);
-  const totalA = qtyA * priceA;
-  const qtyB = Math.round(3 + 3 * change);
-  const priceB = 50;
-  const totalB = qtyB * priceB;
-  const grandTotal = totalA + totalB;
-  const barScale = 100 / 320;
-  return (
-    <Shell>
-      <div className="scene-kicker" style={{ opacity: inFrame }}>THE SAME LOGIC, WITH NEW INPUTS</div>
-      <div className="data-headline" style={{ opacity: inFrame }}>
-        <span>New data.</span>
-        <span className="hero-accent">Same calculation.</span>
-      </div>
-      <div className="data-table" style={{ opacity: inFrame }}>
-        <div className="data-card-heading">
-          <span>THE CORNER POP-UP</span>
-          <span className="illustrative-tag">ILLUSTRATIVE</span>
-        </div>
-        <div className="data-table-head"><span>ITEM</span><span>QTY</span><span>UNIT</span><span>LINE TOTAL</span></div>
-        <div className="data-row">
-          <span className="data-product"><i className="swatch swatch--green" />Coffee</span>
-          <b>{qtyA}</b><b>{money(priceA)}</b><b>{money(totalA)}</b>
-        </div>
-        <div className="data-row">
-          <span className="data-product"><i className="swatch swatch--ochre" />Cake</span>
-          <b>{qtyB}</b><b>{money(priceB)}</b><b>{money(totalB)}</b>
-        </div>
-        <div className="data-card-footer">
-          <span>{qtyA} × {money(priceA)} &nbsp;+&nbsp; {qtyB} × {money(priceB)}</span>
-          <span className="calculated-total">= {money(grandTotal)}</span>
-        </div>
-      </div>
-      <svg className="data-token-path" viewBox="0 0 1280 720" aria-hidden="true">
-        <path d="M760 225C820 245 790 316 850 352" fill="none" stroke={C.edge} strokeWidth="2" strokeDasharray="3 8" />
-      </svg>
-      {dataTokens.map((token, index) => {
-        const p = ramp(t, 15 + index * 4, 72 + index * 3);
-        return (
-          <div
-            key={token.value + '-' + index}
-            className="data-token"
-            style={{
-              left: token.sx + (token.ex - token.sx) * p,
-              top: token.sy + (token.ey - token.sy) * p,
-              opacity: 0.2 + p * 0.55,
-              backgroundColor: token.color,
-            }}
-          >
-            {token.value}
-          </div>
-        );
-      })}
-      <PaperPiece className="metric-card" style={{ opacity: inFrame, transform: 'translateY(' + (1 - inFrame) * 18 + 'px)' }}>
-        <div className="metric-label"><span className="piece-dot" />TOTAL</div>
-        <div className="metric-value">{money(grandTotal)}</div>
-        <div className="metric-caption">recalculated from the rows</div>
-        <div className="bar-chart">
-          <div className="bar-unit">
-            <div className="bar-top-label">{money(totalA)}</div>
-            <div className="bar-track"><div className="bar-fill bar-fill--green" style={{ height: Math.max(22, totalA * barScale) }} /></div>
-            <div className="bar-name">Coffee</div>
-          </div>
-          <div className="bar-unit">
-            <div className="bar-top-label">{money(totalB)}</div>
-            <div className="bar-track"><div className="bar-fill bar-fill--ochre" style={{ height: Math.max(22, totalB * barScale) }} /></div>
-            <div className="bar-name">Cake</div>
-          </div>
-        </div>
-      </PaperPiece>
-      <div className="data-caption">3 × ฿25 + 3 × ฿50 = ฿225&nbsp;&nbsp; → &nbsp;&nbsp;3 × ฿35 + 6 × ฿50 = ฿405</div>
-    </Shell>
-  );
-}
-
-function SceneSix({ frame }) {
-  const t = frame - 660;
-  const enter = ramp(t, 5, 22);
-  const shift = ramp(t, 28, 82);
-  const knobLeft = 12 + shift * 284;
-  const rate = Math.round(10 + 10 * shift);
-  const net = 405 * (1 - rate / 100);
-  const netText = rate === 20 ? '฿324' : '฿' + net.toFixed(2);
-  return (
-    <Shell>
-      <div className="scene-kicker" style={{ opacity: enter }}>RULES CAN CHANGE, TOO</div>
-      <div className="rule-headline" style={{ opacity: enter }}>Change one rule.</div>
-      <div className="discount-guidance" style={{ opacity: enter }}>Try a 20% discount.</div>
-      <div className="rule-track-card" style={{ opacity: enter, transform: 'translateY(' + (1 - enter) * 16 + 'px)' }}>
-        <div className="piece-overline">PROPOSED DISCOUNT</div>
-        <div className="rule-big-rate">{rate}<span>%</span></div>
-        <div className="rule-slider">
-          <div className="rule-slider-fill" style={{ width: knobLeft + 'px' }} />
-          <div className="rule-knob" style={{ left: knobLeft }} />
-          <span className="slider-start">10%</span>
-          <span className="slider-end">20%</span>
-        </div>
-        <div className="rule-range"><span>Current</span><span>Proposed</span></div>
-      </div>
-      <div className="rule-result" style={{ opacity: enter, transform: 'translateY(' + (1 - enter) * 18 + 'px)' }}>
-        <div className="gross-preserved">
-          <span>GROSS</span>
-          <b>฿405</b>
-          <span className="unchanged-label">unchanged</span>
-        </div>
-        <div className="net-comparison">
-          <div className="net-row net-row--old">
-            <div><span>10% discount</span><b>฿364.50</b></div>
-            <div className="net-arrow">→</div>
-          </div>
-          <div className="net-row net-row--new">
-            <div><span>20% discount</span><b>{netText}</b></div>
-            <span className="active-rule-tag">PROPOSED</span>
-          </div>
-        </div>
-      </div>
-      <div className="rule-review-rail" style={{ opacity: ramp(t, 66, 82), transform: 'translateY(' + (1 - ramp(t, 66, 82)) * 10 + 'px)' }}>
-        <div className="review-step"><span>1</span><b>Review proposed rule</b></div>
-        <div className="review-arrow">→</div>
-        <div className="apply-action">Apply to Canvas <span>↗</span></div>
-      </div>
-      <div className="rule-caption">Gross stays ฿405. The source rows stay the same.</div>
-    </Shell>
-  );
-}
-
-function WorkVignette({ style }) {
-  return (
-    <PaperPiece className="vignette vignette--work" style={style}>
-      <div className="vignette-overline"><i className="swatch swatch--green" />WORK</div>
-      <div className="vignette-title">Sales</div>
-      <div className="vignette-mini-table">
-        <div><span>Coffee</span><b>3 × ฿35</b></div>
-        <div><span>Cake</span><b>6 × ฿50</b></div>
-      </div>
-      <div className="vignette-total"><span>TOTAL</span><b>฿405</b></div>
-      <div className="vignette-mark">A living worksheet</div>
-    </PaperPiece>
-  );
-}
-
-function LearningVignette({ style }) {
-  return (
-    <div className="vignette vignette--learning" style={style}>
-      <div className="vignette-overline"><i className="swatch swatch--ochre" />LEARNING</div>
-      <div className="formula-large">F = m·a</div>
-      <div className="formula-flow"><span>mass</span><b>×</b><span>acceleration</span><b>→</b><span>force</span></div>
-      <div className="learning-note">A relationship to explore</div>
-      <svg className="learning-orbit" width="110" height="96" viewBox="0 0 110 96" aria-hidden="true">
-        <ellipse cx="55" cy="48" rx="42" ry="19" fill="none" stroke={C.ochre} strokeWidth="1.5" transform="rotate(-22 55 48)" />
-        <circle cx="56" cy="48" r="12" fill={C.ochreSoft} stroke={C.ochre} strokeWidth="2" />
-        <circle cx="20" cy="27" r="4" fill={C.ochre} />
-      </svg>
     </div>
-  );
+  </AbsoluteFill>;
 }
 
-function PlayVignette({ style }) {
-  return (
-    <div className="vignette vignette--play" style={style}>
-      <div className="vignette-overline"><i className="swatch swatch--blue" />PLAY</div>
-      <div className="play-board">
-        <div /><div /><div />
-        <div /><span className="play-piece">●</span><div />
-        <div /><div /><div />
-      </div>
-      <div className="play-status"><b>TURN 04</b><span>Choose an action</span></div>
-      <div className="play-caption">A turn-based game</div>
+function EndLockup({ frame }) {
+  const reveal = clamp(frame, 1740, 1752);
+  return <AbsoluteFill className="end-scene" style={{ opacity: reveal }}>
+    <div className="end-band" />
+    <div className="end-orbit end-orbit--one" /><div className="end-orbit end-orbit--two" />
+    <div className="end-lockup" style={{ transform: `translateY(${(1 - reveal) * 16}px)` }}>
+      <Mark frame={frame} size={92} staticMark />
+      <div className="end-wordmark">tabletop<span>.</span></div>
+      <div className="end-url">tabletop.ptchrr.workers.dev</div>
+      <div className="end-tagline">Work defines what software becomes.</div>
     </div>
-  );
-}
-
-function SceneSeven({ frame }) {
-  const t = frame - 810;
-  const titleIn = ramp(t, 4, 20);
-  const spread = ramp(t, 12, 55);
-  const cards = [ramp(t, 18, 49), ramp(t, 26, 58), ramp(t, 34, 67)];
-  return (
-    <Shell>
-      <div className="scene-kicker" style={{ opacity: titleIn }}>ONE CANVAS, MANY DIRECTIONS</div>
-      <div className="vignette-headline" style={{ opacity: titleIn }}>
-        <span>For work.</span><span className="hero-accent">Learning.</span><span>Play.</span>
-      </div>
-      <svg className="branch-lines" viewBox="0 0 1280 720" aria-hidden="true">
-        <path d="M640 260C510 290 310 280 242 350M640 260V350M640 260C780 290 970 280 1038 350" fill="none" stroke={C.edge} strokeWidth="2" strokeDasharray="5 8" opacity={spread * 0.85} />
-      </svg>
-      <div className="source-canvas" style={{ opacity: 1 - spread, transform: 'translate(-50%, -50%) scale(' + (1 - spread * 0.6) + ')' }}>
-        <TableMark size={44} />
-        <span>ONE CANVAS</span>
-      </div>
-      <WorkVignette style={{ opacity: cards[0], transform: 'translateY(' + (1 - cards[0]) * 22 + 'px)' }} />
-      <LearningVignette style={{ opacity: cards[1], transform: 'translateY(' + (1 - cards[1]) * 22 + 'px)' }} />
-      <PlayVignette style={{ opacity: cards[2], transform: 'translateY(' + (1 - cards[2]) * 22 + 'px)' }} />
-    </Shell>
-  );
-}
-
-function SceneEight({ frame }) {
-  const t = frame - 930;
-  const enter = ramp(t, 3, 25);
-  return (
-    <Shell dark>
-      <div className="closing-band" style={{ opacity: enter * 0.85 }} />
-      <div className="closing-orbit" style={{ opacity: enter * 0.27, transform: 'scale(' + (0.84 + enter * 0.16) + ')' }} />
-      <div className="closing-copy" style={{ opacity: enter, transform: 'translateY(' + (1 - enter) * 14 + 'px)' }}>
-        <div>Work defines</div>
-        <div>what software</div>
-        <div className="hero-light">becomes.</div>
-      </div>
-      <div className="closing-brand" style={{ opacity: ramp(t, 15, 35), transform: 'translateY(' + (1 - ramp(t, 15, 35)) * 16 + 'px)' }}>
-        <div className="closing-mark"><TableMark size={104} light /></div>
-        <div className="closing-wordmark">TABLETOP</div>
-        <div className="closing-url">tabletop.ptchrr.workers.dev</div>
-      </div>
-      <div className="closing-rule" style={{ opacity: enter }} />
-      <div className="closing-draft" style={{ opacity: enter }}>DRAFT 01 · CODE-ONLY ANIMATIC</div>
-    </Shell>
-  );
+    <div className="end-rule" style={{ transform: `scaleX(${reveal})` }} />
+    <div className="end-draft">CONCEPT FILM · DRAFT 02</div>
+  </AbsoluteFill>;
 }
 
 export function NarrativeAnimatic() {
   const frame = useCurrentFrame();
-  const dark = (frame >= 120 && frame < 210) || frame >= 930;
-  let scene;
-  if (frame < 120) scene = <SceneOne frame={frame} />;
-  else if (frame < 210) scene = <SceneTwo frame={frame} />;
-  else if (frame < 330) scene = <SceneThree frame={frame} />;
-  else if (frame < 480) scene = <SceneFour frame={frame} />;
-  else if (frame < 660) scene = <SceneFive frame={frame} />;
-  else if (frame < 810) scene = <SceneSix frame={frame} />;
-  else if (frame < 930) scene = <SceneSeven frame={frame} />;
-  else scene = <SceneEight frame={frame} />;
-  return (
-    <AbsoluteFill className="animatic-root">
-      {scene}
-      <div className="header-overlay"><Header dark={dark} /></div>
-    </AbsoluteFill>
-  );
+  const introOpacity = frame < 255 ? 1 : 1 - clamp(frame, 255, 270);
+  const intentOpacity = frame < 270 ? clamp(frame, 255, 270) : frame < 405 ? 1 : 1 - clamp(frame, 405, 420);
+  const workspaceOpacity = frame < 420 ? clamp(frame, 405, 420) : frame < 1740 ? 1 : 1 - clamp(frame, 1740, 1755);
+  return <AbsoluteFill className="film-frame">
+    {frame < 270 && <AbsoluteFill style={{ opacity: introOpacity }}><Intro frame={frame} /></AbsoluteFill>}
+    {frame >= 255 && frame < 420 && <AbsoluteFill style={{ opacity: intentOpacity }}><Intent frame={frame} /></AbsoluteFill>}
+    {frame >= 405 && frame < 1755 && <AbsoluteFill style={{ opacity: workspaceOpacity }}><Workspace frame={frame} /></AbsoluteFill>}
+    {frame >= 1740 && <EndLockup frame={frame} />}
+    <Chrome frame={frame} />
+  </AbsoluteFill>;
 }

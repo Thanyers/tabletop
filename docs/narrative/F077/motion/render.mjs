@@ -29,14 +29,14 @@ const compositorPackage = (() => {
 const compositorDir = require(compositorPackage).dir;
 const ffmpegExecutable = resolve(compositorDir, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
 const stills = [
-  [68, 'scene-01.png'],
-  [165, 'scene-02.png'],
-  [270, 'scene-03.png'],
-  [414, 'scene-04.png'],
-  [650, 'scene-05.png'],
-  [780, 'scene-06.png'],
-  [876, 'scene-07.png'],
-  [1000, 'scene-08.png'],
+  [240, 'scene-01.png'],
+  [360, 'scene-02.png'],
+  [630, 'scene-03.png'],
+  [825, 'scene-04.png'],
+  [1020, 'scene-05.png'],
+  [1170, 'scene-06.png'],
+  [1476, 'scene-07.png'],
+  [1695, 'scene-08.png'],
 ];
 
 async function extractFrame(frame, output) {
@@ -88,15 +88,15 @@ if (!extractStillsOnly) {
   });
 }
 
-await extractFrame(1000, outputPoster);
+await extractFrame(1770, outputPoster);
 for (const [frame, filename] of stills) {
   await extractFrame(frame, resolve(mediaDir, filename));
 }
 
 const outputs = [outputVideo, outputPoster, ...stills.map(([, filename]) => resolve(mediaDir, filename))];
 console.log(extractStillsOnly
-  ? '\nExtracted the poster and eight reference stills from the existing 36-second MP4.'
-  : '\nRendered the 36-second, 1280×720 / 30 fps MP4 and extracted its reference stills.');
+  ? '\nExtracted the poster and eight reference stills from the existing 60-second MP4.'
+  : '\nRendered the 60-second, 1280×720 / 30 fps MP4 and extracted its reference stills.');
 for (const output of outputs) {
   const details = await stat(output);
   console.log(output + ' (' + details.size.toLocaleString('en-US') + ' bytes)');

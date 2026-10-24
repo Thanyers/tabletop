@@ -9,6 +9,7 @@
 | READMEเดิม | [README](../../../README.md) | belief, intent-first, three stories, screenshots, scope |
 | หน้าแรกเดิม | [PublicWelcome](../../../src/tabletop/ui/PublicWelcome.tsx), [copy](../../../src/tabletop/ui/landing-copy.ts) | heroSVG, processGIF, three use cases, EN/TH, authslot |
 | motionเดิม | [showcase provenance](../../showcase/README.md), [source](../../showcase/motion/src/tabletop-story.jsx) | 20s/960×540/12fps concept physics, ไม่ใช่AI recording |
+| Logo และ animation เดิม | [tabletop.css](../../../src/tabletop/ui/tabletop.css), [loading-screen.css](../../../src/loading/loading-screen.css) | mark 4 ชิ้น มีวงกลมทองด้านล่างขวา; tilt 2.4s และ pulse 1.2s; รอบ 2 ยึด geometry/timing เดิม |
 | บุคลิก | [design](../../../design.md), [CalmCanvas](../../CALM_CANVAS_DESIGN.md) | ครีม/หมึก/เขียว, การ์ดใช้ทำงาน, ลดnoise |
 | เริ่มไม่มีไฟล์+เติมCSV | [Release9 PD005/006](../../testing/f066-post-deploy/RELEASE9_RESULTS_TH.md) | production QAรายเคส, ไม่ใช่ทุกpromptผ่านครั้งแรก |
 | คำนวณและส่งผลmetric/chart | รายงานเดียวกัน PD013–019 | source/versionคงเดิม; model-job IDsคงเดิม แต่ providerCallsยังUNVERIFIED |
@@ -32,6 +33,7 @@
 - [Reference video](https://skillry.dev/ai-videos/opus-5-5/deedydas-252537): ดูเฟรม0/4/9/14/22–23sและหน้าprompt; ไม่ดาวน์โหลด/นำmedia/เพลงมาใช้ และไม่ติดตั้งpremiumskill
 - [Prompt source](https://github.com/yihui-dev/awesome-opus5-5-videos/blob/main/prompts/deedydas-252537.md): promptสั้น, metadataของremakeเป็นSVG/GSAP; ใช้เป็นreferencedirectionไม่ใช่คำสั่งให้ใช้assetหรือแอบอ้างผล
 - [Event](https://luma.com/39zve8ph): เกณฑ์และexistingprojectruleที่ตรวจจากหน้าeventก่อนงาน ต้องทวนอีกครั้งก่อนส่งประกวดเพราะกติกาอาจเปลี่ยน
+- [Reference รอบ 2](references.md): แยกหน้าเว็บที่ดูภาพจริง (Milanote/Linear) ออกจากบทความที่อ่านเพื่อหาแนวคิด (tldraw/Milanote Help); ไม่อ้างว่าวัดจังหวะ motion ของทุกแหล่งแล้ว
 
 ## งาน integration ที่ต้องตรวจอีกครั้ง
 
