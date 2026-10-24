@@ -92,6 +92,8 @@ One behavior is deliberately tightened, and it is called out rather than hidden:
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **937 passed / 5 skipped (942)** (927 from T5a + 10 navigation tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan clean, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: `src/tabletop/TabletopApp.tsx` is an explicitly uncovered planner path, so the PR selects every focused gate, and the three browser suites run in the full dev run after merge. No schema, retention, billing or visibility change.
 
+Fix (PR #272): the guard shipped as `isSameOpenTable`, which returns false when nothing is open, so the `popstate` handler dropped a Forward-navigated table and the full dev run failed at `tests/cloudflare-browser.mjs:530`. It is now `shouldApplyLateOpen`, which applies when nothing is open, when the same table is open, or when the member stayed put, and still drops a fetch for a table they navigated away from. Navigation tests cover the null/undefined/switched cases.
+
 ### T6a — Room job view/progress seam (PR #267)
 
 Moved out of `cloudflare/room.ts` into `cloudflare/room-job-view.ts`: `PublicModelJob`, the assistant confirmation message and job views, the draft job status/view functions, `publicClarification`, and the four redaction/clamping helpers (`draftIdentityReplacements`, `boundedFailureDetails`, `boundedSearchProgress`, `boundedResearch`). The token/cursor/prompt constants move with them so there is one definition.
@@ -112,7 +114,7 @@ Wire contract, `GENERATIVE_LIMITS`, descriptor fields and product primitives are
 
 Controlled RED, twice, then reverted byte-identically (SHA-256 verified against the pre-probe files): (1) adding a fifth `timeline` kind to the wire union only makes `tsc` fail in 19 places, and compiling that leaf alone shows the first failure is the registry (`TS1360 … Property 'timeline' is missing`); (2) also registering it in the metadata satisfies the leaf alone, while the full program still fails in 14 places (schema, validation, evaluator, runtime index, renderer map and the typed test fixtures) and the registration tests fail 8 cases. After the revert, `npm run typecheck` and the touched suites are green again.
 
-Node `v22.23.2`: `npm run typecheck` (three configs) passed; `npm test` **949 passed / 5 skipped (954)** after merging dev `bad48d7` (dev was 937 / 5, plus the 12 registration tests); lint **0 errors / 111 warnings** (same as baseline); `npm run build` passed; `node scripts/check-public-files.mjs` **842 files / 0 findings**; `npx tsx server/changelog.ts check` 10 fragments; `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: this PR touches shared, client runtime, the canvas UI and one provider prompt module, not Worker, Room, transport or persistence code.
+Node `v22.23.2`: `npm run typecheck` (three configs) passed; `npm test` **950 passed / 5 skipped (955)** after merging dev `58798fe` (dev was 938 / 5, plus the 12 registration tests); lint **0 errors / 111 warnings** (same as baseline); `npm run build` passed; `node scripts/check-public-files.mjs` **843 files / 0 findings**; `npx tsx server/changelog.ts check` 11 fragments; `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: this PR touches shared, client runtime, the canvas UI and one provider prompt module, not Worker, Room, transport or persistence code.
 
 ## First delivery group status (2026-10-24)
 
