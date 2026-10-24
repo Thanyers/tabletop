@@ -77,25 +77,26 @@ function HammerGripIllustration({ adapted, label }: { adapted: boolean; label: s
 function ChairFitIllustration({ adapted, label }: { adapted: boolean; label: string }) {
   return <svg viewBox="0 0 480 270" role="img" aria-label={label} focusable="false" data-scene="chair" data-adapted={adapted}>
     <rect width="480" height="270" rx="18" fill="var(--tt-paper, #faf8f0)" />
-    {/* Workbench is deliberately higher than the unmodified chair seat. */}
-    <path d="M22 59h143v15H22zM34 74h10v143H34zm111 0h10v143h-10z" fill="var(--tt-amber, #89632f)" />
-    <path d="M35 80h10v6H35zm111 0h10v6h-10z" fill="var(--tt-ink, #303d3a)" opacity=".35" />
-    {/* Same chair and the two additions: a visible seat pad and a low offcut footrest. */}
-    <rect x="203" y="83" width="39" height="57" rx="10" fill="var(--tt-muted, #667268)" />
-    <path d="M194 134h94v16h-94zM202 150h11v70h-11zm65 0h11v70h-11z" fill="var(--tt-ink, #303d3a)" />
+    <path d="M40 104h190v13H40zM53 117h10v121H53zm150 0h10v121h-10z" fill="var(--tt-amber, #89632f)" />
+    <path d="M272 167h87v12h-87zM280 179h9v59h-9zm61 0h9v59h-9z" fill="var(--tt-ink, #303d3a)" />
+    <rect x="345" y="101" width="14" height="76" rx="6" fill="var(--tt-muted, #667268)" />
     {adapted && <g aria-hidden="true">
-      <path d="M190 120q47-17 102 0v17q-50-16-102 0z" fill="var(--tt-moss, #356e5d)" />
-      <path d="M114 194h102v22H114z" fill="var(--tt-amber, #89632f)" />
-      <path d="M122 199h86v5h-86z" fill="var(--tt-clay-2, #f6e9e2)" opacity=".55" />
+      <rect x="269" y="151" width="77" height="16" rx="6" fill="var(--tt-moss, #356e5d)" />
+      <path d="M206 211h72v27h-72z" fill="var(--tt-amber, #89632f)" />
+      <path d="M213 219h58m-58 9h58" stroke="var(--tt-paper, #faf8f0)" strokeWidth="2" opacity=".45" />
     </g>}
-    {/* Person's pose is identical in both panels; feet meet the added rest. */}
-    <circle cx="251" cy="76" r="21" fill="var(--tt-clay-2, #f6e9e2)" />
-    <path d="M237 72q3-27 28-18l11 14-8 7-28 5z" fill="var(--tt-ink, #303d3a)" />
-    <path d="M232 101q19-7 34 3l18 30-16 15-45-8 1-27z" fill="var(--tt-blue, #3e6c86)" />
-    <path d="m238 107-29-18-37-8m85 22-20-21-42-3" fill="none" stroke="var(--tt-clay-2, #f6e9e2)" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="m236 136-54 14-31 20 9 13 51-13 37-4m20-18-39 12-25 30 12 10 38-26 37-11" fill="none" stroke="var(--tt-blue, #3e6c86)" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="m151 170-8 22 24 4 14-24m27 14-10 21 24 3 13-20" fill="none" stroke="var(--tt-clay-2, #f6e9e2)" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M134 193h38m18 18h34" fill="none" stroke="var(--tt-ink, #303d3a)" strokeWidth="8" strokeLinecap="round" />
+    {/* One side profile; the cushion raises the same person by its thickness. */}
+    <g transform={adapted ? 'translate(0 -16)' : undefined}>
+      <circle cx="314" cy="70" r="20" fill="var(--tt-clay-2, #f6e9e2)" />
+      <path d="M295 64q4-23 25-15l14 14-8 10-5-9z" fill="var(--tt-ink, #303d3a)" />
+      <path d="M305 88h15v18h-15z" fill="var(--tt-clay-2, #f6e9e2)" />
+      <path d="M300 101q14-8 29 2l7 50q-14 14-40 6l-3-42z" fill="var(--tt-moss, #356e5d)" />
+      <path d="M307 112l-24 20-41-15" fill="none" stroke="var(--tt-clay-2, #f6e9e2)" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M242 117l-17-5" stroke="var(--tt-clay-2, #f6e9e2)" strokeWidth="9" strokeLinecap="round" />
+      <path d="M322 157h-67q-12 0-12 14v39" fill="none" stroke="var(--tt-blue, #3e6c86)" strokeWidth="20" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M243 211v10" stroke="var(--tt-clay-2, #f6e9e2)" strokeWidth="12" />
+      <path d="M249 219h-15l-16 8h34v-8z" fill="var(--tt-ink, #303d3a)" />
+    </g>
     <path d="M26 238h428" stroke="var(--tt-line, #d9d4c4)" strokeWidth="2" />
   </svg>;
 }
