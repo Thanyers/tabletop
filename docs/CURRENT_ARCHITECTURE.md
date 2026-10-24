@@ -31,7 +31,7 @@ flowchart TB
 | Command authority | Actor, epoch, revision, idempotency and transactional state changes | [`authority.ts`](../server/authority.ts) |
 | Persistence adapters | Current state, receipts, events, snapshots, memberships and outboxes | [`WorkspaceRepository`](../server/repository.ts), [`RoomRepository`](../cloudflare/room-repository.ts) |
 | Worker and D1 | OIDC/session/CSRF and discovery of rooms | [`index.ts`](../cloudflare/index.ts), [`auth.ts`](../cloudflare/auth.ts), [R1 auth/storage](R1_ARCHITECTURE.md) |
-| Room | HTTP/WebSocket transport, authority composition, AI/compute wakeups and directory reconciliation | [`room.ts`](../cloudflare/room.ts) |
+| Room | WebSocket transport, authority composition, AI/compute wakeups and directory reconciliation; the HTTP route table and every route that does not need the instance live in `room-http.ts` (F078-T6c) | [`room.ts`](../cloudflare/room.ts), [`room-http.ts`](../cloudflare/room-http.ts) |
 | AI and billing | Consent checks, request context, structured output, progress/recovery and recorded usage | [`ai.ts`](../cloudflare/ai.ts), [`table-assistant.ts`](../cloudflare/table-assistant.ts), [`billing.ts`](../cloudflare/billing.ts) |
 | Reusable compute | Resolve declared inputs, isolated execution, typed output validation and revision-bound lineage | [`orchestrator`](../server/table-compute-orchestrator.ts), [Reusable compute](REUSABLE_COMPUTE.md) |
 

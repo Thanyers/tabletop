@@ -25,6 +25,7 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
+| F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (T0–T4 + T5a/T5b/T6a/T6b/T7a/T7b/T8/T9 done; T6c review) | [F078](docs/features/F078-architecture-improvements.md) |
 | F077-T2 | Apply English README; restore visual hero; show tools adapting to people; remove homepage README navigation | `review` | Codex · `fix/F077-story-visuals` · README, PublicWelcome, landing-copy, narrative visuals and browser contract |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (first group T0–T4) | [F078](docs/features/F078-architecture-improvements.md) |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `done` (T0–T9 merged) | [F078](docs/features/F078-architecture-improvements.md) |
@@ -78,6 +79,8 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F078-T7b | Disposable recovery rehearsal (หลาย revision, revoked member, pending job, exact retry after restore) | `done` (merged `8e3bc7f`) | DeepSeek Harness (lead) | `feat/F078-T7b-recovery-rehearsal` / #279 | `scripts/recovery-rehearsal.ts` (ใหม่), `server/recovery-rehearsal.test.ts` (ใหม่), `docs/STORAGE_LIFECYCLE.md`, spec/PLAN/feature, `changelog.d/` | F078-T7a | 9/9 invariants · RTO ~0.8–0.9 s · modelled RPO 0 commit · unit 963/5 · lint 0/111 |
+| F078-T6c | แยก HTTP surface ของ Room เป็น `room-http.ts`: route table + explicit dependency object, คง status/header/guard order | `review` | DeepSeek Harness (lead) | `feat/F078-T6c-room-http` / [#283](https://github.com/Thanyers/tabletop/pull/283) | `cloudflare/room-http.ts` (ใหม่), `cloudflare/room-http.test.ts` (ใหม่), `cloudflare/room.ts`, `CURRENT_ARCHITECTURE`/F078/spec/changelog | — | unit 963/5 · Workers 236/236 · typecheck 3 config · lint 0/110 · build+dry-run · public scan 970/0 · `room.ts` 1,493→1,280 |
 | F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
 | F066-T8 | เปิด hosted JS/Python แก้เคสไม่ผ่าน และตรวจหลัง deploy | `review` | Codex | `docs/F066-release902-results` | F066 acceptance/feature/spec, DEPLOYMENTS, PLAN, release-notes CRLF parser และ main กลับ dev | — | production9.0.2/8e2c7e1; 37PASS/10BLOCKED/1SKIP; fullCI901/197+browser3ผ่าน; หลายบัญชี8/human/mobileBLOCKED; actualretest/reportและmainbackmergeในPR #258 |
 | F075-T1 | `record-summary.ts` + ใช้ในช่องเลือกแถว 2 จุด + บรรทัด Done | `review` | lead (AI) | `fix/F075-readable-record-picker` | `ui/record-summary.ts`, `ui/GeneratedCanvasObjects.tsx`, `ui/TableCanvasObjects.tsx`, `ui/record-actions.css`, tests | — | client อย่างเดียว |
