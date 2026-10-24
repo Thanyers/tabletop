@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+## 9.1.2 — 2026-10-24
+
+PATCH: Limit homepage corrections to the looping prompt-first hero and realistic individually fitted tool images. No backend, data, schema, binding or secret changes; rollback target 9.1.1.
+
+- Make the homepage hero play a looping request-first canvas sequence without nested framing or a manual Play step, remove its explanatory note, and replace the hammer/chair drawings with realistic individual-fit before/after imagery. Other homepage sections, README and the narrated film are unchanged.
+- Record the verified 9.1.1 publication of the English README and corrected homepage story, close F077-T2, and bring the release history back to dev. Documentation only; no runtime change.
+
 ## 9.1.1 — 2026-10-24
 
 PATCH: Restore the visual homepage story and apply the English README; include disposable recovery/load rehearsal tooling and closeout docs. No production schema, binding, secret or data-policy changes; rollback to 9.1.0 requires no data conversion.

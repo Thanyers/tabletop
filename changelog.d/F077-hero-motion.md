@@ -1,1 +1,0 @@
-- Make the homepage hero play a looping request-first canvas sequence without nested framing or a manual Play step, remove its explanatory note, and replace the hammer/chair drawings with realistic individual-fit before/after imagery. Other homepage sections, README and the narrated film are unchanged.
