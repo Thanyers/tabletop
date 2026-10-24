@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
+  BASELINE_DEFAULTS,
   BASELINE_LIMITS,
   ensureBaselineOutputDirectory,
   parseBaselineOptions,
@@ -12,6 +13,7 @@ import {
 
 describe('disposable architecture baseline', () => {
   it('uses nearest-rank percentiles and rejects out-of-range workload counts', async () => {
+    expect(parseBaselineOptions([])).toEqual(BASELINE_DEFAULTS);
     expect(percentile([9, 1, 5, 3], 0.5)).toBe(3);
     expect(percentile([9, 1, 5, 3], 0.95)).toBe(9);
     expect(parseBaselineOptions(['--records', '100', '--samples', '10', '--stale-samples', '5'])).toEqual({
@@ -59,6 +61,9 @@ describe('disposable architecture baseline', () => {
     expect(report.metadata.pgliteVersion).toMatch(/^\d+\.\d+\.\d+(?:[-+].*)?$/u);
     expect(report.metadata.sourceCommit).toMatch(/^[a-f0-9]{40}$/u);
     expect(report.metadata.sourceScriptSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(report.metadata.sourceFilesSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(report.metadata.sourceFileCount).toBeGreaterThan(2);
+    expect(report.metadata.sourceFilesScope).toContain('src/tabletop and server');
     expect(report.setupCommands.map(sample => sample.commandType)).toEqual([
       'evolve.propose', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
     ]);
@@ -76,5 +81,9 @@ describe('disposable architecture baseline', () => {
     expect(storage.get('commands')?.rows).toBe(report.setupCommands.length + report.measurements.successfulActions.count);
     expect(storage.get('model_jobs')).toMatchObject({ rows: 0 });
     expect(report.storage.every(table => table.byteUnit === 'bytes' && table.relationBytes > 0)).toBe(true);
+
+    const repeated = await runArchitectureBaseline({ records: 1, successfulSamples: 1, staleSamples: 1 });
+    expect(repeated.metadata.sourceFilesSha256).toBe(report.metadata.sourceFilesSha256);
+    expect(repeated.metadata.sourceFileCount).toBe(report.metadata.sourceFileCount);
   });
 });

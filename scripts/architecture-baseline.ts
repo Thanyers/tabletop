@@ -20,6 +20,8 @@ const executeFile = promisify(execFile);
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scriptPath = fileURLToPath(import.meta.url);
 const recordIdWidth = String(TABLE_LIMITS.rowsTotal).length;
+const sourcePathLengthBytes = 4;
+const sourceContentLengthBytes = 8;
 
 export const BASELINE_DEFAULTS = {
   records: 100,
@@ -42,6 +44,9 @@ interface SourceMetadata {
   readonly generatedAt: string;
   readonly sourceCommit: string;
   readonly sourceScriptSha256: string;
+  readonly sourceFilesSha256: string;
+  readonly sourceFileCount: number;
+  readonly sourceFilesScope: string;
   readonly worktreeDirty: boolean;
   readonly nodeVersion: string;
   readonly platform: string;
@@ -109,6 +114,13 @@ const STORAGE_TABLES: readonly StorageTableDefinition[] = [
   { name: 'outbox', relation: 'public.outbox', meaning: 'Undelivered event outbox rows in this direct-authority workload.' },
   { name: 'model_jobs', relation: 'public.model_jobs', meaning: 'Durable model-job rows; this workload creates none.' },
 ];
+
+const SOURCE_FILES_SCOPE = 'tracked and non-ignored untracked .ts/.tsx under src/tabletop and server, excluding credential-named files, declarations, generated outputs, and vendored sources; scripts/architecture-baseline.ts; package.json; package-lock.json';
+
+interface SourceFileContent {
+  readonly path: string;
+  readonly content: Buffer;
+}
 
 function boundedInteger(flag: string, rawValue: string | undefined, minimum: number, maximum: number): number {
   if (!rawValue || !/^(0|[1-9]\d*)$/u.test(rawValue)) throw new Error(`INVALID_${flag.toUpperCase().replaceAll('-', '_')}`);
@@ -210,13 +222,63 @@ function createSyntheticChange(recordCount: number): TableChange {
   };
 }
 
+function isSourceFilePath(path: string): boolean {
+  const normalized = path.replaceAll('\\', '/');
+  const inApplicationSource = /^(?:src\/tabletop|server)\/.+\.tsx?$/u.test(normalized)
+    && !normalized.endsWith('.d.ts');
+  const isBaselineSource = normalized === 'scripts/architecture-baseline.ts';
+  const isPackageManifest = normalized === 'package.json' || normalized === 'package-lock.json';
+  const isGeneratedArtifact = /(?:^|\/)(?:dist|build|coverage|test-results|generated|vendor|third_party|third-party)(?:\/|$)/iu.test(normalized)
+    || /(?:\.generated|\.gen)\.tsx?$/iu.test(normalized);
+  const isCredentialMaterial = /(?:^|\/)(?:\.env(?:\..*)?|credentials?(?:\.[^/]*)?|secrets?(?:\.[^/]*)?)(?:\/|$)/iu.test(normalized);
+  return (inApplicationSource || isBaselineSource || isPackageManifest) && !isGeneratedArtifact && !isCredentialMaterial;
+}
+
+async function sourceFiles(): Promise<SourceFileContent[]> {
+  const { stdout: listedPaths } = await executeFile('git', [
+    'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--',
+    'src/tabletop', 'server', 'scripts/architecture-baseline.ts', 'package.json', 'package-lock.json',
+  ], { cwd: repositoryRoot, windowsHide: true });
+  const paths = [...new Set(listedPaths.split('\0').filter(isSourceFilePath))].sort();
+  const files: SourceFileContent[] = [];
+  for (const path of paths) {
+    const absolutePath = resolve(repositoryRoot, path);
+    if (!isWithin(repositoryRoot, absolutePath)) throw new Error('SOURCE_FINGERPRINT_PATH_INVALID');
+    let entry;
+    try {
+      entry = await lstat(absolutePath);
+    } catch (error) {
+      if (hasErrorCode(error, 'ENOENT')) continue;
+      throw error;
+    }
+    if (entry.isSymbolicLink()) throw new Error('SOURCE_FINGERPRINT_SYMLINK_UNSUPPORTED');
+    if (entry.isFile()) files.push({ path, content: await readFile(absolutePath) });
+  }
+  if (!files.some(file => file.path === 'scripts/architecture-baseline.ts')
+      || !files.some(file => file.path === 'package.json')
+      || !files.some(file => file.path === 'package-lock.json')) {
+    throw new Error('SOURCE_FINGERPRINT_INPUTS_UNAVAILABLE');
+  }
+  return files;
+}
+
 async function sourceMetadata(): Promise<SourceMetadata> {
-  const [{ stdout: sourceCommit }, { stdout: status }, scriptContents, pglitePackageContents] = await Promise.all([
+  const [{ stdout: sourceCommit }, { stdout: status }, sourceContents, scriptContents, pglitePackageContents] = await Promise.all([
     executeFile('git', ['rev-parse', '--verify', 'HEAD'], { cwd: repositoryRoot, windowsHide: true }),
     executeFile('git', ['status', '--porcelain=v1'], { cwd: repositoryRoot, windowsHide: true }),
+    sourceFiles(),
     readFile(scriptPath),
     readFile(join(repositoryRoot, 'node_modules', '@electric-sql', 'pglite', 'package.json')),
   ]);
+  const sourceHash = createHash('sha256').update('architecture-baseline-source-v1\0');
+  for (const file of sourceContents) {
+    const pathBytes = Buffer.from(file.path, 'utf8');
+    const pathLength = Buffer.alloc(sourcePathLengthBytes);
+    pathLength.writeUInt32BE(pathBytes.length);
+    const contentLength = Buffer.alloc(sourceContentLengthBytes);
+    contentLength.writeBigUInt64BE(BigInt(file.content.length));
+    sourceHash.update(pathLength).update(pathBytes).update(contentLength).update(file.content);
+  }
   const pglitePackage: unknown = JSON.parse(pglitePackageContents.toString('utf8'));
   if (typeof pglitePackage !== 'object' || pglitePackage === null || !('version' in pglitePackage)
       || typeof pglitePackage.version !== 'string') {
@@ -226,6 +288,9 @@ async function sourceMetadata(): Promise<SourceMetadata> {
     generatedAt: new Date().toISOString(),
     sourceCommit: sourceCommit.trim(),
     sourceScriptSha256: createHash('sha256').update(scriptContents).digest('hex'),
+    sourceFilesSha256: sourceHash.digest('hex'),
+    sourceFileCount: sourceContents.length,
+    sourceFilesScope: SOURCE_FILES_SCOPE,
     worktreeDirty: Boolean(status.trim()),
     nodeVersion: process.version,
     platform: process.platform,
@@ -296,6 +361,7 @@ export async function runArchitectureBaseline(options: BaselineOptions): Promise
     throw new Error('BASELINE_OPTIONS_OUT_OF_RANGE');
   }
 
+  const metadata = await sourceMetadata();
   const database = createPGliteDatabase(':memory:');
   const repository = new SqlWorkspaceRepository(database);
   try {
@@ -371,7 +437,7 @@ export async function runArchitectureBaseline(options: BaselineOptions): Promise
     }
 
     return {
-      metadata: await sourceMetadata(),
+      metadata,
       workload: {
         records: options.records,
         successfulSamples: options.successfulSamples,
