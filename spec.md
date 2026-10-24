@@ -3,7 +3,7 @@
 แหล่งความจริงของ **สถานะงาน** โปรเจกต์นี้ (ไม่ใช่แชท) · อัปเดตทุกครั้งที่จบงาน ตามกติกาใน [CLAUDE.md](CLAUDE.md)
 รายละเอียดเชิงลึกอยู่ในเอกสารเจ้าของเรื่อง — ไฟล์นี้สรุปและลิงก์ ไม่คัดลอกซ้ำ
 
-อัปเดตล่าสุด: 2026-10-23
+อัปเดตล่าสุด: 2026-10-24
 
 ## ผลิตภัณฑ์
 
@@ -29,6 +29,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 ขอบเขต contract: [GENERIC_TABLE_DESIGN](docs/GENERIC_TABLE_DESIGN.md) · auth/storage: [R1_ARCHITECTURE](docs/R1_ARCHITECTURE.md) · design system: [design.md](design.md)
 
 ## สถานะปัจจุบัน
+
+- **F077-T1 เรื่องเล่าสามสื่อ — `review`, [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) (2026-10-24):** [ชุดร่าง](docs/narrative/F077/README.md) มีหน้าเว็บ TH/EN, README, storyboard/production prompt และ Remotion MP4 เงียบ 36s/1280×720/30fps พร้อม poster/8 stills; เคสร้านกาแฟเชื่อม no-file → ตรวจ/ใช้ → ข้อมูลใหม่ใช้วิธีคำนวณเดิม → แก้กฎเฉพาะจุด · ไม่เปลี่ยนหน้าเว็บ/README ที่เผยแพร่และไม่ใช้โมเดลสร้างวิดีโอ · Node 22.23.2: render สำเร็จ, คำนวณ 4/4, ลิงก์ภายในไม่หาย, browser เล่น/เลื่อนเวลาและสลับ panels ได้, public scan 0 finding, changelog check ผ่าน 1 fragment และ whitespace check ผ่าน; [ขอบเขตผลตรวจ](docs/narrative/F077/verification.md) แยก concept ออกจาก runtime proof, mobile/full UI gate และ human comprehension ยังไม่ตรวจ; CI ตอนจองงานหยุดที่ dependency audit ของ root package เดิม (4 moderate / 3 high) ก่อนเพิ่มสื่อ จึงยังไม่พร้อม merge
 
 - **F066-T13 Ask รายกฎ — ออก9.0.2แล้ว (2026-10-23):** [PR #257](https://github.com/Thanyers/tabletop/pull/257) main8e2c7e1/[deploy39982761764](https://github.com/Thanyers/tabletop/actions/runs/39982761764) สำเร็จ exactคำถาม "กฎนี้รับอะไรและเปลี่ยนผลตรงไหน" ส่งถึงassistantและตอบdiscount_10/inputgross/outputสองค่า/ส่งต่อvat_7ถูกตัวบนstagingและproduction โปรแกรม/raw/computeRuns/data-rule-actionrevisionsเดิม; เปลี่ยนเฉพาะlayoutการ์ดคำตอบใหม่ RenderedRED→GREENรักษาAsk, Changeมี/ไม่มีref และordinaryopenrules FullreleaseCI Node22.23.2 unit901passed/5skipped Workers197 browser3ครบผ่าน; independent reviewไม่มีP1/P2
 
