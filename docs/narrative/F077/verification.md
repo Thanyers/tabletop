@@ -29,6 +29,9 @@ The accepted website design is now in the actual shared homepage, English by def
 | English/Thai and motion | PASS | Fresh English content, Thai/English keyboard switch, immediate full request under reduced motion, original animation retained with reduced-motion poster. |
 | Responsive populated states | PASS | 280/320/414/1280 CSS-pixel views: document width equals viewport for initial and populated boards. Fixed intrinsic table overflow and narrow-screen heading/label stacking found during review. |
 | Landmarks | PASS | One focusable main; global header/footer outside main; home scroll respects reduced motion. |
+| Homepage film and photos | PASS | Browser playback reached 104.433333 seconds with `ended=true`, no media error, and the English text track showing. All three physical-tool photographs loaded. Emulation overrides were restored after checks. |
+| Public files and documents | PASS | Final public scan: 950 files, 0 findings; 50 local Markdown targets resolved, 10 changelog fragments checked, and `git diff --check` passed. |
+| Final dev sync | PASS | Merged `bad48d768841` without conflicts, preserving independent F078 entries. Rebuilt the app and reran the 10 navigation tests and 204 Worker tests after the merge. |
 | Independent review | PASS, no open source blocker | Audio/credential/rights review and homepage state/auth/route/language review; landmark and reduced-motion findings fixed and rechecked. Final media targets supplied after render. |
 | Hosted CI | PENDING | Read the latest PR commit checks; historical CI does not certify this candidate. |
 | Human full-film listening/comprehension | NOT RUN | The user approved the voice direction. Automated audio checks and picture review do not establish naturalness or first-time audience understanding. |
