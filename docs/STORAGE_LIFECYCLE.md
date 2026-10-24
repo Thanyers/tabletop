@@ -392,6 +392,21 @@ A restore should carry at least:
 - Pre-reset snapshots must not be reintroduced alongside a post-reset epoch: the live code would never write
   that pair, and the snapshot key includes the epoch.
 
+## 10a. Disposable rehearsal (F078-T7b)
+
+`scripts/recovery-rehearsal.ts` proves the invariants of section 10 on a disposable on-disk PGlite database. It creates a room, commits several revisions, revokes a member through the repository transaction, seeds pending `model_jobs` rows, snapshots the state, closes the database, restores by copying the directory, reopens it, and re-checks everything through the same `CommandAuthority` the application uses.
+
+Nine invariants are re-checked: state hash, epoch and revision, snapshot/event/receipt counts, outbox pending count, pending jobs still queued, revoked member still revoked, exact retry replaying the original receipt, that retry adding no event or receipt, and the revoked member being refused after the restore (`MEMBERSHIP_REVOKED`).
+
+Measured on Windows x64 / Node `v22.23.2` / PGlite `0.5.10`: build ~1.7 s, snapshot ~2 ms, restore (copy + reopen) ~0.8–0.9 s, invariant verification ~17 ms. The modelled RPO is **0 commits** because the snapshot is taken after a clean close; a crash before that close would lose everything since the last committed transaction. This is not a crash-consistent point-in-time restore.
+
+Limits, written into every report it emits: the Node PGlite adapter only — no D1 directory, Room SQLite or Billing ledger is restored together; billing outcomes do not exist on the Node path, so ledger reconciliation is untested; and nothing here reads or writes a shared database.
+
+```powershell
+node --import tsx scripts/recovery-rehearsal.ts --commits 3 --pending-jobs 2
+npx vitest run server/recovery-rehearsal.test.ts
+```
+
 ## 11. What this document does not prove
 
 - **No coordinated D1 + Room + Billing restore exists.** There is no cross-store transaction, no shared
