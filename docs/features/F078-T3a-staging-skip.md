@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `doing` |
+| สถานะ | `review` ([PR #265](https://github.com/Thanyers/tabletop/pull/265)) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — CI scheduling only |
 | งานในกระดาน | [PLAN](../../PLAN.md) แถว F078-T3a |
@@ -23,11 +23,13 @@ GitHub documents the transitive skip behavior under [job dependencies](https://d
 
 ## Acceptance
 
-- [ ] Staging evaluates its explicit guard after successful validation even when optional ancestor jobs are skipped.
-- [ ] PR/manual/main events and failed validation remain ineligible for staging.
+- [x] Staging has explicit non-cancelled status evaluation after validation, instead of the implicit transitive success guard. Hosted confirmation remains below.
+- [x] PR/manual/main events, cancelled runs and failed validation remain ineligible for staging by the preserved explicit guard.
 - [ ] Latest PR `local-validation` passes before merge; final dev full validation and staging succeed, with version readback at that merge SHA.
 - [ ] Production version/main stay unchanged; no new architecture refactor starts before handoff.
 
 ## Verification
 
-Pending implementation and hosted confirmation. Record actual results before completion; retain the original run's staging result as SKIPPED.
+Node `v22.23.2` / npm `11.0.0`: clean `npm ci` passed, audit 0. YAML AST comparison passed: the only semantic workflow change is adding `!cancelled()` to the staging condition; needs, event/ref/success guards, all other jobs and deployment steps are unchanged. Gate planner/startup red-proof tests 13/13, public scan 829/0, changelog 6 fragments and whitespace checks passed. Application/browser checks are SKIPPED locally for this workflow-only fix; required PR CI and full dev CI supply their actual results.
+
+The real hosted assertion against run 40074892319 returned nonzero with `validation=success`, `deploy=skipped`. Event/ref mismatch and unfinished validation were ruled out by run/job metadata. The explicit status function addresses the documented transitive-skip behavior. Local AST/tests do not emulate the Actions scheduler, so final hosted validation AND successful staging with exact version readback are still required. No local deploy or production change.

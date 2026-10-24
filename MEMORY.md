@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-24 — Optional skipped ancestors suppressed staging after successful validation
+- **What happened:** dev `694d556` passed full validation, but staging was SKIPPED after F078-T3 added optional focused jobs upstream of the final validation job.
+- **Root cause:** GitHub propagates skipped jobs through dependency chains; the downstream deployment condition had no explicit status function, so the default success evaluation suppressed it despite `local-validation` succeeding.
+- **Correct behavior:** use explicit non-cancelled status evaluation together with push/dev and successful validation guards on staging. Verify the hosted staging job is successful and read back its exact source SHA; a successful overall validation run alone does not prove deployment.
+
 ### 2026-10-24 — Union merges retained conflicting task-status rows
 - **What happened:** integrating parallel F078 PRs left repeated PLAN rows with both review and done states for the same task.
 - **Root cause:** `merge=union` preserves independent additions but cannot reconcile task identity or newer status.

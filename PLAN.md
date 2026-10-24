@@ -75,7 +75,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F078-T3a | Restore staging after skipped focused ancestors | `doing` | Codex | `fix/F078-T3a-staging-skip` | validate.yml deploy condition; contract/status docs | F078-T3 merged | Full validation passed at 694d556 but staging was SKIPPED; preserve push/dev + successful validation guards and prove hosted deploy runs. |
+| F078-T3a | Restore staging after skipped focused ancestors | `review` | Codex | `fix/F078-T3a-staging-skip` / #265 | validate.yml deploy condition; contract/status docs | F078-T3 merged | Local gate tests13/13, YAML unchanged except explicit non-cancelled status guard, scan829/0; hosted full validation/deploy confirmation required after merge. |
 | F078-T5..T9 | Incremental UI/Room extraction, recovery design, view registration and load comparison | `todo` | Codex | — | see `docs/features/F078-architecture-improvements.md` | F078-T2..T4 + ownership available | no retention mutation or production release |
 | F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |
 | F066-T8 | เปิด hosted JS/Python แก้เคสไม่ผ่าน และตรวจหลัง deploy | `review` | Codex | `docs/F066-release902-results` | F066 acceptance/feature/spec, DEPLOYMENTS, PLAN, release-notes CRLF parser และ main กลับ dev | — | production9.0.2/8e2c7e1; 37PASS/10BLOCKED/1SKIP; fullCI901/197+browser3ผ่าน; หลายบัญชี8/human/mobileBLOCKED; actualretest/reportและmainbackmergeในPR #258 |

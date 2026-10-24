@@ -455,7 +455,9 @@ jobs:
   deploy-staging:
     name: Deploy tabletop-staging
     needs: [local-validation]
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.local-validation.result == 'success' }}
+    # Explicit status evaluation avoids transitive skips from optional PR-only gates.
+    # Cancellation and unsuccessful validation still prevent deployment.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.local-validation.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
