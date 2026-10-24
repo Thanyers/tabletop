@@ -1,0 +1,98 @@
+{
+  "provider": "ElevenLabs",
+  "voice": "Laura",
+  "rate": "+0%",
+  "language": "en",
+  "assetDirectory": "voice/en-r5",
+  "timingStatus": "MEASURED_AUDIO",
+  "deliveryDirection": "Energetic, curious, conversational product storyteller. Warm confidence. Smile on the reversal. Land verbs; do not shout or read like a news anchor. Natural pauses, varied sentence melody.",
+  "segments": [
+    {
+      "id": "tools",
+      "text": "Good tools fit us. A pen gets a grip. A hammer gets a handle. A chair gets a backrest, armrests, wheels. We keep shaping tools around the people who use them.",
+      "duration": 11.76,
+      "start": 0.4,
+      "end": 12.833333333333334,
+      "deliveryText": "[confident] Good tools fit us. A pen gets a grip. A hammer gets a handle. A chair gets a backrest, armrests, wheels! [warm] We keep shaping tools around the people who use them."
+    },
+    {
+      "id": "friction",
+      "text": "So why does software so often work the other way around? Pick an app. Learn its menus. Bend your workflow to fit. And when your needs change... start again.",
+      "duration": 10.16,
+      "start": 12.833333333333334,
+      "end": 23.666666666666668,
+      "deliveryText": "[curious] So why does software so often work the other way around? Pick an app. Learn its menus. Bend your workflow to fit. And when your needs change... start again."
+    },
+    {
+      "id": "reversal",
+      "text": "What if your tools could change with you? That's Tabletop. Describe what you need. Review the change. Put it to work, right on the canvas. Then keep shaping it.",
+      "duration": 10.24,
+      "start": 23.666666666666668,
+      "end": 34.56666666666667,
+      "deliveryText": "[excited] What if your tools could change with you? That's Tabletop. Describe what you need. Review the change. Put it to work, right on the canvas. Then keep shaping it."
+    },
+    {
+      "id": "table",
+      "text": "Let's start small. A coffee stand. Type: Make me a sales table for coffee and cake. Review the draft, apply it, and you're ready to log sales.",
+      "duration": 10.08,
+      "start": 34.56666666666667,
+      "end": 45.766666666666666,
+      "deliveryText": "[confident] Let's start small. A coffee stand. Type: Make me a sales table for coffee and cake. Review the draft, apply it, and you're ready to log sales."
+    },
+    {
+      "id": "quick-request",
+      "text": "Now the rush hits. Typing every sale is slowing you down. So you ask for quick-sale buttons.",
+      "duration": 6.64,
+      "start": 45.766666666666666,
+      "end": 53.53333333333333,
+      "deliveryText": "[confident] Now the rush hits. Typing every sale is slowing you down. So you ask for quick-sale buttons."
+    },
+    {
+      "id": "quick-use",
+      "text": "Review. Apply. Click Coffee... four coffees, and the total updates. Same table. Less work.",
+      "duration": 7.6,
+      "start": 53.53333333333333,
+      "end": 62.233333333333334,
+      "deliveryText": "[excited] Review. Apply. Click Coffee... four coffees, and the total updates. Same table. Less work."
+    },
+    {
+      "id": "chart",
+      "text": "What's selling? Add a chart. Review it, apply it, and it reads the sales already here. No copying. No starting over.",
+      "duration": 7.68,
+      "start": 62.233333333333334,
+      "end": 71.03333333333333,
+      "deliveryText": "[curious] What's selling? Add a chart. Review it, apply it, and it reads the sales already here. No copying. No starting over."
+    },
+    {
+      "id": "discount10",
+      "text": "Time for an afternoon offer. Add a ten-percent discount. Review, apply... gross stays at two hundred and fifty. Net: two hundred and twenty-five.",
+      "duration": 10.32,
+      "start": 71.03333333333333,
+      "end": 82.46666666666667,
+      "deliveryText": "[confident] Time for an afternoon offer. Add a ten-percent discount. Review, apply... gross stays at two hundred and fifty. Net: two hundred and twenty-five."
+    },
+    {
+      "id": "discount20",
+      "text": "Actually... make that twenty percent. Select the rule, ask for the change, and check the preview. Apply. Net: two hundred. The table, buttons, and chart stay put.",
+      "duration": 12.0,
+      "start": 82.46666666666667,
+      "end": 95.56666666666666,
+      "deliveryText": "[confident] Actually... make that twenty percent. Select the rule, ask for the change, and check the preview. Apply. Net: two hundred. The table, buttons, and chart stay put."
+    },
+    {
+      "id": "close",
+      "text": "Start with what you need. Use it. Change it. Keep going. Tabletop. Tools that adapt to you.",
+      "duration": 7.44,
+      "start": 95.56666666666666,
+      "end": 104.43333333333334,
+      "deliveryText": "[confident] Start with what you need. Use it. Change it. Keep going. Tabletop. Tools that adapt to you."
+    }
+  ],
+  "durationFrames": 3133,
+  "model": "eleven_v3",
+  "voiceSettings": {
+    "stability": 0.5,
+    "similarity_boost": 0.75,
+    "seed": 77
+  }
+}

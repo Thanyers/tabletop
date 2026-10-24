@@ -5,6 +5,26 @@
 
 ## Lessons
 
+### 2026-10-24 — Fixing an unclear metaphor erased the product thesis
+- **What happened:** replacing abstract tools with a cafe order-slip intro made F077 open on a use case and lost the original general story; technically valid TTS was judged flat by the user.
+- **Root cause:** optimized local clarity and measured audio timing without preserving the concept-to-problem-to-reversal arc or evaluating spoken delivery.
+- **Correct behavior:** establish tools adapting to people with recognizable additive examples, explain the software friction and Tabletop reversal, then show a case. Keep a separate delivery check for voice energy and naturalness; waveform checks cannot pass that criterion. Honor the explicit plain white/logo-only ending.
+
+### 2026-10-24 — Intro เครื่องมือและคลิปเงียบยังสื่อไม่ครบ
+- **What happened:** ผู้ใช้ไม่เข้าใจรูปเครื่องมือในintro F077และต้องอ่านทุกอย่างเองเพื่อเข้าใจคลิป
+- **Root cause:** ใช้รูปสัญลักษณ์แทนการกระทำ และจัดเวลาให้ครบ60วินาทีก่อนมีเสียงเล่าเรื่อง
+- **Correct behavior:** เปิดด้วยการใช้เครื่องมือและปัญหาที่มองเห็นได้ เขียนบทพูดก่อนจับเวลา ใช้เสียงจริงกำหนดจังหวะภาพและช่วงพักดูผล; ไม่บังคับความยาวเมื่อผู้ใช้ยกเลิกข้อจำกัดเวลา
+
+
+### 2026-10-24 — UI gate ผ่านแต่ Send/Review ยัง throw
+- **What happened:** F077หน้าpreviewผ่านgenericUIgate แต่flowหลายขั้นของSend/Reviewมีnull-queryก่อนอัปเดตคำขอและผล
+- **Root cause:** HTMLdraft-summaryไม่มีspanภาษาไทย/อังกฤษที่renderคาดไว้; genericinteractiongateไม่ได้ทำครบห้าบท
+- **Correct behavior:** ตรวจflowจริงตั้งแต่คำขอ→ส่ง→ตรวจ→ใช้และconsoleerrors พร้อมอ่านผลทุกช่วงหลังแก้; แยกผลfullUIgateออกจากscenarioacceptanceเสมอ
+
+### 2026-10-24 — ภาพการ์ดเพิ่มไม่เท่ากับเรื่องเครื่องมือปรับเข้ากับคน
+- **What happened:** ร่าง F077 รอบ 2 มีบอร์ดที่เพิ่มการ์ดและเปลี่ยนตัวเลข แต่ผู้ชมไม่เห็นว่าคนเจอปัญหาอะไรหรือพิมพ์ขอให้ปรับอย่างไร
+- **Root cause:** วาง timeline จากรายการความสามารถและ transitions แทนเหตุการณ์ในชีวิตคนใช้; คำขอแรกค้างอยู่ ขณะที่การเปลี่ยนถัดไปเกิดเอง
+- **Correct behavior:** ก่อนทำแต่ละ beat เขียนสี่ช่องให้ครบ: ปัญหาหรือความต้องการ / ข้อความที่คนพิมพ์ / การเปลี่ยนเครื่องมือหลังส่งและตรวจ / การลงมือใช้ที่เห็นผล โดยของเดิมยังอยู่ ตรวจเฟรมก่อนส่งและหลังใช้คู่กัน; ห้ามนับการเพิ่มการ์ดโดยไม่มีคำขอเป็นหลักฐานว่าเล่า evolution ชัดแล้ว
 ### 2026-10-24 — Optional skipped ancestors suppressed staging after successful validation
 - **What happened:** dev `694d556` passed full validation, but staging was SKIPPED after F078-T3 added optional focused jobs upstream of the final validation job.
 - **Root cause:** GitHub propagates skipped jobs through dependency chains; the downstream deployment condition had no explicit status function, so the default success evaluation suppressed it despite `local-validation` succeeding.

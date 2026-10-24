@@ -1,0 +1,171 @@
+{
+  "version": "R6",
+  "source": "media/tabletop-narrative-draft.mp4",
+  "sourceSha256": "901380adbfb2096f96c8b73098990d7a523f7f9eca58364affb780fd8205672c",
+  "method": "Piecewise pitch-preserving retime with FFmpeg setpts and atempo, mapped from R5 narration boundaries.",
+  "fps": 30,
+  "sourceDurationFrames": 3133,
+  "sourceDurationSeconds": 104.433333,
+  "targetDurationFrames": 2797,
+  "targetDurationSeconds": 93.23333333333333,
+  "segments": [
+    {
+      "id": "tools",
+      "sourceStartFrame": 0,
+      "sourceEndFrame": 385,
+      "sourceFrames": 385,
+      "requestedSpeed": 1.2,
+      "effectiveSpeed": 1.199376947,
+      "targetStartFrame": 0,
+      "targetEndFrame": 321,
+      "targetFrames": 321
+    },
+    {
+      "id": "friction",
+      "sourceStartFrame": 385,
+      "sourceEndFrame": 710,
+      "sourceFrames": 325,
+      "requestedSpeed": 1.18,
+      "effectiveSpeed": 1.181818182,
+      "targetStartFrame": 321,
+      "targetEndFrame": 596,
+      "targetFrames": 275
+    },
+    {
+      "id": "reversal",
+      "sourceStartFrame": 710,
+      "sourceEndFrame": 1037,
+      "sourceFrames": 327,
+      "requestedSpeed": 1.15,
+      "effectiveSpeed": 1.151408451,
+      "targetStartFrame": 596,
+      "targetEndFrame": 880,
+      "targetFrames": 284
+    },
+    {
+      "id": "table",
+      "sourceStartFrame": 1037,
+      "sourceEndFrame": 1373,
+      "sourceFrames": 336,
+      "requestedSpeed": 1.11,
+      "effectiveSpeed": 1.108910891,
+      "targetStartFrame": 880,
+      "targetEndFrame": 1183,
+      "targetFrames": 303
+    },
+    {
+      "id": "quick-request",
+      "sourceStartFrame": 1373,
+      "sourceEndFrame": 1606,
+      "sourceFrames": 233,
+      "requestedSpeed": 1.11,
+      "effectiveSpeed": 1.10952381,
+      "targetStartFrame": 1183,
+      "targetEndFrame": 1393,
+      "targetFrames": 210
+    },
+    {
+      "id": "quick-use",
+      "sourceStartFrame": 1606,
+      "sourceEndFrame": 1867,
+      "sourceFrames": 261,
+      "requestedSpeed": 1.1,
+      "effectiveSpeed": 1.101265823,
+      "targetStartFrame": 1393,
+      "targetEndFrame": 1630,
+      "targetFrames": 237
+    },
+    {
+      "id": "chart",
+      "sourceStartFrame": 1867,
+      "sourceEndFrame": 2131,
+      "sourceFrames": 264,
+      "requestedSpeed": 1.11,
+      "effectiveSpeed": 1.109243697,
+      "targetStartFrame": 1630,
+      "targetEndFrame": 1868,
+      "targetFrames": 238
+    },
+    {
+      "id": "discount10",
+      "sourceStartFrame": 2131,
+      "sourceEndFrame": 2474,
+      "sourceFrames": 343,
+      "requestedSpeed": 1.11,
+      "effectiveSpeed": 1.110032362,
+      "targetStartFrame": 1868,
+      "targetEndFrame": 2177,
+      "targetFrames": 309
+    },
+    {
+      "id": "discount20",
+      "sourceStartFrame": 2474,
+      "sourceEndFrame": 2867,
+      "sourceFrames": 393,
+      "requestedSpeed": 1.11,
+      "effectiveSpeed": 1.110169492,
+      "targetStartFrame": 2177,
+      "targetEndFrame": 2531,
+      "targetFrames": 354
+    },
+    {
+      "id": "close",
+      "sourceStartFrame": 2867,
+      "sourceEndFrame": 3133,
+      "sourceFrames": 266,
+      "requestedSpeed": 1,
+      "effectiveSpeed": 1,
+      "targetStartFrame": 2531,
+      "targetEndFrame": 2797,
+      "targetFrames": 266
+    }
+  ],
+  "stills": [
+    {
+      "sourceFrame": 132,
+      "targetFrame": 110,
+      "filename": "scene-01-r6.png"
+    },
+    {
+      "sourceFrame": 272,
+      "targetFrame": 227,
+      "filename": "scene-02-r6.png"
+    },
+    {
+      "sourceFrame": 660,
+      "targetFrame": 554,
+      "filename": "scene-03-r6.png"
+    },
+    {
+      "sourceFrame": 850,
+      "targetFrame": 718,
+      "filename": "scene-04-r6.png"
+    },
+    {
+      "sourceFrame": 1222,
+      "targetFrame": 1047,
+      "filename": "scene-05-r6.png"
+    },
+    {
+      "sourceFrame": 1745,
+      "targetFrame": 1519,
+      "filename": "scene-06-r6.png"
+    },
+    {
+      "sourceFrame": 2020,
+      "targetFrame": 1768,
+      "filename": "scene-07-r6.png"
+    },
+    {
+      "sourceFrame": 2708,
+      "targetFrame": 2388,
+      "filename": "scene-08-r6.png"
+    }
+  ],
+  "posterFrame": 2764,
+  "captions": {
+    "source": "media/tabletop-narration-en.vtt",
+    "output": "media/tabletop-narrative-r6-en.vtt",
+    "cueCount": 58
+  }
+}
