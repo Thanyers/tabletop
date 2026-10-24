@@ -7,6 +7,7 @@ import { validateGenerativeProgram } from '../../src/tabletop/runtime/generative
 import { GENERATIVE_LIMITS } from '../../src/tabletop/shared/generative-contracts.js';
 import { TABLE_DICE_EXAMPLE, TABLE_SCHEMA_GUIDE } from './table-schema-guide.js';
 import { MAX_COMPUTED_COLUMNS } from '../../src/tabletop/shared/computed-columns.js';
+import { GENERATIVE_VIEW_KINDS } from '../../src/tabletop/shared/view-kinds.js';
 
 const heroBinding = { kind: 'record' as const, collection: 'heroes', recordId: 'hero-1' };
 
@@ -144,6 +145,12 @@ function changeWith(collections: number, fieldsPerCollection = 1, rows = 0) {
 }
 
 describe('table schema guide (F047)', () => {
+  it('names every registered Canvas view kind and its descriptor shape', () => {
+    expect(TABLE_SCHEMA_GUIDE).toContain(`VIEW = ${GENERATIVE_VIEW_KINDS.map(kind => kind.toUpperCase()).join(' | ')};`);
+    expect(TABLE_SCHEMA_GUIDE).toContain('VIEW = SCENE | CHART | METRIC | CONTROLS;');
+    for (const kind of GENERATIVE_VIEW_KINDS) expect(TABLE_SCHEMA_GUIDE).toContain(`kind:"${kind}"`);
+  });
+
   it('advertises every numeric limit the validator enforces', () => {
     const guide = TABLE_SCHEMA_GUIDE;
     expect(guide).toContain(`collections<=${TABLE_LIMITS.collections}`);

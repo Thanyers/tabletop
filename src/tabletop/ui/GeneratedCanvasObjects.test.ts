@@ -6,9 +6,11 @@ import type { WorkspaceView } from '../shared/contracts';
 import type { ControlDescriptor, GenerativeViewDescriptor } from '../shared/generative-contracts';
 import type { TableAction, TableChange, TableState } from '../shared/table-contracts';
 import { planForWorkspace } from '../runtime';
+import { evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
+import { GENERATIVE_VIEW_KINDS, type GenerativeViewKind } from '../shared/view-kinds';
 import { cafeQueueChange, diceDuelChange, lightShadowChange } from '../testing/generative-scenarios';
 import { rollCombatChange, rollDiceCardChange } from '../testing/table-scenarios';
-import { beginControlSubmission, beginRangeCommit, controlSubmissionSignature, createControlSubmissionGate, diceRollMode, finishControlSubmission, GeneratedCanvasObject } from './GeneratedCanvasObjects';
+import { beginControlSubmission, beginRangeCommit, controlSubmissionSignature, createControlSubmissionGate, diceRollMode, finishControlSubmission, GeneratedCanvasObject, generatedViewRenderers } from './GeneratedCanvasObjects';
 import { readControlDraftValue, resetControlDrafts, writeControlDraft } from './control-drafts';
 import { clearServerRollsFor, recordServerRoll } from './roll-store';
 import { TableCanvasObject } from './TableCanvasObjects';
@@ -295,5 +297,65 @@ describe('server roll dice card', () => {
 
     expect(markup).toContain('Preview only');
     expect(markup).toMatch(/class="[^"]*tt-dice__roll[^"]*"[^>]*disabled=""/);
+  });
+});
+
+describe('view kind registration (F078-T8)', () => {
+  /** A renderer must exist for every registered kind, and only for those. */
+  it('maps every registered view kind to exactly one renderer', () => {
+    expect(Object.keys(generatedViewRenderers).sort()).toEqual([...GENERATIVE_VIEW_KINDS].sort());
+  });
+
+  it('renders each registered kind through the renderer its descriptor selects', () => {
+    const view = workspace();
+    if (view.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    const program = view.domain.program;
+    if (!program?.canvas) throw new Error('Expected an active canvas program.');
+    const evaluated = evaluateGenerativeCanvas(program.canvas, { program, records: view.domain.records, actor: 'test-actor', turn: null });
+    const markers: Record<GenerativeViewKind, string> = {
+      scene: '<svg',
+      chart: 'bar chart with',
+      metric: 'tt-generated-metric',
+      controls: 'tt-button',
+    };
+    const seen = new Set<GenerativeViewKind>();
+
+    for (const descriptor of program.canvas.views) {
+      const markup = renderView(view, descriptor);
+      expect(markup, `${descriptor.kind} must render through its own renderer`).toContain(markers[descriptor.kind]);
+      expect(markup).not.toContain('The generated view type does not match its descriptor.');
+      expect(evaluated.some(item => item.id === descriptor.id && item.kind === descriptor.kind)).toBe(true);
+      seen.add(descriptor.kind);
+    }
+    expect([...seen].sort()).toEqual([...GENERATIVE_VIEW_KINDS].sort());
+  });
+
+  it('falls back only when the projected view kind does not match its descriptor', () => {
+    const view = workspace();
+    if (view.domain.kind !== 'table') throw new Error('Expected a table workspace.');
+    const program = view.domain.program;
+    if (!program?.canvas) throw new Error('Expected an active canvas program.');
+    const scene = program.canvas.views.find(item => item.kind === 'scene');
+    const metric = program.canvas.views.find(item => item.kind === 'metric');
+    if (!scene || !metric) throw new Error('Expected scene and metric descriptors.');
+    const evaluated = evaluateGenerativeCanvas(program.canvas, { program, records: view.domain.records, actor: 'test-actor', turn: null });
+    const metricProjection = evaluated.find(item => item.id === metric.id);
+    if (!metricProjection) throw new Error('Expected the evaluated metric.');
+
+    const markup = renderToStaticMarkup(generatedViewRenderers.scene({
+      projected: metricProjection,
+      descriptor: scene,
+      actionState: view.domain,
+      workspaceView: view,
+      previewOnly: false,
+      sandboxEnabled: false,
+      previewStoreKey: 'view-kind-mismatch',
+      busy: false,
+      onSimulate: () => null,
+      onCommit: async () => true,
+      onRoll: async () => true,
+    }));
+
+    expect(markup).toContain('The generated view type does not match its descriptor.');
   });
 });
