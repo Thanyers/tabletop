@@ -26,6 +26,9 @@
 | --- | --- | --- | --- |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (T0–T4 + T5a/T5b/T6a/T6b/T7a/T7b/T8/T9 done; T6c review) | [F078](docs/features/F078-architecture-improvements.md) |
+| F077-T2 | Apply English README; restore visual hero; show tools adapting to people; remove homepage README navigation | `review` | Codex · `fix/F077-story-visuals` · README, PublicWelcome, landing-copy, narrative visuals and browser contract |
+| F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (first group T0–T4) | [F078](docs/features/F078-architecture-improvements.md) |
+| F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `done` (T0–T9 merged) | [F078](docs/features/F078-architecture-improvements.md) |
 | F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |
 | F073 | แปะรูปบน canvas แบบ post-it (การ์ดรูป) | `review` | [F073](docs/features/F073-image-cards.md) |

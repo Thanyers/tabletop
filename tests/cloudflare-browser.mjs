@@ -220,24 +220,32 @@ try {
   // The hero invites visitors to the narrated story; prepared demos remain available below.
   await expect(anonymous.getByRole('link', { name: 'Start your table', exact: true })).toHaveAttribute('href', '/api/auth/google/start');
   await expect(anonymous.getByRole('link', { name: 'Watch the narrated story', exact: true })).toHaveAttribute('href', '#film');
+  await expect(anonymous.getByRole('link', { name: /README/i })).toHaveCount(0);
+  await expect(anonymous.locator('a[href*="#readme"]')).toHaveCount(0);
+  await expect(anonymous.getByRole('link', { name: 'Photo credits', exact: true })).toHaveAttribute('href', '/narrative/SOURCES.md');
   for (const name of ['Open the Physics demo', 'Open the Encounter demo']) {
     await expect(anonymous.getByRole('link', { name, exact: true })).toHaveAttribute('href', '/demo');
     await expect(anonymous.getByRole('link', { name, exact: true })).toHaveAttribute('target', '_blank');
   }
-  await expect(anonymous.getByRole('heading', { name: 'Start with sales. Build on the same table.', exact: true })).toBeVisible();
+  await expect(anonymous.getByRole('heading', { name: 'A sales table that grows when the work changes.', exact: true })).toBeVisible();
   await expect(anonymous.getByText('Illustrative · sample data', { exact: true })).toBeVisible();
+  await expect(anonymous.locator('.tt-sales-demo__table tbody tr').nth(0).locator('th, td')).toHaveText(['Coffee', '3', '25', '75']);
+  await expect(anonymous.locator('.tt-sales-demo__table tbody tr').nth(1).locator('th, td')).toHaveText(['Cake', '3', '50', '150']);
+  await expect(anonymous.locator('.tt-sales-demo__table tfoot')).toContainText('225');
+  await expect(anonymous.getByLabel('Read-only sample request', { exact: true })).toHaveValue('Add quick-sale buttons that increase quantity once.');
+  await expect(anonymous.getByRole('button', { name: 'Send sample request', exact: true })).toBeEnabled();
   await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
   await expect(anonymous.locator('.tt-canvas-panel')).toHaveCount(0);
   await expect(anonymous.getByRole('heading', { name: 'Physical tools adapt to people. Software often asks people to adapt to it.', exact: true })).toBeVisible();
-  for (const [alt, src] of [
-    ['An office chair with a back, arms, and wheels against a light background.', '/narrative/office-chair-isolated.jpg'],
-    ['A hand holding a pen comfortably while writing on paper.', '/narrative/writing-hand.jpg'],
-    ['A hand holding the handle of a hammer.', '/narrative/hammer-hand.jpg'],
-  ]) {
-    const photo = anonymous.getByRole('img', { name: alt, exact: true });
-    await expect(photo).toHaveAttribute('src', src);
-    await photo.scrollIntoViewIfNeeded();
-    await expect.poll(() => photo.evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true);
+  for (const scene of ['hammer', 'chair']) {
+    const before = anonymous.locator(`svg[data-scene="${scene}"][data-adapted="false"]`);
+    const after = anonymous.locator(`svg[data-scene="${scene}"][data-adapted="true"]`);
+    await expect(before).toHaveCount(1);
+    await expect(after).toHaveCount(1);
+    await expect(before).toHaveAttribute('viewBox', '0 0 480 270');
+    await expect(after).toHaveAttribute('viewBox', '0 0 480 270');
+    await expect(before).toHaveAttribute('aria-label', /same|bare|before|ด้ามเปล่า|เก้าอี้เดิม/i);
+    await expect(after).toHaveAttribute('aria-label', /grip|wrap|cushion|offcut|กริป|เบาะ|เศษไม้/i);
   }
   await expect(anonymous.getByRole('heading', { name: 'See Tabletop on the canvas.', exact: true })).toBeVisible();
   await expect(anonymous.getByText('A narrated concept film · play when ready', { exact: true })).toBeVisible();
@@ -246,11 +254,53 @@ try {
   await expect(conceptFilm.locator('source')).toHaveAttribute('src', '/narrative/tabletop-story.mp4');
   await expect(conceptFilm.locator('track')).toHaveAttribute('src', '/narrative/tabletop-story-en.vtt');
   const conceptImage = anonymous.locator('.tt-public-welcome__story-frame img');
-  await expect(conceptImage).toHaveAttribute('src', /\.png$/);
+  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-en-poster[^/]*\.png$/);
   await anonymous.getByRole('button', { name: 'Replay the concept animation', exact: true }).click();
-  await expect(conceptImage).toHaveAttribute('src', /\.gif\?replay=1$/);
+  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-en[^/]*\.gif\?replay=1$/);
   await anonymous.getByRole('button', { name: 'Show the still illustration', exact: true }).click();
-  await expect(conceptImage).toHaveAttribute('src', /\.png$/);
+  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-en-poster[^/]*\.png$/);
+
+  // The prefilled sample stays live through the five explicit request/review/apply steps.
+  const sampleTable = anonymous.locator('.tt-sales-demo__table');
+  const sampleGross = sampleTable.locator('tfoot td');
+  const chapterButtons = anonymous.locator('.tt-sales-demo__chapters button');
+  const progressChapter = async (index) => {
+    const chapter = chapterButtons.nth(index);
+    await expect(chapter).toBeEnabled();
+    await chapter.click();
+    // This context requests reduced motion, so the preset appears without typing.
+    await expect(anonymous.getByRole('button', { name: 'Send sample request', exact: true })).toBeEnabled();
+    await anonymous.getByRole('button', { name: 'Send sample request', exact: true }).click();
+    await anonymous.getByRole('button', { name: 'Review draft', exact: true }).click();
+  };
+  await anonymous.getByRole('button', { name: 'Send sample request', exact: true }).click();
+  await anonymous.getByRole('button', { name: 'Review draft', exact: true }).click();
+  await anonymous.getByRole('button', { name: 'Apply change', exact: true }).click();
+  await anonymous.getByRole('button', { name: 'Add one coffee', exact: true }).click();
+  await expect(sampleTable.locator('tbody tr').nth(0).locator('th, td')).toHaveText(['Coffee', '4', '25', '100']);
+  await expect(sampleTable.locator('tbody tr').nth(1).locator('th, td')).toHaveText(['Cake', '3', '50', '150']);
+  await expect(sampleGross).toHaveText('250');
+
+  await progressChapter(2);
+  await anonymous.getByRole('button', { name: 'Apply change', exact: true }).click();
+  await expect(anonymous.locator('.tt-sales-demo__chart-row strong')).toHaveText(['100', '150']);
+  await expect(chapterButtons.nth(3)).toBeEnabled();
+
+  await progressChapter(3);
+  await anonymous.getByRole('button', { name: 'Apply change', exact: true }).click();
+  await expect(sampleGross).toHaveText('250');
+  await expect(anonymous.locator('.tt-sales-demo__result dd').nth(2)).toHaveText('225');
+  await expect(chapterButtons.nth(4)).toBeEnabled();
+
+  await progressChapter(4);
+  await expect(anonymous.locator('.tt-sales-demo__result dd').nth(2)).toHaveText('225');
+  await anonymous.getByRole('button', { name: 'Apply change', exact: true }).click();
+  await expect(anonymous.locator('.tt-sales-demo__result dd').nth(1)).toHaveText('20%');
+  await expect(anonymous.locator('.tt-sales-demo__result dd').nth(2)).toHaveText('200');
+  await anonymous.getByRole('button', { name: 'Reset example', exact: true }).click();
+  await expect(sampleGross).toHaveText('225');
+  await expect(chapterButtons.nth(2)).toBeDisabled();
+
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 390, height: 844 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -271,11 +321,15 @@ try {
   await languages.getByRole('button', { name: 'ไทย', exact: true }).focus();
   await anonymous.keyboard.press('Enter');
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
+  await expect(conceptImage).toHaveAttribute('src', /tabletop-story-poster[^/]*\.png$/);
   await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingTh);
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toHaveAttribute('href', '/api/auth/google/start');
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'ไทย', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
+  await anonymous.getByRole('button', { name: 'เล่นภาพเคลื่อนไหวของแนวคิดอีกครั้ง', exact: true }).click();
+  await expect(conceptImage).toHaveAttribute('src', /tabletop-story[^/]*\.gif\?replay=2$/);
+  await anonymous.getByRole('button', { name: 'แสดงภาพประกอบแบบภาพนิ่ง', exact: true }).click();
   await anonymous.reload();
   await expect(anonymous.locator('html')).toHaveAttribute('lang', 'th');
   await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingTh);

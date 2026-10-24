@@ -1,0 +1,1 @@
+- Apply the English product story to the root README, restore a visual homepage hero, show how grips and seating adapt through use, and remove README links from the homepage journey.

@@ -1,3 +1,22 @@
+# F077 — Revision 7 verification
+
+24 October 2026 · English README and homepage visual correction · [PR #280](https://github.com/Thanyers/tabletop/pull/280)
+
+The root README now uses the English story. The homepage removes README navigation, restores the original learning animation to the hero, and replaces generic tool photos with before/after additions to the same hammer and chair. The accepted 93.2-second R6 film remains unchanged.
+
+| Check | Result | Evidence and limit |
+| --- | --- | --- |
+| README source review | PASS | Independent reader review found no capability/provenance blocker; 14 local references resolve. Reusable-compute contract status now links to its existing production results rather than retaining stale candidate wording. |
+| Build and source checks | PASS | Node 22.23.2: `npm run build`, final Vite rebuild, `npm run build:cloudflare` dry-run, scoped ESLint, Node syntax checks and public-file scan (970 files / 0 findings). |
+| Changed browser journey | PASS | Existing Workers browser harness passed the homepage, English/Thai persistence, sign-in error and version groups. New checks exercise send/review/apply, 225→250 gross, chart values 100/150, 10% net 225, pending 20% retaining 225, applied 20% net 200 and reset. The remaining unchanged app checks continue in the same run. |
+| Visual readback | PASS within scope | Main inspected the English hero and large same-object hammer comparison; signed-in homepage has no horizontal overflow at 280/320/414/1280px, image loaded, zero README links. Existing browser harness also captured anonymous EN/TH desktop/mobile views. |
+| Offline component UI gate | 14/16 measured checks pass; 4 SKIPPED | Real PublicWelcome component bundled offline. Raw full run: 12 PASS / 4 FAIL / 4 SKIP; film-height/status-border repairs passed both targeted rechecks. Remaining FAIL: hardcoded-value lint includes shared/bundled CSS; generic interaction gate expects the already-selected English button to change state. Existing browser test verifies switching both languages instead. Token/theme/dialog gates skipped without corresponding inputs. These are not an all-green or audience-comprehension claim. |
+| English animation | PASS | Same authored composition, 960×540 / 240 frames / 20s. Poster and timeline frames inspected; original Thai assets unchanged. English GIF SHA-256 `A0A3A681ABDAE0747714918C3D9D62C495D6E992C3464EF53E3229C8FBC212A8`; no AI media generation. |
+| Independent review | PASS within source scope | README and UI reviews found no functional/auth blocker. Requested demo regression coverage was added and passed in the changed browser journey. |
+| Publication | NOT YET | Production remains 9.1.0 until the correction passes the release workflow. |
+
+## Revision 6 evidence (historical)
+
 # F077 — Revision 6 verification
 
 24 October 2026 · Node 22.23.2 · Python 3.12 · FFmpeg 8.1.2

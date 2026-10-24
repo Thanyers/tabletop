@@ -220,13 +220,14 @@
 .tt-public-welcome .tt-public-welcome__film-heading > p,
 .tt-public-welcome .tt-public-welcome__section-heading > p { max-width: 42ch; margin: 0; color: var(--tt-ink, #303d3a); font-size: 0.8125rem; line-height: 1.75; }
 .tt-public-welcome .tt-public-welcome__film-frame { overflow: hidden; margin: 0; padding: 0.625rem; border: 1px solid var(--tt-line, #d9d4c4); border-radius: var(--tt-radius-large, 1.125rem); background: var(--tt-canvas, #eeeee2); box-shadow: var(--tt-shadow-piece); }
-.tt-public-welcome .tt-public-welcome__film-frame video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 0.625rem; background: #e9e7dd; object-fit: contain; }
+.tt-public-welcome .tt-public-welcome__film-frame video { display: block; width: 100%; max-height: 60vh; aspect-ratio: 16 / 9; border-radius: 0.625rem; background: #e9e7dd; object-fit: contain; }
 .tt-public-welcome .tt-public-welcome__film-frame figcaption { padding: 0.625rem 0.25rem 0.125rem; color: var(--tt-ink, #303d3a); font-size: 0.6875rem; line-height: 1.6; }
 
 .tt-public-welcome .tt-public-welcome__why {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1.25rem;
+  align-items: start;
+  gap: 1.25rem clamp(1.5rem, 4vw, 3.5rem);
   padding: clamp(3rem, 7vw, 5.25rem) 0;
   border-top: 1px solid var(--tt-line, #d9d4c4);
   border-bottom: 1px solid var(--tt-line, #d9d4c4);
@@ -370,3 +371,70 @@
   .tt-public-welcome *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
   .tt-public-welcome .tt-public-welcome__mark-motion { transform: rotate(-5deg); }
 }
+
+/* The original Tabletop learning scene carries the product thesis in the hero. */
+.tt-public-welcome .tt-public-welcome__hero-story {
+  min-width: 0;
+  margin: 0;
+  padding: clamp(0.5rem, 1.6vw, 0.875rem);
+  border: 1px solid var(--tt-line, #d9d4c4);
+  border-radius: var(--tt-radius-large, 1.125rem);
+  background: var(--tt-canvas, #eeeee2);
+  box-shadow: var(--tt-shadow-piece, 0 3px 0 #d8d4c480, 0 8px 20px #303d3a0d);
+}
+.tt-public-welcome .tt-public-welcome__hero-story-topline {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.125rem 0.625rem;
+  color: var(--tt-ink, #303d3a);
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+.tt-public-welcome .tt-public-welcome__hero-story-topline > span:last-child {
+  color: var(--tt-moss, #356e5d);
+  font: 700 0.5625rem/1.4 'IBM Plex Mono', monospace;
+  text-align: right;
+}
+.tt-public-welcome .tt-public-welcome__hero-story .tt-public-welcome__story-frame {
+  padding: 0.375rem;
+  border-radius: 0.875rem;
+  background: var(--tt-paper, #faf8f0);
+}
+.tt-public-welcome .tt-public-welcome__hero-story .tt-public-welcome__story-frame img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+}
+.tt-public-welcome .tt-public-welcome__hero-story figcaption {
+  align-items: flex-start;
+  padding: 0.5rem 0.125rem 0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+.tt-public-welcome .tt-public-welcome__hero-story figcaption > span { max-width: 43ch; line-height: 1.6; }
+.tt-public-welcome .tt-public-welcome__hero-story figcaption button { min-height: 2.75rem; }
+
+@media (min-width: 960px) {
+  .tt-public-welcome .tt-public-welcome__hero {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: clamp(2rem, 4.5vw, 4.5rem);
+    padding-block: clamp(3rem, 6vw, 5.5rem) clamp(2.5rem, 4vw, 3.5rem);
+  }
+  .tt-public-welcome .tt-public-welcome__hero h1 { max-width: 11ch; font-size: clamp(3.5rem, 6vw, 5.75rem); }
+}
+
+@media (max-width: 359px) {
+  .tt-public-welcome .tt-public-welcome__header { flex-wrap: wrap; gap: 0.25rem; padding-inline: 0.5rem; }
+  .tt-public-welcome .tt-public-welcome__brand { gap: 0.25rem; font-size: 1rem; }
+  .tt-public-welcome .tt-public-welcome__language { margin-left: auto; }
+  .tt-public-welcome .tt-public-welcome__signin { padding-inline: 0.5rem; }
+  .tt-public-welcome .tt-public-welcome__signin svg { display: none; }
+  .tt-public-welcome .tt-public-welcome__language button { min-height: 2.75rem; padding-inline: 0.375rem; font-size: 0.6875rem; }
+  .tt-public-welcome .tt-public-welcome__nav { display: flex; order: 4; width: 100%; flex: 0 0 100%; justify-content: flex-start; gap: 0.75rem; overflow-x: auto; margin-left: 0; }
+  .tt-public-welcome .tt-public-welcome__nav a { min-height: 2.5rem; font-size: 0.6875rem; }
+}
+
+.tt-public-welcome[lang="th"] .tt-public-welcome__hero-story-topline > span:last-child { letter-spacing: 0; }
