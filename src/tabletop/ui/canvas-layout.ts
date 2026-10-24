@@ -1,3 +1,5 @@
+import { generativeViewKindForCapability, generativeViewKindMetadata } from '../shared/view-kinds';
+
 export type CanvasLayoutRole = 'source' | 'process' | 'scene' | 'result' | 'control' | 'reference' | 'other';
 export type CanvasComposition = 'scene' | 'comparison' | 'flow' | 'islands';
 
@@ -50,6 +52,13 @@ function normalizedSize(node: CanvasLayoutNode) {
 
 /** Map allowlisted capability names to the small set of layout roles. */
 export function canvasLayoutRole(capability: string, id = ''): CanvasLayoutRole {
+  // F078-T8: a generated Canvas view carries its kind in the capability id, so the
+  // role comes from the same registry the runtime uses instead of guessing the leaf.
+  const generatedViewKind = generativeViewKindForCapability(capability);
+  if (generatedViewKind) {
+    const role: CanvasLayoutRole = generativeViewKindMetadata(generatedViewKind).layoutRole;
+    return role;
+  }
   const leaf = capability.split('.').at(-1)?.toLowerCase() ?? '';
   const name = `${leaf} ${id.split('.').at(-1)?.toLowerCase() ?? ''}`;
   if (/^(source|sources|input|upload)$/.test(leaf) || /\b(source|sources|input)\b/.test(name)) return 'source';

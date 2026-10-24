@@ -1,4 +1,5 @@
-import { GENERATIVE_LIMITS, type ControlDescriptor, type ControlInputBinding, type GenerativeCanvas, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar, type SceneMotion, type ScenePrimitive } from '../../shared/generative-contracts';
+import { GENERATIVE_LIMITS, type ControlDescriptor, type ControlInputBinding, type GenerativeCanvas, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar, type GenerativeViewDescriptor, type SceneMotion, type ScenePrimitive } from '../../shared/generative-contracts';
+import { assertNeverViewKind, type GenerativeViewKind } from '../../shared/view-kinds';
 import type { TableAction, TableProgram, TableRecord, TableValue } from '../../shared/table-contracts';
 import { computeDerivedCollections, currentComputeRun, isComputeTableValue, validateComputeOutputs, type ComputeRunRecord, type ComputeTableValue } from '../../shared/table-compute';
 import { expressionWithinBounds, validateGenerativeProgram } from './validation';
@@ -390,43 +391,69 @@ export function evaluateGenerativeCanvas(canvas: GenerativeCanvas, context: Gene
   const issues = validateGenerativeProgram(context.program, context.records);
   if (issues.length > 0) fail(issues[0]);
   const spend = makeSpend(options.fuel ?? GENERATIVE_LIMITS.evaluationFuel);
-  const evaluated: EvaluatedGenerativeView[] = [];
-  let totalSceneElements = 0;
-  let totalChartPoints = 0;
-  for (const view of canvas.views) {
-    if (view.kind === 'metric') {
-      const value = asOutput(evaluateWithSpend(view.value, context, spend));
-      if (!outputWithinBounds(value)) fail('Metric output exceeds deterministic bounds.');
-      if (isGenerativeArray(value)) fail('Metric views must return a scalar.');
-      evaluated.push({ id: view.id, kind: 'metric', title: view.title, value, ...(view.format ? { format: view.format } : {}) });
-    } else if (view.kind === 'chart') {
-      const rows = recordSet(context, view.collection).rows;
-      const points = rows.map(row => {
-        spend();
-        const category = fieldValue(row, view.categoryField);
-        if (category !== null && typeof category !== 'string' && typeof category !== 'number') fail('Chart categories must be text or numeric values.');
-        const value = asNumber(evaluateWithSpend(view.value, context, spend, { row }));
-        return { id: row.id, category, value };
-      });
-      totalChartPoints += points.length;
-      if (totalChartPoints > GENERATIVE_LIMITS.chartPoints) fail('Chart output exceeds the point limit.');
-      evaluated.push({ id: view.id, kind: 'chart', title: view.title, chart: view.chart, ...(view.color ? { color: view.color } : {}), points });
-    } else if (view.kind === 'scene') {
-      totalSceneElements += view.elements.length;
-      if (totalSceneElements > GENERATIVE_LIMITS.sceneElements) fail('Scene output exceeds the element limit.');
-      const elements = view.elements.map(element => scenePrimitive(element, context, spend));
-      evaluated.push({ id: view.id, kind: 'scene', title: view.title, width: view.width, height: view.height, elements });
-    } else {
-      const controls = view.controls.map(descriptor => {
-        const inputValues = resolveBindings(descriptor.actionId, descriptor.inputs, context, spend);
-        const value = 'value' in descriptor && descriptor.value ? asOutput(evaluateWithSpend(descriptor.value, context, spend)) : undefined;
-        if (value !== undefined && 'parameter' in descriptor) actionParameterValue(context, descriptor.actionId, descriptor.parameter, toTableValue(value));
-        return { descriptor, inputValues, ...(value === undefined ? {} : { value }) };
-      });
-      evaluated.push({ id: view.id, kind: 'controls', title: view.title, controls });
-    }
-  }
+  const scope: ViewEvaluationScope = { context, spend, totals: { sceneElements: 0, chartPoints: 0 } };
+  const evaluated = canvas.views.map(view => evaluateCanvasView(view, scope));
   const serialized = JSON.stringify(evaluated) ?? '';
   if (new TextEncoder().encode(serialized).byteLength > GENERATIVE_LIMITS.outputBytes) fail('Canvas output exceeds deterministic bounds.');
   return evaluated;
+}
+
+interface ViewEvaluationTotals { sceneElements: number; chartPoints: number }
+interface ViewEvaluationScope {
+  readonly context: GenerativeEvaluationContext;
+  readonly spend: () => void;
+  readonly totals: ViewEvaluationTotals;
+}
+type ViewEvaluator<K extends GenerativeViewKind> = (view: Extract<GenerativeViewDescriptor, { kind: K }>, scope: ViewEvaluationScope) => EvaluatedGenerativeView;
+
+/**
+ * F078-T8: one evaluator per built-in view kind. The mapped record type makes a
+ * kind without an evaluator a compile error; `evaluateCanvasView` dispatches on
+ * the descriptor kind and only accepts `never` from an unregistered one.
+ */
+const viewEvaluators: { readonly [K in GenerativeViewKind]: ViewEvaluator<K> } = {
+  metric: (view, { context, spend }) => {
+    const value = asOutput(evaluateWithSpend(view.value, context, spend));
+    if (!outputWithinBounds(value)) fail('Metric output exceeds deterministic bounds.');
+    if (isGenerativeArray(value)) fail('Metric views must return a scalar.');
+    return { id: view.id, kind: 'metric', title: view.title, value, ...(view.format ? { format: view.format } : {}) };
+  },
+  chart: (view, { context, spend, totals }) => {
+    const rows = recordSet(context, view.collection).rows;
+    const points = rows.map(row => {
+      spend();
+      const category = fieldValue(row, view.categoryField);
+      if (category !== null && typeof category !== 'string' && typeof category !== 'number') fail('Chart categories must be text or numeric values.');
+      const value = asNumber(evaluateWithSpend(view.value, context, spend, { row }));
+      return { id: row.id, category, value };
+    });
+    totals.chartPoints += points.length;
+    if (totals.chartPoints > GENERATIVE_LIMITS.chartPoints) fail('Chart output exceeds the point limit.');
+    return { id: view.id, kind: 'chart', title: view.title, chart: view.chart, ...(view.color ? { color: view.color } : {}), points };
+  },
+  scene: (view, { context, spend, totals }) => {
+    totals.sceneElements += view.elements.length;
+    if (totals.sceneElements > GENERATIVE_LIMITS.sceneElements) fail('Scene output exceeds the element limit.');
+    const elements = view.elements.map(element => scenePrimitive(element, context, spend));
+    return { id: view.id, kind: 'scene', title: view.title, width: view.width, height: view.height, elements };
+  },
+  controls: (view, { context, spend }) => {
+    const controls = view.controls.map(descriptor => {
+      const inputValues = resolveBindings(descriptor.actionId, descriptor.inputs, context, spend);
+      const value = 'value' in descriptor && descriptor.value ? asOutput(evaluateWithSpend(descriptor.value, context, spend)) : undefined;
+      if (value !== undefined && 'parameter' in descriptor) actionParameterValue(context, descriptor.actionId, descriptor.parameter, toTableValue(value));
+      return { descriptor, inputValues, ...(value === undefined ? {} : { value }) };
+    });
+    return { id: view.id, kind: 'controls', title: view.title, controls };
+  },
+};
+
+function evaluateCanvasView(view: GenerativeViewDescriptor, scope: ViewEvaluationScope): EvaluatedGenerativeView {
+  switch (view.kind) {
+    case 'scene': return viewEvaluators.scene(view, scope);
+    case 'chart': return viewEvaluators.chart(view, scope);
+    case 'metric': return viewEvaluators.metric(view, scope);
+    case 'controls': return viewEvaluators.controls(view, scope);
+    default: return assertNeverViewKind(view);
+  }
 }

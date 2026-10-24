@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GENERATIVE_VIEW_CAPABILITY_PREFIX, GENERATIVE_VIEW_KINDS, GENERATIVE_VIEW_KIND_METADATA } from '../shared/view-kinds';
 import { canvasLayoutRole, layoutCanvas, unpinnedNodesOverlappingPinnedResizes, type CanvasLayoutEdge, type CanvasLayoutNode, type CanvasPoint } from './canvas-layout';
 
 function graphFixture(count: number) {
@@ -152,6 +153,14 @@ describe('relationship-aware Canvas layout', () => {
     expect(canvasLayoutRole('table.generated-view.scene', 'table.view.story')).toBe('scene');
     expect(canvasLayoutRole('table.generated-view.controls', 'table.view.controls')).toBe('control');
     expect(canvasLayoutRole('table.generated-view.metric', 'table.view.total')).toBe('result');
+  });
+
+  it('takes the role of every registered generated view from the view-kind registry', () => {
+    for (const kind of GENERATIVE_VIEW_KINDS) {
+      expect(canvasLayoutRole(`${GENERATIVE_VIEW_CAPABILITY_PREFIX}${kind}`, `table.view.${kind}`)).toBe(GENERATIVE_VIEW_KIND_METADATA[kind].layoutRole);
+    }
+    // An unregistered generated view still falls back to the generic heuristics.
+    expect(canvasLayoutRole(`${GENERATIVE_VIEW_CAPABILITY_PREFIX}legacy`, 'table.view.legacy')).toBe('other');
   });
 
   it('meets the initial 24-node and incremental 24-node timing targets', () => {

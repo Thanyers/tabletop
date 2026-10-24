@@ -12,6 +12,7 @@ import { TABLE_LIMITS } from '../../src/tabletop/domain/table.js';
 import { MAX_COMPUTED_COLUMNS } from '../../src/tabletop/shared/computed-columns.js';
 import { GENERATIVE_LIMITS, type ControlsViewDescriptor } from '../../src/tabletop/shared/generative-contracts.js';
 import { COMPUTE_GENERATION_POLICY } from '../../src/tabletop/shared/compute-runtime-profiles.js';
+import { GENERATIVE_VIEW_KINDS } from '../../src/tabletop/shared/view-kinds.js';
 
 /**
  * F049: the exact dice control example embedded in the guide below.
@@ -38,6 +39,9 @@ export const TABLE_DICE_EXAMPLE: ControlsViewDescriptor = {
   }],
 };
 const TABLE_DICE_EXAMPLE_JSON = JSON.stringify(TABLE_DICE_EXAMPLE);
+
+/** F078-T8: the VIEW alternatives come from the registered view kinds, not a copied list. */
+const VIEW_KINDS = GENERATIVE_VIEW_KINDS.map(kind => kind.toUpperCase()).join(' | ');
 
 const LIMITS = [
   `collections<=${TABLE_LIMITS.collections}`,
@@ -129,7 +133,7 @@ DERIVED: a value calculated independently for each row (such as quantity × unit
   A no-input button saving fixed rows needs a condition refusing a 2nd press.
 
 CANVAS{version:1,views:VIEW[<=12]}
-VIEW = SCENE | CHART | METRIC | CONTROLS; every view is {id,kind,title,relatedTo?{views?:ID[<=12],collections?:ID[<=6]}}.
+VIEW = ${VIEW_KINDS}; every view is {id,kind,title,relatedTo?{views?:ID[<=12],collections?:ID[<=6]}}.
 SCENE{id,kind:"scene",title,width:number>0<=4096,height:number>0<=4096,elements:PRIM[<=128]}
 CHART{id,kind:"chart",title,chart:bar|line|scatter,collection:COLLECTION_ID,categoryField:FIELD_ID,value:EXPR,color?:PAINT}
 METRIC{id,kind:"metric",title,value:EXPR,format?:number|percent|text}

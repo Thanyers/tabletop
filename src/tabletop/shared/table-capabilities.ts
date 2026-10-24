@@ -1,5 +1,6 @@
 import { GENERATIVE_LIMITS } from './generative-contracts';
 import { MAX_COMPUTED_COLUMNS } from './computed-columns';
+import { generativeViewKindListSentence } from './view-kinds';
 
 export interface CapabilityItem { id: string; title: string; detail: string }
 
@@ -26,7 +27,7 @@ export const TABLE_CAPABILITIES: { supported: CapabilityItem[]; gaps: Capability
     { id: 'import', title: 'Import rows from CSV or Excel', detail: 'Owner previews CSV or the first Excel sheet, then appends or confirms replacement; all-or-nothing with typed checks.' },
     { id: 'computed', title: 'Computed columns', detail: 'Row formulas over number fields (+ − × ÷ field or number), up to 6 per table.' },
     { id: 'compute', title: 'Reusable calculations', detail: 'Typed inputs and outputs connect saved calculation modules to cards and other modules. Available engines depend on the host configuration.' },
-    { id: 'canvas', title: 'Canvas views', detail: 'Scene, chart, metric and controls descriptors; up to 12 views, kept when rules evolve.' },
+    { id: 'canvas', title: 'Canvas views', detail: `${generativeViewKindListSentence()} descriptors; up to ${GENERATIVE_LIMITS.canvasViews} views, kept when rules evolve.` },
     { id: 'files', title: 'Shared source files', detail: 'Up to 4 UTF-8 files (32 KiB each, 64 KiB total) visible to invited members.' },
     { id: 'live', title: 'Live collaboration', detail: 'Shared card layout, live cursors, private chat answers and AI consent once per table.' },
   ],
