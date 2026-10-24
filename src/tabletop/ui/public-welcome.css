@@ -399,3 +399,10 @@
   .tt-public-welcome .tt-public-welcome__nav { display: flex; order: 4; width: 100%; flex: 0 0 100%; justify-content: flex-start; gap: 0.75rem; overflow-x: auto; margin-left: 0; }
   .tt-public-welcome .tt-public-welcome__nav a { min-height: 2.5rem; font-size: 0.6875rem; }
 }
+
+/* Carry the physical-tool examples into the software problem before the café case. */
+.tt-public-welcome .tt-public-welcome__bridge { display: grid; grid-column: 1 / -1; gap: 1rem; padding-block: 1.5rem; }
+.tt-public-welcome .tt-public-welcome__bridge h3 { margin: 0; color: var(--tt-ink, #303d3a); font-size: clamp(1.25rem, 3vw, 1.75rem); line-height: 1.35; }
+.tt-public-welcome .tt-public-welcome__bridge p { max-width: 64ch; margin: 0; color: var(--tt-ink, #303d3a); font-size: 0.9375rem; line-height: 1.8; }
+.tt-public-welcome .tt-public-welcome__bridge p + p { margin-top: 0.75rem; }
+@media (min-width: 760px) { .tt-public-welcome .tt-public-welcome__bridge { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(2rem, 5vw, 4.5rem); } }

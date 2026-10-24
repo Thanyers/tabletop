@@ -5,6 +5,12 @@
 
 ## Lessons
 
+### 2026-10-25 — Correct assets can still tell the story in the wrong order
+- **What happened:** the homepage opened a café case and its film before explaining the tools-to-software idea; README opened a learning animation before that idea. Repeated authoring labels interrupted both.
+- **Root cause:** sections were added where they were implemented instead of in the order a new reader needs them.
+- **Correct behavior:** read the page as definition → reason/problem → concrete evolving case → broader uses → next action. Put each visual beside its subject, keep one clear sample disclosure, and remove production-process labels from the product story. Check actual DOM order and existing language/auth/demo contracts before release.
+
+
 ### 2026-10-24 — A thesis needs visible change, not generic object photos
 - **What happened:** the public homepage left the hero without a visual, opened its example on an empty board, and used ordinary tool photos to explain personal adaptation. The user could not see what had changed to fit the person.
 - **Root cause:** the copy described adaptation but the pictures only identified objects; navigation also sent visitors to README instead of completing the product story on the page.
