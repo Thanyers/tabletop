@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-24 — npm peer resolver fails while adding narrow dependency overrides
+- **What happened:** npm 10/11 threw an internal `edgesOut` error when regenerating the lockfile for compatible F078-T0 patches; the old lock remained unchanged.
+- **Root cause:** the failure was inside npm's peer-set resolution; the exact internal cause is unverified. The same manifest resolved with npm 12.2.1.
+- **Correct behavior:** use a scoped compatible npm invocation to regenerate the lock without global configuration changes, inspect changed package versions, then verify ordinary project `npm ci`, audit, unit/Worker tests and build before committing. Do not use broad `audit fix --force` or bypass the advisory gate.
+
 ### 2026-10-23 — คำถามอ้างกฎถูกค้นหาการ์ดรับไปก่อนส่ง
 - **What happened:** Askรายกฎล้างข้อความแต่ไม่มีassistant job; exactคำถามลงท้ายตรงไหนเปิดRulesแทน
 - **Root cause:** TableChat.submitเรียกcanvas object finderก่อนonSend และfinderตี WHERE_TH+aliasกฎเป็นnavigationโดยไม่ดูselected references; ไม่ใช่หลักฐานว่าproviderค้างหรือการทดสอบหลายแท็บเป็นสาเหตุ
