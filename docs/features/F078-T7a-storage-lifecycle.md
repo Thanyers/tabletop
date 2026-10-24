@@ -101,11 +101,11 @@ Node `v22.23.2`, npm `11.0.0` (worktree `feat/F078-T7a-storage-contract`):
 - `npm run typecheck` — ผ่าน 3 configs (client build project, `tsconfig.server.json`, `tsconfig.cloudflare.json`)
 - `npm run lint` — **0 errors / 111 warnings** (เท่า baseline ของ dev)
 - `node node_modules/vitest/vitest.mjs run server/storage-growth.test.ts` — **5 passed (5)**
-- `npm test` — **932 passed / 5 skipped (937)** จาก 124 passed + 2 skipped test files (baseline 927/5 + 5 test ใหม่)
+- `npm test` — **942 passed / 5 skipped (947)** จาก 125 passed + 2 skipped test files หลัง merge dev `bad48d7` (dev 937 + 5 test ใหม่)
 - `node --import tsx scripts/storage-growth.ts` — ผ่าน, workload 2×24 commits, 4 points, เขียน JSON 1 ไฟล์ใต้
   `test-results/storage-growth/`; ผลตามตารางด้านบน
-- `node scripts/check-public-files.mjs` — **839 files / 0 findings**
-- `npx tsx server/changelog.ts check` — **8 fragments OK**
+- `node scripts/check-public-files.mjs` — **844 files / 0 findings**
+- `npx tsx server/changelog.ts check` — **10 fragments OK**
 - `git diff --check` — ไม่มี whitespace error
 
 **SKIPPED:** Workers/browser suites และ production/staging deployment — งานนี้แตะเอกสาร สคริปต์วัด และ test
