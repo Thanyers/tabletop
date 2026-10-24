@@ -75,7 +75,6 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F078-T6a | แยก Room job view/progress เป็น module server-only | `review` | DeepSeek Harness (lead) | `feat/F078-T6a-room-job-view` / #267 | `cloudflare/room.ts`, `cloudflare/room-job-view.ts` (ใหม่), `changelog.d/` | — | คง public status/response/redaction/visibility เดิมทุกไบต์; Workers 204/204 · room.ts 1809→1489 บรรทัด · lint 0 error/3 warning เดิม · ไม่แตะ schema/billing/retention |
 | F078-T6b | แยก Room job recovery/reconcile เป็น seam แรกของ coordination | `review` | DeepSeek Harness (lead) | `feat/F078-T6b-room-job-recovery` | `cloudflare/room.ts`, `cloudflare/room-job-recovery.ts` (ใหม่), `changelog.d/` | F078-T6a | Workers 204/204 · room.ts 1489→1423 · lint 0 error/3 warning เดิม · คง receipt/epoch/revision/revoked-member/uncertain guards; draft/assistant runners ยังอยู่ใน Room |
 | F078-T7..T9 | Storage lifecycle/recovery, typed view registration, load comparison | `todo` | DeepSeek Harness (lead) | — | ดู `docs/features/F078-architecture-improvements.md` | F078-T5a | หนึ่ง PR ต่อหนึ่ง sub-task |
 | F076-T1 | เมนู + ใน `TableChat` + รูปรอ + `composerTools` | `review` | lead (AI) | `feat/F076-plus-menu` | `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `ui/useTableChat.tsx`, `TabletopApp.tsx`, `ui/table-chat.css`, `ui/note-card.css`, `tests/generic-table-browser.mjs` | — | client อย่างเดียว |

@@ -82,6 +82,16 @@ Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **927 pass
 
 Required PR CI ([run40079154319](https://github.com/Thanyers/tabletop/actions/runs/40079154319)) passed `local-validation`, fast-checks, the built Worker startup probes, the **F066 composer/reference-routing browser harness** and the focused compute tests, with the three browser suites and staging correctly skipped on a pull request. Merged into `dev` as `90c0ad0`.
 
+### T5b — navigation/focus lifecycle (PR #268)
+
+Moved out of `TabletopApp` into `src/tabletop/navigation/workspace-navigation.ts` as pure decisions: `pageForPath`, `pathForProjection`, `nextHistoryWrite` (returns `skip` / `replace` / `push` plus the mode the next write starts from), `signInReturnPath`, `isSameOpenTable`, `tableChangeReset` with `pendingRulesObject`, and `focusRequest` with the invoice evidence object ids. The `AppPage` type moved with them.
+
+The component keeps every piece of React state — projection, page, selection, focus, opened card, draft prefill, rename and invitation panels — and only applies the returned decision. No route, history-entry count or visual behavior changed, and this is not a UI redesign.
+
+One behavior is deliberately tightened, and it is called out rather than hidden: the `popstate` handler now checks `isSameOpenTable` before applying a fetched table, so a back/forward fetch that resolves after the member switched tables no longer draws the previous table under the new address. The rule that a chat-first table opens nothing until there is a rule draft to review (F006) is now a named function, and a participant is taken to the review card because F035 gives participants the owner's permissions except delete/reset — the test states that rather than assuming opposite.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **937 passed / 5 skipped (942)** (927 from T5a + 10 navigation tests), lint **0 errors / 111 warnings** (same as baseline), `npm run build` passed, public scan clean, `changelog.ts check` 7 fragments, `git diff --check` clean. Workers and browser suites are **SKIPPED locally**: `src/tabletop/TabletopApp.tsx` is an explicitly uncovered planner path, so the PR selects every focused gate, and the three browser suites run in the full dev run after merge. No schema, retention, billing or visibility change.
+
 ### T6a — Room job view/progress seam (PR #267)
 
 Moved out of `cloudflare/room.ts` into `cloudflare/room-job-view.ts`: `PublicModelJob`, the assistant confirmation message and job views, the draft job status/view functions, `publicClarification`, and the four redaction/clamping helpers (`draftIdentityReplacements`, `boundedFailureDetails`, `boundedSearchProgress`, `boundedResearch`). The token/cursor/prompt constants move with them so there is one definition.
