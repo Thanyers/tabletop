@@ -1,0 +1,1 @@
+- F078-T5b: extract the client's navigation and canvas-focus lifecycle out of `TabletopApp` into a typed module (address-bar sync mode, back/forward route resolution, table-open late-result guard, per-table selection/focus reset and focus requests). Behavior, routes, history entries and rendered UI are unchanged; no schema, retention or production change.
