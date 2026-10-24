@@ -1,14 +1,44 @@
-# F077 — ผลตรวจรอบ 3
+# F077 — ผลตรวจรอบ4: English narration + action sound
+
+24 ตุลาคม2026 · Node22.23.2 · Python3.12 · English-first · ความยาวตามเรื่อง ไม่บังคับ60s
+
+## Candidate รอบ4
+
+- เสียงบรรยาย8ช่วง en-US-AriaNeural จากบทที่เขียนเอง ผ่านedge-tts7.3.1; ไม่มีkeyหรือเสียงบุคคลอ้างอิง
+- เสียงtyping/send/review/apply/tool-arrivalและpaper/contactสร้างด้วยโค้ดตามเฟรม; ไม่มีเพลงหรือเสียงดาวน์โหลด
+- Introเป็นปากกาจดออร์เดอร์และแก้ผลบวก ก่อนเลื่อนเข้าสู่canvas แทนรูปเก้าอี้/ปากกา/ค้อนที่ผู้ใช้ไม่เข้าใจ
+- ความยาวกำหนดจากเสียงจริงและช่วงพัก:84.7s/2541frames; อังกฤษทั้งเสียงและข้อความในคลิป; webTH/ENคงอยู่
+
+| Check | Result | Evidence / limit |
+| --- | --- | --- |
+| Narration-only independent review | PASS after revision | เพิ่มเหตุว่ากรอกแต่ละรายการช้า; chart/discountมีapprovalในบท; introใช้Imagineและconceptdisclosureคงตลอด; ไม่อ้างruntimeproof |
+| Intro visual review | PASS, main | ตรวจintroก่อนrenderและMP4-derivedscene01หลังrender:ใบออร์เดอร์/ยอดแก้275→225; workerตรวจ8stillsและmainตรวจintro/quick-sale/20%applied |
+| Voice generation | PASS8/8 | MP3ทุกช่วงdecodeได้และมีWordBoundarymetadata; คงrateปกติ ไม่เร่งเพื่อให้ครบ60s |
+| Mix / timing / captions | PASS | FLAC84.7s/stereo48kHz;8voicewindowsไม่ทับ;5causalcuechainsผ่าน;Coffeeclickหลังปุ่มพร้อม;22captionintervalsไม่ทับ/ไม่เกินคลิป;premixpeak.78และSFXpeak.049; normalizedoutput-15.93LUFS/-1.50dBTP;ไม่ใช้ผลนี้อ้างhumanlistening |
+| Final film / sound / frames | PASS | H.2641280×720/30fps/2541frames, AACstereo48kHz,84.700s; FFmpegdecodeครบ; finalAACreadback-15.95LUFS/-1.50dBTP;8MP4-derivedstillsตรวจแล้ว |
+| Browser player / captions | PASS playback; caption toggle NOT RUN | Browserอ่านduration84.7และended=trueที่84.7; replayเวลาเดินถึง12.29sและpause12.30s;ไม่มีmediaerror;EnglishtextTrackมีอยู่และ22VTTcuesผ่านstaticcheck แต่ไม่ได้เปิดCCในplayer |
+| Independent audio review | PASS | reviewerตรวจhashของcache8/8,wordtiming/VTTตรง,readback-15.95LUFS/-1.50dBTP;Coffee35.167sตรงคำCoffee35.158sต่าง8ms;ไม่ฟังเสียงด้วยคน |
+| Independent source review | PASS within source scope | reviewerตรวจheadercutsตามvoice,request→draft→review→apply→result,pointerไม่ซ้อน,ruleเลือกก่อนพิมพ์,ตัวเลขจากgrossเดียว,README84.7s/Englishและdisclosure;ไม่ได้ตรวจMP4สุดท้าย |
+| Syntax / internal links | PASS | node --check review.jsและrender.mjs;Pythoncompile2scripts;70localtargetsมีอยู่ |
+| Public / changelog / whitespace | PASS | node scripts/check-public-files.mjs:876files/0findings; npx tsx server/changelog.ts check:4fragmentsOK; git diff --checkผ่าน |
+| Human listening / comprehension | NOT RUN | เครื่องมือนี้อ่านaudioinputไม่ได้; metadata/waveformไม่ยืนยันความเป็นธรรมชาติของเสียงหรือfirst-timecomprehension |
+| Production / exact prompts | NOT RUN | conceptanimationและข้อมูลสมมติ ไม่ใช่runtimeproof |
+
+หน้าเว็บเปลี่ยนเฉพาะคำอธิบาย/เวลา/trackcaptionของวิดีโอ; การทดลองบอร์ดเดิมไม่มีlogicchange FullUIgateและbrowser5บทของรอบ3เป็นhistoricalผลเดิม ไม่อ้างว่ารันใหม่รอบ4
+
+Final MP4:3,515,240bytes · SHA256 `409fc4a8c1e111783aeb8370518c154f06d2589d3af4eb3ad7a3da21323821b7`
+
+## ประวัติรอบ3 (ก่อนเพิ่มเสียง)
 
 24 ตุลาคม 2026 · Node.js 22.23.2 · ขอบเขต: สื่อร่างและตัวอย่างในหน้า ไม่ใช่ production runtime
 
-## เหตุที่ต้องแก้รอบนี้
+### เหตุที่ต้องแก้รอบนี้
 
 ผู้ใช้ดูรอบ2แล้วระบุว่าไม่เห็นเครื่องมือปรับเข้ากับคนและไม่เห็นการพิมพ์คำขอต่อเนื่อง **เกณฑ์เรื่องเล่ารอบ2ไม่ผ่าน** แม้ผล UI gate 16/16 และตัวเลขจะผ่าน จึงไม่ใช้ผลตรวจเทคนิคอ้างว่าคนดูเข้าใจ
 
 รอบ3เปลี่ยนเป็นความต้องการของคนขาย → พิมพ์ → ส่ง → ร่าง → ตรวจ/ใช้ → ลงมือใช้ แล้วขอปรับต่อบนโต๊ะเดิม
 
-## ผลที่ตรวจใหม่
+### ผลที่ตรวจใหม่
 
 | การตรวจ | ผล | สิ่งที่ตรวจจริง |
 | --- | --- | --- |
@@ -32,7 +62,7 @@
 
 ตัวอย่างบนเว็บเป็นreadonlypresetที่เลือกบทแล้วเล่นเรื่องต่อ กดปุ่มขายได้จริงเฉพาะstateในหน้า ไม่ได้ตีความข้อความอิสระหรือเรียกAI ภาพวิดีโอสร้างจากโค้ดและข้อมูลสมมติทั้งหมด
 
-## ขอบเขตเก่าและ CI
+### ขอบเขตเก่าและ CI
 
 รอบ1เป็น36s; รอบ2เป็น60s hash `9198e8852be7998441f81873c11adb1a26bdc9e55ac2f7f345ca969a2bf1fc34` ผลเหล่านั้นไม่ใช่ผลตรวจartifactรอบ3
 

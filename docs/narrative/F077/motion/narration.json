@@ -1,0 +1,65 @@
+{
+  "voice": "en-US-AriaNeural",
+  "rate": "+0%",
+  "language": "en",
+  "assetDirectory": "voice/en",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "Imagine a cafe starting with pen and paper. Then orders pile up. What if its tools could grow with the work?",
+      "duration": 8.688,
+      "start": 0.4,
+      "end": 9.9
+    },
+    {
+      "id": "table",
+      "text": "Start with a request: Make me a sales table for coffee and cake. Tabletop drafts it. Review it, apply it, and start using it.",
+      "duration": 10.608,
+      "start": 9.9,
+      "end": 21.833333333333332
+    },
+    {
+      "id": "quick-request",
+      "text": "Now the shop gets busy. Entering every sale is too slow. Add buttons so I can record a sale with one click.",
+      "duration": 8.976,
+      "start": 21.833,
+      "end": 31.933333333333334
+    },
+    {
+      "id": "quick-use",
+      "text": "The buttons join the same canvas. Click Coffee: the count goes up, and the total updates.",
+      "duration": 7.008,
+      "start": 31.933,
+      "end": 40.166666666666664
+    },
+    {
+      "id": "chart",
+      "text": "Want to see what's selling? Ask for a chart. Once approved, it reads the same sales data. There's nothing to enter again.",
+      "duration": 10.152,
+      "start": 40.167,
+      "end": 51.63333333333333
+    },
+    {
+      "id": "discount10",
+      "text": "Trying an afternoon offer? Add and approve a ten-percent discount. The rule calculates the net total from today's sales.",
+      "duration": 9.336,
+      "start": 51.633,
+      "end": 62.3
+    },
+    {
+      "id": "discount20",
+      "text": "Change your mind? Select that rule and ask for twenty percent. Review the new result, then apply it. Your table, buttons, and chart stay in place.",
+      "duration": 11.976,
+      "start": 62.3,
+      "end": 75.8
+    },
+    {
+      "id": "close",
+      "text": "Tabletop. Start small, use it, and shape it as you go. Tools that keep adapting to you.",
+      "duration": 7.992,
+      "start": 75.8,
+      "end": 84.7
+    }
+  ],
+  "durationFrames": 2541
+}

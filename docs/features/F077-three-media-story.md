@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — รอบ 3 ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
+| สถานะ | `review` — รอบ 4 ใน [PR #259](https://github.com/Thanyers/tabletop/pull/259) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | เอกสารและสื่อร่าง; ไม่มี production release |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 |
@@ -27,6 +27,7 @@
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
+| 2026-10-24 | รอบ 4 เพิ่มเสียงบรรยายอังกฤษและเสียงที่สัมพันธ์กับการกระทำ ปรับ pace และเปิดเรื่องด้วยการจดออร์เดอร์จริง | ผู้ใช้ไม่เข้าใจรูป tools และต้องการฟังเข้าใจโดยไม่อ่านทุกอย่าง; คำสั่งล่าสุดEnglish-firstและไม่จำกัด1นาที; ภาพยังสร้างจากโค้ด |
 | 2026-10-24 | รอบ 3 เล่าคนขายที่ค่อย ๆ ขอปรับโต๊ะ: จดขาย → ปุ่มขายเร็ว → กราฟ → โปรโมชัน → แก้กฎ | ผู้ใช้ชี้ว่ารอบ 2 ยังไม่มีจังหวะพิมพ์และไม่เห็นเครื่องมือปรับให้เข้ากับคน; ทุกการเพิ่มต้องตามหลังคำขอและเห็นการใช้จริงในตัวอย่าง |
 | 2026-10-24 | รอบ 2 ใช้บอร์ดเดียวค่อย ๆ เพิ่ม แก้ และแตกแขนงในคลิป 60s; ห้าม morph วัตถุ | ผู้ใช้ต้องการเห็นวิวัฒนาการของโต๊ะชัด ๆ และมีเวลาอ่านผล |
 | 2026-10-24 | ใช้ mark/wordmark และ loader animation จาก repo; เปิดเรื่องด้วยเก้าอี้ ปากกา ค้อนที่แยกเป็นวัตถุ | รักษาอัตลักษณ์และขยายคำเปรียบเทียบให้เห็นเครื่องมือหลายแบบ |
@@ -41,8 +42,8 @@
 
 [แผนและเปรียบเทียบของเดิม](../narrative/F077/README.md) · [หน้า preview](../narrative/F077/review.html) · [copy หน้าเว็บ](../narrative/F077/landing-copy.md) · [README ร่าง](../narrative/F077/readme-draft.md) · [video brief/prompt](../narrative/F077/video-brief.md) · [ผลตรวจ](../narrative/F077/verification.md)
 
-รอบ 3 มี MP4 เงียบ 60 วินาที 1280×720/30fps, poster และภาพนิ่ง 8 ฉาก พร้อม Remotion source/lockfile ใช้ logo/loader เดิมและวัตถุเก้าอี้ ปากกา ค้อนแยกกัน ทุกเครื่องมือเกิดหลังคนขายพิมพ์คำขอ: จดขาย → ปุ่มขายเร็ว → กราฟ → ส่วนลด10% → แก้กฎเดิม20% เห็นการกดขายและผลจากข้อมูลเดิม สร้างด้วยโค้ดทั้งหมด
+รอบ 4 มี MP4 ภาษาอังกฤษพร้อมเสียงบรรยายสังเคราะห์และเสียงการกระทำ 84.7 วินาที 1280×720/30fps พร้อม captions, poster, ภาพนิ่ง 8 ฉาก และ source ที่ render ซ้ำได้จากเสียง cache ใช้ logo/loader เดิม เปิดด้วยปากกาจดออร์เดอร์และแก้ยอด ก่อนเลื่อนเข้าสู่ canvas ทุกเครื่องมือเกิดหลังคนขายพิมพ์คำขอ: จดขาย → ปุ่มขายเร็ว → กราฟ → ส่วนลด10% → แก้กฎเดิม20% ภาพและ sound effects สร้างด้วยโค้ดทั้งหมด
 
-หน้าเว็บร่าง TH/EN ใช้ readonly preset ที่พิมพ์ให้เห็นตามบท แล้วกดส่ง/ตรวจ/ใช้ ปุ่มขายเพิ่มจำนวนและคำนวณกราฟ/ยอดใหม่ได้จริงใน state ของหน้า README และ copy ใช้เรื่องเดียวกัน โดยไม่อ้างเป็น product runtime proof
+หน้าเว็บร่าง TH/EN และ README ใช้เรื่องเดียวกัน โดยไม่อ้างเป็น product runtime proof หน้า preview เล่นภาพยนตร์อังกฤษพร้อม optional caption ได้
 
-Node 22.23.2: render/decodeครบ1,800frames; คำนวณ8/8; ลิงก์67/67; full UI gate16/16measured+4SKIP; browser5บทพร้อมภาษา/reset/ใช้ต่อผ่านหลังแก้null-query; independent source reviewปิด3/3P2; publicscan0finding; changelog1fragmentและwhitespaceผ่าน Mainตรวจ5ภาพสำคัญจากMP4 และ browserยืนยันเล่น60sได้ไม่มีmediaerror ไม่ยืนยันpause/seekรอบนี้ รายละเอียดและข้อจำกัดใน verification; humancomprehensionยังไม่ตรวจ
+Node22.23.2/Python3.12/FFmpeg8.1.2: render/decode2541frames; voicecache8/8และช่วงเสียง8/8; causalcuechains5/5; VTT22ช่วง; internallinks70/70; publicscan876files/0findings; changelog4fragments; whitespaceผ่าน; independentaudio/source reviewไม่มีblocker Browserเล่นถึง84.7sและreplay/pauseได้ ไม่มีmediaerror MainตรวจภาพสำคัญจากMP4 ผลUIgateและinteraction5บทของรอบ3คงเป็นhistorical ไม่ได้รันซ้ำเพราะรอบนี้ไม่แก้logicหน้าเว็บ ยังไม่ได้humanlistening/comprehensionหรือเปิดCCผ่านplayer รายละเอียดใน verification

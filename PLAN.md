@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F077-T1 | ร่างเรื่องเล่าสามสื่อ + Remotion animatic | `review` | Codex · [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) · รอบ 3: ปัญหาของคนใช้ → พิมพ์คำขอ → ตรวจ/ใช้ → เครื่องมือปรับให้พอดี; แก้เว็บ/คลิปและเรื่องเล่าร่วมกัน; ไม่เปลี่ยน landing/README ที่เผยแพร่ |
+| F077-T1 | ร่างเรื่องเล่าสามสื่อ + Remotion animatic | `review` | Codex · [draft PR #259](https://github.com/Thanyers/tabletop/pull/259) · รอบ4: English voiceover + action SFX + introจดออร์เดอร์; paceตามบท84.7s; ไม่เปลี่ยนlanding/READMEที่เผยแพร่ |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (first group T0–T4) | [F078](docs/features/F078-architecture-improvements.md) |
 | F076 | ปุ่ม + เป็นเมนูเดียว (ไฟล์/post-it/รูป) + รูปรอในช่องแชทก่อนแปะ | `review` | [F076](docs/features/F076-plus-menu.md) |
 | F075 | ช่องเลือกรายการอ่านออก + บอกผลหลังกดปุ่มแอ็กชัน | `review` | [F075](docs/features/F075-readable-record-picker.md) |

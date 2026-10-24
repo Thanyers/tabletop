@@ -83,4 +83,4 @@ Hero มี composer เห็นการพิมพ์คำขอก่อ�
 | Scope | เครื่องมือทำงานภายในส่วนประกอบและระบบคำนวณที่รองรับ สิ่งที่ AI ร่างอาจต้องปรับก่อนใช้ | Tools work within supported components and compute runtimes. AI drafts may need adjustment before use. |
 | Thesis | Work defines what software becomes. | Work defines what software becomes. |
 
-คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอรอบ 3 ใช้ TH เป็นหลัก; เสียง/ซับ EN เป็น export แยกใน final
+คงข้อความauth/welcome/errorเดิม; TH/ENในแผนนี้ครอบเฉพาะpublic narrative วิดีโอรอบ4ใช้Englishทั้งภาพ/เสียง พร้อมcaptionENที่เลือกเปิดได้; ไม่ล็อกความยาว60s

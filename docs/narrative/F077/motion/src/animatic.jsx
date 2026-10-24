@@ -30,83 +30,90 @@ const mix = (value, from, to, a, b) => interpolate(value, [from, to], [a, b], {
 });
 
 const money = (value) => '฿' + value.toLocaleString('en-US');
-const segmenter = new Intl.Segmenter('th', { granularity: 'grapheme' });
+const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
 const graphemes = (text) => Array.from(segmenter.segment(text), ({ segment }) => segment);
 
 const REQUESTS = [
   {
     id: 'table',
-    title: 'โต๊ะจดขายกาแฟและเค้ก',
-    label: 'ตารางขาย',
-    detail: 'กาแฟและเค้ก พร้อมจำนวน ราคา และยอดรวมต่อรายการ',
-    message: 'ช่วยทำโต๊ะจดขายกาแฟกับเค้ก',
-    typeStart: 168,
-    send: 234,
-    draftEnd: 258,
-    reviewed: 276,
-    applyStart: 284,
-    apply: 300,
-    result: 312,
+    title: 'Sales table · coffee + cake',
+    label: 'Sales table',
+    detail: 'Coffee and cake with quantities, prices, and line totals.',
+    message: 'Make me a sales table for coffee and cake.',
+    typeStart: 346,
+    typingStep: 1.7,
+    send: 441,
+    draftEnd: 465,
+    reviewed: 512,
+    applyStart: 524,
+    apply: 536,
+    result: 555,
   },
   {
     id: 'quick',
-    title: 'เพิ่มปุ่มขาย +1',
-    label: 'ปุ่มขาย +1',
-    detail: 'ปุ่มกาแฟ +1 และเค้ก +1',
-    message: 'ช่วงลูกค้าเยอะ กรอกไม่ทัน\nเพิ่มปุ่มขาย กดครั้งเดียวเพิ่มจำนวน',
-    typeStart: 428,
-    send: 552,
-    draftEnd: 576,
-    reviewed: 600,
-    applyStart: 608,
-    apply: 628,
-    result: 640,
+    title: 'One-click sale buttons',
+    label: 'Quick-sale buttons',
+    detail: 'Coffee +1 and Cake +1.',
+    message: 'Add buttons so I can record a sale with one click.',
+    typeStart: 814,
+    typingStep: 1.5,
+    send: 911,
+    draftEnd: 917,
+    reviewed: 924,
+    applyStart: 930,
+    apply: 936,
+    result: 958,
   },
   {
     id: 'chart',
-    title: 'เพิ่มกราฟแยกตามสินค้า',
-    label: 'กราฟสินค้า',
-    detail: 'กาแฟ ฿100 · เค้ก ฿150 จากตารางเดียวกัน',
-    message: 'อยากรู้ว่าอะไรขายดี\nเพิ่มกราฟยอดขายแยกตามสินค้า',
-    typeStart: 850,
-    send: 954,
-    draftEnd: 978,
-    reviewed: 1002,
-    applyStart: 1010,
-    apply: 1028,
-    result: 1040,
+    title: 'Sales by item',
+    label: 'Sales chart',
+    detail: 'Coffee ฿100 · Cake ฿150 from the same rows.',
+    message: 'Add a chart by item.',
+    typeStart: 1270,
+    typingStep: 1.2,
+    send: 1317,
+    draftEnd: 1326,
+    reviewed: 1339,
+    applyStart: 1345,
+    apply: 1352,
+    result: 1362,
   },
   {
     id: 'discount10',
-    title: 'เพิ่มกฎส่วนลด 10%',
-    label: 'ส่วนลด 10%',
-    detail: '฿250 × 90% = ฿225 สุทธิ',
-    message: 'เพิ่มส่วนลด 10%',
-    typeStart: 1152,
-    send: 1200,
-    draftEnd: 1224,
-    reviewed: 1248,
-    applyStart: 1256,
-    apply: 1274,
-    result: 1286,
+    title: '10% discount rule',
+    label: '10% discount',
+    detail: '฿250 × 90% = ฿225 net.',
+    message: 'Add a 10% discount.',
+    typeStart: 1622,
+    typingStep: 1.2,
+    send: 1664,
+    draftEnd: 1672,
+    reviewed: 1679,
+    applyStart: 1686,
+    apply: 1694,
+    result: 1710,
   },
   {
     id: 'discount20',
-    title: 'เปลี่ยนกฎที่เลือกเป็น 20%',
-    label: 'แก้กฎ 20%',
-    detail: '฿250 × 80% = ฿200 · ยอดรวมคงเดิม',
-    message: 'เปลี่ยนกฎนี้เป็น 20%',
-    typeStart: 1392,
-    send: 1446,
-    draftEnd: 1470,
-    reviewed: 1494,
-    applyStart: 1502,
-    apply: 1520,
-    result: 1532,
+    title: 'Change the selected rule to 20%',
+    label: '20% discount',
+    detail: '฿250 × 80% = ฿200 net.',
+    message: 'Change this to 20%.',
+    typeStart: 1962,
+    typingStep: 1.2,
+    send: 2010,
+    draftEnd: 2018,
+    reviewed: 2026,
+    applyStart: 2064,
+    apply: 2074,
+    result: 2091,
   },
 ].map((request) => ({ ...request, letters: graphemes(request.message) }));
 
-const QUICK_CLICK = 692;
+const QUICK_CLICK = 1055;
+const QUICK_UPDATE = 1074;
+const RULE_SELECT = 1929;
 
 function Mark({ frame, size = 30, staticMark = false }) {
   // Canonical four-tile mark and frame-based port of the existing loader motion.
@@ -150,142 +157,130 @@ function Mark({ frame, size = 30, staticMark = false }) {
 }
 
 function Chrome({ frame }) {
-  const dark = frame >= 1740;
+  const dark = frame >= 2415;
   return <header className={`chrome${dark ? ' chrome--dark' : ''}`}>
     <div className="brand-lockup"><Mark frame={frame} size={30} /><span>tabletop<span className="brand-period">.</span></span></div>
     <div className="provenance">
       <strong>Concept animation · illustrative data</strong>
-      <span>ภาพอธิบาย · ข้อมูลตัวอย่าง</span>
     </div>
   </header>;
 }
 
-function Chair({ frame }) {
-  const enter = clamp(frame, 3, 20);
-  return <svg className="chair-object" viewBox="0 0 340 410" style={{
-    opacity: enter,
-    transform: `translate(${(1 - enter) * 48}px, ${(1 - enter) * 16}px)`,
-  }} aria-label="A wooden chair">
-    <ellipse cx="177" cy="380" rx="111" ry="13" fill={C.ink} opacity=".1" />
-    <path d="M98 74 Q98 62 111 62 H232 Q245 62 245 75 V229 H98Z" fill="#b9c8b6" stroke={C.green} strokeWidth="5" />
-    <path d="M117 84 H225 V210 H117Z" fill={C.paper} opacity=".62" />
-    <path d="M75 236 L268 236 Q279 236 279 249 V269 Q279 280 266 280 H78 Q66 280 66 269 V248 Q66 236 75 236Z" fill={C.ochre} />
-    <path d="M88 278 L102 375 M257 278 L245 375 M83 270 L53 367 M264 270 L294 367" fill="none" stroke={C.ochre} strokeWidth="14" strokeLinecap="round" />
-    <path d="M72 346 Q169 364 276 345" fill="none" stroke={C.ochre} strokeWidth="8" strokeLinecap="round" />
+function WritingPen({ frame }) {
+  const strokes = [
+    { start: 26, end: 55, x0: 58, x1: 468, y: 173 },
+    { start: 59, end: 88, x0: 58, x1: 468, y: 235 },
+    { start: 99, end: 125, x0: 118, x1: 382, y: 306 },
+    { start: 128, end: 143, x0: 408, x1: 492, y: 380 },
+  ];
+  const stroke = strokes.find(({ start, end }) => frame >= start && frame <= end);
+  if (!stroke) return null;
+  const pointX = mix(frame, stroke.start, stroke.end, stroke.x0, stroke.x1);
+  const opacity = clamp(frame, stroke.start, stroke.start + 3)
+    * (1 - clamp(frame, stroke.end - 3, stroke.end));
+  return <svg className="manual-pen" viewBox="0 0 184 42" aria-hidden="true" style={{
+    left: pointX - 184,
+    top: stroke.y - 20,
+    opacity,
+  }}>
+    <path d="M13 11 Q8 21 13 31 L150 29 Q159 28 165 21 L150 13Z" fill={C.green} stroke="#234a3f" strokeWidth="2" />
+    <path d="M30 14 L136 15" stroke="#a9cbb5" strokeWidth="3" strokeLinecap="round" />
+    <path d="M165 15 L183 21 L165 27Z" fill={C.ochre} />
+    <path d="M179 20 L184 21 L179 22Z" fill={C.ink} />
+    <path d="M31 12 V5 Q31 2 35 2 H85" fill="none" stroke={C.ink} strokeWidth="3" strokeLinecap="round" />
   </svg>;
 }
 
-function Cushion({ frame }) {
-  const enter = clamp(frame, 95, 117);
-  return <svg className="cushion-object" viewBox="0 0 210 56" style={{
+function OrderSlip({ frame }) {
+  const enter = clamp(frame, 0, 18);
+  const coffee = clamp(frame, 22, 55);
+  const cake = clamp(frame, 56, 89);
+  const addition = clamp(frame, 99, 125);
+  const wrongTotal = clamp(frame, 119, 123);
+  const correctionLine = clamp(frame, 127, 138);
+  const correctedTotal = clamp(frame, 138, 149);
+  const clipWritten = (progress) => ({
+    clipPath: `inset(0 ${100 - progress * 100}% 0 0)`,
+    opacity: progress > 0 ? 1 : 0,
+  });
+
+  return <div className="order-slip" style={{
     opacity: enter,
-    transform: `translateY(${(1 - enter) * 24}px) scale(${0.9 + enter * 0.1})`,
-  }} aria-hidden="true">
-    <path d="M16 14 Q18 6 29 7 H181 Q192 8 194 18 L188 42 Q186 50 175 49 H31 Q19 48 17 39Z" fill={C.greenSoft} stroke={C.green} strokeWidth="3" />
-    <path d="M37 17 Q105 12 174 18 M35 39 Q105 44 174 38" fill="none" stroke="#b9d3c1" strokeWidth="2" />
-  </svg>;
-}
-
-function Book({ frame }) {
-  const enter = clamp(frame, 103, 125);
-  return <svg className="book-object" viewBox="0 0 106 66" style={{
-    opacity: enter,
-    transform: `translate(${(1 - enter) * 26}px, ${(1 - enter) * 12}px) rotate(-8deg)`,
-  }} aria-hidden="true">
-    <path d="M12 10 Q32 4 52 15 V56 Q32 46 12 53Z" fill={C.white} stroke={C.blue} strokeWidth="3" />
-    <path d="M52 15 Q73 4 94 10 V53 Q74 46 52 56Z" fill={C.blueSoft} stroke={C.blue} strokeWidth="3" />
-    <path d="M20 21 Q34 17 45 23 M20 30 Q34 26 45 32 M60 23 Q75 17 86 21 M60 32 Q75 26 86 30" stroke="#9ab3c1" strokeWidth="2" />
-    <path d="M52 15V56" stroke={C.blue} strokeWidth="3" />
-  </svg>;
-}
-
-function Pen({ frame }) {
-  const enter = clamp(frame, 22, 38);
-  const draw = clamp(frame, 38, 70);
-  return <>
-    <svg className="pen-mark" viewBox="0 0 260 116" aria-hidden="true">
-      <path d="M16 72 C56 20 84 94 128 48 S202 40 245 64" fill="none" stroke={C.green} strokeWidth="4" strokeLinecap="round" pathLength="1" strokeDasharray={`${draw} 1`} />
-      <circle cx="245" cy="64" r="5" fill={C.green} opacity={draw} />
-    </svg>
-    <svg className="pen-object" viewBox="0 0 170 42" style={{
-      opacity: enter,
-      transform: `translate(${mix(frame, 22, 38, -58, 0)}px, ${mix(frame, 22, 38, -25, 0)}px) rotate(-36deg)`,
-    }} aria-label="A pen drawing a line">
-      <rect x="10" y="13" width="136" height="16" rx="8" fill={C.green} />
-      <rect x="18" y="16" width="90" height="3" rx="2" fill="#d7e8d6" opacity=".8" />
-      <path d="M145 13 L164 21 L145 29Z" fill={C.ochre} />
-      <path d="M13 13 Q6 21 13 29" fill="none" stroke="#243548" strokeWidth="3" />
-      <path d="M46 13V6 Q46 1 52 1 H105" fill="none" stroke="#243548" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  </>;
-}
-
-function Hammer({ frame }) {
-  const enter = clamp(frame, 58, 75);
-  const strike = clamp(frame, 80, 91);
-  const settle = clamp(frame, 92, 106);
-  const rotation = frame < 80 ? -26 : frame < 93 ? mix(frame, 80, 93, -26, 24) : mix(frame, 93, 106, 24, 0);
-  return <>
-    <div className="nail-board" style={{ opacity: clamp(frame, 69, 82) }}>
-      <div className="wood-grain wood-grain--one" /><div className="wood-grain wood-grain--two" />
-      <svg viewBox="0 0 72 82" className="nail-svg" aria-hidden="true">
-        <path d={`M36 ${strike ? 13 + strike * 12 : 13}V69`} stroke="#6f8190" strokeWidth="6" strokeLinecap="round" />
-        <path d={`M23 ${strike ? 12 + strike * 12 : 12}H49`} stroke={C.ink} strokeWidth="7" strokeLinecap="round" />
-        <path d="M30 70H42" stroke={C.ochre} strokeWidth="4" strokeLinecap="round" opacity={settle} />
-      </svg>
-      <span>NAIL</span>
+    transform: `translateY(${(1 - enter) * 44}px) rotate(-1deg)`,
+  }}>
+    <div className="slip-holes"><i /><i /><i /><i /><i /></div>
+    <div className="slip-topline"><b>THE CORNER POP-UP</b><span>DAILY ORDER · 001</span></div>
+    <div className="slip-title">Sales note <small>coffee &amp; cake</small></div>
+    <div className="slip-rule" />
+    <div className="slip-columns"><span>ITEM</span><span>COUNT × PRICE</span><span>LINE TOTAL</span></div>
+    <div className="slip-row slip-row--coffee" style={clipWritten(coffee)}>
+      <strong><i className="slip-dot slip-dot--green" />Coffee</strong><span>3 × ฿25</span><b>฿75</b>
     </div>
-    <svg className="hammer-object" viewBox="0 0 170 130" style={{
-      opacity: enter,
-      transform: `translate(${mix(frame, 58, 75, 34, 0)}px, ${mix(frame, 58, 75, -28, 0)}px) rotate(${rotation}deg)`,
-    }} aria-label="A hammer adding a nail">
-      <path d="M88 48 L132 96 Q138 103 131 111 Q124 118 117 110 L72 62Z" fill={C.ochre} />
-      <path d="M42 22 Q51 12 63 21 L88 44 Q96 52 87 61 L79 69 Q70 77 62 69 L37 46 Q29 37 42 22Z" fill={C.blue} stroke="#243548" strokeWidth="4" />
-      <path d="M41 28 L25 14 Q17 8 11 16 Q5 24 13 30 L29 44Z" fill="#243548" />
-      <path d="M54 28 L78 50" stroke="#a9c2cb" strokeWidth="4" strokeLinecap="round" />
-    </svg>
-  </>;
+    <div className="slip-row slip-row--cake" style={clipWritten(cake)}>
+      <strong><i className="slip-dot slip-dot--ochre" />Cake</strong><span>3 × ฿50</span><b>฿150</b>
+    </div>
+    <div className="slip-addition" style={clipWritten(addition)}>
+      <span>ADD THE LINE TOTALS</span><b>฿75 + ฿150</b><i>=</i>
+    </div>
+    <div className="slip-total">
+      <span className="slip-total-label">DAILY TOTAL</span>
+      <div className="slip-total-values">
+        <span className="slip-total-old" style={{ opacity: wrongTotal }}>
+          ฿275<i style={{ width: `${correctionLine * 72}px` }} />
+        </span>
+        <b className="slip-total-correct" style={{ opacity: correctedTotal }}>฿225</b>
+      </div>
+    </div>
+    <div className="slip-recheck" style={{ opacity: correctedTotal }}>Checked again</div>
+    <div className="slip-footer">PAPER ORDER · ILLUSTRATIVE EXAMPLE</div>
+    <WritingPen frame={frame} />
+  </div>;
+}
+
+function OrderStack({ frame }) {
+  const reveal = clamp(frame, 120, 142);
+  if (!reveal) return null;
+  return <div className="order-stack" style={{ opacity: reveal }} aria-hidden="true">
+    <div className="stack-slip stack-slip--back"><b>ORDER 003</b><i /><i /><i /></div>
+    <div className="stack-slip stack-slip--front"><b>ORDER 002</b><i /><i /><i /></div>
+  </div>;
 }
 
 function Intro({ frame }) {
-  const title = clamp(frame, 7, 28);
-  return <AbsoluteFill className="intro-scene">
-    <div className="intro-copy" style={{ opacity: title, transform: `translateY(${(1 - title) * 14}px)` }}>
-      <div className="intro-eyebrow">TOOLS THAT FIT THE WORK</div>
-      <h1>เครื่องมือปรับตาม<br /><em>งานของคุณ</em></h1>
-      <p>เริ่มจากความต้องการ แล้วค่อยต่อเติม</p>
+  const transition = clamp(frame, 282, 300);
+  const question = clamp(frame, 188, 204);
+  const title = clamp(frame, 8, 24);
+  return <AbsoluteFill className="intro-scene" style={{ transform: `translateX(${-1280 * transition}px)` }}>
+    <div className="intro-rule" style={{ transform: `scaleX(${title})`, transformOrigin: 'left center' }} />
+    <div className="intro-copy" style={{ opacity: title, transform: `translateY(${(1 - title) * 12}px)` }}>
+      <div className="intro-eyebrow">THE CORNER POP-UP · A BUSY DAY</div>
+      <h1>
+        <span className="intro-message" style={{ opacity: 1 - question }}>Write it down. <em>Add it up again.</em></span>
+        <span className="intro-message" style={{ opacity: question }}>Could the tool <em>fit your work?</em></span>
+      </h1>
+      <p>Every order starts with a note. Every total needs checking.</p>
     </div>
-    <div className="writing-sheet" style={{ opacity: clamp(frame, 20, 38) }}>
-      <div className="sheet-overline">IDEA / NOTE</div>
-      <div className="sheet-rule" />
-      <Pen frame={frame} />
-    </div>
-    <div className="nail-scene"><Hammer frame={frame} /></div>
-    <div className="chair-scene">
-      <Chair frame={frame} />
-      <Cushion frame={frame} />
-      <Book frame={frame} />
-    </div>
-    <div className="intro-footer" style={{ opacity: clamp(frame, 105, 123) }}>
-      A coffee seller · one changing workday
-    </div>
+    <div className="intro-note"><i />A SMALL SHOP · A BUSY AFTERNOON</div>
+    <OrderStack frame={frame} />
+    <OrderSlip frame={frame} />
   </AbsoluteFill>;
 }
 
 const chapterFor = (frame) => {
-  if (frame < 420) return ['เริ่มจากสิ่งที่ต้องใช้', 'START WITH TODAY’S NEED'];
-  if (frame < 840) return ['ช่วงลูกค้าเยอะ อยากจดให้น้อยลง', 'A QUICKER WAY TO COUNT SALES'];
-  if (frame < 1140) return ['อยากรู้ว่าอะไรขายดี', 'ASK FOR THE VIEW YOU NEED'];
-  if (frame < 1380) return ['ลองส่วนลดแบบเห็นยอดสุทธิ', 'ADD A 10% DISCOUNT RULE'];
-  if (frame < 1650) return ['เปลี่ยนกฎนี้ แล้วเลือกนำไปใช้', 'REVIEW A CHANGE TO THIS RULE'];
-  return ['โต๊ะเดียว ปรับไปตามงาน', 'ONE CANVAS · SHAPED BY THE SELLER'];
+  if (frame < 297) return ['COULD THIS TOOL FIT YOUR WORK?', 'THE CORNER POP-UP'];
+  if (frame < 655) return ['START WITH TODAY’S NEED', 'THE CORNER POP-UP'];
+  if (frame < 1205) return ['MAKE A BUSY MOMENT EASIER', 'ONE CANVAS · ONE CLICK'];
+  if (frame < 1549) return ['ASK FOR A CLEARER VIEW', 'SALES BY ITEM'];
+  if (frame < 1869) return ['TRY AN AFTERNOON OFFER', 'GROSS STAYS THE SAME'];
+  if (frame < 2274) return ['CHANGE THE RULE', 'REVIEW → APPLY'];
+  return ['SHAPED BY THE WORK', 'THE CORNER POP-UP'];
 };
 
 function Chapter({ frame }) {
-  const [thai, english] = chapterFor(frame);
+  const [title, context] = chapterFor(frame);
   return <div className="chapter-caption">
-    <span>{thai}</span>
-    <small>{english}</small>
+    <span>{title}</span>
+    <small>{context}</small>
   </div>;
 }
 
@@ -297,7 +292,7 @@ function Pointer({ className = '', style = {} }) {
 
 function SalesTable({ frame, visible, coffeeQty, coffeeTotal, gross, reveal }) {
   if (!visible) return null;
-  const coffeeFlash = frame >= QUICK_CLICK && frame < QUICK_CLICK + 28 ? 1 - clamp(frame, QUICK_CLICK + 12, QUICK_CLICK + 28) : 0;
+  const coffeeFlash = frame >= QUICK_UPDATE && frame < QUICK_UPDATE + 24 ? 1 - clamp(frame, QUICK_UPDATE + 8, QUICK_UPDATE + 24) : 0;
   return <div className="sales-card paper-card" style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 16}px)` }}>
     <div className="card-topline"><span><i className="kind-dot kind-dot--green" />TODAY’S SALES</span><span className="sample-chip">EXAMPLE</span></div>
     <div className="sales-column-head"><span>ITEM</span><span>QTY</span><span>UNIT</span><span>LINE TOTAL</span></div>
@@ -350,7 +345,7 @@ function SalesChart({ visible, reveal, coffeeTotal }) {
         <b>{money(150)}</b><i style={{ height: cakeHeight, background: C.ochre }} /><span>Cake</span>
       </div>
     </div>
-    <div className="chart-foot">Same source rows · gross ฿250</div>
+    <div className="chart-foot">From the same rows · gross ฿250</div>
   </div>;
 }
 
@@ -358,20 +353,20 @@ function DiscountCard({ visible, reveal, rate, gross, net, selected }) {
   if (!visible) return null;
   return <div className={`discount-card paper-card${selected ? ' discount-card--selected' : ''}`} style={{ opacity: reveal, transform: `translateY(${(1 - reveal) * 14}px)` }}>
     <div className="discount-head">
-      <span><i className="kind-dot kind-dot--clay" />กฎส่วนลด</span>
-      <div className="discount-head-meta"><span className="saved-chip saved-chip--applied">ใช้แล้ว</span>{selected && <span className="selection-chip">เลือกอยู่</span>}</div>
+      <span><i className="kind-dot kind-dot--clay" />DISCOUNT RULE</span>
+      <div className="discount-head-meta"><span className="saved-chip saved-chip--applied">APPLIED</span>{selected && <span className="selection-chip">SELECTED</span>}</div>
     </div>
     <div className="discount-content">
-      <div className="discount-rate"><strong>{rate}%</strong><small>ปัจจุบัน</small></div>
-      <div className="discount-math"><span>ก่อนลด {money(gross)}</span><i>→</i><b>สุทธิ {money(net)}</b></div>
+      <div className="discount-rate"><strong>{rate}%</strong><small>CURRENT</small></div>
+      <div className="discount-math"><span>GROSS {money(gross)}</span><i>→</i><b>NET {money(net)}</b></div>
     </div>
-    <div className="discount-foot">ยอดรวม {money(gross)} · คิดจากรายการเดิม</div>
+    <div className="discount-foot">Gross stays {money(gross)} · calculated from the same rows</div>
   </div>;
 }
 
 function CanvasBoard({ frame }) {
   const [coffeeQty, gross, coffeeTotal] = (() => {
-    const qty = frame >= QUICK_CLICK + 8 ? 4 : 3;
+    const qty = frame >= QUICK_UPDATE ? 4 : 3;
     const coffee = qty * 25;
     return [qty, coffee + 3 * 50, coffee];
   })();
@@ -380,7 +375,7 @@ function CanvasBoard({ frame }) {
   const chartVisible = frame >= REQUESTS[2].result;
   const discount10Visible = frame >= REQUESTS[3].result;
   const discount20Visible = frame >= REQUESTS[4].result;
-  const discountSelected = frame >= REQUESTS[4].typeStart - 12;
+  const discountSelected = frame >= RULE_SELECT;
   const cardReveal = (result) => clamp(frame, result, result + 18);
   const chartDraw = clamp(frame, REQUESTS[2].result, REQUESTS[2].result + 26);
   const rate = discount20Visible ? 20 : 10;
@@ -409,7 +404,7 @@ function CanvasBoard({ frame }) {
         />
         : <div className="empty-canvas" style={{ opacity: 1 - clamp(frame, REQUESTS[0].result - 20, REQUESTS[0].result) }}>
           <span className="empty-mark"><i /><i /><i /><i /></span>
-          <b>Start with the work in front of you.</b>
+          <b>A canvas begins with a request.</b>
           <small>No file needed to ask.</small>
         </div>}
       <QuickSale frame={frame} visible={quickVisible} reveal={cardReveal(REQUESTS[1].result)} />
@@ -436,13 +431,13 @@ function RequestState({ frame, request }) {
   const composerSettle = sent ? clamp(frame, request.send, request.send + 18) : 0;
   const visibleLetters = sent
     ? request.letters.length
-    : Math.max(0, Math.min(request.letters.length, Math.floor((frame - request.typeStart) / 2) + 1));
+    : Math.max(0, Math.min(request.letters.length, Math.floor((frame - request.typeStart) / request.typingStep) + 1));
   const typed = sent ? '' : request.letters.slice(0, visibleLetters).join('');
   const reviewPointer = frame >= request.reviewed - 10 && frame < request.reviewed;
-  const applyPointerStart = request.reviewed + 6;
+  const applyPointerStart = Math.max(request.reviewed + 18, request.applyStart - 8);
   const applyPointer = frame >= applyPointerStart && frame < request.apply;
   const sendPointer = frame >= request.send - 10 && frame < request.send + 4;
-  const status = !sent ? 'กำลังพิมพ์' : drafting ? 'กำลังเตรียมร่าง' : applying ? 'กำลังใช้' : applied ? 'ใช้บนโต๊ะนี้แล้ว' : reviewed ? 'คุณตรวจแล้ว' : 'พร้อมให้ตรวจ';
+  const status = !sent ? 'Typing' : drafting ? 'Drafting your change' : applying ? 'Applying' : applied ? 'Applied to this canvas' : reviewed ? 'Reviewed by you' : 'Ready for review';
   const composerStyle = {
     top: mix(composerSettle, 0, 1, 76, 439),
     height: mix(composerSettle, 0, 1, 430, 67),
@@ -461,21 +456,21 @@ function RequestState({ frame, request }) {
 
   return <>
     {sent && <div className="request-bubble" style={{ opacity: bubbleReveal, transform: `translateY(${(1 - bubbleReveal) * 12}px)` }}>
-      <div className="bubble-author">คนขาย</div>
+      <div className="bubble-author">YOU</div>
       <div className="bubble-text">{request.message}</div>
     </div>}
     {sent && <div className={`assistant-card${applied ? ' assistant-card--done' : ''}`}>
       <div className="assistant-status"><i className={applied ? 'status-dot status-dot--done' : 'status-dot'} />TABLETOP <span>{status}</span></div>
       {drafting
-        ? <div className="drafting-copy"><b>กำลังร่างการปรับโต๊ะนี้</b><div className="draft-progress"><i style={{ width: `${clamp(frame, request.send, request.draftEnd) * 100}%` }} /></div></div>
+        ? <div className="drafting-copy"><b>Drafting a change to this canvas</b><div className="draft-progress"><i style={{ width: `${clamp(frame, request.send, request.draftEnd) * 100}%` }} /></div></div>
         : applied
-          ? <div className="applied-copy"><strong>✓ {request.title}</strong><span>เพิ่มหลังจากคุณตรวจแล้ว</span></div>
+          ? <div className="applied-copy"><strong>✓ {request.title}</strong><span>Added after your review</span></div>
           : <>
             <div className="proposal-copy"><b>{request.title}</b><span>{request.detail}</span></div>
-            {request.id === 'discount20' && <div className="proposal-preview"><span>ใช้ 10% · ฿225</span><i>→</i><b>เสนอ 20% · ฿200</b></div>}
+            {request.id === 'discount20' && <div className="proposal-preview"><span>Keep 10% · ฿225</span><i>→</i><b>Proposed 20% · ฿200</b></div>}
             <div className="proposal-actions">
-              <div className={`review-action${reviewed ? ' review-action--done' : reviewPointer ? ' review-action--focus' : ''}`}><i>{reviewed ? '✓' : '1'}</i>{reviewed ? 'ตรวจแล้ว' : 'ตรวจ'}</div>
-              <div className={`apply-action${frame >= request.applyStart && frame < request.apply ? ' apply-action--focus' : ''}`}>{applying ? 'กำลังใช้…' : 'ใช้'}</div>
+              <div className={`review-action${reviewed ? ' review-action--done' : reviewPointer ? ' review-action--focus' : ''}`}><i>{reviewed ? '✓' : '1'}</i>{reviewed ? 'Reviewed' : 'Review'}</div>
+              <div className={`apply-action${frame >= request.applyStart && frame < request.apply ? ' apply-action--focus' : ''}`}>{applying ? 'Applying…' : 'Apply'}</div>
               {reviewPointer && <Pointer className="review-pointer" style={{ left: 28, opacity: 1 }} />}
               {applyPointer && <Pointer className="apply-pointer" style={{
                 left: mix(frame, applyPointerStart, request.apply, 155, 302),
@@ -485,12 +480,12 @@ function RequestState({ frame, request }) {
           </>}
     </div>}
     <div className={`composer${sent ? ' composer--sent' : ' composer--composing'}`} style={composerStyle}>
-      <div className="composer-label" style={composerLabelStyle}><span>คำขอของคุณ</span><small>กดส่งเมื่อพร้อม</small></div>
+      <div className="composer-label" style={composerLabelStyle}><span>YOUR REQUEST</span><small>Send when ready</small></div>
       <div className="composer-row" style={{ height: composerInputStyle.height }}>
         <div className="composer-input" style={composerInputStyle}>
-          {typed.length ? <span className="typed-text" style={{ fontSize: composerFontSize }}>{typed}<i className="typing-caret" /></span> : (!sent || composerSettle === 1) && <span className="placeholder-text" style={{ fontSize: composerFontSize }}>บอกสิ่งที่อยากให้โต๊ะนี้ช่วย…</span>}
+          {typed.length ? <span className="typed-text" style={{ fontSize: composerFontSize }}>{typed}<i className="typing-caret" /></span> : (!sent || composerSettle === 1) && <span className="placeholder-text" style={{ fontSize: composerFontSize }}>Tell this canvas what would help…</span>}
         </div>
-        <div className={`send-button${frame >= request.typeStart + request.letters.length * 2 ? ' send-button--ready' : ''}${sendPointer ? ' send-button--focus' : ''}`} style={{ fontSize: mix(composerSettle, 0, 1, 16, 11) }}>ส่ง <span>↗</span></div>
+        <div className={`send-button${frame >= request.typeStart + request.letters.length * request.typingStep ? ' send-button--ready' : ''}${sendPointer ? ' send-button--focus' : ''}`} style={{ fontSize: mix(composerSettle, 0, 1, 16, 11) }}>Send <span>↗</span></div>
         {sendPointer && <Pointer className="send-pointer" style={{
           left: mix(frame, request.send - 10, request.send, 195, 334),
           opacity: 1,
@@ -511,13 +506,13 @@ function ConversationPanel({ frame }) {
   return <div className={`conversation-panel${composing ? ' conversation-panel--composing' : ''}`}>
     <div className="conversation-header">
       <span className="conversation-avatar">C</span>
-      <div><b>ร้านกาแฟตัวอย่าง</b><small>โต๊ะเดียว · ปรับตามคนขาย</small></div>
-      <span className="conversation-live"><i />ร่างสด</span>
+      <div><b>The Corner Pop-Up</b><small>One canvas · shaped by the seller</small></div>
+      <span className="conversation-live"><i />DRAFT</span>
     </div>
-    <div className="accepted-label">สิ่งที่เพิ่มแล้ว</div>
+    <div className="accepted-label">ALREADY ADDED</div>
     <div className="accepted-trail">
       {accepted.length === 0
-        ? <span className="accepted-empty">ยังไม่มี</span>
+        ? <span className="accepted-empty">Nothing yet</span>
         : accepted.map((item) => <span className="accepted-chip" key={item.id}><i>✓</i>{item.label}</span>)}
     </div>
     <RequestState frame={frame} request={request} />
@@ -533,7 +528,7 @@ function Workspace({ frame }) {
 }
 
 function EndLockup({ frame }) {
-  const reveal = clamp(frame, 1740, 1752);
+  const reveal = clamp(frame, 2415, 2427);
   return <AbsoluteFill className="end-scene" style={{ opacity: reveal }}>
     <div className="end-band" />
     <div className="end-orbit end-orbit--one" /><div className="end-orbit end-orbit--two" />
@@ -541,20 +536,19 @@ function EndLockup({ frame }) {
       <Mark frame={frame} size={90} staticMark />
       <div className="end-wordmark">tabletop<span>.</span></div>
       <div className="end-url">tabletop.ptchrr.workers.dev</div>
-      <div className="end-tagline">เครื่องมือที่ค่อย ๆ ปรับให้เข้ากับคุณ</div>
+      <div className="end-tagline">Tools that keep adapting to you.</div>
     </div>
-    <div className="end-draft">CONCEPT FILM · DRAFT 03</div>
+    <div className="end-draft">CONCEPT FILM · DRAFT 04</div>
   </AbsoluteFill>;
 }
 
 export function NarrativeAnimatic() {
   const frame = useCurrentFrame();
-  const introOpacity = frame < 138 ? 1 : 1 - clamp(frame, 138, 150);
-  const workspaceOpacity = frame < 150 ? clamp(frame, 138, 150) : frame < 1740 ? 1 : 1 - clamp(frame, 1740, 1752);
+  const transition = clamp(frame, 282, 300);
   return <AbsoluteFill className="film-frame">
-    {frame < 151 && <AbsoluteFill style={{ opacity: introOpacity }}><Intro frame={frame} /></AbsoluteFill>}
-    {frame >= 138 && frame < 1752 && <AbsoluteFill style={{ opacity: workspaceOpacity }}><Workspace frame={frame} /></AbsoluteFill>}
-    {frame >= 1740 && <EndLockup frame={frame} />}
+    {frame < 300 && <Intro frame={frame} />}
+    {frame >= 282 && frame < 2427 && <AbsoluteFill style={{ transform: `translateX(${1280 * (1 - transition)}px)` }}><Workspace frame={frame} /></AbsoluteFill>}
+    {frame >= 2415 && <EndLockup frame={frame} />}
     <Chrome frame={frame} />
   </AbsoluteFill>;
 }
