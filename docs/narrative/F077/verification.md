@@ -1,3 +1,17 @@
+# F077 — Revision 8 verification
+
+24 October 2026 · [PR #285](https://github.com/Thanyers/tabletop/pull/285) · [Release #286](https://github.com/Thanyers/tabletop/pull/286)
+
+- Scope: only hero media/note/framing and the hammer/chair images changed visibly. README, its original animation, accepted R6 film, sales walkthrough and other page copy are unchanged.
+- Node 22.23.2: build/typecheck, Worker dry-run, scoped lint and public-file scan passed. Full local Workers browser suite: 35 PASS groups, zero browser errors, 37 mocked provider requests; no live provider call.
+- Both EN/TH GIFs: 960×540, 216 frames, 18,000ms, loop=0 (infinite). Typed requests precede each new card; existing cards persist. Posters and typing/card timeline frames inspected. Autoplay, Pause/Resume and reduced-motion poster are covered by the browser contract.
+- Local CUA: no overflow at 280/320/414/1280, autoplay GIF loaded, all four before/after panels loaded. Main inspected the rendered hero and physical images. Independent source review confirmed scope containment; its autoplay-control finding was resolved with the discreet Pause/Resume control.
+- The physical images are generated photorealistic illustrations. [Exact prompts and provenance](../../../public/narrative/adaptations/README.md) are saved with the assets. The film has not gained generated imagery.
+- [Full release CI](https://github.com/Thanyers/tabletop/actions/runs/40092252022) passed all three browser suites. [Production deploy](https://github.com/Thanyers/tabletop/actions/runs/40092917650) passed; `/version` reports `9.1.2 / abe4aaf`, health/readiness returned 200, and production visual readback verified the scoped changes. No production account/data mutation or live AI invocation was performed.
+- The full generic offline UI gate was not rerun for this bounded correction; the earlier revision's documented checker findings remain historical, not silently relabelled PASS.
+
+## Revision 7 evidence (historical)
+
 # F077 — Revision 7 verification
 
 24 October 2026 · English README and homepage visual correction · [PR #280](https://github.com/Thanyers/tabletop/pull/280)

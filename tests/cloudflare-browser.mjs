@@ -228,15 +228,18 @@ try {
     await expect(anonymous.getByRole('link', { name, exact: true })).toHaveAttribute('target', '_blank');
   }
   await expect(anonymous.getByRole('heading', { name: 'A sales table that grows when the work changes.', exact: true })).toBeVisible();
-  await expect(anonymous.getByText('Illustrative · sample data', { exact: true })).toBeVisible();
+  await expect(anonymous.getByText('Prepared interactive example with sample data. It does not call AI or save changes to your tables.', { exact: true })).toBeVisible();
   await expect(anonymous.locator('.tt-sales-demo__table tbody tr').nth(0).locator('th, td')).toHaveText(['Coffee', '3', '25', '75']);
   await expect(anonymous.locator('.tt-sales-demo__table tbody tr').nth(1).locator('th, td')).toHaveText(['Cake', '3', '50', '150']);
   await expect(anonymous.locator('.tt-sales-demo__table tfoot')).toContainText('225');
-  await expect(anonymous.getByLabel('Read-only sample request', { exact: true })).toHaveValue('Add quick-sale buttons that increase quantity once.');
-  await expect(anonymous.getByRole('button', { name: 'Send sample request', exact: true })).toBeEnabled();
-  await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
+  await expect(anonymous.getByLabel('Example request', { exact: true })).toHaveValue('Add quick-sale buttons that increase quantity once.');
+  await expect(anonymous.getByRole('button', { name: 'Send request', exact: true })).toBeEnabled();
+  await expect(anonymous.getByRole('heading', { name: 'The same should be true of software.', exact: true })).toBeVisible();
   await expect(anonymous.locator('.tt-canvas-panel')).toHaveCount(0);
-  await expect(anonymous.getByRole('heading', { name: 'Physical tools adapt to people. Software often asks people to adapt to it.', exact: true })).toBeVisible();
+  await expect(anonymous.getByRole('heading', { name: 'A tool becomes yours through use.', exact: true })).toBeVisible();
+  expect(await anonymous.locator('#top, #why, #board, #examples, #film').evaluateAll((sections) => sections.map((section) => section.id))).toEqual(['top', 'why', 'board', 'examples', 'film']);
+  expect(await anonymous.locator('.tt-public-welcome__nav a').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual(['#why', '#board', '#examples']);
+
   for (const scene of ['hammer', 'chair']) {
     const before = anonymous.locator(`img[data-scene="${scene}"][data-adapted="false"]`);
     const after = anonymous.locator(`img[data-scene="${scene}"][data-adapted="true"]`);
@@ -248,7 +251,7 @@ try {
     await expect(after).toHaveAttribute('alt', /grip|wrap|cushion|offcut|กริป|เบาะ|เศษไม้/i);
   }
   await expect(anonymous.getByRole('heading', { name: 'See Tabletop on the canvas.', exact: true })).toBeVisible();
-  await expect(anonymous.getByText('A narrated concept film · play when ready', { exact: true })).toBeVisible();
+  await expect(anonymous.getByText('The café story, with English narration and illustrative examples.', { exact: true })).toBeVisible();
   const conceptFilm = anonymous.locator('.tt-public-welcome__film-frame video');
   await expect(conceptFilm).toHaveAttribute('poster', '/narrative/tabletop-story-poster.png');
   await expect(conceptFilm.locator('source')).toHaveAttribute('src', '/narrative/tabletop-story.mp4');
@@ -276,11 +279,11 @@ try {
     await expect(chapter).toBeEnabled();
     await chapter.click();
     // This context requests reduced motion, so the preset appears without typing.
-    await expect(anonymous.getByRole('button', { name: 'Send sample request', exact: true })).toBeEnabled();
-    await anonymous.getByRole('button', { name: 'Send sample request', exact: true }).click();
+    await expect(anonymous.getByRole('button', { name: 'Send request', exact: true })).toBeEnabled();
+    await anonymous.getByRole('button', { name: 'Send request', exact: true }).click();
     await anonymous.getByRole('button', { name: 'Review draft', exact: true }).click();
   };
-  await anonymous.getByRole('button', { name: 'Send sample request', exact: true }).click();
+  await anonymous.getByRole('button', { name: 'Send request', exact: true }).click();
   await anonymous.getByRole('button', { name: 'Review draft', exact: true }).click();
   await anonymous.getByRole('button', { name: 'Apply change', exact: true }).click();
   await anonymous.getByRole('button', { name: 'Add one coffee', exact: true }).click();
@@ -308,6 +311,8 @@ try {
   await expect(sampleGross).toHaveText('225');
   await expect(chapterButtons.nth(2)).toBeDisabled();
 
+  await anonymous.locator('#why').screenshot({ path: join(output, 'public-welcome-why.png') });
+  await anonymous.locator('#board').screenshot({ path: join(output, 'public-welcome-example.png') });
   await anonymous.screenshot({ path: join(output, 'public-welcome-desktop.png'), fullPage: true });
   await anonymous.setViewportSize({ width: 390, height: 844 });
   expect(await anonymous.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -333,7 +338,7 @@ try {
   await expect(anonymous.getByRole('link', { name: 'ดำเนินการต่อด้วย Google' })).toHaveAttribute('href', '/api/auth/google/start');
   await expect(anonymous.getByRole('link', { name: 'Continue with Google' })).toHaveCount(0);
   await expect(anonymous.getByRole('group', { name: 'ภาษา' }).getByRole('button', { name: 'ไทย', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(anonymous.getByText('Work defines what software becomes.', { exact: true })).toBeVisible();
+  await expect(anonymous.getByRole('heading', { name: 'ซอฟต์แวร์ก็ควรปรับแบบนั้นได้', exact: true })).toBeVisible();
   await anonymous.emulateMedia({ reducedMotion: 'no-preference' });
   await expect(conceptImage).toHaveAttribute('src', /hero-evolution-th[^/]*\.gif$/);
   await anonymous.emulateMedia({ reducedMotion: 'reduce' });
