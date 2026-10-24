@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — round 7 / [PR #280](https://github.com/Thanyers/tabletop/pull/280), [release #282](https://github.com/Thanyers/tabletop/pull/282); production 9.1.1 / 3f8a06e |
+| สถานะ | `done` — round 8 / [PR #285](https://github.com/Thanyers/tabletop/pull/285), [release #286](https://github.com/Thanyers/tabletop/pull/286); production 9.1.2 / abe4aaf |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.1 — English README and corrected homepage visuals published; accepted R6 film unchanged |
+| เวอร์ชัน | 9.1.2 — scoped hero motion and realistic adaptation imagery published; README and R6 film unchanged |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 และ F077-T2 |
 
 ## ทำไม
@@ -62,4 +62,4 @@
 
 The user explicitly limited visible edits to the hero animation/note/framing and the physical adaptation images. The new hero must type each request before its card appears, retain earlier cards, loop without a Play click, and have one flat canvas. Keep the existing README animation and accepted R6 film unchanged. Physical images must be realistic and show substantial individual fit (a hand-shaped hammer grip; a chair with seat/back/arm/foot supports), retaining the same object and person before/after. Generated image provenance and exact prompts live beside those image assets.
 
-Round 8 candidate: 18-second EN/TH infinitely looping GIFs, typed request then experiment/controls/chart, flat background matching the homepage. A small Pause/Resume icon provides motion control while autoplay remains the default; reduced motion receives a poster. Node 22.23.2 build/typecheck, Worker dry-run and scoped lint pass. Browser changed groups and four-width visual readback pass; full suite and release remain pending. The independent source review confirms unchanged README/film/sales content.
+Round 8 candidate: 18-second EN/TH infinitely looping GIFs, typed request then experiment/controls/chart, flat background matching the homepage. A small Pause/Resume icon provides motion control while autoplay remains the default; reduced motion receives a poster. Node 22.23.2 build/typecheck, Worker dry-run and scoped lint pass. Browser changed groups and four-width visual readback pass; the complete 35-group suite and full release CI passed, and production 9.1.2 was verified. The independent source review confirms unchanged README/film/sales content.

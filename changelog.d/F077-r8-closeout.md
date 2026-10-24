@@ -1,0 +1,1 @@
+- Record verified production 9.1.2 and close the scoped F077 hero/image correction with browser, motion and publication evidence. Documentation only.

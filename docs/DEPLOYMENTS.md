@@ -1,18 +1,25 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 18:37 น. (Asia/Bangkok)**: production รายงาน **9.1.1 / 3f8a06e** จาก [v9.1.1](https://github.com/Thanyers/tabletop/releases/tag/v9.1.1); [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40090356750) สำเร็จ และ health/readiness ตอบ 200. Staging snapshot ที่ตรวจได้เป็น **0.0.0-dev / 99b0e92**; [รอบ ec32900](https://github.com/Thanyers/tabletop/actions/runs/40089724966) ยังทำงาน จึงไม่อ้างว่า staging รอบล่าสุดเสร็จแล้ว
+ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 19:16 น. (Asia/Bangkok)**: production รายงาน **9.1.2 / abe4aaf**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40092917650) สำเร็จ และ health/readiness ตอบ 200. Staging snapshot ที่ตรวจได้เป็น **0.0.0-dev / 8e32920**; เป็นการอ่าน ณ เวลาที่ระบุ ไม่ใช่คำยืนยันว่า dev HEAD รอบถัดไป deploy แล้ว
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [3f8a06e](https://github.com/Thanyers/tabletop/commit/3f8a06e41aef8e3a66a708c9068aaf70cbb09810) — PR #282 | [99b0e92](https://github.com/Thanyers/tabletop/commit/99b0e92a7e18848611ec658a0d161e9ea7d52712) — observed snapshot |
-| Release | v9.1.1 / 9.1.1 | dev / 0.0.0-dev |
+| Source | [abe4aaf](https://github.com/Thanyers/tabletop/commit/abe4aafbb33eb7ac540276ccd020583fde530ac7) — PR #286 | `8e32920` — observed snapshot |
+| Release | v9.1.2 / 9.1.2 | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.1.2 — scoped hero and realistic tool imagery (24 October 2026)
+
+- [Release PR #286](https://github.com/Thanyers/tabletop/pull/286), main `abe4aaf`; [full release CI](https://github.com/Thanyers/tabletop/actions/runs/40092252022) passed all three browser suites and fast checks. [Production deploy](https://github.com/Thanyers/tabletop/actions/runs/40092917650) succeeded; version `9.1.2 / abe4aaf`, health/readiness 200.
+- Only the requested homepage hero and physical images changed visibly: typed requests create/add cards on a flat infinitely looping canvas; the old note and initial Play requirement are removed; realistic before/after images show personalized fit. README, accepted R6 film, sales walkthrough and other page copy remain unchanged. Rollback target 9.1.1; no schema/binding/secret/backend/data-policy change.
+- Local Workers browser suite 35 PASS groups, no browser errors, plus scoped production visual readback. [Full evidence and limits](narrative/F077/verification.md).
+- Release Notes HTML generated from the released changelog. The existing private Claude artifact cannot be updated through this agent's tools; the ignored HTML is the handoff, without creating a replacement public URL.
 
 ## Release 9.1.1 — English README and visual homepage correction (24 October 2026)
 
