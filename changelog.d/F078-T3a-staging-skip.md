@@ -1,1 +1,0 @@
-- **F078-T3a:** Preserve staging deployment after successful full dev validation when optional focused PR jobs are skipped; cancelled runs, other events/branches and unsuccessful validation remain ineligible.

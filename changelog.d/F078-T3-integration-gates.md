@@ -1,2 +1,0 @@
-- Add path-selected Worker startup, composer/reference browser, and focused compute integration checks to PRs into `dev`, while preserving the existing full-suite triggers and `main` result reuse.
-- Make the F066 composer browser gate wait for its exact asynchronous prefill and add a controlled delayed-update probe; product behavior is unchanged.
