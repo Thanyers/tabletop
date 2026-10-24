@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` |
+| สถานะ | `done` (merged dev `78c6002`) |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชันที่คาด | PATCH — development verification; existing behavior |
 

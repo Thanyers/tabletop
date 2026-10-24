@@ -120,6 +120,8 @@ declare global {
     __f066Commands?: Array<{ type: string; payload: unknown }>;
     __f066SentMessages?: string[];
     __f066OpenedObjects?: string[];
+    __f066PendingPrefill?: string;
+    __f066ReleasePrefill?: () => void;
   }
 }
 
@@ -132,6 +134,7 @@ function Harness() {
   const [outgoingPrompt, setOutgoingPrompt] = useState('');
   const [lastEdit, setLastEdit] = useState('');
   const view = makeView(actor, initialState);
+  const holdJavaScriptPrefill = new URLSearchParams(window.location.search).get('f066-prefill-race') === 'hold';
 
   useEffect(() => registerCanvasObjectFinder((_verb, query) => {
     const match = matchCanvasObjects([{ id: 'table.rules', title: 'Rules' }], query)[0];
@@ -152,7 +155,17 @@ function Harness() {
   const onEditRules = (prompt = '') => {
     setLastEdit(prompt);
     setEditMode(true);
-    setPrefill({ text: prompt, key: Date.now() });
+    const nextPrefill = { text: prompt, key: Date.now() };
+    if (holdJavaScriptPrefill && prompt.startsWith('Change Count orders to use JavaScript.')) {
+      window.__f066PendingPrefill = prompt;
+      window.__f066ReleasePrefill = () => {
+        setPrefill(nextPrefill);
+        delete window.__f066PendingPrefill;
+        delete window.__f066ReleasePrefill;
+      };
+    } else {
+      setPrefill(nextPrefill);
+    }
     setFocusKey((current) => current + 1);
   };
   const outgoing = chatReferencePrompt(references, outgoingPrompt);
