@@ -47,3 +47,7 @@ Node และ Cloudflare เก็บ workspace ผ่าน repository คน�
 | --- | --- | --- |
 | 2026-10-24 | แชร์เฉพาะ scenario และ structural adapter interface; ให้ entrypoint ของแต่ละ runtime สร้าง repository จริงของตน | เทียบ persistence invariant โดยไม่ผูก suite เข้ากับ harness เฉพาะ runtime หรือทำให้ hosted auth ต้องเหมือน Node guest auth |
 | 2026-10-24 | ทดสอบ late commit failure ด้วย outbox ID collision ในฐานข้อมูลทดสอบที่ทิ้งได้ | ทำให้ write ที่เกิดก่อน outbox ถูกตรวจ rollback ครบทั้ง workspace, snapshot, event และ receipt โดยไม่แก้ schema |
+
+## Integrated prerequisite verification
+
+After merging dev through F078-T1 and the F078-T0 dependency patch, ordinary `npm ci` reports 0 vulnerabilities. Focused SQL and Room suites each pass 7/7 on Node v22.23.2. Source review found no blocking findings; hosted identity equivalence, D1 directory replay ordering and production acceptance remain outside these seven scenarios.
