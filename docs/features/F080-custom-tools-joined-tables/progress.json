@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T22:35:00+07:00",
-  "lastVerifiedAt": "2026-10-25T22:19:00+07:00",
+  "updatedAt": "2026-10-25T22:45:00+07:00",
+  "lastVerifiedAt": "2026-10-25T22:45:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "71a359191efd8d9f8077be3b811ffe67712acfad",
-    "candidateSha": "71a359191efd8d9f8077be3b811ffe67712acfad",
+    "headSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
+    "candidateSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "C0 docs + C1 contracts + C2 isolated host/runner ผ่านในเครื่องและอยู่ที่ PR #305 · C5 เริ่มแล้วด้วย shared collaboration-space contract (schema + role×verb matrix, ยังไม่มี migration) · ค้าง: authority integration ของ behaviour, C3 authoring, room shell (รอเลือก visual), hosted/human acceptance · ยังไม่มี production release",
+  "currentCheckpoint": "C0+C1+C2+C5-contract อยู่ที่ PR #305 · C3 เริ่มแล้ว: authoring pipeline เดียว (validate→compile→isolated trial→activate) พร้อม budget ที่บังคับก่อน dispatch และบันทึก provenance แยก requester/generator/reviewer · ISO-01 กลับมา PASS บนหลักฐาน http origin + คุกกี้จริง · CI มี job `tool-host` · ค้าง: authority commit, storage/migration (ต้องอนุมัติ), room shell (รอเลือก visual), hosted/human acceptance",
   "slices": [
     {
       "alias": "C0",
@@ -68,7 +68,8 @@
       "state": "doing",
       "dependsOn": [
         "C2"
-      ]
+      ],
+      "note": "pipeline + budget enforcement + fixture generator (73df3e6); live provider ยังติด GATE-PAID-AI, source editor UI ยังไม่ทำ"
     },
     {
       "alias": "C4",
@@ -321,7 +322,7 @@
       "id": "F080-T1B",
       "jt": "JT-1B",
       "featureId": "F080",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "F080-T1A"
       ],
@@ -329,11 +330,22 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": null,
-      "checks": [],
-      "findings": [],
+      "candidateSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
+      "checks": [
+        {
+          "name": "single authoring pipeline (human + AI) with pre-dispatch budget and isolated trial",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/runtime/tools/authoring.test.ts",
+          "result": "PASS",
+          "evidence": "12/12: an over-budget estimate never calls the generator (the spy generator is never entered); no generator or no budget fails closed; validation → compile → trial → activation for both routes; one repair attempt receives the previous diagnostics; a trial failure blocks activation and keeps the problems; an unchanged hand edit is rejected as NO_CHANGE; the AI route is handed the person-edited base version, not the original",
+          "checkedSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6"
+        }
+      ],
+      "findings": [
+        "Budget enforcement is now structural rather than a log line: the generator is only reachable through a function that refuses when the estimate exceeds the remaining cap, which is what the paid-AI gate requires before any live call."
+      ],
       "blocker": null,
-      "nextAction": "AI authoring path + human source editor + activation/readback บนโต๊ะเดียว (ต้องมี T1A host ก่อน)"
+      "nextAction": "source editor UI (human route) + activation/readback on one table + wiring the pipeline behind an authorized generator; live provider only after GATE-PAID-AI approval of calls/usd."
     },
     {
       "id": "F080-T-V",
@@ -597,34 +609,22 @@
   ],
   "nextActions": [
     {
-      "id": "NA-0",
-      "action": "ปิด reviewer findings ที่ค้าง: เสิร์ฟ harness จาก http origin + cookie จริงแล้วบังคับ document.cookie ให้ throw, เพิ่ม spec.md block ของ F080, ผูก behaviorId/declaredWrites เข้า request และอ่าน request.expected, เพิ่ม CI job ของ tool-host harness, เก็บกวาด limit/code ที่ไม่ถูกใช้",
-      "verify": "node tests/ui/tool-host/browser.mjs (จาก http origin) + npm test + gh pr checks",
-      "expect": "ISO-01 กลับมา PASS บนหลักฐานที่ถูกต้อง หรือคง UNVERIFIED พร้อมเหตุผล"
-    },
-    {
       "id": "NA-1",
-      "action": "commit + push checkpoint ของ C2 แล้วขอ independent review ของ candidate ff0ad2c",
-      "verify": "gh pr view 305 --json state,isDraft,headRefOid",
-      "expect": "OPEN, isDraft true, headRefOid = ff0ad2c หรือใหม่กว่า"
+      "action": "C3 ต่อ: source editor UI ของคน + activation/readback บนโต๊ะเดียว โดยใช้ authoring pipeline ที่มีอยู่ (fixture generator ก่อน)",
+      "verify": "node --import tsx tests/tool-authoring-browser.mjs (ต้องสร้าง harness)",
+      "expect": "คนแก้ source แล้ว activate ได้ และ AI-fixture ต่อยอดจาก source นั้นผ่าน pipeline เดียวกัน"
     },
     {
       "id": "NA-2",
-      "action": "C3: authorization pipeline ที่Inject generator ได้ (fixture generator ก่อน) + source editor ของคน + activation/readback บนโต๊ะเดียว",
-      "verify": "npx vitest run src/tabletop/domain/tool-authoring.test.ts",
-      "expect": "ทั้งทาง AI-fixture และทางคนผ่าน pipeline เดียวกัน; source ที่คนแก้ถูกใช้เป็น base ของรอบถัดไป"
+      "action": "C5 storage/route: ออกแบบตาราง/additive migration + disposable local DB test แล้วขอ scoped approval ก่อน apply",
+      "verify": "npm test -- server/collaboration-space-repository.test.ts",
+      "expect": "repository conformance ผ่านบน disposable DB; ยังไม่ apply ที่ staging"
     },
     {
       "id": "NA-3",
-      "action": "C5: collaboration space contract ใน shared (schema/reader) โดยยังไม่ apply migration",
-      "verify": "npx vitest run src/tabletop/shared/collaboration-space.test.ts",
-      "expect": "space/สมาชิก/role/connection schema ผ่าน negative tests; reader ทน workspace เก่า"
-    },
-    {
-      "id": "NA-4",
-      "action": "CV: ทำ 3 prototype ให้ครบพร้อม driver + ภาพ แล้วถามเจ้าของเลือก",
-      "verify": "node tests/ui/tool-room-explore/run.mjs",
-      "expect": "ภารกิจเดียวกันทำได้ทั้ง 3 แนว + report.json PASS"
+      "action": "ปิด reviewer findings ที่เหลือ: 64 KiB bound กับ object payload, limit/code ที่ไม่ถูกใช้, การวัด hang/CPU ของ frame",
+      "verify": "npx vitest run src/tabletop/shared/tool-protocol.test.ts",
+      "expect": "แต่ละ limit มี code/test ที่บังคับใช้จริง หรือถูกลบออก"
     }
   ],
   "blockedItems": [],

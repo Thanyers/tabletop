@@ -119,18 +119,17 @@
       "requirement": "G1",
       "slice": "F080-T1A",
       "title": "frame/bridge spoofing, unauthorized network/storage, malformed/oversized message, cleanup/hang",
-      "status": "UNVERIFIED",
-      "environment": "local (Windows 11, Node v22.23.2) · browser: system Edge headless via Playwright",
-      "sha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+      "status": "PASS",
+      "environment": "browser (system Edge headless via Playwright) served from http://127.0.0.1",
+      "sha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
       "node": "v22.23.2",
       "commands": [
-        "node tests/ui/tool-host/browser.mjs",
-        "npx vitest run src/tabletop/shared/tool-protocol.test.ts"
+        "npm run test:tool-host:browser"
       ],
-      "evidence": "inside the frame: document.cookie throws SecurityError (sandboxed without allow-same-origin), localStorage blocked, fetch(\"/favicon.svg\") fails, location.origin === \"null\"; a spoofed intent posted by the page itself is ignored (intent count unchanged); protocol unit tests reject unknown methods, wrong protocol version, oversized (>64 KiB) and deeply nested messages, and messages whose nonce is not the live instance",
+      "evidence": "14/14 checks from a real http origin: the host page provably holds `tabletop_probe=sandbox-canary`; inside the frame `document.cookie` throws SecurityError (sandboxed without allow-same-origin), `localStorage` throws, `fetch(\"/index.html\")` is blocked by CSP (the same URL the server serves, so it is CSP and not a 404), `location.origin === \"null\"`; a spoofed intent posted by the page itself is ignored; protocol unit tests reject unknown methods, wrong protocol version, oversized and deeply nested messages, and messages whose nonce is not the live instance",
       "expected": "message จาก frame อื่น/instance ที่ถูกทำลายถูกทิ้ง; method ที่ไม่อยู่ใน allowlist ถูก reject; oversized message ถูกตัดพร้อม error; network/storage capability ที่ไม่ได้ให้ถูกปฏิเสธ; ไม่มี session cookie/token ใน frame; ถ้า cancel execution ไม่ได้ต้องรายงานเป็น limitation ไม่ใช่ PASS",
-      "actual": "DOWNGRADED after independent review: the 13 browser checks pass, but the fixture is opened from file://, where a non-sandboxed frame would also report origin \"null\" and have no readable cookie jar. The cookie assertion accepted \"empty\", which proves nothing about allow-same-origin.",
-      "limitations": "Must be re-run from a real http(s) origin with a host cookie set and with document.cookie required to THROW. Until then cookie/network isolation is UNVERIFIED. Storage blocking and the page-originated-spoof rejection are still meaningful, but they do not cover cross-origin cookie access."
+      "actual": "PASS for cookie/storage/network/spoof/nonce/size on an http origin",
+      "limitations": "hang and CPU behaviour of a runaway frame are still not measured (iframe is not a hard CPU boundary); the CI job runs on Chromium while local runs use system Edge."
     },
     {
       "id": "ISO-02",
@@ -156,15 +155,15 @@
       "title": "คนแก้ source แล้ว AI แก้ต่อบน version นั้นจริง",
       "status": "UNVERIFIED",
       "environment": "browser + live provider (แยก gate)",
-      "sha": "not-run",
+      "sha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
       "node": "v22.23.2",
       "commands": [
         "node --import tsx tests/tool-authoring-browser.mjs",
         "node --import tsx scripts/tool-authoring-live.mjs --real-ai"
       ],
-      "evidence": null,
+      "evidence": "pipeline half PASS: the authoring pipeline hands the generator the person-edited base version (asserted), routes both authors through validate→compile→trial→activate, and refuses to dispatch without an approved budget. No model call has been made.",
       "expected": "source ที่คนแก้ถูกใช้เป็น input จริงของการแก้ครั้งถัดไป (มี hash ของ base version); ไม่มีเส้นทางแอบกลับไป template; fixture/local แยกจาก live-provider result",
-      "actual": "not run",
+      "actual": "UNVERIFIED — the fixture generator is not a model; the live-provider half still needs GATE-PAID-AI",
       "limitations": "live-provider ต้องมี enforceable cap + authorization ก่อน dispatch"
     },
     {
@@ -542,14 +541,14 @@
       "title": "AI-generated source และ source ที่คนแก้ผ่าน pipeline เดียวกัน (compile/type/schema → isolated trial → diagnostics/repair → activate → readback)",
       "status": "UNVERIFIED",
       "environment": "local + browser",
-      "sha": "not-run",
+      "sha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
       "node": "v22.23.2",
       "commands": [
         "npm test -- src/tabletop/domain/tool-activation-pipeline.test.ts"
       ],
-      "evidence": null,
+      "evidence": "structurally proven: AI route and human route share one pipeline and one activation record shape (12/12 authoring tests). The AI side used a fixture generator, not a model.",
       "expected": "ทั้งสองทางเดินผ่านขั้นเดียวกันและได้ readback ที่เห็น source/diff และกลับไปแก้ได้; ไม่มีทางลัดเฉพาะ AI หรือเฉพาะคน",
-      "actual": "not run",
+      "actual": "UNVERIFIED — do not read the fixture generator as evidence of AI authoring",
       "limitations": "activation policy เดิม (auto-apply guards) ต้องไม่ถูกผ่อน"
     },
     {

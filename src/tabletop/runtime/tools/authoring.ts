@@ -154,7 +154,7 @@ export async function authorToolPackage(input: ToolAuthoringInput, deps: ToolAut
   let calls = 0;
   let usd = 0;
   let generatorRecord: ToolActivationRecord['generator'];
-  let baseContentHash = input.route.baseContentHash;
+  const baseContentHash = input.route.baseContentHash;
 
   if (input.route.kind === 'human') {
     definition = input.route.definition;
