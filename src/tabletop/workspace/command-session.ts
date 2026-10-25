@@ -2,8 +2,8 @@ import { ApiFailure, type TabletopCapabilities, type UploadRequest } from '../cl
 import type { CommandAck, WorkspaceView } from '../shared/contracts';
 import type { RollResult } from '../shared/roll';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { matchesExpectedTableCandidateView, sameTableCandidateScope } from '../ui/table-candidate-apply';
-import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from '../ui/table-chat-state';
+import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './table-candidate-apply';
+import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from './table-chat-state';
 import { errorText } from './error-text';
 import { decodeSourceText, inferredMime } from './source-file';
 

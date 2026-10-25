@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tableChatMode } from './table-chat-state';
+import { tableChatMode } from '../workspace/table-chat-state';
 
 describe('owner asks to extend an active table', () => {
   it.each([

@@ -29,8 +29,8 @@ import {
 } from '../domain/knowledge';
 import { useWorkspace } from '../state/store';
 import type { Workspace } from '../state/types';
-import {routeConnections} from '../state/edge-routing';
-import CanvasEdge from './CanvasEdge';
+import {routeConnections} from '../tabletop/shared/edge-routing';
+import CanvasEdge from '../tabletop/ui/CanvasEdge';
 import './constellation.css';
 
 type ViewMode = 'story' | 'map' | 'list';

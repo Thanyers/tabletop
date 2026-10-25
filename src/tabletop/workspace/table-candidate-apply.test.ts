@@ -5,7 +5,7 @@ import { decideDomain } from '../domain';
 import type { ActorContext, Candidate, WorkspaceView } from '../shared/contracts';
 import { loanAmortizationChange } from '../testing/generative-scenarios';
 import { applyTableCandidate, matchesExpectedTableCandidateView } from './table-candidate-apply';
-import type { Command } from './types';
+import type { Command } from '../ui/types';
 
 const owner: ActorContext = {
   actorId: 'owner-account', name: 'Owner', role: 'owner', workspaceId: 'table-apply', epoch: 1, now: 1000,

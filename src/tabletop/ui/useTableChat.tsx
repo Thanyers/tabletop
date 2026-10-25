@@ -15,7 +15,7 @@ import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { viewerCan } from '../shared/permissions';
-import { addableWebSources, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, parseChatFollowUps, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from './table-chat-state';
+import { addableWebSources, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, parseChatFollowUps, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from '../workspace/table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;

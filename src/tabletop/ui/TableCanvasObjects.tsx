@@ -14,7 +14,7 @@ import type { GenerativeViewDescriptor } from '../shared/generative-contracts';
 import { CandidateLifecycle } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
-import { applyTableCandidate } from './table-candidate-apply';
+import { applyTableCandidate } from '../workspace/table-candidate-apply';
 import { NoteCard } from './NoteCard';
 import { autoMapping, buildImportRows, parseCsv, worksheetToCsvTable } from './table-row-import';
 import { RollParameterControl } from './RollParameterControl';

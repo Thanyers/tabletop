@@ -44,6 +44,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T8 | Typed built-in Canvas view registration | T3, T5 | Compiler/tests catch a missing kind, malformed descriptors reject, valid schema→semantic→evaluation→render passes; wire contract preserved; core does not import React |
 | T9 | Extended load/soak and capacity comparison | T2, T5–T7 | Success/stale latency, queue/job age, failure/reconnect/outbox lag and storage curve across rooms compared against the recorded baseline before any capacity change |
 | T10 | Delete the Node runtime's unreachable model-job lifecycle; keep the provider contracts where their adapter consumes them | T1 | HTTP contract for `/model` unchanged (`503 MODEL_NOT_CONFIGURED`); no caller of the removed store/gateway; guard test keeps it from returning |
+| T12 | Point inverted seams down again: shared export, workspace decision modules, Canvas renderer/geometry out of the legacy tree | T1 | Same functions and inputs; moved tests pass at the new seam; no client import reaches `server/`; no behavior change |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -179,3 +180,15 @@ The Node guest runtime answers `POST /api/workspaces/:id/model` with `503 MODEL_
 This task deletes the lifecycle (`server/model.ts` 504 lines and `server/model.test.ts` 490 lines) and keeps the two contracts that are actually consumed in `server/providers/model-contracts.ts`. It is guarded the test-first way: `server/dead-model-lifecycle.test.ts` asserts the module file is absent, failed before the deletion and passes after it, so a later change cannot quietly reinstate a second job store.
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **953 passed / 5 skipped (958)** (the 10 cases in `model.test.ts` went with the module), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (one pre-existing unused-import warning in `cloudflare/ai.ts` is unchanged), `node scripts/check-public-files.mjs` **970 files / 0 findings** after the commit, `git diff --check` clean. No HTTP contract, schema, billing, retention or production behavior change; the removed code was never reachable from a request.
+
+### T12 — inverted seams, pointed down again
+
+Three dependencies pointed up the layering that `CURRENT_ARCHITECTURE.md` describes, so a test or a move had to carry the wrong tree with it:
+
+- `server/exports.ts` formatted an invoice but was imported by the client `/demo` page (`src/tabletop/demo/InteractiveDemo.tsx`), the Worker Room HTTP seam and the Node feature routes. It is a pure formatter over the domain, so it now lives at `src/tabletop/shared/export-invoice.ts`; its test moved with it.
+- `src/tabletop/workspace/command-session.ts` — a seam that deliberately imports no React — imported `ui/table-chat-state` and `ui/table-candidate-apply`. Both are pure decision modules, so they now live next to it in `src/tabletop/workspace/`; the UI imports them downward.
+- `src/tabletop/ui/CanvasWorkspace.tsx` imported its edge renderer from the legacy `src/components/` tree and its obstacle-aware geometry from legacy `src/state/`. `CanvasEdge` (with its stylesheet) moved to `src/tabletop/ui/` and `edge-routing` to `src/tabletop/shared/`; the legacy workspace, the trio canvas and the constellation now import them from the Tabletop tree, which is the direction the product is supposed to retire toward.
+
+The sequence was test-first: the moved test files were created at their new paths first and failed (the modules were still elsewhere), then the implementations moved and the same tests passed unchanged. `grep` over `src/` confirms no client file imports `server/` anymore.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **953 passed / 5 skipped (958)** (same count as dev, the suites moved rather than changed), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. No behavior change: same functions, same inputs, same assertions.

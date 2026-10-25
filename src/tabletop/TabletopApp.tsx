@@ -18,7 +18,7 @@ import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/
 import { AIProposal } from './ui/AIProposal';
 import { useTableChat } from './ui/useTableChat';
 import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
-import type { AddableWebSource } from './ui/table-chat-state';
+import type { AddableWebSource } from './workspace/table-chat-state';
 import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistoryWrite, pageForPath, pathForProjection, shouldApplyLateOpen, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
 import { StartPage } from './ui/StartPage';

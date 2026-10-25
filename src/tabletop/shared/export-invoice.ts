@@ -1,5 +1,5 @@
-import { reconcileInvoice } from '../src/tabletop/domain/index.js';
-import type { InvoiceState } from '../src/tabletop/shared/contracts.js';
+import { reconcileInvoice } from '../domain/index.js';
+import type { InvoiceState } from './contracts.js';
 const escape=(value:unknown)=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 function cell(value:unknown){let text=String(value??'');if(/^[\s]*[=+@\-\t\r]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"'}
 export function exportInvoice(state:InvoiceState,format:'csv'|'html'):string {

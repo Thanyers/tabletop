@@ -1,6 +1,6 @@
 import { BaseEdge, EdgeLabelRenderer, type Edge, type EdgeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
-import type { RoutedConnection } from '../state/edge-routing';
+import type { RoutedConnection } from '../shared/edge-routing';
 import './canvas-edges.css';
 
 export interface CanvasEdgeData extends Record<string, unknown> {

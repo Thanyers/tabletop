@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chosenFollowUps, parseChatFollowUps } from './table-chat-state';
+import { chosenFollowUps, parseChatFollowUps } from '../workspace/table-chat-state';
 import { followUpConnections, followUpPosition } from './canvas-flow';
 
 describe('F070 choice trail', () => {

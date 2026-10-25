@@ -1,7 +1,7 @@
 import type { AuthorizedWorkspace, CommandAuthority } from '../server/authority.js';
 import { isRecord, randomToken, sha256 } from '../server/codec.js';
 import { AuthorityError } from '../server/errors.js';
-import { exportInvoice } from '../server/exports.js';
+import { exportInvoice } from '../src/tabletop/shared/export-invoice.js';
 import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import { projectionCursor } from '../server/projection-cursor.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';

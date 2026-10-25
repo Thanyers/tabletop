@@ -4,7 +4,7 @@ import { planForWorkspace } from '../runtime';
 import { PracticeRuntime } from './practice';
 import { PRACTICE_SCENARIOS } from './scenarios';
 import { PRACTICE_SAMPLE_FILES } from './sample-files';
-import { exportInvoice } from '../../../server/exports';
+import { exportInvoice } from '../shared/export-invoice';
 import { ConfirmDialog, UploadCapabilityProvider } from '../ui/WorkbenchShared';
 import { PracticeClockProvider } from '../ui/PracticeClock';
 import { TableSurface } from '../ui/TableSurface';
