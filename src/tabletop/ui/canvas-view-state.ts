@@ -1,4 +1,5 @@
 import { parseCardSortMode, type CardSortMode } from './canvas-card-meta';
+import type { CanvasPoint } from './canvas-layout';
 
 /**
  * F078-T14: the Canvas kept six browser-backed view preferences inline in a
@@ -14,11 +15,6 @@ import { parseCardSortMode, type CardSortMode } from './canvas-card-meta';
  */
 
 export type CanvasStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
-
-export interface CanvasPoint {
-  x: number;
-  y: number;
-}
 
 export interface SavedCanvasLayout {
   positions: Record<string, CanvasPoint & { pinned?: boolean }>;

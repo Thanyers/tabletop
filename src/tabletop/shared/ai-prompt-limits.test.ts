@@ -48,9 +48,11 @@ describe('AI prompt limits', () => {
     ];
     const promptLiteral = /prompt:\s*z\.string\([^)]*\)\.max\(\s*(?:4_000|4000)\s*\)/u;
     const capAssignment = /(?:MAX_PROMPT_CHARS|MAX_MODEL_PROMPT_CHARS|MAX_TABLE_ASSISTANT_PROMPT_CHARS)\s*=\s*(?:4_000|4000)\b/u;
+    /** F078-T18: a length guard is a prompt cap too; it must read the owner constant as well. */
+    const promptLengthLiteral = /prompt\.length\s*(?:<=?|>=?)\s*(?:4_000|4000)\b/u;
     const offenders = files.filter((file) => {
       const text = source(file);
-      return promptLiteral.test(text) || capAssignment.test(text);
+      return promptLiteral.test(text) || capAssignment.test(text) || promptLengthLiteral.test(text);
     });
     expect(offenders).toEqual([]);
   });

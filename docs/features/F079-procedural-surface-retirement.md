@@ -86,7 +86,7 @@ F078 (architecture review 2026-10-24) จัดเรื่องนี้เป
 - guard test `src/tabletop/legacy-boundary.test.ts` (5 เคส): ตรวจว่า legacy ไม่อยู่ใน `src/`, boot ไม่เลือก legacy, ไม่มี import จาก `src/` เข้า `legacy/`, tsconfig/eslint/vite ไม่เห็นมัน, และ dev server ไม่มี middleware ของ lab
 - วัดผล: unit **981 → 808 passed** (legacy unit 28 ไฟล์/173 เคสออกจากชุด), lint warning 118 → 66, `build` ผ่านโดยไม่มี legacy chunk, Workers 236/236 เท่าเดิม
 
-สิ่งที่ **ไม่ทำ** ในรอบนี้: ไม่ลบไฟล์ (สำหรับ option A ภายหลัง), ไม่ย้าย `tests/` spec ของ legacy (44 ไฟล์ยังอยู่ แต่ไม่ถูก CI เรียก), และ `docs/source-baseline.json` ยังเก็บ path เดิมเป็นบันทึกประวัติ
+สิ่งที่ **ไม่ทำ** ในรอบนี้: ไม่ลบไฟล์ (สำหรับ option A ภายหลัง), ไม่ย้าย `tests/` spec ของ legacy (44 ไฟล์ยังอยู่ แต่ไม่ถูก CI เรียก และ script `test:browser`/`test:spatial`/`test:constellation` ถูกเอาออกแล้วเพื่อไม่ให้เรียก spec ที่ตาย), และ `docs/source-baseline.json` ยังเก็บ path เดิมเป็นบันทึกประวัติ
 
 ## คำถามเปิด (เหลือ)
 

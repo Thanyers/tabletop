@@ -999,7 +999,7 @@ export class Room extends DurableObject<Env> {
       expectedEpoch: input.expectedEpoch,
       // Keep the prompt that reserveModelJob stored: the committing and finished rows replace
       // `data`, and without it other members' history (F034) drops the finished request.
-      ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= 4_000 ? { prompt: input.prompt } : {}),
+      ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= MAX_TABLE_ASSISTANT_PROMPT_CHARS ? { prompt: input.prompt } : {}),
     };
     let commandMayHaveCommitted = false;
     // F045: identity tokens are captured from the authorized view before the provider runs, so the
