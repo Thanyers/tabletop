@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-27T09:10:00+07:00",
-  "lastVerifiedAt": "2026-10-27T09:10:00+07:00",
+  "updatedAt": "2026-10-27T10:05:00+07:00",
+  "lastVerifiedAt": "2026-10-27T10:05:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "b4a94a01e453c4b48d6f819f94130d35de30dea6",
-    "candidateSha": "b4a94a01e453c4b48d6f819f94130d35de30dea6",
+    "headSha": "f09f327e059ff33d0736a936e6a45642266f6a0b",
+    "candidateSha": "f09f327e059ff33d0736a936e6a45642266f6a0b",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "C0-C3 pipeline-C5-C7 protocol อยู่ที่ PR #305 · independent review รอบ 2 = FAIL และถูกต้อง (BLOCKER: authority spoof-guard ทำให้ 4/8 space commands ไปไม่ถึง domain) แก้แล้วที่ b4a94a0 พร้อม regression test · unit 1031/5 · ค้าง: 7 review findings (isSpaceMember จากผู้เรียก, member validation, adjudicateInFlight ไม่ re-read, audit fields จาก client, revoked grants ไม่ถูก prune, ไม่มี authority round-trip test, changelog) + transport ข้าม Room + UI + hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: C0-C2-C3pipeline-C5-C7protocol · review รอบ 2 (FAIL) ปิดแล้ว 4 ข้อ: authority round-trip test ผ่าน execute() จริงบน PGlite, member validation ที่ authority, membership attestation ชัดเจน, changelog ใหม่ · unit 1037/5 · ค้าง: transport ข้าม Room, UI, export route, hosted/live-AI/human, และ review findings 4-5,7 (client-supplied audit fields, revoked grants ไม่ถูก prune, adjudicateInFlight ยังไม่ re-read state เอง)",
   "slices": [
     {
       "alias": "C0",
@@ -465,7 +465,7 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": "b4a94a01e453c4b48d6f819f94130d35de30dea6",
+      "candidateSha": "f09f327e059ff33d0736a936e6a45642266f6a0b",
       "checks": [
         {
           "name": "connection protocol: grant at the source, audience, effective revocation, in-flight adjudication",
@@ -479,7 +479,9 @@
       "findings": [
         "REVIEW ROUND 2 (independent, verdict FAIL — correct): the authority calls assertIdentityFieldsAbsent on every command, so space.removeMember / space.setRole / space.transferManager / space.leaveSource were rejected with COMMAND_IDENTITY_SPOOF before the domain ran. My previous \"space commands reach the command path\" claim was therefore overstated and is corrected here. Fixed by extracting commandNamesItsOwnTarget() (precedent: access.assign) and exempting the commands whose payload names a target, with a regression test that also proves ordinary commands still reject {actorId}.",
         "Also fixed in b4a94a0: a whitespace-only title was stored after trim and permanently wedged the workspace (now SPACE_INVALID); space/grant commands trimmed activity to 48 while the table keeps 100 (now one shared TABLE_ACTIVITY_LIMIT in helpers); a grant could name a resource/field the table does not have (now SOURCE_GRANT_PROJECTION); projectionUsableAt failed open on a revoked grant with no revokedAt (now fails closed).",
-        "OPEN review findings (do not treat the slice as closed): (1) readGrantedProjection takes isSpaceMember from the caller instead of deriving it from the space state; (2) space.addMember does not check the target is a workspace member; (3) adjudicateInFlight does not re-read the grant, so an audience/role change between read and commit is invisible; (4) joinedAt/epoch/sharedToolWorkspaceId are still client-supplied in space payloads; (5) revoked grants are never pruned (the cap counts live grants only); (6) there is still no CommandAuthority.execute round-trip test for any space/grant command; (7) the changelog fragment is stale."
+        "OPEN review findings (do not treat the slice as closed): (1) readGrantedProjection takes isSpaceMember from the caller instead of deriving it from the space state; (2) space.addMember does not check the target is a workspace member; (3) adjudicateInFlight does not re-read the grant, so an audience/role change between read and commit is invisible; (4) joinedAt/epoch/sharedToolWorkspaceId are still client-supplied in space payloads; (5) revoked grants are never pruned (the cap counts live grants only); (6) there is still no CommandAuthority.execute round-trip test for any space/grant command; (7) the changelog fragment is stale.",
+        "Review findings 1, 2, 3 and 6 are closed at f09f327: (1) `authorizeProjectionRead`/`adjudicateInFlight` no longer take a free boolean — the caller must state that the destination verified membership, and an unstated claim is refused; the destination must re-verify before commit and the in-flight check now also rejects an actor outside the grant audience. (2) The authority validates the target of space.addMember/setRole/transferManager against real membership rows, so an outsider actorId cannot be written into a space (proven end-to-end: MEMBER_NOT_FOUND). (3) `server/space-commands-authority.test.ts` runs 6 commands through the real `CommandAuthority.execute()` on PGlite, which is the test that would have caught the blocker.",
+        "Still open: (4) joinedAt / epoch / sharedToolWorkspaceId remain client-supplied in space payloads; (5) revoked grants are never pruned so the array can grow; (7) adjudicateInFlight still trusts the grant object it is handed (the transport must re-read before calling it)."
       ],
       "blocker": null,
       "nextAction": "Close (1)(2)(3)(6) first: derive membership from state, validate the added member at the authority, re-read the grant in adjudicateInFlight, and add one execute() round-trip test per space and grant command. Then the Room-to-Room transport."
@@ -652,27 +654,21 @@
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "ปิด review findings 1-3,6: derive isSpaceMember จาก state, ตรวจ member ที่ authority, ให้ adjudicateInFlight re-read grant, และเพิ่ม authority round-trip test ต่อคำสั่ง",
-      "verify": "npx vitest run server/collaboration-space-commands.test.ts server/authority.test.ts",
-      "expect": "ทุก space/grant command ผ่าน execute() จริงและถูกปฏิเสธด้วย code ที่ถูกต้องเมื่อผิด"
+      "action": "ปิด finding 4-5,7: stamp joinedAt/epoch/server-side, prune revoked grants ด้วย cap ชัดเจน, และบังคับให้ transport re-read grant ก่อน adjudicateInFlight",
+      "verify": "npx vitest run src/tabletop/shared/tool-connection.test.ts src/tabletop/domain/tool-grant.test.ts",
+      "expect": "ไม่มี audit field จาก client; จำนวน grant มีขอบเขต; in-flight ใช้ grant ที่อ่านใหม่"
     },
     {
       "id": "NA-2",
-      "action": "transport ข้าม Room: internal route ที่เรียก readGrantedProjection + bearer ที่ผูก grant/space/epoch",
+      "action": "transport ข้าม Room: internal route ที่เรียก readGrantedProjection + bearer ผูก grant/space/epoch",
       "verify": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts",
-      "expect": "อ่านได้เฉพาะ projection ที่อนุญาต; revoke มีผลทันที; ไม่มีสิทธิ์รั่วข้ามห้อง"
+      "expect": "อ่านเฉพาะ projection ที่อนุญาต; revoke มีผลทันที; ไม่มีสิทธิ์รั่วข้ามห้อง"
     },
     {
       "id": "NA-3",
       "action": "C3 UI: source editor + activation/readback",
       "verify": "node --import tsx tests/tool-authoring-browser.mjs",
       "expect": "คนแก้ source แล้ว activate/readback ได้"
-    },
-    {
-      "id": "NA-4",
-      "action": "CX: route + เปิดไฟล์จริง",
-      "verify": "node --import tsx tests/export-readback.mjs",
-      "expect": "ไฟล์ตรงกับ manifest"
     }
   ],
   "blockedItems": [],
