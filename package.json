@@ -28,7 +28,8 @@
     "test": "vitest run",
     "prepare": "husky",
     "predev": "node scripts/build-tool-sandbox-runtime.mjs",
-    "test:tool-host:browser": "node scripts/build-tool-sandbox-runtime.mjs && node scripts/build-tool-host-harness.mjs && node tests/ui/tool-host/browser.mjs"
+    "test:tool-host:browser": "node scripts/build-tool-sandbox-runtime.mjs && node scripts/build-tool-host-harness.mjs && node tests/ui/tool-host/browser.mjs",
+    "test:tool-authoring:browser": "node scripts/build-tool-authoring-harness.mjs && node tests/ui/tool-authoring/browser.mjs"
   },
   "engines": {
     "node": ">=22.13.0"
