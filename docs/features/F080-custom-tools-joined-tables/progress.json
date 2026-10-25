@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T01:58:00+07:00",
-  "lastVerifiedAt": "2026-10-26T01:58:00+07:00",
+  "updatedAt": "2026-10-26T02:12:00+07:00",
+  "lastVerifiedAt": "2026-10-26T02:12:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
-    "candidateSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
+    "headSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e",
+    "candidateSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: การชนโต๊ะทำงานครบเส้น — อ่าน projection ข้ามห้อง (rows สด) และ **action กลับต้นทางเดียว** ผ่าน Worker→Room ต้นทาง→authority commit ในฐานะ grant issuer พร้อม retry replay และ refusal ครบ (12/12 e2e, 8/8 transport, 5/5 authority) · cloudflare 281/281 · unit 1064/5 · ค้าง: T4A/T4B (context/history/impact/recovery), T5 portable, CX export route, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: export route ทำงานครบ (GET /api/workspaces/:space/space/export → source สร้างไฟล์จาก rows จริง + grant flag แยกจากสิทธิ์อ่าน) · e2e 17/17 ใน cross test, export transport 7/7, builder 7/7 · cloudflare 295/295 · unit 1071/5 · ค้าง: เปิดไฟล์ในแอปปลายทาง (EXPORT-01), disconnect/rebind (G3-02), T4A/T4B, T5, room shell (รอเลือก visual), hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -650,7 +650,7 @@
       "id": "F080-T-X",
       "jt": "JT-X",
       "featureId": "F080",
-      "state": "doing",
+      "state": "review",
       "dependsOn": [
         "F080-T1A",
         "F080-T3B"
@@ -659,7 +659,7 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
+      "candidateSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e",
       "checks": [
         {
           "name": "export contract: own permission, revision consistency, Thai/number/formula/HTML escaping, per-collection files",
@@ -668,11 +668,19 @@
           "result": "PASS",
           "evidence": "13/13: CSV quotes commas/quotes/newlines, keeps Thai and numbers intact, prefixes formula-looking cells so a spreadsheet shows text, caps one cell; UTF-8 BOM by default because Excel on Windows turns BOM-less UTF-8 Thai into mojibake; HTML escapes <script> and sets default-src none; export is refused for a missing/stale permission, an empty selection, a revision mismatch (including one source read at another revision), an uncovered field set and a row overflow; a successful run emits one file per collection plus a manifest that records the snapshot, the withheld fields and the producedAt time",
           "checkedSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3"
+        },
+        {
+          "name": "export end to end through the Worker with its own permission",
+          "environment": "Cloudflare tier (worker.fetch + real DOs) · local unit",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-export-transport.test.ts; npx vitest run src/tabletop/shared/space-export.test.ts",
+          "result": "PASS",
+          "evidence": "17/17 in the cross e2e incl. export cases: a CSV downloads with the real source rows (Field camera) and only the granted field as a column, the response carries content-disposition plus x-source-data-revision/x-grant-version, the HTML variant works, a read-only grant is 403 EXPORT_NOT_PERMITTED, a revoked grant is 409, an outsider is 403; transport 7/7 and builder 7/7 (permission, revision consistency, Thai/comma quoting, row cap).",
+          "checkedSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e"
         }
       ],
       "findings": [],
       "blocker": null,
-      "nextAction": "route/HTTP surface + end-user file open (numbers, Thai, counts) on a real spreadsheet/browser; joined export needs the C7 connection so it can prove it exports only authorized projections"
+      "nextAction": "Open a produced file in a spreadsheet/browser (the last step of EXPORT-01), then disconnect/rebind (G3-02)."
     },
     {
       "id": "F080-Closure",
