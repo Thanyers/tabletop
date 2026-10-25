@@ -244,15 +244,15 @@
       "title": "authorized action เขียน source target หนึ่งครั้ง; stale/retry/revoked ถูก reject ถูกต้อง",
       "status": "UNVERIFIED",
       "environment": "workers integration + authority receipt",
-      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+      "sha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/tool-action.test.ts"
+        "npx vitest run server/space-action-authority.test.ts"
       ],
-      "evidence": "contract half: the freshness check refuses TOOL_STALE_REVISION / TOOL_SOURCE_REVOKED before any side effect, and the target commit remains the target authority's; nothing commits yet because the transport is not built",
+      "evidence": "authority level PASS (5/5): an action through a connection commits exactly one target (the source table) as the grant issuer, the grant is re-checked inside the commit transaction, and refusals are typed for an action the grant does not list, a missing grant, a revoked grant and a wrong workspace. A retry does not double-apply (it is refused), but it does not replay the receipt yet.",
       "expected": "สำเร็จครั้งเดียวแม้ retry (idempotency/receipt); stale expected revision ถูก reject ก่อน side effect; revoked grant ถูก reject; ไม่มี partial write ใน operation ที่ประกาศ",
-      "actual": "UNVERIFIED — no live single-target commit exists",
-      "limitations": "unsupported multi-authority operation ต้อง reject ไม่ใช่ degrade"
+      "actual": "PARTIAL — commit and refusals are proven at the authority; no HTTP route, and retry replays nothing yet",
+      "limitations": "no end-to-end action test through the Worker; stale/retry semantics still short of the acceptance wording"
     },
     {
       "id": "REVOKE-01",

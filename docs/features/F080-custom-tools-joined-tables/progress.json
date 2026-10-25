@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T01:31:00+07:00",
-  "lastVerifiedAt": "2026-10-26T01:31:00+07:00",
+  "updatedAt": "2026-10-26T01:50:00+07:00",
+  "lastVerifiedAt": "2026-10-26T01:50:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "3c98044018c76d3158c7b2465fb01e91a6fb0696",
-    "candidateSha": "3c98044018c76d3158c7b2465fb01e91a6fb0696",
+    "headSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
+    "candidateSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: JOIN-01 ปิดครบสาย — URL contract ใช้ร่วมกันระหว่าง client/e2e, fetcher (credentials:include) มีเทสต์, client mapping, panel, และ e2e จริงบน DO/F1 ยืนยัน rows จริง + propagation + revoke + impersonation · cloudflare 273/273 · unit 1059/5 · ค้าง: T3B authorized action กลับต้นทาง, export route, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: T3B เริ่มแล้ว — action ผ่าน connection commit บน authority ของต้นทางในฐานะ grant issuer (5/5 tests: commit จริง, ไม่มี grant/ไม่อยู่ใน allowlist/ถูก revoke/ผิด workspace ถูกปฏิเสธ) · retry ตอนนี้ \"ถูกปฏิเสธ\" ไม่ใช่ replay (ปลอดภัยแต่ยังไม่ตรงเกณฑ์ JOIN-02) · ยังไม่มี HTTP route ของ action · cloudflare 273/273 · unit 1064/5",
   "slices": [
     {
       "alias": "C0",
@@ -550,7 +550,7 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": "f09f327e059ff33d0736a936e6a45642266f6a0b",
+      "candidateSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
       "checks": [
         {
           "name": "connection protocol: grant at the source, audience, effective revocation, in-flight adjudication",
@@ -559,6 +559,14 @@
           "result": "PASS",
           "evidence": "14/14 protocol tests: a read is authorized per port/audience/epoch; revocation is reported before a stale epoch so neither masks the other; the effective revocation point stops serving cached projections; an in-flight request is rejected when the grant was revoked or the source reset; the connection lifecycle is closed (revoked is terminal, missing is recoverable) · 10/10 grant command tests: epoch/dataRevision/issuer/time/version are stamped by the source (a client-supplied sourceEpoch or grantVersion is a payload error), duplicate ids and the live-grant cap are refused, revoke bumps grantVersion and is idempotent, and readGrantedProjection refuses after revoke/non-member/unexposed-port/stale-epoch",
           "checkedSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c"
+        },
+        {
+          "name": "an action through a connection commits on the source authority",
+          "environment": "local (PGlite) via CommandAuthority.executeSpaceAction",
+          "command": "npx vitest run server/space-action-authority.test.ts",
+          "result": "PASS",
+          "evidence": "5/5: the borrow action commits on the source table (the camera row becomes unavailable, revision moves); refusals are typed for a grant that does not list the action (SPACE_ACTION_NOT_GRANTED), no grant at all, a revoked grant (SPACE_ACTION_REVOKED) and a grant issued to another workspace (SPACE_ACTION_FORBIDDEN). The guard runs inside the commit transaction, so a revoke cannot race the write, and the issuer is the actor so a connection never exceeds their own rights.",
+          "checkedSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081"
         }
       ],
       "findings": [
@@ -566,10 +574,12 @@
         "Also fixed in b4a94a0: a whitespace-only title was stored after trim and permanently wedged the workspace (now SPACE_INVALID); space/grant commands trimmed activity to 48 while the table keeps 100 (now one shared TABLE_ACTIVITY_LIMIT in helpers); a grant could name a resource/field the table does not have (now SOURCE_GRANT_PROJECTION); projectionUsableAt failed open on a revoked grant with no revokedAt (now fails closed).",
         "OPEN review findings (do not treat the slice as closed): (1) readGrantedProjection takes isSpaceMember from the caller instead of deriving it from the space state; (2) space.addMember does not check the target is a workspace member; (3) adjudicateInFlight does not re-read the grant, so an audience/role change between read and commit is invisible; (4) joinedAt/epoch/sharedToolWorkspaceId are still client-supplied in space payloads; (5) revoked grants are never pruned (the cap counts live grants only); (6) there is still no CommandAuthority.execute round-trip test for any space/grant command; (7) the changelog fragment is stale.",
         "Review findings 1, 2, 3 and 6 are closed at f09f327: (1) `authorizeProjectionRead`/`adjudicateInFlight` no longer take a free boolean — the caller must state that the destination verified membership, and an unstated claim is refused; the destination must re-verify before commit and the in-flight check now also rejects an actor outside the grant audience. (2) The authority validates the target of space.addMember/setRole/transferManager against real membership rows, so an outsider actorId cannot be written into a space (proven end-to-end: MEMBER_NOT_FOUND). (3) `server/space-commands-authority.test.ts` runs 6 commands through the real `CommandAuthority.execute()` on PGlite, which is the test that would have caught the blocker.",
-        "Still open: (4) joinedAt / epoch / sharedToolWorkspaceId remain client-supplied in space payloads; (5) revoked grants are never pruned so the array can grow; (7) adjudicateInFlight still trusts the grant object it is handed (the transport must re-read before calling it)."
+        "Still open: (4) joinedAt / epoch / sharedToolWorkspaceId remain client-supplied in space payloads; (5) revoked grants are never pruned so the array can grow; (7) adjudicateInFlight still trusts the grant object it is handed (the transport must re-read before calling it).",
+        "Retry semantics are safe but not yet correct for the acceptance: a second call with the same idempotency key is refused with IDEMPOTENCY_MISMATCH instead of replaying the stored ack, because trustedRequestHash includes the expected revision and that moved. No double write happens; making the receipt hash revision-independent for space actions is the next step.",
+        "Action ids are domain-defined and camelCase (e.g. giveBack), so the grant schema was relaxed to a bounded [A-Za-z][A-Za-z0-9_-]{1,39} reference."
       ],
       "blocker": null,
-      "nextAction": "Close (1)(2)(3)(6) first: derive membership from state, validate the added member at the authority, re-read the grant in adjudicateInFlight, and add one execute() round-trip test per space and grant command. Then the Room-to-Room transport."
+      "nextAction": "Three steps in order: (1) make the space-action receipt hash revision-independent so a retry replays; (2) add the HTTP route (Worker + /internal/space-action) mirroring the projection read; (3) extend the two-workspace e2e with commit/retry/stale/revoked cases."
     },
     {
       "id": "F080-T4A",
