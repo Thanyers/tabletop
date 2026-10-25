@@ -8,6 +8,7 @@ import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
 import { projectionCursor } from '../server/projection-cursor.js';
+import { resolveSpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 import { authenticateHash, authenticateRequest, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
 import { redactString, respondToTablePrompt, type IdentityReplacement } from './table-assistant.js';
@@ -220,6 +221,24 @@ export class Room extends DurableObject<Env> {
       redeemInvite: (request, ticket) => this.redeemInvite(request, ticket),
       joinByInviteLink: (request, token) => this.joinByInviteLink(request, token),
       scheduleDirectorySync: () => this.scheduleDirectorySync(),
+      // F080: the Worker vouches that the caller is in the destination space; this table decides
+      // the rest against its own grant list, read fresh for this request.
+      readSpaceProjection: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as { kind: string; spaceGrants?: Parameters<typeof resolveSpaceProjectionRead>[0]['grants'] };
+        return resolveSpaceProjectionRead({
+          grants: domain.kind === 'table' ? domain.spaceGrants ?? [] : [],
+          grantId: input.grantId,
+          spaceId: input.spaceId,
+          sourceWorkspaceId: workspace.id,
+          sourceEpoch: workspace.epoch,
+          actorId: input.actorId,
+          portId: input.portId,
+          membership: { verifiedBy: 'destination', actorId: input.actorId },
+          now: Date.now(),
+        });
+      },
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }

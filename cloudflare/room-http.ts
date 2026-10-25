@@ -6,6 +6,8 @@ import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
 import { projectionCursor } from '../server/projection-cursor.js';
 import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
 import { authenticateRequest, isAdminSession, requireMutation } from './auth.js';
+import { z } from 'zod';
+import type { SpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 import { PROJECTION_CURSOR_PATTERN } from './room-job-view.js';
 import type { RoomRepository } from './room-repository.js';
 import { requireWorkspaceWritable } from './table-mode.js';
@@ -56,6 +58,13 @@ export interface RoomRouteMatch {
   readonly imageId?: string;
 }
 
+const spaceProjectionRequestSchema = z.strictObject({
+  grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  spaceId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  actorId: z.string().min(1).max(160),
+  portId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+});
+
 export interface RoomHttpDeps {
   env(): Env;
   readonly repository: RoomRepository;
@@ -66,6 +75,16 @@ export interface RoomHttpDeps {
   redeemInvite(request: Request, rawTicket: string): Promise<WorkspaceView>;
   joinByInviteLink(request: Request, rawToken: string): Promise<WorkspaceView>;
   scheduleDirectorySync(): void;
+  /**
+   * F080: decide one cross-workspace projection read against this table's own grants.
+   * The Worker vouches for space membership; this table decides everything else.
+   */
+  readSpaceProjection(input: {
+    grantId: string;
+    spaceId: string;
+    actorId: string;
+    portId: string;
+  }): Promise<SpaceProjectionRead>;
 }
 
 export interface RoomHttp {
@@ -88,6 +107,10 @@ export function matchRoomRoute(request: Request, boundRoomId: string | null): Ro
   }
   if (request.method === 'GET' && url.pathname === '/internal/metadata') {
     return { handler: 'room-http', name: 'internal.metadata' };
+  }
+  // F080: only the Worker can produce this path (clients are forwarded /api/workspaces/<id>… only).
+  if (request.method === 'POST' && url.pathname === '/internal/space-projection') {
+    return { handler: 'room-http', name: 'internal.space-projection' };
   }
   const imageRoute = IMAGE_ROUTE.exec(url.pathname);
   if (imageRoute) {
@@ -140,6 +163,8 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
         return internalView(request, requestId);
       case 'internal.metadata':
         return internalMetadata(request, requestId);
+      case 'internal.space-projection':
+        return internalSpaceProjection(request, requestId);
       case 'workspace.view':
         return workspaceView(request, requestId, match.workspaceId);
       case 'events':
@@ -173,6 +198,15 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
     // Header values must survive non-Latin names, so the name travels percent-encoded.
     if (change?.actorName) headers[UPDATED_BY_HEADER] = encodeURIComponent(change.actorName);
     return json(200, authorized.workspace, headers);
+  }
+
+  async function internalSpaceProjection(request: Request, requestId: string): Promise<Response> {
+    const parsed = spaceProjectionRequestSchema.safeParse(await readJson(request));
+    if (!parsed.success) return json(400, { ok: false, code: 'SPACE_PROJECTION_PAYLOAD', message: 'Invalid projection request.' }, { 'x-request-id': requestId });
+    const answer = await deps.readSpaceProjection(parsed.data);
+    if (answer.ok) return json(200, answer, { 'x-request-id': requestId });
+    const status = answer.code === 'SPACE_GRANT_REVOKED' || answer.code === 'SPACE_GRANT_STALE_EPOCH' ? 409 : 404;
+    return json(status, answer, { 'x-request-id': requestId });
   }
 
   async function internalMetadata(request: Request, requestId: string): Promise<Response> {

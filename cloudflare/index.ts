@@ -10,11 +10,15 @@ import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
 import { displayWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { tableCapabilitySummary } from '../src/tabletop/shared/table-capabilities.js';
 import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
+import { handleSpaceProjectionRead } from './space-projection-transport.js';
+import type { SpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 export { Room } from './room.js';
 export { Billing } from './billing.js';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|invite-link|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}|images(?:/img_[0-9a-f]{32})?))?$`, 'u');
+/** F080: a cross-workspace projection read. Answered by the Worker, not forwarded to the destination Room. */
+const spaceProjectionRoute = new RegExp(`^/api/workspaces/(${uuid})/space/projection$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
 const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
 const joinLinkSchema = z.strictObject({ link: z.string().max(100) });
@@ -146,6 +150,23 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);
   if (method === 'GET' && path === '/api/admin/workspaces') return adminWorkspaces(request, env);
   const session = await authenticateRequest(request, env);
+  const spaceProjection = spaceProjectionRoute.exec(path);
+  if (method === 'GET' && spaceProjection?.[1]) {
+    // F080 (D-020): the Worker answers the membership question and asks the source table for the
+    // grant decision. No secret changes hands: the source is reached over its own /internal route.
+    const spaceId = spaceProjection[1];
+    return handleSpaceProjectionRead(request, {
+      authenticate: async () => ({ actorId: session.record.actorId }),
+      workspaceView: async (original, workspaceId) => {
+        const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
+        return response.ok ? await response.json<WorkspaceView>() : undefined;
+      },
+      readSourceProjection: async (original, sourceWorkspaceId, projectionBody) => {
+        const response = await room(env, sourceWorkspaceId).fetch(internalRequest(original, '/internal/space-projection', projectionBody));
+        return await response.json<SpaceProjectionRead | { ok: false; code: string; message: string }>();
+      },
+    }, { spaceId });
+  }
   if (!['GET', 'HEAD'].includes(method)) {
     requireMutation(request, env, session);
     await limit(env, `mutate:${session.record.actorId}`, 120, 60_000);
