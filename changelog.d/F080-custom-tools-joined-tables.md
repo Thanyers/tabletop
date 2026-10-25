@@ -1,1 +1,2 @@
-- เพิ่ม checkpoint ของงาน F080 (custom tools + joined tables): feature doc, index, progress, acceptance registry และ decision log สำหรับงาน JT-0…JT-5/JT-V/JT-X (ยังไม่มี runtime change และยังไม่ขึ้น production)
+- เพิ่ม checkpoint ของงาน F080 (custom tools + joined tables): feature doc, index, progress, acceptance registry และ decision log สำหรับงาน JT-0…JT-5/JT-V/JT-X (docs-only, ยังไม่มี runtime change และยังไม่ขึ้น production)
+- เพิ่ม contract ของ tool package และ bridge ระหว่าง host กับ sandboxed frame (`src/tabletop/shared/tool-package.ts`, `tool-protocol.ts`) พร้อม negative tests: pinned import allowlist, import graph/cycle/depth, declared write targets, reader compatibility ของ workspace ที่ยังไม่มี tool state; ยังไม่ผูก UI หรือรัน package จริง
