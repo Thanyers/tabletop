@@ -281,8 +281,14 @@ export class Room extends DurableObject<Env> {
       listSpaceGrants: async input => {
         const workspaceId = this.requireBoundRoomId();
         const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
-        const domain = workspace.domainState as unknown as { spaceGrants?: Parameters<typeof selectGrantsForSpace>[0] };
-        return selectGrantsForSpace(Array.isArray(domain.spaceGrants) ? domain.spaceGrants : [], input.spaceWorkspaceId);
+        const domain = workspace.domainState as unknown as {
+          spaceGrants?: Parameters<typeof selectGrantsForSpace>[0];
+          dataRevision?: number;
+        };
+        // The live revision travels with the answer, so a recap can compare without a second read.
+        const live = domain.dataRevision ?? 0;
+        return selectGrantsForSpace(Array.isArray(domain.spaceGrants) ? domain.spaceGrants : [], input.spaceWorkspaceId)
+          .map(connection => ({ ...connection, liveDataRevision: live }));
       },
       // F080: the export is built here because only this table can see its rows and its export flag.
       exportSpaceProjection: async input => {

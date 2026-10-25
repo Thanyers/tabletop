@@ -137,6 +137,7 @@ export interface RoomHttpDeps {
     exportAllowed: boolean;
     actions: string[];
     ports: string[];
+    liveDataRevision: number;
   }[]>;
   exportSpaceProjection(input: {
     grantId: string;
