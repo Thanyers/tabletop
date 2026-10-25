@@ -142,3 +142,14 @@ Log เธเธฒเธฃเธ•เธฑเธ”เธชเธดเธเนเธเธ—เธตเนเธเธนเธเธเธฑเธ contract/เธชเธ–
 - **เธ•เธฑเธ”เธชเธดเธ:** เธ—เธธเธ PR เน€เธเธตเธขเธ fragment เนเธ `changelog.d/F080-*.md` เนเธฅเธฐเธฃเธฑเธ `npx tsx server/changelog.ts check`
 - **เน€เธซเธ•เธธเธเธฅ/เธซเธฅเธฑเธเธเธฒเธ:** `changelog.d/README.md` เนเธฅเธฐ CI `fast-checks`
 - **Rollback:** เนเธกเนเธ•เนเธญเธเธกเธต
+
+## D-016 — Authoring pipeline เดียว + budget ที่บังคับก่อน dispatch
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (pipeline + budget), `open` (live provider)
+- **ตัดสิน:** ทั้ง AI และคนใช้ `authorToolPackage()` เส้นเดียว: validate  compile  isolated trial  activate พร้อม record ที่แยก requester / generator / reviewer และ **generator ถูกเรียกได้เฉพาะผ่านฟังก์ชันที่ตรวจ budget ก่อน** (ถ้า estimate เกิน cap จะไม่เรียกเลย) ? declaredWrites มาจาก package ผ่าน `buildToolBehaviorRequest()` ไม่ใช่จากผู้เรียก และ `checkToolBehaviorFreshness()` บังคับ `TOOL_STALE_REVISION`/`TOOL_SOURCE_REVOKED` ก่อน side effect
+- **เหตุผล/หลักฐาน:** `authoring.test.ts` 12/12 (พิสูจน์ว่า generator ไม่ถูกเรียกเมื่อเกิน budget, repair ได้ diagnostics, trial failure บล็อก activation, hand edit ที่ไม่เปลี่ยนอะไรถูก reject, AI ได้ base ที่คนแก้), `tool-behavior-request.test.ts` 11/11 (scope มาจาก package, freshness codes ทำงานจริง)
+- **ทางเลือกที่ตัดทิ้ง:** ให้ UI/route เรียก generator เองแล้วค่อยตรวจ budget ทีหลัง — ตรวจไม่ทันต้นทุนจริง; ให้ caller ส่ง declaredWrites เอง — ขยาย scope ได้เกิน package
+- **Contract ที่กระทบ:** `runtime/tools/authoring.ts`, `shared/tool-behavior-request.ts`
+- **Rollback:** ปิด generator = AI route fail closed โดย pipeline/คนยังทำงาน
+- **ข้อจำกัด:** ยังไม่มีการเรียก model จริง (GATE-PAID-AI) ? source editor UI ยังไม่ทำ ? ยังไม่มี readback บนโต๊ะจริง
