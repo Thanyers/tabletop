@@ -47,32 +47,38 @@ describe('the protocol note is one machine-readable copy', () => {
 
 describe('a read is authorized per port, per audience, at the live epoch', () => {
   it('allows a space member through a granted port', () => {
-    const verdict = authorizeProjectionRead(grant(), { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-a', portId: 'budget', isSpaceMember: true });
+    const verdict = authorizeProjectionRead(grant(), { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-a', portId: 'budget', membershipVerifiedBy: 'destination' as const });
     expect(verdict.ok).toBe(true);
     if (!verdict.ok) return;
     expect(verdict.projection.fields).toEqual(['room', 'price']);
   });
 
   it('refuses a port the grant does not expose', () => {
-    const verdict = authorizeProjectionRead(grant(), { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-a', portId: 'plan', isSpaceMember: true });
+    const verdict = authorizeProjectionRead(grant(), { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-a', portId: 'plan', membershipVerifiedBy: 'destination' as const });
     expect(verdict).toMatchObject({ ok: false, code: 'GRANT_FIELD_NOT_PERMITTED' });
   });
 
   it('refuses a non-member, and a member outside a named audience', () => {
-    expect(authorizeProjectionRead(grant(), { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-a', portId: 'budget', isSpaceMember: false })).toMatchObject({ ok: false, code: 'GRANT_AUDIENCE' });
+    expect(authorizeProjectionRead(grant(), {
+      sourceEpoch: SOURCE_EPOCH,
+      actorId: 'actor-a',
+      portId: 'budget',
+      // Simulates a caller that never established membership: the read must be refused.
+      membershipVerifiedBy: undefined as unknown as 'destination',
+    })).toMatchObject({ ok: false, code: 'GRANT_AUDIENCE' });
     const named = grant({ audience: { kind: 'actors', actorIds: ['actor-b'] } });
-    expect(authorizeProjectionRead(named, { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-a', portId: 'budget', isSpaceMember: true })).toMatchObject({ ok: false, code: 'GRANT_AUDIENCE' });
-    expect(authorizeProjectionRead(named, { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-b', portId: 'budget', isSpaceMember: true }).ok).toBe(true);
+    expect(authorizeProjectionRead(named, { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-a', portId: 'budget', membershipVerifiedBy: 'destination' as const })).toMatchObject({ ok: false, code: 'GRANT_AUDIENCE' });
+    expect(authorizeProjectionRead(named, { sourceEpoch: SOURCE_EPOCH, actorId: 'actor-b', portId: 'budget', membershipVerifiedBy: 'destination' as const }).ok).toBe(true);
   });
 
   it('refuses after a source reset even when the grant was never revoked', () => {
-    expect(authorizeProjectionRead(grant(), { sourceEpoch: SOURCE_EPOCH + 1, actorId: 'actor-a', portId: 'budget', isSpaceMember: true })).toMatchObject({ ok: false, code: 'GRANT_STALE_EPOCH' });
+    expect(authorizeProjectionRead(grant(), { sourceEpoch: SOURCE_EPOCH + 1, actorId: 'actor-a', portId: 'budget', membershipVerifiedBy: 'destination' as const })).toMatchObject({ ok: false, code: 'GRANT_STALE_EPOCH' });
     expect(grantIsLive(grant(), SOURCE_EPOCH + 1)).toBe(false);
   });
 
   it('reports revoked before anything else, so a stale epoch cannot mask a revocation', () => {
     const revoked = grant({ status: 'revoked', revokedAt: 2_000, revokedBy: 'actor-b' });
-    const verdict = authorizeProjectionRead(revoked, { sourceEpoch: SOURCE_EPOCH + 5, actorId: 'actor-a', portId: 'budget', isSpaceMember: true });
+    const verdict = authorizeProjectionRead(revoked, { sourceEpoch: SOURCE_EPOCH + 5, actorId: 'actor-a', portId: 'budget', membershipVerifiedBy: 'destination' as const });
     expect(verdict).toMatchObject({ ok: false, code: 'GRANT_REVOKED' });
   });
 });

@@ -123,7 +123,7 @@ describe('revocation is recorded at the source and is idempotent', () => {
 
 describe('reads and in-flight work go through the same grant check', () => {
   const read = (state: ReturnType<typeof createTableState>, overrides: Partial<Parameters<typeof readGrantedProjection>[1]> = {}) =>
-    readGrantedProjection(state, { grantId: 'grant-budget', actorId: 'actor-a', portId: 'budget', isSpaceMember: true, sourceEpoch: 3, ...overrides });
+    readGrantedProjection(state, { grantId: 'grant-budget', actorId: 'actor-a', portId: 'budget', membershipVerifiedBy: 'destination' as const, sourceEpoch: 3, ...overrides });
 
   it('serves a live projection', () => {
     const result = read(grantOnce());
@@ -140,7 +140,7 @@ describe('reads and in-flight work go through the same grant check', () => {
 
   it('refuses a non-member, an unexposed port and a stale epoch', () => {
     const state = grantOnce();
-    expect(read(state, { isSpaceMember: false })).toMatchObject({ ok: false, code: 'GRANT_AUDIENCE' });
+    expect(read(state, { membershipVerifiedBy: undefined })).toMatchObject({ ok: false, code: 'GRANT_AUDIENCE' });
     expect(read(state, { portId: 'plan' })).toMatchObject({ ok: false, code: 'GRANT_FIELD_NOT_PERMITTED' });
     expect(read(state, { sourceEpoch: 4 })).toMatchObject({ ok: false, code: 'GRANT_STALE_EPOCH' });
   });

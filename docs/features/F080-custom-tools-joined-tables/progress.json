@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T23:30:00+07:00",
-  "lastVerifiedAt": "2026-10-25T23:30:00+07:00",
+  "updatedAt": "2026-10-27T09:10:00+07:00",
+  "lastVerifiedAt": "2026-10-27T09:10:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
-    "candidateSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+    "headSha": "b4a94a01e453c4b48d6f819f94130d35de30dea6",
+    "candidateSha": "b4a94a01e453c4b48d6f819f94130d35de30dea6",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: C0+C1+C2+C3-pipeline+C5(contract+storage+commands ผ่าน authority path)+CX-contract+C7-protocol · unit 1025/5 · ยังไม่มี transport ข้าม Room, ไม่มี route ของ export, ไม่มี room shell (รอเลือก visual), ไม่มี hosted/live-AI/human acceptance",
+  "currentCheckpoint": "C0-C3 pipeline-C5-C7 protocol อยู่ที่ PR #305 · independent review รอบ 2 = FAIL และถูกต้อง (BLOCKER: authority spoof-guard ทำให้ 4/8 space commands ไปไม่ถึง domain) แก้แล้วที่ b4a94a0 พร้อม regression test · unit 1031/5 · ค้าง: 7 review findings (isSpaceMember จากผู้เรียก, member validation, adjudicateInFlight ไม่ re-read, audit fields จาก client, revoked grants ไม่ถูก prune, ไม่มี authority round-trip test, changelog) + transport ข้าม Room + UI + hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -465,7 +465,7 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+      "candidateSha": "b4a94a01e453c4b48d6f819f94130d35de30dea6",
       "checks": [
         {
           "name": "connection protocol: grant at the source, audience, effective revocation, in-flight adjudication",
@@ -476,9 +476,13 @@
           "checkedSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c"
         }
       ],
-      "findings": [],
+      "findings": [
+        "REVIEW ROUND 2 (independent, verdict FAIL — correct): the authority calls assertIdentityFieldsAbsent on every command, so space.removeMember / space.setRole / space.transferManager / space.leaveSource were rejected with COMMAND_IDENTITY_SPOOF before the domain ran. My previous \"space commands reach the command path\" claim was therefore overstated and is corrected here. Fixed by extracting commandNamesItsOwnTarget() (precedent: access.assign) and exempting the commands whose payload names a target, with a regression test that also proves ordinary commands still reject {actorId}.",
+        "Also fixed in b4a94a0: a whitespace-only title was stored after trim and permanently wedged the workspace (now SPACE_INVALID); space/grant commands trimmed activity to 48 while the table keeps 100 (now one shared TABLE_ACTIVITY_LIMIT in helpers); a grant could name a resource/field the table does not have (now SOURCE_GRANT_PROJECTION); projectionUsableAt failed open on a revoked grant with no revokedAt (now fails closed).",
+        "OPEN review findings (do not treat the slice as closed): (1) readGrantedProjection takes isSpaceMember from the caller instead of deriving it from the space state; (2) space.addMember does not check the target is a workspace member; (3) adjudicateInFlight does not re-read the grant, so an audience/role change between read and commit is invisible; (4) joinedAt/epoch/sharedToolWorkspaceId are still client-supplied in space payloads; (5) revoked grants are never pruned (the cap counts live grants only); (6) there is still no CommandAuthority.execute round-trip test for any space/grant command; (7) the changelog fragment is stale."
+      ],
       "blocker": null,
-      "nextAction": "transport + UI: an internal Room-to-Room read that uses readGrantedProjection on the source, subscription/invalidation, then the room shell once a visual is chosen"
+      "nextAction": "Close (1)(2)(3)(6) first: derive membership from state, validate the added member at the authority, re-read the grant in adjudicateInFlight, and add one execute() round-trip test per space and grant command. Then the Room-to-Room transport."
     },
     {
       "id": "F080-T4A",
@@ -648,27 +652,27 @@
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "Transport ของ connection: internal route บน Room ต้นทางที่เรียก readGrantedProjection + Bearer ที่ผูก grant/space/epoch แล้วให้ destination ดึง projection (ยังไม่ต้อง migration)",
-      "verify": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts",
-      "expect": "อ่านได้เฉพาะ projection ที่ grant อนุญาต; revoke แล้วอ่านไม่ได้ทันที; ไม่มี cookie/สิทธิ์รั่วข้ามห้อง"
+      "action": "ปิด review findings 1-3,6: derive isSpaceMember จาก state, ตรวจ member ที่ authority, ให้ adjudicateInFlight re-read grant, และเพิ่ม authority round-trip test ต่อคำสั่ง",
+      "verify": "npx vitest run server/collaboration-space-commands.test.ts server/authority.test.ts",
+      "expect": "ทุก space/grant command ผ่าน execute() จริงและถูกปฏิเสธด้วย code ที่ถูกต้องเมื่อผิด"
     },
     {
       "id": "NA-2",
+      "action": "transport ข้าม Room: internal route ที่เรียก readGrantedProjection + bearer ที่ผูก grant/space/epoch",
+      "verify": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts",
+      "expect": "อ่านได้เฉพาะ projection ที่อนุญาต; revoke มีผลทันที; ไม่มีสิทธิ์รั่วข้ามห้อง"
+    },
+    {
+      "id": "NA-3",
       "action": "C3 UI: source editor + activation/readback",
       "verify": "node --import tsx tests/tool-authoring-browser.mjs",
       "expect": "คนแก้ source แล้ว activate/readback ได้"
     },
     {
-      "id": "NA-3",
+      "id": "NA-4",
       "action": "CX: route + เปิดไฟล์จริง",
       "verify": "node --import tsx tests/export-readback.mjs",
       "expect": "ไฟล์ตรงกับ manifest"
-    },
-    {
-      "id": "NA-4",
-      "action": "ขออนุมัติ paid-AI cap (ยังค้างจากรอบก่อน)",
-      "verify": "n/a (user decision)",
-      "expect": "ได้ authorization + cap"
     }
   ],
   "blockedItems": [],

@@ -150,7 +150,7 @@ export function handleSourceGrantCommand(
  */
 export function readGrantedProjection(
   state: TableState,
-  input: { grantId: string; actorId: string; portId: string; isSpaceMember: boolean; sourceEpoch: number },
+  input: { grantId: string; actorId: string; portId: string; membershipVerifiedBy?: 'destination'; sourceEpoch: number },
 ): { ok: true; grant: ToolProjectionGrant; projection: { portId: string; resource: string; fields: string[]; maxRows: number } } | { ok: false; code: string; message: string } {
   const grant = (state.spaceGrants ?? []).find(entry => entry.grantId === input.grantId);
   if (!grant) return { ok: false, code: 'GRANT_NOT_FOUND', message: 'That grant does not exist on this table.' };
@@ -158,7 +158,7 @@ export function readGrantedProjection(
     sourceEpoch: input.sourceEpoch,
     actorId: input.actorId,
     portId: input.portId,
-    isSpaceMember: input.isSpaceMember,
+    membershipVerifiedBy: (input.membershipVerifiedBy ?? undefined) as 'destination',
   });
   if (!verdict.ok) return { ok: false, code: verdict.code, message: verdict.message };
   return { ok: true, grant, projection: verdict.projection };

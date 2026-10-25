@@ -121,11 +121,23 @@ export function grantIsLive(grant: ToolProjectionGrant, sourceEpoch: number): bo
  */
 export function authorizeProjectionRead(
   grant: ToolProjectionGrant,
-  input: { sourceEpoch: number; actorId: string; portId: string; isSpaceMember: boolean },
+  input: {
+    sourceEpoch: number;
+    actorId: string;
+    portId: string;
+    /**
+     * Who verified that this actor is in the destination space. The source cannot check it — the
+     * membership lives on the destination — so the caller has to say where the answer came from and
+     * an unverified claim is refused instead of being trusted as a boolean.
+     */
+    membershipVerifiedBy: 'destination';
+  },
 ): GrantVerdict {
   if (grant.status === 'revoked') return { ok: false, code: 'GRANT_REVOKED', message: 'The source revoked this connection.' };
   if (grant.sourceEpoch !== input.sourceEpoch) return { ok: false, code: 'GRANT_STALE_EPOCH', message: 'The source was reset after this grant was issued.' };
-  if (!input.isSpaceMember) return { ok: false, code: 'GRANT_AUDIENCE', message: 'Only a member of the space may read through this connection.' };
+  if (input.membershipVerifiedBy !== 'destination') {
+    return { ok: false, code: 'GRANT_AUDIENCE', message: 'Space membership must be asserted by the destination.' };
+  }
   if (grant.audience.kind === 'actors' && !grant.audience.actorIds.includes(input.actorId)) {
     return { ok: false, code: 'GRANT_AUDIENCE', message: 'This member is not in the audience of the grant.' };
   }
@@ -147,7 +159,14 @@ export type InFlightVerdict =
  */
 export function adjudicateInFlight(
   grant: ToolProjectionGrant,
-  input: { sourceEpoch: number; now: number },
+  input: {
+    sourceEpoch: number;
+    now: number;
+    /** The actor asking to commit; checked against the audience on the freshly re-read grant. */
+    actorId?: string;
+    /** Whether the destination still lists that actor as a space member. */
+    membershipVerifiedBy?: 'destination';
+  },
 ): InFlightVerdict {
   if (grant.status === 'revoked') {
     return { ok: false, code: 'GRANT_REVOKED', message: `The source revoked this connection at ${grant.revokedAt ?? input.now}.` };

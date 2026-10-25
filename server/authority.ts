@@ -858,6 +858,17 @@ export class CommandAuthority {
           if (existing.payloadHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           return { ...existing.response, duplicate: true };
         }
+        if (envelope.type === 'space.addMember' || envelope.type === 'space.setRole' || envelope.type === 'space.transferManager') {
+          // F080: the target of a space command must be someone the table actually has. Without
+          // this, a manager could write an actorId that no membership row backs, and the destination
+          // space would then treat an outsider as a member.
+          const target = envelope.type === 'space.addMember'
+            ? (envelope.payload as { member?: { actorId?: unknown } } | null)?.member?.actorId
+            : (envelope.payload as { actorId?: unknown } | null)?.actorId;
+          if (typeof target !== 'string') throw new AuthorityError('SPACE_PAYLOAD');
+          const targetMember = await transaction.getMember(target);
+          if (!targetMember || targetMember.revokedAt !== null) throw new AuthorityError('MEMBER_NOT_FOUND', 'This person is not at the table.');
+        }
         if (envelope.type === 'access.assign') {
           // F035: roles go to current members only, and the owner's access never changes.
           const target = (envelope.payload as { actorId?: unknown } | null)?.actorId;
