@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useRef } from 'react';
 import { validateToolPackage, type ToolPackageDefinition } from '../shared/tool-package';
 import { compileToolPackage } from '../runtime/tools/compile';
 import type { ToolAuthoringResult } from '../runtime/tools/authoring';
@@ -57,6 +57,11 @@ export function ToolAuthoringPanel(props: ToolAuthoringPanelProps): React.ReactE
   const [problems, setProblems] = useState<ShownProblem[]>([]);
   const [result, setResult] = useState<ToolAuthoringResult | undefined>();
   const [busy, setBusy] = useState(false);
+  /** Feedback for a check, because a passing check otherwise looks like a click that did nothing. */
+  const [checkNote, setCheckNote] = useState('');
+  const checkCount = useRef(0);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const tablistRef = useRef<HTMLDivElement | null>(null);
 
   /** Rebuild the definition the person is editing, keeping everything except the source text. */
   const draft = useMemo<ToolPackageDefinition>(() => ({
@@ -74,15 +79,21 @@ export function ToolAuthoringPanel(props: ToolAuthoringPanelProps): React.ReactE
    * error is visible before the person asks to activate, and not only after a failed activation.
    */
   const check = useCallback(() => {
+    checkCount.current += 1;
+    const round = checkCount.current;
     const validation = validateToolPackage(draft);
     if (!validation.ok) {
       setProblems(validation.problems.map(problem => ({ code: problem.code, path: problem.path, message: problem.message })));
       setResult(undefined);
+      setCheckNote(`ตรวจครั้งที่ ${round}: ไม่ผ่าน ${validation.problems.length} จุด — แก้แล้วตรวจใหม่`);
       return false;
     }
     const compiled = compileToolPackage(validation.package, hashStandIn);
     setProblems(compiled.ok ? [] : compiled.problems.map(problem => ({ code: problem.code, path: problem.path, message: problem.message })));
     setResult(undefined);
+    setCheckNote(compiled.ok
+      ? `ตรวจครั้งที่ ${round}: โครงสร้างและ compile ผ่าน — พร้อม activate`
+      : `ตรวจครั้งที่ ${round}: compile ไม่ผ่าน ${compiled.problems.length} จุด`);
     return compiled.ok;
   }, [draft]);
 
@@ -113,15 +124,33 @@ export function ToolAuthoringPanel(props: ToolAuthoringPanelProps): React.ReactE
         <span data-testid="package-version" style={{ fontSize: 12, opacity: 0.75 }}>{`v${props.initial.version} · ${props.initial.packageId}`}</span>
       </header>
 
-      <div role="tablist" aria-label="ไฟล์ในแพ็กเกจ" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div role="tablist" aria-label="ไฟล์ในแพ็กเกจ" ref={tablistRef} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
+        onKeyDown={event => {
+          const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1
+            : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+          if (step === 0) return;
+          event.preventDefault();
+          const index = files.findIndex(file => file.path === activePath);
+          const next = files[(index + step + files.length) % files.length];
+          if (!next) return;
+          setActivePath(next.path);
+          // Focus follows selection, which is what makes the tablist usable from the keyboard.
+          requestAnimationFrame(() => tablistRef.current?.querySelector<HTMLButtonElement>(`[data-testid="file-tab-${next.path}"]`)?.focus());
+        }}
+      >
         {files.map(file => (
           <button
             key={file.path}
             type="button"
             role="tab"
             aria-selected={file.path === activePath}
+            tabIndex={file.path === activePath ? 0 : -1}
             data-testid={`file-tab-${file.path}`}
-            onClick={() => setActivePath(file.path)}
+            onClick={() => {
+              setActivePath(file.path);
+              // Move the caret into the file that was chosen, so a click always does something visible.
+              requestAnimationFrame(() => editorRef.current?.focus());
+            }}
             style={{ padding: '4px 10px', borderRadius: 8, border: file.path === activePath ? '2px solid #1f6feb' : '1px solid #9aa4ae', background: '#fff' }}
           >
             {file.path}
@@ -133,6 +162,7 @@ export function ToolAuthoringPanel(props: ToolAuthoringPanelProps): React.ReactE
         <label style={{ display: 'grid', gap: 4 }}>
           <span style={{ fontSize: 12, opacity: 0.8 }}>{`source: ${active.path}`}</span>
           <textarea
+            ref={editorRef}
             data-testid="source-editor"
             aria-label={`source ของ ${active.path}`}
             value={active.text}
@@ -149,6 +179,7 @@ export function ToolAuthoringPanel(props: ToolAuthoringPanelProps): React.ReactE
       ) : null}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <p data-testid="check-note" aria-live="polite" style={{ margin: 0, fontSize: 12, minHeight: 18 }}>{checkNote}</p>
         <button type="button" data-testid="validate" onClick={check} style={{ padding: '6px 12px', borderRadius: 8 }}>
           ตรวจ source
         </button>
