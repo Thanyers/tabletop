@@ -225,17 +225,17 @@
       "title": "source A/B คนละ workspace IDs; shared tool อ่านทั้งคู่; source update propagate พร้อม freshness",
       "status": "UNVERIFIED",
       "environment": "workers integration + browser",
-      "sha": "07a1267f40b345e86ba6c8d353409a327c7735a3",
+      "sha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
-        "npx vitest run src/tabletop/shared/tool-grant-rows.test.ts",
+        "npx vitest run src/tabletop/shared/tool-grant-rows.test.ts src/tabletop/ui/joined-projection-client.test.ts",
         "npm run test:tool-joined:browser"
       ],
-      "evidence": "three layers are proven separately: (1) two workspaces with different ids, a grant bound to the space workspace, and a cross-room read that returns rows plus the live sourceRevision (cloudflare tier, real DOs); (2) rows carry only granted fields and are clamped (unit 5/5); (3) a panel renders two sources with independent revisions, refreshes both, and turns a revoked source into an explicit unavailable state without showing old values (browser 8/8, CI).",
+      "evidence": "all three layers are proven: (1) two workspaces with distinct ids, a grant bound to the space workspace, and a cross-room read returning rows that carry only the granted field at the source's live revision — and the next read reports a higher revision after the source changed, with no notification to the space (real DOs); (2) the client transport maps every refusal to a panel state and never lets one failing source hide the others (8/8); (3) the panel renders both sources, refreshes both and turns a revoked source into an explicit unavailable card without stale values (8/8, CI).",
       "expected": "สอง workspace id ต่างกันจริง; projection จากทั้งคู่มี source revision/freshness; เปลี่ยนต้นทางแล้วค่าใหม่มาถึงโดยไม่มี manual copy",
-      "actual": "UNVERIFIED — the panel is exercised with a fake transport, and the e2e source table has no rows, so \"a shared tool reads both live and an update propagates end to end\" is not yet demonstrated in one running path",
-      "limitations": "what remains is the client transport between the endpoint and the panel, plus a source table with real data in the e2e"
+      "actual": "UNVERIFIED — the only unproven link is the panel's fetch binding to the real URL; no test would fail today if that binding were wrong",
+      "limitations": "no deployed staging run; the browser harness scripts the HTTP response, so the credential/cookie path to the endpoint is untested from the panel side"
     },
     {
       "id": "JOIN-02",

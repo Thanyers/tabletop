@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T01:08:00+07:00",
-  "lastVerifiedAt": "2026-10-26T01:08:00+07:00",
+  "updatedAt": "2026-10-26T01:20:00+07:00",
+  "lastVerifiedAt": "2026-10-26T01:20:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "07a1267f40b345e86ba6c8d353409a327c7735a3",
-    "candidateSha": "07a1267f40b345e86ba6c8d353409a327c7735a3",
+    "headSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73",
+    "candidateSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: cross-room read คืน rows ที่ revision สดแล้ว (e2e ยืนยัน rows+dataRevision) และมีหน้าจอ joined panel ที่ render สองแหล่งพร้อม revoke/reconnect (8/8 ใน CI) · cloudflare tier 271/271 · unit 1052/5 · ยังค้าง: ต่อ panel เข้ากับ endpoint จริง (ตอนนี้ harness ใช้ fake transport), source ที่มีข้อมูลจริงใน e2e, action กลับต้นทาง (T3B), export route, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: joined read ครบทั้งสามชั้น — (1) endpoint คืน rows จริงจากโต๊ะที่มีข้อมูล พร้อม revision สดและ propagate เมื่อต้นทางเปลี่ยน (e2e จริง), (2) client mapping 8/8, (3) panel สองแหล่ง 8/8 — เหลือเพียง fetch binding จาก panel ไป URL จริง · cloudflare 273/273 · unit 1052/5 · ค้าง: T3B action กลับต้นทาง, export route, room shell (รอเลือก visual), hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -499,6 +499,22 @@
           "result": "PASS",
           "evidence": "8/8: both sources render with their own revisions (3 / 7) and 4 rows total; a refresh moves both revisions (4 / 9) and replaces the old values; disconnecting one source shows an explicit \"revoked\" status, removes its table entirely and leaves no last-known value on screen, while the other source keeps its data; reconnect restores it at a new revision (10); the same actions work from the keyboard; the view delegates transport to its caller (never fakes a read)",
           "checkedSha": "07a1267f40b345e86ba6c8d353409a327c7735a3"
+        },
+        {
+          "name": "real rows from a table with data, and propagation on a later read",
+          "environment": "Cloudflare tier (worker.fetch + real DOs + D1)",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "8/8 now: a source built through the real command path (import → evolve.propose/simulate/validate/approve/activate) serves rows whose keys are exactly the granted field (`name` only, `available` withheld) at the source's live dataRevision; after the source owner imports another file through its own path, the next read reports a higher sourceDataRevision with no notification to the space.",
+          "checkedSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73"
+        },
+        {
+          "name": "client transport maps endpoint answers to panel states",
+          "environment": "local unit + browser",
+          "command": "npx vitest run src/tabletop/ui/joined-projection-client.test.ts; npm run test:tool-joined:browser",
+          "result": "PASS",
+          "evidence": "8/8 unit: asks every source with space/source/grant/port (never a caller-supplied actor), maps 409 revoked→revoked, 409 stale→stale, 404/unlinked/unknown-code→missing, keeps other sources when one read throws, never shows rows on a refusal even when the body carries them, treats a 200 with a malformed body as missing, passes the abort signal. Browser 8/8 now runs this same client against a scripted transport.",
+          "checkedSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73"
         }
       ],
       "findings": [
@@ -512,7 +528,7 @@
         "The two-workspace test that the previous two reviews demanded now exists and passes through the real Worker entry (`worker.fetch` + seeded sessions via `cookieName`/`csrfForToken`). It is the test that would have caught the slug-identity blocker: the impersonation case asserts 404 while the authorized workspace still reads 200."
       ],
       "blocker": "ต้องได้ผลเลือก visual จากเจ้าของก่อนลงทุน room shell",
-      "nextAction": "Connect the panel to the real endpoint (one client transport that fetches each source projection and maps refusals to the statuses the panel already handles), then give the e2e source table real rows so JOIN-01 can be judged on data that actually moves."
+      "nextAction": "Bind the panel fetch to the real endpoint (one function: GET /api/workspaces/:space/space/projection with credentials + query), then the remaining JOIN-01 gap closes; after that T3B (authorized action back to one source target)."
     },
     {
       "id": "F080-T3B",
