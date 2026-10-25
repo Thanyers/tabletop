@@ -420,17 +420,17 @@
       "requirement": "G5",
       "slice": "F080-T5",
       "title": "copied definitions อยู่ต่อหลัง unlink; marker ในฟิลด์ที่ห้ามคัดลอกไม่ติดไป; retention ที่อนุญาตหมดอายุตามจริง",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "environment": "serialization + storage + readback",
-      "sha": "780b587173cac9658aafbd3d18339652c3ee11cf",
+      "sha": "f875950",
       "node": "v22.23.2",
       "commands": [
         "npx vitest run src/tabletop/shared/tool-portable.test.ts"
       ],
-      "evidence": "definitions travel without data or access: planted markers in records, grants and members never reach the portable bundle, and an edited bundle fails its own content hash. Definitions also survive a disconnect (the space and its other sources keep working after one is unlinked).",
+      "evidence": "a copy now carries an expiry bounded by PORTABLE_COPY_MAX_AGE_MS (30 days): export refuses a negative, zero or over-long window (RETENTION_OUT_OF_RANGE), import refuses an expired or undated copy (BUNDLE_EXPIRED / BUNDLE_SCHEMA), and a fresh copy still imports. Definitions travel without records, grants or members, and an edited bundle fails its own content hash.",
       "expected": "synthetic marker ถูกวางใน raw rows/defaults/source/examples/run output/cache/history/checkpoint/grant และตรวจว่า payload/storage/readback มีเฉพาะส่วนที่อนุญาต; definitions ที่อนุญาตอยู่ต่อหลัง disconnect; ไม่มี live records/grants/source IDs ติดไป",
-      "actual": "PARTIAL — copying and marker-free travel are proven; retention/expiry rules for an allowed copy are not implemented",
-      "limitations": "no retention window or expiry for copied data exists yet, so that acceptance clause is untested"
+      "actual": "PASS at local unit level",
+      "limitations": "retention is enforced on the portable bundle; there is no server-side retention sweep for an already-imported copy."
     },
     {
       "id": "EXPORT-01",

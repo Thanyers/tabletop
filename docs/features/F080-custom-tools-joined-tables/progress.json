@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T02:41:00+07:00",
-  "lastVerifiedAt": "2026-10-26T02:41:00+07:00",
+  "updatedAt": "2026-10-26T02:52:00+07:00",
+  "lastVerifiedAt": "2026-10-26T02:52:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "780b587173cac9658aafbd3d18339652c3ee11cf",
-    "candidateSha": "780b587173cac9658aafbd3d18339652c3ee11cf",
+    "headSha": "f875950",
+    "candidateSha": "f875950",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: T5 ครึ่งแรกเสร็จ — portable bundle (definitions เท่านั้น, hash guard, input mapping 9/9) และ held-out สองแพ็กเกจ (เรียน/เล่น) ที่ render+act บน host ที่ไม่ถูกแก้ (browser 16/16, host ไม่มี marker) · cloudflare 295/295 · unit 1086/5 · ค้าง: retention/expiry (COPY-01), mount ในแอปจริง, T4A/T4B, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: COPY-01 ปิด (retention 30 วัน + refused expired) · 3 แนว visual room shell ส่งให้เลือกแล้ว (docs/previews/room-shell/, ui-gate 14/16) · ค้าง: รอเลือก A/B/C + paid-AI cap, mount panel ในแอปจริง, T4A/T4B, hosted/human",
   "slices": [
     {
       "alias": "C0",
