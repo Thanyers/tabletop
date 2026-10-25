@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { createServer } from 'node:http';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { extname, join, normalize, resolve } from 'node:path';
 
 /**
  * F080 / C2 browser acceptance: the generated tool really renders inside a sandboxed frame and
@@ -12,9 +12,41 @@ import { pathToFileURL } from 'node:url';
  */
 
 const root = resolve(import.meta.dirname, '..', '..', '..');
-const pages = resolve(root, 'test-results/tool-host-harness/index.html');
+const harnessDir = resolve(root, 'test-results/tool-host-harness');
 const output = resolve(root, 'test-results/tool-host');
 await mkdir(output, { recursive: true });
+
+/**
+ * Serve the harness from a real http origin.
+ *
+ * This matters for the isolation proof: from `file://` a *non-sandboxed* frame also reports
+ * `origin === "null"` and has no cookie jar, so the probe would pass without proving anything.
+ * Every response sets a cookie, so the parent page demonstrably holds one and a frame that could
+ * read it would be caught instead of silently "empty".
+ */
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json' };
+const server = createServer(async (request, response) => {
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const relative = normalize(url.pathname === '/' ? '/index.html' : url.pathname).replace(/^([/\\])+/, '');
+  const file = join(harnessDir, relative);
+  if (!file.startsWith(harnessDir)) {
+    response.writeHead(403).end();
+    return;
+  }
+  try {
+    const body = await readFile(file);
+    response.writeHead(200, {
+      'content-type': MIME[extname(file)] ?? 'application/octet-stream',
+      'set-cookie': 'tabletop_probe=sandbox-canary; Path=/; SameSite=Lax',
+      'cache-control': 'no-store',
+    });
+    response.end(body);
+  } catch {
+    response.writeHead(404).end();
+  }
+});
+await new Promise(done => server.listen(0, '127.0.0.1', done));
+const origin = `http://127.0.0.1:${server.address().port}`;
 
 const checks = [];
 const mark = (name, detail = '') => {
@@ -33,8 +65,12 @@ const pageErrors = [];
 page.on('pageerror', error => pageErrors.push(String(error)));
 
 try {
-  await page.goto(pathToFileURL(pages).href);
+  await page.goto(`${origin}/index.html`);
   await page.getByText('C2 — generated tool host').waitFor();
+
+  const parentCookie = await page.evaluate(() => document.cookie);
+  if (!parentCookie.includes('tabletop_probe=sandbox-canary')) fail('the parent page holds a cookie', parentCookie);
+  mark('host page runs from a real http origin and holds a session-style cookie', parentCookie);
 
   const compile = await page.getByTestId('compile').innerText();
   if (!compile.includes('compile: ok')) fail('package compiles', compile);
@@ -121,14 +157,16 @@ try {
     try { report.cookie = document.cookie === '' ? 'empty' : `read:${document.cookie}`; } catch (error) { report.cookie = `blocked:${String(error)}`; }
     try { globalThis.localStorage.getItem('x'); report.storage = 'readable'; } catch (error) { report.storage = `blocked:${String(error).slice(0, 60)}`; }
     try {
-      const response = await fetch('/favicon.svg');
+      // Same-site and definitely served by the harness server, so a failure here is CSP, not 404.
+      const response = await fetch('/index.html');
       report.fetch = `reachable:${response.status}`;
     } catch (error) {
       report.fetch = `blocked:${String(error).slice(0, 60)}`;
     }
     return { ...report, origin: location.origin, href: location.href.slice(0, 40) };
   });
-  if (!isolation.cookie.startsWith('empty') && !isolation.cookie.startsWith('blocked')) fail('no cookie access in frame', isolation.cookie);
+  // The parent provably holds this cookie, so "readable" here would be a real leak.
+  if (!isolation.cookie.startsWith('blocked')) fail('a sandboxed frame must not read cookies', isolation.cookie);
   if (!isolation.storage.startsWith('blocked')) fail('storage is blocked in frame', isolation.storage);
   if (!isolation.fetch.startsWith('blocked')) fail('network is blocked in frame', isolation.fetch);
   mark('frame has no cookie/storage/network access', JSON.stringify(isolation));
@@ -151,4 +189,5 @@ try {
 } finally {
   await context.close();
   await browser.close();
+  await new Promise(done => server.close(done));
 }

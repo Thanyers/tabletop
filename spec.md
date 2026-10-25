@@ -3,7 +3,7 @@
 แหล่งความจริงของ **สถานะงาน** โปรเจกต์นี้ (ไม่ใช่แชท) · อัปเดตทุกครั้งที่จบงาน ตามกติกาใน [CLAUDE.md](CLAUDE.md)
 รายละเอียดเชิงลึกอยู่ในเอกสารเจ้าของเรื่อง — ไฟล์นี้สรุปและลิงก์ ไม่คัดลอกซ้ำ
 
-อัปเดตล่าสุด: 2026-10-24
+อัปเดตล่าสุด: 2026-10-25
 
 ## ผลิตภัณฑ์
 
@@ -28,6 +28,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 แผนที่ contract/capability ปัจจุบัน: [CURRENT_ARCHITECTURE](docs/CURRENT_ARCHITECTURE.md) · ข้อมูล/คำสั่ง: [GENERIC_TABLE_DESIGN](docs/GENERIC_TABLE_DESIGN.md) · auth/storage: [R1_ARCHITECTURE](docs/R1_ARCHITECTURE.md) · design system: [design.md](design.md)
 
 ## สถานะปัจจุบัน
+
+- **F080 custom tools + joined tables — `review` (C0/C1/C2 + C5 contract), draft PR [#305](https://github.com/Thanyers/tabletop/pull/305) (2026-10-25):** contract ของ tool package/bridge (`shared/tool-package.ts`, `shared/tool-protocol.ts`), compile adapter ที่เป็น pure JS (Sucrase) จึงรันได้ทั้ง browser/Node/Worker, host ที่ mount generated UI ใน iframe `sandbox="allow-scripts"` + CSP ปิด (`ui/GeneratedToolHost.tsx`, `ui/tool-sandbox/`), isolated behaviour runner บน workerd (`cloudflare/tool-behavior-runner.ts`) + validator ฝั่ง host, collaboration-space contract พร้อม role×verb matrix (`shared/collaboration-space.ts`) และ projection ที่ตัดตาม declared field ∩ grant field (`shared/tool-projection.ts`) · Node 22.23.2: typecheck 3 config, unit **896 passed / 5 skipped (901)**, Workers **11/11** (runner), browser **14/14** (host harness จาก http origin: parent ถือคุกกี้จริง, frame อ่าน `document.cookie` ไม่ได้—SecurityError, `localStorage` ถูกบล็อก, `fetch` ถูก CSP บล็อก), `build` ผ่าน, lint 0 errors, public scan 0 findings · **ยังไม่มี authority integration** (behaviour ถูก validate แต่ยังไม่มี route commit), ไม่มี AI authoring, ไม่มี migration/storage, ไม่มี hosted/human acceptance — EXEC-01/EDIT-01/G1-01 ยังเป็น UNVERIFIED.
 
 - **F079-T1 ซ่อม `/demo` หลัง freeze (preload CSS) — `review`, PR เตรียมเปิด (2026-10-25):** dev run ของ #302/#303 ล้มที่ browser-workers ใน scenario interactive demo: client boot เลือก 3 dynamic import ใน `React.lazy(() => { … })` เดียว → Rollup ผูก preload deps ชุดเดียวให้ call นั้น และหลังตัด legacy branch ชุดนั้นกลายเป็นของ `TabletopApp` → `/demo` โหลด JS แต่ไม่โหลด `InteractiveDemo.css` (วัดใน browser: `.tt-flow-wrap` สูง 0px, footer ทับ header, การ์ดลากไม่ขยับ) · แก้ `src/main.tsx` เป็น `lazy(() => import(…))` แยกต่อ route ทำให้แต่ละ chunk preload CSS ของตัวเอง (ตรวจใน `dist`: InteractiveDemo deps = `[js, canvas, calm-workspace, rotate, charts, calm-workspace.css, InteractiveDemo.css]`) · เพิ่ม `src/tabletop/client-entry.test.ts` 2 เคส (แดงก่อน, เขียวหลัง) กัน multi-import lazy กลับมา · Node 22.23.2: typecheck 3 config ผ่าน, unit **810 passed / 5 skipped (815)** (dev 808 + 2), Workers **236 / 236**, `build` ผ่าน, lint **0 errors / 66 warnings**, public scan 0 findings; ยืนยัน browser local ว่า scenario interactive demo ผ่าน (suite เดินต่อไปถึง generic-table) · ไม่เปลี่ยน route หรือ UI อื่น.
 - **F078-T18 review follow-ups — `done`, [PR #303](https://github.com/Thanyers/tabletop/pull/303) merge `7f64daa` (2026-10-25):** หลังรีวิวสองแกนของงาน architecture ทั้งชุด แก้ของที่รีวิวเจอ: (1) prompt-length literal ที่เหลือ 2 จุด (`cloudflare/room.ts` `input.prompt.length <= 4_000`, `cloudflare/table-assistant.ts` `prompt.length > 4000` สองที่) เปลี่ยนไปใช้ `MAX_TABLE_ASSISTANT_PROMPT_CHARS`/`MAX_PROMPT_CHARS` และขยาย drift test ให้จับ `prompt.length` literal ด้วย — ยืนยันด้วย controlled RED (คืน literal แล้วเทสต์แดงที่ `cloudflare/room.ts`, คืนค่าคงที่แล้วเขียว) · (2) ลบ `CanvasPoint` ที่ประกาศซ้ำใน `ui/canvas-view-state.ts` แล้ว import type จาก `ui/canvas-layout.ts` · (3) ปรับสถานะให้ตรง: F078-T6c `done` merge `f0e372d`, F079 freeze `done` merge `a3a2c83` (spec/PLAN/README), เพิ่ม owner ของ prompt/source limits ใน `CURRENT_ARCHITECTURE` · (4) ถอด `test:browser`/`test:spatial`/`test:constellation` ออกจาก `package.json` เพราะชี้ spec ที่ถูก freeze. Node 22.23.2: typecheck 3 config, unit/Workers/build/lint/public scan ตามผลที่จะบันทึกใน PR; ไม่เปลี่ยน runtime behavior.
@@ -194,10 +196,11 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 - Rule drafting กับ assistant มีเพดาน request คนละชุด; อ่านค่าจากเจ้าของ contract ในหน้าเดียวกัน ไม่ใช้ limit ของ draft แทน assistant และยังไม่มีสรุปความจำระยะยาวอัตโนมัติ
 - ห้อง Worker/Node และ invite แบบโต๊ะทั่วไป/legacy ต่างกัน; ใช้ [capability matrix](docs/CURRENT_ARCHITECTURE.md#runtime-capability-matrix) และ contract ของแต่ละ flow
 - การแก้กฎต้องรักษาข้อมูลและ definitions ที่เข้ากันได้; รายละเอียด evolution/import/compute อยู่ใน [Generative runtime](docs/GENERATIVE_CANVAS_RUNTIME.md) และ [Reusable compute](docs/REUSABLE_COMPUTE.md) ส่วนสถานะ hosted อ้าง [Deployments](docs/DEPLOYMENTS.md)
+- F080 tool package: compile ไม่มี type-check (ตรวจได้แค่ parse + schema) จึงไม่ควรเรียกว่า type-safe · frame CSP ต้องมี `'unsafe-eval'` เพื่อ instantiate โมดูลที่ compile มา (จำกัดเฉพาะใน sandbox ที่ opaque origin) · sandbox runtime ถูก inline ต่อ frame ประมาณ 685 KB (ยังไม่ optimize) · iframe ไม่ได้ให้ hard CPU isolation
 
 ### ยังไม่ได้พิสูจน์
 
-มือถือ/สองอุปกรณ์จริง, load/soak, live budget-negative, กู้คืน D1 + Room + Billing ทั้งระบบ, automated a11y audit
+มือถือ/สองอุปกรณ์จริง, load/soak, live budget-negative, กู้คืน D1 + Room + Billing ทั้งระบบ, automated a11y audit, F080: authority commit ของ behaviour, AI authoring, hosted/staging run, multi-table live join, human study (5 คน/3 วัน)
 
 ## การตัดสินใจ
 
