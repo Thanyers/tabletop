@@ -432,6 +432,10 @@ jobs:
         env:
           BROWSER_CHANNEL: chromium
         run: npm run test:tool-authoring:browser
+      - name: Verify the room shell
+        env:
+          BROWSER_CHANNEL: chromium
+        run: npm run test:room-shell:browser
       - name: Verify the joined data panel
         env:
           BROWSER_CHANNEL: chromium
@@ -445,6 +449,7 @@ jobs:
             test-results/tool-host/
             test-results/tool-authoring/
             test-results/tool-joined/
+            test-results/room-shell/
           retention-days: 7
           include-hidden-files: false
           if-no-files-found: ignore
