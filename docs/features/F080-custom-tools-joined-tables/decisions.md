@@ -262,3 +262,15 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ทำไมไม่แก้:** การเปลี่ยน `not_found_handling` เป็น `single-page-application` คือการเปลี่ยนพฤติกรรมการเสิร์ฟของ **production** ซึ่งอยู่นอกขอบเขตที่อนุญาต (dev-only, no production config) จึงต้องขออนุมัติแยกพร้อมผลกระทบ
 
 **ถ้าจะปิดช่องนี้ภายหลัง:** เปลี่ยน `assets.not_found_handling` เป็น `"single-page-application"` (หรือเพิ่ม `_redirects` แบบ rewrite ไป `/index.html` ที่ status 200) แล้วทดสอบทั้ง `/t/:id` และ `/s/:id` บน staging ก่อน
+
+## D-026 — PROV-01 ยังไม่ปิด: หลักฐานแยกบทบาทได้ แต่เส้นทาง manual review ยังอธิบายไม่ได้
+
+**สิ่งที่ยืนยันแล้ว (จากโค้ดและ probe):** `ToolActivationRecord` มี `requesterActorId`, `generator` (human | ai+generatorId+calls+usd), `reviewer` (auto | manual+actorId), `problems`, `reason`, `recordedAt` — แยกสี่บทบาทจริง และกรณี `auto` ไม่แต่งชื่อคนขึ้นมา
+
+**สิ่งที่ยังอธิบายไม่ได้ (timebox หมดแล้ว):** ใน fixture ที่ถือว่า valid แล้ว reviewer แบบ `auto` activate สำเร็จ แต่ `manual` ไม่ activate ทั้งกรณีผู้สั่งเองและคนอื่น ทั้งที่โค้ดที่อ่าน (`authorToolPackage`) ไม่ได้ใช้ `reviewer` ในการตัดสิน ⇒ มีการปฏิเสธอยู่ก่อนถึงจุดนั้น ยังไม่ได้ระบุว่าเกิดจากที่ใด
+
+**สิ่งที่ต้องแก้ในรายงานรอบก่อน:** ผมเคยสรุปว่า "manual review ไม่เคย activate เพราะนโยบาย" — ที่จริงเทสต์ชุดแรกใช้ package ที่ผิด (`runtimeProfile` และ import pin ไม่ตรง) จึงถูกปฏิเสธด้วย `TOOL_PACKAGE_INVALID` ข้อสรุปนั้นจึงไม่ถูกต้อง และผมถอนคำกล่าวนั้น
+
+**ขั้นถัดไปที่ควรทำ:** ไล่หาว่ามี guard ที่ไหนอ่าน `route.kind`/reviewer (เช่น wrapper หรือ policy module) แล้วเขียนเทสต์ที่ valid จริง; ห้ามสรุปซ้ำจนกว่าจะมี `record.reason` ของเคส valid มายืนยัน
+
+**ผลต่อ acceptance:** `PROV-01` คงเป็น UNVERIFIED — ไม่ใช่เพราะขาดข้อมูลแยกบทบาท แต่เพราะเส้นทาง manual review ยังไม่ผ่านการพิสูจน์
