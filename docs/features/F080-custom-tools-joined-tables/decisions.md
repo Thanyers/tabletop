@@ -215,3 +215,15 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ผลที่ต้องตามมา:** `applySpaceCommand` ต้อง bump `revision` ตามกติกาเดิม, recap ต้องอ่าน `seen` จาก state แล้วส่งเข้า `buildSpaceRecap`, และ member ที่ยังไม่เคยเรียกจะยัง `unseen: true` ตามที่ตกลงไว้
 
 **ขั้นที่ยังไม่ทำ:** ห่วงโซ่นี้ยังไม่ลงโค้ด — ต้องแก้พร้อมกัน 6 จุดใน `shared/collaboration-space-command.ts` (array, schema, union, parse switch, apply case) และ `shared/collaboration-space.ts` (type)
+
+**แผนที่ไฟล์ที่ตรวจแล้ว (สำหรับลงมือรอบถัดไป):**
+
+| ไฟล์ | จุดที่ต้องแก้ |
+| --- | --- |
+| `shared/collaboration-space-command.ts` | `SPACE_COMMANDS` (บรรทัด ~15-24), schema ใหม่, union `ParsedSpaceCommand`, `case 'space.seen'` ใน `parseSpaceCommand` (~บรรทัด 120) |
+| `shared/collaboration-space.ts` | ฟิลด์ `seen?: Record<string, number>` ของ state + `case 'space.seen'` ใน `applySpaceCommand` (ไม่ได้อยู่ในไฟล์ command) + bump `revision` |
+| `domain/collaboration-space.ts` | `toSpaceCommand` (~บรรทัด 154) และ `spaceLabel` (~บรรทัด 166) |
+| `cloudflare/space-recap-transport.ts` | ส่ง `lastSeen` (อ่านจาก state) เข้า `buildSpaceRecap` |
+| `shared/collaboration-space-command.test.ts` | เปลี่ยน `it.todo` 6 ข้อเป็นเทสต์จริง (สัญญาเขียนไว้แล้ว) |
+
+**สถานะ:** ยังไม่ลงโค้ด — สัญญา (todo 6 ข้อ) และแผนที่ไฟล์พร้อมแล้ว
