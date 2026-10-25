@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TABLE_TURN_SEATS, type WorkspaceView } from './contracts.js';
 import type { TableValue } from './table-contracts.js';
+import { MAX_ASSISTANT_PROMPT_CHARS } from './ai-prompt-limits.js';
 
 const revisionTokenSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 const commandIdSchema = z.string().uuid();
@@ -51,7 +52,7 @@ export const tableAssistantRequestSchema = z.strictObject({
   commandId: commandIdSchema,
   expectedRevision: revisionTokenSchema,
   expectedEpoch: z.number().int().positive().safe(),
-  prompt: z.string().trim().min(3).max(4_000),
+  prompt: z.string().trim().min(3).max(MAX_ASSISTANT_PROMPT_CHARS),
   consent: z.literal(true),
 });
 
@@ -63,7 +64,7 @@ export const tableAssistantConfirmationSchema = z.strictObject({
 
 export const tableAssistantConversationEntrySchema = z.strictObject({
   contextSource: z.literal('recalled').optional(),
-  prompt: z.string().min(1).max(4_000),
+  prompt: z.string().min(1).max(MAX_ASSISTANT_PROMPT_CHARS),
   result: z.strictObject({
     kind: z.enum(['explanation', 'action-proposal', 'clarification', 'refusal', 'build-request']),
     text: z.string().min(1).max(8_000),
@@ -77,7 +78,7 @@ export const tableAssistantJobSchema = z.strictObject({
   /** Opaque actor id of the member who asked; lets open history (F034) label other members' chats. */
   askedBy: z.string().min(1).max(200).optional(),
   createdAt: z.number().int().nonnegative().safe(),
-  prompt: z.string().min(1).max(4_000),
+  prompt: z.string().min(1).max(MAX_ASSISTANT_PROMPT_CHARS),
   status: z.enum(['running', 'completed', 'failed']),
   expectedRevision: revisionTokenSchema,
   expectedEpoch: z.number().int().positive().safe(),

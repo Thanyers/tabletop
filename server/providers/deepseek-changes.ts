@@ -10,6 +10,7 @@ import { applyTablePatch, isTablePatch, tablePatchSchema } from '../../src/table
 import { DomainError, MAX_TABLE_MEMBER_SEATS, type ChangeSet } from '../../src/tabletop/shared/contracts.js';
 import type { TableProgram, TableRecord } from '../../src/tabletop/shared/table-contracts.js';
 import { jsonWithinBudget } from '../../src/tabletop/shared/json-budget.js';
+import { MAX_DRAFT_PROMPT_CHARS } from '../../src/tabletop/shared/ai-prompt-limits.js';
 import {
   MAX_JOB_PARTIAL_CONTENT_CHARS,
   MAX_JOB_STREAM_CHARS,
@@ -53,11 +54,11 @@ const encounterChangeSchema: z.ZodType<ChangeSet> = z.strictObject({
 });
 
 const inputSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('teaching'), prompt: z.string().min(3).max(4000), parameters: physicsParamsSchema }),
-  z.strictObject({ kind: z.literal('encounter'), prompt: z.string().min(3).max(4000), rule: encounterRuleSchema }),
+  z.strictObject({ kind: z.literal('teaching'), prompt: z.string().min(3).max(MAX_DRAFT_PROMPT_CHARS), parameters: physicsParamsSchema }),
+  z.strictObject({ kind: z.literal('encounter'), prompt: z.string().min(3).max(MAX_DRAFT_PROMPT_CHARS), rule: encounterRuleSchema }),
   z.strictObject({
     kind: z.literal('table'),
-    prompt: z.string().min(3).max(4000),
+    prompt: z.string().min(3).max(MAX_DRAFT_PROMPT_CHARS),
     sources: z.array(z.strictObject({
       id: z.string().min(1).max(100), filename: z.string().min(1).max(120),
       text: z.string().min(1).max(TABLE_FILE_BYTES),

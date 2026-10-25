@@ -57,7 +57,8 @@ export const MODEL_JOB_ID_PATTERN = /^[a-f0-9]{64}$/u;
 /** Projection/revision cursors share the same opaque token shape. */
 export const PROJECTION_CURSOR_PATTERN = /^[a-f0-9]{64}$/u;
 /** The assistant prompt bound; stored history must never exceed what a request could carry. */
-export const MAX_TABLE_ASSISTANT_PROMPT_CHARS = 4_000;
+import { MAX_ASSISTANT_PROMPT_CHARS } from '../src/tabletop/shared/ai-prompt-limits.js';
+export const MAX_TABLE_ASSISTANT_PROMPT_CHARS = MAX_ASSISTANT_PROMPT_CHARS;
 
 export interface PublicModelJob {
   id: string;

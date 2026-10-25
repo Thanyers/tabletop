@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Check, FileText, FolderOpen, LoaderCircle, Paperclip, RefreshCw, Sparkles } from 'lucide-react';
 import type { ModelJob, TabletopCapabilities } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
+import { MAX_TABLE_SOURCES, TABLE_TOTAL_SOURCE_BYTES } from '../shared/table-source-limits';
 import './account.css';
 
 interface AIProposalProps {
@@ -202,7 +203,7 @@ export function AIProposal({ view, capabilities, onRequest, onPoll, onRefresh, o
                 ? 'Request completed'
                 : '';
     const sourceBytes = tableSources.reduce((sum, source) => sum + new TextEncoder().encode(source.text).byteLength, 0);
-    const attachDisabled = !onAttachFile || readOnly || attaching || requesting || waitingNow || tableSources.length >= 4 || sourceBytes >= 64 * 1024;
+    const attachDisabled = !onAttachFile || readOnly || attaching || requesting || waitingNow || tableSources.length >= MAX_TABLE_SOURCES || sourceBytes >= TABLE_TOTAL_SOURCE_BYTES;
 
     return <section className={`tt-ai-proposal tt-ai-proposal--table${embedded ? ' tt-ai-proposal--embedded' : ''}`} data-testid={embedded ? undefined : 'table-assistant'} aria-label={embedded ? 'Private rule drafting tools' : undefined} aria-labelledby={embedded ? undefined : 'tt-ai-title'}>
       {!embedded && <header className="tt-ai-proposal__head"><span className="tt-ai-proposal__icon"><Sparkles size={15} /></span><div><span className="tt-kicker">OWNER TOOLS</span><h2 id="tt-ai-title">Table assistant</h2></div><span className="tt-ai-proposal__manual">Rules stay on Canvas</span></header>}
