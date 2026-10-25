@@ -155,14 +155,29 @@ async function route(request: Request, env: Env): Promise<Response> {
     // F080 (D-020): the Worker answers the membership question and asks the source table for the
     // grant decision. No secret changes hands: the source is reached over its own /internal route.
     const spaceId = spaceProjection[1];
+    // Each call fans out to two Durable Objects, and the answers differ per grant/port, so an
+    // unlimited caller could enumerate a linked table's connections.
+    await limit(env, `space-projection:${session.record.actorId}`, 60, 60_000);
     return handleSpaceProjectionRead(request, {
       authenticate: async () => ({ actorId: session.record.actorId }),
       workspaceView: async (original, workspaceId) => {
         const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
-        return response.ok ? await response.json<WorkspaceView>() : undefined;
+        // A destination outage is not an authorization denial; let the handler see the status.
+        if (response.status === 401 || response.status === 403 || response.status === 404) return undefined;
+        if (!response.ok) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<WorkspaceView>();
       },
       readSourceProjection: async (original, sourceWorkspaceId, projectionBody) => {
-        const response = await room(env, sourceWorkspaceId).fetch(internalRequest(original, '/internal/space-projection', projectionBody));
+        // Only the destination needs the caller's credentials; do not forward a session cookie into
+        // another tenant's Room, which uses neither the cookie nor the CSRF token.
+        const forwarded = new Request(new URL('/internal/space-projection', original.url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(projectionBody),
+        });
+        const response = await room(env, sourceWorkspaceId).fetch(forwarded);
+        // A 5xx means the source could not answer; never report that as "not granted".
+        if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
         return await response.json<SpaceProjectionRead | { ok: false; code: string; message: string }>();
       },
     }, { spaceId });

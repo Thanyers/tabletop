@@ -164,7 +164,7 @@ describe('how the source answer is reported', () => {
   });
 
   it('passes the acting actor and the space identity to the source, never a caller-supplied one', async () => {
-    const calls: { source: string; body: { grantId: string; spaceId: string; actorId: string; portId: string } }[] = [];
+    const calls: { source: string; body: { grantId: string; spaceId: string; spaceWorkspaceId: string; actorId: string; portId: string } }[] = [];
     await handleSpaceProjectionRead(request(good), deps({
       readSourceProjection: async (_request, source, body) => {
         calls.push({ source, body });
@@ -172,7 +172,14 @@ describe('how the source answer is reported', () => {
       },
     }));
     expect(calls[0]?.source).toBe(SOURCE);
-    // The actor comes from the session and the space id from the stored space, not from the query.
-    expect(calls[0]?.body).toEqual({ grantId: 'grant-budget', spaceId: 'activity-room', actorId: 'actor-a', portId: 'budget' });
+    // The actor comes from the session, the slug and the workspace id from stored state/route —
+    // never from the query.
+    expect(calls[0]?.body).toEqual({
+      grantId: 'grant-budget',
+      spaceId: 'activity-room',
+      spaceWorkspaceId: SPACE_WORKSPACE,
+      actorId: 'actor-a',
+      portId: 'budget',
+    });
   });
 });

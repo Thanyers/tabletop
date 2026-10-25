@@ -125,7 +125,7 @@ describe('grant commands survive the authority guard', () => {
   it('reaches the domain payload check rather than the identity guard', async () => {
     const h = await harness();
     const code = await h
-      .execute('source.grantProjection', { grantId: 'grant-empty', spaceId: 'activity-room', audience: { kind: 'space-members' }, projections: [], actions: [] })
+      .execute('source.grantProjection', { grantId: 'grant-empty', spaceId: 'activity-room', spaceWorkspaceId: h.workspaceId, audience: { kind: 'space-members' }, projections: [], actions: [] })
       .then(() => 'accepted')
       .catch((error: { code?: string }) => error.code);
     // An empty projection list is refused by the strict payload schema: proof the command is no
@@ -138,6 +138,7 @@ describe('grant commands survive the authority guard', () => {
     const granted = await h.execute('source.grantProjection', {
       grantId: 'grant-budget',
       spaceId: 'activity-room',
+      spaceWorkspaceId: h.workspaceId,
       audience: { kind: 'space-members' },
       projections: [{ portId: 'budget', resource: 'costs', fields: ['room', 'price'], maxRows: 25 }],
       actions: [],

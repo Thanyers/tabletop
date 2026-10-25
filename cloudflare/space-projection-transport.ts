@@ -23,7 +23,7 @@ export interface SpaceProjectionTransportDeps {
   readSourceProjection(
     request: Request,
     sourceWorkspaceId: string,
-    body: { grantId: string; spaceId: string; actorId: string; portId: string },
+    body: { grantId: string; spaceId: string; spaceWorkspaceId: string; actorId: string; portId: string },
   ): Promise<SpaceProjectionRead | { ok: false; code: string; message: string }>;
 }
 
@@ -86,6 +86,8 @@ export async function handleSpaceProjectionRead(
   const answer = await deps.readSourceProjection(request, source, {
     grantId: grant,
     spaceId: collaborationSpace.spaceId,
+    // The workspace the source must have authorized; the slug above is display data only.
+    spaceWorkspaceId: space,
     actorId: session.actorId,
     portId: port,
   });

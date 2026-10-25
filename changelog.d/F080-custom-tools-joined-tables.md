@@ -6,3 +6,4 @@
 - เพิ่ม collaboration space แบบ additive บน workspace state (ไม่มี migration) + คำสั่ง space ผ่าน command path เดิม และ connection protocol ที่ให้ grant อยู่ที่ต้นทาง, revoke มี effective point และคำขอ in-flight ถูกปฏิเสธ
 - เพิ่ม export contract (CSV/HTML) ที่มีสิทธิ์แยก, ตรง revision เดียวกัน, กันสูตร/HTML และแยกไฟล์ต่อ collection; ยังไม่มี route
 - หมายเหตุ: authority integration ของ behaviour, transport ข้าม Room, UI และ hosted/live-AI/human acceptance ยังไม่ทำ
+- เพิ่มทางอ่าน projection ข้าม workspace (Worker ไกล่เกลี่ย + internal route ของ Room ต้นทาง ไม่มี secret ใหม่) โดย grant ผูกกับ workspace id ของเจ้าของห้อง ไม่ใช่ชื่อห้อง และมี rate limit ต่อผู้ใช้; ยังคืนเฉพาะ descriptor ของ grant ไม่มีแถวข้อมูล และยังไม่มี two-workspace test

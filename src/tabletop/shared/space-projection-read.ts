@@ -27,8 +27,10 @@ export interface SpaceProjectionReadInput {
   /** Every grant recorded on the source table. */
   grants: readonly ToolProjectionGrant[];
   grantId: string;
-  /** The space asking, as recorded on the destination. */
+  /** The space asking, as a display reference only. */
   spaceId: string;
+  /** The workspace hosting the space — the identity the grant was issued to. */
+  spaceWorkspaceId: string;
   sourceWorkspaceId: string;
   /** The source table's live epoch. */
   sourceEpoch: number;
@@ -56,8 +58,12 @@ export type SpaceProjectionRead =
 
 export function resolveSpaceProjectionRead(input: SpaceProjectionReadInput): SpaceProjectionRead {
   const grant = input.grants.find(entry => entry.grantId === input.grantId);
-  // A grant that belongs to another space or another table is indistinguishable from a missing one.
-  if (!grant || grant.spaceId !== input.spaceId || grant.sourceWorkspaceId !== input.sourceWorkspaceId) {
+  // A grant belongs to one workspace and one table. Identity is the workspace id: a space slug is
+  // chosen by the destination, so matching on it alone would let any workspace reuse someone
+  // else's slug and read through their grant.
+  if (!grant
+    || grant.spaceWorkspaceId !== input.spaceWorkspaceId
+    || grant.sourceWorkspaceId !== input.sourceWorkspaceId) {
     return { ok: false, code: 'SPACE_GRANT_NOT_FOUND', message: 'That connection is not granted to this space.' };
   }
   if (!projectionUsableAt(grant, input.now)) {

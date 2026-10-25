@@ -19,6 +19,7 @@ function grant(overrides: Partial<ToolProjectionGrant> = {}): ToolProjectionGran
   return {
     grantId: 'grant-1',
     spaceId: 'activity-room',
+    spaceWorkspaceId: '11111111-1111-4111-8111-111111111111',
     sourceWorkspaceId: SOURCE_WORKSPACE,
     sourceEpoch: SOURCE_EPOCH,
     sourceDataRevision: 7,

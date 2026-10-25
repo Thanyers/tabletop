@@ -60,7 +60,8 @@ export interface RoomRouteMatch {
 
 const spaceProjectionRequestSchema = z.strictObject({
   grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
-  spaceId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  spaceId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/u),
+  spaceWorkspaceId: z.string().uuid(),
   actorId: z.string().min(1).max(160),
   portId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
 });
@@ -82,6 +83,7 @@ export interface RoomHttpDeps {
   readSpaceProjection(input: {
     grantId: string;
     spaceId: string;
+    spaceWorkspaceId: string;
     actorId: string;
     portId: string;
   }): Promise<SpaceProjectionRead>;

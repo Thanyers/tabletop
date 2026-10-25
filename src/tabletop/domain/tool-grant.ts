@@ -23,6 +23,8 @@ const idSchema = z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u);
 const grantRequestSchema = z.strictObject({
   grantId: idSchema,
   spaceId: idSchema,
+  // The workspace the source is authorizing; a slug alone is not an identity.
+  spaceWorkspaceId: z.string().uuid(),
   audience: z.union([
     z.strictObject({ kind: z.literal('space-members') }),
     z.strictObject({ kind: z.literal('actors'), actorIds: z.array(z.string().min(1).max(160)).min(1).max(TOOL_CONNECTION_LIMITS.maxAudienceActors) }),
@@ -103,6 +105,7 @@ export function handleSourceGrantCommand(
     const grant: ToolProjectionGrant = {
       grantId: request.grantId,
       spaceId: request.spaceId,
+      spaceWorkspaceId: request.spaceWorkspaceId,
       sourceWorkspaceId: ctx.workspaceId,
       sourceEpoch: ctx.epoch,
       sourceDataRevision: state.dataRevision,

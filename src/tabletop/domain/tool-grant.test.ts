@@ -29,6 +29,7 @@ function withPermission(permissions: Permission[], overrides: Partial<ActorConte
 const grantPayload = {
   grantId: 'grant-budget',
   spaceId: SPACE_ID,
+  spaceWorkspaceId: '11111111-1111-4111-8111-111111111111',
   audience: { kind: 'space-members' },
   projections: [{ portId: 'budget', resource: 'costs', fields: ['room', 'price'], maxRows: 50 }],
   actions: [{ actionId: 'reserve' }],

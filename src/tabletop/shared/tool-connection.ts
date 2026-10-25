@@ -36,6 +36,7 @@ export const TOOL_CONNECTION_LIMITS = {
 export const toolProjectionGrantSchema = z.strictObject({
   grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
   spaceId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  spaceWorkspaceId: z.string().uuid(),
   sourceWorkspaceId: z.string().uuid(),
   sourceEpoch: z.number().int().nonnegative(),
   sourceDataRevision: z.number().int().nonnegative(),
@@ -77,8 +78,14 @@ export interface ToolGrantProjection {
  */
 export interface ToolProjectionGrant {
   grantId: string;
-  /** The collaboration space that may read. */
+  /** The collaboration space that may read, as a display reference. */
   spaceId: string;
+  /**
+   * The workspace that hosts the space. This is the identity the source authorizes: a slug is
+   * chosen by the destination and anyone could reuse it, so a read is only allowed when the
+   * workspace asking is the one this grant was issued to.
+   */
+  spaceWorkspaceId: string;
   sourceWorkspaceId: string;
   /** Epoch the grant was issued under; a source reset invalidates it. */
   sourceEpoch: number;

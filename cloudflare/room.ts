@@ -228,9 +228,10 @@ export class Room extends DurableObject<Env> {
         const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
         const domain = workspace.domainState as { kind: string; spaceGrants?: Parameters<typeof resolveSpaceProjectionRead>[0]['grants'] };
         return resolveSpaceProjectionRead({
-          grants: domain.kind === 'table' ? domain.spaceGrants ?? [] : [],
+          grants: Array.isArray(domain.spaceGrants) && domain.kind === 'table' ? domain.spaceGrants : [],
           grantId: input.grantId,
           spaceId: input.spaceId,
+          spaceWorkspaceId: input.spaceWorkspaceId,
           sourceWorkspaceId: workspace.id,
           sourceEpoch: workspace.epoch,
           actorId: input.actorId,
