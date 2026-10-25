@@ -15,6 +15,7 @@ import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
 import { createPrivateChatStore, type PrivateChatStorage } from '../workspace/private-chat-store';
+import { runJobPollLoop } from '../workspace/job-poll-loop';
 import { viewerCan } from '../shared/permissions';
 import { addableWebSources, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from '../workspace/table-chat-state';
 
@@ -422,30 +423,28 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         return Boolean(card.job && (card.job.status === 'running' || card.job.confirmationStatus === 'processing'));
       }) : [];
     for (const card of toPoll) {
-      const startedAt = Date.now();
-      void (async () => {
-        const interval = card.kind === 'draft' ? DRAFT_POLL_MS : ANSWER_POLL_MS;
+      void runJobPollLoop({
+        intervalMs: card.kind === 'draft' ? DRAFT_POLL_MS : ANSWER_POLL_MS,
         // F045: a draft outlives its poll grace only if the server raised the configured limit.
-        const limit = card.kind === 'draft' ? draftPollLimitMs(card.modelJob) : ANSWER_POLL_LIMIT_MS;
-        while (!cancelled && Date.now() - startedAt < limit) {
-          await wait(interval);
-          if (cancelled || scopeRef.current !== startScope) return;
-          try {
-            if (card.kind === 'draft' && card.modelJob) {
-              const next = await pollModelOnce(startScope, card.id, viewRef.current?.id ?? '', card.modelJob.id);
-              if (next.status === 'failed' || next.status === 'completed' || next.status === 'complete') return;
-            } else if (card.job && startView) {
-              const latestView = viewRef.current?.id === startView.id ? viewRef.current : startView;
-              const next = await pollAnswerOnce(startScope, card.id, latestView, card.job.id);
-              if (next.status === 'failed' || (next.status === 'completed' && next.confirmationStatus !== 'processing')) return;
-            }
-          } catch (error) {
-            if (cancelled || scopeRef.current !== startScope) return;
-            patchCard(startScope, card.id, { pollError: errorText(error) });
+        limitMs: card.kind === 'draft' ? draftPollLimitMs(card.modelJob) : ANSWER_POLL_LIMIT_MS,
+        now: () => Date.now(),
+        wait,
+        isActive: () => !cancelled && scopeRef.current === startScope,
+        attempt: async () => {
+          if (card.kind === 'draft' && card.modelJob) {
+            const next = await pollModelOnce(startScope, card.id, viewRef.current?.id ?? '', card.modelJob.id);
+            return next.status === 'failed' || next.status === 'completed' || next.status === 'complete';
           }
-        }
-        if (!cancelled && scopeRef.current === startScope) patchCard(startScope, card.id, { pollTimedOut: true });
-      })();
+          if (card.job && startView) {
+            const latestView = viewRef.current?.id === startView.id ? viewRef.current : startView;
+            const next = await pollAnswerOnce(startScope, card.id, latestView, card.job.id);
+            return next.status === 'failed' || (next.status === 'completed' && next.confirmationStatus !== 'processing');
+          }
+          return true;
+        },
+        onError: (error) => patchCard(startScope, card.id, { pollError: errorText(error) }),
+        onTimeout: () => patchCard(startScope, card.id, { pollTimedOut: true }),
+      });
     }
     return () => { cancelled = true; };
   }, [scope, activePollKey, pollModelOnce, pollAnswerOnce, patchCard]);

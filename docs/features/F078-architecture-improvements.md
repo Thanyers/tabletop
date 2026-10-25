@@ -49,6 +49,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T13 | One owner for the AI prompt caps and for the shared-source limits, with drift tests | T12 | Same values and messages; contract/route/provider/UI import the leaf modules; a reintroduced literal fails a test |
 | T15 | Private chat state (closed cards, job→card ids, follow-ups, chat canvas ids) out of `useTableChat` | T12 | Same key, caps and fallbacks; blocked storage cannot break chat; the poll/retry loop stays for a later task |
 | T17 | Identity port (sessions + one-shot redemption) split from the workspace repository; no adapter implements what it cannot do | T4 | Session methods only where an identity store exists; missing identity fails loudly; Room adapter has no session methods; conformance suites still pass |
+| T16 | Chat job poll loop (`runJobPollLoop`) with injected clock/wait | T15 | Same intervals, limits, settle conditions and patches; cancellation stops without a timeout; a failed attempt keeps polling |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -247,3 +248,15 @@ Behavior kept: no HTTP route changes, the Room still rejects `/api/session`-styl
 Test-first: `server/identity-port.test.ts` was written before the option existed. It asserts that a runtime without identity fails with `INTERNAL_ERROR` (before the change it reported `SESSION_EXPIRED`), that the injected identity receives `getSession`/`touchSession`, and that `createOrRefreshSession` creates the session through it. Two fixture mistakes were found and fixed in the test, not the code: the server cookie name and the double-hash CSRF fixture (`sha256(sha256('tabletop-r1-csrf-v1:' + token))`).
 
 Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **975 passed / 5 skipped (980)** (dev 972 + 3 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (remaining warnings are pre-existing), public scan **0 findings** after the commit. The repository-conformance suites (SQL and Room adapters) still pass, so the split did not change transaction or receipt behavior.
+
+### T16 — the chat job poll loop
+
+The second slice of the chat lifecycle, and the racy one. `useTableChat`'s effect owned the loop that waits an interval, polls once, settles, survives an error, and reports a timeout — all inside a `useEffect` with refs and cancellation flags, so its bounds could only be exercised through a mounted chat.
+
+`src/tabletop/workspace/job-poll-loop.ts` now owns the loop. `runJobPollLoop({ intervalMs, limitMs, now, wait, attempt, isActive, onError, onTimeout })` resolves `'settled' | 'timed-out' | 'stopped'`, and keeps the previous order exactly: the limit is checked before each wait, an inactive caller returns `'stopped'` without the timeout patch, a failed attempt reports through `onError` and keeps polling, and the timeout is reported once. The hook keeps the card/scope callbacks — which job to poll, when a job counts as settled, which patch each outcome applies — and passes them in.
+
+Deliberately unchanged: the intervals (`DRAFT_POLL_MS` 1.2 s, `ANSWER_POLL_MS` 1 s), `ANSWER_POLL_LIMIT_MS` 250 s and `draftPollLimitMs()`, the settle predicates, and the `pollError`/`pollTimedOut` patches.
+
+Test-first: six tests on a fake clock were written before the module (`Cannot find module`), and they pin the settled-first case, repeated polling, the timeout at the limit, error-continue, cancellation during a wait (no extra attempt) and cancellation between attempts (no timeout patch).
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **981 passed / 5 skipped (986)** (dev 975 + 6 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. `useTableChat.tsx` went from 1,084 to 1,081 lines; the remaining hook surface is React state and card rendering.
