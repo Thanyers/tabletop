@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T22:45:00+07:00",
-  "lastVerifiedAt": "2026-10-25T22:45:00+07:00",
+  "updatedAt": "2026-10-25T22:56:00+07:00",
+  "lastVerifiedAt": "2026-10-25T22:56:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
-    "candidateSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
+    "headSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
+    "candidateSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "C0+C1+C2+C5-contract อยู่ที่ PR #305 · C3 เริ่มแล้ว: authoring pipeline เดียว (validate→compile→isolated trial→activate) พร้อม budget ที่บังคับก่อน dispatch และบันทึก provenance แยก requester/generator/reviewer · ISO-01 กลับมา PASS บนหลักฐาน http origin + คุกกี้จริง · CI มี job `tool-host` · ค้าง: authority commit, storage/migration (ต้องอนุมัติ), room shell (รอเลือก visual), hosted/human acceptance",
+  "currentCheckpoint": "PR #305: C0+C1+C2+C5-contract+C3-pipeline+CX-contract ผ่านในเครื่องและใน CI · CI job `tool-host` รันบน Chromium และเขียว (run 40208135569) · ISO-01 กลับมา PASS บน http origin + คุกกี้จริง · ค้าง: authority commit ของ behaviour, storage/route (ยังไม่ต้องมี migration ถ้าเก็บ space เป็น optional field), source editor UI, room shell (รอเลือก visual), hosted/human acceptance",
   "slices": [
     {
       "alias": "C0",
@@ -153,11 +153,12 @@
       "alias": "CX",
       "jt": "JT-X",
       "featureTask": "F080-T-X",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "C1",
         "C7"
-      ]
+      ],
+      "note": "contract + tests commit ecb63c9; ยังไม่มี route/end-user file open"
     },
     {
       "alias": "C11",
@@ -511,7 +512,7 @@
       "id": "F080-T-X",
       "jt": "JT-X",
       "featureId": "F080",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "F080-T1A",
         "F080-T3B"
@@ -520,11 +521,20 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": null,
-      "checks": [],
+      "candidateSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
+      "checks": [
+        {
+          "name": "export contract: own permission, revision consistency, Thai/number/formula/HTML escaping, per-collection files",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-export.test.ts",
+          "result": "PASS",
+          "evidence": "13/13: CSV quotes commas/quotes/newlines, keeps Thai and numbers intact, prefixes formula-looking cells so a spreadsheet shows text, caps one cell; UTF-8 BOM by default because Excel on Windows turns BOM-less UTF-8 Thai into mojibake; HTML escapes <script> and sets default-src none; export is refused for a missing/stale permission, an empty selection, a revision mismatch (including one source read at another revision), an uncovered field set and a row overflow; a successful run emits one file per collection plus a manifest that records the snapshot, the withheld fields and the producedAt time",
+          "checkedSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3"
+        }
+      ],
       "findings": [],
       "blocker": null,
-      "nextAction": "export contract หลัง T1A (owned/permission/limits) แล้ว joined export หลัง T3B"
+      "nextAction": "route/HTTP surface + end-user file open (numbers, Thai, counts) on a real spreadsheet/browser; joined export needs the C7 connection so it can prove it exports only authorized projections"
     },
     {
       "id": "F080-Closure",
@@ -558,7 +568,7 @@
         "G1-01 (live part)",
         "HELDOUT-01 (live part)"
       ],
-      "workContinues": "fixture/local authoring tests และ runtime/backend slice อื่นเดินต่อได้"
+      "workContinues": "มี enforceable pre-dispatch budget แล้ว (`checkToolAiBudget` + generator ที่เข้าถึงได้เฉพาะผ่าน `authorToolPackage`) · fixture-generator tests และ slice อื่นเดินต่อได้ · ยังต้องให้เจ้าของอนุมัติตัวเลข cap ก่อนเรียก provider จริง"
     },
     {
       "id": "GATE-HOSTED-WRITE",
@@ -610,21 +620,27 @@
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "C3 ต่อ: source editor UI ของคน + activation/readback บนโต๊ะเดียว โดยใช้ authoring pipeline ที่มีอยู่ (fixture generator ก่อน)",
-      "verify": "node --import tsx tests/tool-authoring-browser.mjs (ต้องสร้าง harness)",
-      "expect": "คนแก้ source แล้ว activate ได้ และ AI-fixture ต่อยอดจาก source นั้นผ่าน pipeline เดียวกัน"
+      "action": "ขออนุมัติเฉพาะส่วนของ paid AI: cap 3 run × ≤6 calls / ≤USD 0.20 รวม 18 calls / USD 0.60 พร้อมหลักฐานว่า enforcement มีจริง (authoring tests)",
+      "verify": "n/a (user decision)",
+      "expect": "ได้ authorization + cap ที่ผูกกับ provider call จริง"
     },
     {
       "id": "NA-2",
-      "action": "C5 storage/route: ออกแบบตาราง/additive migration + disposable local DB test แล้วขอ scoped approval ก่อน apply",
-      "verify": "npm test -- server/collaboration-space-repository.test.ts",
-      "expect": "repository conformance ผ่านบน disposable DB; ยังไม่ apply ที่ staging"
+      "action": "C3 UI: source editor + activation/readback บนโต๊ะเดียว (ใช้ pipeline + activation record ที่มี)",
+      "verify": "node --import tsx tests/tool-authoring-browser.mjs",
+      "expect": "คนแก้ source แล้ว activate และเห็น readback/diff ได้จริง"
     },
     {
       "id": "NA-3",
-      "action": "ปิด reviewer findings ที่เหลือ: 64 KiB bound กับ object payload, limit/code ที่ไม่ถูกใช้, การวัด hang/CPU ของ frame",
-      "verify": "npx vitest run src/tabletop/shared/tool-protocol.test.ts",
-      "expect": "แต่ละ limit มี code/test ที่บังคับใช้จริง หรือถูกลบออก"
+      "action": "C5 storage: เก็บ collaboration space เป็น optional field บน workspace state (additive, ไม่มี migration) + reader/round-trip test ก่อนตัดสินใจแตะ domain/table.ts",
+      "verify": "npm test -- src/tabletop/domain/collaboration-space.test.ts",
+      "expect": "space ถูก persist/อ่านกลับได้โดยไม่ต้อง migrate และ workspace เก่าไม่พัง"
+    },
+    {
+      "id": "NA-4",
+      "action": "CX ต่อ: route + เปิดไฟล์จริงใน Excel/browser เพื่อตรวจจำนวนแถว/ภาษาไทย/ตัวเลข",
+      "verify": "node --import tsx tests/export-readback.mjs",
+      "expect": "ไฟล์ที่ผู้ใช้เปิดได้จริงตรงกับ manifest"
     }
   ],
   "blockedItems": [],

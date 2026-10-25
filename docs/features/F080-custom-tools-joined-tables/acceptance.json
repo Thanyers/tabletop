@@ -48,7 +48,7 @@
       "title": "immutable package + exact dependency graph + schema validation/round-trip",
       "status": "PASS",
       "environment": "local (Windows 11, Node v22.23.2)",
-      "sha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb",
+      "sha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
       "node": "v22.23.2",
       "commands": [
         "npx vitest run src/tabletop/shared/tool-package.test.ts",
@@ -84,7 +84,7 @@
       "title": "novel drag/interaction package ไม่ต้องเพิ่ม host renderer",
       "status": "PASS",
       "environment": "local (Windows 11, Node v22.23.2) · browser: system Edge headless via Playwright",
-      "sha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+      "sha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
       "node": "v22.23.2",
       "commands": [
         "node scripts/build-tool-sandbox-runtime.mjs",
@@ -126,7 +126,7 @@
       "commands": [
         "npm run test:tool-host:browser"
       ],
-      "evidence": "14/14 checks from a real http origin: the host page provably holds `tabletop_probe=sandbox-canary`; inside the frame `document.cookie` throws SecurityError (sandboxed without allow-same-origin), `localStorage` throws, `fetch(\"/index.html\")` is blocked by CSP (the same URL the server serves, so it is CSP and not a 404), `location.origin === \"null\"`; a spoofed intent posted by the page itself is ignored; protocol unit tests reject unknown methods, wrong protocol version, oversized and deeply nested messages, and messages whose nonce is not the live instance",
+      "evidence": "14/14 from a real http origin, and the same harness now runs in CI as the `tool-host` job (Chromium) where it passed on run 40208135569: the host page provably holds `tabletop_probe=sandbox-canary`; inside the frame `document.cookie` throws SecurityError, `localStorage` throws, `fetch(\"/index.html\")` is blocked by CSP even though the server serves that URL, `location.origin === \"null\"`; a page-originated spoof is ignored; protocol tests reject unknown methods, wrong version, oversized and deeply nested messages and non-live nonces",
       "expected": "message จาก frame อื่น/instance ที่ถูกทำลายถูกทิ้ง; method ที่ไม่อยู่ใน allowlist ถูก reject; oversized message ถูกตัดพร้อม error; network/storage capability ที่ไม่ได้ให้ถูกปฏิเสธ; ไม่มี session cookie/token ใน frame; ถ้า cancel execution ไม่ได้ต้องรายงานเป็น limitation ไม่ใช่ PASS",
       "actual": "PASS for cookie/storage/network/spoof/nonce/size on an http origin",
       "limitations": "hang and CPU behaviour of a runaway frame are still not measured (iframe is not a hard CPU boundary); the CI job runs on Chromium while local runs use system Edge."
@@ -138,7 +138,7 @@
       "title": "generated server code ไม่มี DB/secret/network capability; timeout/cancel/malformed result ถูก reject",
       "status": "PASS",
       "environment": "Cloudflare Workers runtime via @cloudflare/vitest-plugin (workerd), Node v22.23.2",
-      "sha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+      "sha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/tool-behavior-runner.test.ts"
@@ -436,17 +436,16 @@
       "slice": "F080-T-X",
       "title": "export จาก declared snapshot/version set เดียว + Thai/numbers/formula escaping + เปิดในแอปปลายทาง",
       "status": "UNVERIFIED",
-      "environment": "server + target app (spreadsheet/browser)",
-      "sha": "not-run",
+      "environment": "local unit (server-side contract only)",
+      "sha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- server/tool-export.test.ts",
-        "node --import tsx tests/export-readback.mjs"
+        "npx vitest run src/tabletop/shared/tool-export.test.ts"
       ],
-      "evidence": null,
+      "evidence": "contract half PASS (13/13): permission and revision checks happen before any file exists; Thai text, decimals, quotes/commas/newlines, formula-looking cells and HTML are escaped; one file per collection with a manifest; BOM for Excel",
       "expected": "permission + size enforced ที่ server; CSV ภาษาไทย/ตัวเลข/สูตรปลอม (=,+,-,@) escape ถูก; HTML escape ถูก; หลาย collection แยกไฟล์หรือมี manifest; ค่าทั้งหมดมาจาก snapshot/version set เดียวกัน; เปิดไฟล์จริงและนับแถวได้",
-      "actual": "not run",
-      "limitations": "serializer unit test ไม่เท่ากับ end-user export acceptance"
+      "actual": "UNVERIFIED — no route enforces it, no end-user file has been opened in a spreadsheet/browser, and the joined-export case needs the C7 connection",
+      "limitations": "a serializer unit test is not an end-user export acceptance (the plan says so explicitly)"
     },
     {
       "id": "HELDOUT-01",
