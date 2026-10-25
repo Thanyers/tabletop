@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T00:15:00+07:00",
-  "lastVerifiedAt": "2026-10-26T00:10:00+07:00",
+  "updatedAt": "2026-10-26T00:25:00+07:00",
+  "lastVerifiedAt": "2026-10-26T00:25:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
-    "candidateSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
+    "headSha": "c23a8674d395903458d2fcd8e024a6185ad4c505",
+    "candidateSha": "c23a8674d395903458d2fcd8e024a6185ad4c505",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "C0-C2-C3(pipeline+panel)-C5-C7protocol อยู่ที่ PR #305 · resolver ของ cross-room read พร้อม (7/7) และ D-020 ตัดสินวิธี authenticate โดยไม่เพิ่ม secret · ขั้นถัดไปที่ชัดเจน: wire Worker route + Room internal route แล้วทำ Worker-tier test ด้วยสอง workspace จริง",
+  "currentCheckpoint": "PR #305: transport ของ cross-room read ถูก wire แล้ว (Worker route + Room internal route + pure resolver) แต่ยังไม่มี Worker-tier test ที่มีสอง workspace จริง — JOIN-01/REVOKE-01 ยังเป็น UNVERIFIED · unit 1046/5 · cloudflare tier (transport+room-http) 45/45 · ต่อไป: independent review ของ wiring นี้ + two-workspace worker test",
   "slices": [
     {
       "alias": "C0",
@@ -104,13 +104,13 @@
       "alias": "C6",
       "jt": "JT-3A",
       "featureTask": "F080-T3A",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "C4",
         "C5",
         "CV"
       ],
-      "note": "resolver + design decision พร้อม (D-020); HTTP wiring กับ Worker-tier test ยังไม่ทำ"
+      "note": "transport wired (c23a867): GET /api/workspaces/:space/space/projection → Worker → POST /internal/space-projection → resolveSpaceProjectionRead; ยังไม่พิสูจน์ end-to-end ด้วยสอง workspace"
     },
     {
       "alias": "C7",
@@ -448,7 +448,7 @@
       "id": "F080-T3A",
       "jt": "JT-3A",
       "featureId": "F080",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "F080-T2A",
         "F080-T2B",
@@ -458,13 +458,23 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": null,
-      "checks": [],
+      "candidateSha": "c23a8674d395903458d2fcd8e024a6185ad4c505",
+      "checks": [
+        {
+          "name": "cross-workspace projection transport: worker handler decisions",
+          "environment": "Cloudflare tier (vitest.cloudflare) with faked Rooms",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts cloudflare/room-http.test.ts",
+          "result": "PASS",
+          "evidence": "13/13 transport tests + 32/32 route-table tests: unauthenticated → 401, non-member → 403, workspace without a space → 404, unlinked source → 404, revoked grant → 409, unknown grant → 404, malformed parameters rejected before any Room is asked, non-GET → 405; the acting actor and space identity passed to the source come from the session and stored state, never from the query",
+          "checkedSha": "c23a8674d395903458d2fcd8e024a6185ad4c505"
+        }
+      ],
       "findings": [
-        "D-020 settles the authentication question for cross-workspace reads without a new secret: the Worker mediates, the destination vouches for space membership, and the source decides against its own grant list through resolveSpaceProjectionRead(). The remaining work is HTTP wiring plus a Worker-tier test with two real workspaces; until that exists, JOIN-01 stays UNVERIFIED and no claim of a live cross-room read should be made."
+        "D-020 settles the authentication question for cross-workspace reads without a new secret: the Worker mediates, the destination vouches for space membership, and the source decides against its own grant list through resolveSpaceProjectionRead(). The remaining work is HTTP wiring plus a Worker-tier test with two real workspaces; until that exists, JOIN-01 stays UNVERIFIED and no claim of a live cross-room read should be made.",
+        "The wiring is not yet proven end-to-end: the Room-side dep (readSpaceProjection) and the Worker route are implemented and typecheck, but no test stands up two workspaces and performs a real cross-room read. That is the exact shape of gap that hid the earlier COMMAND_IDENTITY_SPOOF blocker, so JOIN-01/REVOKE-01 stay UNVERIFIED until a two-workspace Worker-tier test exists."
       ],
       "blocker": "ต้องได้ผลเลือก visual จากเจ้าของก่อนลงทุน room shell",
-      "nextAction": "room shell ตามแนวที่เลือก + shared tool workspace + live multi-source bindings"
+      "nextAction": "Two-workspace Worker-tier test: create space workspace A and source B, grant a projection on B, link B into A, read through the Worker route (happy path), then revoke on B and assert the next read fails with SPACE_GRANT_REVOKED. Then an independent review of the wiring diff."
     },
     {
       "id": "F080-T3B",

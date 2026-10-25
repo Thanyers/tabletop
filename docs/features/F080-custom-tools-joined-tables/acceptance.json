@@ -225,16 +225,15 @@
       "title": "source A/B คนละ workspace IDs; shared tool อ่านทั้งคู่; source update propagate พร้อม freshness",
       "status": "UNVERIFIED",
       "environment": "workers integration + browser",
-      "sha": "not-run",
+      "sha": "c23a8674d395903458d2fcd8e024a6185ad4c505",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/collaboration-space.test.ts",
-        "node --import tsx tests/joined-tables-browser.mjs"
+        "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts"
       ],
-      "evidence": null,
+      "evidence": "transport decisions PASS with faked Rooms (13/13): membership is answered by the destination, the grant by the source, and every refusal has a distinct status and code. The resolver underneath is 7/7. The Room-side dep and the Worker route are implemented and typecheck.",
       "expected": "สอง workspace id ต่างกันจริง; projection จากทั้งคู่มี source revision/freshness; เปลี่ยนต้นทางแล้วค่าใหม่มาถึงโดยไม่มี manual copy",
-      "actual": "not run",
-      "limitations": "ไม่มี global linearizable snapshot ข้าม authority — ต้องรายงาน freshness แยกแหล่ง"
+      "actual": "UNVERIFIED — no test performs a real cross-room read between two workspaces, and nothing yet renders a two-source tool live",
+      "limitations": "the untested remainder is the wiring, which is where the previous blocker lived; treat this as \"built\", not \"works\""
     },
     {
       "id": "JOIN-02",
@@ -260,12 +259,12 @@
       "title": "read/subscription/context/compute/cache/history/export หยุดตาม scope หลัง effective revoke",
       "status": "UNVERIFIED",
       "environment": "workers integration (adversarial)",
-      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+      "sha": "c23a8674d395903458d2fcd8e024a6185ad4c505",
       "node": "v22.23.2",
       "commands": [
         "npx vitest run src/tabletop/shared/tool-connection.test.ts src/tabletop/domain/tool-grant.test.ts"
       ],
-      "evidence": "protocol half PASS: a revoked grant is refused before an epoch mismatch can mask it, the effective revocation point (revokedAt) makes a projection unusable from that moment, an in-flight request is rejected when the grant was revoked or the source reset, the grant version bumps and revocation is idempotent, and a read is refused for a non-member or an unexposed port",
+      "evidence": "protocol proven (repository tests) + transport returns 409 SPACE_GRANT_REVOKED for a revoked grant in the handler tests; there is no live subscription to invalidate yet",
       "expected": "หลัง revoke มี effective point ชัด: subscription ใหม่ถูกปฏิเสธ, in-flight job ถูกตัดสินตาม contract, cache/projection ที่ระบบควบคุมถูก invalidate; audit metadata ไม่บรรจุค่าเดิม; บอกข้อจำกัดว่าค่า/ไฟล์ที่ผู้ใช้เคยเห็นหรือ export ไปแล้วเรียกคืนไม่ได้",
       "actual": "PARTIAL — the protocol and the grant records are proven; there is no live subscription, compute input, AI context, history or export path wired to them yet",
       "limitations": "must be re-run against the transport; values a person already saw or exported cannot be recalled and the docs must keep saying so"
