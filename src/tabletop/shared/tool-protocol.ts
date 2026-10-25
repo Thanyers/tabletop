@@ -241,7 +241,16 @@ function parseWith<Message>(schema: z.ZodType<Message>, value: unknown): ToolBri
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return { ok: false, code: 'BRIDGE_NOT_OBJECT', detail: 'A bridge message is an object.' };
   }
-  if (!jsonWithinBudget(value, 16, 4_000)) {
+  // `jsonWithinBudget` guards untrusted wire values and treats `undefined` as unusable, while a
+  // JS object legitimately spells an absent optional field as `undefined`. Probe the JSON view,
+  // which is what actually crosses the bridge.
+  let probe: unknown;
+  try {
+    probe = JSON.parse(JSON.stringify(value));
+  } catch {
+    return { ok: false, code: 'BRIDGE_TOO_LARGE', detail: 'The message cannot be serialised.' };
+  }
+  if (!jsonWithinBudget(probe, 16, 4_000)) {
     return { ok: false, code: 'BRIDGE_TOO_LARGE', detail: 'The message is nested too deeply or has too many nodes.' };
   }
   const parsed = schema.safeParse(value);
@@ -308,4 +317,18 @@ export type ToolIntentRejection = typeof TOOL_INTENT_REJECTIONS[number];
 
 export function isToolIntentRejection(value: unknown): value is ToolIntentRejection {
   return typeof value === 'string' && (TOOL_INTENT_REJECTIONS as readonly string[]).includes(value);
+}
+
+/**
+ * What a package receives after asking for a behaviour. `abandoned` exists because a frame can
+ * disappear or the host can unmount while a request is in flight; a package must be able to
+ * finish that promise instead of hanging forever.
+ */
+export interface ToolIntentOutcome {
+  requestId: string;
+  behaviorId: string;
+  status: 'committed' | 'rejected' | 'abandoned';
+  code?: string;
+  message?: string;
+  instanceRevision?: number;
 }

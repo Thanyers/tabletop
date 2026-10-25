@@ -480,6 +480,17 @@ export function validateToolPackage(value: unknown): ToolPackageValidation {
       problems.push({ code: 'PACKAGE_ENTRY', path: 'behaviorEntry', message: 'The behaviour entry must be one of the package files.' });
     } else if (behaviorFile.language === 'tsx') {
       problems.push({ code: 'PACKAGE_ENTRY', path: 'behaviorEntry', message: 'The behaviour entry must not be a .tsx module.' });
+    } else {
+      // The runner loads the behaviour as a single module inside the isolate, so a relative
+      // import would resolve to nothing there. Refuse it here instead of failing at run time.
+      const relative = toolSourceImports(behaviorFile.text).filter(entry => entry.kind === 'relative');
+      if (relative.length > 0) {
+        problems.push({
+          code: 'PACKAGE_BEHAVIOR',
+          path: 'behaviorEntry',
+          message: `The behaviour module must be self-contained; it imports ${relative.map(entry => entry.specifier).join(', ')}.`,
+        });
+      }
     }
   }
   if (definition.behaviors.length > 0 && !definition.behaviorEntry) {

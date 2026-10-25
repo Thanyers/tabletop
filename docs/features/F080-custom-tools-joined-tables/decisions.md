@@ -104,6 +104,37 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - **เหตุผล/หลักฐาน:** แผน §4.4; execution guide T5
 - **Rollback:** ไม่มี side effect เกิดขึ้นเมื่อ reject
 
+## D-013 — Compiler: pure-JS transform (Sucrase) ใน platform adapter
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (local compile + render + invoke; ยังไม่พิสูจน์บน staging Worker)
+- **ตัดสิน:** ใช้ `sucrase@3.35.0` (pin แน่นอน) เป็น compiler ที่รันได้ทั้ง browser/Node/Worker แทน native binary
+- **เหตุผล/หลักฐาน:** ทางเลือก (a) trusted deployment-compatible adapter ต้องรันได้บน staging ซึ่งเป็น Cloudflare Worker — native esbuild รันไม่ได้ และ esbuild-wasm หนัก/ต้องเสิร์ฟ asset เพิ่ม · Sucrase เป็น pure JS จึงให้ผลเหมือนกันทุก environment · artifact ยังถือว่า untrusted (sandbox/bridge/authority เป็นตัวคุม) · UI compile เป็น CommonJS เพื่อโหลดผ่าน registry ใน frame; behaviour compile เป็น ESM เพราะ isolate import `./module.js` (และ validation บังคับให้ behaviour module self-contained ไม่มี relative import)
+- **ทางเลือกที่ตัดทิ้ง:** ให้ client compile แล้วอ้างว่า server verified — ทำไม่ได้ตามที่ตัดสิน; เพิ่ม compiler service ใหม่ — ยังไม่มีหลักฐานคุ้ม
+- **Contract ที่กระทบ:** `package.json` (+`sucrase`), `src/tabletop/runtime/tools/compile.ts`, `TOOL_COMPILE_LIMITS`
+- **Rollback:** เปลี่ยน adapter ได้โดยไม่แตะ schema; artifact มี `contentHash` แยกจาก source อยู่แล้ว
+- **ข้อจำกัดที่บันทึก:** ไม่มี type-check ในขั้น compile (ตรวจได้แค่ parse + schema) — ต้องบอกผู้ใช้ตามจริง ไม่ใช่ "type-safe"
+
+## D-014 — Frame CSP อนุญาต `'unsafe-eval'` เฉพาะใน sandbox
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (browser harness ผ่าน 13 checks)
+- **ตัดสิน:** `TOOL_SANDBOX_CSP` = `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'` และไม่ใส่ `frame-ancestors` (meta ไม่รองรับ)
+- **เหตุผล/หลักฐาน:** ต้อง instantiate โมดูลที่ compile มาเป็นข้อความ; frame มี opaque origin (sandbox ไม่มี `allow-same-origin`) และ browser harness ยืนยันว่า `document.cookie` โยน SecurityError, `localStorage` ถูกบล็อก, `fetch` ล้มเหลว, `location.origin === 'null'` · `unsafe-eval` จึงไม่ขยายสิทธิ์ของ host
+- **ทางเลือกที่ตัดทิ้ง:** ใช้ `blob:`/`import()` แทน eval — ต้องเปิด `script-src blob:` และพึ่ง behavior ของ opaque origin ที่ยังไม่พิสูจน์; คง eval ที่แคบและพิสูจน์ได้
+- **Rollback:** แก้ที่ `ui/tool-sandbox/document.ts` ที่เดียว
+- **ข้อจำกัด:** iframe ไม่ได้ให้ hard CPU isolation — ยังต้องวัด hang/recovery แยก
+
+## D-015 — ใช้ binding `COMPUTE_LOADER` เดิมกับ tool behaviour (ยังไม่แยก binding ใหม่)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `default` (เปลี่ยนได้เมื่อมีเหตุผลด้านโควตา/การแยก)
+- **ตัดสิน:** `cloudflare/tool-behavior-runner.ts` รับ `loader?: WorkerLoader` และใช้ binding เดียวกับ compute แทนการเพิ่ม `TOOL_LOADER` ใน `wrangler.jsonc`
+- **เหตุผล/หลักฐาน:** `wrangler.jsonc` มี `worker_loaders[0] = COMPUTE_LOADER` อยู่แล้ว และ `server/compute-deploy-config.ts` ตรวจ config ตอน deploy — เพิ่ม binding ใหม่จะแตะ config ของ operator ทันทีโดยยังไม่มีเหตุผลด้านโควตา · `loader.load()` สร้าง isolate ใหม่ต่อครั้งอยู่แล้ว จึงแยกกันได้ในระดับ execution
+- **ทางเลือกที่ตัดทิ้ง:** เพิ่ม binding/DO class ใหม่ (ต้อง wrangler migration + staging config) — เลื่อนไปจนมีหลักฐานว่าโควตาหรือ isolation ต้องการ
+- **Rollback:** เปลี่ยนเป็น binding แยกได้โดยแก้ที่จุดสร้าง runner เท่านั้น
+- **ข้อจำกัด:** สองความสามารถแชร์โควตาของ loader เดียวกัน — ต้องวัดโหลดก่อนสรุป capacity
+
 ## D-012 — ไม่อัปเดต `CHANGELOG.md` ตรง ๆ
 
 - **วันที่:** 2026-10-25

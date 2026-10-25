@@ -9,7 +9,7 @@
     "test:agents": "node --test scripts/agent-startup.test.mjs",
     "dev": "vite --host 127.0.0.1",
     "dev:api": "node --import tsx server/bootstrap.ts",
-    "build": "node scripts/generate-public-demo.mjs --check && npm run typecheck && vite build",
+    "build": "node scripts/build-tool-sandbox-runtime.mjs && node scripts/generate-public-demo.mjs --check && npm run typecheck && vite build",
     "typecheck": "tsc -b && tsc -p tsconfig.server.json && tsc -p tsconfig.cloudflare.json",
     "lint": "eslint .",
     "dev:cloudflare": "wrangler dev --local --ip 127.0.0.1 --port 8787 --var PUBLIC_ORIGIN:http://127.0.0.1:8787",
@@ -26,7 +26,8 @@
     "test:r1:browser": "node --import tsx tests/tabletop-r1.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
-    "prepare": "husky"
+    "prepare": "husky",
+    "predev": "node scripts/build-tool-sandbox-runtime.mjs"
   },
   "engines": {
     "node": ">=22.13.0"
@@ -46,6 +47,7 @@
     "react-dom": "^19.1.0",
     "read-excel-file": "^9.3.12",
     "recharts": "^3.0.0",
+    "sucrase": "3.35.0",
     "tsx": "4.23.15",
     "ws": "8.22.0",
     "zod": "4.6.7",

@@ -375,6 +375,16 @@
 - **Root cause:** เครื่องมือหรือ editor ที่ใช้แก้ conflict อ่านไฟล์ด้วย encoding ภาษาไทยของ Windows ไม่ใช่ UTF-8 · CI ไม่ตรวจ encoding ของเอกสาร
 - **Correct behavior:** หลังแก้ conflict ใน `.md` ทุกครั้ง รัน `git diff --cached -- '*.md' | grep -cE 'เธ|โ€'` ต้องได้ 0 ก่อน commit · ตั้ง editor/เครื่องมือให้อ่านเขียน UTF-8 · ถ้าเจอแล้ว ซ่อมโดยแปลงกลับ (Windows-874 → bytes → UTF-8) และเทียบกับเวอร์ชันก่อนเสีย ไม่แก้ทีละบรรทัดด้วยมือ
 
+### 2026-10-25 — `jsonWithinBudget` ปฏิเสธ object ที่มีค่า `undefined` (พลาดซ้ำสองที่ในงานเดียว)
+- **What happened:** `shared/json-budget.ts` ใช้กันค่าที่ไม่น่าเชื่อถือจาก wire และถือ `undefined` เป็นค่าที่ใช้ไม่ได้ · ใน F080 ผมใช้มันตรวจ tool package ที่สร้างใน TS ซึ่งเขียน optional field ที่ไม่ใช้เป็น `undefined` → ได้ `PACKAGE_BUDGET` ทั้งที่ package ถูกต้อง · แล้วพลาดซ้ำที่ bridge: host ตอบ `code: undefined` กลับเข้า frame ทำให้ `parseToolHostMessage` คืน `BRIDGE_TOO_LARGE` และ frame ไม่เคยได้ผลลัพธ์ (อาการคือ UI ค้าง ไม่มี error)
+- **Root cause:** ตรวจ "JSON view" ด้วยฟังก์ชันที่ออกแบบสำหรับ JS object ดิบ · `JSON.stringify` ตัด `undefined` ออก แต่ `jsonWithinBudget` เรียกซ้ำบน object จริง
+- **Correct behavior:** ก่อนเรียก `jsonWithinBudget` กับค่าที่ประกอบในโปรแกรม ให้ probe ด้วย `JSON.parse(JSON.stringify(value))` (ใน `try/catch`) แล้วค่อยส่งค่าเดิมให้ schema · ฝั่งผู้ส่ง ให้ละ optional field ที่เป็น `undefined` ออกแทนการส่งไป (`...(x === undefined ? {} : { x })`) · เขียน test ที่มี optional field เป็น `undefined` ทั้งสองทาง
+
+### 2026-10-25 — sandboxed iframe รันโมดูลที่ compile แล้วไม่ได้ถ้า CSP ไม่มี `'unsafe-eval'`
+- **What happened:** F080 สร้าง srcdoc + `sandbox="allow-scripts"` + CSP `default-src 'none'; script-src 'unsafe-inline'` แล้ว mount package ด้วย `new Function(...)` → เบราว์เซอร์บล็อก "Evaluating a string as JavaScript violates ... 'unsafe-eval'" และ UI แสดงเฉพาะ fallback error
+- **Root cause:** CSP ของ frame ต้องอนุญาต eval ถ้าจะ instantiate โมดูลที่ compile มาเป็นข้อความ · และ `frame-ancestors` ที่ส่งทาง `<meta>` ถูกเพิกเฉย (มี console warning)
+- **Correct behavior:** ใส่ `'unsafe-eval'` ใน `script-src` ของ **frame CSP เท่านั้น** (ไม่ใช่ของ host) เพราะ frame มี opaque origin ไม่มีคุกกี้/สตอเรจ/เน็ตเวิร์กอยู่แล้ว และอย่าใส่ `frame-ancestors` ใน meta · เก็บ `TOOL_SANDBOX_CSP` ไว้ที่ `ui/tool-sandbox/document.ts` ที่เดียว
+
 ## Deploy failures
 
 ### 2026-10-25 — v9.1.3 Worker published before Container settings finished
