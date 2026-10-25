@@ -98,7 +98,7 @@ function codeOf(error: unknown): string {
 }
 
 describe('an action through a connection', () => {
-  it('commits on the source table and never applies twice on a retry', async () => {
+  it('commits on the source table and replays the receipt on a retry', async () => {
     const h = await harness();
     await h.seedProgram();
     await h.grant();
@@ -124,11 +124,9 @@ describe('an action through a connection', () => {
     expect(availability(afterFirst)).toBe(false);
     expect(Number((afterFirst.domain as { actionRevision?: number }).actionRevision ?? 0)).toBe(before + 1);
 
-    // A retry with the same idempotency key must never apply twice. Today it is REFUSED rather than
-    // replayed, because the receipt hash includes the revision the command expected and that moved;
-    // refusing is safe (no second write) but the plan asks for a replay, so the follow-up is to make
-    // the receipt hash revision-independent for space actions.
-    await expect(h.authority.executeSpaceAction({
+    // A retry with the same idempotency key replays the stored receipt: no second write, and the
+    // caller can distinguish a replay from a first commit.
+    const retry = await h.authority.executeSpaceAction({
       actorId: h.actorId,
       workspaceId: h.workspaceId,
       grantId: 'grant-equipment',
@@ -136,9 +134,9 @@ describe('an action through a connection', () => {
       actionId: 'borrow',
       inputs: { item: 'camera' },
       idempotencyKey: 'retry-1',
-    })).rejects.toSatisfy((error: unknown) => codeOf(error) === 'IDEMPOTENCY_MISMATCH');
+    });
+    expect(retry.duplicate).toBe(true);
     const afterRetry = await h.view();
-    // Whatever it reports, the second call must not have written anything.
     expect(afterRetry.revision).toBe(afterFirst.revision);
     expect(Number((afterRetry.domain as { actionRevision?: number }).actionRevision ?? 0)).toBe(before + 1);
   });

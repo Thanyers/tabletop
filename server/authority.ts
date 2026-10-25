@@ -824,9 +824,19 @@ export class CommandAuthority {
     inputs: Record<string, unknown>;
     idempotencyKey: string;
   }): Promise<CommandAck> {
+    // The actor that commits is the person who granted the connection, never the requester: a
+    // connection can only ever do what its issuer could do themselves.
+    const grantedBy = await this.repository.withWorkspaceTransaction(input.workspaceId, async transaction => {
+      const domain = transaction.workspace.domainState as unknown as { spaceGrants?: ToolProjectionGrant[] };
+      const found = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
+      return found?.grantedBy;
+    });
+    if (!grantedBy) throw new AuthorityError('SPACE_ACTION_NOT_GRANTED');
+    const actingActorId = grantedBy;
+
     const guard: SpaceActionGuard = {
       assertAllowed: async (transaction, workspace) => {
-        const member = await transaction.getMember(input.actorId);
+        const member = await transaction.getMember(actingActorId);
         if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
         const domain = workspace.domainState as unknown as { kind?: string; spaceGrants?: ToolProjectionGrant[] };
         const grant = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
@@ -834,7 +844,7 @@ export class CommandAuthority {
         const verdict = authorizeSpaceAction(grant, {
           spaceWorkspaceId: input.spaceWorkspaceId,
           sourceEpoch: workspace.epoch,
-          actorId: input.actorId,
+          actorId: actingActorId,
           actionId: input.actionId,
           membershipVerifiedBy: 'destination',
         });
@@ -851,7 +861,7 @@ export class CommandAuthority {
     };
     // The commit needs the revision and epoch the caller is acting on; the guard below re-checks
     // the grant, and a change in between still fails the normal CAS instead of committing blindly.
-    const snapshot = await this.computeSnapshot(input.workspaceId, input.actorId);
+    const snapshot = await this.computeSnapshot(input.workspaceId, actingActorId);
     const envelope: CommandEnvelope = {
       commandId: sha256('tabletop-space-action-v1:' + input.grantId + ':' + input.actionId + ':' + input.idempotencyKey),
       expectedRevision: snapshot.workspace.revision,
@@ -869,13 +879,14 @@ export class CommandAuthority {
       idempotencyKey: input.idempotencyKey,
     }));
     return this.executeInternal(
-      { record: { actorId: input.actorId, tokenHash: '' } },
+      { record: { actorId: actingActorId, tokenHash: '' } },
       input.workspaceId,
       envelope,
       null,
       fingerprint,
       undefined,
       guard,
+      true,
     );
   }
   private async executeTrustedCompute(
@@ -907,11 +918,16 @@ export class CommandAuthority {
     requestFingerprint?: string,
     modelJobGuard?: ModelJobCommitGuard,
     spaceActionGuard?: SpaceActionGuard,
+    stableRequestHash = false,
   ): Promise<CommandAck> {
     const now = this.now();
     const requestHash = requestFingerprint === undefined
       ? this.commandRequestHash(envelope)
-      : this.trustedRequestHash(envelope, requestFingerprint);
+      : stableRequestHash
+        // A retry must replay the stored receipt even though the revision moved, so the hash covers
+        // the request identity (type, payload, fingerprint) and not the revision it expected.
+        ? hashValue({ type: envelope.type, payload: envelope.payload, requestFingerprint })
+        : this.trustedRequestHash(envelope, requestFingerprint);
     let ack: CommandAck;
     try {
       ack = await this.repository.withWorkspaceTransaction(workspaceId, async (transaction) => {

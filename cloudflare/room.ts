@@ -257,6 +257,24 @@ export class Room extends DurableObject<Env> {
         });
         return { ...answer, rows: rows.rows, sourceDataRevision: rows.sourceDataRevision };
       },
+      // F080: an action through a connection commits as the grant issuer, on this table's authority.
+      executeSpaceAction: async input => {
+        try {
+          const ack = await this.authority.executeSpaceAction({
+            actorId: input.actorId,
+            workspaceId: this.requireBoundRoomId(),
+            grantId: input.grantId,
+            spaceWorkspaceId: input.spaceWorkspaceId,
+            actionId: input.actionId,
+            inputs: input.inputs,
+            idempotencyKey: input.idempotencyKey,
+          });
+          return { ok: true as const, revision: ack.workspace.revision, duplicate: ack.duplicate };
+        } catch (error) {
+          const code = error instanceof AuthorityError ? error.code : 'SPACE_ACTION_FAILED';
+          return { ok: false as const, code, message: error instanceof Error ? error.message : 'The action failed.' };
+        }
+      },
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }

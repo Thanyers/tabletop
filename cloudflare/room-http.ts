@@ -58,6 +58,16 @@ export interface RoomRouteMatch {
   readonly imageId?: string;
 }
 
+const spaceActionRequestSchema = z.strictObject({
+  grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  spaceId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/u),
+  spaceWorkspaceId: z.string().uuid(),
+  actorId: z.string().min(1).max(160),
+  actionId: z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{1,39}$/u),
+  inputs: z.record(z.string().min(1).max(40), z.union([z.string().max(2_000), z.number().finite(), z.boolean(), z.null()])),
+  idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,80}$/u),
+});
+
 const spaceProjectionRequestSchema = z.strictObject({
   grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
   spaceId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/u),
@@ -87,6 +97,19 @@ export interface RoomHttpDeps {
     actorId: string;
     portId: string;
   }): Promise<SpaceProjectionRead>;
+  /**
+   * F080: run one source action through a connection. The source authorizes it inside its own
+   * commit transaction; this dependency only forwards and reports.
+   */
+  executeSpaceAction(input: {
+    grantId: string;
+    spaceId: string;
+    spaceWorkspaceId: string;
+    actorId: string;
+    actionId: string;
+    inputs: Record<string, string | number | boolean | null>;
+    idempotencyKey: string;
+  }): Promise<{ ok: true; revision: string; duplicate: boolean } | { ok: false; code: string; message: string }>;
 }
 
 export interface RoomHttp {
@@ -113,6 +136,9 @@ export function matchRoomRoute(request: Request, boundRoomId: string | null): Ro
   // F080: only the Worker can produce this path (clients are forwarded /api/workspaces/<id>… only).
   if (request.method === 'POST' && url.pathname === '/internal/space-projection') {
     return { handler: 'room-http', name: 'internal.space-projection' };
+  }
+  if (request.method === 'POST' && url.pathname === '/internal/space-action') {
+    return { handler: 'room-http', name: 'internal.space-action' };
   }
   const imageRoute = IMAGE_ROUTE.exec(url.pathname);
   if (imageRoute) {
@@ -167,6 +193,8 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
         return internalMetadata(request, requestId);
       case 'internal.space-projection':
         return internalSpaceProjection(request, requestId);
+      case 'internal.space-action':
+        return internalSpaceAction(request, requestId);
       case 'workspace.view':
         return workspaceView(request, requestId, match.workspaceId);
       case 'events':
@@ -208,6 +236,18 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
     const answer = await deps.readSpaceProjection(parsed.data);
     if (answer.ok) return json(200, answer, { 'x-request-id': requestId });
     const status = answer.code === 'SPACE_GRANT_REVOKED' || answer.code === 'SPACE_GRANT_STALE_EPOCH' ? 409 : 404;
+    return json(status, answer, { 'x-request-id': requestId });
+  }
+
+  async function internalSpaceAction(request: Request, requestId: string): Promise<Response> {
+    const parsed = spaceActionRequestSchema.safeParse(await readJson(request));
+    if (!parsed.success) return json(400, { ok: false, errorCode: 'SPACE_ACTION_PAYLOAD', message: 'Invalid action request.' }, { 'x-request-id': requestId });
+    const answer = await deps.executeSpaceAction(parsed.data);
+    if (answer.ok) return json(200, answer, { 'x-request-id': requestId });
+    const status = answer.code === 'SPACE_ACTION_REVOKED' || answer.code === 'SPACE_ACTION_STALE' ? 409
+      : answer.code === 'SPACE_ACTION_FORBIDDEN' ? 403
+        : answer.code === 'SPACE_ACTION_FAILED' ? 422
+          : 404;
     return json(status, answer, { 'x-request-id': requestId });
   }
 

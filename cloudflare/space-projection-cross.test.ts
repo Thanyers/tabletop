@@ -282,3 +282,91 @@ describe('two workspaces, one granted projection', () => {
     expect(result.body).toMatchObject({ errorCode: 'SPACE_NOT_MEMBER' });
   });
 });
+
+/** An active equipment table granted to a space, with the `borrow` action allowed. */
+async function actionFixture(): Promise<{ owner: Actor; sourceOwner: Actor; space: string; source: string }> {
+  const owner = await seedActor('Action owner');
+  const sourceOwner = await seedActor('Action source');
+  const space = await createWorkspace(owner, 'Action space');
+  const source = await createEquipmentTable(sourceOwner);
+  await command(sourceOwner, source, 'source.grantProjection', {
+    grantId: 'grant-actions',
+    spaceId: 'action-room',
+    spaceWorkspaceId: space.id,
+    audience: { kind: 'space-members' },
+    projections: [{ portId: 'equipment', resource: 'equipment', fields: ['name'], maxRows: 5 }],
+    actions: [{ actionId: 'borrow' }],
+  });
+  const created = await command(owner, space, 'space.create', {
+    spaceId: 'action-room', title: 'ห้องลงมือ', sharedToolWorkspaceId: space.id,
+  });
+  await command(owner, created.workspace, 'space.addSource', {
+    source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+  });
+  return { owner, sourceOwner, space: space.id, source: source.id };
+}
+
+async function callAction(actor: Actor, spaceId: string, body: {
+  source: string; grant: string; actionId: string; inputs: Record<string, unknown>; idempotencyKey: string;
+}) {
+  const response = await worker.fetch(request(`/api/workspaces/${spaceId}/space/action`, actor, { method: 'POST', body }), bindings);
+  return { status: response.status, body: await response.json() as Record<string, unknown> };
+}
+
+describe('an action through a connection, end to end', () => {
+  it('commits on the source and replays the receipt on a retry', async () => {
+    const setup = await actionFixture();
+    const payload = { source: setup.source, grant: 'grant-actions', actionId: 'borrow', inputs: { item: 'camera' }, idempotencyKey: 'e2e-retry-1' };
+
+    const first = await callAction(setup.owner, setup.space, payload);
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ ok: true, committed: true, duplicate: false });
+
+    // The source row really changed.
+    const sourceView = await viewOf(setup.sourceOwner, setup.source);
+    const equipment = (sourceView.domain as { records: Record<string, { id: string; values: { available?: unknown } }[]> }).records.equipment;
+    expect(equipment?.find(row => row.id === 'camera')?.values.available).toBe(false);
+
+    const retry = await callAction(setup.owner, setup.space, payload);
+    expect(retry.status).toBe(200);
+    expect(retry.body).toMatchObject({ ok: true, duplicate: true });
+    expect(retry.body.revision).toBe(first.body.revision);
+  });
+
+  it('refuses after the grant is revoked', async () => {
+    const setup = await actionFixture();
+    const source = await viewOf(setup.sourceOwner, setup.source);
+    await command(setup.sourceOwner, source, 'source.revokeProjection', { grantId: 'grant-actions' });
+    const result = await callAction(setup.owner, setup.space, {
+      source: setup.source, grant: 'grant-actions', actionId: 'borrow', inputs: { item: 'camera' }, idempotencyKey: 'e2e-revoked-1',
+    });
+    expect(result.status).toBe(409);
+    expect(result.body).toMatchObject({ ok: false, errorCode: 'SPACE_ACTION_REVOKED' });
+  });
+
+  it('refuses an action the grant does not list, and someone outside the space', async () => {
+    const setup = await actionFixture();
+    const notGranted = await callAction(setup.owner, setup.space, {
+      source: setup.source, grant: 'grant-actions', actionId: 'giveBack', inputs: { item: 'camera' }, idempotencyKey: 'e2e-ungranted-1',
+    });
+    expect(notGranted.status).toBe(404);
+    expect(notGranted.body).toMatchObject({ errorCode: 'SPACE_ACTION_NOT_GRANTED' });
+
+    const outsider = await seedActor('Action outsider');
+    const refused = await callAction(outsider, setup.space, {
+      source: setup.source, grant: 'grant-actions', actionId: 'borrow', inputs: { item: 'camera' }, idempotencyKey: 'e2e-outsider-1',
+    });
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({ errorCode: 'SPACE_NOT_MEMBER' });
+  });
+
+  it('refuses a table the space never linked', async () => {
+    const setup = await actionFixture();
+    const other = await createWorkspace(setup.sourceOwner, 'Unlinked table');
+    const result = await callAction(setup.owner, setup.space, {
+      source: other.id, grant: 'grant-actions', actionId: 'borrow', inputs: { item: 'camera' }, idempotencyKey: 'e2e-unlinked-1',
+    });
+    expect(result.status).toBe(404);
+    expect(result.body).toMatchObject({ errorCode: 'SPACE_SOURCE_NOT_LINKED' });
+  });
+});
