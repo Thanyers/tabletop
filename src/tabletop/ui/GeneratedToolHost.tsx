@@ -4,6 +4,7 @@ import {
   TOOL_BRIDGE_LIMITS,
   TOOL_PROTOCOL_VERSION,
   parseToolFrameMessage,
+  toolBridgeMessageSize,
   toolFrameNonceMatches,
   type ToolFrameMessage,
   type ToolHostMessage,
@@ -129,9 +130,15 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
     const frame = frameRef.current;
     if (!frame?.contentWindow) return;
     if (portsSentRef.current === props.ports) return;
-    frame.contentWindow.postMessage({ protocol: TOOL_PROTOCOL_VERSION, kind: 'ports', ports: props.ports } satisfies ToolHostMessage, '*');
+    const message = { protocol: TOOL_PROTOCOL_VERSION, kind: 'ports', ports: props.ports } satisfies ToolHostMessage;
+    // A structured-cloned object is not bounded by the protocol's string check, so measure it here.
+    if (toolBridgeMessageSize(message) > TOOL_BRIDGE_LIMITS.maxMessageChars) {
+      onLog?.('error', 'TOOL_BRIDGE_TOO_LARGE: the projection is too large to send into the tool.');
+      return;
+    }
+    frame.contentWindow.postMessage(message, '*');
     portsSentRef.current = props.ports;
-  }, [props.ports, frameLoaded]);
+  }, [props.ports, frameLoaded, onLog]);
 
   const reply = useCallback((message: ToolHostMessage) => {
     frameRef.current?.contentWindow?.postMessage(message, '*');

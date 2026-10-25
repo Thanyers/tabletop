@@ -24,8 +24,6 @@ export const TOOL_BRIDGE_LIMITS = {
   maxPendingIntents: 8,
   /** Characters of one log line accepted from the frame. */
   maxLogChars: 400,
-  /** Log lines kept per instance. */
-  maxLogEntries: 50,
   /** Rendered height the frame may request, in CSS pixels. */
   maxHeightPx: 4_000,
   /** Characters of one diagnostic message returned to the author. */
@@ -302,6 +300,7 @@ export function toolBridgeMessageSize(message: unknown): number {
  */
 export const TOOL_INTENT_REJECTIONS = [
   'TOOL_UNKNOWN_BEHAVIOR',
+  // Emitted by the authority seam once it exists; declared now so packages can branch on it.
   'TOOL_BEHAVIOR_INPUT_INVALID',
   'TOOL_NOT_AUTHORIZED',
   'TOOL_STALE_REVISION',

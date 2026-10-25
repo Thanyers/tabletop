@@ -58,7 +58,6 @@ export const TOOL_PACKAGE_LIMITS = {
   maxActions: 8,
   maxTitleChars: 80,
   maxDescriptionChars: 400,
-  maxConfigEntries: 16,
   maxConfigValueChars: 200,
   /** Identifier ceiling shared by ports, behaviours, inputs and files. */
   maxIdChars: 40,

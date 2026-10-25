@@ -1,6 +1,7 @@
 import {
   TOOL_BRIDGE_LIMITS,
   TOOL_PROTOCOL_VERSION,
+  toolBridgeMessageSize,
   type ToolFrameMessage,
   type ToolHostMessage,
   type ToolPortSnapshot,
@@ -79,8 +80,12 @@ export function createToolSdk(options: ToolSdkOptions): ToolSdkControl {
       if (pending.size >= TOOL_BRIDGE_LIMITS.maxPendingIntents) {
         return Promise.resolve({ requestId, behaviorId, status: 'abandoned' as const, code: 'TOOL_BUSY', message: 'Too many requests are already waiting.' });
       }
+      const message: ToolFrameMessage = { protocol: TOOL_PROTOCOL_VERSION, kind: 'intent', nonce: options.nonce, requestId, behaviorId, inputs };
+      if (toolBridgeMessageSize(message) > TOOL_BRIDGE_LIMITS.maxMessageChars) {
+        return Promise.resolve({ requestId, behaviorId, status: 'abandoned' as const, code: 'TOOL_BRIDGE_TOO_LARGE', message: 'The request is too large to send.' });
+      }
       const outcome = new Promise<ToolIntentOutcome>(resolve => pending.set(requestId, resolve));
-      options.post({ protocol: TOOL_PROTOCOL_VERSION, kind: 'intent', nonce: options.nonce, requestId, behaviorId, inputs });
+      options.post(message);
       // The host drops a malformed message without replying, so the package must never hang.
       setTimeout(() => {
         const resolve = pending.get(requestId);
