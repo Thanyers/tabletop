@@ -187,6 +187,18 @@ describe('tool package hashing and references', () => {  it('hashes deterministi
   it('canonicalises object keys so equal values serialise identically', () => {
     expect(canonicalJson({ b: 1, a: [2, { d: 4, c: 3 }] })).toBe('{"a":[2,{"c":3,"d":4}],"b":1}');
   });
+
+  it('round-trips a package through storage without changing its content hash', () => {
+    const stored = { schemaVersion: TOOL_PACKAGE_SCHEMA_VERSION, packages: [makePackage()], instances: [], connections: [] };
+    const read = readToolWorkspace(JSON.parse(JSON.stringify(stored)));
+    expect(read.problems).toEqual([]);
+    const original = validateToolPackage(stored.packages[0]);
+    const restored = validateToolPackage(read.state.packages[0]);
+    expect(original.ok && restored.ok).toBe(true);
+    if (original.ok && restored.ok) {
+      expect(toolPackageContentHash(restored.package, hash)).toBe(toolPackageContentHash(original.package, hash));
+    }
+  });
 });
 
 describe('tool source import parsing', () => {

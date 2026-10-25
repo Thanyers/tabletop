@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T22:05:00+07:00",
-  "lastVerifiedAt": "2026-10-25T21:45:00+07:00",
+  "updatedAt": "2026-10-25T21:55:00+07:00",
+  "lastVerifiedAt": "2026-10-25T21:52:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,17 +18,19 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
-    "candidateSha": null,
+    "headSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb",
+    "candidateSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb",
+    "pr": 305,
+    "prState": "draft",
     "openPrsAtStart": [
       { "number": 250, "head": "fix/CI-provider-mock-diagnostics", "draft": false, "title": "CI: ตัวจำลอง AI ในเทสต์ Workers บอกเหตุผลเมื่อปฏิเสธ request" }
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "C0 เสร็จ (checkpoint artifacts + PLAN booking) → เริ่ม C1 (package contract) และ C2 (isolated runtime proof) ต่อทันที",
+  "currentCheckpoint": "C0 (docs/checkpoint) และ C1 (tool package + bridge contracts) commit ไว้ที่ PR #305 แล้ว; C2 isolated runtime proof กำลังทำ (handwritten package, iframe host, behaviour runner) — ยังไม่มี hosted/live-AI/human acceptance ใด ๆ",
   "slices": [
     { "alias": "C0", "jt": "JT-0", "featureTask": "F080-T0", "state": "review", "dependsOn": [] },
-    { "alias": "C1", "jt": "JT-1A", "featureTask": "F080-T1A", "state": "doing", "dependsOn": ["C0"] },
+    { "alias": "C1", "jt": "JT-1A", "featureTask": "F080-T1A", "state": "review", "note": "contracts + validation + reader compatibility commit e4d01aa; storage interface รอ C5", "dependsOn": ["C0"] },
     { "alias": "C2", "jt": "JT-1A", "featureTask": "F080-T1A", "state": "doing", "dependsOn": ["C1"] },
     { "alias": "C3", "jt": "JT-1B", "featureTask": "F080-T1B", "state": "planned", "dependsOn": ["C2"] },
     { "alias": "C4", "jt": "JT-2A", "featureTask": "F080-T2A", "state": "planned", "dependsOn": ["C3"] },
@@ -51,9 +53,9 @@
       "dependsOn": [],
       "owner": "lead",
       "branch": "feat/F080-custom-tools",
-      "pr": "draft (เปิดในรอบนี้)",
+      "pr": "305 (draft)",
       "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
-      "candidateSha": null,
+      "candidateSha": "3d078481303fecc06a9256f67fa583db6fcc9412",
       "checks": [
         {
           "name": "git root/branch/HEAD/status ของ checkout อ้างอิง",
@@ -81,11 +83,11 @@
         },
         {
           "name": "checkpoint artifacts ครบ 4 ไฟล์ + feature entry + changelog fragment",
-          "environment": "local",
+          "environment": "local (Windows, Node v22.23.2)",
           "command": "node scripts/check-public-files.mjs; npx tsx server/changelog.ts check",
-          "result": "UNVERIFIED",
-          "evidence": null,
-          "checkedSha": null
+          "result": "PASS",
+          "evidence": "public scan 1017 files / 0 findings; changelog.d 13 fragments OK",
+          "checkedSha": "3d078481303fecc06a9256f67fa583db6fcc9412"
         }
       ],
       "findings": [],
@@ -103,10 +105,45 @@
       "pr": null,
       "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
       "candidateSha": null,
-      "checks": [],
-      "findings": [],
+      "checks": [
+        {
+          "name": "tool package contract: schema, limits, import graph, write declarations, reader compatibility",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-package.test.ts",
+          "result": "PASS",
+          "evidence": "27/27 tests: valid round-trip + hash stability + 15 negative cases (unknown field, entry/behaviour mismatch, unpinned import, node:/https:/absolute import, missing target, cycle, depth, write target, duplicate path, language mismatch, char budget, deep value)",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "host↔frame bridge protocol: closed methods, nonce identity, size/length bounds",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-protocol.test.ts",
+          "result": "PASS",
+          "evidence": "16/16 tests: unknown kind/method rejected, wrong protocol version, oversize and deep payload rejected, records/scalar snapshot mismatch, height and log bounds, nonce mismatch drop, rejection vocabulary closed",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "controlled RED: cycle guard removed must make its test fail",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "patch `if (inStack.has(path))` → `if (false)`; npx vitest run tool-package.test.ts -t cycle; restore",
+          "result": "PASS",
+          "evidence": "test failed while the guard was disabled (1 failed / 24 skipped) and passed again after restore; the test is not vacuous",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "typecheck + lint for the new modules",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx tsc -b; npx eslint src/tabletop/shared/tool-package.ts src/tabletop/shared/tool-protocol.ts <tests>",
+          "result": "PASS",
+          "evidence": "tsc -b clean; eslint clean (0 errors, 0 warnings)",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        }
+      ],
+      "findings": [
+        "shared/json-budget.ts treats an `undefined` value as unusable, so a TS object that spells an omitted optional field as `undefined` was reported as PACKAGE_BUDGET. Fixed by probing the JSON view of the package (which is what the store and the hash see) and keeping jsonWithinBudget semantics unchanged for wire values."
+      ],
       "blocker": null,
-      "nextAction": "สร้าง shared/tool-package.ts + tool-protocol.ts (typed schemas, validation, dependency graph limits) พร้อม negative tests ก่อนแตะ UI"
+      "nextAction": "C2: handwritten synthetic package → compile adapter → sandboxed iframe host + bridge + server behaviour runner; ต้องได้ render+invoke จริงและ negative isolation tests ก่อนแตะ AI authoring"
     },
     {
       "id": "F080-T1B",
