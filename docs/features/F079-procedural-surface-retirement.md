@@ -1,0 +1,93 @@
+# F079 — Retire or freeze the Procedural surface
+
+| | |
+| --- | --- |
+| สถานะ | `proposed` — ต้องได้ product decision ก่อนแตะโค้ด |
+| เจ้าของฟีเจอร์ | ยังไม่กำหนด (product owner) |
+| เวอร์ชันที่คาด | ไม่มี release ของตัวเอง; ถ้าเลือก B (freeze) เป็น PATCH, ถ้าเลือก A (delete) เป็น MAJOR |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F079` |
+
+## ทำไม
+
+Tabletop โตมาจากโปรเจกต์ก่อนหน้าที่ชื่อ Procedural: single-user "Living Software Workspace" พร้อม Trio demo (shipping contract, encounter, band rehearsal), accounting story และ Component Lab. โค้ดชุดนั้นยังอยู่ใน `src/` ทั้งชุดและยัง build/typecheck/lint/นับเป็น surface ที่ทุก session ของ agent ต้องอ่าน แม้ [`product.md`](../../product.md) จะอธิบายเฉพาะ shared table และ demos ที่ `/demo` (Invoice, Physics, Encounter) ซึ่งเป็นโค้ด Tabletop ไม่ใช่ Procedural
+
+F078 (architecture review 2026-10-24) จัดเรื่องนี้เป็น candidate ที่ 3 และระบุว่าเป็นการตัดสินสินค้า ไม่ใช่ refactor. เอกสารนี้ทำหน้าที่เก็บหลักฐานและทางเลือกให้เจ้าของผลิตภัณฑ์เคาะ — **ยังไม่มีการลบโค้ดใด ๆ ใน PR นี้**
+
+## สิ่งที่ผู้ใช้จะเห็น
+
+- วันนี้: `?legacy-demo=1` เปิด Procedural shell (Trio/accounting) ที่ `/`; `/demo` และ `/demo/replay` เป็นหน้า public ตามปกติและ **ไม่ใช่** ส่วนที่จะถูก retire
+- ถ้าเลือก B: `?legacy-demo=1` หยุดทำงาน (หรือย้ายไป branch `legacy`), หน้า `/demo` ไม่เปลี่ยน
+- ถ้าเลือก A: เหมือน B และไม่มีโค้ดชุดนี้ใน repo อีก
+
+## ข้อเท็จจริงจากโค้ด (dev `9574dc0`, 2026-10-25)
+
+| พื้นที่ | ไฟล์ | TS/TSX บรรทัด | ขนาดไฟล์ |
+| --- | --- | --- | --- |
+| `src/trio/` | 66 | 10,409 | 831,244 B |
+| `src/components/` | 28 | 3,658 | 452,155 B |
+| `src/domain/` (Procedural) | 19 | 4,330 | 208,976 B |
+| `src/state/` | 8 | 582 | 72,885 B |
+| `src/lab/` | 9 | 764 | 75,414 B |
+| `src/App.tsx` + `src/LegacyEntry.tsx` | 2 | 247 | 48,462 B |
+| **รวม** | **132** | **19,990** | **1,689,136 B** |
+
+เทียบกับ `src/` ทั้งหมด: 317 ไฟล์ / 57,759 บรรทัด → legacy คิดเป็น **34.6% ของบรรทัด** และ **~1.6 MB** ของ source (รวม CSS ในโฟลเดอร์เหล่านั้น)
+
+การเข้าถึง:
+
+- `src/main.tsx` เลือก entry ด้วย `location.search.get('legacy-demo') === '1' ? import('./LegacyEntry') : import('./tabletop/TabletopApp')` — lazy import แยก chunk แล้ว ดังนั้น **first load ของ `/` ไม่ได้จ่ายค่าน้ำหนักนี้**; สิ่งที่ยังจ่ายคือ tsc/eslint/vitest/agent context
+- `LegacyEntry.tsx` → `App.tsx` เป็นผู้ใช้ `TrioExperience`/`TrioCanvas`/`Lab` และเป็นทางเข้าเดียวของ `src/App.tsx`
+- หลัง F078-T12: `src/tabletop/**` **ไม่ import** `components/`, `state/`, `trio/` หรือ `lab/` แล้ว เหลือ dependency เดียวที่ยังชี้เข้า legacy คือ test-only: `src/tabletop/shared/edge-routing.test.ts` ใช้ `makeObject` จาก `src/state/objects` (ต้องย้าย helper ก่อนลบ `src/state`)
+- `src/tabletop/demo/**` (หน้า `/demo`), `src/tabletop/testing/**` และ workbench เดิมไม่ใช่ legacy — อยู่ในผลิตภัณฑ์ปัจจุบัน
+
+การทดสอบและ CI:
+
+- `tests/` มี 53 spec; **44** เป็นของ Procedural/Trio/Component Lab (`trio-*`, `demo-*`, `constellation-*`, `browser.mjs`, `spatial-learning.mjs`, `component-lab-*`, ฯลฯ)
+- CI ไม่รัน 44 spec เหล่านี้: งาน browser ใน `.github/workflows/validate.yml` รัน `npm run demo:auto:run`, `test:r1:browser` (`tests/tabletop-r1.mjs`), `tests/ui/f066-rules-browser.mjs` และ Cloudflare browser suite เท่านั้น; `test:browser`/`test:spatial`/`test:constellation` ใน `package.json` ไม่ถูกเรียกจาก CI
+- unit test ของ legacy: 12 ไฟล์ใต้ `src/trio/**` + 4 ไฟล์ใต้ `src/state/**` + 9 ไฟล์ใต้ `src/domain/**` + 2 ไฟล์ใต้ `src/lab/**` — รันใน `npm test` ทุกครั้ง
+
+เอกสารและ manifest:
+
+- `docs/source-baseline.json` เป็น hash manifest ของไฟล์ Procedural ทั้งชุด (`src/App.tsx`, `components/`, `domain/`, `lab/`, `trio/`, `scripts/component-lab/`, `tests/trio-*`)
+- ไม่มีเอกสารเจ้าของเรื่องสำหรับ Trio/Component Lab; `product.md` ไม่ได้กล่าวถึงทั้งสอง
+- Component Lab เป็น Vite `serve`-only middleware + hostname gate (`src/lab/useComponentLab.tsx`, `scripts/component-lab/plugin.ts`) — เข้าไม่ได้บน Worker ที่ deploy แล้ว
+
+## ทางเลือก
+
+**A. Retire + delete** — ย้าย `makeObject` helper ที่ test ใช้ก่อน, ลบ 132 ไฟล์ + 44 spec + `scripts/component-lab/**` + Vite plugin + `LegacyEntry` branch ใน `main.tsx`, ปรับ `docs/source-baseline.json` และ `docs/` ที่อ้างถึง
+ข้อดี: source เล็กลง 34.6%, tsc/eslint/vitest/agent context ลดจริง, ไม่มี surface ที่ไม่มีเจ้าของ
+ข้อเสีย: ประวัติการทดลองหายจาก working tree (ยังอยู่ใน git history), ถ้ามีคนบุ๊กมาร์ก `?legacy-demo=1` จะเจอ 404/`/` ปกติ, ต้องมีคนรับผิดชอบตัดสิน
+
+**B. Freeze outside the build (แนะนำให้เริ่มที่นี่)** — ย้ายทั้งชุดไป `legacy/` ที่ root, ตัด `?legacy-demo=1` ออกจาก `main.tsx`, เอา `legacy/` ออกจาก `tsconfig` includes, `eslint` ignores, `vitest` includes, และ Vite entry; เก็บ `docs/source-baseline.json` และเอกสารอ้างอิงไว้เป็นบันทึก
+ข้อดี: tsc/eslint/vitest/agent context ลดเท่า A ทันที; ยังตรวจย้อนได้ใน repo; ย้อนกลับง่าย ( revert PR เดียว); ไม่ต้องตัดสินเรื่องลบถาวรวันนี้
+ข้อเสีย: ยังมีไฟล์อยู่ใน repo (แต่ไม่มีใคร build/อ่านเป็นค่าเริ่มต้น), ต้องมีวินัยไม่ให้กลับมา import
+
+**C. Keep and document** — คงทุกอย่างและเพิ่มส่วน "Procedural surface" ใน `product.md` ระบุเจ้าของและสถานะ (maintained demo หรือ frozen)
+ข้อดี: ไม่เสียอะไร
+ข้อเสีย: 34.6% ของ source ยังไม่มีเจ้าของ, spec 44 ตัวยังไม่ถูกรัน, และ architecture review รอบหน้าจะเสนอเรื่องเดิมอีก
+
+## ผลกระทบถ้าเลือก B หรือ A
+
+- `src/main.tsx`: ตัด branch `legacy-demo` (เหลือ `/demo`, `/demo/replay`, `/` → `TabletopApp`)
+- `src/LegacyEntry.tsx`, `src/App.tsx`, `src/trio/**`, `src/components/**`, `src/state/**`, `src/domain/**`, `src/lab/**`: ออกจาก build graph
+- test helper: `src/tabletop/shared/edge-routing.test.ts` ต้องเปลี่ยนไปใช้ fixture ของตัวเอง (dependency สุดท้ายที่ชี้เข้า legacy)
+- `scripts/component-lab/**`, `vite.config.ts` plugin, `tests/component-lab-*.mjs`, `tests/trio-*.mjs`, `tests/browser.mjs`, `tests/spatial-learning.mjs`, `tests/constellation-demo.mjs` และ spec legacy อื่น: ออกหรือย้ายตาม
+- `package.json`: `test:browser`, `test:spatial`, `test:constellation` และ `demo:auto*` ต้องทบทวน (`demo:auto` ใช้ Tabletop demo ไม่ใช่ Trio)
+- `docs/source-baseline.json` และเอกสารที่อ้าง path legacy: ปรับหรือ freeze ตาม
+- **ไม่กระทบ**: `/demo` และ `/demo/replay` (Tabletop demo), product.md demos (Invoice/Physics/Encounter), Worker/Room, contract ใด ๆ
+
+## คำถามเปิด (ต้องตอบก่อนลงมือ)
+
+1. Procedural/Trio/accounting ยังเป็นส่วนหนึ่งของผลิตภัณฑ์หรือไม่? ถ้าใช่ ต้องมีเจ้าของและ CI coverage; ถ้าไม่ ไป A/B
+2. เลือก B (freeze) แล้วลบภายหลังเมื่อไม่มีลิงก์/การใช้งาน หรือเลือก A ทันที?
+3. มีลิงก์ภายนอก (`?legacy-demo=1`, invite/ห้องเก่า) ที่ต้องคงการเข้าถึงชั่วคราวหรือไม่?
+
+## การตัดสินใจ
+
+| วันที่ | การตัดสินใจ | เหตุผล |
+| --- | --- | --- |
+| 2026-10-25 | บันทึกเป็นข้อเสนอ ยังไม่ลบหรือย้ายโค้ด | F078 candidate 3 เป็นการตัดสินสินค้า; ต้องมีเจ้าของเคาะก่อน |
+
+## Verification
+
+PR นี้เอกสารเท่านั้น: `node scripts/check-public-files.mjs` 0 findings, `npx tsx server/changelog.ts check` ผ่าน, `git diff --check` สะอาด, และไม่มีไฟล์ `.ts/.tsx` ถูกแก้ — application/browser suites ไม่ต้องรันซ้ำสำหรับการเปลี่ยนเอกสาร (ตาม AGENTS.md)
