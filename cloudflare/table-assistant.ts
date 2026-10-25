@@ -371,12 +371,12 @@ function prepareConversation(
     ...(entry.confirmationStatus === undefined ? {} : { confirmationStatus: entry.confirmationStatus }),
   }));
   let omitted = 0;
-  while (items.length > 0 && (items[0]!.prompt.length > 4000 || items[0]!.result.text.length > 8000
+  while (items.length > 0 && (items[0]!.prompt.length > MAX_PROMPT_CHARS || items[0]!.result.text.length > 8000
     || new TextEncoder().encode(JSON.stringify(items)).byteLength > MAX_CONVERSATION_BYTES)) {
     items.shift();
     omitted += 1;
   }
-  if (items.some((entry) => entry.prompt.length > 4000 || entry.result.text.length > 8000)) {
+  if (items.some((entry) => entry.prompt.length > MAX_PROMPT_CHARS || entry.result.text.length > 8000)) {
     return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'A prior conversation entry exceeds its safe size limit.');
   }
   return { items, omitted };

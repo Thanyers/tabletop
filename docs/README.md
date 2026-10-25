@@ -21,7 +21,7 @@
 
 รายละเอียดสถานะรุ่นอยู่ใน [Deployments](DEPLOYMENTS.md) ส่วนผลตรวจร้านกาแฟ แสงและเงา เกมแบ่งน้ำ และลิงก์ CI ที่เคยสรุปบน README ตามได้จาก [Generative Canvas acceptance](GENERATIVE_CANVAS_ACCEPTANCE.md) และ [Release 2.0 acceptance](RELEASE_2_0_ACCEPTANCE.md) ทั้งสองเป็นบันทึกตามรอบตรวจของตัวเอง ไม่ใช่การยืนยันรุ่นปัจจุบัน
 
-- [F079 Procedural surface retirement](features/F079-procedural-surface-retirement.md): ข้อเสนอ retire/freeze พื้นที่ Procedural (Trio/accounting/Component Lab) พร้อมหลักฐานขนาด การเข้าถึง ผลกระทบ และ 3 ทางเลือก — รอ product decision ยังไม่ลบโค้ด
+- [F079 Procedural surface retirement](features/F079-procedural-surface-retirement.md): freeze พื้นที่ Procedural (Trio/accounting/Component Lab) ตาม option B: โค้ดอยู่ใต้ `legacy/`, ออกจาก build/tsc/lint/test และ `?legacy-demo=1` ถูกตัด — ยังไม่ลบไฟล์
 - [STORAGE_LIFECYCLE](STORAGE_LIFECYCLE.md): เจ้าของและความหมายของทุก persistent store, โมเดลการเติบโตต่อ commit, semantics ของ reset/expiry ที่ต่างกัน, replay horizon ของ receipt และ recovery manifest/invariant — retention ยังไม่ตัดสิน
 - [ARCHITECTURE_LOAD](ARCHITECTURE_LOAD.md): harness วัด load หลายห้อง + hot room ผ่าน authority/SQL จริง, storage curve และ outbox backlog พร้อมกฎ comparability (เทียบค่าเฉพาะเมื่อ workload/source/runtime ตรงกัน) และรายการสัญญาณที่วัดไม่ได้ในเครื่อง — ผลในเครื่องไม่ใช่ capacity
 - [GENERATIVE_CANVAS_RUNTIME](GENERATIVE_CANVAS_RUNTIME.md): candidate ที่กำลังทดสอบสำหรับภาพ/สูตร/เครื่องมือใหม่บน Canvas, ทดลองร่าง, layout ร่วมกัน และการค้นบทสนทนาเดิม

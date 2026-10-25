@@ -26,9 +26,6 @@
     "test:r1:browser": "node --import tsx tests/tabletop-r1.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
-    "test:browser": "node tests/browser.mjs",
-    "test:spatial": "node tests/spatial-learning.mjs",
-    "test:constellation": "node tests/constellation-demo.mjs",
     "prepare": "husky"
   },
   "engines": {
