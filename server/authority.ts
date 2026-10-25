@@ -2,6 +2,8 @@ import type { IncomingMessage } from 'node:http';
 import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainDecision, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
+import { authorizeSpaceAction, type ToolProjectionGrant } from '../src/tabletop/shared/tool-connection.js';
+import type { WorkspaceTransaction } from './repository.js';
 import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
 import { SPACE_COMMANDS, isSpaceCommand } from '../src/tabletop/shared/collaboration-space-command.js';
 import { SOURCE_GRANT_COMMANDS, isSourceGrantCommand } from '../src/tabletop/domain/tool-grant.js';
@@ -140,6 +142,11 @@ export interface AuthorityOptions {
   readonly computeRunner?: ComputeRunner;
   readonly scheduleBackground?: (task: Promise<void>) => void;
   readonly onComputeWorkScheduled?: (workspaceId: string) => void;
+}
+
+/** F080: a check that runs inside the commit transaction for an action invoked through a connection. */
+export interface SpaceActionGuard {
+  assertAllowed(transaction: WorkspaceTransaction, workspace: StoredWorkspace): Promise<void>;
 }
 
 interface InternalCommandSession {
@@ -800,6 +807,77 @@ export class CommandAuthority {
     });
   }
 
+  /**
+   * Run one source action through a connection.
+   *
+   * The grant issuer is the actor: a connection can never do more than the person who granted it.
+   * The grant is re-checked inside the commit transaction, the command id is derived from the
+   * caller's idempotency key so a retry replays the receipt instead of applying twice, and the
+   * commit is still the source table's own single-target commit.
+   */
+  async executeSpaceAction(input: {
+    actorId: string;
+    workspaceId: string;
+    grantId: string;
+    spaceWorkspaceId: string;
+    actionId: string;
+    inputs: Record<string, unknown>;
+    idempotencyKey: string;
+  }): Promise<CommandAck> {
+    const guard: SpaceActionGuard = {
+      assertAllowed: async (transaction, workspace) => {
+        const member = await transaction.getMember(input.actorId);
+        if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
+        const domain = workspace.domainState as unknown as { kind?: string; spaceGrants?: ToolProjectionGrant[] };
+        const grant = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
+        if (!grant || grant.sourceWorkspaceId !== workspace.id) throw new AuthorityError('SPACE_ACTION_NOT_GRANTED');
+        const verdict = authorizeSpaceAction(grant, {
+          spaceWorkspaceId: input.spaceWorkspaceId,
+          sourceEpoch: workspace.epoch,
+          actorId: input.actorId,
+          actionId: input.actionId,
+          membershipVerifiedBy: 'destination',
+        });
+        if (!verdict.ok) {
+          const code = verdict.code === 'GRANT_REVOKED' ? 'SPACE_ACTION_REVOKED'
+            : verdict.code === 'GRANT_STALE_EPOCH' ? 'SPACE_ACTION_STALE'
+              : verdict.code === 'GRANT_ACTION_NOT_PERMITTED' ? 'SPACE_ACTION_NOT_GRANTED'
+                : 'SPACE_ACTION_FORBIDDEN';
+          throw new AuthorityError(code, verdict.message);
+        }
+        // A connection cannot exceed what the issuer may already do at this table.
+        if (!may(workspace, member, 'table.act')) throw new AuthorityError('SPACE_ACTION_FORBIDDEN');
+      },
+    };
+    // The commit needs the revision and epoch the caller is acting on; the guard below re-checks
+    // the grant, and a change in between still fails the normal CAS instead of committing blindly.
+    const snapshot = await this.computeSnapshot(input.workspaceId, input.actorId);
+    const envelope: CommandEnvelope = {
+      commandId: sha256('tabletop-space-action-v1:' + input.grantId + ':' + input.actionId + ':' + input.idempotencyKey),
+      expectedRevision: snapshot.workspace.revision,
+      expectedEpoch: snapshot.workspace.epoch,
+      type: 'table.act',
+      payload: { actionId: input.actionId, inputs: input.inputs },
+    };
+    // The receipt hash covers the request, not the revision it happened to read, so a retry after a
+    // commit replays the stored ack instead of failing as an idempotency mismatch.
+    const fingerprint = sha256(JSON.stringify({
+      grantId: input.grantId,
+      spaceWorkspaceId: input.spaceWorkspaceId,
+      actionId: input.actionId,
+      inputs: input.inputs,
+      idempotencyKey: input.idempotencyKey,
+    }));
+    return this.executeInternal(
+      { record: { actorId: input.actorId, tokenHash: '' } },
+      input.workspaceId,
+      envelope,
+      null,
+      fingerprint,
+      undefined,
+      guard,
+    );
+  }
   private async executeTrustedCompute(
     actorId: string,
     workspaceId: string,
@@ -828,6 +906,7 @@ export class CommandAuthority {
     trustedOperation: 'artifact-import' | 'table-compute' | null,
     requestFingerprint?: string,
     modelJobGuard?: ModelJobCommitGuard,
+    spaceActionGuard?: SpaceActionGuard,
   ): Promise<CommandAck> {
     const now = this.now();
     const requestHash = requestFingerprint === undefined
@@ -850,6 +929,8 @@ export class CommandAuthority {
               || (envelope.type === 'table.compute.update' && workspace.ownerActorId !== session.record.actorId)
               || !may(workspace, member, 'data.compute'))) throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
         if (modelJobGuard) await transaction.assertModelJobCommitting(modelJobGuard);
+        // F080: re-checked inside the commit transaction, so a revoke cannot race the commit.
+        if (spaceActionGuard) await spaceActionGuard.assertAllowed(transaction, workspace);
         if (workspace.kind === 'teaching' && envelope.type === 'teaching.setRepresentation') {
           await this.validateTeachingTarget(transaction, envelope.payload);
         }

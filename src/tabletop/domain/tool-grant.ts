@@ -19,6 +19,8 @@ import { requirePermission, TABLE_ACTIVITY_LIMIT } from './helpers';
  */
 
 const idSchema = z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u);
+/** Action ids are the domain's, so camelCase is legal here. */
+const actionIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{1,39}$/u);
 
 const grantRequestSchema = z.strictObject({
   grantId: idSchema,
@@ -35,7 +37,7 @@ const grantRequestSchema = z.strictObject({
     fields: z.array(idSchema).min(1).max(TOOL_CONNECTION_LIMITS.maxFields),
     maxRows: z.number().int().positive().max(200),
   })).min(1).max(TOOL_CONNECTION_LIMITS.maxProjections),
-  actions: z.array(z.strictObject({ actionId: idSchema })).max(TOOL_CONNECTION_LIMITS.maxActions),
+  actions: z.array(z.strictObject({ actionId: actionIdSchema })).max(TOOL_CONNECTION_LIMITS.maxActions),
 });
 
 const revokeRequestSchema = z.strictObject({ grantId: idSchema });

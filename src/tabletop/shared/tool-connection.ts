@@ -33,6 +33,9 @@ export const TOOL_CONNECTION_LIMITS = {
   maxAudienceActors: 64,
 } as const;
 
+/** Table action ids are the domain's, so camelCase is legal; this is a bounded reference. */
+const actionIdSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{1,39}$/u);
+
 export const toolProjectionGrantSchema = z.strictObject({
   grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
   spaceId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
@@ -56,7 +59,7 @@ export const toolProjectionGrantSchema = z.strictObject({
     fields: z.array(z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u)).min(1).max(24),
     maxRows: z.number().int().positive().max(200),
   })).min(1).max(8),
-  actions: z.array(z.strictObject({ actionId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u) })).max(8),
+  actions: z.array(z.strictObject({ actionId: actionIdSchema })).max(8),
 });
 export type ConnectionStatus = 'proposed' | 'granted' | 'active' | 'revoked' | 'missing' | 'incompatible';
 
@@ -126,6 +129,47 @@ export function grantIsLive(grant: ToolProjectionGrant, sourceEpoch: number): bo
  * reset epoch is refused even when the grant was never revoked, so neither condition can be
  * relied on to mask the other.
  */
+export type ActionVerdict =
+  | { ok: true }
+  | { ok: false; code: 'GRANT_REVOKED' | 'GRANT_STALE_EPOCH' | 'GRANT_AUDIENCE' | 'GRANT_NOT_FOUND' | 'GRANT_ACTION_NOT_PERMITTED'; message: string };
+
+/**
+ * Authorize calling one source action through a connection.
+ *
+ * The same grant that allows a read also bounds the actions, and only the ones it lists may be
+ * called. A revoked connection refuses before anything else is considered, so neither a stale epoch
+ * nor a friendly audience can be used to reach an action that was taken away.
+ */
+export function authorizeSpaceAction(
+  grant: ToolProjectionGrant,
+  input: {
+    /** The workspace hosting the space, as the grant recorded it. */
+    spaceWorkspaceId: string;
+    sourceEpoch: number;
+    actorId: string;
+    actionId: string;
+    membershipVerifiedBy: 'destination';
+  },
+): ActionVerdict {
+  if (grant.status === 'revoked') return { ok: false, code: 'GRANT_REVOKED', message: 'The source revoked this connection.' };
+  if (grant.spaceWorkspaceId !== input.spaceWorkspaceId) {
+    return { ok: false, code: 'GRANT_NOT_FOUND', message: 'That connection is not granted to this space.' };
+  }
+  if (grant.sourceEpoch !== input.sourceEpoch) {
+    return { ok: false, code: 'GRANT_STALE_EPOCH', message: 'The source was reset after this grant was issued.' };
+  }
+  if (input.membershipVerifiedBy !== 'destination') {
+    return { ok: false, code: 'GRANT_AUDIENCE', message: 'Space membership must be asserted by the destination.' };
+  }
+  if (grant.audience.kind === 'actors' && !grant.audience.actorIds.includes(input.actorId)) {
+    return { ok: false, code: 'GRANT_AUDIENCE', message: 'This member is not in the audience of the grant.' };
+  }
+  if (!grant.actions.some(action => action.actionId === input.actionId)) {
+    return { ok: false, code: 'GRANT_ACTION_NOT_PERMITTED', message: 'The grant does not allow this action.' };
+  }
+  return { ok: true };
+}
+
 export function authorizeProjectionRead(
   grant: ToolProjectionGrant,
   input: {
