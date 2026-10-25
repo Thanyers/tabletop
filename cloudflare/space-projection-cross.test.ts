@@ -536,3 +536,61 @@ describe('three tables and rebinding', () => {
     expect((rebound.body.rows as unknown[]).length).toBeGreaterThan(0);
   });
 });
+
+async function readRecap(actor: Actor, spaceId: string) {
+  const response = await worker.fetch(request(`/api/workspaces/${spaceId}/space/recap`, actor), bindings);
+  return { status: response.status, body: await response.json() as Record<string, unknown> };
+}
+
+describe('a room recap', () => {
+  it('reports a stable connection, then a change, then a withdrawal', async () => {
+    const owner = await seedActor('Recap owner');
+    const sourceOwner = await seedActor('Recap source');
+    const space = await createWorkspace(owner, 'Recap space');
+    const source = await createEquipmentTable(sourceOwner);
+
+    await command(sourceOwner, source, 'source.grantProjection', {
+      grantId: 'grant-recap',
+      spaceId: 'recap-room',
+      spaceWorkspaceId: space.id,
+      audience: { kind: 'space-members' },
+      projections: [{ portId: 'equipment', resource: 'equipment', fields: ['name'], maxRows: 5 }],
+      actions: [],
+    });
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'recap-room', title: 'ห้องสรุป', sharedToolWorkspaceId: space.id,
+    });
+    await command(owner, created.workspace, 'space.addSource', {
+      source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+    });
+
+    // Nothing has changed since the grant was issued, so the room is stable.
+    const stable = await readRecap(owner, space.id);
+    expect(stable.status).toBe(200);
+    const stableRecap = stable.body.recap as { headline: string; incomplete: boolean; current: unknown[] };
+    expect(stableRecap.incomplete).toBe(false);
+
+    // The source moves; the recap must say so with real numbers.
+    const current = await viewOf(sourceOwner, source.id);
+    await command(sourceOwner, current, 'table.import', { filename: 'more.txt', text: 'a second file' });
+    const moved = await readRecap(owner, space.id);
+    const movedRecap = moved.body.recap as { changed: { from: number; to: number }[]; headline: string };
+    expect(movedRecap.changed.length).toBeGreaterThan(0);
+    expect(movedRecap.changed[0]!.to).toBeGreaterThan(movedRecap.changed[0]!.from);
+
+    // Withdrawing shows up as a withdrawal, not as a change.
+    const latest = await viewOf(sourceOwner, source.id);
+    await command(sourceOwner, latest, 'source.revokeProjection', { grantId: 'grant-recap' });
+    const withdrawn = await readRecap(owner, space.id);
+    const withdrawnRecap = withdrawn.body.recap as { withdrawn: unknown[] };
+    expect(withdrawnRecap.withdrawn.length).toBe(1);
+  });
+
+  it('refuses someone outside the space', async () => {
+    const owner = await seedActor('Recap outsider owner');
+    const space = await createWorkspace(owner, 'Recap space 2');
+    const outsider = await seedActor('Recap outsider');
+    const result = await readRecap(outsider, space.id);
+    expect(result.status).toBe(403);
+  });
+});
