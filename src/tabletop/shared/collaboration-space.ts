@@ -297,7 +297,8 @@ export function decideSpace(space: CollaborationSpace, actorId: string, command:
       if (next.members.length >= SPACE_LIMITS.maxMembers) return { ok: false, code: 'SPACE_LIMIT', message: 'The space is full.' };
       if (next.members.some(member => member.actorId === command.member.actorId)) return { ok: false, code: 'SPACE_DUPLICATE', message: 'That member is already in the space.' };
       if (command.member.role === 'manager') return { ok: false, code: 'SPACE_INVALID', message: 'Transfer management instead of adding a second manager.' };
-      next.members = [...next.members, { ...command.member }];
+      // The join time is audit data: the domain stamps it instead of trusting the payload.
+      next.members = [...next.members, { ...command.member, joinedAt: now }];
       // `sources` is deliberately untouched: joining the space is not a data grant.
       return { ok: true, space: next };
     }

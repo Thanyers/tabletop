@@ -241,3 +241,16 @@ describe('a title that trims to nothing is refused, not stored', () => {
     expect(readSpaceFromState(created.state).problems).toEqual([]);
   });
 });
+
+describe('audit fields are stamped by the domain', () => {
+  it('stamps the join time instead of trusting the payload', () => {
+    const state = workspaceWithSpace();
+    const decision = applySpaceCommand({ state, actor: owner, now: 5_000 }, {
+      type: 'space.addMember',
+      member: { actorId: 'actor-b', name: 'B', role: 'participant', joinedAt: 1 },
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) return;
+    expect(decision.space.members.find(member => member.actorId === 'actor-b')?.joinedAt).toBe(5_000);
+  });
+});

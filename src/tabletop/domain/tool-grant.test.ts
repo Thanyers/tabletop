@@ -149,3 +149,23 @@ describe('reads and in-flight work go through the same grant check', () => {
     expect(read(grantOnce(), { grantId: 'grant-other' })).toMatchObject({ ok: false, code: 'GRANT_NOT_FOUND' });
   });
 });
+
+describe('grant bookkeeping stays bounded and cannot be dictated by the client', () => {
+  it('keeps the audit trail bounded once many grants were revoked', () => {
+    let state = createTableState();
+    for (let index = 0; index < TOOL_CONNECTION_LIMITS.maxGrantsPerSource; index += 1) {
+      const granted = handleSourceGrantCommand(state, 'source.grantProjection', { ...grantPayload, grantId: `grant-${index}` }, actor());
+      if (!granted) throw new Error('grant refused');
+      state = granted.state;
+      const revoked = handleSourceGrantCommand(state, 'source.revokeProjection', { grantId: `grant-${index}` }, actor({ now: 2_000 }));
+      if (!revoked) throw new Error('revoke refused');
+      state = revoked.state;
+    }
+    expect(state.spaceGrants).toHaveLength(TOOL_CONNECTION_LIMITS.maxGrantsPerSource);
+    const next = handleSourceGrantCommand(state, 'source.grantProjection', { ...grantPayload, grantId: 'grant-final' }, actor());
+    if (!next) throw new Error('grant refused');
+    // The new grant is stored and the old revoked ones do not grow the list without bound.
+    expect(next.state.spaceGrants?.length).toBeLessThanOrEqual(TOOL_CONNECTION_LIMITS.maxGrantsPerSource + 1);
+    expect(next.state.spaceGrants?.some(entry => entry.grantId === 'grant-final')).toBe(true);
+  });
+});

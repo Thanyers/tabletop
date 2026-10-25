@@ -78,6 +78,12 @@ export function handleSourceGrantCommand(
     if (live.length >= TOOL_CONNECTION_LIMITS.maxGrantsPerSource) {
       throw new DomainError('SOURCE_GRANT_LIMIT', `At most ${TOOL_CONNECTION_LIMITS.maxGrantsPerSource} active grants per table.`);
     }
+    // Revoked grants are kept for the audit trail, but only a bounded number of them: otherwise a
+    // holder of the sharing permission could grow the table state without limit.
+    const revoked = grants.filter(grant => grant.status !== 'granted');
+    const pruned = revoked.length >= TOOL_CONNECTION_LIMITS.maxGrantsPerSource
+      ? grants.filter(grant => grant.status === 'granted')
+      : grants;
     // Every projection must name something the source actually has, so a grant cannot promise
     // data the table does not own.
     const program = state.program;
@@ -111,7 +117,7 @@ export function handleSourceGrantCommand(
     return {
       state: {
         ...state,
-        spaceGrants: [...grants, grant],
+        spaceGrants: [...pruned, grant],
         actionRevision: state.actionRevision + 1,
         activity: [...state.activity, { actorId: ctx.actorId, action: type, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT),
       },
