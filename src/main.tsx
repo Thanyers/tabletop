@@ -12,10 +12,13 @@ import '@fontsource/noto-sans-thai/700.css';
 import '@xyflow/react/dist/style.css';
 import { UpdateNotice } from './update-notice/UpdateNotice';
 import { LoadingScreen } from './loading/LoadingScreen';
-const Experience = lazy(() => {
-  const path = location.pathname;
-  if (path === '/demo' || path === '/demo/') return import('./tabletop/demo/InteractiveDemo');
-  if (path === '/demo/replay' || path === '/demo/replay/') return import('./tabletop/demo/PublicDemo');
-  return import('./tabletop/TabletopApp');
-});
+// One `lazy(() => import(…))` per route: a single factory choosing between several
+// dynamic imports makes Rollup attach one preload list to the whole call, so a
+// route can load its JS without its CSS (F079).
+const path = location.pathname;
+const Experience = path === '/demo' || path === '/demo/'
+  ? lazy(() => import('./tabletop/demo/InteractiveDemo'))
+  : path === '/demo/replay' || path === '/demo/replay/'
+    ? lazy(() => import('./tabletop/demo/PublicDemo'))
+    : lazy(() => import('./tabletop/TabletopApp'));
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><Suspense fallback={<LoadingScreen />}><Experience/></Suspense><UpdateNotice/></React.StrictMode>);
