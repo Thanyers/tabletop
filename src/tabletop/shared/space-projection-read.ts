@@ -1,3 +1,4 @@
+import type { ToolPortRow } from './tool-protocol';
 import {
   authorizeProjectionRead,
   effectiveRevocationAt,
@@ -50,9 +51,15 @@ export type SpaceProjectionRead =
     ok: true;
     grantId: string;
     projection: ToolGrantProjection;
+    /** The revision these rows were read at; a caller that caches must quote it back. */
     sourceDataRevision: number;
     grantVersion: number;
     readAt: number;
+    /**
+     * Attached by the source host, which is the only layer holding records. Absent when the caller
+     * asked only for the grant descriptor.
+     */
+    rows?: ToolPortRow[];
   }
   | { ok: false; code: SpaceProjectionRefusal; message: string };
 

@@ -9,6 +9,7 @@ import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
 import { projectionCursor } from '../server/projection-cursor.js';
 import { resolveSpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
+import { projectGrantRows } from '../src/tabletop/shared/tool-grant-rows.js';
 import { authenticateHash, authenticateRequest, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
 import { redactString, respondToTablePrompt, type IdentityReplacement } from './table-assistant.js';
@@ -227,7 +228,7 @@ export class Room extends DurableObject<Env> {
         const workspaceId = this.requireBoundRoomId();
         const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
         const domain = workspace.domainState as { kind: string; spaceGrants?: Parameters<typeof resolveSpaceProjectionRead>[0]['grants'] };
-        return resolveSpaceProjectionRead({
+        const answer = resolveSpaceProjectionRead({
           grants: Array.isArray(domain.spaceGrants) && domain.kind === 'table' ? domain.spaceGrants : [],
           grantId: input.grantId,
           spaceId: input.spaceId,
@@ -239,6 +240,22 @@ export class Room extends DurableObject<Env> {
           membership: { verifiedBy: 'destination', actorId: input.actorId },
           now: Date.now(),
         });
+        if (!answer.ok) return answer;
+        // Rows are read from the state this request already holds, at its own revisions, so the
+        // response cannot mix revisions even under load.
+        const records = (domain as { records?: Record<string, { id: string; values: Record<string, unknown> }[]>; dataRevision?: number; ruleRevision?: number });
+        const rows = projectGrantRows({
+          portId: answer.projection.portId,
+          fields: answer.projection.fields,
+          maxRows: answer.projection.maxRows,
+          dataRevision: records.dataRevision ?? 0,
+          ruleRevision: records.ruleRevision ?? 0,
+          grantVersion: answer.grantVersion,
+          label: 'source',
+          records: records.records?.[answer.projection.resource] ?? [],
+          readAt: Date.now(),
+        });
+        return { ...answer, rows: rows.rows, sourceDataRevision: rows.sourceDataRevision };
       },
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));

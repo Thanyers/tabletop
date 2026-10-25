@@ -102,6 +102,8 @@ export async function handleSpaceProjectionRead(
     grantId: answer.grantId,
     portId: port,
     projection: answer.projection,
+    // The data half: rows read at the source's own revision, plus that revision.
+    rows: answer.rows ?? [],
     sourceDataRevision: answer.sourceDataRevision,
     grantVersion: answer.grantVersion,
     readAt: answer.readAt,

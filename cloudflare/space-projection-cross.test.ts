@@ -113,13 +113,18 @@ async function fixture(): Promise<Fixture> {
 }
 
 describe('two workspaces, one granted projection', () => {
-  it('serves the descriptor to a member of the granted workspace', async () => {
+  it('serves the descriptor and rows at the live revision', async () => {
     const setup = await fixture();
     const result = await readProjection(setup.owner, setup.space, { source: setup.source, grant: 'grant-budget', port: 'budget' });
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject({ ok: true, grantId: 'grant-budget', portId: 'budget' });
     const projection = result.body.projection as { fields: string[] };
     expect(projection.fields).toEqual(['room', 'price']);
+    // The data half: rows are attached by the source at its own revision (empty before any data).
+    expect(result.body.rows).toEqual([]);
+    const sourceView = await viewOf(setup.sourceOwner, setup.source);
+    const domain = sourceView.domain as { dataRevision: number };
+    expect(result.body.sourceDataRevision).toBe(domain.dataRevision);
   });
 
   it('refuses a workspace that reuses the slug but was never granted', async () => {
