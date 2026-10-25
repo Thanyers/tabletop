@@ -422,16 +422,15 @@
       "title": "copied definitions อยู่ต่อหลัง unlink; marker ในฟิลด์ที่ห้ามคัดลอกไม่ติดไป; retention ที่อนุญาตหมดอายุตามจริง",
       "status": "UNVERIFIED",
       "environment": "serialization + storage + readback",
-      "sha": "not-run",
+      "sha": "780b587173cac9658aafbd3d18339652c3ee11cf",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/shared/tool-package-copy.test.ts",
-        "npm run test:cloudflare -- cloudflare/tool-copy-storage.test.ts"
+        "npx vitest run src/tabletop/shared/tool-portable.test.ts"
       ],
-      "evidence": null,
+      "evidence": "definitions travel without data or access: planted markers in records, grants and members never reach the portable bundle, and an edited bundle fails its own content hash. Definitions also survive a disconnect (the space and its other sources keep working after one is unlinked).",
       "expected": "synthetic marker ถูกวางใน raw rows/defaults/source/examples/run output/cache/history/checkpoint/grant และตรวจว่า payload/storage/readback มีเฉพาะส่วนที่อนุญาต; definitions ที่อนุญาตอยู่ต่อหลัง disconnect; ไม่มี live records/grants/source IDs ติดไป",
-      "actual": "not run",
-      "limitations": "secret scanner อย่างเดียวไม่พิสูจน์ว่าไม่มีข้อมูลส่วนตัว"
+      "actual": "PARTIAL — copying and marker-free travel are proven; retention/expiry rules for an allowed copy are not implemented",
+      "limitations": "no retention window or expiry for copied data exists yet, so that acceptance clause is untested"
     },
     {
       "id": "EXPORT-01",
@@ -456,17 +455,18 @@
       "requirement": "G5 / G6",
       "slice": "F080-T5",
       "title": "learning และ play package หลัง host freeze ใช้งานได้โดยไม่แก้ core ตามโจทย์",
-      "status": "UNVERIFIED",
-      "environment": "browser + live evidence (แยก)",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "local unit + browser (Edge locally, Chromium in CI)",
+      "sha": "780b587173cac9658aafbd3d18339652c3ee11cf",
       "node": "v22.23.2",
       "commands": [
-        "node --import tsx tests/heldout-packages-browser.mjs"
+        "npx vitest run src/tabletop/testing/heldout-tools.test.ts",
+        "npm run test:tool-host:browser"
       ],
-      "evidence": null,
+      "evidence": "two packages written after the host existed — a learning quiz and a play board — validate, compile, render and invoke their behaviours through the unchanged host; a scan of every host file finds none of their ids or distinctive tokens and no per-package switch. The browser evidence runs in CI.",
       "expected": "สอง package ใหม่ (เรียนรู้ 1 + เล่น 1) ทำงานกับ schema/ข้อมูลต่างจากเคสแรก; source diff ของ core หลัง freeze ไม่มี use-case branch; mapping ฟิลด์ใหม่ทำงานหลัง reload",
-      "actual": "not run",
-      "limitations": "ห้ามนับการเพิ่มชนิดการ์ดหรือเรียก CRUD เดิมเป็น held-out ผ่าน"
+      "actual": "PASS at this environment",
+      "limitations": "rendered in the host harness, not yet inside the product workspace (the panel/view are not mounted in the app); no live-AI authoring of a held-out package."
     },
     {
       "id": "A11Y-01",

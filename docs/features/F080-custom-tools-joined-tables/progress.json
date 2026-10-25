@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T02:26:00+07:00",
-  "lastVerifiedAt": "2026-10-26T02:26:00+07:00",
+  "updatedAt": "2026-10-26T02:41:00+07:00",
+  "lastVerifiedAt": "2026-10-26T02:41:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074",
-    "candidateSha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074",
+    "headSha": "780b587173cac9658aafbd3d18339652c3ee11cf",
+    "candidateSha": "780b587173cac9658aafbd3d18339652c3ee11cf",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: การชนโต๊ะครบทั้งอ่าน/ลงมือ/ถอน-เชื่อมใหม่/สามโต๊ะ + export ที่อ่านกลับด้วย parser อิสระ · cross e2e 19/19 · cloudflare 295/295 · unit 1072/5 · ค้าง: เปิดไฟล์ใน spreadsheet (EXPORT-01), load/limit ของ three-table (TOPO-01), T4A/T4B, T5, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: T5 ครึ่งแรกเสร็จ — portable bundle (definitions เท่านั้น, hash guard, input mapping 9/9) และ held-out สองแพ็กเกจ (เรียน/เล่น) ที่ render+act บน host ที่ไม่ถูกแก้ (browser 16/16, host ไม่มี marker) · cloudflare 295/295 · unit 1086/5 · ค้าง: retention/expiry (COPY-01), mount ในแอปจริง, T4A/T4B, room shell (รอเลือก visual), hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -640,7 +640,7 @@
       "id": "F080-T5",
       "jt": "JT-5",
       "featureId": "F080",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "F080-T4B"
       ],
@@ -648,11 +648,28 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": null,
-      "checks": [],
+      "candidateSha": "780b587173cac9658aafbd3d18339652c3ee11cf",
+      "checks": [
+        {
+          "name": "portable bundles: definitions only, hash-guarded, mapped to a different schema",
+          "environment": "local unit",
+          "command": "npx vitest run src/tabletop/shared/tool-portable.test.ts",
+          "result": "PASS",
+          "evidence": "9/9: a bundle carries the package, its reference, the runtime profile and the input mapping; planted markers in records/grants/members never reach it (the strict schema refuses the extra keys outright); an edited source fails BUNDLE_HASH_MISMATCH; a newer bundle version is refused; a malformed mapping is refused; a mapping to different local field ids bridges the same data.",
+          "checkedSha": "780b587173cac9658aafbd3d18339652c3ee11cf"
+        },
+        {
+          "name": "held-out learning and play packages on the unchanged host",
+          "environment": "local unit + browser (Edge locally, Chromium in CI)",
+          "command": "npx vitest run src/tabletop/testing/heldout-tools.test.ts; npm run test:tool-host:browser",
+          "result": "PASS",
+          "evidence": "5/5: both packages validate and compile; no host file mentions their ids or distinctive tokens; no per-package switch exists in the sandbox or compiler. Browser 16/16: the learning package renders its questions from a records port and invokes its submit behaviour, and the play package renders its boats and invokes advance — both through the same GeneratedToolHost, with no host change in this slice.",
+          "checkedSha": "780b587173cac9658aafbd3d18339652c3ee11cf"
+        }
+      ],
       "findings": [],
       "blocker": null,
-      "nextAction": "portable definitions/import mapping + held-out learning/play packages"
+      "nextAction": "Retention/expiry for copied definitions (COPY-01), then mounting the panel and the joined view in the real workspace UI, and T4A."
     },
     {
       "id": "F080-T-X",
