@@ -43,6 +43,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T7b | Disposable recovery rehearsal | T7a | Multiple revisions, revoked member, pending/uncertain jobs, exact retry after restore, state hash/cursor/receipt/billing agreement; model RPO/RTO measured with hosted-restore limits stated |
 | T8 | Typed built-in Canvas view registration | T3, T5 | Compiler/tests catch a missing kind, malformed descriptors reject, valid schema→semantic→evaluation→render passes; wire contract preserved; core does not import React |
 | T9 | Extended load/soak and capacity comparison | T2, T5–T7 | Success/stale latency, queue/job age, failure/reconnect/outbox lag and storage curve across rooms compared against the recorded baseline before any capacity change |
+| T10 | Delete the Node runtime's unreachable model-job lifecycle; keep the provider contracts where their adapter consumes them | T1 | HTTP contract for `/model` unchanged (`503 MODEL_NOT_CONFIGURED`); no caller of the removed store/gateway; guard test keeps it from returning |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -170,3 +171,11 @@ T0/#264, T1/#260, T4/#263, T2/#261 and T3/#262 are merged into dev. T3's full de
 ### T3a closing status (2026-10-24)
 
 T3a/#265 merged as `d374e7051350237354d2055982cc383040c8e402`. Its dev run [40075882571](https://github.com/Thanyers/tabletop/actions/runs/40075882571) finished **success** with `Deploy tabletop-staging` **success** — the hosted deployment the scheduling fix existed for — while the three focused PR-only jobs stayed SKIPPED by design and are not counted as passes. Reading `/version` back returned staging `0.0.0-dev / d374e70` (`built_at` `2026-10-24T07:59:41Z`) and production unchanged at `9.0.2 / 8e2c7e1`. So the scheduling regression is closed by a real staging deployment, not by the overall run conclusion alone.
+
+### T10 — the Node runtime's unreachable model-job lifecycle
+
+The Node guest runtime answers `POST /api/workspaces/:id/model` with `503 MODEL_NOT_CONFIGURED` before it reaches any provider (`server/features.ts`, pinned by `server/features.test.ts`). Beside that route it still carried a complete parallel lifecycle — `ModelGateway`, `SqlModelJobStore`, `ModelJob`, `ModelJobStore`, their zod schemas and a 490-line test — with no production caller; only `ModelInput` and `ModelProvider` were read, by `server/providers/deepseek.ts` and the Worker invoice path.
+
+This task deletes the lifecycle (`server/model.ts` 504 lines and `server/model.test.ts` 490 lines) and keeps the two contracts that are actually consumed in `server/providers/model-contracts.ts`. It is guarded the test-first way: `server/dead-model-lifecycle.test.ts` asserts the module file is absent, failed before the deletion and passes after it, so a later change cannot quietly reinstate a second job store.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **953 passed / 5 skipped (958)** (the 10 cases in `model.test.ts` went with the module), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (one pre-existing unused-import warning in `cloudflare/ai.ts` is unchanged), `node scripts/check-public-files.mjs` **970 files / 0 findings** after the commit, `git diff --check` clean. No HTTP contract, schema, billing, retention or production behavior change; the removed code was never reachable from a request.
