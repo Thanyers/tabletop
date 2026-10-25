@@ -32,6 +32,7 @@ function grant(overrides: Partial<ToolProjectionGrant> = {}): ToolProjectionGran
       { portId: 'budget', resource: 'costs', fields: ['room', 'price'], maxRows: 50 },
     ],
     actions: [{ actionId: 'reserve' }],
+    exportAllowed: false,
     ...overrides,
   };
 }

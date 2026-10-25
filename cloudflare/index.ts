@@ -12,6 +12,7 @@ import { tableCapabilitySummary } from '../src/tabletop/shared/table-capabilitie
 import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 import { handleSpaceProjectionRead } from './space-projection-transport.js';
 import { handleSpaceAction } from './space-action-transport.js';
+import { handleSpaceExport } from './space-export-transport.js';
 import type { SpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 export { Room } from './room.js';
 export { Billing } from './billing.js';
@@ -22,6 +23,8 @@ const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invit
 const spaceProjectionRoute = new RegExp(`^/api/workspaces/(${uuid})/space/projection$`, 'u');
 /** F080: an action invoked through a connection; answered by the Worker, committed by the source. */
 const spaceActionRoute = new RegExp(`^/api/workspaces/(${uuid})/space/action$`, 'u');
+/** F080: a download of one granted projection, produced by the source. */
+const spaceExportRoute = new RegExp(`^/api/workspaces/(${uuid})/space/export$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
 const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
 const joinLinkSchema = z.strictObject({ link: z.string().max(100) });
@@ -212,6 +215,30 @@ async function route(request: Request, env: Env): Promise<Response> {
         const response = await room(env, sourceWorkspaceId).fetch(forwarded);
         if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
         return await response.json<{ ok: true; revision: string; duplicate: boolean } | { ok: false; code: string; message: string }>();
+      },
+    }, { spaceId });
+  }
+  const spaceExport = spaceExportRoute.exec(path);
+  if (method === 'GET' && spaceExport?.[1]) {
+    const spaceId = spaceExport[1];
+    await limit(env, `space-export:${session.record.actorId}`, 30, 60_000);
+    return handleSpaceExport(request, {
+      authenticate: async () => ({ actorId: session.record.actorId }),
+      workspaceView: async (original, workspaceId) => {
+        const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
+        if (response.status === 401 || response.status === 403 || response.status === 404) return undefined;
+        if (!response.ok) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<WorkspaceView>();
+      },
+      exportSourceProjection: async (_original, sourceWorkspaceId, body) => {
+        const forwarded = new Request(new URL('/internal/space-export', request.url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const response = await room(env, sourceWorkspaceId).fetch(forwarded);
+        if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json();
       },
     }, { spaceId });
   }

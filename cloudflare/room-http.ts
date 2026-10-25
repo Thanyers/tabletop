@@ -58,6 +58,15 @@ export interface RoomRouteMatch {
   readonly imageId?: string;
 }
 
+const spaceExportRequestSchema = z.strictObject({
+  grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  spaceId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/u),
+  spaceWorkspaceId: z.string().uuid(),
+  actorId: z.string().min(1).max(160),
+  portId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  format: z.enum(['csv', 'html']),
+});
+
 const spaceActionRequestSchema = z.strictObject({
   grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
   spaceId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/u),
@@ -110,6 +119,18 @@ export interface RoomHttpDeps {
     inputs: Record<string, string | number | boolean | null>;
     idempotencyKey: string;
   }): Promise<{ ok: true; revision: string; duplicate: boolean } | { ok: false; code: string; message: string }>;
+  /** F080: build one export file from this table's own rows and grant; the source decides. */
+  exportSpaceProjection(input: {
+    grantId: string;
+    spaceId: string;
+    spaceWorkspaceId: string;
+    actorId: string;
+    portId: string;
+    format: 'csv' | 'html';
+  }): Promise<
+    | { ok: true; filename: string; format: 'csv' | 'html'; content: string; sourceDataRevision: number; grantVersion: number }
+    | { ok: false; code: string; message: string }
+  >;
 }
 
 export interface RoomHttp {
@@ -139,6 +160,9 @@ export function matchRoomRoute(request: Request, boundRoomId: string | null): Ro
   }
   if (request.method === 'POST' && url.pathname === '/internal/space-action') {
     return { handler: 'room-http', name: 'internal.space-action' };
+  }
+  if (request.method === 'POST' && url.pathname === '/internal/space-export') {
+    return { handler: 'room-http', name: 'internal.space-export' };
   }
   const imageRoute = IMAGE_ROUTE.exec(url.pathname);
   if (imageRoute) {
@@ -195,6 +219,8 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
         return internalSpaceProjection(request, requestId);
       case 'internal.space-action':
         return internalSpaceAction(request, requestId);
+      case 'internal.space-export':
+        return internalSpaceExport(request, requestId);
       case 'workspace.view':
         return workspaceView(request, requestId, match.workspaceId);
       case 'events':
@@ -248,6 +274,17 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
       : answer.code === 'SPACE_ACTION_FORBIDDEN' ? 403
         : answer.code === 'SPACE_ACTION_FAILED' ? 422
           : 404;
+    return json(status, answer, { 'x-request-id': requestId });
+  }
+
+  async function internalSpaceExport(request: Request, requestId: string): Promise<Response> {
+    const parsed = spaceExportRequestSchema.safeParse(await readJson(request));
+    if (!parsed.success) return json(400, { ok: false, code: 'SPACE_EXPORT_PAYLOAD', message: 'Invalid export request.' }, { 'x-request-id': requestId });
+    const answer = await deps.exportSpaceProjection(parsed.data);
+    if (answer.ok) return json(200, answer, { 'x-request-id': requestId });
+    const status = answer.code === 'SPACE_GRANT_REVOKED' || answer.code === 'SPACE_GRANT_STALE_EPOCH' ? 409
+      : answer.code === 'EXPORT_NOT_PERMITTED' ? 403
+        : 404;
     return json(status, answer, { 'x-request-id': requestId });
   }
 

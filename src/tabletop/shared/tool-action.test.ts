@@ -28,6 +28,7 @@ function grant(overrides: Partial<ToolProjectionGrant> = {}): ToolProjectionGran
     audience: { kind: 'space-members' },
     projections: [{ portId: 'budget', resource: 'costs', fields: ['room', 'price'], maxRows: 25 }],
     actions: [{ actionId: 'reserve' }],
+    exportAllowed: false,
     ...overrides,
   };
 }

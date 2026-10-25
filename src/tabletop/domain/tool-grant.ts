@@ -38,6 +38,7 @@ const grantRequestSchema = z.strictObject({
     maxRows: z.number().int().positive().max(200),
   })).min(1).max(TOOL_CONNECTION_LIMITS.maxProjections),
   actions: z.array(z.strictObject({ actionId: actionIdSchema })).max(TOOL_CONNECTION_LIMITS.maxActions),
+  exportAllowed: z.boolean().optional(),
 });
 
 const revokeRequestSchema = z.strictObject({ grantId: idSchema });
@@ -118,6 +119,8 @@ export function handleSourceGrantCommand(
       audience: request.audience,
       projections: request.projections,
       actions: request.actions,
+      // Absent means "read only": an export needs an explicit yes from the source.
+      exportAllowed: request.exportAllowed === true,
     };
     return {
       state: {

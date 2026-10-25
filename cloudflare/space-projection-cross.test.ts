@@ -370,3 +370,79 @@ describe('an action through a connection, end to end', () => {
     expect(result.body).toMatchObject({ errorCode: 'SPACE_SOURCE_NOT_LINKED' });
   });
 });
+
+/** An equipment table whose connection may or may not allow export. */
+async function exportFixture(exportAllowed: boolean): Promise<{ owner: Actor; sourceOwner: Actor; space: string; source: string }> {
+  const owner = await seedActor('Export owner');
+  const sourceOwner = await seedActor('Export source');
+  const space = await createWorkspace(owner, 'Export space');
+  const source = await createEquipmentTable(sourceOwner);
+  await command(sourceOwner, source, 'source.grantProjection', {
+    grantId: 'grant-export',
+    spaceId: 'export-room',
+    spaceWorkspaceId: space.id,
+    audience: { kind: 'space-members' },
+    projections: [{ portId: 'equipment', resource: 'equipment', fields: ['name'], maxRows: 10 }],
+    actions: [],
+    exportAllowed,
+  });
+  const created = await command(owner, space, 'space.create', {
+    spaceId: 'export-room', title: 'ห้องส่งออก', sharedToolWorkspaceId: space.id,
+  });
+  await command(owner, created.workspace, 'space.addSource', {
+    source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+  });
+  return { owner, sourceOwner, space: space.id, source: source.id };
+}
+
+async function downloadExport(actor: Actor, spaceId: string, source: string, query = 'grant=grant-export&port=equipment') {
+  const response = await worker.fetch(request(`/api/workspaces/${spaceId}/space/export?source=${source}&${query}`, actor), bindings);
+  return { status: response.status, headers: response.headers, text: await response.text() };
+}
+
+describe('exporting a granted projection', () => {
+  it('downloads a CSV with the source rows when the grant allows export', async () => {
+    const setup = await exportFixture(true);
+    const result = await downloadExport(setup.owner, setup.space, setup.source);
+    expect(result.status).toBe(200);
+    expect(result.headers.get('content-type')).toContain('text/csv');
+    expect(result.headers.get('content-disposition')).toContain('attachment');
+    expect(result.headers.get('x-source-data-revision')).toBeTruthy();
+    // The real rows travel: the equipment scenario names the field camera.
+    expect(result.text).toContain('Field camera');
+    // Only the granted field is a column.
+    expect(result.text.split('\r\n')[0]).toBe('name');
+  });
+
+  it('serves an HTML file when asked', async () => {
+    const setup = await exportFixture(true);
+    const result = await downloadExport(setup.owner, setup.space, setup.source, 'grant=grant-export&port=equipment&format=html');
+    expect(result.status).toBe(200);
+    expect(result.headers.get('content-type')).toContain('text/html');
+    expect(result.text).toContain('Field camera');
+  });
+
+  it('refuses a read-only grant with its own code', async () => {
+    const setup = await exportFixture(false);
+    const result = await downloadExport(setup.owner, setup.space, setup.source);
+    expect(result.status).toBe(403);
+    expect(result.text).toContain('EXPORT_NOT_PERMITTED');
+  });
+
+  it('refuses after the grant is revoked', async () => {
+    const setup = await exportFixture(true);
+    const source = await viewOf(setup.sourceOwner, setup.source);
+    await command(setup.sourceOwner, source, 'source.revokeProjection', { grantId: 'grant-export' });
+    const result = await downloadExport(setup.owner, setup.space, setup.source);
+    expect(result.status).toBe(409);
+    expect(result.text).toContain('SPACE_GRANT_REVOKED');
+  });
+
+  it('refuses someone outside the space', async () => {
+    const setup = await exportFixture(true);
+    const outsider = await seedActor('Export outsider');
+    const result = await downloadExport(outsider, setup.space, setup.source);
+    expect(result.status).toBe(403);
+    expect(result.text).toContain('SPACE_NOT_MEMBER');
+  });
+});

@@ -60,6 +60,7 @@ export const toolProjectionGrantSchema = z.strictObject({
     maxRows: z.number().int().positive().max(200),
   })).min(1).max(8),
   actions: z.array(z.strictObject({ actionId: actionIdSchema })).max(8),
+  exportAllowed: z.boolean().optional(),
 });
 export type ConnectionStatus = 'proposed' | 'granted' | 'active' | 'revoked' | 'missing' | 'incompatible';
 
@@ -101,6 +102,11 @@ export interface ToolProjectionGrant {
   revokedAt?: number;
   revokedBy?: string;
   audience: { kind: 'space-members' } | { kind: 'actors'; actorIds: string[] };
+  /**
+   * Reading rows and taking a file away are different permissions. A grant without this may serve
+   * projections to the tool, but no export will be produced from it.
+   */
+  exportAllowed: boolean;
   projections: ToolGrantProjection[];
   /** Source actions the destination may invoke through the connection. */
   actions: { actionId: string }[];

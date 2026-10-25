@@ -10,6 +10,7 @@ import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/
 import { projectionCursor } from '../server/projection-cursor.js';
 import { resolveSpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 import { projectGrantRows } from '../src/tabletop/shared/tool-grant-rows.js';
+import { buildSpaceExport } from '../src/tabletop/shared/space-export.js';
 import { authenticateHash, authenticateRequest, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
 import { redactString, respondToTablePrompt, type IdentityReplacement } from './table-assistant.js';
@@ -274,6 +275,33 @@ export class Room extends DurableObject<Env> {
           const code = error instanceof AuthorityError ? error.code : 'SPACE_ACTION_FAILED';
           return { ok: false as const, code, message: error instanceof Error ? error.message : 'The action failed.' };
         }
+      },
+      // F080: the export is built here because only this table can see its rows and its export flag.
+      exportSpaceProjection: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as unknown as {
+          kind?: string;
+          spaceGrants?: Parameters<typeof buildSpaceExport>[0]['grant'][];
+          records?: Record<string, { id: string; values: Record<string, unknown> }[]>;
+          dataRevision?: number;
+          ruleRevision?: number;
+        };
+        const grant = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
+        if (!grant) return { ok: false as const, code: 'SPACE_GRANT_NOT_FOUND', message: 'That connection is not granted to this space.' };
+        const projection = grant.projections.find(entry => entry.portId === input.portId);
+        return buildSpaceExport({
+          grant,
+          portId: input.portId,
+          actorId: input.actorId,
+          spaceWorkspaceId: input.spaceWorkspaceId,
+          sourceEpoch: workspace.epoch,
+          dataRevision: domain.dataRevision ?? 0,
+          ruleRevision: domain.ruleRevision ?? 0,
+          records: projection ? domain.records?.[projection.resource] ?? [] : [],
+          format: input.format,
+          producedAt: Date.now(),
+        });
       },
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
