@@ -1,6 +1,6 @@
 import type { WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import type { CollaborationSpace } from '../src/tabletop/shared/collaboration-space.js';
-import { buildSpaceRecap, type SpaceRecap } from '../src/tabletop/shared/space-recap.js';
+import { buildSpaceRecap, paginateRecap, type SpaceRecap } from '../src/tabletop/shared/space-recap.js';
 import type { GrantedConnection } from '../src/tabletop/shared/space-grants.js';
 
 /**
@@ -112,7 +112,14 @@ export async function handleSpaceRecap(
     })),
   });
 
-  return new Response(JSON.stringify({ ok: true, recap }), {
+  // The page is part of the answer, so a client that deep-links to a later page learns how many
+  // there really are instead of guessing.
+  const page = paginateRecap(recap, {
+    page: Number(new URL(request.url).searchParams.get('page') ?? '1'),
+    pageSize: Number(new URL(request.url).searchParams.get('pageSize') ?? '10'),
+  });
+
+  return new Response(JSON.stringify({ ok: true, recap, page }), {
     status: 200,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
