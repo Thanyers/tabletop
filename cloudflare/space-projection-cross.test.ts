@@ -594,3 +594,63 @@ describe('a room recap', () => {
     expect(result.status).toBe(403);
   });
 });
+
+/**
+ * F080 / TOPO-01: what three linked sources actually cost.
+ *
+ * This measures the read path the room uses, not a benchmark of the platform: sequential reads from
+ * one Worker entry against real Durable Objects, with the per-grant row ceiling asserted every time.
+ * The numbers are reported, never asserted as a capacity claim.
+ */
+describe('three tables under repeated reads', () => {
+  it('serves repeated reads within the per-grant limits and reports its own timing', async () => {
+    const owner = await seedActor('Load owner');
+    const space = await createWorkspace(owner, 'Load space');
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'load-room', title: 'ห้องวัดโหลด', sharedToolWorkspaceId: space.id,
+    });
+    let current = created.workspace;
+    const sources: { id: string; grant: string; port: string }[] = [];
+
+    for (const index of [1, 2, 3]) {
+      const sourceOwner = await seedActor(`Load source ${index}`);
+      const source = await createEquipmentTable(sourceOwner);
+      const grantId = `grant-load-${index}`;
+      const portId = `port${index}`;
+      // A small ceiling on purpose: the measurement must show the cap being honoured.
+      await command(sourceOwner, source, 'source.grantProjection', {
+        grantId,
+        spaceId: 'load-room',
+        spaceWorkspaceId: space.id,
+        audience: { kind: 'space-members' },
+        projections: [{ portId, resource: 'equipment', fields: ['name'], maxRows: 2 }],
+        actions: [],
+      });
+      const linked = await command(owner, current, 'space.addSource', {
+        source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+      });
+      current = linked.workspace;
+      sources.push({ id: source.id, grant: grantId, port: portId });
+    }
+
+    const started = Date.now();
+    let reads = 0;
+    let rowsSeen = 0;
+    for (let round = 0; round < 5; round += 1) {
+      for (const source of sources) {
+        const result = await readProjection(owner, space.id, { source: source.id, grant: source.grant, port: source.port });
+        expect(result.status, `round ${round}`).toBe(200);
+        const rows = result.body.rows as unknown[];
+        // The grant ceiling is honoured on every single read, not only the first.
+        expect(rows.length).toBeLessThanOrEqual(2);
+        rowsSeen += rows.length;
+        reads += 1;
+      }
+    }
+    const elapsed = Date.now() - started;
+    expect(reads).toBe(15);
+    // A generous ceiling that still catches a pathological regression (seconds per read).
+    expect(elapsed / reads).toBeLessThan(2_000);
+    console.log(JSON.stringify({ reads, rowsSeen, elapsedMs: elapsed, averageMs: Math.round(elapsed / reads) }));
+  });
+});

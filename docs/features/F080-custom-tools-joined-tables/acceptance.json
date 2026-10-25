@@ -297,17 +297,16 @@
       "slice": "F080-T3B",
       "title": "three-table topology พิสูจน์ว่าไม่ hardcode คู่เดียว + วัด load/limit",
       "status": "UNVERIFIED",
-      "environment": "workers integration + local load harness",
-      "sha": "not-run",
+      "environment": "Cloudflare tier (workerd + real Durable Objects + D1), local machine",
+      "sha": "16395b2",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/three-table-topology.test.ts",
-        "node --import tsx scripts/joined-load-probe.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": null,
+      "evidence": "topology: a room links three independent tables and each answers with its own live revision and rows (19/19 in the cross e2e). repeated reads: 15 reads across the three sources (5 rounds) all returned 200, every response honoured the per-grant ceiling of 2 rows (30 rows total), total elapsed 78 ms, about 5 ms per read on this machine.",
       "expected": "3 source tables ทำงานพร้อมกันได้; composite ที่รวม 3 แหล่งไม่ต้องแก้ core; ตัวเลข load ที่วัดได้ระบุว่าเป็น local ไม่ใช่ production capacity",
-      "actual": "not run",
-      "limitations": "ห้ามอ้าง local result เป็น production capacity"
+      "actual": "PARTIAL - composition is proven for three tables and repeated reads stay within the per-grant limits, but the timing is a local measure",
+      "limitations": "the 5 ms per read figure is local workerd on this machine, not production capacity; there is no load driver, no concurrency and no hosted run"
     },
     {
       "id": "CTX-01",
