@@ -16,6 +16,8 @@ import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { HeaderPeople } from './ui/HeaderPeople';
 import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
+import { SpaceRoomScreen } from './ui/SpaceRoomScreen';
+import { createSpaceRoomDeps } from './ui/space-room-deps';
 import { useTableChat } from './ui/useTableChat';
 import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
 import type { AddableWebSource } from './workspace/table-chat-state';
@@ -118,6 +120,8 @@ export default function TabletopApp() {
   const [capabilities, setCapabilities] = useState<TabletopCapabilities>(localCapabilities);
   const [session, setSession] = useState<SessionView | null>(null);
   const [view, setView] = useState<WorkspaceView | null>(null);
+  // F080: when set, `/s/:id` renders the collaboration room instead of the table surface.
+  const [spaceRoomId, setSpaceRoomId] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
   // Which page shows while no table is open: the table list or the /new start page.
   const [page, setPage] = useState<AppPage>('landing');
@@ -218,6 +222,7 @@ export default function TabletopApp() {
     try {
       const next = await tabletopClient.workspace(id);
       setWorkspace(next);
+      setSpaceRoomId(null);
       setWorkspaceMenuOpen(false);
       return next;
     } catch (error) {
@@ -334,6 +339,20 @@ export default function TabletopApp() {
             // Do not reveal whether the table exists; members and outsiders see the same notice.
             setPage('tables');
             showNotice('This table is not available to this account. Ask the table owner for an invitation.', 'error');
+          }
+        } else if (route?.name === 'space') {
+          try {
+            const opened = await tabletopClient.workspace(route.id);
+            if (alive) {
+              setWorkspace(opened);
+              setSpaceRoomId(route.id);
+            }
+          } catch (error) {
+            if (error instanceof ApiFailure && error.status === 401) throw error;
+            if (!alive) return;
+            // The same notice as a table: an outsider learns nothing about the room either.
+            setPage('tables');
+            showNotice('This room is not available to this account.', 'error');
           }
         } else if (route?.name === 'new') {
           setPage('new');
@@ -707,6 +726,21 @@ export default function TabletopApp() {
   />;
   if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} busy={busy === 'auth.logout'} onOpenTables={openTablesPage} onStart={openStartPage} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />;
   if (!view) return <WorkspaceChooser session={session} account={headerAccount} onHome={openLandingPage} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
+
+  // F080: a room is its own screen. It reuses the workspace load for auth, then lets the screen ask
+  // its own questions, so no table surface code runs for a room and nothing here decides access.
+  if (spaceRoomId) return (
+    <div className="tt-app" data-workspace-kind="table">
+      <SpaceRoomScreen
+        workspaceId={spaceRoomId}
+        deps={createSpaceRoomDeps({
+          loadWorkspace: (id) => tabletopClient.workspace(id),
+          actorId: view.actor.actorId,
+          viewerLabel: view.actor.name,
+        })}
+      />
+    </div>
+  );
 
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
