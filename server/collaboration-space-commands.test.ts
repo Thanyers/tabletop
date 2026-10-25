@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SPACE_COMMANDS } from '../src/tabletop/shared/collaboration-space-command';
+import { SOURCE_GRANT_COMMANDS } from '../src/tabletop/domain/tool-grant';
 import { commandAllowed } from './authority';
 import { PERMISSION_LABELS } from '../src/tabletop/shared/permissions';
 
@@ -41,6 +42,21 @@ describe('space commands are allowed exactly where they belong', () => {
   it('does not open the allowlist for an invented space command', () => {
     expect(commandAllowed('table', 'space.grantSourceAccess', null)).toBe(false);
     expect(commandAllowed('table', 'space.deleteEverything', null)).toBe(false);
+  });
+});
+
+describe('grant commands reach the source table only', () => {
+  it('is allowed for a table workspace', () => {
+    for (const command of SOURCE_GRANT_COMMANDS) expect(commandAllowed('table', command, null), command).toBe(true);
+  });
+
+  it('is not allowed from another kind or through a trusted operation', () => {
+    for (const command of SOURCE_GRANT_COMMANDS) {
+      expect(commandAllowed('invoice', command, null), command).toBe(false);
+      expect(commandAllowed('teaching', command, null), command).toBe(false);
+      expect(commandAllowed('encounter', command, null), command).toBe(false);
+    }
+    expect(commandAllowed('table', 'source.grantToEveryone', null)).toBe(false);
   });
 });
 

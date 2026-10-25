@@ -4,6 +4,7 @@ import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
 import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
 import { SPACE_COMMANDS } from '../src/tabletop/shared/collaboration-space-command.js';
+import { SOURCE_GRANT_COMMANDS } from '../src/tabletop/domain/tool-grant.js';
 import { DISPLAY_COMMANDS } from '../src/tabletop/domain/display.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
@@ -85,6 +86,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     'table.addWebSources', 'table.reviewWebSource',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
     ...SPACE_COMMANDS,
+    ...SOURCE_GRANT_COMMANDS,
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
     'evolve.autoApply', 'evolve.removeItem',
     ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,

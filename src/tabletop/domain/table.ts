@@ -5,6 +5,7 @@ import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type Gener
 import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
 import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
 import { handleSpaceCommand } from './collaboration-space';
+import { handleSourceGrantCommand } from './tool-grant';
 import { liveCanvasCardIds, pruneCardMeta, touchCardMeta } from './table-card-meta';
 import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
@@ -999,6 +1000,9 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   // F080: collaboration-space commands live in their own module and report a refusal by throwing.
   const spaceDecision = handleSpaceCommand(state, type, payload, ctx);
   if (spaceDecision) return spaceDecision;
+  // F080: a projection grant is the source table's decision, so it is handled here too.
+  const grantDecision = handleSourceGrantCommand(state, type, payload, ctx);
+  if (grantDecision) return grantDecision;
   if (type === 'table.compute.run') return queueComputeRun(state, payload, ctx, true);
   if (type === 'table.compute.queue') return queueComputeRun(state, payload, ctx, false);
   if (type === 'table.compute.update') return updateComputeRun(state, payload, ctx);
