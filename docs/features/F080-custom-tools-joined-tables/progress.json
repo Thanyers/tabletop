@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T03:30:00+07:00",
-  "lastVerifiedAt": "2026-10-26T03:30:00+07:00",
+  "updatedAt": "2026-10-26T05:58:00+07:00",
+  "lastVerifiedAt": "2026-10-26T05:58:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305 (draft, mergeable): T4A recap ต่อครบเส้นแล้ว — GET /api/workspaces/:space/space/recap → /internal/space-grants → buildSpaceRecap; e2e 21/21 ยืนยัน stable→moved(from->to)→withdrawn + outsider 403; HIST-01 = PARTIAL (ขาด pagination, last-seen, UI mount) · 13 PASS / 22 UNVERIFIED · รอผู้ใช้: room shell A/B/C, paid-AI cap, เปิด budget.csv",
+  "currentCheckpoint": "PR #305: ผู้ใช้ตัดสินครบ 3 ข้อ — shell C · Split ledger (D-022), paid-AI 3×6 calls ≤USD0.20/run (D-023), EXPORT-01 ปิดด้วยการเปิด CSV ของผู้ใช้ (D-024) · ลำดับถัดไป: สร้าง shell C ด้วย token ของ repo → mount ToolAuthoringPanel/JoinedProjectionView/recap · 13 PASS + EXPORT-01 = 14 PASS / 21 UNVERIFIED",
   "slices": [
     {
       "alias": "C0",

@@ -438,18 +438,19 @@
       "requirement": "G5",
       "slice": "F080-T-X",
       "title": "export จาก declared snapshot/version set เดียว + Thai/numbers/formula escaping + เปิดในแอปปลายทาง",
-      "status": "UNVERIFIED",
-      "environment": "Cloudflare tier (worker.fetch + real DOs) · local unit",
-      "sha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074",
+      "status": "PASS",
+      "environment": "human (owner readback in a spreadsheet) + Cloudflare tier + local unit",
+      "sha": "7d38482",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
-        "npx vitest run src/tabletop/shared/space-export-readback.test.ts src/tabletop/shared/space-export.test.ts src/tabletop/shared/tool-export.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-export-transport.test.ts",
+        "npx vitest run src/tabletop/shared/space-export-readback.test.ts src/tabletop/shared/space-export.test.ts",
+        "owner opened test-results/export-sample/budget.csv in Excel"
       ],
-      "evidence": "the produced file is read back by an independent parser (Python csv, UTF-8 forced): header is exactly the granted fields, three rows come back with Thai text intact, a comma inside a value stays one cell, doubled quotes collapse, and a formula-looking cell stays text; the route response carries content-disposition and the source revision; export is a separate grant permission.",
+      "evidence": "the file is produced by the source from granted rows at one revision, with export as a separate permission (read-only grant -> 403, revoked -> 409). an independent parser (Python csv, UTF-8 forced) reads it back: header is exactly the granted fields, Thai survives, a comma inside a value stays one cell, doubled quotes collapse, and a formula-looking cell stays text. the owner opened the produced CSV in Excel and confirmed the row count, Thai text, numbers and that no cell became a formula.",
       "expected": "permission + size enforced ที่ server; CSV ภาษาไทย/ตัวเลข/สูตรปลอม (=,+,-,@) escape ถูก; HTML escape ถูก; หลาย collection แยกไฟล์หรือมี manifest; ค่าทั้งหมดมาจาก snapshot/version set เดียวกัน; เปิดไฟล์จริงและนับแถวได้",
-      "actual": "PARTIAL — everything except opening the file in a spreadsheet application is proven",
-      "limitations": "EXPORT-01 asks for a readback in the target app; Python csv is an independent parser but not a spreadsheet, so the manual step remains"
+      "actual": "PASS at the human + Worker environment",
+      "limitations": "still not exercised against deployed staging; the artifact reviewed was produced by the same export path but from the sample script, not from a staging download"
     },
     {
       "id": "HELDOUT-01",
@@ -499,7 +500,7 @@
       "commands": [
         "node --import tsx tests/room-explore-browser.mjs --variant=A|B|C"
       ],
-      "evidence": null,
+      "evidence": "three rendered alternatives (docs/previews/room-shell/variant-a|b|c.jpg) with measured ui-gate results were shown to the owner, who chose C · Split ledger (decision D-022).",
       "expected": "ภารกิจ หาโต๊ะเพื่อน→focus→เลือกของเชื่อม→สร้างเครื่องมือร่วม→ดูต้นทาง/สถานะ→กลับโต๊ะตน→disconnect ทำได้ทั้ง 3 แนว พร้อม keyboard alternative และ 320/414px focus mode; มีภาพสรุป + task completion/misclick/confusion; มีบันทึกว่าเจ้าของเลือกแนวไหน",
       "actual": "not run",
       "limitations": "ภาพนิ่งไม่ใช่ runtime proof; agent check ไม่ใช่ human evidence"
