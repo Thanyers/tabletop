@@ -1,2 +1,6 @@
-- เพิ่ม checkpoint ของงาน F080 (custom tools + joined tables): feature doc, index, progress, acceptance registry และ decision log สำหรับงาน JT-0…JT-5/JT-V/JT-X (docs-only, ยังไม่มี runtime change และยังไม่ขึ้น production)
-- เพิ่ม contract ของ tool package และ bridge ระหว่าง host กับ sandboxed frame (`src/tabletop/shared/tool-package.ts`, `tool-protocol.ts`) พร้อม negative tests: pinned import allowlist, import graph/cycle/depth, declared write targets, reader compatibility ของ workspace ที่ยังไม่มี tool state; ยังไม่ผูก UI หรือรัน package จริง
+- เพิ่ม checkpoint ของงาน F080 (custom tools + joined tables): feature doc, index, progress, acceptance registry และ decision log สำหรับงาน JT-0…JT-5/JT-V/JT-X (docs-only slice)
+- เพิ่ม contract ของ tool package และ bridge ระหว่าง host กับ sandboxed frame (`shared/tool-package.ts`, `shared/tool-protocol.ts`) พร้อม negative tests: pinned import allowlist, import graph/cycle/depth, declared write targets, reader compatibility
+- เพิ่ม compile adapter (Sucrase, pure JS จึงรันได้ทั้ง browser/Node/Worker) + host ที่ mount generated UI ใน iframe `sandbox="allow-scripts"` พร้อม CSP ปิด และ typed nonce bridge; ยังไม่มี AI authoring และยังไม่ผูก authority commit
+- เพิ่ม isolated server-behaviour runner (workerd `loader.load` + `env:{}`/`globalOutbound:null`) และ host-side write-scope validation ที่ปฏิเสธผลนอกเหนือ declared writes ก่อนถึง commit
+- เพิ่ม collaboration-space contract (space/members/roles/source refs/commands) พร้อม role×verb matrix ตามแผน: สมาชิกห้องไม่ได้สิทธิ์ข้อมูลต้นทาง และไม่มี role ใดให้ source grant ได้ — ยังไม่มี migration/storage
+- เพิ่ม projection ที่ตัดข้อมูลตาม declared field ∩ grant field และใส่ revision/freshness ต่อแหล่ง; ยังไม่มี host shell
