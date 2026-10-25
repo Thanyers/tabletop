@@ -2,16 +2,16 @@
 
 | | |
 | --- | --- |
-| สถานะ | `proposed` — ต้องได้ product decision ก่อนแตะโค้ด |
-| เจ้าของฟีเจอร์ | ยังไม่กำหนด (product owner) |
-| เวอร์ชันที่คาด | ไม่มี release ของตัวเอง; ถ้าเลือก B (freeze) เป็น PATCH, ถ้าเลือก A (delete) เป็น MAJOR |
+| สถานะ | `done` — เลือก **B (freeze)** เมื่อ 2026-10-25; โค้ดอยู่ใน `legacy/` และออกจาก build แล้ว |
+| เจ้าของฟีเจอร์ | product owner (อนุมัติ B); implementation โดย DeepSeek Harness |
+| เวอร์ชันที่คาด | PATCH ของ docs/config; การเลิกให้บริการ `?legacy-demo=1` ต้องระบุใน release note |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว `F079` |
 
 ## ทำไม
 
-Tabletop โตมาจากโปรเจกต์ก่อนหน้าที่ชื่อ Procedural: single-user "Living Software Workspace" พร้อม Trio demo (shipping contract, encounter, band rehearsal), accounting story และ Component Lab. โค้ดชุดนั้นยังอยู่ใน `src/` ทั้งชุดและยัง build/typecheck/lint/นับเป็น surface ที่ทุก session ของ agent ต้องอ่าน แม้ [`product.md`](../../product.md) จะอธิบายเฉพาะ shared table และ demos ที่ `/demo` (Invoice, Physics, Encounter) ซึ่งเป็นโค้ด Tabletop ไม่ใช่ Procedural
+Tabletop โตมาจากโปรเจกต์ก่อนหน้าที่ชื่อ Procedural: single-user "Living Software Workspace" พร้อม Trio demo (shipping contract, encounter, band rehearsal), accounting story และ Component Lab. โค้ดชุดนั้นเคยอยู่ใน `src/` ทั้งชุดและยัง build/typecheck/lint/นับเป็น surface ที่ทุก session ของ agent ต้องอ่าน แม้ [`product.md`](../../product.md) จะอธิบายเฉพาะ shared table และ demos ที่ `/demo` (Invoice, Physics, Encounter) ซึ่งเป็นโค้ด Tabletop ไม่ใช่ Procedural
 
-F078 (architecture review 2026-10-24) จัดเรื่องนี้เป็น candidate ที่ 3 และระบุว่าเป็นการตัดสินสินค้า ไม่ใช่ refactor. เอกสารนี้ทำหน้าที่เก็บหลักฐานและทางเลือกให้เจ้าของผลิตภัณฑ์เคาะ — **ยังไม่มีการลบโค้ดใด ๆ ใน PR นี้**
+F078 (architecture review 2026-10-24) จัดเรื่องนี้เป็น candidate ที่ 3 และระบุว่าเป็นการตัดสินสินค้า ไม่ใช่ refactor. เอกสารนี้เก็บหลักฐานและทางเลือก; เจ้าของผลิตภัณฑ์เลือก **B (freeze)** เมื่อ 2026-10-25 — โค้ดถูกย้ายไป `legacy/` แล้ว ไม่ถูกลบ
 
 ## สิ่งที่ผู้ใช้จะเห็น
 
@@ -76,18 +76,37 @@ F078 (architecture review 2026-10-24) จัดเรื่องนี้เป
 - `docs/source-baseline.json` และเอกสารที่อ้าง path legacy: ปรับหรือ freeze ตาม
 - **ไม่กระทบ**: `/demo` และ `/demo/replay` (Tabletop demo), product.md demos (Invoice/Physics/Encounter), Worker/Room, contract ใด ๆ
 
-## คำถามเปิด (ต้องตอบก่อนลงมือ)
+## สิ่งที่ทำจริง (option B — freeze, 2026-10-25)
 
-1. Procedural/Trio/accounting ยังเป็นส่วนหนึ่งของผลิตภัณฑ์หรือไม่? ถ้าใช่ ต้องมีเจ้าของและ CI coverage; ถ้าไม่ ไป A/B
-2. เลือก B (freeze) แล้วลบภายหลังเมื่อไม่มีลิงก์/การใช้งาน หรือเลือก A ทันที?
-3. มีลิงก์ภายนอก (`?legacy-demo=1`, invite/ห้องเก่า) ที่ต้องคงการเข้าถึงชั่วคราวหรือไม่?
+- `git mv` → `legacy/`: `App.tsx`, `LegacyEntry.tsx`, `styles.css`, `workspace-v3.css`, `theme.css`, `trio/`, `components/`, `state/`, `domain/`, `lab/` (132 ไฟล์, 19,990 บรรทัด TS/TSX) และ `scripts/component-lab/` → `legacy/scripts/component-lab/`
+- `src/main.tsx`: ตัด branch `?legacy-demo=1` แล้ว; `/`, `/demo`, `/demo/replay` ยังทำงานเหมือนเดิม
+- `vite.config.ts`: ตัด `componentLabPlugin` ออกจาก dev server
+- `eslint.config.js`: ignore `legacy/`
+- `src/tabletop/shared/edge-routing.test.ts`: ใช้ geometry fixture ของตัวเองแทน `makeObject` จาก `src/state/objects` — ไม่มี dependency จาก `src/` เข้า `legacy/` เหลืออยู่
+- guard test `src/tabletop/legacy-boundary.test.ts` (5 เคส): ตรวจว่า legacy ไม่อยู่ใน `src/`, boot ไม่เลือก legacy, ไม่มี import จาก `src/` เข้า `legacy/`, tsconfig/eslint/vite ไม่เห็นมัน, และ dev server ไม่มี middleware ของ lab
+- วัดผล: unit **981 → 808 passed** (legacy unit 28 ไฟล์/173 เคสออกจากชุด), lint warning 118 → 66, `build` ผ่านโดยไม่มี legacy chunk, Workers 236/236 เท่าเดิม
+
+สิ่งที่ **ไม่ทำ** ในรอบนี้: ไม่ลบไฟล์ (สำหรับ option A ภายหลัง), ไม่ย้าย `tests/` spec ของ legacy (44 ไฟล์ยังอยู่ แต่ไม่ถูก CI เรียก), และ `docs/source-baseline.json` ยังเก็บ path เดิมเป็นบันทึกประวัติ
+
+## คำถามเปิด (เหลือ)
+
+1. จะลบ `legacy/` จริง (option A) หลังปล่อยรุ่นถัดไปหรือไม่?
+2. จะย้าย/ลบ spec 44 ไฟล์กับ `package.json` scripts (`test:browser`, `test:spatial`, `test:constellation`) เมื่อไร?
+3. มีลิงก์ภายนอก `?legacy-demo=1` ที่ต้องแจ้งเจ้าของก่อนหรือไม่?
 
 ## การตัดสินใจ
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
 | 2026-10-25 | บันทึกเป็นข้อเสนอ ยังไม่ลบหรือย้ายโค้ด | F078 candidate 3 เป็นการตัดสินสินค้า; ต้องมีเจ้าของเคาะก่อน |
+| 2026-10-25 | เลือก B (freeze outside the build): ย้ายไป `legacy/`, ตัด entry/config, ไม่ลบ | ลด surface ของ tsc/eslint/test/agent ทันที, ย้อนกลับได้ด้วย revert PR เดียว, และยังไม่ตัดสินเรื่องลบถาวร |
 
 ## Verification
 
-PR นี้เอกสารเท่านั้น: `node scripts/check-public-files.mjs` 0 findings, `npx tsx server/changelog.ts check` ผ่าน, `git diff --check` สะอาด, และไม่มีไฟล์ `.ts/.tsx` ถูกแก้ — application/browser suites ไม่ต้องรันซ้ำสำหรับการเปลี่ยนเอกสาร (ตาม AGENTS.md)
+- `npm run typecheck` (3 config) ผ่าน
+- `npm test` **808 passed / 5 skipped (813)** (legacy unit 173 เคสออกจากชุดตามที่ freeze)
+- `npm run test:cloudflare` **236 / 236**
+- `npm run build` ผ่าน; ไม่มี legacy chunk ใน `dist/assets`
+- `npm run lint` **0 errors / 66 warnings**
+- `node scripts/check-public-files.mjs` และ `git diff --check` ผ่าน
+- browser suites: CI ของ PR ยังรัน `local-validation`; dev run หลัง merge เป็นตัวยืนยัน `/` และ `/demo` ตามปกติ

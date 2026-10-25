@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { makeObject } from '../../state/objects';
 import { routeConnections, type RoutedConnection, type RoutingRect } from './edge-routing';
 
 const rect = (id: string, x: number, y: number, width: number, height: number): RoutingRect => ({ id, x, y, width, height });
@@ -48,14 +47,18 @@ function expectLabelOutsideCards(route: RoutedConnection, rects: readonly Routin
   }
 }
 
-function asRect(object: ReturnType<typeof makeObject>): RoutingRect {
-  return {
-    id: object.id,
-    x: object.position.x,
-    y: object.position.y,
-    width: object.width,
-    height: object.height,
-  };
+/**
+ * F079: these four rectangles are the frozen Procedural default layout the
+ * assertions were written against; the test only needs their geometry.
+ */
+function defaultRect(kind: 'source' | 'worker' | 'table' | 'learning'): RoutingRect {
+  const geometry = {
+    source: { x: -310, y: 235, width: 260, height: 300 },
+    worker: { x: 620, y: 16, width: 270, height: 100 },
+    table: { x: 0, y: 140, width: 650, height: 390 },
+    learning: { x: 0, y: 0, width: 440, height: 600 },
+  }[kind];
+  return { id: kind, ...geometry };
 }
 
 describe('routeConnections', () => {
@@ -104,13 +107,7 @@ describe('routeConnections', () => {
   });
 
   it('keeps real source, worker, and explanation cards clear in the default canvas layout', () => {
-    const objects = [
-      makeObject('source', 'accounting'),
-      makeObject('worker', 'accounting'),
-      makeObject('table', 'accounting'),
-      makeObject('learning', 'accounting'),
-    ];
-    const rects = objects.map(asRect);
+    const rects = (['source', 'worker', 'table', 'learning'] as const).map(defaultRect);
     const [route] = routeConnections(rects, [{ id: 'source-worker', source: 'source', target: 'worker', label: 'ใช้ข้อมูลและกฎ' }]);
 
     expect(route?.hidden).toBe(false);

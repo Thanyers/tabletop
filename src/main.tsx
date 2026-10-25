@@ -16,6 +16,6 @@ const Experience = lazy(() => {
   const path = location.pathname;
   if (path === '/demo' || path === '/demo/') return import('./tabletop/demo/InteractiveDemo');
   if (path === '/demo/replay' || path === '/demo/replay/') return import('./tabletop/demo/PublicDemo');
-  return new URLSearchParams(location.search).get('legacy-demo') === '1' ? import('./LegacyEntry') : import('./tabletop/TabletopApp');
+  return import('./tabletop/TabletopApp');
 });
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><Suspense fallback={<LoadingScreen />}><Experience/></Suspense><UpdateNotice/></React.StrictMode>);

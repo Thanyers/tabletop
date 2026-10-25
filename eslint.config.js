@@ -9,7 +9,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist/', 'worker-build/', '.wrangler/', 'test-results/', 'playwright-report/',
-      'server/.data/', 'public/', 'docs/', 'handoff/', '.claude/',
+      'server/.data/', 'public/', 'docs/', 'handoff/', '.claude/', 'legacy/',
     ],
   },
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
