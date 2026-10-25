@@ -8,6 +8,7 @@ import type { Env } from './contracts.js';
 import { cookieName, csrfForToken } from './auth.js';
 import worker from './index.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
+import { spaceProjectionUrl } from '../src/tabletop/shared/space-projection-url.js';
 
 /**
  * F080 / C6 — the cross-workspace projection read, end to end, through the real Worker entry.
@@ -73,8 +74,8 @@ async function command(actor: Actor, workspace: WorkspaceView, type: string, pay
 }
 
 async function readProjection(actor: Actor, spaceId: string, query: { source: string; grant: string; port: string }) {
-  const url = `/api/workspaces/${spaceId}/space/projection?source=${query.source}&grant=${query.grant}&port=${query.port}`;
-  const response = await worker.fetch(request(url, actor), bindings);
+  // Built by the same helper the browser fetcher uses: this test and the client cannot drift apart.
+  const response = await worker.fetch(request(spaceProjectionUrl(spaceId, query), actor), bindings);
   return { status: response.status, body: await response.json() as Record<string, unknown> };
 }
 

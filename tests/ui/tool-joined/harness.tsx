@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { JoinedProjectionView, type JoinedSource } from '../../../src/tabletop/ui/JoinedProjectionView';
 import { readJoinedSources, type JoinedSourceRequest, type ProjectionResponse } from '../../../src/tabletop/ui/joined-projection-client';
+import { createJoinedProjectionFetcher } from '../../../src/tabletop/ui/joined-projection-fetcher';
 
 /**
  * F080 / C6 harness: the joined panel wired through the real client mapping.
@@ -48,8 +49,15 @@ function Harness(): React.ReactElement {
   const [script, setScript] = useState<Record<string, ProjectionResponse>>(INITIAL);
 
   const read = useCallback(async (responses: Record<string, ProjectionResponse>): Promise<JoinedSource[]> => {
+    // Scripted platform fetch: it answers by the port in the query, exactly as the Worker would.
+    const scriptedFetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'https://tabletop.test');
+      const port = url.searchParams.get('port') ?? '';
+      const answer = responses[port] ?? { status: 404, body: { ok: false, errorCode: 'SPACE_SOURCE_NOT_LINKED' } };
+      return new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
     const sources = await readJoinedSources(SPACE, REQUESTS, {
-      fetchProjection: async input => responses[input.port] ?? { status: 404, body: { ok: false, errorCode: 'SPACE_SOURCE_NOT_LINKED' } },
+      fetchProjection: createJoinedProjectionFetcher({ origin: 'https://tabletop.test', fetchImpl: scriptedFetch }),
     });
     for (const source of sources) {
       if (source.status === 'live' || source.status === 'stale') lastLiveRevision[source.portId] = source.dataRevision;
