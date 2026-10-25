@@ -91,6 +91,8 @@ export async function handleSpaceRecap(
 
   const recap: SpaceRecap = buildSpaceRecap({
     space: collaborationSpace,
+    // Stored reading positions; a member with no record is reported as unseen, never as caught up.
+    lastSeen: collaborationSpace.seen ?? {},
     grants: grants.map(entry => ({
       grant: {
         grantId: entry.grant.grantId,

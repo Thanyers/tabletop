@@ -152,6 +152,7 @@ function toSpaceCommand(parsed: Exclude<ReturnType<typeof parseSpaceCommand>, { 
     case 'space.transferManager': return { type: 'space.transferManager', actorId: parsed.actorId };
     case 'space.addSource': return { type: 'space.addSource', source: parsed.source };
     case 'space.leaveSource': return { type: 'space.leaveSource', workspaceId: parsed.workspaceId };
+    case 'space.seen': return { type: 'space.seen', revision: parsed.revision };
   }
 }
 
@@ -164,6 +165,7 @@ function spaceLabel(type: string): string {
     case 'space.transferManager': return 'Space management transferred.';
     case 'space.addSource': return 'Source table linked to the space.';
     case 'space.leaveSource': return 'Source table unlinked from the space.';
+    case 'space.seen': return 'Reading position recorded.';
     default: return 'Space updated.';
   }
 }

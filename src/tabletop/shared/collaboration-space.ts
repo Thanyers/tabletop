@@ -137,6 +137,11 @@ export interface CollaborationSpace {
   epoch: number;
   createdAt: number;
   updatedAt: number;
+  /**
+   * How far each member has read, keyed by actor. Absent means "never recorded", which a recap
+   * reports as unseen instead of assuming the member is up to date (decision D-021).
+   */
+  seen?: Record<string, number>;
 }
 
 const idSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,39}$/u);
@@ -170,6 +175,7 @@ export const collaborationSpaceSchema: z.ZodType<CollaborationSpace> = z.strictO
   epoch: z.number().int().nonnegative(),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
+  seen: z.record(z.string().min(1).max(160), z.number().int().nonnegative()).optional(),
 });
 
 export type SpaceProblemCode = 'SPACE_SCHEMA' | 'SPACE_MEMBER' | 'SPACE_SOURCE' | 'SPACE_BUDGET';
@@ -256,6 +262,7 @@ export function spaceMayReadSource(
  * ---------------------------------------------------------------------------------------------- */
 
 export type SpaceCommand =
+  | { type: 'space.seen'; revision: number }
   | { type: 'space.rename'; title: string }
   | { type: 'space.addMember'; member: SpaceMember }
   | { type: 'space.removeMember'; actorId: string }
@@ -335,6 +342,16 @@ export function decideSpace(space: CollaborationSpace, actorId: string, command:
       if (next.sources.some(source => source.workspaceId === command.source.workspaceId)) return { ok: false, code: 'SPACE_DUPLICATE', message: 'That table is already referenced.' };
       if (command.source.workspaceId === space.sharedToolWorkspaceId) return { ok: false, code: 'SPACE_INVALID', message: 'The shared-tool workspace cannot also be a source.' };
       next.sources = [...next.sources, { ...command.source, addedBy: actorId, addedAt: now }];
+      return { ok: true, space: next };
+    }
+    case 'space.seen': {
+      // A member records their own reading position; an older position never moves it back.
+      const previous = next.seen?.[actorId];
+      if (previous !== undefined && command.revision <= previous) {
+        next.seen = { ...(next.seen ?? {}), [actorId]: previous };
+        return { ok: true, space: next };
+      }
+      next.seen = { ...(next.seen ?? {}), [actorId]: command.revision };
       return { ok: true, space: next };
     }
     case 'space.leaveSource': {

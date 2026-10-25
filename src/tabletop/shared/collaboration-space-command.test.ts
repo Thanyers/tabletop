@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SPACE_COMMANDS, isSpaceCommand, parseSpaceCommand } from './collaboration-space-command';
+import { COLLABORATION_SPACE_SCHEMA_VERSION, decideSpace, type CollaborationSpace } from './collaboration-space';
 
 const WORKSPACE = '11111111-1111-4111-8111-111111111111';
 const SOURCE = '22222222-2222-4222-8222-222222222222';
@@ -62,10 +63,54 @@ describe('payloads are parsed at the boundary', () => {
  * a passing test that asserts nothing is not.
  */
 describe('space.seen records how far a member has read', () => {
-  it.todo('is in the closed command vocabulary');
-  it.todo('parses a revision and nothing else');
-  it.todo('rejects a negative, fractional or missing revision');
-  it.todo('bumps the space revision like every other space command');
-  it.todo('records the calling actor only — a member cannot mark last-seen for someone else');
-  it.todo('keeps the previous value when the same actor asks for an older revision');
+  const space = (overrides: Partial<CollaborationSpace> = {}): CollaborationSpace => ({
+    schemaVersion: COLLABORATION_SPACE_SCHEMA_VERSION,
+    spaceId: 'activity-room',
+    title: 'ห้อง',
+    sharedToolWorkspaceId: '99999999-9999-4999-8999-999999999999',
+    managerActorId: 'actor-a',
+    members: [
+      { actorId: 'actor-a', name: 'A', role: 'manager', joinedAt: 1 },
+      { actorId: 'actor-b', name: 'B', role: 'maker', joinedAt: 2 },
+    ],
+    sources: [],
+    revision: 7,
+    epoch: 1,
+    createdAt: 1,
+    updatedAt: 7,
+    ...overrides,
+  });
+
+  it('is in the closed command vocabulary', () => {
+    expect(SPACE_COMMANDS).toContain('space.seen');
+    expect(isSpaceCommand('space.seen')).toBe(true);
+  });
+
+  it('parses a revision and nothing else', () => {
+    expect(parseSpaceCommand('space.seen', { revision: 5 })).toEqual({ ok: true, type: 'space.seen', revision: 5 });
+    expect(parseSpaceCommand('space.seen', { revision: 5, extra: true }).ok).toBe(false);
+  });
+
+  it('rejects a negative, fractional or missing revision', () => {
+    expect(parseSpaceCommand('space.seen', { revision: -1 }).ok).toBe(false);
+    expect(parseSpaceCommand('space.seen', { revision: 1.5 }).ok).toBe(false);
+    expect(parseSpaceCommand('space.seen', {}).ok).toBe(false);
+  });
+
+  it('records the calling actor and bumps the space revision', () => {
+    const decision = decideSpace(space(), 'actor-b', { type: 'space.seen', revision: 5 }, 100);
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) return;
+    expect(decision.space.seen).toEqual({ 'actor-b': 5 });
+    expect(decision.space.revision).toBe(8);
+    // A member cannot record a position for someone else.
+    expect(decision.space.seen).not.toHaveProperty('actor-a');
+  });
+
+  it('never moves a reading position backwards', () => {
+    const earlier = decideSpace(space({ seen: { 'actor-b': 6 } }), 'actor-b', { type: 'space.seen', revision: 3 }, 100);
+    expect(earlier.ok).toBe(true);
+    if (!earlier.ok) return;
+    expect(earlier.space.seen).toEqual({ 'actor-b': 6 });
+  });
 });
