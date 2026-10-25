@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../../src/tabletop/domain/helpers.js';
 import { DomainError } from '../../src/tabletop/shared/contracts.js';
 import { invoiceChangeSchema } from '../../src/tabletop/domain/index.js';
-import type { ModelInput, ModelProvider } from '../model.js';
+import type { ModelInput, ModelProvider } from './model-contracts.js';
 
 const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const DEFAULT_MODEL = 'deepseek-flash';

@@ -5,7 +5,7 @@ import { MAX_REQUEST_INPUT_TOKENS, TABLE_AI_INPUT_BYTES } from '../src/tabletop/
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../src/tabletop/domain/helpers.js';
 import { DomainError, type ChangeSet, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider, type DeepSeekUsage } from '../server/providers/deepseek.js';
-import type { ModelInput } from '../server/model.js';
+import type { ModelInput } from '../server/providers/model-contracts.js';
 import { DeepSeekChangeProvider, ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, RejectedChangeReply, measureDeepSeekChangeRequest, MAX_CHANGE_REQUEST_BYTES, TABLE_REQUEST_TOKEN_MARGIN, type DeepSeekChangeInput, type DeepSeekChangeProgress, type TableClarification } from '../server/providers/deepseek-changes.js';
 import { runResearch, type ResearchOutcome } from '../server/providers/deepseek-research.js';
 import { MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_QUERIES, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_SOURCE_AUTHORITY, type ModelJobResearch, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
