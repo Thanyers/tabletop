@@ -125,6 +125,27 @@ describe('the recap route', () => {
     expect((await handleSpaceRecap(request('POST'), deps({}), { spaceId: SPACE })).status).toBe(405);
   });
 
+  it('carries impact only for the sources that actually changed or were withdrawn', async () => {
+    const response = await handleSpaceRecap(request(), deps({
+      [A]: [{ connection: connection(), liveDataRevision: 9 }],
+      [B]: [{ connection: connection({ grantId: 'grant-b', sourceWorkspaceId: B }), liveDataRevision: 4 }],
+    }), { spaceId: SPACE });
+    const payload = await response.json() as { impact: { workspaceId: string; ports: unknown[]; summary: string }[] };
+    expect(payload.impact).toHaveLength(1);
+    expect(payload.impact[0]?.workspaceId).toBe(A);
+    expect(payload.impact[0]?.ports).toHaveLength(1);
+    expect(payload.impact[0]?.summary).toContain('ข้อมูลใหม่');
+  });
+
+  it('carries no impact when nothing moved', async () => {
+    const response = await handleSpaceRecap(request(), deps({
+      [A]: [{ connection: connection(), liveDataRevision: 4 }],
+      [B]: [{ connection: connection({ grantId: 'grant-b', sourceWorkspaceId: B }), liveDataRevision: 4 }],
+    }), { spaceId: SPACE });
+    const payload = await response.json() as { impact: unknown[] };
+    expect(payload.impact).toEqual([]);
+  });
+
   it('carries no rows or field values anywhere in the answer', async () => {
     const response = await handleSpaceRecap(request(), deps({
       [A]: [{ connection: connection(), liveDataRevision: 4 }],
