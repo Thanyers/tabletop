@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T23:05:00+07:00",
-  "lastVerifiedAt": "2026-10-25T23:05:00+07:00",
+  "updatedAt": "2026-10-25T23:30:00+07:00",
+  "lastVerifiedAt": "2026-10-25T23:30:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
-    "candidateSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
+    "headSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+    "candidateSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: C0+C1+C2+C5 (contract + migration-free storage)+C3 pipeline+CX contract · CI เขียวรวม job ใหม่ `tool-host` บน Chromium · เพิ่ม spec.md block ของ F080 และแผน/decision ครบ · ค้าง: authority route ของ behaviour, connection/projection จริง, source editor UI, room shell (รอเลือก visual), hosted/human acceptance · ยังไม่มี production release",
+  "currentCheckpoint": "PR #305: C0+C1+C2+C3-pipeline+C5(contract+storage+commands ผ่าน authority path)+CX-contract+C7-protocol · unit 1025/5 · ยังไม่มี transport ข้าม Room, ไม่มี route ของ export, ไม่มี room shell (รอเลือก visual), ไม่มี hosted/live-AI/human acceptance",
   "slices": [
     {
       "alias": "C0",
@@ -84,11 +84,11 @@
       "alias": "C5",
       "jt": "JT-2B",
       "featureTask": "F080-T2B",
-      "state": "doing",
+      "state": "review",
       "dependsOn": [
         "C1"
       ],
-      "note": "contract (71a3591) + storage path แบบ optional field (878f995) · ยังไม่มี route/grants/projections จริง และไม่มี migration (ไม่ต้องมีแล้ว)"
+      "note": "contract + storage + space commands ผ่าน authority path (e812e83/ae3daf5); route ของ connection/projection ยังไม่ทำ"
     },
     {
       "alias": "CV",
@@ -115,10 +115,11 @@
       "alias": "C7",
       "jt": "JT-3B",
       "featureTask": "F080-T3B",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "C6"
-      ]
+      ],
+      "note": "protocol + grant/revoke commands + in-flight adjudication (ae3daf5); ไม่มี transport ข้าม Room และไม่มี UI"
     },
     {
       "alias": "C8",
@@ -389,7 +390,7 @@
       "id": "F080-T2B",
       "jt": "JT-2B",
       "featureId": "F080",
-      "state": "doing",
+      "state": "review",
       "dependsOn": [
         "F080-T1A"
       ],
@@ -414,6 +415,14 @@
           "result": "PASS",
           "evidence": "9/9: a workspace that never had a space reads as {space: undefined, problems: []}; create makes the owner the single manager and bumps actionRevision; addMember leaves `sources` byte-identical; leaveSource marks `left` instead of deleting; JSON round-trip is unchanged; a newer space schema is reported without discarding the workspace. Full src suite 801/801 shows the TableState addition regressed nothing.",
           "checkedSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561"
+        },
+        {
+          "name": "space commands reach the real command path (domain + authority allowlist)",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/domain/collaboration-space.test.ts server/collaboration-space-commands.test.ts src/tabletop/shared/collaboration-space-command.test.ts",
+          "result": "PASS",
+          "evidence": "17/17 domain tests (create by owner only, member add/role change through handleTableCommand, maker may link a source but not manage members, unknown type still returns null, malformed payload rejected before state) · 12/12 payload-parsing tests · 7/7 authority wiring tests (every space command allowed for kind `table` only, invented commands refused, trusted operations stay additive not permissive)",
+          "checkedSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c"
         }
       ],
       "findings": [
@@ -448,7 +457,7 @@
       "id": "F080-T3B",
       "jt": "JT-3B",
       "featureId": "F080",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "F080-T3A"
       ],
@@ -456,11 +465,20 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": null,
-      "checks": [],
+      "candidateSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+      "checks": [
+        {
+          "name": "connection protocol: grant at the source, audience, effective revocation, in-flight adjudication",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-connection.test.ts src/tabletop/domain/tool-grant.test.ts",
+          "result": "PASS",
+          "evidence": "14/14 protocol tests: a read is authorized per port/audience/epoch; revocation is reported before a stale epoch so neither masks the other; the effective revocation point stops serving cached projections; an in-flight request is rejected when the grant was revoked or the source reset; the connection lifecycle is closed (revoked is terminal, missing is recoverable) · 10/10 grant command tests: epoch/dataRevision/issuer/time/version are stamped by the source (a client-supplied sourceEpoch or grantVersion is a payload error), duplicate ids and the live-grant cap are refused, revoke bumps grantVersion and is idempotent, and readGrantedProjection refuses after revoke/non-member/unexposed-port/stale-epoch",
+          "checkedSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c"
+        }
+      ],
       "findings": [],
       "blocker": null,
-      "nextAction": "authorized action กลับต้นทางจริง, disconnect/rebind, third-table topology"
+      "nextAction": "transport + UI: an internal Room-to-Room read that uses readGrantedProjection on the source, subscription/invalidation, then the room shell once a visual is chosen"
     },
     {
       "id": "F080-T4A",
@@ -630,27 +648,27 @@
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "C6/C7: route + command สำหรับ space/connection (ใช้ storage field ที่มี) แล้วต่อ projection อ่านหลายต้นทาง + action กลับต้นทางเดียว",
-      "verify": "npm run test:cloudflare -- cloudflare/collaboration-space.test.ts",
-      "expect": "positive/negative ตาม role×verb, revoke มีผลกับ subscription/job, ไม่มี partial write"
+      "action": "Transport ของ connection: internal route บน Room ต้นทางที่เรียก readGrantedProjection + Bearer ที่ผูก grant/space/epoch แล้วให้ destination ดึง projection (ยังไม่ต้อง migration)",
+      "verify": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts",
+      "expect": "อ่านได้เฉพาะ projection ที่ grant อนุญาต; revoke แล้วอ่านไม่ได้ทันที; ไม่มี cookie/สิทธิ์รั่วข้ามห้อง"
     },
     {
       "id": "NA-2",
-      "action": "C3 UI: source editor + activation/readback บนโต๊ะเดียว",
+      "action": "C3 UI: source editor + activation/readback",
       "verify": "node --import tsx tests/tool-authoring-browser.mjs",
-      "expect": "คนแก้ source แล้ว activate/readback ได้จริง"
+      "expect": "คนแก้ source แล้ว activate/readback ได้"
     },
     {
       "id": "NA-3",
-      "action": "ขออนุมัติเฉพาะส่วนของ paid AI (cap) เพื่อปลด GATE-PAID-AI",
-      "verify": "n/a (user decision)",
-      "expect": "authorization + cap ที่ enforce ได้จริงก่อน dispatch"
+      "action": "CX: route + เปิดไฟล์จริง",
+      "verify": "node --import tsx tests/export-readback.mjs",
+      "expect": "ไฟล์ตรงกับ manifest"
     },
     {
       "id": "NA-4",
-      "action": "CX: route + เปิดไฟล์จริงใน Excel/browser",
-      "verify": "node --import tsx tests/export-readback.mjs",
-      "expect": "ไฟล์ที่ผู้ใช้เปิดได้ตรงกับ manifest"
+      "action": "ขออนุมัติ paid-AI cap (ยังค้างจากรอบก่อน)",
+      "verify": "n/a (user decision)",
+      "expect": "ได้ authorization + cap"
     }
   ],
   "blockedItems": [],

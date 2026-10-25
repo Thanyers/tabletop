@@ -164,3 +164,24 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - **Contract ที่กระทบ:** `shared/table-contracts.ts` (field เดียว), `domain/collaboration-space.ts` (ใหม่), `shared/collaboration-space.ts` (มีอยู่)
 - **Rollback:** ลบ field ออกได้ทันทีเพราะ reader ทนการไม่มี field; ไม่มี schema ที่ apply ไปแล้วให้ย้อน
 - **ข้อจำกัด:** ยังไม่มี route/command ผ่าน authority (จะทำใน C6/C7) · space ยังไม่ผูก connection/projection จริง · ถ้าต้อง query space ข้าม workspace จะต้องมี index/migration แยกและขออนุมัติ
+
+## D-018 — Space commands เดินผ่าน command path เดิม (ไม่เพิ่ม route)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven`
+- **ตัดสิน:** เพิ่ม `SPACE_COMMANDS` เข้า `publicCommands.table` และ hook ใน `handleTableCommand` ครั้งเดียว แทนการเปิด endpoint ใหม่ · payload ถูก parse ที่ขอบเขตด้วย zod (strict) แล้วจึงถึง domain · `space.create` สงวนให้ owner; ที่เหลือใช้ role×verb ของ space
+- **เหตุผล/หลักฐาน:** `domain/collaboration-space.test.ts` 17/17 (รวม maker link source ได้แต่จัดการสมาชิกไม่ได้), `shared/collaboration-space-command.test.ts` 12/12, `server/collaboration-space-commands.test.ts` 7/7 (allowlist ต่อ kind, invented command ถูกปฏิเสธ, trusted operation เป็นส่วนเพิ่มไม่ใช่ทางข้ามสิทธิ์)
+- **ทางเลือกที่ตัดทิ้ง:** route ใหม่ `/api/spaces/...` — เพิ่ม surface + auth ที่ต้องพิสูจน์ซ้ำ โดยยังไม่ได้อะไรเพิ่ม
+- **Rollback:** ลบ 2 บรรทัด (import + spread) และ hook 1 บรรทัด
+- **ข้อจำกัด:** ยังไม่มี UI/route เฉพาะของ connection และยังไม่มีการทดสอบผ่าน HTTP จริง
+
+## D-019 — Connection protocol: grant ที่ต้นทาง, revoke มี effective point, in-flight ต้องถูกปฏิเสธ
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (protocol) · `open` (transport)
+- **ตัดสิน:** `TOOL_CONNECTION_PROTOCOL` เป็นแหล่งความจริงเดียว (snapshot/freshness/commit owner/atomicity/in-flight/revocation/recovery) · grant เก็บที่ source ใน `TableState.spaceGrants` และ client ระบุได้แค่ space/audience/projections/actions — epoch/dataRevision/issuer/เวลา/version ถูกประทับจาก state จริง · `authorizeProjectionRead` ตรวจ revoke ก่อน stale epoch · `adjudicateInFlight` ปฏิเสธคำขอที่ค้างเมื่อ grant ถูกถอนหรือ source reset · `projectionUsableAt` ปิด cache ตั้งแต่ `revokedAt`
+- **เหตุผล/หลักฐาน:** `tool-connection.test.ts` 14/14, `tool-grant.test.ts` 10/10, `server/collaboration-space-commands.test.ts` 7/7; ยืนยันว่าไม่มี distributed atomicity และไม่มีการเขียนหลาย authority ใน operation เดียว
+- **ทางเลือกที่ตัดทิ้ง:** ให้ destination เก็บสำเนา grant เอง — จะทำให้ revoke ที่ source ไม่มีผล; re-read ก่อน write แล้วหวังว่าปิด race ได้ — แผนห้ามไว้ชัด
+- **Contract ที่กระทบ:** `shared/tool-connection.ts` (ใหม่), `TableState.spaceGrants?` (additive), `domain/tool-grant.ts`, `server/authority.ts` allowlist
+- **Rollback:** ลบ field/commands ได้โดยไม่ต้อง migrate; reader ทนการไม่มี field
+- **ข้อจำกัด:** ยังไม่มี transport ข้าม Room (Room A อ่าน Room B), ไม่มี subscription/invalidation จริง, ไม่มี UI; ผลที่ผู้ใช้เห็น/export ไปแล้วเรียกคืนไม่ได้ และต้องรายงานตามนั้น

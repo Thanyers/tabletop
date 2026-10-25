@@ -244,14 +244,14 @@
       "title": "authorized action เขียน source target หนึ่งครั้ง; stale/retry/revoked ถูก reject ถูกต้อง",
       "status": "UNVERIFIED",
       "environment": "workers integration + authority receipt",
-      "sha": "not-run",
+      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/tool-action.test.ts"
       ],
-      "evidence": null,
+      "evidence": "contract half: the freshness check refuses TOOL_STALE_REVISION / TOOL_SOURCE_REVOKED before any side effect, and the target commit remains the target authority's; nothing commits yet because the transport is not built",
       "expected": "สำเร็จครั้งเดียวแม้ retry (idempotency/receipt); stale expected revision ถูก reject ก่อน side effect; revoked grant ถูก reject; ไม่มี partial write ใน operation ที่ประกาศ",
-      "actual": "not run",
+      "actual": "UNVERIFIED — no live single-target commit exists",
       "limitations": "unsupported multi-authority operation ต้อง reject ไม่ใช่ degrade"
     },
     {
@@ -261,15 +261,15 @@
       "title": "read/subscription/context/compute/cache/history/export หยุดตาม scope หลัง effective revoke",
       "status": "UNVERIFIED",
       "environment": "workers integration (adversarial)",
-      "sha": "not-run",
+      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/revocation.test.ts"
+        "npx vitest run src/tabletop/shared/tool-connection.test.ts src/tabletop/domain/tool-grant.test.ts"
       ],
-      "evidence": null,
+      "evidence": "protocol half PASS: a revoked grant is refused before an epoch mismatch can mask it, the effective revocation point (revokedAt) makes a projection unusable from that moment, an in-flight request is rejected when the grant was revoked or the source reset, the grant version bumps and revocation is idempotent, and a read is refused for a non-member or an unexposed port",
       "expected": "หลัง revoke มี effective point ชัด: subscription ใหม่ถูกปฏิเสธ, in-flight job ถูกตัดสินตาม contract, cache/projection ที่ระบบควบคุมถูก invalidate; audit metadata ไม่บรรจุค่าเดิม; บอกข้อจำกัดว่าค่า/ไฟล์ที่ผู้ใช้เคยเห็นหรือ export ไปแล้วเรียกคืนไม่ได้",
-      "actual": "not run",
-      "limitations": "physical erasure ทุกสำเนาทำไม่ได้ — ต้องรายงานตามจริง"
+      "actual": "PARTIAL — the protocol and the grant records are proven; there is no live subscription, compute input, AI context, history or export path wired to them yet",
+      "limitations": "must be re-run against the transport; values a person already saw or exported cannot be recalled and the docs must keep saying so"
     },
     {
       "id": "ACL-01",
@@ -278,14 +278,14 @@
       "title": "ห้อง/โต๊ะที่ไม่เกี่ยวข้องไม่เห็นข้อมูล; การอยู่ห้อง/ลากโต๊ะชนกันไม่ให้สิทธิ์ข้อมูล; copy ไม่ให้สิทธิ์ต้นทางเพิ่ม",
       "status": "UNVERIFIED",
       "environment": "workers integration + browser",
-      "sha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
+      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/collaboration-space.test.ts"
       ],
-      "evidence": "contract + storage: 21/21 matrix tests and 9/9 storage tests prove the role×verb matrix keeps administration to the manager, that membership alone never reads a source (an active source grant and an active link are both required), that membership/role changes leave `sources` byte-identical, and that the space survives a JSON round trip on the hosting workspace without a migration.",
+      "evidence": "contract + storage + commands: the role×verb matrix, the migration-free space storage, the space commands through handleTableCommand/allowlist, and the source-side grant check (audience, epoch, port, revocation) are all covered by tests; nobody can widen a source grant from a space role because the command that issues a grant requires `members.invite` at the source",
       "expected": "negative tests: สมาชิกห้องที่ไม่มี source grant อ่านไม่ได้; source role เปลี่ยนมีผล; room manager ไม่ grant เกินสิทธิ์ตน; เพิ่มสมาชิกใหม่ไม่ขยาย source grant",
-      "actual": "PARTIAL — the matrix and storage are proven; no server route enforces them yet",
+      "actual": "PARTIAL — everything above is proven; no HTTP route enforces it end to end yet",
       "limitations": "must be re-run against the real route before this can be PASS; until the route exists, nothing can grant data from a canvas position because nothing grants data at all"
     },
     {
@@ -626,12 +626,12 @@
       "title": "disconnect: tool อยู่ต่อแต่ช่องทางที่ถูกถอนใช้ไม่ได้; ไม่ใช้ cached value/AI context เลี่ยง; rebind ได้",
       "status": "UNVERIFIED",
       "environment": "workers + browser",
-      "sha": "not-run",
+      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/tool-rebind.test.ts"
       ],
-      "evidence": null,
+      "evidence": "protocol half: after a revoke, readGrantedProjection refuses and the cached projection is unusable from the revocation moment; the connection is terminal and rebinding issues a new grant rather than reviving the old one",
       "expected": "หลังถอนโต๊ะ: definition ยังอยู่, read/write ต่อ source ถูกปฏิเสธ, แสดง missing source, rebind ไปแหล่งใหม่ได้โดยไม่เขียนกลับแหล่งเดิม และไม่แสดงค่าเก่าเป็นทางเลี่ยง",
       "actual": "not run",
       "limitations": "การเก็บสำเนาข้อมูลต้องมี authorization record แยก"
