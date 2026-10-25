@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { createCanvasViewState, isCanvasPosition, type CardSizes, type CanvasStorage, type SavedCanvasLayout } from './canvas-view-state';
 import { Background, BackgroundVariant, Controls, Handle, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type EdgeTypes, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2, Star, Pencil, Search } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
@@ -25,6 +26,17 @@ import { routeConnections, type RoutingLink, type RoutingRect } from '../shared/
 
 /** Lines around the cards, drawn by the obstacle-aware router instead of the default curve. */
 const canvasEdgeTypes: EdgeTypes = { canvasConnection: CanvasEdgeView };
+
+/** Browser storage can be blocked (private mode, policy); the canvas then runs without persistence. */
+function browserStorage(): CanvasStorage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+const canvasView = createCanvasViewState(browserStorage());
 /** The canvas paper shows through the mask under each line. */
 const CANVAS_EDGE_HALO = '#eeeee2';
 
@@ -104,11 +116,6 @@ export interface CanvasAuxiliaryObject {
   busy?: boolean;
   /** F070: the card this one opened from (a picked option); draws a labelled line and seats it beside that card. */
   linkedFrom?: CanvasFollowUpLink;
-}
-
-interface SavedCanvasLayout {
-  positions: Record<string, CanvasPoint & { pinned?: boolean }>;
-  viewport?: { centerX: number; centerY: number; zoom: number };
 }
 
 interface SharedCanvasLayout {
@@ -192,21 +199,8 @@ function canRename(view: WorkspaceView, id: string): boolean {
   return view.actor.role === 'owner';
 }
 
-const starStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-starred:${workspaceKey}`;
 
 /** Cards this viewer starred to find quickly; kept per table in this browser and listed first in Objects. */
-function readStarred(workspaceKey: string): ReadonlySet<string> {
-  try {
-    const stored: unknown = JSON.parse(window.localStorage.getItem(starStorageKey(workspaceKey)) ?? '[]');
-    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string' && id.length <= 240).slice(0, 200) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function writeStarred(workspaceKey: string, ids: ReadonlySet<string>): void {
-  try { window.localStorage.setItem(starStorageKey(workspaceKey), JSON.stringify([...ids].slice(-200))); } catch { /* best effort */ }
-}
 
 /** Mirrors the server rule: anyone tidies chat cards; views, data tables and files are the owner's. */
 function canTrash(view: WorkspaceView, id: string): boolean {
@@ -223,47 +217,14 @@ function sharedLayoutForView(view: WorkspaceView): SharedCanvasLayout | null {
   if (!Number.isSafeInteger(candidate.revision) || !candidate.positions || typeof candidate.positions !== 'object') return null;
   const positions: SharedCanvasLayout['positions'] = {};
   for (const [id, point] of Object.entries(candidate.positions)) {
-    if (!isPosition(point)) continue;
+    if (!isCanvasPosition(point)) continue;
     positions[id] = { ...point, pinned: point.pinned !== false };
   }
   return { revision: Number(candidate.revision), positions };
 }
 
-function isPosition(value: unknown): value is CanvasPoint & { pinned?: boolean } {
-  if (!value || typeof value !== 'object') return false;
-  const point = value as { x?: unknown; y?: unknown; pinned?: unknown };
-  return Number.isFinite(point.x) && Number.isFinite(point.y)
-    && Math.abs(Number(point.x)) < 100_000 && Math.abs(Number(point.y)) < 100_000
-    && (point.pinned === undefined || typeof point.pinned === 'boolean');
-}
-
-const layoutStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-layout:${workspaceKey}`;
-const hiddenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-hidden:${workspaceKey}`;
-const seenStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-seen:${workspaceKey}`;
-const sizeStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-size:${workspaceKey}`;
-type CardSizes = Readonly<Record<string, { width: number; height: number }>>;
 
 /** Card sizes this viewer set by dragging an edge. Kept per table in this browser, like closed cards. */
-function readCardSizes(workspaceKey: string): CardSizes {
-  try {
-    const stored: unknown = JSON.parse(window.localStorage.getItem(sizeStorageKey(workspaceKey)) ?? '{}');
-    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
-    const sizes: Record<string, { width: number; height: number }> = {};
-    for (const [id, value] of Object.entries(stored as Record<string, unknown>).slice(0, 200)) {
-      const size = value as { width?: unknown; height?: unknown } | null;
-      const width = Number(size?.width);
-      const height = Number(size?.height);
-      if (id.length <= 240 && width >= 200 && width <= 4000 && height >= 100 && height <= 4000) sizes[id] = { width, height };
-    }
-    return sizes;
-  } catch {
-    return {};
-  }
-}
-
-function writeCardSizes(workspaceKey: string, sizes: CardSizes): void {
-  try { window.localStorage.setItem(sizeStorageKey(workspaceKey), JSON.stringify(sizes)); } catch { /* best effort */ }
-}
 
 /**
  * Cards that start closed on a table that has its own views: the raw rules, actions, data tables, people and
@@ -275,82 +236,7 @@ function startsClosed(id: string, ids: readonly string[]): boolean {
   return id === 'table.rules' || id === 'table.actions' || id.startsWith('table.collection.') || id === 'workspace.people' || id === 'workspace.history';
 }
 
-function readSeenObjects(workspaceKey: string): Set<string> {
-  try {
-    const stored: unknown = JSON.parse(window.localStorage.getItem(seenStorageKey(workspaceKey)) ?? '[]');
-    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string').slice(0, 400) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function writeSeenObjects(workspaceKey: string, ids: ReadonlySet<string>): void {
-  try { window.localStorage.setItem(seenStorageKey(workspaceKey), JSON.stringify([...ids].slice(-400))); } catch { /* best effort */ }
-}
-
-function readHiddenObjects(workspaceKey: string): ReadonlySet<string> {
-  try {
-    const stored: unknown = JSON.parse(window.localStorage.getItem(hiddenStorageKey(workspaceKey)) ?? '[]');
-    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string' && id.length <= 240).slice(0, 200) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function writeHiddenObjects(workspaceKey: string, ids: ReadonlySet<string>): void {
-  try {
-    if (ids.size === 0) window.localStorage.removeItem(hiddenStorageKey(workspaceKey));
-    else window.localStorage.setItem(hiddenStorageKey(workspaceKey), JSON.stringify([...ids].slice(0, 200)));
-  } catch { /* private mode: closing still works until reload */ }
-}
-
 /** F054: the Objects order this viewer picked for this table; an unreadable value falls back to the default. */
-const sortStorageKey = (workspaceKey: string) => `tabletop:r1:canvas-sort:${workspaceKey}`;
-
-function readCardSortMode(workspaceKey: string): CardSortMode {
-  try {
-    return parseCardSortMode(window.localStorage.getItem(sortStorageKey(workspaceKey)));
-  } catch {
-    return parseCardSortMode(null);
-  }
-}
-
-function writeCardSortMode(workspaceKey: string, mode: CardSortMode): void {
-  try { window.localStorage.setItem(sortStorageKey(workspaceKey), mode); } catch { /* best effort */ }
-}
-
-function readCanvasLayout(workspaceKey: string): SavedCanvasLayout {
-  try {
-    const stored = window.localStorage.getItem(layoutStorageKey(workspaceKey));
-    if (!stored) return { positions: {} };
-    const parsed: unknown = JSON.parse(stored);
-    if (!parsed || typeof parsed !== 'object') return { positions: {} };
-    const candidate = parsed as Partial<SavedCanvasLayout>;
-    const positions: SavedCanvasLayout['positions'] = {};
-    if (candidate.positions && typeof candidate.positions === 'object') {
-      for (const [id, point] of Object.entries(candidate.positions)) {
-        if (isPosition(point)) {
-          positions[id] = { x: point.x, y: point.y, pinned: point.pinned ?? true };
-        }
-      }
-    }
-    const viewport = candidate.viewport;
-    if (viewport && Number.isFinite(viewport.centerX) && Number.isFinite(viewport.centerY) && Number.isFinite(viewport.zoom)) {
-      return { positions, viewport: { centerX: viewport.centerX, centerY: viewport.centerY, zoom: Math.min(1.7, Math.max(0.25, viewport.zoom)) } };
-    }
-    return { positions };
-  } catch {
-    return { positions: {} };
-  }
-}
-
-function writeCanvasLayout(workspaceKey: string, layout: SavedCanvasLayout) {
-  try {
-    window.localStorage.setItem(layoutStorageKey(workspaceKey), JSON.stringify(layout));
-  } catch {
-    // The canvas remains usable when browser storage is unavailable or full.
-  }
-}
 
 function portStyle(index: number, length: number): React.CSSProperties {
   const top = `${((index + 1) / (length + 1)) * 100}%`;
@@ -776,18 +662,18 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const teachingParams = view.domain.kind === 'teaching' ? view.domain.parameters : null;
   const allowedNodeIds = useMemo(() => visibleNodeIds ? new Set(visibleNodeIds) : null, [visibleNodeIds]);
   // Cards this viewer closed. Kept per table in this browser; the Objects panel lists them to bring them back.
-  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => readHiddenObjects(workspaceKey));
-  const [cardSizes, setCardSizes] = useState<CardSizes>(() => readCardSizes(workspaceKey));
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => canvasView.hidden(workspaceKey));
+  const [cardSizes, setCardSizes] = useState<CardSizes>(() => canvasView.cardSizes(workspaceKey));
   // A group of cards picked with Shift+click or a Shift+drag box; they move, hide and go to chat together.
   const [multiIds, setMultiIds] = useState<ReadonlySet<string>>(new Set());
   // F054: the Objects order, remembered per table in this browser like closed cards and sizes.
-  const [cardSort, setCardSort] = useState<CardSortMode>(() => readCardSortMode(workspaceKey));
+  const [cardSort, setCardSort] = useState<CardSortMode>(() => canvasView.sortMode(workspaceKey));
   const hiddenScopeRef = useRef(workspaceKey);
   if (hiddenScopeRef.current !== workspaceKey) {
     hiddenScopeRef.current = workspaceKey;
-    setHiddenIds(readHiddenObjects(workspaceKey));
-    setCardSizes(readCardSizes(workspaceKey));
-    setCardSort(readCardSortMode(workspaceKey));
+    setHiddenIds(canvasView.hidden(workspaceKey));
+    setCardSizes(canvasView.cardSizes(workspaceKey));
+    setCardSort(canvasView.sortMode(workspaceKey));
   }
   const trashedList = useMemo(() => trashedForView(view), [view]);
   const trashedIds = useMemo(() => new Set(trashedList), [trashedList]);
@@ -855,17 +741,17 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     const ids = [...listedPlanNodes.map((spec) => spec.id), ...listedAuxiliaryObjects.map((object) => object.id)];
     // Until the table has its own views nothing starts closed, so decide nothing yet.
     if (!ids.some((id) => id.startsWith('table.view.'))) return;
-    const seen = readSeenObjects(workspaceKey);
+    const seen = canvasView.seen(workspaceKey);
     const fresh = ids.filter((id) => !seen.has(id));
     if (fresh.length === 0) return;
     const closing = fresh.filter((id) => startsClosed(id, ids));
     for (const id of fresh) seen.add(id);
-    writeSeenObjects(workspaceKey, seen);
+    canvasView.saveSeen(workspaceKey, seen);
     if (closing.length === 0) return;
     setHiddenIds((current) => {
       const next = new Set(current);
       for (const id of closing) next.add(id);
-      writeHiddenObjects(workspaceKey, next);
+      canvasView.saveHidden(workspaceKey, next);
       return next;
     });
   }, [listedAuxiliaryObjects, listedPlanNodes, view.kind, workspaceKey]);
@@ -905,9 +791,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     pinnedNodeIdsRef.current.add(id);
     workspacePositionsRef.current = { ...workspacePositionsRef.current, [id]: saved };
     if (!persistLayout) return;
-    const layout = readCanvasLayout(workspaceKey);
+    const layout = canvasView.layout(workspaceKey);
     layout.positions[id] = saved;
-    writeCanvasLayout(workspaceKey, layout);
+    canvasView.saveLayout(workspaceKey, layout);
   }, [persistLayout, workspaceKey]);
 
   // The newest local move per card; an older server answer must not pull that card back (no flicker while
@@ -1141,7 +1027,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     setHiddenIds((current) => {
       const next = new Set(current);
       next.delete(id);
-      writeHiddenObjects(workspaceKey, next);
+      canvasView.saveHidden(workspaceKey, next);
       return next;
     });
   }, [workspaceKey]);
@@ -1163,7 +1049,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     const height = Math.round(box.height);
     setCardSizes((current) => {
       const next = { ...current, [id]: { width, height } };
-      writeCardSizes(workspaceKey, next);
+      canvasView.saveCardSizes(workspaceKey, next);
       return next;
     });
     // Dragging the left or top edge also moves the card.
@@ -1174,7 +1060,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     setHiddenIds((current) => {
       const next = new Set(current);
       next.add(id);
-      writeHiddenObjects(workspaceKey, next);
+      canvasView.saveHidden(workspaceKey, next);
       return next;
     });
     if (activeOpenedId === id) {
@@ -1190,7 +1076,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       setHiddenIds((current) => {
         const next = new Set(current);
         next.delete(id);
-        writeHiddenObjects(workspaceKey, next);
+        canvasView.saveHidden(workspaceKey, next);
         return next;
       });
     } else if (!nodes.some((node) => node.id === id)) return;
@@ -1212,7 +1098,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [cancelPendingOpenObjectFocus, flow, focusNodeId, focusRequestKey, hiddenIds, nodes, onOpenObject, openedObjectId, onSelectNode, requestOpenObjectFocus, view.kind, workspaceKey]);
 
   const changeCardSort = useCallback((mode: CardSortMode) => {
-    writeCardSortMode(workspaceKey, mode);
+    canvasView.saveSortMode(workspaceKey, mode);
     setCardSort(mode);
     announce(CARD_SORT_OPTIONS.find((option) => option.mode === mode)?.announcement ?? '');
   }, [announce, workspaceKey]);
@@ -1303,7 +1189,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   useEffect(() => {
     const isNewWorkspace = layoutWorkspaceRef.current !== workspaceKey;
     const visibleSharedIds = new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)].filter((id) => isSharedCanvasNodeForView(id, view)));
-    const storedLayout = isNewWorkspace && persistLayout ? readCanvasLayout(workspaceKey) : null;
+    const storedLayout = isNewWorkspace && persistLayout ? canvasView.layout(workspaceKey) : null;
     const remoteLayoutChanged = remoteLayoutEnabled && sharedLayout !== null
       && (isNewWorkspace || (sharedLayout.revision >= (appliedSharedLayoutRevisionRef.current ?? -1)
         && appliedSharedLayoutRevisionRef.current !== sharedLayout.revision));
@@ -1470,13 +1356,13 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     if (!persistLayout) return;
     const bounds = flowWrapRef.current?.getBoundingClientRect();
     if (!bounds || bounds.width <= 0 || bounds.height <= 0 || viewport.zoom <= 0) return;
-    const current = readCanvasLayout(workspaceKey);
+    const current = canvasView.layout(workspaceKey);
     current.viewport = {
       centerX: (bounds.width / 2 - viewport.x) / viewport.zoom,
       centerY: (bounds.height / 2 - viewport.y) / viewport.zoom,
       zoom: viewport.zoom,
     };
-    writeCanvasLayout(workspaceKey, current);
+    canvasView.saveLayout(workspaceKey, current);
   }, [workspaceKey, persistLayout]);
 
   // A drag moves the card under the pointer and, when it belongs to the group, every other selected card.
@@ -1694,7 +1580,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   const revealAllObjects = useCallback(() => {
     setContextMenu(null);
     setHiddenIds(new Set());
-    writeHiddenObjects(workspaceKey, new Set());
+    canvasView.saveHidden(workspaceKey, new Set());
   }, [workspaceKey]);
   // Header people: centre the view on another member's live cursor, keeping the zoom.
   useEffect(() => registerCanvasPointFocus((x, y) => {
@@ -1988,17 +1874,17 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   // Chat commands ("open rules") still match on the canvas order of every listed card, hidden ones included.
   const objectTitles = useMemo(() => cardRows, [cardRows]);
   finderStateRef.current = { objectTitles, navigateToObject, hideObject };
-  const [starredIds, setStarredIds] = useState<ReadonlySet<string>>(() => readStarred(workspaceKey));
+  const [starredIds, setStarredIds] = useState<ReadonlySet<string>>(() => canvasView.starred(workspaceKey));
   const starScopeRef = useRef(workspaceKey);
   if (starScopeRef.current !== workspaceKey) {
     starScopeRef.current = workspaceKey;
-    setStarredIds(readStarred(workspaceKey));
+    setStarredIds(canvasView.starred(workspaceKey));
   }
   const toggleStar = (id: string) => setStarredIds((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    writeStarred(workspaceKey, next);
+    canvasView.saveStarred(workspaceKey, next);
     return next;
   });
   const [objectQuery, setObjectQuery] = useState('');
