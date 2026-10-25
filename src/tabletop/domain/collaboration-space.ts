@@ -9,6 +9,7 @@ import {
 import { isSpaceCommand, parseSpaceCommand } from '../shared/collaboration-space-command';
 import type { TableState } from '../shared/table-contracts';
 import { DomainError } from '../shared/contracts';
+import { TABLE_ACTIVITY_LIMIT } from './helpers';
 
 /**
  * F080 / C5: where a collaboration space lives and how a command reaches it.
@@ -29,8 +30,8 @@ export type SpaceCommandResult =
   | { ok: true; state: TableState; space: CollaborationSpace }
   | { ok: false; code: string; message: string };
 
-/** How many activity entries the space commands keep; the table trims the same way. */
-const ACTIVITY_LIMIT = 48;
+/** The table trims its activity at 100; space commands must not shorten history the table keeps. */
+const ACTIVITY_LIMIT = TABLE_ACTIVITY_LIMIT;
 
 /** Read the space from a workspace, tolerating one written by an older or newer build. */
 export function readSpaceFromState(state: TableState): { space: CollaborationSpace | undefined; problems: string[] } {
@@ -81,6 +82,9 @@ export function createSpaceState(state: TableState, input: CreateSpaceInput): Sp
     return { ok: false, code: 'SPACE_EXISTS', message: 'This workspace already holds a collaboration space.' };
   }
   const title = input.title.trim();
+  if (title.length === 0) {
+    return { ok: false, code: 'SPACE_INVALID', message: 'Use a title of 1 to 80 characters.' };
+  }
   const space: CollaborationSpace = {
     schemaVersion: 1,
     spaceId: input.spaceId,

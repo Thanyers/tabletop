@@ -7,7 +7,7 @@ import {
   type ToolProjectionGrant,
 } from '../shared/tool-connection';
 import type { TableState } from '../shared/table-contracts';
-import { requirePermission } from './helpers';
+import { requirePermission, TABLE_ACTIVITY_LIMIT } from './helpers';
 
 /**
  * F080 / C7: issuing and revoking a projection grant at the source table.
@@ -78,6 +78,22 @@ export function handleSourceGrantCommand(
     if (live.length >= TOOL_CONNECTION_LIMITS.maxGrantsPerSource) {
       throw new DomainError('SOURCE_GRANT_LIMIT', `At most ${TOOL_CONNECTION_LIMITS.maxGrantsPerSource} active grants per table.`);
     }
+    // Every projection must name something the source actually has, so a grant cannot promise
+    // data the table does not own.
+    const program = state.program;
+    for (const projection of request.projections) {
+      const collection = program?.collections.find(entry => entry.id === projection.resource);
+      if (program && !collection) {
+        throw new DomainError('SOURCE_GRANT_PROJECTION', `The table has no resource "${projection.resource}".`);
+      }
+      if (collection) {
+        const fieldIds = new Set(collection.fields.map(field => field.id));
+        const unknown = projection.fields.filter(field => !fieldIds.has(field));
+        if (unknown.length > 0) {
+          throw new DomainError('SOURCE_GRANT_PROJECTION', `"${projection.resource}" has no field ${unknown.join(', ')}.`);
+        }
+      }
+    }
     const grant: ToolProjectionGrant = {
       grantId: request.grantId,
       spaceId: request.spaceId,
@@ -97,7 +113,7 @@ export function handleSourceGrantCommand(
         ...state,
         spaceGrants: [...grants, grant],
         actionRevision: state.actionRevision + 1,
-        activity: [...state.activity, { actorId: ctx.actorId, action: type, at: ctx.now }].slice(-48),
+        activity: [...state.activity, { actorId: ctx.actorId, action: type, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT),
       },
       label: `Projection granted to ${grant.spaceId}.`,
     };

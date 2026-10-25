@@ -215,3 +215,29 @@ describe('space commands travel through handleTableCommand', () => {
     expect(handleTableCommand(createTableState(), 'totally.unknown', {}, owner)).toBeNull();
   });
 });
+
+describe('a title that trims to nothing is refused, not stored', () => {
+  it('refuses a whitespace-only title instead of wedging the workspace', () => {
+    const result = createSpaceState(createTableState(), {
+      spaceId: 'activity-room',
+      title: '   ',
+      sharedToolWorkspaceId: SHARED_TOOL_WORKSPACE,
+      actor: owner,
+      now: 1,
+    });
+    expect(result).toMatchObject({ ok: false, code: 'SPACE_INVALID' });
+  });
+
+  it('keeps the workspace usable: a valid create still works afterwards', () => {
+    const refused = createSpaceState(createTableState(), {
+      spaceId: 'activity-room', title: '  ', sharedToolWorkspaceId: SHARED_TOOL_WORKSPACE, actor: owner, now: 1,
+    });
+    expect(refused.ok).toBe(false);
+    const created = createSpaceState(createTableState(), {
+      spaceId: 'activity-room', title: 'ห้อง', sharedToolWorkspaceId: SHARED_TOOL_WORKSPACE, actor: owner, now: 2,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(readSpaceFromState(created.state).problems).toEqual([]);
+  });
+});

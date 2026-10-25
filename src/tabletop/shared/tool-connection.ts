@@ -168,8 +168,12 @@ export function effectiveRevocationAt(grant: ToolProjectionGrant): number | unde
  * re-authorize rather than reuse the rows it already had.
  */
 export function projectionUsableAt(grant: ToolProjectionGrant, at: number): boolean {
-  const revokedAt = effectiveRevocationAt(grant);
-  return revokedAt === undefined || at < revokedAt;
+  // Fail closed: a revoked grant is unusable even if a stored record lost its timestamp.
+  if (grant.status === 'revoked') {
+    const revokedAt = effectiveRevocationAt(grant);
+    return revokedAt !== undefined && at < revokedAt;
+  }
+  return true;
 }
 
 /* ------------------------------------------------------------------------------------------------

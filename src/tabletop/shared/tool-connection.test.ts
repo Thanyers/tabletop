@@ -83,6 +83,13 @@ describe('revocation has an effective point and a cache cannot outlive it', () =
     expect(projectionUsableAt(grant(), 99_999)).toBe(true);
   });
 
+  it('fails closed when the timestamp is missing', () => {
+    // A stored record that lost revokedAt must not resurrect access.
+    const legacy = grant({ status: 'revoked', revokedAt: undefined });
+    expect(projectionUsableAt(legacy, 1)).toBe(false);
+    expect(projectionUsableAt(legacy, 99_999)).toBe(false);
+  });
+
   it('stops serving a projection from the revocation moment onwards', () => {
     const revoked = grant({ status: 'revoked', revokedAt: 2_000 });
     expect(effectiveRevocationAt(revoked)).toBe(2_000);

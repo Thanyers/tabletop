@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SPACE_COMMANDS } from '../src/tabletop/shared/collaboration-space-command';
 import { SOURCE_GRANT_COMMANDS } from '../src/tabletop/domain/tool-grant';
-import { commandAllowed } from './authority';
+import { assertIdentityFieldsAbsent, commandAllowed, commandNamesItsOwnTarget } from './authority';
 import { PERMISSION_LABELS } from '../src/tabletop/shared/permissions';
 
 /**
@@ -65,5 +65,31 @@ describe('the space matrix never borrows a table permission', () => {
     // If a space feature ever needs a table permission, that is a product decision, not a side effect.
     expect(Object.keys(PERMISSION_LABELS)).not.toContain('space.manage');
     expect(Object.keys(PERMISSION_LABELS)).not.toContain('source.grant');
+  });
+});
+
+describe('the identity-spoof guard does not swallow commands that name a target', () => {
+  it('exempts exactly the commands whose payload names a target', () => {
+    // These four were silently rejected before the exemption: the guard saw `actorId`/`role`/
+    // `workspaceId` and refused the command before the domain could run.
+    for (const command of ['space.removeMember', 'space.setRole', 'space.transferManager', 'space.leaveSource']) {
+      expect(commandNamesItsOwnTarget(command), command).toBe(true);
+    }
+    for (const command of SOURCE_GRANT_COMMANDS) expect(commandNamesItsOwnTarget(command), command).toBe(true);
+    expect(commandNamesItsOwnTarget('access.assign')).toBe(true);
+    expect(commandNamesItsOwnTarget('teaching.setRepresentation')).toBe(true);
+  });
+
+  it('does not exempt ordinary commands', () => {
+    for (const command of ['table.act', 'table.roll', 'canvas.layout', 'workspace.reset', 'evolve.propose']) {
+      expect(commandNamesItsOwnTarget(command), command).toBe(false);
+    }
+  });
+
+  it('still rejects a spoofed identity on a command that does not name a target', () => {
+    expect(() => assertIdentityFieldsAbsent({ actorId: 'someone-else' })).toThrowError(/COMMAND_IDENTITY_SPOOF|identity/i);
+    expect(() => assertIdentityFieldsAbsent({ epoch: 9 })).toThrowError(/COMMAND_IDENTITY_SPOOF|identity/i);
+    // ... and accepts a payload that only names a target, which is what the exempt commands send.
+    expect(() => assertIdentityFieldsAbsent({ member: { actorId: 'actor-b' } })).not.toThrow();
   });
 });

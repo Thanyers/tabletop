@@ -3,8 +3,8 @@ import { DomainError, type ActorContext, type Artifact, type CaseKind, type Comm
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
 import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
-import { SPACE_COMMANDS } from '../src/tabletop/shared/collaboration-space-command.js';
-import { SOURCE_GRANT_COMMANDS } from '../src/tabletop/domain/tool-grant.js';
+import { SPACE_COMMANDS, isSpaceCommand } from '../src/tabletop/shared/collaboration-space-command.js';
+import { SOURCE_GRANT_COMMANDS, isSourceGrantCommand } from '../src/tabletop/domain/tool-grant.js';
 import { DISPLAY_COMMANDS } from '../src/tabletop/domain/display.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
@@ -237,7 +237,20 @@ function commandFrom(value: unknown): CommandEnvelope {
   return result.data;
 }
 
-function assertIdentityFieldsAbsent(payload: unknown): void {
+/**
+ * Some commands name a target in an identity-shaped field: the member being assigned or removed,
+ * the table being unlinked. The acting identity always comes from the session, and the strict
+ * payload schema pins which keys are legal, so these are exempt from the spoof guard. Every other
+ * command must not carry those keys at all.
+ */
+export function commandNamesItsOwnTarget(type: string): boolean {
+  return type === 'teaching.setRepresentation'
+    || type === 'access.assign'
+    || isSpaceCommand(type)
+    || isSourceGrantCommand(type);
+}
+
+export function assertIdentityFieldsAbsent(payload: unknown): void {
   if (!isRecord(payload)) return;
   const forbidden = ['actorId', 'role', 'seat', 'workspaceId', 'epoch'];
   if (forbidden.some((key) => Object.hasOwn(payload, key))) throw new AuthorityError('COMMAND_IDENTITY_SPOOF');
@@ -880,7 +893,7 @@ export class CommandAuthority {
           return this.renameWorkspace(transaction, workspace, member, session, envelope, requestHash, title, now);
         }
         // access.assign names its target member; the block above already checked it is a current non-owner member.
-        if (envelope.type !== 'teaching.setRepresentation' && envelope.type !== 'access.assign') assertIdentityFieldsAbsent(envelope.payload);
+        if (!commandNamesItsOwnTarget(envelope.type)) assertIdentityFieldsAbsent(envelope.payload);
         if (envelope.type === 'teaching.answer' && member.role !== 'learner') throw new AuthorityError('ROLE_FORBIDDEN');
         // F035: other lesson commands are decided by the member's permissions in the domain (requirePermission).
 
