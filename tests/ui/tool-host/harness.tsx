@@ -4,6 +4,7 @@ import { compileToolPackage } from '../../../src/tabletop/runtime/tools/compile'
 import type { ToolIntentOutcome, ToolPortSnapshot } from '../../../src/tabletop/shared/tool-protocol';
 import { GeneratedToolHost, type ToolIntentRequest } from '../../../src/tabletop/ui/GeneratedToolHost';
 import { FIXTURE_PACKAGE } from './fixture-package';
+import { HELD_OUT_LEARNING, HELD_OUT_PLAY } from '../../../src/tabletop/testing/heldout-tools';
 
 /**
  * F080 / C2 harness: mounts the real GeneratedToolHost with the real compiler output for a
@@ -36,7 +37,32 @@ interface HarnessState {
 const state: HarnessState = { compileOk: false, problems: [], intents: [], logs: [], outcomes: [] };
 (globalThis as unknown as { __HARNESS__: HarnessState }).__HARNESS__ = state;
 
-const compiled = compileToolPackage(FIXTURE_PACKAGE, fixtureHash);
+const which = new URLSearchParams(location.search).get('package');
+const selected = which === 'quiz-hall' ? HELD_OUT_LEARNING : which === 'boat-race' ? HELD_OUT_PLAY : FIXTURE_PACKAGE;
+const heldOutPorts: ToolPortSnapshot[] = which === 'quiz-hall'
+  ? [{
+    portId: 'questions',
+    kind: 'records',
+    status: 'live',
+    revision: { dataRevision: 1, ruleRevision: 1, grantVersion: 1, readAt: 1_760_000_000_000 },
+    sourceLabel: 'คลังคำถาม',
+    rows: [
+      { id: 'q1', values: { prompt: 'ข้อใดคือสัตว์เลี้ยงลูกด้วยนม' } },
+      { id: 'q2', values: { prompt: 'ข้อใดคือพืช' } },
+    ],
+  }]
+  : which === 'boat-race'
+    ? [{
+      portId: 'boats',
+      kind: 'records',
+      status: 'live',
+      revision: { dataRevision: 1, ruleRevision: 1, grantVersion: 1, readAt: 1_760_000_000_000 },
+      sourceLabel: 'กระดาน',
+      rows: [{ id: 'red', values: { seat: 'host', score: 0 } }, { id: 'blue', values: { seat: 'guest', score: 0 } }],
+    }]
+    : [];
+const compiled = compileToolPackage(selected, fixtureHash);
+const HOSTED_PORTS: ToolPortSnapshot[] = which === undefined ? [] : heldOutPorts;
 state.compileOk = compiled.ok;
 if (!compiled.ok) state.problems = compiled.problems.map(problem => `${problem.code} ${problem.path}: ${problem.message}`);
 
@@ -66,7 +92,7 @@ const INITIAL_PORTS: ToolPortSnapshot[] = [
 ];
 
 function Harness(): React.ReactElement {
-  const [ports, setPorts] = useState<ToolPortSnapshot[]>(INITIAL_PORTS);
+  const [ports, setPorts] = useState<ToolPortSnapshot[]>(which === 'quiz-hall' || which === 'boat-race' ? HOSTED_PORTS : INITIAL_PORTS);
   const [instances, setInstances] = useState(0);
 
   const onIntent = useCallback(async (request: ToolIntentRequest): Promise<ToolIntentOutcome> => {

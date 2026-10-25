@@ -175,6 +175,31 @@ try {
   await view.locator('[data-testid="source-status"]').waitFor();
   mark('remount replaces the instance cleanly');
 
+  // Held-out package: a learning tool the host was never written for.
+  await page.goto(`${origin}/index.html?package=quiz-hall`);
+  const quizView = page.frameLocator('iframe[title="ผังพื้นที่กิจกรรม (ตัวอย่าง)"]');
+  await quizView.locator('[data-testid="submit-answers"]').waitFor();
+  const questions = await quizView.locator('[data-testid^="answer-"]').count();
+  if (questions !== 4) fail('held-out questions rendered from a records port', String(questions));
+  await quizView.locator('[data-testid="answer-q1-a"]').click();
+  await quizView.locator('[data-testid="submit-answers"]').click();
+  await quizView.locator('[data-testid="quiz-note"]').filter({ hasText: 'บันทึกคำตอบแล้ว' }).waitFor();
+  const heldOutBehaviour = await page.evaluate(() => globalThis.__HARNESS__.intents.at(-1)?.behaviorId);
+  if (heldOutBehaviour !== 'submit') fail('held-out behaviour invoked', String(heldOutBehaviour));
+  mark('a held-out learning package renders and acts on the unchanged host', `${questions} answers · behaviour ${heldOutBehaviour}`);
+
+  // The second held-out package: a play tool with a different shape again.
+  await page.goto(`${origin}/index.html?package=boat-race`);
+  const boardView = page.frameLocator('iframe[title="ผังพื้นที่กิจกรรม (ตัวอย่าง)"]');
+  await boardView.locator('[data-testid="advance-red"]').waitFor();
+  const boats = await boardView.locator('[data-testid^="boat-"]').count();
+  if (boats !== 2) fail('held-out board rendered from a records port', String(boats));
+  await boardView.locator('[data-testid="advance-red"]').click();
+  await boardView.locator('[data-testid="board-note"]').filter({ hasText: 'เดินเรือแล้ว' }).waitFor();
+  const playBehaviour = await page.evaluate(() => globalThis.__HARNESS__.intents.at(-1)?.behaviorId);
+  if (playBehaviour !== 'advance') fail('held-out play behaviour invoked', String(playBehaviour));
+  mark('a held-out play package renders and acts on the same host', `${boats} boats · behaviour ${playBehaviour}`);
+
   if (pageErrors.length > 0) fail('no uncaught page errors', pageErrors.join(' | '));
   mark('no uncaught page errors');
 
