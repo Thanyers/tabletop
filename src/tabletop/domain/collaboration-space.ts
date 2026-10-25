@@ -6,15 +6,17 @@ import {
   type SpaceCommand,
   type SpaceDecision,
 } from '../shared/collaboration-space';
+import { isSpaceCommand, parseSpaceCommand } from '../shared/collaboration-space-command';
 import type { TableState } from '../shared/table-contracts';
+import { DomainError } from '../shared/contracts';
 
 /**
- * F080 / C5: where a collaboration space lives.
+ * F080 / C5: where a collaboration space lives and how a command reaches it.
  *
  * It is an optional field on the workspace that owns the shared tools, exactly like notes and
  * card metadata were added before it: additive, absent in older workspaces, and never a reason to
- * reject stored state. That keeps the whole slice migration-free — no new table, no D1 change —
- * while the space still only *references* the source tables it was linked to.
+ * reject stored state. That keeps the slice migration-free — no new table, no D1 change — while
+ * the space still only *references* the source tables it was linked to.
  */
 
 export interface SpaceCommandContext {
@@ -99,4 +101,65 @@ export function createSpaceState(state: TableState, input: CreateSpaceInput): Sp
     activity: [...state.activity, { actorId: input.actor.actorId, action: 'space.create', at: input.now }].slice(-ACTIVITY_LIMIT),
   };
   return { ok: true, state: next, space };
+}
+
+/**
+ * Domain entry point for the space commands.
+ *
+ * Returns `null` for any other command so `handleTableCommand` can keep its own chain unchanged.
+ * A rejected command throws `DomainError` with a stable code, which is how every other domain
+ * command reports a refusal, so the authority maps it to a rejected ack rather than a crash.
+ */
+export function handleSpaceCommand(
+  state: TableState,
+  type: string,
+  payload: unknown,
+  ctx: ActorContext,
+): { state: TableState; label: string } | null {
+  if (!isSpaceCommand(type)) return null;
+  const parsed = parseSpaceCommand(type, payload);
+  if (!parsed.ok) throw new DomainError(parsed.code, parsed.message);
+
+  if (parsed.type === 'space.create') {
+    if (ctx.role !== 'owner') throw new DomainError('SPACE_FORBIDDEN', 'Only the workspace owner can create the space.');
+    const created = createSpaceState(state, {
+      spaceId: parsed.spaceId,
+      title: parsed.title,
+      sharedToolWorkspaceId: parsed.sharedToolWorkspaceId,
+      actor: ctx,
+      now: ctx.now,
+    });
+    if (!created.ok) throw new DomainError(created.code, created.message);
+    return { state: created.state, label: `Space created: ${created.space.title}.` };
+  }
+
+  const command = toSpaceCommand(parsed);
+  const applied = applySpaceCommand({ state, actor: ctx, now: ctx.now }, command);
+  if (!applied.ok) throw new DomainError(applied.code, applied.message);
+  return { state: applied.state, label: spaceLabel(parsed.type) };
+}
+
+function toSpaceCommand(parsed: Exclude<ReturnType<typeof parseSpaceCommand>, { ok: false } | { type: 'space.create' }>): SpaceCommand {
+  switch (parsed.type) {
+    case 'space.rename': return { type: 'space.rename', title: parsed.title };
+    case 'space.addMember': return { type: 'space.addMember', member: parsed.member };
+    case 'space.removeMember': return { type: 'space.removeMember', actorId: parsed.actorId };
+    case 'space.setRole': return { type: 'space.setRole', actorId: parsed.actorId, role: parsed.role };
+    case 'space.transferManager': return { type: 'space.transferManager', actorId: parsed.actorId };
+    case 'space.addSource': return { type: 'space.addSource', source: parsed.source };
+    case 'space.leaveSource': return { type: 'space.leaveSource', workspaceId: parsed.workspaceId };
+  }
+}
+
+function spaceLabel(type: string): string {
+  switch (type) {
+    case 'space.rename': return 'Space renamed.';
+    case 'space.addMember': return 'Member added to the space.';
+    case 'space.removeMember': return 'Member removed from the space.';
+    case 'space.setRole': return 'Space role changed.';
+    case 'space.transferManager': return 'Space management transferred.';
+    case 'space.addSource': return 'Source table linked to the space.';
+    case 'space.leaveSource': return 'Source table unlinked from the space.';
+    default: return 'Space updated.';
+  }
 }

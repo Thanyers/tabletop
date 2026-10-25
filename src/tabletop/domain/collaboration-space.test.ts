@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '../shared/contracts';
-import { createTableState } from './table';
+import { createTableState, handleTableCommand } from './table';
 import { applySpaceCommand, createSpaceState, readSpaceFromState } from './collaboration-space';
 
 const SHARED_TOOL_WORKSPACE = '11111111-1111-4111-8111-111111111111';
@@ -133,5 +133,85 @@ describe('stored state round-trips and tolerates a newer schema', () => {
     const read = readSpaceFromState(tampered);
     expect(read.space).toBeUndefined();
     expect(read.problems.join(' ')).toContain('schemaVersion');
+  });
+});
+
+/** Assert the stable code a DomainError carries, not its human message. */
+function throwsCode(run: () => unknown, code: string): void {
+  try {
+    run();
+  } catch (error) {
+    expect((error as { code?: string }).code).toBe(code);
+    return;
+  }
+  throw new Error(`expected a DomainError with code ${code}`);
+}
+
+describe('space commands travel through handleTableCommand', () => {
+  const createPayload = { spaceId: 'activity-room', title: 'ห้องวางผังกิจกรรม', sharedToolWorkspaceId: SHARED_TOOL_WORKSPACE };
+
+  it('creates the space for the owner and returns a label', () => {
+    const decision = handleTableCommand(createTableState(), 'space.create', createPayload, owner);
+    expect(decision).not.toBeNull();
+    expect(decision?.state.collaborationSpace?.managerActorId).toBe('actor-a');
+    expect(decision?.label).toContain('Space created');
+  });
+
+  it('refuses creation by a non-owner with a stable code', () => {
+    throwsCode(() => handleTableCommand(createTableState(), 'space.create', createPayload, other), 'SPACE_FORBIDDEN');
+  });
+
+  it('lets the manager add a member through the same entry point', () => {
+    const created = handleTableCommand(createTableState(), 'space.create', createPayload, owner);
+    if (!created) throw new Error('create failed');
+    const added = handleTableCommand(created.state, 'space.addMember', {
+      member: { actorId: 'actor-b', name: 'B', role: 'participant', joinedAt: 5 },
+    }, owner);
+    expect(added?.state.collaborationSpace?.members.map(member => member.actorId)).toEqual(['actor-a', 'actor-b']);
+    expect(added?.label).toContain('Member added');
+  });
+
+  it('refuses an actor who is not in the space', () => {
+    const created = handleTableCommand(createTableState(), 'space.create', createPayload, owner);
+    if (!created) throw new Error('create failed');
+    throwsCode(() => handleTableCommand(created.state, 'space.rename', { title: 'x' }, other), 'SPACE_NOT_MEMBER');
+  });
+
+  it('refuses an administrative command from a participant who joined', () => {
+    const created = handleTableCommand(createTableState(), 'space.create', createPayload, owner);
+    if (!created) throw new Error('create failed');
+    const added = handleTableCommand(created.state, 'space.addMember', {
+      member: { actorId: 'actor-b', name: 'B', role: 'participant', joinedAt: 5 },
+    }, owner);
+    if (!added) throw new Error('add failed');
+    throwsCode(() => handleTableCommand(added.state, 'space.rename', { title: 'x' }, other), 'SPACE_FORBIDDEN');
+  });
+
+  it('lets a participant run but not author: the matrix holds through the command path', () => {
+    const created = handleTableCommand(createTableState(), 'space.create', createPayload, owner);
+    if (!created) throw new Error('create failed');
+    const added = handleTableCommand(created.state, 'space.addMember', {
+      member: { actorId: 'actor-b', name: 'B', role: 'maker', joinedAt: 5 },
+    }, owner);
+    if (!added) throw new Error('add failed');
+    const linked = handleTableCommand(added.state, 'space.addSource', {
+      source: { workspaceId: SOURCE, epoch: 1, addedBy: 'actor-b', addedAt: 6, status: 'linked' },
+    }, other);
+    expect(linked?.state.collaborationSpace?.sources).toHaveLength(1);
+    // A maker may link, but not manage members.
+    throwsCode(() => handleTableCommand(linked!.state, 'space.addMember', {
+      member: { actorId: 'actor-c', name: 'C', role: 'viewer', joinedAt: 7 },
+    }, other), 'SPACE_FORBIDDEN');
+  });
+
+  it('rejects a malformed payload before touching state', () => {
+    throwsCode(() => handleTableCommand(createTableState(), 'space.create', { spaceId: 'activity-room' }, owner), 'SPACE_PAYLOAD');
+  });
+
+  it('leaves every other command untouched', () => {
+    // The normal chain still validates its own payloads ...
+    throwsCode(() => handleTableCommand(createTableState(), 'table.act', {}, owner), 'INVALID_COMMAND');
+    // ... and an unknown type is still "not mine", not a space error.
+    expect(handleTableCommand(createTableState(), 'totally.unknown', {}, owner)).toBeNull();
   });
 });

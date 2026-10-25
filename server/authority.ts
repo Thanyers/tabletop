@@ -3,6 +3,7 @@ import { DomainError, type ActorContext, type Artifact, type CaseKind, type Comm
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
 import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
+import { SPACE_COMMANDS } from '../src/tabletop/shared/collaboration-space-command.js';
 import { DISPLAY_COMMANDS } from '../src/tabletop/domain/display.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
@@ -83,6 +84,7 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.roll', 'table.setComputedColumns', 'table.compute.run', 'canvas.layout',
     'table.addWebSources', 'table.reviewWebSource',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
+    ...SPACE_COMMANDS,
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
     'evolve.autoApply', 'evolve.removeItem',
     ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
@@ -1225,7 +1227,7 @@ export class CommandAuthority {
   }
 }
 
-function commandAllowed(kind: CaseKind, type: string, trustedOperation: 'artifact-import' | 'table-compute' | null): boolean {
+export function commandAllowed(kind: CaseKind, type: string, trustedOperation: 'artifact-import' | 'table-compute' | null): boolean {
   if (type === 'workspace.reset' || type === 'workspace.rename') return true;
   if (type === 'invoice.import') return trustedOperation === 'artifact-import' && kind === 'invoice';
   if (type === 'table.compute.queue' || type === 'table.compute.update') return trustedOperation === 'table-compute' && kind === 'table';

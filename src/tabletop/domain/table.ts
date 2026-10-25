@@ -4,6 +4,7 @@ import type { TableAction, TableChange, TableField, TableOperand, TableProgram, 
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
 import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
 import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
+import { handleSpaceCommand } from './collaboration-space';
 import { liveCanvasCardIds, pruneCardMeta, touchCardMeta } from './table-card-meta';
 import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
@@ -995,6 +996,9 @@ function updateComputeRun(state: TableState, payload: unknown, ctx: ActorContext
 }
 
 export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): TableCommandDecision | null {
+  // F080: collaboration-space commands live in their own module and report a refusal by throwing.
+  const spaceDecision = handleSpaceCommand(state, type, payload, ctx);
+  if (spaceDecision) return spaceDecision;
   if (type === 'table.compute.run') return queueComputeRun(state, payload, ctx, true);
   if (type === 'table.compute.queue') return queueComputeRun(state, payload, ctx, false);
   if (type === 'table.compute.update') return updateComputeRun(state, payload, ctx);
