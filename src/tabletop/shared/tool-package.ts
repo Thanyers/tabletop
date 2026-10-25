@@ -483,12 +483,12 @@ export function validateToolPackage(value: unknown): ToolPackageValidation {
     } else {
       // The runner loads the behaviour as a single module inside the isolate, so a relative
       // import would resolve to nothing there. Refuse it here instead of failing at run time.
-      const relative = toolSourceImports(behaviorFile.text).filter(entry => entry.kind === 'relative');
-      if (relative.length > 0) {
+      const imports = toolSourceImports(behaviorFile.text);
+      if (imports.length > 0) {
         problems.push({
           code: 'PACKAGE_BEHAVIOR',
           path: 'behaviorEntry',
-          message: `The behaviour module must be self-contained; it imports ${relative.map(entry => entry.specifier).join(', ')}.`,
+          message: `The behaviour module must be self-contained; it imports ${imports.map(entry => entry.specifier).join(', ')}.`,
         });
       }
     }
@@ -573,8 +573,15 @@ export function validateToolPackage(value: unknown): ToolPackageValidation {
       problems.push({ code: 'PACKAGE_BEHAVIOR', path: `behaviors.${behavior.id}.inputs`, message: 'Input ids must be unique.' });
     }
     for (const write of behavior.writes) {
-      if (write.target !== 'self' && !portIds.has(write.target)) {
+      if (write.target === 'self') continue;
+      const targetPort = definition.ports.find(port => port.id === write.target);
+      if (!targetPort) {
         problems.push({ code: 'PACKAGE_WRITE', path: `behaviors.${behavior.id}.writes`, message: `Write target "${write.target}" is not a declared port.` });
+        continue;
+      }
+      // An `out` port carries results out of the package; writing through it would invert it.
+      if (targetPort.direction !== 'in') {
+        problems.push({ code: 'PACKAGE_WRITE', path: `behaviors.${behavior.id}.writes`, message: `Write target "${write.target}" must be an inbound port.` });
       }
     }
   }

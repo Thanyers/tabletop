@@ -57,7 +57,7 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 ## D-006 — Compiler location: ตัดสินหลังทดลอง ไม่เดา
 
 - **วันที่:** 2026-10-25
-- **สถานะ:** `open`
+- **สถานะ:** `superseded` โดย D-013 (เลือก Sucrase เป็น compiler แล้ว)
 - **ตัดสิน (ชั่วคราว):** ยังไม่ล็อกระหว่าง (a) trusted deployment-compatible compile adapter และ (b) isolated client compiler ที่ artifact ยังถือว่า untrusted; ต้องทดลองทั้งสองทางเท่าที่จำเป็นใน C2 แล้วเลือกจาก deployability/resource limits/source reproducibility
 - **เหตุผล/หลักฐาน:** `package.json` ของ dev ไม่มี direct compiler dependency สำหรับ package authoring (มี Vite/esbuild ผ่าน transitive เท่านั้น) · ห้ามสมมติว่า transitive esbuild ใช้เป็น deployed runtime compiler ได้ · ห้ามอ้าง server-verified source-to-bundle ถ้า compile อยู่ client อย่างเดียว
 - **ทางเลือกที่ตัดทิ้ง:** เพิ่ม compiler service ใหม่ต่อ package — ยังไม่มีหลักฐานว่าราคา/น้ำหนักคุ้ม

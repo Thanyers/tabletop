@@ -15,7 +15,7 @@ export function Tool(props: Props) {
 
 const BEHAVIOR_TS = `type Input = { room: string };
 export function allocate(inputs: Input) {
-  return { changes: [{ target: 'self', resource: 'allocations', operation: 'create', values: { room: inputs.room } }] };
+  return [{ target: 'self', resource: 'allocations', operation: 'create', values: { room: inputs.room } }];
 }
 `;
 

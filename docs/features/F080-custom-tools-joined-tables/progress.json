@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T22:20:00+07:00",
+  "updatedAt": "2026-10-25T22:35:00+07:00",
   "lastVerifiedAt": "2026-10-25T22:19:00+07:00",
   "goal": {
     "tool": "native DSH goal",
@@ -310,7 +310,9 @@
         "shared/json-budget.ts treats an `undefined` value as unusable, so a TS object that spells an omitted optional field as `undefined` was reported as PACKAGE_BUDGET. Fixed by probing the JSON view of the package (which is what the store and the hash see) and keeping jsonWithinBudget semantics unchanged for wire values.",
         "The frame needs `unsafe-eval` in its own CSP to instantiate compiled modules; the host CSP is untouched and the frame has an opaque origin with no cookie/storage/network (verified in the browser harness).",
         "The bridge parser rejected messages containing `undefined` optional fields because jsonWithinBudget treats undefined as unusable; fixed by probing the JSON view on both the package and the message path, and by omitting absent fields when the host replies.",
-        "HTML5 drag-and-drop cannot be driven reliably by pointer emulation; the fixture uses pointer events, which is also the correct behaviour for touch and keyboard."
+        "HTML5 drag-and-drop cannot be driven reliably by pointer emulation; the fixture uses pointer events, which is also the correct behaviour for touch and keyboard.",
+        "Independent review FAILED the candidate and found real defects; fixed in the follow-up commit: (a) a projection update arriving before the frame mounted was dropped — ports are now re-sent on frame load; (b) an inline `presentation={{…}}` remounted the frame on every parent render — the effect now depends on primitive fields; (c) a write declaration could target an `out` port — rejected now; (d) a behaviour module importing a pinned library passed validation and failed only in the isolate — all imports are rejected now; (e) the SDK promise could hang when the host dropped a message — intents now settle as abandoned on timeout and on the pending cap; (f) my own fixture encoded the wrong behaviour ABI (`{changes}` instead of a bare list).",
+        "Reviewer findings still OPEN (do not mark PASS): ISO-01 must be re-run from an http origin (downgraded to UNVERIFIED); the behaviour runner needs `behaviorId` + package-derived declared writes and must read `request.expected`, otherwise TOOL_STALE_REVISION/TOOL_SOURCE_REVOKED are unreachable; spec.md has no F080 entry yet; the frame runtime is ~685 KB inlined per instance and undocumented; the 64 KiB bridge bound is only enforced for string payloads; no CI job runs the tool-host harness; several declared limits/rejection codes are unenforced."
       ],
       "blocker": null,
       "nextAction": "C3: authoring pipeline with an injected generator (fixture generator in tests), human source editing, activation + readback on one table; the live provider stays behind GATE-PAID-AI. In parallel: C5 collaboration-space contract (shared schema only, no migration) and re-run the visual exploration slice."
@@ -594,6 +596,12 @@
     }
   ],
   "nextActions": [
+    {
+      "id": "NA-0",
+      "action": "ปิด reviewer findings ที่ค้าง: เสิร์ฟ harness จาก http origin + cookie จริงแล้วบังคับ document.cookie ให้ throw, เพิ่ม spec.md block ของ F080, ผูก behaviorId/declaredWrites เข้า request และอ่าน request.expected, เพิ่ม CI job ของ tool-host harness, เก็บกวาด limit/code ที่ไม่ถูกใช้",
+      "verify": "node tests/ui/tool-host/browser.mjs (จาก http origin) + npm test + gh pr checks",
+      "expect": "ISO-01 กลับมา PASS บนหลักฐานที่ถูกต้อง หรือคง UNVERIFIED พร้อมเหตุผล"
+    },
     {
       "id": "NA-1",
       "action": "commit + push checkpoint ของ C2 แล้วขอ independent review ของ candidate ff0ad2c",

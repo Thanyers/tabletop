@@ -275,3 +275,30 @@ describe('pinned import allowlist', () => {
     expect(TOOL_PACKAGE_PINNED_IMPORTS['react-dom/client']).toBe(reactDom);
   });
 });
+
+describe('write targets and behaviour imports', () => {
+  it('refuses a write that targets an outbound port', () => {
+    const outPortPackage = makePackage({
+      ports: [{ id: 'cost', label: 'Cost', direction: 'out', kind: 'number', fields: [], maxRows: 1 }],
+      behaviors: [{ id: 'allocate', label: 'Allocate', entry: 'allocate', inputs: [], writes: [{ target: 'cost', resource: 'rows', operations: ['update'], maxRows: 5 }] }],
+    });
+    expect(problemCodes(outPortPackage)).toContain('PACKAGE_WRITE');
+  });
+
+  it('accepts a write that targets a declared inbound port', () => {
+    const inPortPackage = makePackage({
+      ports: [{ id: 'plan', label: 'Plan', direction: 'in', kind: 'records', fields: ['room'], maxRows: 10 }],
+      behaviors: [{ id: 'allocate', label: 'Allocate', entry: 'allocate', inputs: [], writes: [{ target: 'plan', resource: 'placements', operations: ['create'], maxRows: 5 }] }],
+    });
+    expect(validateToolPackage(inPortPackage).ok).toBe(true);
+  });
+
+  it('refuses a behaviour module that imports a pinned library, not only a relative file', () => {
+    const files = [
+      uiFile(),
+      { path: 'behavior/run.ts', language: 'ts' as const, text: "import { z } from 'zod';\nexport function allocate() { return []; }\n" },
+    ];
+    const pkg = makePackage({ files, imports: { ...makePackage().imports } });
+    expect(problemCodes(pkg)).toContain('PACKAGE_BEHAVIOR');
+  });
+});

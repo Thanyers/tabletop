@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CompiledToolPackage } from '../runtime/tools/compile';
 import {
   TOOL_BRIDGE_LIMITS,
@@ -19,8 +19,8 @@ import { buildToolSandboxDocument } from './tool-sandbox/document';
  *
  * The host owns the boundary. It builds the document, rejects every message that is not from
  * this frame with this instance's nonce, and never trusts a frame that claims an actor, a
- * workspace or a revision — the only thing a frame can do is ask for a declared behaviour,
- * and the authority decides what that behaviour may actually write.
+ * workspace or a revision — the only thing a frame can do is ask for a declared behaviour
+ * that the host then runs; the authority decides what that behaviour may actually write.
  */
 
 export interface ToolIntentRequest {
@@ -48,7 +48,7 @@ export interface GeneratedToolHostProps {
 
 let runtimePromise: Promise<string> | undefined;
 
-/** Load the sandbox runtime once per page, without credentials and without caching headers. */
+/** Load the sandbox runtime once per page, without credentials. */
 export function loadToolSandboxRuntime(): Promise<string> {
   const inline = (globalThis as unknown as { __TOOL_SANDBOX_RUNTIME__?: string }).__TOOL_SANDBOX_RUNTIME__;
   if (typeof inline === 'string' && inline.length > 0) return Promise.resolve(inline);
@@ -68,13 +68,31 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
   const { instanceId, nonce, compiled, presentation, onIntent, onLog, title } = props;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [document, setDocument] = useState<string | undefined>();
+  const [frameLoaded, setFrameLoaded] = useState(false);
   const [height, setHeight] = useState(props.initialHeightPx ?? 320);
   const [failure, setFailure] = useState<string | undefined>();
-  const initialPorts = useRef(props.ports);
-  const latestPorts = useRef(props.ports);
+
+  const portsRef = useRef(props.ports);
+  portsRef.current = props.ports;
+  const portsSentRef = useRef<ToolPortSnapshot[] | undefined>(undefined);
+
+  /**
+   * Depend on stable primitives, not object identity: a caller that writes
+   * `presentation={{ … }}` inline would otherwise rebuild the document on every parent render
+   * and remount the frame, losing the package's own UI state.
+   */
+  const presentationKey = `${presentation.locale}|${presentation.reducedMotion}|${presentation.maxRows}`;
+  const stablePresentation = useMemo<ToolPresentation>(
+    () => ({ locale: presentation.locale, reducedMotion: presentation.reducedMotion, maxRows: presentation.maxRows }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the primitive fields on purpose
+    [presentationKey],
+  );
 
   useEffect(() => {
     let cancelled = false;
+    setDocument(undefined);
+    setFrameLoaded(false);
+    portsSentRef.current = undefined;
     loadToolSandboxRuntime()
       .then(runtimeScript => {
         if (cancelled) return;
@@ -86,8 +104,8 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
           packageId: compiled.packageId,
           packageVersion: compiled.version,
           contentHash: compiled.contentHash,
-          ports: initialPorts.current,
-          presentation,
+          ports: portsRef.current,
+          presentation: stablePresentation,
         };
         setDocument(buildToolSandboxDocument({ runtimeScript, compiled, init }));
       })
@@ -97,17 +115,23 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
     return () => {
       cancelled = true;
     };
-  }, [compiled, instanceId, nonce, presentation]);
+  }, [compiled, instanceId, nonce, stablePresentation]);
 
-  // Projection updates are posted into the live frame; re-mounting would drop package UI state.
+  /**
+   * Push projection changes into the live frame.
+   *
+   * A projection can change while the document is still being built (loading the runtime is
+   * async), so this runs once the frame reports `load` as well as on every change: the frame
+   * always ends up with the newest projections it was authorized to see.
+   */
   useEffect(() => {
-    if (latestPorts.current === props.ports) return;
-    latestPorts.current = props.ports;
+    if (!frameLoaded) return;
     const frame = frameRef.current;
     if (!frame?.contentWindow) return;
-    const message: ToolHostMessage = { protocol: TOOL_PROTOCOL_VERSION, kind: 'ports', ports: props.ports };
-    frame.contentWindow.postMessage(message, '*');
-  }, [props.ports]);
+    if (portsSentRef.current === props.ports) return;
+    frame.contentWindow.postMessage({ protocol: TOOL_PROTOCOL_VERSION, kind: 'ports', ports: props.ports } satisfies ToolHostMessage, '*');
+    portsSentRef.current = props.ports;
+  }, [props.ports, frameLoaded]);
 
   const reply = useCallback((message: ToolHostMessage) => {
     frameRef.current?.contentWindow?.postMessage(message, '*');
@@ -181,6 +205,7 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
       ref={frameRef}
       title={title}
       srcDoc={document}
+      onLoad={() => setFrameLoaded(true)}
       // No allow-same-origin: the frame must stay an opaque origin with no cookie access.
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"

@@ -1,9 +1,11 @@
-import type {
-  ToolFrameMessage,
-  ToolHostMessage,
-  ToolPortSnapshot,
-  ToolScalar,
-  ToolIntentOutcome,
+import {
+  TOOL_BRIDGE_LIMITS,
+  TOOL_PROTOCOL_VERSION,
+  type ToolFrameMessage,
+  type ToolHostMessage,
+  type ToolPortSnapshot,
+  type ToolScalar,
+  type ToolIntentOutcome,
 } from '../../shared/tool-protocol';
 
 /**
@@ -74,16 +76,26 @@ export function createToolSdk(options: ToolSdkOptions): ToolSdkControl {
     },
     intent(behaviorId, inputs = {}) {
       const requestId = toolRequestId();
+      if (pending.size >= TOOL_BRIDGE_LIMITS.maxPendingIntents) {
+        return Promise.resolve({ requestId, behaviorId, status: 'abandoned' as const, code: 'TOOL_BUSY', message: 'Too many requests are already waiting.' });
+      }
       const outcome = new Promise<ToolIntentOutcome>(resolve => pending.set(requestId, resolve));
-      options.post({ protocol: 1, kind: 'intent', nonce: options.nonce, requestId, behaviorId, inputs });
+      options.post({ protocol: TOOL_PROTOCOL_VERSION, kind: 'intent', nonce: options.nonce, requestId, behaviorId, inputs });
+      // The host drops a malformed message without replying, so the package must never hang.
+      setTimeout(() => {
+        const resolve = pending.get(requestId);
+        if (!resolve) return;
+        pending.delete(requestId);
+        resolve({ requestId, behaviorId, status: 'abandoned', code: 'TOOL_ABANDONED', message: 'The host did not answer in time.' });
+      }, TOOL_BRIDGE_LIMITS.intentTimeoutMs);
       return outcome;
     },
     resize(heightPx) {
       const height = Math.max(1, Math.min(4_000, Math.round(heightPx)));
-      options.post({ protocol: 1, kind: 'resize', nonce: options.nonce, height });
+      options.post({ protocol: TOOL_PROTOCOL_VERSION, kind: 'resize', nonce: options.nonce, height });
     },
     log(level, message) {
-      options.post({ protocol: 1, kind: 'log', nonce: options.nonce, level, message: String(message).slice(0, 400) });
+      options.post({ protocol: TOOL_PROTOCOL_VERSION, kind: 'log', nonce: options.nonce, level, message: String(message).slice(0, 400) });
     },
   };
 

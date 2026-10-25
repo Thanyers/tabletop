@@ -128,11 +128,10 @@ export function allocate(inputs: Inputs) {
   const room = String(inputs.room ?? '');
   const zone = String(inputs.zone ?? '');
   if (!room || !zone) throw new Error('room and zone are required');
-  return {
-    changes: [
-      { target: 'self', resource: 'placements', operation: 'create', values: { room, zone } },
-    ],
-  };
+  // The exported behaviour returns the change list; the isolate entry wraps it for the wire.
+  return [
+    { target: 'self', resource: 'placements', operation: 'create', values: { room, zone } },
+  ];
 }
 `;
 

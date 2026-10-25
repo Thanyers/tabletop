@@ -119,7 +119,7 @@
       "requirement": "G1",
       "slice": "F080-T1A",
       "title": "frame/bridge spoofing, unauthorized network/storage, malformed/oversized message, cleanup/hang",
-      "status": "PASS",
+      "status": "UNVERIFIED",
       "environment": "local (Windows 11, Node v22.23.2) · browser: system Edge headless via Playwright",
       "sha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
       "node": "v22.23.2",
@@ -129,8 +129,8 @@
       ],
       "evidence": "inside the frame: document.cookie throws SecurityError (sandboxed without allow-same-origin), localStorage blocked, fetch(\"/favicon.svg\") fails, location.origin === \"null\"; a spoofed intent posted by the page itself is ignored (intent count unchanged); protocol unit tests reject unknown methods, wrong protocol version, oversized (>64 KiB) and deeply nested messages, and messages whose nonce is not the live instance",
       "expected": "message จาก frame อื่น/instance ที่ถูกทำลายถูกทิ้ง; method ที่ไม่อยู่ใน allowlist ถูก reject; oversized message ถูกตัดพร้อม error; network/storage capability ที่ไม่ได้ให้ถูกปฏิเสธ; ไม่มี session cookie/token ใน frame; ถ้า cancel execution ไม่ได้ต้องรายงานเป็น limitation ไม่ใช่ PASS",
-      "actual": "PASS for cookie/storage/network/spoof/nonce/size; hang and CPU behaviour NOT measured",
-      "limitations": "iframe does not provide hard CPU isolation — a busy loop can still block the browser UI thread; cancellation of a runaway frame is not proven. Frame CPU/hang measurement is an open item."
+      "actual": "DOWNGRADED after independent review: the 13 browser checks pass, but the fixture is opened from file://, where a non-sandboxed frame would also report origin \"null\" and have no readable cookie jar. The cookie assertion accepted \"empty\", which proves nothing about allow-same-origin.",
+      "limitations": "Must be re-run from a real http(s) origin with a host cookie set and with document.cookie required to THROW. Until then cookie/network isolation is UNVERIFIED. Storage blocking and the page-originated-spoof rejection are still meaningful, but they do not cover cross-origin cookie access."
     },
     {
       "id": "ISO-02",
