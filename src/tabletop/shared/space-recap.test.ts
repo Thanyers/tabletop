@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CollaborationSpace } from './collaboration-space';
 import type { ToolProjectionGrant } from './tool-connection';
-import { buildSpaceRecap } from './space-recap';
+import { buildSpaceRecap, paginateRecap, recapEntries } from './space-recap';
 
 /** F080 / JT-4A: a recap may only say what the room actually holds. */
 
@@ -101,5 +101,58 @@ describe('a recap reports what the room holds', () => {
   it('says there is nothing yet for an empty room', () => {
     const recap = buildSpaceRecap({ space: space({ sources: [] }), grants: [] });
     expect(recap.headline).toBe('ห้องนี้ยังไม่มีแหล่งข้อมูลที่เชื่อมอยู่');
+  });
+});
+
+describe('a recap can be paged without losing what matters', () => {
+  function busyRoom(): ReturnType<typeof buildSpaceRecap> {
+    return buildSpaceRecap({
+      space: space(),
+      grants: [
+        { grant: grant(A), liveDataRevision: 4 },
+        { grant: grant(B, { sourceWorkspaceId: B, grantId: 'grant-b' }), liveDataRevision: 12 },
+        { grant: grant('44444444-4444-4444-8444-444444444444', { sourceWorkspaceId: '44444444-4444-4444-8444-444444444444', grantId: 'grant-c', status: 'revoked' }), liveDataRevision: 1 },
+      ],
+    });
+  }
+
+  it('puts news before the stable entries', () => {
+    const entries = recapEntries(busyRoom());
+    expect(entries.map(entry => entry.kind)).toEqual(['changed', 'withdrawn', 'current']);
+  });
+
+  it('pages the entries and reports whether more are left', () => {
+    const recap = busyRoom();
+    const first = paginateRecap(recap, { page: 1, pageSize: 2 });
+    expect(first.entries).toHaveLength(2);
+    expect(first.total).toBe(3);
+    expect(first.pages).toBe(2);
+    expect(first.hasMore).toBe(true);
+
+    const second = paginateRecap(recap, { page: 2, pageSize: 2 });
+    expect(second.entries).toHaveLength(1);
+    expect(second.hasMore).toBe(false);
+  });
+
+  it('clamps a page that outlived its data instead of failing a deep link', () => {
+    const recap = busyRoom();
+    const past = paginateRecap(recap, { page: 99, pageSize: 2 });
+    expect(past.page).toBe(2);
+    expect(past.entries).toHaveLength(1);
+    expect(paginateRecap(recap, { page: 0 }).page).toBe(1);
+  });
+
+  it('keeps a sane page size for nonsense input', () => {
+    const recap = busyRoom();
+    expect(paginateRecap(recap, { pageSize: 0 }).pageSize).toBe(1);
+    expect(paginateRecap(recap, { pageSize: 9_999 }).pageSize).toBe(50);
+  });
+
+  it('gives an empty room one page with nothing on it', () => {
+    const empty = buildSpaceRecap({ space: space({ sources: [] }), grants: [] });
+    const page = paginateRecap(empty);
+    expect(page.entries).toEqual([]);
+    expect(page.pages).toBe(1);
+    expect(page.hasMore).toBe(false);
   });
 });

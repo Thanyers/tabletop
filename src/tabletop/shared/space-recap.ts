@@ -87,3 +87,44 @@ export function buildSpaceRecap(input: SpaceRecapInput): SpaceRecap {
     incomplete,
   };
 }
+
+/** One recap entry, tagged so a reader can tell a change from a withdrawal. */
+export interface RecapEntry {
+  kind: 'current' | 'changed' | 'withdrawn';
+  workspaceId: string;
+  grantId: string;
+  from?: number;
+  to?: number;
+}
+
+export interface RecapPage {
+  entries: RecapEntry[];
+  page: number;
+  pageSize: number;
+  pages: number;
+  total: number;
+  hasMore: boolean;
+}
+
+/** Historical entries first (a change or a withdrawal is news), then the stable ones. */
+export function recapEntries(recap: SpaceRecap): RecapEntry[] {
+  return [
+    ...recap.changed.map(entry => ({ kind: 'changed' as const, ...entry })),
+    ...recap.withdrawn.map(entry => ({ kind: 'withdrawn' as const, ...entry })),
+    ...recap.current.map(entry => ({ kind: 'current' as const, ...entry })),
+  ];
+}
+
+/**
+ * Page the recap so a busy room can be read without shipping every entry at once. The page number is
+ * clamped rather than rejected: asking for page 99 of three returns the last page, which is what a
+ * deep link that outlived its data should do.
+ */
+export function paginateRecap(recap: SpaceRecap, options: { page?: number; pageSize?: number } = {}): RecapPage {
+  const pageSize = Math.min(Math.max(Math.trunc(options.pageSize ?? 10), 1), 50);
+  const total = recap.changed.length + recap.withdrawn.length + recap.current.length;
+  const pages = Math.max(Math.ceil(total / pageSize), 1);
+  const page = Math.min(Math.max(Math.trunc(options.page ?? 1), 1), pages);
+  const entries = recapEntries(recap).slice((page - 1) * pageSize, page * pageSize);
+  return { entries, page, pageSize, pages, total, hasMore: page < pages };
+}
