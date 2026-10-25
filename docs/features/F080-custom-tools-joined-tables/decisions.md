@@ -249,3 +249,16 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **การตัดสินใจของผู้ใช้ (2026-10-26):** เปิด `test-results/export-sample/budget.csv` ใน Excel แล้ว **ถูกต้อง** — 3 แถว, ไทยไม่เพี้ยน, `ห้องโถง, ใหญ่` อยู่เซลล์เดียว, `'=1+1` ไม่กลายเป็นสูตร
 
 **ผล:** `EXPORT-01` = PASS ที่ environment `human` โดยมีผู้ใช้เป็นผู้ยืนยัน ไม่ใช่ inference ของ AI
+
+## D-025 — `/s/:id` เป็น client route และไม่แก้ asset config ของ production
+
+**สิ่งที่ตรวจพบ (2026-10-26):**
+- `wrangler.jsonc` ตั้ง `assets.not_found_handling = "none"` และ `run_worker_first = ["/api/*", "/healthz", "/readyz", "/version", "/internal/*"]`
+- Worker ไม่มีโค้ดเสิร์ฟ `index.html` สำหรับ path ของแอป (ค้นแล้ว: ไม่มี `parseRoute`/`text/html` ใน `cloudflare/index.ts`)
+- ⇒ path อย่าง `/t/:id` หรือ `/s/:id` ไม่มีไฟล์จริงให้ asset service ตอบ และไม่ถูกจัดเข้า worker-first
+
+**ผลที่บันทึกไว้ตรง ๆ:** การเปิด `/s/:id` ตรง ๆ ใน production **อาจ 404** เช่นเดียวกับ `/t/:id` ที่มีอยู่ก่อนแล้ว — เป็นข้อจำกัดเดิมของ repo ไม่ใช่ข้อถอยหลังของงานนี้ การนำทางภายในแอป (history/popstate) ยังทำงาน
+
+**ทำไมไม่แก้:** การเปลี่ยน `not_found_handling` เป็น `single-page-application` คือการเปลี่ยนพฤติกรรมการเสิร์ฟของ **production** ซึ่งอยู่นอกขอบเขตที่อนุญาต (dev-only, no production config) จึงต้องขออนุมัติแยกพร้อมผลกระทบ
+
+**ถ้าจะปิดช่องนี้ภายหลัง:** เปลี่ยน `assets.not_found_handling` เป็น `"single-page-application"` (หรือเพิ่ม `_redirects` แบบ rewrite ไป `/index.html` ที่ status 200) แล้วทดสอบทั้ง `/t/:id` และ `/s/:id` บน staging ก่อน
