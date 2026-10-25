@@ -1,0 +1,1 @@
+- เพิ่ม checkpoint ของงาน F080 (custom tools + joined tables): feature doc, index, progress, acceptance registry และ decision log สำหรับงาน JT-0…JT-5/JT-V/JT-X (ยังไม่มี runtime change และยังไม่ขึ้น production)

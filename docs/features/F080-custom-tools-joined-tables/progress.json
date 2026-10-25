@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 1,
+  "feature": "F080",
+  "updatedAt": "2026-10-25T22:05:00+07:00",
+  "lastVerifiedAt": "2026-10-25T21:45:00+07:00",
+  "goal": {
+    "tool": "native DSH goal",
+    "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
+    "revision": 1,
+    "status": "active",
+    "scope": "JT full set incl. JT-V and JT-X",
+    "note": "ไม่มี active Goal มาก่อนใน session นี้ จึงสร้างใหม่แทนการรับช่วง; ไม่มี Goal อื่นที่ชน scope"
+  },
+  "repo": {
+    "name": "Thanyers/tabletop",
+    "baseBranch": "dev",
+    "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
+    "fetchedAt": "2026-10-25T21:41:00+07:00",
+    "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
+    "branch": "feat/F080-custom-tools",
+    "headSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
+    "candidateSha": null,
+    "openPrsAtStart": [
+      { "number": 250, "head": "fix/CI-provider-mock-diagnostics", "draft": false, "title": "CI: ตัวจำลอง AI ในเทสต์ Workers บอกเหตุผลเมื่อปฏิเสธ request" }
+    ],
+    "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
+  },
+  "currentCheckpoint": "C0 เสร็จ (checkpoint artifacts + PLAN booking) → เริ่ม C1 (package contract) และ C2 (isolated runtime proof) ต่อทันที",
+  "slices": [
+    { "alias": "C0", "jt": "JT-0", "featureTask": "F080-T0", "state": "review", "dependsOn": [] },
+    { "alias": "C1", "jt": "JT-1A", "featureTask": "F080-T1A", "state": "doing", "dependsOn": ["C0"] },
+    { "alias": "C2", "jt": "JT-1A", "featureTask": "F080-T1A", "state": "doing", "dependsOn": ["C1"] },
+    { "alias": "C3", "jt": "JT-1B", "featureTask": "F080-T1B", "state": "planned", "dependsOn": ["C2"] },
+    { "alias": "C4", "jt": "JT-2A", "featureTask": "F080-T2A", "state": "planned", "dependsOn": ["C3"] },
+    { "alias": "C5", "jt": "JT-2B", "featureTask": "F080-T2B", "state": "planned", "dependsOn": ["C1"] },
+    { "alias": "CV", "jt": "JT-V", "featureTask": "F080-T-V", "state": "planned", "dependsOn": ["C0", "C1"] },
+    { "alias": "C6", "jt": "JT-3A", "featureTask": "F080-T3A", "state": "planned", "dependsOn": ["C4", "C5", "CV"] },
+    { "alias": "C7", "jt": "JT-3B", "featureTask": "F080-T3B", "state": "planned", "dependsOn": ["C6"] },
+    { "alias": "C8", "jt": "JT-4A", "featureTask": "F080-T4A", "state": "planned", "dependsOn": ["C4", "C7"] },
+    { "alias": "C9", "jt": "JT-4B", "featureTask": "F080-T4B", "state": "planned", "dependsOn": ["C7", "C8"] },
+    { "alias": "C10", "jt": "JT-5", "featureTask": "F080-T5", "state": "planned", "dependsOn": ["C9"] },
+    { "alias": "CX", "jt": "JT-X", "featureTask": "F080-T-X", "state": "planned", "dependsOn": ["C1", "C7"] },
+    { "alias": "C11", "jt": "closure", "featureTask": "F080-Closure", "state": "planned", "dependsOn": ["C10", "CX"] }
+  ],
+  "tasks": [
+    {
+      "id": "F080-T0",
+      "jt": "JT-0",
+      "featureId": "F080",
+      "state": "review",
+      "dependsOn": [],
+      "owner": "lead",
+      "branch": "feat/F080-custom-tools",
+      "pr": "draft (เปิดในรอบนี้)",
+      "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
+      "candidateSha": null,
+      "checks": [
+        {
+          "name": "git root/branch/HEAD/status ของ checkout อ้างอิง",
+          "environment": "local",
+          "command": "git rev-parse --show-toplevel; git rev-parse --abbrev-ref HEAD; git rev-parse HEAD; git status --porcelain=v1 -b",
+          "result": "PASS",
+          "evidence": "checkout อ้างอิงอยู่ที่ branch อื่นที่ไม่ใช่ dev และ clean; งานนี้จึงแยก worktree ใหม่จาก origin/dev ไม่แตะ checkout เดิม",
+          "checkedSha": "b7710897c2fac44fae1de9a5d1d46892740624c2"
+        },
+        {
+          "name": "fetch origin/dev",
+          "environment": "local",
+          "command": "git fetch origin --prune; git rev-parse origin/dev",
+          "result": "PASS",
+          "evidence": "origin/dev = a6feb3c1fbe2",
+          "checkedSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c"
+        },
+        {
+          "name": "feature ID ว่าง",
+          "environment": "GitHub + git",
+          "command": "gh pr list --state open; git branch -r; grep F080 PLAN.md",
+          "result": "PASS",
+          "evidence": "ไม่มี F080 ใน PLAN.md/docs/features/remote branches; open PR มีเฉพาะ #250 ที่ไม่เกี่ยวกับ scope นี้",
+          "checkedSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c"
+        },
+        {
+          "name": "checkpoint artifacts ครบ 4 ไฟล์ + feature entry + changelog fragment",
+          "environment": "local",
+          "command": "node scripts/check-public-files.mjs; npx tsx server/changelog.ts check",
+          "result": "UNVERIFIED",
+          "evidence": null,
+          "checkedSha": null
+        }
+      ],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "commit bootstrap แล้ว push + เปิด draft PR ชื่อขึ้นต้น F080; จากนั้นเริ่ม C1 (tool-package contract) ทันที"
+    },
+    {
+      "id": "F080-T1A",
+      "jt": "JT-1A",
+      "featureId": "F080",
+      "state": "doing",
+      "dependsOn": ["F080-T0"],
+      "owner": "lead + backend specialist",
+      "branch": "feat/F080-custom-tools",
+      "pr": null,
+      "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "สร้าง shared/tool-package.ts + tool-protocol.ts (typed schemas, validation, dependency graph limits) พร้อม negative tests ก่อนแตะ UI"
+    },
+    {
+      "id": "F080-T1B",
+      "jt": "JT-1B",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T1A"],
+      "owner": "frontend + backend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "AI authoring path + human source editor + activation/readback บนโต๊ะเดียว (ต้องมี T1A host ก่อน)"
+    },
+    {
+      "id": "F080-T-V",
+      "jt": "JT-V",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T0", "F080-T1A"],
+      "owner": "frontend/design specialist",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": "ต้องให้เจ้าของเลือกแนวภาพหลังทำครบ 3 แนว (ไม่เลือกแทน) — ไม่บล็อก runtime/backend slice อื่น",
+      "nextAction": "ทำ 3 interactive prototypes ด้วยภารกิจเดียวกัน + ภาพสรุป แล้วถามเจ้าของหนึ่งคำถามพร้อมหลักฐาน"
+    },
+    {
+      "id": "F080-T2A",
+      "jt": "JT-2A",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T1B"],
+      "owner": "lead + backend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "nested imports, pinned versions, selective update, minimum-context diff และ recovery"
+    },
+    {
+      "id": "F080-T2B",
+      "jt": "JT-2B",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T1A"],
+      "owner": "backend specialist",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "collaboration space aggregate + membership/role/grant + connection protocol + revoke/in-flight contract"
+    },
+    {
+      "id": "F080-T3A",
+      "jt": "JT-3A",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T2A", "F080-T2B", "F080-T-V"],
+      "owner": "frontend + backend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": "ต้องได้ผลเลือก visual จากเจ้าของก่อนลงทุน room shell",
+      "nextAction": "room shell ตามแนวที่เลือก + shared tool workspace + live multi-source bindings"
+    },
+    {
+      "id": "F080-T3B",
+      "jt": "JT-3B",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T3A"],
+      "owner": "backend + UI",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "authorized action กลับต้นทางจริง, disconnect/rebind, third-table topology"
+    },
+    {
+      "id": "F080-T4A",
+      "jt": "JT-4A",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T2A", "F080-T3B"],
+      "owner": "domain + frontend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "context/recap เต็ม + impact/drill-down + lineage รวม revisions"
+    },
+    {
+      "id": "F080-T4B",
+      "jt": "JT-4B",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T3B", "F080-T4A"],
+      "owner": "backend + frontend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "scoped transforms/recovery + saved A/B + promote ที่ไม่ทับงานใหม่"
+    },
+    {
+      "id": "F080-T5",
+      "jt": "JT-5",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T4B"],
+      "owner": "backend + frontend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "portable definitions/import mapping + held-out learning/play packages"
+    },
+    {
+      "id": "F080-T-X",
+      "jt": "JT-X",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T1A", "F080-T3B"],
+      "owner": "independent export owner",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "export contract หลัง T1A (owned/permission/limits) แล้ว joined export หลัง T3B"
+    },
+    {
+      "id": "F080-Closure",
+      "jt": "closure",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": ["F080-T5", "F080-T-X"],
+      "owner": "lead + independent reviewer",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "integration/review/checks/staging + external acceptances; ห้าม production"
+    }
+  ],
+  "externalGates": [
+    {
+      "id": "GATE-PAID-AI",
+      "state": "blocked",
+      "what": "live AI acceptance (intent-only generation/repair) ต้องมี enforceable call/cost cap ก่อน dispatch",
+      "why": "monetary cap ของ product ปิดตาม F036; ต้องมี cap ที่บังคับได้จริงก่อน paid call",
+      "neededFrom": "product owner: authorization + cap (แผนเสนอ 3 run × ≤6 calls / USD 0.20 = 18 calls / USD 0.60)",
+      "unblocks": ["EDIT-01 (live part)", "G1-01 (live part)", "HELDOUT-01 (live part)"],
+      "workContinues": "fixture/local authoring tests และ runtime/backend slice อื่นเดินต่อได้"
+    },
+    {
+      "id": "GATE-HOSTED-WRITE",
+      "state": "not_requested",
+      "what": "hosted synthetic fixture writes",
+      "why": "ต้องมี environment/object/scope/expected rows/rollback ที่อนุมัติก่อน",
+      "neededFrom": "product owner: scoped approval พร้อม scope/rollback",
+      "unblocks": ["hosted integration acceptance"],
+      "workContinues": "disposable local integration ทำต่อได้"
+    },
+    {
+      "id": "GATE-PERSISTENT-MUTATION",
+      "state": "not_requested",
+      "what": "persistent schema/data mutation (D1 migration) สำหรับ collaboration space",
+      "why": "R0 ตาม CLAUDE.md: ต้องระบุ environment/object/operation/scope/expected rows/rollback",
+      "neededFrom": "product owner: scoped approval เฉพาะเมื่อ C5 ต้อง apply migration; เพิ่มแบบ additive และมี rollback",
+      "unblocks": ["F080-T2B storage apply", "staging migration path"],
+      "workContinues": "เขียน migration draft + ทดสอบบน disposable local DB ได้โดยไม่ apply"
+    },
+    {
+      "id": "GATE-VISUAL-CHOICE",
+      "state": "not_requested",
+      "what": "เจ้าของเลือกแนว room shell จาก 3 แนว",
+      "why": "D5/แผน §6 ห้ามเลือกแทน",
+      "neededFrom": "product owner: เลือก A/B/C จากหลักฐาน prototype",
+      "unblocks": ["F080-T3A room shell"],
+      "workContinues": "C1–C5/CX เดินต่อได้"
+    },
+    {
+      "id": "GATE-HUMAN-STUDY",
+      "state": "blocked",
+      "what": "ผู้ใช้จริง 5 คน เว้น 3 วัน ≥4 ผ่าน",
+      "why": "agent ทำแทนไม่ได้",
+      "neededFrom": "product owner: จัด session จริงตาม test kit",
+      "unblocks": ["HUMAN-01", "Goal closure"],
+      "workContinues": "เตรียม test kit/record sheet และทำงานอิสระที่เหลือ"
+    }
+  ],
+  "nextActions": [
+    {
+      "id": "NA-1",
+      "action": "commit + push bootstrap (feature doc, checkpoint, changelog, PLAN row) แล้วเปิด draft PR base dev ชื่อขึ้นต้น F080",
+      "verify": "gh pr view --json state,isDraft,baseRefName,headRefName",
+      "expect": "state OPEN, isDraft true, baseRefName dev"
+    },
+    {
+      "id": "NA-2",
+      "action": "C1: เขียน src/tabletop/shared/tool-package.ts (definitions/ports/behaviors schema + limits) และ tool-protocol.ts (bridge message schema) พร้อม negative tests",
+      "verify": "npm test -- src/tabletop/shared/tool-package.test.ts",
+      "expect": "valid round-trip ผ่าน; cycle/missing/oversize/depth reject ด้วย typed error"
+    },
+    {
+      "id": "NA-3",
+      "action": "C2: พิสูจน์ isolated runtime ด้วย handwritten package (iframe host + bridge + behavior runner) ก่อนแตะ AI",
+      "verify": "node --import tsx tests/tool-host-browser.mjs; npm run test:cloudflare -- cloudflare/tool-behavior-runner.test.ts",
+      "expect": "render+invoke จริงและ negative isolation tests ผ่าน; บันทึก deployed-runtime feasibility"
+    },
+    {
+      "id": "NA-4",
+      "action": "CV: เริ่ม 3 visual prototypes ขนานกับ C1/C2 (fixture contract จาก C1)",
+      "verify": "node --import tsx tests/room-explore-browser.mjs --variant=A|B|C",
+      "expect": "ภารกิจเดียวกันทำได้ 3 แนว + ภาพสรุป + task metrics พร้อมให้เจ้าของเลือก"
+    }
+  ],
+  "blockedItems": [],
+  "productionStatement": "ยังไม่มี production release; ห้าม merge main/release tag/deploy จากงานนี้"
+}
