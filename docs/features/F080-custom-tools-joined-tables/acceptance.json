@@ -223,19 +223,19 @@
       "requirement": "G3",
       "slice": "F080-T3A",
       "title": "source A/B คนละ workspace IDs; shared tool อ่านทั้งคู่; source update propagate พร้อม freshness",
-      "status": "UNVERIFIED",
-      "environment": "workers integration + browser",
-      "sha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real DOs + D1) · browser harness (Edge locally, Chromium in CI) · local unit",
+      "sha": "3c98044018c76d3158c7b2465fb01e91a6fb0696",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
-        "npx vitest run src/tabletop/shared/tool-grant-rows.test.ts src/tabletop/ui/joined-projection-client.test.ts",
+        "npx vitest run src/tabletop/shared/tool-grant-rows.test.ts src/tabletop/ui/joined-projection-client.test.ts src/tabletop/ui/joined-projection-fetcher.test.ts",
         "npm run test:tool-joined:browser"
       ],
-      "evidence": "all three layers are proven: (1) two workspaces with distinct ids, a grant bound to the space workspace, and a cross-room read returning rows that carry only the granted field at the source's live revision — and the next read reports a higher revision after the source changed, with no notification to the space (real DOs); (2) the client transport maps every refusal to a panel state and never lets one failing source hide the others (8/8); (3) the panel renders both sources, refreshes both and turns a revoked source into an explicit unavailable card without stale values (8/8, CI).",
+      "evidence": "the whole chain is covered and every seam is shared code: one URL builder used by both the fetcher and the e2e test; a fetcher that sends credentials and forwards aborts; a client that maps 409 revoked/stale and 404 missing while keeping the other sources; a panel that re-reads, drops stale rows and turns a revoked source into an explicit unavailable card; and an e2e with two real workspaces where rows carry only the granted field at the live revision, a later source change raises sourceDataRevision on the next read, and a slug-reusing workspace is refused.",
       "expected": "สอง workspace id ต่างกันจริง; projection จากทั้งคู่มี source revision/freshness; เปลี่ยนต้นทางแล้วค่าใหม่มาถึงโดยไม่มี manual copy",
-      "actual": "UNVERIFIED — the only unproven link is the panel's fetch binding to the real URL; no test would fail today if that binding were wrong",
-      "limitations": "no deployed staging run; the browser harness scripts the HTTP response, so the credential/cookie path to the endpoint is untested from the panel side"
+      "actual": "PASS at this environment",
+      "limitations": "not exercised against deployed staging: the browser→Worker cookie path over real HTTP is platform behaviour and is not asserted by a test; the browser harness scripts the platform fetch."
     },
     {
       "id": "JOIN-02",

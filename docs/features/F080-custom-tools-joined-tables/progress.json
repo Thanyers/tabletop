@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T01:20:00+07:00",
-  "lastVerifiedAt": "2026-10-26T01:20:00+07:00",
+  "updatedAt": "2026-10-26T01:31:00+07:00",
+  "lastVerifiedAt": "2026-10-26T01:31:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73",
-    "candidateSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73",
+    "headSha": "3c98044018c76d3158c7b2465fb01e91a6fb0696",
+    "candidateSha": "3c98044018c76d3158c7b2465fb01e91a6fb0696",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: joined read ครบทั้งสามชั้น — (1) endpoint คืน rows จริงจากโต๊ะที่มีข้อมูล พร้อม revision สดและ propagate เมื่อต้นทางเปลี่ยน (e2e จริง), (2) client mapping 8/8, (3) panel สองแหล่ง 8/8 — เหลือเพียง fetch binding จาก panel ไป URL จริง · cloudflare 273/273 · unit 1052/5 · ค้าง: T3B action กลับต้นทาง, export route, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: JOIN-01 ปิดครบสาย — URL contract ใช้ร่วมกันระหว่าง client/e2e, fetcher (credentials:include) มีเทสต์, client mapping, panel, และ e2e จริงบน DO/F1 ยืนยัน rows จริง + propagation + revoke + impersonation · cloudflare 273/273 · unit 1059/5 · ค้าง: T3B authorized action กลับต้นทาง, export route, room shell (รอเลือก visual), hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -515,6 +515,14 @@
           "result": "PASS",
           "evidence": "8/8 unit: asks every source with space/source/grant/port (never a caller-supplied actor), maps 409 revoked→revoked, 409 stale→stale, 404/unlinked/unknown-code→missing, keeps other sources when one read throws, never shows rows on a refusal even when the body carries them, treats a 200 with a malformed body as missing, passes the abort signal. Browser 8/8 now runs this same client against a scripted transport.",
           "checkedSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73"
+        },
+        {
+          "name": "one URL contract shared by the browser fetcher and the end-to-end test",
+          "environment": "local unit + Cloudflare tier",
+          "command": "npx vitest run src/tabletop/ui/joined-projection-fetcher.test.ts; npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "7/7: the path builder produces `/api/workspaces/<space>/space/projection?source&grant&port`, escapes values, keeps key order; the fetcher calls exactly that URL with credentials:\"include\", forwards the abort signal, reports a non-JSON body by status and lets a network error reject so the mapping layer can mark one source missing. The e2e test now builds its request with the same helper, so a drift on either side breaks it; the browser harness runs the real fetcher with only the platform fetch scripted.",
+          "checkedSha": "3c98044018c76d3158c7b2465fb01e91a6fb0696"
         }
       ],
       "findings": [
