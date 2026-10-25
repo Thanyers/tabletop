@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T03:12:00+07:00",
-  "lastVerifiedAt": "2026-10-26T03:12:00+07:00",
+  "updatedAt": "2026-10-26T03:30:00+07:00",
+  "lastVerifiedAt": "2026-10-26T03:30:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "f875950",
-    "candidateSha": "f875950",
+    "headSha": "1c64c71",
+    "candidateSha": "1c64c71",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305 (draft, mergeable): T4A เริ่มแล้ว — recap บริสุทธิ์ 6/6 ผ่าน CI (5bfd86a); ขั้นต่อไปต้องมี source-side query ที่บอก grant+revision ต่อห้อง จึงจะต่อ route ได้ · 13 PASS / 22 UNVERIFIED · ค้าง: room shell A/B/C, paid-AI cap, เปิด CSV ใน Excel, T4B, TOPO load, hosted/human",
+  "currentCheckpoint": "PR #305 (draft, mergeable): T4A recap ต่อครบเส้นแล้ว — GET /api/workspaces/:space/space/recap → /internal/space-grants → buildSpaceRecap; e2e 21/21 ยืนยัน stable→moved(from->to)→withdrawn + outsider 403; HIST-01 = PARTIAL (ขาด pagination, last-seen, UI mount) · 13 PASS / 22 UNVERIFIED · รอผู้ใช้: room shell A/B/C, paid-AI cap, เปิด budget.csv",
   "slices": [
     {
       "alias": "C0",
