@@ -1,7 +1,7 @@
 import { viewerCan } from '../shared/permissions';
 import type { Candidate, WorkspaceView } from '../shared/contracts';
 import type { TableChange, TableState } from '../shared/table-contracts';
-import type { Command } from './types';
+import type { Command } from '../ui/types';
 
 type TableCandidate = Candidate & { change: TableChange };
 type TableCandidateView = WorkspaceView & { kind: 'table'; domain: TableState & { candidate: TableCandidate } };

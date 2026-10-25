@@ -1,10 +1,18 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { createDomain, decideDomain, reconcileInvoice } from '../src/tabletop/domain';
-import type { ActorContext, InvoiceState } from '../src/tabletop/shared/contracts';
-import { exportInvoice } from './exports';
-import { hashValue } from './codec';
-const context: ActorContext = { actorId: 'owner', name: 'Owner', workspaceId: 'test', role: 'owner', epoch: 1, now: 1000, hash: hashValue };
+import { createDomain, decideDomain, reconcileInvoice } from '../domain';
+import type { ActorContext, InvoiceState } from './contracts';
+import { exportInvoice } from './export-invoice';
+
+/**
+ * F078-T12: the invoice export was reachable from a client page but lived under
+ * `server/`, so a pure formatter depended on the server tree. It is a shared
+ * contract now and its tests move with it.
+ */
+const hash = (value: string): string => createHash('sha256').update(value).digest('hex');
+const context: ActorContext = { actorId: 'owner', name: 'Owner', workspaceId: 'test', role: 'owner', epoch: 1, now: 1000, hash };
 const invoice = () => createDomain('invoice', context) as InvoiceState;
+
 describe('invoice evidence and export boundaries', () => {
   it('keeps unreviewed rows unresolved and exports exact rate source lineage', () => {
     const state = invoice();
@@ -16,6 +24,7 @@ describe('invoice evidence and export boundaries', () => {
     expect(result.rows[0].sourceIds).not.toContain('started-kg-step');
     expect(exportInvoice(state, 'csv')).toContain('unverified_shipment_source');
   });
+
   it('neutralizes CSV formulas and escapes untrusted filenames and HTML text', () => {
     const state = invoice();
     state.shipments[0].id = '=HYPERLINK("https://example.invalid")';
@@ -27,6 +36,7 @@ describe('invoice evidence and export boundaries', () => {
     expect(html).toContain('&lt;img src=x');
     expect(html).toContain("default-src 'none'");
   });
+
   it('imports the next full dataset while retaining rules, sources and saved runs', () => {
     const original = invoice();
     const saved = decideDomain(original, { type: 'invoice.saveRun', payload: {} }, context).state as InvoiceState;

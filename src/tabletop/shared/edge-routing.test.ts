@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeObject } from './objects';
+import { makeObject } from '../../state/objects';
 import { routeConnections, type RoutedConnection, type RoutingRect } from './edge-routing';
 
 const rect = (id: string, x: number, y: number, width: number, height: number): RoutingRect => ({ id, x, y, width, height });

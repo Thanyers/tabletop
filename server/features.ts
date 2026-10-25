@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { RouteExtension } from './app.js';
 import { processUpload } from './artifacts.js';
 import { hashValue } from './codec.js';
-import { exportInvoice } from './exports.js';
+import { exportInvoice } from '../src/tabletop/shared/export-invoice.js';
 import { AuthorityError } from './errors.js';
 import type { PrivateObjectStore } from './storage.js';
 import { DomainError } from '../src/tabletop/shared/contracts.js';

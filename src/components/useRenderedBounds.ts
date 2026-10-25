@@ -1,7 +1,7 @@
 import {useLayoutEffect,useMemo,useState,type RefObject} from 'react';
 import {useReactFlow} from '@xyflow/react';
 import type {CanvasObject} from '../state/types';
-import type {RoutingRect} from '../state/edge-routing';
+import type {RoutingRect} from '../tabletop/shared/edge-routing';
 
 // CSS can still be moving a card after its canonical position/size has changed.
 // Route against the rendered rectangle, without persisting animation geometry.

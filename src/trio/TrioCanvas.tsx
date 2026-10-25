@@ -35,8 +35,8 @@ import {
   type ReactFlowProps,
   type Viewport,
 } from '@xyflow/react';
-import { routeConnections, type RoutedConnection, type RoutingLink, type RoutingRect } from '../state/edge-routing';
-import CanvasEdge, { type CanvasEdgeData } from '../components/CanvasEdge';
+import { routeConnections, type RoutedConnection, type RoutingLink, type RoutingRect } from '../tabletop/shared/edge-routing';
+import CanvasEdge, { type CanvasEdgeData } from '../tabletop/ui/CanvasEdge';
 import { TrioObject } from './TrioStage';
 import { canvasObjectForEvent, canvasObjectForStep, narrativeFocus, narrativeSelector } from './narrativeFocus';
 import { canApprove, rulesFingerprint } from './domain';

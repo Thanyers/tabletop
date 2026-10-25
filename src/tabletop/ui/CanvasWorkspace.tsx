@@ -20,8 +20,8 @@ import { canvasLayoutScopeKey, isSharedCanvasNodeForView, missingSharedCanvasNod
 import './canvas-visual-flow.css';
 import { LiveCursors, useLiveCursorSender } from './live-cursors';
 import { CURSOR_SEND_INTERVAL_MS } from '../shared/cursor-protocol';
-import CanvasEdgeView, { type CanvasEdgeData } from '../../components/CanvasEdge';
-import { routeConnections, type RoutingLink, type RoutingRect } from '../../state/edge-routing';
+import CanvasEdgeView, { type CanvasEdgeData } from './CanvasEdge';
+import { routeConnections, type RoutingLink, type RoutingRect } from '../shared/edge-routing';
 
 /** Lines around the cards, drawn by the obstacle-aware router instead of the default curve. */
 const canvasEdgeTypes: EdgeTypes = { canvasConnection: CanvasEdgeView };
