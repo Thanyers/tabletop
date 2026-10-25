@@ -273,7 +273,7 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
   };
 
   const noticeText: Record<Notice, string> = {
-    starting: text('The sample table is already on the canvas. Send the selected request to add a quick-sale action, or replay chapter 1.', 'วางโต๊ะตัวอย่างไว้บน Canvas แล้ว ส่งคำขอที่เลือกเพื่อเพิ่มปุ่มขาย หรือย้อนดูบทที่ 1'),
+    starting: text('You already have today’s sales. Send the request to add quicker entry for the busy counter.', 'มีรายการขายวันนี้อยู่แล้ว ส่งคำขอเพื่อเพิ่มปุ่มขายให้ทันช่วงร้านยุ่ง'),
     typing: text('A sample request is appearing · you can wait or send it when ready.', 'กำลังแสดงคำขอตัวอย่าง · รอหรือส่งเมื่อพร้อมได้เลย'),
     ready: text('The request is ready · send it when you choose.', 'คำขอพร้อมแล้ว · กดส่งเมื่อคุณต้องการ'),
     sent: text('The request is in this illustration · review the draft before applying it.', 'คำขออยู่ในภาพจำลองนี้ · ตรวจร่างก่อนใช้การเปลี่ยนแปลง'),
@@ -296,12 +296,11 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
   return <section className="tt-sales-demo" id="board" aria-labelledby="tt-sales-demo-title">
     <div className="tt-sales-demo__intro">
       <div>
-          <p className="tt-sales-demo__kicker">{text('ONE SAMPLE TABLE · A SMALL CAFÉ EXAMPLE', 'โต๊ะตัวอย่างเดียว · ตัวอย่างร้านกาแฟ')}</p>
           <h2 id="tt-sales-demo-title">{text('A sales table that grows when the work changes.', 'โต๊ะขายที่ต่อยอดได้เมื่องานเปลี่ยน')}</h2>
       </div>
-      <span className="tt-sales-demo__sample">{text('Illustrative · sample data', 'ภาพอธิบาย · ข้อมูลตัวอย่าง')}</span>
     </div>
 
+    <p className="tt-sales-demo__example-note" id="tt-sales-request-note">{text('Prepared interactive example with sample data. It does not call AI or save changes to your tables.', 'ตัวอย่างโต้ตอบที่ใช้ข้อมูลและคำขอเตรียมไว้ ไม่เรียก AI และไม่บันทึกการเปลี่ยนแปลงลงโต๊ะของคุณ')}</p>
     <div className="tt-sales-demo__canvas" data-chapter={state.chapter}>
       <div className="tt-sales-demo__canvas-head">
         <div className="tt-sales-demo__canvas-name">{text('Today’s sales', 'ยอดขายวันนี้')}</div>
@@ -311,30 +310,28 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
       <div className="tt-sales-demo__request-area">
         <div className="tt-sales-demo__request-heading">
           <div>
-            <p>{text('SAMPLE REQUEST', 'คำขอตัวอย่าง')}</p>
-          <span>{text('Choose a chapter, then send the sample request yourself.', 'เลือกบท แล้วส่งคำขอตัวอย่างด้วยตัวเอง')}</span>
+            <p>{text('NEXT REQUEST', 'คำขอถัดไป')}</p>
+          <span>{text('Choose a step, then send its request.', 'เลือกขั้น แล้วส่งคำขอของขั้นนั้น')}</span>
           <strong className="tt-sales-demo__request-context">{chapterContexts[language][state.chapter]}</strong>
           </div>
-          <span className="tt-sales-demo__local-label">{text('LOCAL ILLUSTRATION', 'ภาพจำลอง')}</span>
         </div>
-        <label htmlFor="tt-sales-request" className="tt-sales-demo__visually-hidden">{text('Read-only sample request', 'ข้อความคำขอตัวอย่างแบบอ่านอย่างเดียว')}</label>
+        <label htmlFor="tt-sales-request" className="tt-sales-demo__visually-hidden">{text('Example request', 'คำขอของตัวอย่าง')}</label>
         <textarea
           ref={inputRef}
           id="tt-sales-request"
           rows={2}
           readOnly
           disabled={state.phase === 'idle'}
-          placeholder={state.phase === 'idle' ? text('Choose a chapter below to start typing a request.', 'เลือกบทด้านล่างเพื่อเริ่มพิมพ์คำขอ') : ''}
+          placeholder={state.phase === 'idle' ? text('Choose a step below to see its request.', 'เลือกขั้นด้านล่างเพื่อดูคำขอ') : ''}
           value={state.request}
           aria-describedby="tt-sales-request-note"
           onKeyDown={handleRequestKeyDown}
         />
         <div className="tt-sales-demo__request-foot">
-          <p id="tt-sales-request-note">{text('The selected chapter controls the illustration · text is not interpreted.', 'บทที่เลือกกำหนดภาพจำลอง · ข้อความไม่ได้ถูกประมวลผล')}</p>
           <div className="tt-sales-demo__request-buttons">
             {state.phase === 'typing' && <button className="tt-sales-demo__show-now" type="button" onClick={showRequestNow}>{text('Show request now', 'แสดงข้อความทันที')}</button>}
             <button className="tt-sales-demo__send" ref={sendRef} type="button" onClick={sendRequest} disabled={state.phase !== 'ready'}>
-              <Send size={15} aria-hidden="true" />{text('Send sample request', 'ส่งคำขอตัวอย่าง')}
+              <Send size={15} aria-hidden="true" />{text('Send request', 'ส่งคำขอ')}
             </button>
           </div>
         </div>
@@ -342,9 +339,8 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
 
       <div className="tt-sales-demo__flow">
         <article className="tt-sales-demo__node tt-sales-demo__brief" aria-labelledby="tt-sales-brief-title">
-          <p className="tt-sales-demo__node-label" id="tt-sales-brief-title">{text('THE BRIEF', 'โจทย์')}</p>
+          <p className="tt-sales-demo__node-label" id="tt-sales-brief-title">{text('YOUR REQUEST', 'คำขอของคุณ')}</p>
           <blockquote aria-live="polite">{submitted ? `“${state.request}”` : text('The sent request will appear here.', 'คำขอที่ส่งจะแสดงตรงนี้')}</blockquote>
-          <p className="tt-sales-demo__node-note">{text('Start with the work.', 'เริ่มจากเรื่องที่อยากทำ')}</p>
         </article>
         <div className="tt-sales-demo__connector" aria-hidden="true"><ArrowRight /><ArrowDown /></div>
 
@@ -435,7 +431,7 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
       </p> : null}
 
       <div className="tt-sales-demo__controls">
-        <div className="tt-sales-demo__chapters" role="group" aria-label={text('Five example chapters', 'ตัวอย่าง 5 ช่วง')}>
+        <div className="tt-sales-demo__chapters" role="group" aria-label={text('Five example steps', 'ตัวอย่าง 5 ขั้นตอน')}>
           {chapterNames[language].map((chapter, index) => {
             const number = (index + 1) as Chapter;
             return <button
@@ -456,6 +452,5 @@ export function NarrativeSalesDemo({ language }: { language: LandingLanguage }) 
         </div>
       </div>
     </div>
-    <p className="tt-sales-demo__disclosure">{text('This browser-only illustration calculates sample data. It does not call AI or save to Tabletop.', 'กระดานนี้คำนวณจากข้อมูลตัวอย่างในเบราว์เซอร์ ไม่เรียก AI และไม่บันทึกเข้าระบบ')}</p>
   </section>;
 }

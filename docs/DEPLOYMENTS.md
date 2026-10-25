@@ -1,18 +1,40 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 17:37 น. (Asia/Bangkok)**: production รายงาน **9.1.0 / 48d9b98** จาก [v9.1.0](https://github.com/Thanyers/tabletop/releases/tag/v9.1.0) และ [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40086302663) สำเร็จ รวม migrations/deploy/smoke; staging snapshot ยังเป็น **0.0.0-dev / d73262b** ขณะที่ [รอบ 1afe586](https://github.com/Thanyers/tabletop/actions/runs/40085989380) กำลัง deploy จึงไม่อ้าง staging ล่าสุดว่าเสร็จแล้ว
+ตรวจ `/version` ออนไลน์ล่าสุด **25 ตุลาคม 2569 เวลา 04:08 น. (Asia/Bangkok)**: production รายงาน **9.1.3 / 4748689**, health/readiness 200 และหน้าเว็บใหม่แสดงแล้ว แต่ **deployment ยังเป็น PARTIAL**: [รอบแรก](https://github.com/Thanyers/tabletop/actions/runs/40132004027) และ [retry SHA เดิม](https://github.com/Thanyers/tabletop/actions/runs/40132413721) ล้มตอน apply Container settings; smoke/GitHub Release publication เป็น SKIPPED ([incident #291](https://github.com/Thanyers/tabletop/issues/291)). Staging ที่อ่านได้ยังเป็น **0.0.0-dev / ac51767** ไม่ใช่ dev HEAD ล่าสุด
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [48d9b98](https://github.com/Thanyers/tabletop/commit/48d9b98389dcf4b0657a266c3c9917624e798833) — PR #274 | [d73262b](https://github.com/Thanyers/tabletop/commit/d73262bdf9c61f201f0d92ac5b5d9a1710d4bbe9) — observed snapshot |
-| Release | v9.1.0 / 9.1.0 | dev / 0.0.0-dev |
+| Source | [4748689](https://github.com/Thanyers/tabletop/commit/4748689214f88b70864880e3e7776195d2f1cf84) — PR #289, Worker published / Container settings incomplete | `ac51767` — observed snapshot |
+| Release | v9.1.3 / 9.1.3 — PARTIAL deployment | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.1.3 — public content live; Container settings incomplete (25 October 2026)
+
+- [Release PR #289](https://github.com/Thanyers/tabletop/pull/289), main `4748689`; [full release CI](https://github.com/Thanyers/tabletop/actions/runs/40131202479) passed all three browser suites and fast checks. Public homepage and GitHub README contain the final narrative order/copy; accepted media and backend/configuration source are unchanged. Rollback reference: 9.1.2 (no rollback performed).
+- Both [initial deploy](https://github.com/Thanyers/tabletop/actions/runs/40132004027) and [same-SHA retry](https://github.com/Thanyers/tabletop/actions/runs/40132413721) failed at Production — deploy after Worker publication, while applying Durable Object-managed Container settings. D1 migration steps succeeded. Workflow smoke and GitHub Release publication were SKIPPED. `/version` and health/readiness readback do not establish compute readiness or full pipeline completion. [Incident #291](https://github.com/Thanyers/tabletop/issues/291) remains open; underlying platform cause is unknown.
+- No third blind retry, local deployment, backend/configuration/credential change or production account/data mutation was made for this homepage/README request. [F077 evidence](narrative/F077/verification.md) records final-source validation and retained UI-gate limits.
+- Release Notes HTML was generated from the released changelog. This agent cannot publish to the existing private Claude artifact; the ignored HTML is the handoff without a replacement public URL.
+
+## Release 9.1.2 — scoped hero and realistic tool imagery (24 October 2026)
+
+- [Release PR #286](https://github.com/Thanyers/tabletop/pull/286), main `abe4aaf`; [full release CI](https://github.com/Thanyers/tabletop/actions/runs/40092252022) passed all three browser suites and fast checks. [Production deploy](https://github.com/Thanyers/tabletop/actions/runs/40092917650) succeeded; version `9.1.2 / abe4aaf`, health/readiness 200.
+- Only the requested homepage hero and physical images changed visibly: typed requests create/add cards on a flat infinitely looping canvas; the old note and initial Play requirement are removed; realistic before/after images show personalized fit. README, accepted R6 film, sales walkthrough and other page copy remain unchanged. Rollback target 9.1.1; no schema/binding/secret/backend/data-policy change.
+- Local Workers browser suite 35 PASS groups, no browser errors, plus scoped production visual readback. [Full evidence and limits](narrative/F077/verification.md).
+- Release Notes HTML generated from the released changelog. The existing private Claude artifact cannot be updated through this agent's tools; the ignored HTML is the handoff, without creating a replacement public URL.
+
+## Release 9.1.1 — English README and visual homepage correction (24 October 2026)
+
+- [Release PR #282](https://github.com/Thanyers/tabletop/pull/282), main `3f8a06e`, [full release CI](https://github.com/Thanyers/tabletop/actions/runs/40089761432) passed all three browser suites and fast checks. [Main validation](https://github.com/Thanyers/tabletop/actions/runs/40090333516) reused the identical validated release tree.
+- [Production deploy](https://github.com/Thanyers/tabletop/actions/runs/40090356750) succeeded. `/version`: `9.1.1 / 3f8a06e`, `built_at=2026-10-24T11:33:54Z`; `/healthz` and `/readyz` returned 200. No new schema, binding, secret or data-policy change; rollback target 9.1.0.
+- Public browser readback: original animation hero now has an English rendition, the sales illustration starts at 225, the same hammer/chair show useful additions, and README links are absent. Hero and lazy-loaded demo images loaded; no horizontal overflow at 1280/375px. The accepted R6 film is unchanged.
+- Local Workers browser acceptance: 35 PASS groups, exit 0, no browser errors (37 mocked provider requests). Local offline UI gate retains two documented findings and four skipped checks; see [F077 verification](narrative/F077/verification.md). No production account/data mutation or live AI invocation was used for this readback.
+- Release Notes HTML generated from the released changelog. Updating the existing private Claude artifact is unavailable to this agent; the ignored local HTML is the handoff, with no replacement public link created.
 
 ## Release 9.1.0 — F077 homepage and paced film (24 October 2026)
 

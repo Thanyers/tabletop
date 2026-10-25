@@ -4,6 +4,30 @@
 
 ## Unreleased
 
+## 9.1.3 — 2026-10-24
+
+PATCH: Reorder the homepage and README story and remove redundant public copy. Accepted video and all media remain unchanged; no backend, schema, binding, secret or data changes. Rollback target 9.1.2.
+
+- Reorder the homepage and English README so the tool-adaptation idea and software problem come before the café example; remove repeated slogans and authoring labels while retaining one clear sample note. The accepted film and all media remain unchanged.
+- Record verified production 9.1.2 and close the scoped F077 hero/image correction with browser, motion and publication evidence. Documentation only.
+
+## 9.1.2 — 2026-10-24
+
+PATCH: Limit homepage corrections to the looping prompt-first hero and realistic individually fitted tool images. No backend, data, schema, binding or secret changes; rollback target 9.1.1.
+
+- Make the homepage hero play a looping request-first canvas sequence without nested framing or a manual Play step, remove its explanatory note, and replace the hammer/chair drawings with realistic individual-fit before/after imagery. Other homepage sections, README and the narrated film are unchanged.
+- Record the verified 9.1.1 publication of the English README and corrected homepage story, close F077-T2, and bring the release history back to dev. Documentation only; no runtime change.
+
+## 9.1.1 — 2026-10-24
+
+PATCH: Restore the visual homepage story and apply the English README; include disposable recovery/load rehearsal tooling and closeout docs. No production schema, binding, secret or data-policy changes; rollback to 9.1.0 requires no data conversion.
+
+- Apply the English product story to the root README, restore a visual homepage hero, show how grips and seating adapt through use, and remove README links from the homepage journey.
+- F078: mark the architecture improvement series done. T0–T9 are merged into dev with one PR per seam (T5a, T5b and its fix, T6a, T6b, T7a, T7b, T8, T9); the board row, feature status and spec record the closing dev and staging SHA, the T5b regression that the pipeline caught and the fix that closed it, and the fact that the current production release was cut by the team from an earlier dev SHA.
+- F078-T7b: add a disposable recovery rehearsal that builds a room with several revisions, a revoked member and queued model jobs on an on-disk PGlite, snapshots it, restores it by copying the directory, and re-checks nine invariants through the real authority (state hash, epoch/revision, snapshot/event/receipt counts, outbox backlog, pending jobs, revocation, exact retry replay with no new event, and the revoked member still refused). It reports the modelled RPO and measured reopen+verify time together with the limits: Node PGlite only, no coordinated D1/Room/Billing restore, and no shared database touched.
+- F078-T9: add a bounded multi-room and hot-room load harness that measures success/stale latency, outbox lag and the storage curve through the real authority and SQL adapter, and compares it with a recorded capture only when workload counts, source digest and runtime versions match (otherwise it reports not comparable instead of a delta). Local synthetic measurements only; no infrastructure or concurrency change.
+- Align the Workers browser acceptance contract with the approved F077 homepage copy and layout while retaining language, sign-in, navigation, responsive and reduced-motion checks. No product behavior changes.
+
 ## 9.1.0 — 2026-10-24
 
 MINOR: English-first homepage with an evolving sample board and 93-second narrated story, plus tested internal architecture improvements. No schema, binding or secret changes; rollback target 9.0.2.

@@ -5,6 +5,12 @@
 
 ## Lessons
 
+### 2026-10-25 — Correct assets can still tell the story in the wrong order
+- **What happened:** the homepage opened a café case and its film before explaining the tools-to-software idea; README opened a learning animation before that idea. Repeated authoring labels interrupted both.
+- **Root cause:** sections were added where they were implemented instead of in the order a new reader needs them.
+- **Correct behavior:** read the page as definition → reason/problem → concrete evolving case → broader uses → next action. Put each visual beside its subject, keep one clear sample disclosure, and remove production-process labels from the product story. Check actual DOM order and existing language/auth/demo contracts before release.
+
+
 ### 2026-10-24 — A thesis needs visible change, not generic object photos
 - **What happened:** the public homepage left the hero without a visual, opened its example on an empty board, and used ordinary tool photos to explain personal adaptation. The user could not see what had changed to fit the person.
 - **Root cause:** the copy described adaptation but the pictures only identified objects; navigation also sent visitors to README instead of completing the product story on the page.
@@ -370,6 +376,11 @@
 - **Correct behavior:** หลังแก้ conflict ใน `.md` ทุกครั้ง รัน `git diff --cached -- '*.md' | grep -cE 'เธ|โ€'` ต้องได้ 0 ก่อน commit · ตั้ง editor/เครื่องมือให้อ่านเขียน UTF-8 · ถ้าเจอแล้ว ซ่อมโดยแปลงกลับ (Windows-874 → bytes → UTF-8) และเทียบกับเวอร์ชันก่อนเสีย ไม่แก้ทีละบรรทัดด้วยมือ
 
 ## Deploy failures
+
+### 2026-10-25 — v9.1.3 Worker published before Container settings finished
+- **What happened:** [run 40132004027](https://github.com/Thanyers/tabletop/actions/runs/40132004027), [issue #291](https://github.com/Thanyers/tabletop/issues/291), started `2026-10-24T20:56:21Z` and failed at production-deploy at `2026-10-24T20:59:44Z`. Wrangler reported that the Worker version was deployed but Durable Object-managed Container application settings could not finish. Production already reported `9.1.3 / 4748689`; health/readiness/capabilities returned 200. Smoke was SKIPPED, so this was a partial deployment rather than a successful run.
+- **Root cause:** observed failure is incomplete Container settings application after Worker publication. The underlying platform cause is not established; this release changed homepage/README copy and no compute configuration.
+- **Correct behavior:** retry Release deploy through `workflow_dispatch` with the same full main SHA, as the run log and recovery procedure prescribe. Do not deploy locally, move the tag, change secrets, or infer completion from `/version` alone. The same-SHA retry [run 40132413721](https://github.com/Thanyers/tabletop/actions/runs/40132413721) failed at the same stage at `2026-10-24T21:04:27Z`; smoke and GitHub Release publication remained SKIPPED. Keep #291 open and record partial publication. After two identical failures, obtain a concrete platform diagnosis before retrying again; do not expand a homepage/README task into backend/configuration changes. Full deployment/compute readiness is UNVERIFIED.
 
 ### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
 - **What happened:** Release deploy ของ v2.2.0 ([run 39464889970](https://github.com/Thanyers/tabletop/actions/runs/39464889970), issue #49) ล้มที่ขั้น Staging — deploy เวลา 2026-10-20T17:19:20Z (job เริ่ม 17:18:20Z) ด้วย `CPU limits are not supported for the Free plan [code: 100328]` · staging/production ยังเป็น 2.0.0 ไม่มีผลต่อผู้ใช้ · แก้ secret config เวลา 2026-10-20T19:18:30Z · deploy สำเร็จทั้ง staging/production ด้วย SHA เดิมเวลา 2026-10-21T01:27Z ([run 39527338589](https://github.com/Thanyers/tabletop/actions/runs/39527338589)) และ issue #49 ปิดเวลา 01:33Z

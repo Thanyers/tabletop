@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — round 7 / [PR #280](https://github.com/Thanyers/tabletop/pull/280); round 6 remains production 9.1.0 |
+| สถานะ | `done` — round 9 content live at 9.1.3 / 4748689; [release #289](https://github.com/Thanyers/tabletop/pull/289); full deployment remains partial ([#291](https://github.com/Thanyers/tabletop/issues/291)) |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.0 — homepage และคลิป93.2sเผยแพร่แล้ว; round 7 applies the English README and corrects homepage visuals |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 และ F077-T2 |
+| เวอร์ชัน | 9.1.3 — homepage/README narrative order and copy cleanup; accepted film/media unchanged |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T4 |
 
 ## ทำไม
 
@@ -57,3 +57,17 @@
 หน้า homepage จริงใช้ดีไซน์ที่ยอมรับและ English เป็นฐาน บอร์ดตัวอย่างทำงานใน browser โดยไม่เรียก AI หรือบันทึกข้อมูล runtime มีส่งคำขอ → Review → Apply ครบห้าบท; ข้อมูลเดิมและยอดที่ใช้อยู่ไม่เปลี่ยนระหว่างตรวจร่างส่วนลด รอบ 7 นำ README ภาษาอังกฤษไปใช้ใน root แล้ว
 
 สถานะการตรวจและข้อจำกัดล่าสุดอยู่ใน [verification](../narrative/F077/verification.md) ผลของรอบ 4 เก็บเป็นประวัติ ไม่ใช่ผลรับรองรอบ 5
+
+## Round 8 — bounded hero and image correction
+
+The user explicitly limited visible edits to the hero animation/note/framing and the physical adaptation images. The new hero must type each request before its card appears, retain earlier cards, loop without a Play click, and have one flat canvas. Keep the existing README animation and accepted R6 film unchanged. Physical images must be realistic and show substantial individual fit (a hand-shaped hammer grip; a chair with seat/back/arm/foot supports), retaining the same object and person before/after. Generated image provenance and exact prompts live beside those image assets.
+
+Round 8 candidate: 18-second EN/TH infinitely looping GIFs, typed request then experiment/controls/chart, flat background matching the homepage. A small Pause/Resume icon provides motion control while autoplay remains the default; reduced motion receives a poster. Node 22.23.2 build/typecheck, Worker dry-run and scoped lint pass. Browser changed groups and four-width visual readback pass; the complete 35-group suite and full release CI passed, and production 9.1.2 was verified. The independent source review confirms unchanged README/film/sales content.
+
+## Round 9 — reading order and editorial cleanup
+
+User scope: homepage and root README only; the accepted film stays unchanged. Establish what Tabletop does, show why tools should fit people, connect that to software friction, then demonstrate the same café table evolving through use. Broader work/learning/play examples follow; the film is an optional continuation near the end. Preserve the populated café start and all existing actions.
+
+Remove repeated eyebrows and aphorisms, the THE IDEA callout, duplicated physical-example labels, LOCAL ILLUSTRATION and text-interpreted implementation notes. Keep one prepared-example disclosure next to the café heading. README moves the existing learning GIF into Learning, retains current capability qualifications and the exact AGPL section, and removes unrelated D&D/unrestricted-execution disclaimers.
+
+Node22.23.2 build/typecheck, Worker dry-run, scoped lint, 13 README local references and unchanged-license check pass. CUA verifies order and no overflow at 280/320/414/1280. Stable-content readback is identical with reduced motion and the poster loads. Full offline UI gate: 13 measured PASS, 3 FAIL, 4 SKIP; failures are shared CSS literals, index-based parity after a motion control is removed, and the already-selected English button. These findings are retained, not marked PASS. Local browser suite: 35 groups; final-source full release CI passed. Public content is live; Container settings deployment remains incomplete (#291).

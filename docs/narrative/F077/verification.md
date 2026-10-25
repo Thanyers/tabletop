@@ -1,3 +1,33 @@
+# F077 — Revision 9 verification
+
+25 October 2026 · [PR #288](https://github.com/Thanyers/tabletop/pull/288) · [Release #289](https://github.com/Thanyers/tabletop/pull/289)
+
+- Scope: homepage and English root README order/copy only. The accepted film, captions, GIFs and physical images have no source-byte changes compared with production 9.1.2 (`abe4aaf`).
+- Reader order: product definition → physical-tool adaptation → software friction/solution → evolving café example → broader uses → optional film → start. README's learning animation now sits with Learning.
+- Cleanup: repeated hero/section eyebrows, THE IDEA callout, vague footer/README slogans, repeated physical labels, LOCAL ILLUSTRATION and text-interpreted implementation notes removed. One prepared-request/sample-data/no-live-AI disclosure remains near the café example. English/Thai copy is aligned.
+- Node22.23.2: local build/typecheck, Worker dry-run, scoped lint, public scan, 13 resolving README references and exact AGPL-section preservation passed. Local Workers suite: 35 PASS groups, no browser errors, using the built UI before final disclosure/Thai wording polish. [Full release CI](https://github.com/Thanyers/tabletop/actions/runs/40131202479) passed all three browser suites on final source. Main validation reused the identical validated tree.
+- CUA readback: DOM/header anchors follow the intended order; no overflow at 280/320/414/1280. Important headings/table content remains identical and visible under reduced motion, with the poster selected. Existing browser checks cover real language switching and the five-step café state/calculation flow.
+- Raw offline UI gate: 13 measured PASS / 3 FAIL / 4 SKIP. Findings retained: shared bundled CSS literals; generic reduced-motion parity indexes elements by position while removing Pause shifts later indices; generic interaction clicks already-selected English. Four skipped checks lack theme/token/dialog inputs. Raw failures are not relabelled PASS; focused content/language checks are separate evidence.
+- Production readback at 04:08 Asia/Bangkok: `/version` reports `9.1.3 / 4748689`, built_at `2026-10-24T21:02:51Z`; health/readiness 200. Actual homepage order and final prepared-example copy verified. Root README blob on GitHub main equals local main (`36d0eae6d3d19e6c1c7371ddddd7a721800c84a5`). Staging remains `0.0.0-dev / ac51767`, not the latest dev HEAD.
+- Deployment is **PARTIAL**: [first attempt](https://github.com/Thanyers/tabletop/actions/runs/40132004027) and [same-SHA retry](https://github.com/Thanyers/tabletop/actions/runs/40132413721) both failed applying Durable Object-managed Container settings after Worker publication. D1 migration steps succeeded; workflow smoke and GitHub Release publication were **SKIPPED**. Full deployment and compute completion remain **UNVERIFIED**; [incident #291](https://github.com/Thanyers/tabletop/issues/291) stays open. No backend, Wrangler/configuration or credential changes were attempted. Public readback is not a substitute for completed pipeline smoke or actual compute execution.
+- No production account/data write or live AI request was used for validation. Release Notes HTML was generated locally; updating the existing private Claude artifact is unavailable to this agent.
+
+## Revision 8 evidence (historical)
+
+# F077 — Revision 8 verification
+
+24 October 2026 · [PR #285](https://github.com/Thanyers/tabletop/pull/285) · [Release #286](https://github.com/Thanyers/tabletop/pull/286)
+
+- Scope: only hero media/note/framing and the hammer/chair images changed visibly. README, its original animation, accepted R6 film, sales walkthrough and other page copy are unchanged.
+- Node 22.23.2: build/typecheck, Worker dry-run, scoped lint and public-file scan passed. Full local Workers browser suite: 35 PASS groups, zero browser errors, 37 mocked provider requests; no live provider call.
+- Both EN/TH GIFs: 960×540, 216 frames, 18,000ms, loop=0 (infinite). Typed requests precede each new card; existing cards persist. Posters and typing/card timeline frames inspected. Autoplay, Pause/Resume and reduced-motion poster are covered by the browser contract.
+- Local CUA: no overflow at 280/320/414/1280, autoplay GIF loaded, all four before/after panels loaded. Main inspected the rendered hero and physical images. Independent source review confirmed scope containment; its autoplay-control finding was resolved with the discreet Pause/Resume control.
+- The physical images are generated photorealistic illustrations. [Exact prompts and provenance](../../../public/narrative/adaptations/README.md) are saved with the assets. The film has not gained generated imagery.
+- [Full release CI](https://github.com/Thanyers/tabletop/actions/runs/40092252022) passed all three browser suites. [Production deploy](https://github.com/Thanyers/tabletop/actions/runs/40092917650) passed; `/version` reports `9.1.2 / abe4aaf`, health/readiness returned 200, and production visual readback verified the scoped changes. No production account/data mutation or live AI invocation was performed.
+- The full generic offline UI gate was not rerun for this bounded correction; the earlier revision's documented checker findings remain historical, not silently relabelled PASS.
+
+## Revision 7 evidence (historical)
+
 # F077 — Revision 7 verification
 
 24 October 2026 · English README and homepage visual correction · [PR #280](https://github.com/Thanyers/tabletop/pull/280)
@@ -8,12 +38,12 @@ The root README now uses the English story. The homepage removes README navigati
 | --- | --- | --- |
 | README source review | PASS | Independent reader review found no capability/provenance blocker; 14 local references resolve. Reusable-compute contract status now links to its existing production results rather than retaining stale candidate wording. |
 | Build and source checks | PASS | Node 22.23.2: `npm run build`, final Vite rebuild, `npm run build:cloudflare` dry-run, scoped ESLint, Node syntax checks and public-file scan (970 files / 0 findings). |
-| Changed browser journey | PASS | Existing Workers browser harness passed the homepage, English/Thai persistence, sign-in error and version groups. New checks exercise send/review/apply, 225→250 gross, chart values 100/150, 10% net 225, pending 20% retaining 225, applied 20% net 200 and reset. The remaining unchanged app checks continue in the same run. |
-| Visual readback | PASS within scope | Main inspected the English hero and large same-object hammer comparison; signed-in homepage has no horizontal overflow at 280/320/414/1280px, image loaded, zero README links. Existing browser harness also captured anonymous EN/TH desktop/mobile views. |
+| Complete Workers browser suite | PASS | Existing Workers browser harness passed the homepage, English/Thai persistence, sign-in error and version groups. New checks exercise send/review/apply, 225→250 gross, chart values 100/150, 10% net 225, pending 20% retaining 225, applied 20% net 200 and reset. The complete local suite finished with 35 PASS groups, exit 0 and no browser errors; its 37 provider requests were intercepted by the test mock, not sent to a live AI provider. |
+| Visual readback | PASS within scope | Main inspected the English hero, same-object hammer comparison and corrected chair side profile; signed-in homepage has no horizontal overflow at 280/320/414/1280px, image loaded, zero README links. Existing browser harness also captured anonymous EN/TH desktop/mobile views. |
 | Offline component UI gate | 14/16 measured checks pass; 4 SKIPPED | Real PublicWelcome component bundled offline. Raw full run: 12 PASS / 4 FAIL / 4 SKIP; film-height/status-border repairs passed both targeted rechecks. Remaining FAIL: hardcoded-value lint includes shared/bundled CSS; generic interaction gate expects the already-selected English button to change state. Existing browser test verifies switching both languages instead. Token/theme/dialog gates skipped without corresponding inputs. These are not an all-green or audience-comprehension claim. |
 | English animation | PASS | Same authored composition, 960×540 / 240 frames / 20s. Poster and timeline frames inspected; original Thai assets unchanged. English GIF SHA-256 `A0A3A681ABDAE0747714918C3D9D62C495D6E992C3464EF53E3229C8FBC212A8`; no AI media generation. |
 | Independent review | PASS within source scope | README and UI reviews found no functional/auth blocker. Requested demo regression coverage was added and passed in the changed browser journey. |
-| Publication | NOT YET | Production remains 9.1.0 until the correction passes the release workflow. |
+| Publication | PASS | [Release #282](https://github.com/Thanyers/tabletop/pull/282) merged as `3f8a06e`. [Full release CI](https://github.com/Thanyers/tabletop/actions/runs/40089761432) passed all three browser suites; [production deploy](https://github.com/Thanyers/tabletop/actions/runs/40090356750) succeeded. Readback: `9.1.1 / 3f8a06e`, health/readiness 200. Published English hero and lazy-loaded examples loaded, README links 0, no overflow at 1280 and 375px. No signed-in production write or live-provider test was performed. |
 
 ## Revision 6 evidence (historical)
 
