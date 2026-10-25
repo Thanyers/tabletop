@@ -203,3 +203,15 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - **ทางเลือกที่ตัดทิ้ง:** ให้ destination เก็บสำเนา grant (revoke ที่ต้นทางจะไม่มีผล) · ให้ client ถือ token แล้วอ่านเอง (ย้ายการตัดสินใจไปฝั่ง client) · ใช้ HMAC secret ระหว่าง Room (ต้องขอ config ใหม่โดยยังไม่จำเป็น)
 - **Rollback:** ลบ route + handler; resolver เป็น pure function ที่ลบได้โดยไม่กระทบ state
 - **ข้อจำกัด:** ยังไม่มี subscription/push (อ่านตาม request) · ยังไม่มี test ระดับ Worker ที่มีสอง workspace จริง — ต้องทำก่อนอ้าง JOIN-01 · ไม่มี global snapshot ข้ามแหล่ง (ตาม D-019)
+
+## D-021 — last-seen เป็นคำสั่งของห้อง ไม่ใช่ค่าที่ route เดา
+
+**บริบท:** recap ต้องบอกว่าใครอ่านถึง revision ไหน (เกณฑ์ HIST-01) และ `buildSpaceRecap` รับ `lastSeen` ได้แล้ว (15/15) แต่ยังไม่มีที่เก็บค่าจริง
+
+**การตัดสินใจ:** เก็บ last-seen เป็นฟิลด์ของ space state (`seen: Record<actorId, revision>`) และเขียนผ่านคำสั่ง `space.seen` ตามห่วงโซ่ปกติ (schema → parse → apply → activity) ไม่ให้ route เขียนข้อมูลเอง
+
+**เหตุผล:** (1) การอ่านไม่ควรเปลี่ยนข้อมูล — ถ้า route เขียน last-seen ระหว่าง GET จะทำให้การอ่านกลายเป็นการเขียน และเกิด race กับ revision (2) คำสั่งเดินผ่าน authority เดิม จึงได้ actor/permission/receipt ฟรี (3) ฟิลด์นี้ additive ⇒ ไม่ต้อง migration
+
+**ผลที่ต้องตามมา:** `applySpaceCommand` ต้อง bump `revision` ตามกติกาเดิม, recap ต้องอ่าน `seen` จาก state แล้วส่งเข้า `buildSpaceRecap`, และ member ที่ยังไม่เคยเรียกจะยัง `unseen: true` ตามที่ตกลงไว้
+
+**ขั้นที่ยังไม่ทำ:** ห่วงโซ่นี้ยังไม่ลงโค้ด — ต้องแก้พร้อมกัน 6 จุดใน `shared/collaboration-space-command.ts` (array, schema, union, parse switch, apply case) และ `shared/collaboration-space.ts` (type)
