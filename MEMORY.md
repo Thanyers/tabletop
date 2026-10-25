@@ -385,6 +385,11 @@
 - **Root cause:** CSP ของ frame ต้องอนุญาต eval ถ้าจะ instantiate โมดูลที่ compile มาเป็นข้อความ · และ `frame-ancestors` ที่ส่งทาง `<meta>` ถูกเพิกเฉย (มี console warning)
 - **Correct behavior:** ใส่ `'unsafe-eval'` ใน `script-src` ของ **frame CSP เท่านั้น** (ไม่ใช่ของ host) เพราะ frame มี opaque origin ไม่มีคุกกี้/สตอเรจ/เน็ตเวิร์กอยู่แล้ว และอย่าใส่ `frame-ancestors` ใน meta · เก็บ `TOOL_SANDBOX_CSP` ไว้ที่ `ui/tool-sandbox/document.ts` ที่เดียว
 
+### 2026-10-25 — `Add-Content`/`Set-Content` ใน PowerShell เขียนทับไฟล์ไทยทั้งไฟล์เป็น double-encoded
+- **What happened:** ระหว่าง F080 ผมเพิ่มหัวข้อ decision ด้วย `Add-Content` แล้วแก้ประโยคด้วย `(Get-Content -Raw) -replace … | Set-Content` · ไฟล์ `decisions.md` ทั้งไฟล์ (20305 bytes) กลายเป็น UTF-8 ที่ decode ไม่ผ่าน (243 U+FFFD) และหลุดเข้า commit `607ece0` · ตรวจพบเพราะ `read` tool ฟ้อง `invalid UTF-8 text`
+- **Root cause:** cmdlet เหล่านี้ decode ไฟล์เดิมด้วย assumed encoding (ANSI/Windows-874 สำหรับไทย) แล้ว encode ใหม่ทั้งไฟล์ → ข้อความไทยเดิมพังทั้งไฟล์ ไม่ใช่แค่บรรทัดที่แก้ · เป็นคลาสเดียวกับ incident 2026-10-21 แต่รอบนี้มาจาก cmdlet ไม่ใช่ editor
+- **Correct behavior:** ห้ามใช้ `Set-Content`/`Add-Content`/`Out-File` กับไฟล์ที่มีภาษาไทย · ใช้ `edit`/`write` tool หรือ `node -e "fs.writeFileSync(path, text, 'utf8')"` เท่านั้น · หลังแก้เอกสารไทยทุกครั้ง ให้รันสแกน UTF-8 (strict decoder) + มาร์กเกอร์ mojibake (`เธ|โ€`) ก่อน commit · ถ้าพังแล้ว ให้กู้เวอร์ชันที่ยัง valid จาก `git show <sha>:<path>` ด้วย `fs.writeFileSync` (ไม่ผ่าน shell redirection) แล้วเขียนใหม่ทั้งบล็อกด้วย tool
+
 ## Deploy failures
 
 ### 2026-10-25 — v9.1.3 Worker published before Container settings finished

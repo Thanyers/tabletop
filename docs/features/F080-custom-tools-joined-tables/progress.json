@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T22:56:00+07:00",
-  "lastVerifiedAt": "2026-10-25T22:56:00+07:00",
+  "updatedAt": "2026-10-25T23:05:00+07:00",
+  "lastVerifiedAt": "2026-10-25T23:05:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
-    "candidateSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3",
+    "headSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
+    "candidateSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: C0+C1+C2+C5-contract+C3-pipeline+CX-contract ผ่านในเครื่องและใน CI · CI job `tool-host` รันบน Chromium และเขียว (run 40208135569) · ISO-01 กลับมา PASS บน http origin + คุกกี้จริง · ค้าง: authority commit ของ behaviour, storage/route (ยังไม่ต้องมี migration ถ้าเก็บ space เป็น optional field), source editor UI, room shell (รอเลือก visual), hosted/human acceptance",
+  "currentCheckpoint": "PR #305: C0+C1+C2+C5 (contract + migration-free storage)+C3 pipeline+CX contract · CI เขียวรวม job ใหม่ `tool-host` บน Chromium · เพิ่ม spec.md block ของ F080 และแผน/decision ครบ · ค้าง: authority route ของ behaviour, connection/projection จริง, source editor UI, room shell (รอเลือก visual), hosted/human acceptance · ยังไม่มี production release",
   "slices": [
     {
       "alias": "C0",
@@ -88,7 +88,7 @@
       "dependsOn": [
         "C1"
       ],
-      "note": "contract (schema/reader/role×verb/commands) commit 71a3591; storage + route + grants ยังไม่ทำ และยังไม่ apply migration"
+      "note": "contract (71a3591) + storage path แบบ optional field (878f995) · ยังไม่มี route/grants/projections จริง และไม่มี migration (ไม่ต้องมีแล้ว)"
     },
     {
       "alias": "CV",
@@ -397,7 +397,7 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": "71a359191efd8d9f8077be3b811ffe67712acfad",
+      "candidateSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
       "checks": [
         {
           "name": "collaboration space contract: role×verb matrix, source-link invariants, commands, reader compatibility",
@@ -406,13 +406,23 @@
           "result": "PASS",
           "evidence": "21/21: matrix keeps administration to the manager; a participant can run but not author/rebind; no space role can decide a source grant; export needs a separate unexpired grant; membership alone never reads a source; addMember/setRole/transferManager leave sources byte-identical; a second manager is refused; leaving marks the link `left` instead of deleting history; reader tolerates absent/old/newer schema and skips only the unreadable entries",
           "checkedSha": "71a359191efd8d9f8077be3b811ffe67712acfad"
+        },
+        {
+          "name": "collaboration space storage path without a migration",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/domain/collaboration-space.test.ts; npx vitest run src/tabletop",
+          "result": "PASS",
+          "evidence": "9/9: a workspace that never had a space reads as {space: undefined, problems: []}; create makes the owner the single manager and bumps actionRevision; addMember leaves `sources` byte-identical; leaveSource marks `left` instead of deleting; JSON round-trip is unchanged; a newer space schema is reported without discarding the workspace. Full src suite 801/801 shows the TableState addition regressed nothing.",
+          "checkedSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561"
         }
       ],
       "findings": [
-        "The plan matrix has no \"grant a source\" verb at all — encoded as an absence in SPACE_VERBS plus a test that asserts it, so a future verb addition fails the test rather than widening access silently."
+        "The plan matrix has no \"grant a source\" verb at all — encoded as an absence in SPACE_VERBS plus a test that asserts it, so a future verb addition fails the test rather than widening access silently.",
+        "No strict schema guards stored domain state (no domainStateSchema/tableStateSchema in server/; it is read back through parseJsonValue), so the space can live as an optional field on the hosting workspace — the same additive shape notes/cardMeta used. That removes the D1 migration this slice was gated on.",
+        "Encoding incident: PowerShell Add-Content/Set-Content rewrote decisions.md double-encoded (243 U+FFFD) and it reached a commit; repaired by restoring the last valid blob and rewriting through the editor tool. A strict-UTF-8 + mojibake scan now runs before commit (MEMORY.md records the rule)."
       ],
       "blocker": null,
-      "nextAction": "storage + route for the space aggregate (additive only; D1 migration needs a scoped approval before apply), then connection proposals/projections on top of the C2 runner"
+      "nextAction": "connection/projection route on top of this storage: propose → source grant → bind → authorized read → subscribe/invalidate → revoke, with the role×verb matrix enforced server-side; needs no D1 migration but does touch the Room route table."
     },
     {
       "id": "F080-T3A",
@@ -620,27 +630,27 @@
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "ขออนุมัติเฉพาะส่วนของ paid AI: cap 3 run × ≤6 calls / ≤USD 0.20 รวม 18 calls / USD 0.60 พร้อมหลักฐานว่า enforcement มีจริง (authoring tests)",
-      "verify": "n/a (user decision)",
-      "expect": "ได้ authorization + cap ที่ผูกกับ provider call จริง"
+      "action": "C6/C7: route + command สำหรับ space/connection (ใช้ storage field ที่มี) แล้วต่อ projection อ่านหลายต้นทาง + action กลับต้นทางเดียว",
+      "verify": "npm run test:cloudflare -- cloudflare/collaboration-space.test.ts",
+      "expect": "positive/negative ตาม role×verb, revoke มีผลกับ subscription/job, ไม่มี partial write"
     },
     {
       "id": "NA-2",
-      "action": "C3 UI: source editor + activation/readback บนโต๊ะเดียว (ใช้ pipeline + activation record ที่มี)",
+      "action": "C3 UI: source editor + activation/readback บนโต๊ะเดียว",
       "verify": "node --import tsx tests/tool-authoring-browser.mjs",
-      "expect": "คนแก้ source แล้ว activate และเห็น readback/diff ได้จริง"
+      "expect": "คนแก้ source แล้ว activate/readback ได้จริง"
     },
     {
       "id": "NA-3",
-      "action": "C5 storage: เก็บ collaboration space เป็น optional field บน workspace state (additive, ไม่มี migration) + reader/round-trip test ก่อนตัดสินใจแตะ domain/table.ts",
-      "verify": "npm test -- src/tabletop/domain/collaboration-space.test.ts",
-      "expect": "space ถูก persist/อ่านกลับได้โดยไม่ต้อง migrate และ workspace เก่าไม่พัง"
+      "action": "ขออนุมัติเฉพาะส่วนของ paid AI (cap) เพื่อปลด GATE-PAID-AI",
+      "verify": "n/a (user decision)",
+      "expect": "authorization + cap ที่ enforce ได้จริงก่อน dispatch"
     },
     {
       "id": "NA-4",
-      "action": "CX ต่อ: route + เปิดไฟล์จริงใน Excel/browser เพื่อตรวจจำนวนแถว/ภาษาไทย/ตัวเลข",
+      "action": "CX: route + เปิดไฟล์จริงใน Excel/browser",
       "verify": "node --import tsx tests/export-readback.mjs",
-      "expect": "ไฟล์ที่ผู้ใช้เปิดได้จริงตรงกับ manifest"
+      "expect": "ไฟล์ที่ผู้ใช้เปิดได้ตรงกับ manifest"
     }
   ],
   "blockedItems": [],

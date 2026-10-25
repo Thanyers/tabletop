@@ -143,13 +143,24 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - **เหตุผล/หลักฐาน:** `changelog.d/README.md` และ CI `fast-checks`
 - **Rollback:** ไม่ต้องมี
 
-## D-016 � Authoring pipeline ���� + budget ���ѧ�Ѻ��͹ dispatch
+## D-016 — Authoring pipeline เดียว + budget ที่บังคับก่อน dispatch
 
-- **�ѹ���:** 2026-10-25
-- **ʶҹ�:** `proven` (pipeline + budget), `open` (live provider)
-- **�Ѵ�Թ:** ��� AI ��Ф��� `authorToolPackage()` �������: validate  compile  isolated trial  activate ����� record ����¡ requester / generator / reviewer ��� **generator �١���¡��੾�м�ҹ�ѧ��ѹ����Ǩ budget ��͹** (��� estimate �Թ cap ��������¡���) ? declaredWrites �Ҩҡ package ��ҹ `buildToolBehaviorRequest()` �����ҡ������¡ ��� `checkToolBehaviorFreshness()` �ѧ�Ѻ `TOOL_STALE_REVISION`/`TOOL_SOURCE_REVOKED` ��͹ side effect
-- **�˵ؼ�/��ѡ�ҹ:** `authoring.test.ts` 12/12 (���٨����� generator ���١���¡������Թ budget, repair �� diagnostics, trial failure ���͡ activation, hand edit ����������¹���ö١ reject, AI �� base ��褹��), `tool-behavior-request.test.ts` 11/11 (scope �Ҩҡ package, freshness codes �ӧҹ��ԧ)
-- **�ҧ���͡���Ѵ���:** ��� UI/route ���¡ generator �ͧ���Ǥ��µ�Ǩ budget ����ѧ � ��Ǩ���ѹ�鹷ع��ԧ; ��� caller �� declaredWrites �ͧ � ���� scope ���Թ package
-- **Contract ����з�:** `runtime/tools/authoring.ts`, `shared/tool-behavior-request.ts`
-- **Rollback:** �Դ generator = AI route fail closed �� pipeline/���ѧ�ӧҹ
-- **��ͨӡѴ:** �ѧ����ա�����¡ model ��ԧ (GATE-PAID-AI) ? source editor UI �ѧ���� ? �ѧ����� readback ����Ш�ԧ
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (pipeline + budget), `open` (live provider)
+- **ตัดสิน:** ทั้ง AI และคนใช้ `authorToolPackage()` เส้นเดียว: validate → compile → isolated trial → activate พร้อม record ที่แยก requester / generator / reviewer และ **generator ถูกเรียกได้เฉพาะผ่านฟังก์ชันที่ตรวจ budget ก่อน** (ถ้า estimate เกิน cap จะไม่เรียกเลย) · declaredWrites มาจาก package ผ่าน `buildToolBehaviorRequest()` ไม่ใช่จากผู้เรียก และ `checkToolBehaviorFreshness()` บังคับ `TOOL_STALE_REVISION`/`TOOL_SOURCE_REVOKED` ก่อน side effect
+- **เหตุผล/หลักฐาน:** `authoring.test.ts` 12/12 (พิสูจน์ว่า generator ไม่ถูกเรียกเมื่อเกิน budget, repair ได้ diagnostics, trial failure บล็อก activation, hand edit ที่ไม่เปลี่ยนอะไรถูก reject, AI ได้ base ที่คนแก้) · `tool-behavior-request.test.ts` 11/11 (scope มาจาก package, freshness codes ทำงานจริง)
+- **ทางเลือกที่ตัดทิ้ง:** ให้ UI/route เรียก generator เองแล้วค่อยตรวจ budget ทีหลัง — ตรวจไม่ทันต้นทุนจริง · ให้ caller ส่ง declaredWrites เอง — ขยาย scope ได้เกิน package
+- **Contract ที่กระทบ:** `runtime/tools/authoring.ts`, `shared/tool-behavior-request.ts`
+- **Rollback:** ปิด generator = AI route fail closed โดย pipeline/คนยังทำงาน
+- **ข้อจำกัด:** ยังไม่มีการเรียก model จริง (GATE-PAID-AI) · source editor UI ยังไม่ทำ · ยังไม่มี readback บนโต๊ะจริง
+
+## D-017 — เก็บ collaboration space เป็น optional field บน workspace (ไม่มี migration)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (storage round-trip) · `open` (route/grants)
+- **ตัดสิน:** `TableState.collaborationSpace?: CollaborationSpace` — เพิ่มแบบ optional แบบเดียวกับ `notes` (F037) และ `cardMeta` (F054) ไม่มีตาราง/คอลัมน์/migration ใหม่ และไม่มี D1 change ที่ต้องขออนุมัติ
+- **เหตุผล/หลักฐาน:** ไม่มี zod schema เข้มงวดครอบ domain state ที่เก็บลง storage (grep ใน `server/` ไม่พบ `domainStateSchema`/`tableStateSchema`; อ่านกลับผ่าน `parseJsonValue`) จึงเพิ่ม field ได้โดยไม่ต้องแก้ codec · `domain/collaboration-space.test.ts` 9/9 (workspace ที่ไม่มี space อ่านสะอาด, create ทำให้ owner เป็น manager คนเดียว, addMember ไม่แตะ `sources`, JSON round-trip เท่าเดิม, schemaVersion ใหม่ถูกปฏิเสธโดยไม่ทำ workspace พัง) · `npx vitest run src/tabletop` 801/801 ยืนยันว่าไม่มี regression
+- **ทางเลือกที่ตัดทิ้ง:** สร้างตาราง/aggregate ใหม่ใน DO SQLite — ต้องมี migration + scoped approval โดยยังไม่ได้อะไรเพิ่มในระดับ storage · เก็บทุกอย่างใน `TableProgram` — ชนเพดาน 64 KiB และทำให้ space ผูกกับ rule revision
+- **Contract ที่กระทบ:** `shared/table-contracts.ts` (field เดียว), `domain/collaboration-space.ts` (ใหม่), `shared/collaboration-space.ts` (มีอยู่)
+- **Rollback:** ลบ field ออกได้ทันทีเพราะ reader ทนการไม่มี field; ไม่มี schema ที่ apply ไปแล้วให้ย้อน
+- **ข้อจำกัด:** ยังไม่มี route/command ผ่าน authority (จะทำใน C6/C7) · space ยังไม่ผูก connection/projection จริง · ถ้าต้อง query space ข้าม workspace จะต้องมี index/migration แยกและขออนุมัติ

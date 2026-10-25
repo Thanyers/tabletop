@@ -278,15 +278,15 @@
       "title": "ห้อง/โต๊ะที่ไม่เกี่ยวข้องไม่เห็นข้อมูล; การอยู่ห้อง/ลากโต๊ะชนกันไม่ให้สิทธิ์ข้อมูล; copy ไม่ให้สิทธิ์ต้นทางเพิ่ม",
       "status": "UNVERIFIED",
       "environment": "workers integration + browser",
-      "sha": "71a359191efd8d9f8077be3b811ffe67712acfad",
+      "sha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/collaboration-space.test.ts"
       ],
-      "evidence": "contract-level PASS: 21/21 collaboration-space tests encode the role×verb matrix, refuse admin verbs for non-managers, prove membership alone never reads a source (source grant + active link required), and prove membership/role changes leave source links unchanged. Runtime enforcement (route/DO) does not exist yet.",
+      "evidence": "contract + storage: 21/21 matrix tests and 9/9 storage tests prove the role×verb matrix keeps administration to the manager, that membership alone never reads a source (an active source grant and an active link are both required), that membership/role changes leave `sources` byte-identical, and that the space survives a JSON round trip on the hosting workspace without a migration.",
       "expected": "negative tests: สมาชิกห้องที่ไม่มี source grant อ่านไม่ได้; source role เปลี่ยนมีผล; room manager ไม่ grant เกินสิทธิ์ตน; เพิ่มสมาชิกใหม่ไม่ขยาย source grant",
-      "actual": "PARTIAL — the matrix and the invariants are proven as a contract; no server route enforces them yet",
-      "limitations": "must be re-run against the real route + repository before this item can be PASS; a canvas position or room membership still cannot grant data because nothing grants it yet"
+      "actual": "PARTIAL — the matrix and storage are proven; no server route enforces them yet",
+      "limitations": "must be re-run against the real route before this can be PASS; until the route exists, nothing can grant data from a canvas position because nothing grants data at all"
     },
     {
       "id": "TOPO-01",
