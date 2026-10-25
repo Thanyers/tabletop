@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  PORTABLE_COPY_MAX_AGE_MS,
   PORTABLE_TOOL_SCHEMA_VERSION,
   PORTABLE_FORBIDDEN_KEYS,
   exportPortableTool,
@@ -20,6 +21,9 @@ import {
  * name are planted in the "live" objects around the package, and the exported bundle must not
  * contain any of them.
  */
+
+/** Bundles carry a retention window, so fixtures export at "now" rather than at epoch 0. */
+const NOW = Date.now();
 
 const hash = (value: unknown): string => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 
@@ -47,7 +51,7 @@ function makePackage(overrides: Partial<ToolPackageDefinition> = {}): ToolPackag
 
 describe('a bundle carries definitions and no access', () => {
   it('exports the package, its reference, the runtime profile and the mapping', () => {
-    const result = exportPortableTool({ definition: makePackage(), hash, exportedAt: 1_000 });
+    const result = exportPortableTool({ definition: makePackage(), hash, exportedAt: NOW });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.bundle.schemaVersion).toBe(PORTABLE_TOOL_SCHEMA_VERSION);
@@ -67,13 +71,13 @@ describe('a bundle carries definitions and no access', () => {
       spaceGrants: [{ grantId: 'MARKER_GRANT' }],
       members: [{ actorId: 'actor-1', name: 'MARKER_MEMBER' }],
     };
-    const result = exportPortableTool({ definition: packageWithNeighbours, hash, exportedAt: 1_000 });
+    const result = exportPortableTool({ definition: packageWithNeighbours, hash, exportedAt: NOW });
     // Extra keys are refused outright by the strict schema rather than silently copied.
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe('PACKAGE_INVALID');
 
-    const clean = exportPortableTool({ definition: makePackage(), hash, exportedAt: 1_000 });
+    const clean = exportPortableTool({ definition: makePackage(), hash, exportedAt: NOW });
     expect(clean.ok).toBe(true);
     if (!clean.ok) return;
     const text = JSON.stringify(clean.bundle);
@@ -107,7 +111,7 @@ describe('a bundle carries definitions and no access', () => {
 
 describe('import re-validates what it is given', () => {
   function bundle() {
-    const result = exportPortableTool({ definition: makePackage(), hash, exportedAt: 1_000 });
+    const result = exportPortableTool({ definition: makePackage(), hash, exportedAt: NOW });
     if (!result.ok) throw new Error('export failed');
     return result.bundle;
   }
@@ -135,6 +139,29 @@ describe('import re-validates what it is given', () => {
   it('refuses a malformed mapping and a non-object bundle', () => {
     expect(importPortableTool({ ...bundle(), mapping: [{ portId: 'plan' }] }, hash)).toMatchObject({ ok: false, code: 'BUNDLE_SCHEMA' });
     expect(importPortableTool('not a bundle', hash)).toMatchObject({ ok: false, code: 'BUNDLE_SCHEMA' });
+  });
+
+  it('refuses a copy after its retention window', () => {
+    const result = exportPortableTool({ definition: makePackage(), hash, exportedAt: 1_000, retentionMs: 60_000 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.bundle.expiresAt).toBe(61_000);
+    expect(importPortableTool(result.bundle, hash, 60_999).ok).toBe(true);
+    expect(importPortableTool(result.bundle, hash, 61_000)).toMatchObject({ ok: false, code: 'BUNDLE_EXPIRED' });
+  });
+
+  it('refuses a retention that is negative, zero or longer than the product allows', () => {
+    for (const retentionMs of [-1, 0, PORTABLE_COPY_MAX_AGE_MS + 1]) {
+      expect(exportPortableTool({ definition: makePackage(), hash, exportedAt: 1_000, retentionMs }), String(retentionMs))
+        .toMatchObject({ ok: false, code: 'RETENTION_OUT_OF_RANGE' });
+    }
+  });
+
+  it('defaults to the longest window the product allows', () => {
+    const result = exportPortableTool({ definition: makePackage(), hash, exportedAt: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.bundle.expiresAt).toBe(NOW + PORTABLE_COPY_MAX_AGE_MS);
   });
 
   it('applies the mapping against a different table schema when used with new data', () => {

@@ -30,9 +30,17 @@ export interface PortableInputMapping {
   localField: string;
 }
 
+/** Longest a copy may stay importable; a bundle asking for more is refused rather than clamped. */
+export const PORTABLE_COPY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
+
 export interface PortableToolBundle {
   schemaVersion: typeof PORTABLE_TOOL_SCHEMA_VERSION;
   exportedAt: number;
+  /**
+   * Retention for this copy. Definitions are not personal data, but a copy should not be able to
+   * travel forever without anyone deciding that it may, so every bundle states when it stops.
+   */
+  expiresAt: number;
   /** Definitions only; contains no records and no access. */
   package: ToolPackageDefinition;
   ref: ToolPackageRef;
@@ -43,16 +51,18 @@ export interface PortableToolBundle {
 
 export type PortableExportResult =
   | { ok: true; bundle: PortableToolBundle }
-  | { ok: false; code: 'PACKAGE_INVALID' | 'PACKAGE_MAPPING_INVALID'; problems: string[] };
+  | { ok: false; code: 'PACKAGE_INVALID' | 'PACKAGE_MAPPING_INVALID' | 'RETENTION_OUT_OF_RANGE'; problems: string[] };
 
 export type PortableImportResult =
   | { ok: true; definition: ToolPackageDefinition; ref: ToolPackageRef; mapping: PortableInputMapping[] }
-  | { ok: false; code: 'BUNDLE_SCHEMA' | 'PACKAGE_INVALID' | 'BUNDLE_HASH_MISMATCH' | 'BUNDLE_VERSION'; problems: string[] };
+  | { ok: false; code: 'BUNDLE_SCHEMA' | 'PACKAGE_INVALID' | 'BUNDLE_HASH_MISMATCH' | 'BUNDLE_VERSION' | 'BUNDLE_EXPIRED'; problems: string[] };
 
 export interface PortableExportInput {
   definition: unknown;
   hash: (value: unknown) => string;
   exportedAt: number;
+  /** When this copy stops being importable; defaults to the maximum the product allows. */
+  retentionMs?: number;
   /** Local field ids, keyed by package port then package field. */
   localFields?: Record<string, Record<string, string>>;
   config?: Record<string, string | number | boolean>;
@@ -65,6 +75,14 @@ export function exportPortableTool(input: PortableExportInput): PortableExportRe
     return { ok: false, code: 'PACKAGE_INVALID', problems: validation.problems.map(problem => `${problem.code} ${problem.path}: ${problem.message}`) };
   }
   const definition = validation.package;
+  const retentionMs = input.retentionMs ?? PORTABLE_COPY_MAX_AGE_MS;
+  if (!Number.isFinite(retentionMs) || retentionMs <= 0 || retentionMs > PORTABLE_COPY_MAX_AGE_MS) {
+    return {
+      ok: false,
+      code: 'RETENTION_OUT_OF_RANGE',
+      problems: [`Retention must be between 1 ms and ${PORTABLE_COPY_MAX_AGE_MS} ms (${Math.round(PORTABLE_COPY_MAX_AGE_MS / 86_400_000)} days).`],
+    };
+  }
   const mapping: PortableInputMapping[] = [];
   for (const port of definition.ports) {
     if (port.direction !== 'in') continue;
@@ -81,6 +99,7 @@ export function exportPortableTool(input: PortableExportInput): PortableExportRe
     bundle: {
       schemaVersion: PORTABLE_TOOL_SCHEMA_VERSION,
       exportedAt: input.exportedAt,
+      expiresAt: input.exportedAt + retentionMs,
       package: definition,
       ref: toolPackageRef(definition, input.hash),
       runtimeProfile: definition.runtimeProfile,
@@ -97,7 +116,11 @@ export function exportPortableTool(input: PortableExportInput): PortableExportRe
  * refused instead of importing something the exporter never approved. A newer bundle version is
  * refused rather than guessed at.
  */
-export function importPortableTool(bundle: unknown, hash: (value: unknown) => string): PortableImportResult {
+export function importPortableTool(
+  bundle: unknown,
+  hash: (value: unknown) => string,
+  now = Date.now(),
+): PortableImportResult {
   const record = bundle as Partial<Record<'schemaVersion' | 'package' | 'ref' | 'mapping' | 'runtimeProfile' | 'config', unknown>> | null;
   if (!record || typeof record !== 'object') return { ok: false, code: 'BUNDLE_SCHEMA', problems: ['The bundle is not an object.'] };
   if (record.schemaVersion !== PORTABLE_TOOL_SCHEMA_VERSION) {
@@ -106,6 +129,13 @@ export function importPortableTool(bundle: unknown, hash: (value: unknown) => st
       code: record.schemaVersion === undefined ? 'BUNDLE_SCHEMA' : 'BUNDLE_VERSION',
       problems: [`This bundle uses schema version ${String(record.schemaVersion)}; this build reads ${PORTABLE_TOOL_SCHEMA_VERSION}.`],
     };
+  }
+  const expiresAt = (record as { expiresAt?: unknown }).expiresAt;
+  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+    return { ok: false, code: 'BUNDLE_SCHEMA', problems: ['The bundle does not say when it expires.'] };
+  }
+  if (expiresAt <= now) {
+    return { ok: false, code: 'BUNDLE_EXPIRED', problems: ['This copy has expired; ask the source for a fresh one.'] };
   }
   const validation = validateToolPackage(record.package);
   if (!validation.ok) {
