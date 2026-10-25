@@ -2,6 +2,7 @@ import type { WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import type { CollaborationSpace } from '../src/tabletop/shared/collaboration-space.js';
 import { buildSpaceRecap, paginateRecap, type SpaceRecap } from '../src/tabletop/shared/space-recap.js';
 import type { GrantedConnection } from '../src/tabletop/shared/space-grants.js';
+import { impactOfSourceChange } from '../src/tabletop/shared/space-impact.js';
 
 /**
  * F080 / JT-4A — "what happened in this room", Worker side.
@@ -121,7 +122,13 @@ export async function handleSpaceRecap(
     pageSize: Number(new URL(request.url).searchParams.get('pageSize') ?? '10'),
   });
 
-  return new Response(JSON.stringify({ ok: true, recap, page }), {
+  // A recap says a source moved; the impact says which of its ports that touches. Both are derived
+  // from the grants the source issued, so neither can name a port the grant never exposed.
+  const connections = grants.map(entry => entry.grant);
+  const touched = [...new Set([...recap.changed, ...recap.withdrawn].map(entry => entry.workspaceId))];
+  const impact = touched.map(workspaceId => impactOfSourceChange(connections, recap, workspaceId));
+
+  return new Response(JSON.stringify({ ok: true, recap, page, impact }), {
     status: 200,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
