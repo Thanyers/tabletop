@@ -1,5 +1,6 @@
 import { GENERATIVE_LIMITS } from './generative-contracts';
 import { MAX_COMPUTED_COLUMNS } from './computed-columns';
+import { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from './table-source-limits';
 import { generativeViewKindListSentence } from './view-kinds';
 
 export interface CapabilityItem { id: string; title: string; detail: string }
@@ -11,9 +12,9 @@ export const TABLE_CAPABILITY_LIMITS = {
   actions: 16,
   rowsPerCollection: 100,
   rowsPerTable: 200,
-  files: 4,
-  fileBytes: 32 * 1024,
-  sourceBytes: 64 * 1024,
+  files: MAX_TABLE_SOURCES,
+  fileBytes: TABLE_FILE_BYTES,
+  sourceBytes: TABLE_TOTAL_SOURCE_BYTES,
   computedColumns: MAX_COMPUTED_COLUMNS,
   canvasViews: GENERATIVE_LIMITS.canvasViews,
 } as const;

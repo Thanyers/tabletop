@@ -46,6 +46,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T10 | Delete the Node runtime's unreachable model-job lifecycle; keep the provider contracts where their adapter consumes them | T1 | HTTP contract for `/model` unchanged (`503 MODEL_NOT_CONFIGURED`); no caller of the removed store/gateway; guard test keeps it from returning |
 | T12 | Point inverted seams down again: shared export, workspace decision modules, Canvas renderer/geometry out of the legacy tree | T1 | Same functions and inputs; moved tests pass at the new seam; no client import reaches `server/`; no behavior change |
 | T14 | Canvas browser view state (starred/hidden/seen/sizes/sort/layout) behind one module over an injected storage | T12 | Same keys, caps and fallbacks; blocked storage cannot break the canvas; unit tests cover corrupt values; component keeps React state only |
+| T13 | One owner for the AI prompt caps and for the shared-source limits, with drift tests | T12 | Same values and messages; contract/route/provider/UI import the leaf modules; a reintroduced literal fails a test |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -205,3 +206,16 @@ Behavior is preserved on purpose, and the tests say so: the same `tabletop:r1:*`
 Test-first: `canvas-view-state.test.ts` was written before the module and failed with `Cannot find module`; after the module landed, two expectations were wrong about the default sort (`updated-desc` instead of the code's `created-desc`) and were corrected in the test, not the implementation.
 
 Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **959 passed / 5 skipped (964)** (dev 953 + 6 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (three pre-existing hook-dependency warnings in `CanvasWorkspace` are unchanged), public scan **0 findings** after the commit. `CanvasWorkspace.tsx` went from 2,259 to 2,146 lines. No UI or user-visible behavior change.
+
+### T13 — one owner per limit
+
+Two classes of numbers were re-typed wherever they were needed:
+
+- **AI prompt caps.** `MAX_DRAFT_PROMPT_CHARS` and `MAX_ASSISTANT_PROMPT_CHARS` were `4_000`/`4000` in the assistant contract schemas, in `cloudflare/room.ts` and `room-job-view.ts`, in the job repository's prompt guard, and in the DeepSeek provider schemas. They now live in `src/tabletop/shared/ai-prompt-limits.ts`, a leaf module with no imports (the same reason `ai-request-limits.ts` exists: Worker startup can read it without an import cycle). `room-job-view` keeps exporting `MAX_TABLE_ASSISTANT_PROMPT_CHARS` so existing importers are unchanged.
+- **Shared-source limits.** Four slots, 32 KiB per file and 64 KiB per table were declared in the domain, again in `TABLE_CAPABILITY_LIMITS`, and again as literals in the client (`TableCanvasObjects`, `AIProposal`, `workspace/command-session`). `src/tabletop/shared/table-source-limits.ts` owns them now; `domain/table.ts` imports and re-exports the same names, and the client imports the leaf directly, so a limit change cannot leave the UI blocking a file the server accepts.
+
+Test-first: two drift tests were written before the consolidation and failed on the missing modules; after the change they also scan the contract, the Worker routes, the provider schemas and the three client files and fail if a prompt-cap literal (`prompt: z.string()…max(4_000|4000)`, `MAX_PROMPT_CHARS = 4000`) or a hand-typed source limit (`32 * 1024`, `64 * 1024`, `MAX_SOURCE_FILES = 4`, `sources.length >= 4`) comes back. The assistant contract is also tested behaviorally: 4,000 characters are accepted, 4,001 rejected.
+
+Deliberately left alone: the 4,000-character caps on assistant *answer text*, research snippets and job partial content are different concepts; consolidating them into a prompt cap would change what they bound.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **964 passed / 5 skipped (969)** (dev 959 + 5 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (the listed warnings are pre-existing), public scan **0 findings** after the commit. No limit value, guard order or user-facing message changed.

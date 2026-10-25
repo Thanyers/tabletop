@@ -7,6 +7,7 @@ import type { ComputedColumn } from '../shared/table-contracts';
 import { computeRecordRow, MAX_COMPUTED_COLUMNS } from '../shared/computed-columns';
 import { formatComputedExpression, parseComputedFormula } from '../shared/computed-formula';
 import { TABLE_CAPABILITIES, TABLE_CAPABILITY_LIMITS } from '../shared/table-capabilities';
+import { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../shared/table-source-limits';
 import type { ActorContext, WorkspaceView } from '../shared/contracts';
 import type { PlanNode } from '../runtime';
 import { applyTableChange, handleTableCommand } from '../domain/table';
@@ -38,8 +39,8 @@ interface TableCanvasObjectProps {
   onEditRules?: (prompt?: string) => void;
 }
 
-const MAX_SOURCE_FILES = 4;
-const MAX_SOURCE_BYTES = 64 * 1024;
+const MAX_SOURCE_FILES = MAX_TABLE_SOURCES;
+const MAX_SOURCE_BYTES = TABLE_TOTAL_SOURCE_BYTES;
 
 export function TableCanvasObject(props: TableCanvasObjectProps) {
   if (props.view.domain.kind !== 'table') return null;
@@ -657,7 +658,7 @@ function TableRowImport({ collection, existingRecords, fixedRecordIds, busy, onC
     if (!file) return;
     const fileInput = event.currentTarget;
     setMessage(''); setCsv(''); setWorksheet(null); setFileName(''); setReplaceConfirmed(false); setOpen(true);
-    if (file.size > 32 * 1024) { setMessage('Files must be 32 KiB or smaller.'); fileInput.value = ''; return; }
+    if (file.size > TABLE_FILE_BYTES) { setMessage('Files must be 32 KiB or smaller.'); fileInput.value = ''; return; }
     setReadingFile(true);
     try {
       if (/\.xlsx$/iu.test(file.name)) {

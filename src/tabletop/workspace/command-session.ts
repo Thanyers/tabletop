@@ -5,6 +5,7 @@ import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './table-candidate-apply';
 import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from './table-chat-state';
 import { errorText } from './error-text';
+import { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../shared/table-source-limits';
 import { decodeSourceText, inferredMime } from './source-file';
 
 /**
@@ -231,7 +232,7 @@ export function createWorkspaceCommandSession(deps: WorkspaceCommandDeps): Works
     };
     if (!activeTarget()) throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
     if (!/\.(csv|json|txt|md)$/iu.test(file.name)) throw new ApiFailure('Use a UTF-8 CSV, JSON, TXT or Markdown file. PDF and binary files are not supported.', 415, 'TABLE_FILE');
-    if (file.size < 1 || file.size > 32 * 1024) throw new ApiFailure('Each source file must contain between 1 byte and 32 KiB.', 413, 'TABLE_FILE_SIZE');
+    if (file.size < 1 || file.size > TABLE_FILE_BYTES) throw new ApiFailure('Each source file must contain between 1 byte and 32 KiB.', 413, 'TABLE_FILE_SIZE');
 
     let text: string;
     try { text = decodeSourceText(await file.arrayBuffer()); }
@@ -240,7 +241,7 @@ export function createWorkspaceCommandSession(deps: WorkspaceCommandDeps): Works
     if (!current || current.domain.kind !== 'table') throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
     const nextBytes = new TextEncoder().encode(text).byteLength;
     const existingBytes = current.domain.sources.reduce((sum, source) => sum + new TextEncoder().encode(source.text).byteLength, 0);
-    if (current.domain.sources.length >= 4 || existingBytes + nextBytes > 64 * 1024) throw new ApiFailure('A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.', 413, 'TABLE_LIMIT');
+    if (current.domain.sources.length >= MAX_TABLE_SOURCES || existingBytes + nextBytes > TABLE_TOTAL_SOURCE_BYTES) throw new ApiFailure('A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.', 413, 'TABLE_LIMIT');
 
     const requestSequence = projectionClock.value;
     deps.setBusy('table.import');

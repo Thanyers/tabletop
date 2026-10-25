@@ -30,6 +30,7 @@ import { hashValue, isRecord, parseJsonValue, readNumber, readString } from '../
 import { AuthorityError } from '../server/errors.js';
 import { memberLimitMessage, workspaceMemberCapacity } from '../server/limits.js';
 import type { ModelFailureDetails, ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { MAX_ASSISTANT_PROMPT_CHARS } from '../src/tabletop/shared/ai-prompt-limits.js';
 
 type SqlRow = Record<string, SqlStorageValue>;
 type SqlBinding = SqlStorageValue;
@@ -825,7 +826,7 @@ export class RoomRepository implements WorkspaceRepository {
       if (receipt) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
 
       if (input.kind === 'table-assistant') {
-        if (typeof input.prompt !== 'string' || input.prompt.length === 0 || input.prompt.length > 4_000) {
+        if (typeof input.prompt !== 'string' || input.prompt.length === 0 || input.prompt.length > MAX_ASSISTANT_PROMPT_CHARS) {
           throw new AuthorityError('INVALID_REQUEST');
         }
         const totalRow = this.rows<{ job_count: SqlStorageValue }>(
@@ -854,7 +855,7 @@ export class RoomRepository implements WorkspaceRepository {
         expectedRevision: input.expectedRevision,
         expectedEpoch: input.epoch,
         // Rule-draft prompts are kept too so open visibility (F034) can show them to the table.
-        ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= 4_000 ? { prompt: input.prompt } : {}),
+        ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= MAX_ASSISTANT_PROMPT_CHARS ? { prompt: input.prompt } : {}),
       };
       this.storage.transactionSync(() => {
         this.storage.sql.exec(

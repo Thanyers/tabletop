@@ -17,7 +17,7 @@ import { ReasonedDomainError } from './model-failure.js';
 import { computeRuntimeCapabilities, type ComputeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
 import { EDIT_FALLBACK_SIMPLIFY_ISSUES, FALLBACK_REPAIR_ATTEMPT, FALLBACK_SIMPLIFY_ISSUES, nextRepairIssues } from './repair.js';
 
-const MAX_PROMPT_CHARS = 4_000;
+import { MAX_DRAFT_PROMPT_CHARS as MAX_PROMPT_CHARS } from '../src/tabletop/shared/ai-prompt-limits.js';
 const MAX_INVOICE_INPUT_BYTES = 48_000;
 const MAX_CHANGE_INPUT_BYTES = 24_000;
 const MAX_TABLE_INPUT_BYTES = TABLE_AI_INPUT_BYTES;

@@ -47,7 +47,7 @@ import { resolveTableRuleReferences } from '../src/tabletop/shared/table-rule-re
 import { COMPUTE_EXECUTION_TIMEOUT_MS } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
-const MAX_MODEL_PROMPT_CHARS = 4_000;
+import { MAX_DRAFT_PROMPT_CHARS as MAX_MODEL_PROMPT_CHARS } from '../src/tabletop/shared/ai-prompt-limits.js';
 const TABLE_ASSISTANT_CONTEXT_TURNS = 6;
 const TABLE_ASSISTANT_CONTEXT_MAX_BYTES = 16_384;
 const TABLE_ASSISTANT_HISTORY_DEFAULT_PAGE_SIZE = 20;

@@ -17,10 +17,9 @@ import { computeInputBindingSchema, computeProgramProblems, computeRunRecordSche
 import { MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_SOURCE_AUTHORITY } from '../shared/model-job-progress';
 import { fixedProgramRecordIds, matchRowsByIdentity } from '../shared/row-identity';
 
-export const TABLE_FILE_BYTES = 32 * 1024;
-export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
-/** F064 C: source slots per table, imported files and web sources together. */
-export const MAX_TABLE_SOURCES = 4;
+import { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../shared/table-source-limits';
+/** F078-T13: one owner for the source limits; re-exported so domain importers stay unchanged. */
+export { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES };
 // F066: kept in a leaf module so Worker startup can never read it before it is set.
 export { TABLE_AI_INPUT_BYTES } from '../shared/ai-request-limits';
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */

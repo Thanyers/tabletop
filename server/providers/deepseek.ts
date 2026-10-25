@@ -10,7 +10,7 @@ const DEFAULT_MAX_TOKENS = 2048;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_API_KEY_CHARS = 4096;
-const MAX_PROMPT_CHARS = 4000;
+import { MAX_DRAFT_PROMPT_CHARS as MAX_PROMPT_CHARS } from '../../src/tabletop/shared/ai-prompt-limits.js';
 const MAX_EXCERPT_CHARS = 4000;
 const MAX_INPUT_BYTES = 48_000;
 const MAX_REQUEST_OVERHEAD_BYTES = 8_000;
