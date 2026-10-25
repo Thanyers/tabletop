@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T02:52:00+07:00",
-  "lastVerifiedAt": "2026-10-26T02:52:00+07:00",
+  "updatedAt": "2026-10-26T03:02:00+07:00",
+  "lastVerifiedAt": "2026-10-26T03:02:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: COPY-01 ปิด (retention 30 วัน + refused expired) · 3 แนว visual room shell ส่งให้เลือกแล้ว (docs/previews/room-shell/, ui-gate 14/16) · ค้าง: รอเลือก A/B/C + paid-AI cap, mount panel ในแอปจริง, T4A/T4B, hosted/human",
+  "currentCheckpoint": "PR #305: ui-gate วัดจริงแล้ว — joined panel 16/16, authoring panel 14/16 (tablist ลูกศรไม่ขยับ focus, tab คลิกแล้วไม่เปลี่ยน state) ⇒ A11Y-01 ยัง UNVERIFIED และมี defect list ชัดเจนให้แก้รอบหน้า · 13 PASS / 22 UNVERIFIED",
   "slices": [
     {
       "alias": "C0",

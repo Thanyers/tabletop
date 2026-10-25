@@ -475,16 +475,16 @@
       "title": "keyboard/focus/contrast/responsive 320/414px/reduced motion ของ host + custom UI",
       "status": "UNVERIFIED",
       "environment": "browser (local chromium)",
-      "sha": "not-run",
+      "sha": "4f9bd8b",
       "node": "v22.23.2",
       "commands": [
-        "node \"$UI_GATE/gate.mjs\" <built-page> --full",
-        "node --import tsx tests/tool-a11y-browser.mjs"
+        "node C:/Users/mokun/.agents/skills/ui-gate/gate.mjs test-results/tool-joined-harness/index.html --full",
+        "node C:/Users/mokun/.agents/skills/ui-gate/gate.mjs test-results/tool-authoring-harness/index.html --full"
       ],
-      "evidence": null,
+      "evidence": "joined panel harness: 16/16 measured (axe ARIA/landmarks, state-aware contrast light+dark, touch targets 2.5.8, keyboard, reduced motion, overflow at 280/320/414, RTL). authoring harness: 14/16 measured with two real defects — (1) the file tablist uses roving tabindex but ArrowDown/ArrowRight never move focus (WCAG 2.1.1), (2) the ui/main.tsx tab declares aria-selected/role=tab yet a click changes nothing, and the check-source button shows no observable effect in the gate run.",
       "expected": "gate รายงาน N/N จริง; ทุก flow ถึงด้วย keyboard; focus ไม่ติดอยู่ใน iframe; contrast ผ่าน WCAG AA; 320/414px ไม่มี horizontal overflow; reduced motion ไม่พัง",
-      "actual": "not run",
-      "limitations": "custom UI ต้องมี accessibility diagnostics/repair ของตัวเอง ไม่พึ่ง host อย่างเดียว"
+      "actual": "PARTIAL — the joined panel passes every measured check; the authoring panel fails two keyboard/state checks",
+      "limitations": "ui-gate reports 16 measured checks; theme/token/DTCG/contrast-pair/focus-trap checks were SKIPPED (need --theme and --focustrap), so this is not a full a11y pass. Fixes for the authoring defects are the next task."
     },
     {
       "id": "VISUAL-01",
