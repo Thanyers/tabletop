@@ -58,6 +58,12 @@ export interface RoomRouteMatch {
   readonly imageId?: string;
 }
 
+const spaceGrantsRequestSchema = z.strictObject({
+  spaceWorkspaceId: z.string().uuid(),
+  actorId: z.string().min(1).max(160),
+});
+
+const spaceGrantsRequestSchemaMaybeUnused = spaceGrantsRequestSchema;
 const spaceExportRequestSchema = z.strictObject({
   grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
   spaceId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/u),
@@ -66,6 +72,7 @@ const spaceExportRequestSchema = z.strictObject({
   portId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
   format: z.enum(['csv', 'html']),
 });
+
 
 const spaceActionRequestSchema = z.strictObject({
   grantId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
@@ -120,6 +127,17 @@ export interface RoomHttpDeps {
     idempotencyKey: string;
   }): Promise<{ ok: true; revision: string; duplicate: boolean } | { ok: false; code: string; message: string }>;
   /** F080: build one export file from this table's own rows and grant; the source decides. */
+  /** F080: the connections this table holds for one room, with the revision each was issued at. */
+  listSpaceGrants(input: { spaceWorkspaceId: string; actorId: string }): Promise<{
+    grantId: string;
+    sourceWorkspaceId: string;
+    grantedRevision: number;
+    status: string;
+    grantVersion: number;
+    exportAllowed: boolean;
+    actions: string[];
+    ports: string[];
+  }[]>;
   exportSpaceProjection(input: {
     grantId: string;
     spaceId: string;
@@ -163,6 +181,9 @@ export function matchRoomRoute(request: Request, boundRoomId: string | null): Ro
   }
   if (request.method === 'POST' && url.pathname === '/internal/space-export') {
     return { handler: 'room-http', name: 'internal.space-export' };
+  }
+  if (request.method === 'POST' && url.pathname === '/internal/space-grants') {
+    return { handler: 'room-http', name: 'internal.space-grants' };
   }
   const imageRoute = IMAGE_ROUTE.exec(url.pathname);
   if (imageRoute) {
@@ -221,6 +242,8 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
         return internalSpaceAction(request, requestId);
       case 'internal.space-export':
         return internalSpaceExport(request, requestId);
+      case 'internal.space-grants':
+        return internalSpaceGrants(request, requestId);
       case 'workspace.view':
         return workspaceView(request, requestId, match.workspaceId);
       case 'events':
@@ -275,6 +298,13 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
         : answer.code === 'SPACE_ACTION_FAILED' ? 422
           : 404;
     return json(status, answer, { 'x-request-id': requestId });
+  }
+
+  async function internalSpaceGrants(request: Request, requestId: string): Promise<Response> {
+    const parsed = spaceGrantsRequestSchema.safeParse(await readJson(request));
+    if (!parsed.success) return json(400, { ok: false, code: 'SPACE_GRANTS_PAYLOAD', message: 'Invalid grants request.' }, { 'x-request-id': requestId });
+    const grants = await deps.listSpaceGrants(parsed.data);
+    return json(200, { ok: true, grants }, { 'x-request-id': requestId });
   }
 
   async function internalSpaceExport(request: Request, requestId: string): Promise<Response> {
