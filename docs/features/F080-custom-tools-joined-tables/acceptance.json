@@ -259,32 +259,34 @@
       "title": "read/subscription/context/compute/cache/history/export หยุดตาม scope หลัง effective revoke",
       "status": "UNVERIFIED",
       "environment": "workers integration (adversarial)",
-      "sha": "c23a8674d395903458d2fcd8e024a6185ad4c505",
+      "sha": "7ed80770c4f4609481105dda4e51fd6df21ebeef",
       "node": "v22.23.2",
       "commands": [
-        "npx vitest run src/tabletop/shared/tool-connection.test.ts src/tabletop/domain/tool-grant.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": "protocol proven (repository tests) + transport returns 409 SPACE_GRANT_REVOKED for a revoked grant in the handler tests; there is no live subscription to invalidate yet",
+      "evidence": "end-to-end: revoking on the source makes the very next Worker-level read return 409 SPACE_GRANT_REVOKED, with no cache to purge (every read re-asks the source); protocol-level: effective revocation point, in-flight adjudication, audience re-check. Subscription/context/compute/history/export paths do not exist yet, so they cannot be shown to stop.",
       "expected": "หลัง revoke มี effective point ชัด: subscription ใหม่ถูกปฏิเสธ, in-flight job ถูกตัดสินตาม contract, cache/projection ที่ระบบควบคุมถูก invalidate; audit metadata ไม่บรรจุค่าเดิม; บอกข้อจำกัดว่าค่า/ไฟล์ที่ผู้ใช้เคยเห็นหรือ export ไปแล้วเรียกคืนไม่ได้",
-      "actual": "PARTIAL — the protocol and the grant records are proven; there is no live subscription, compute input, AI context, history or export path wired to them yet",
-      "limitations": "must be re-run against the transport; values a person already saw or exported cannot be recalled and the docs must keep saying so"
+      "actual": "PARTIAL — reads and in-flight are proven; the other surfaces do not exist",
+      "limitations": "values a person already saw cannot be recalled; there is no live subscription to invalidate"
     },
     {
       "id": "ACL-01",
       "requirement": "G3",
       "slice": "F080-T2B",
       "title": "ห้อง/โต๊ะที่ไม่เกี่ยวข้องไม่เห็นข้อมูล; การอยู่ห้อง/ลากโต๊ะชนกันไม่ให้สิทธิ์ข้อมูล; copy ไม่ให้สิทธิ์ต้นทางเพิ่ม",
-      "status": "UNVERIFIED",
-      "environment": "workers integration + browser",
-      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real DOs + D1) · local browser for the command path",
+      "sha": "7ed80770c4f4609481105dda4e51fd6df21ebeef",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/collaboration-space.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+        "npm run test:cloudflare -- cloudflare/room-http.test.ts",
+        "npx vitest run src/tabletop/shared/collaboration-space.test.ts src/tabletop/domain/collaboration-space.test.ts"
       ],
-      "evidence": "contract + storage + commands: the role×verb matrix, the migration-free space storage, the space commands through handleTableCommand/allowlist, and the source-side grant check (audience, epoch, port, revocation) are all covered by tests; nobody can widen a source grant from a space role because the command that issues a grant requires `members.invite` at the source",
+      "evidence": "end-to-end: someone outside the space gets 403 SPACE_NOT_MEMBER; a workspace that reuses another space's slug and links the same table gets 404 SPACE_GRANT_NOT_FOUND while the granted workspace reads 200; a source the space never linked is 404; membership alone never authorizes data because the grant must name the workspace; role×verb matrix and command path are covered by 21+20 tests, and the grant command requires `members.invite` at the source",
       "expected": "negative tests: สมาชิกห้องที่ไม่มี source grant อ่านไม่ได้; source role เปลี่ยนมีผล; room manager ไม่ grant เกินสิทธิ์ตน; เพิ่มสมาชิกใหม่ไม่ขยาย source grant",
-      "actual": "PARTIAL — everything above is proven; no HTTP route enforces it end to end yet",
-      "limitations": "must be re-run against the real route before this can be PASS; until the route exists, nothing can grant data from a canvas position because nothing grants data at all"
+      "actual": "PASS on the Worker tier and local command path",
+      "limitations": "not exercised against deployed staging; \"copy definitions cannot add a source grant\" is structural (definitions carry no grants) rather than a runtime negative test"
     },
     {
       "id": "TOPO-01",

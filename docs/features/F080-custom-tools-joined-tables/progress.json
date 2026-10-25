@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T00:48:00+07:00",
-  "lastVerifiedAt": "2026-10-26T00:48:00+07:00",
+  "updatedAt": "2026-10-26T00:55:00+07:00",
+  "lastVerifiedAt": "2026-10-26T00:55:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "880237341017c3f3b11a0c12295505bdc6ef4d29",
-    "candidateSha": "880237341017c3f3b11a0c12295505bdc6ef4d29",
+    "headSha": "7ed80770c4f4609481105dda4e51fd6df21ebeef",
+    "candidateSha": "7ed80770c4f4609481105dda4e51fd6df21ebeef",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: transport wire + ปิด review findings 5 และ 3 แล้ว (Room internal route มีเทสต์+harness dep, error body ใช้ errorCode ตาม contract) · cloudflare tier 50/50 · unit 1047/5 · ค้างหลัก: two-workspace e2e (ต้องใช้ cookieName/csrfForToken ของ repo), rows/live revision ของ endpoint, UI joined view, export route, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: cross-room projection read พิสูจน์ end-to-end แล้วด้วยสอง workspace จริงผ่าน Worker entry (happy path, impersonation→404, revoke→409, port/limit, outsider→403) · cloudflare tier 271/271 · unit 1047/5 · ค้าง: endpoint ยังคืน descriptor ไม่ใช่ rows/live revision (JOIN-01), UI joined view, action กลับต้นทาง (T3B), export route, room shell (รอเลือก visual), hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -448,7 +448,7 @@
       "id": "F080-T3A",
       "jt": "JT-3A",
       "featureId": "F080",
-      "state": "doing",
+      "state": "review",
       "dependsOn": [
         "F080-T2A",
         "F080-T2B",
@@ -475,6 +475,14 @@
           "result": "PASS",
           "evidence": "37/37 room-http (route row POST /internal/space-projection, 200 with the resolver answer, 400 for a malformed body before the resolver runs, 409 for a revocation, 404 for an unknown grant — and the harness now provides the new required dep, so the handler cannot be silently unexercised) + 13/13 transport with the canonical errorCode body",
           "checkedSha": "880237341017c3f3b11a0c12295505bdc6ef4d29"
+        },
+        {
+          "name": "two-workspace end-to-end: authorization identity, revocation, impersonation",
+          "environment": "Cloudflare tier via `worker.fetch` with real Durable Objects and D1",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "6/6: two workspaces (space owner A, source owner B) and two sessions; a member of the granted workspace reads the descriptor (200); a workspace that reuses the space slug and links the same table gets 404 SPACE_GRANT_NOT_FOUND while the authorized workspace still reads 200; a revoke on the source makes the very next read 409 SPACE_GRANT_REVOKED; an unexposed port is 404 SPACE_GRANT_PORT; an unknown grant is 404; a source the space never linked is 404 SPACE_SOURCE_NOT_LINKED; someone outside the space is 403 SPACE_NOT_MEMBER. Whole tier 271/271.",
+          "checkedSha": "7ed80770c4f4609481105dda4e51fd6df21ebeef"
         }
       ],
       "findings": [
@@ -484,10 +492,11 @@
         "Also fixed in the same pass: a source Room 5xx was reported as 404 \"not granted\" (now 503 DATABASE_UNAVAILABLE), a destination outage was reported as a membership denial (status now passed through), the route is rate-limited (60/min per actor, because each call fans out to two DOs), and the caller session cookie is no longer forwarded into the source tenant.",
         "OPEN from review round 3: (a) the new Room route/handler still has no test and room-http.test.ts does not provide the new required dep; (b) the refusal body uses `code` where the repo contract is `errorCode` (src/tabletop/shared/contracts.ts:116); (c) the endpoint returns a grant descriptor, not rows, so JOIN-01 cannot pass until rows are wired and `sourceDataRevision` becomes live; (d) the 401/405 branches are unreachable in production; (e) spaceId regexes disagree (collaboration-space.ts allows a leading digit, room-http/tool-connection do not); (f) the Room read skips the authority schema-version gate; (g) PLAN/spec still lack the T3A row and the new counts.",
         "Review findings 5 and 3 from round 3 are closed: the Room route/handler has tests and the harness provides `readSpaceProjection`; refusal bodies now use the repo contract { ok:false, errorCode, message } instead of an invented `code` field.",
-        "The two-workspace end-to-end test was attempted and withdrawn rather than committed failing: the room.test.ts fixtures use `cookieName(bindings,\"session\")` for the cookie and `csrfForToken(token)` for the mutation token, so a hand-built session yields 401 on /internal/create. Next attempt should import those two helpers (auth.ts / server side) instead of re-deriving them."
+        "The two-workspace end-to-end test was attempted and withdrawn rather than committed failing: the room.test.ts fixtures use `cookieName(bindings,\"session\")` for the cookie and `csrfForToken(token)` for the mutation token, so a hand-built session yields 401 on /internal/create. Next attempt should import those two helpers (auth.ts / server side) instead of re-deriving them.",
+        "The two-workspace test that the previous two reviews demanded now exists and passes through the real Worker entry (`worker.fetch` + seeded sessions via `cookieName`/`csrfForToken`). It is the test that would have caught the slug-identity blocker: the impersonation case asserts 404 while the authorized workspace still reads 200."
       ],
       "blocker": "ต้องได้ผลเลือก visual จากเจ้าของก่อนลงทุน room shell",
-      "nextAction": "Two-workspace e2e using the repo session helpers: create space workspace + source workspace, grant with spaceWorkspaceId, link the source, read through the real Room route (200), revoke (409), reset epoch (409), impersonation with the same slug (404), and a forced source failure (503 through the Worker branch)."
+      "nextAction": "Rows + live revision: serve the actual projected rows at the current source dataRevision (and re-read on demand), then a joined view that renders two sources — without that, JOIN-01 cannot honestly pass."
     },
     {
       "id": "F080-T3B",
