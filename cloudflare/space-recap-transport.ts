@@ -128,7 +128,15 @@ export async function handleSpaceRecap(
   const touched = [...new Set([...recap.changed, ...recap.withdrawn].map(entry => entry.workspaceId))];
   const impact = touched.map(workspaceId => impactOfSourceChange(connections, recap, workspaceId));
 
-  return new Response(JSON.stringify({ ok: true, recap, page, impact }), {
+  // A room cannot know a grant id or a port id on its own, so the answer carries the connections
+  // each source reported. The screen uses them to build read requests instead of inventing them.
+  const reported = grants.map(entry => ({
+    workspaceId: entry.grant.sourceWorkspaceId,
+    grantId: entry.grant.grantId,
+    ports: entry.grant.ports,
+  }));
+
+  return new Response(JSON.stringify({ ok: true, recap, page, impact, connections: reported }), {
     status: 200,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
