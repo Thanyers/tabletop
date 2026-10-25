@@ -55,3 +55,17 @@ describe('payloads are parsed at the boundary', () => {
     expect(parseSpaceCommand('space.leaveSource', { workspaceId: SOURCE })).toEqual({ ok: true, type: 'space.leaveSource', workspaceId: SOURCE });
   });
 });
+
+/**
+ * The contract for storing last-seen (decision D-021), written before the chain exists so the
+ * behaviour is agreed instead of improvised. These are `todo` on purpose: a skipped test is honest,
+ * a passing test that asserts nothing is not.
+ */
+describe('space.seen records how far a member has read', () => {
+  it.todo('is in the closed command vocabulary');
+  it.todo('parses a revision and nothing else');
+  it.todo('rejects a negative, fractional or missing revision');
+  it.todo('bumps the space revision like every other space command');
+  it.todo('records the calling actor only — a member cannot mark last-seen for someone else');
+  it.todo('keeps the previous value when the same actor asks for an older revision');
+});
