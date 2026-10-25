@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T22:15:00+07:00",
-  "lastVerifiedAt": "2026-10-25T22:12:00+07:00",
+  "updatedAt": "2026-10-25T22:20:00+07:00",
+  "lastVerifiedAt": "2026-10-25T22:19:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
-    "candidateSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+    "headSha": "71a359191efd8d9f8077be3b811ffe67712acfad",
+    "candidateSha": "71a359191efd8d9f8077be3b811ffe67712acfad",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "C0 (docs) + C1 (contracts) + C2 (isolated host + compile adapter + behaviour runner) อยู่ที่ PR #305 draft · UI/ISC/EXEC runner evidence ผ่านในเครื่อง แต่ authority integration, AI authoring, collaboration space, visual choice และ human/hosted acceptance ยังไม่ทำ · ยังไม่มี production release",
+  "currentCheckpoint": "C0 docs + C1 contracts + C2 isolated host/runner ผ่านในเครื่องและอยู่ที่ PR #305 · C5 เริ่มแล้วด้วย shared collaboration-space contract (schema + role×verb matrix, ยังไม่มี migration) · ค้าง: authority integration ของ behaviour, C3 authoring, room shell (รอเลือก visual), hosted/human acceptance · ยังไม่มี production release",
   "slices": [
     {
       "alias": "C0",
@@ -83,10 +83,11 @@
       "alias": "C5",
       "jt": "JT-2B",
       "featureTask": "F080-T2B",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "C1"
-      ]
+      ],
+      "note": "contract (schema/reader/role×verb/commands) commit 71a3591; storage + route + grants ยังไม่ทำ และยังไม่ apply migration"
     },
     {
       "alias": "CV",
@@ -373,7 +374,7 @@
       "id": "F080-T2B",
       "jt": "JT-2B",
       "featureId": "F080",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "F080-T1A"
       ],
@@ -381,11 +382,22 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": null,
-      "checks": [],
-      "findings": [],
+      "candidateSha": "71a359191efd8d9f8077be3b811ffe67712acfad",
+      "checks": [
+        {
+          "name": "collaboration space contract: role×verb matrix, source-link invariants, commands, reader compatibility",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/collaboration-space.test.ts",
+          "result": "PASS",
+          "evidence": "21/21: matrix keeps administration to the manager; a participant can run but not author/rebind; no space role can decide a source grant; export needs a separate unexpired grant; membership alone never reads a source; addMember/setRole/transferManager leave sources byte-identical; a second manager is refused; leaving marks the link `left` instead of deleting history; reader tolerates absent/old/newer schema and skips only the unreadable entries",
+          "checkedSha": "71a359191efd8d9f8077be3b811ffe67712acfad"
+        }
+      ],
+      "findings": [
+        "The plan matrix has no \"grant a source\" verb at all — encoded as an absence in SPACE_VERBS plus a test that asserts it, so a future verb addition fails the test rather than widening access silently."
+      ],
       "blocker": null,
-      "nextAction": "collaboration space aggregate + membership/role/grant + connection protocol + revoke/in-flight contract"
+      "nextAction": "storage + route for the space aggregate (additive only; D1 migration needs a scoped approval before apply), then connection proposals/projections on top of the C2 runner"
     },
     {
       "id": "F080-T3A",
