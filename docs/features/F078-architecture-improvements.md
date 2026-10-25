@@ -45,6 +45,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T9 | Extended load/soak and capacity comparison | T2, T5–T7 | Success/stale latency, queue/job age, failure/reconnect/outbox lag and storage curve across rooms compared against the recorded baseline before any capacity change |
 | T10 | Delete the Node runtime's unreachable model-job lifecycle; keep the provider contracts where their adapter consumes them | T1 | HTTP contract for `/model` unchanged (`503 MODEL_NOT_CONFIGURED`); no caller of the removed store/gateway; guard test keeps it from returning |
 | T12 | Point inverted seams down again: shared export, workspace decision modules, Canvas renderer/geometry out of the legacy tree | T1 | Same functions and inputs; moved tests pass at the new seam; no client import reaches `server/`; no behavior change |
+| T14 | Canvas browser view state (starred/hidden/seen/sizes/sort/layout) behind one module over an injected storage | T12 | Same keys, caps and fallbacks; blocked storage cannot break the canvas; unit tests cover corrupt values; component keeps React state only |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -192,3 +193,15 @@ Three dependencies pointed up the layering that `CURRENT_ARCHITECTURE.md` descri
 The sequence was test-first: the moved test files were created at their new paths first and failed (the modules were still elsewhere), then the implementations moved and the same tests passed unchanged. `grep` over `src/` confirms no client file imports `server/` anymore.
 
 Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **953 passed / 5 skipped (958)** (same count as dev, the suites moved rather than changed), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. No behavior change: same functions, same inputs, same assertions.
+
+### T14 — Canvas view state behind one module
+
+`CanvasWorkspace.tsx` is the client's canvas composition root, and it also held six browser-backed view preferences inline: starred cards, hidden cards, cards this browser already saw, card sizes, the Objects sort order, and the per-viewer layout with its viewport. Each had its own key, cap, `try/catch` and parse rule — about 160 lines that could only be tested through a mounted canvas.
+
+They now live in `src/tabletop/ui/canvas-view-state.ts`: `createCanvasViewState(storage)` takes a `CanvasStorage` (`Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>`) or `null`, and returns one method pair per preference plus `sortMode`/`layout`. The component builds one instance over `window.localStorage` (with a guard for blocked storage) and keeps React state only; 23 call sites point at the module. `isCanvasPosition` is exported so the shared-layout parser and the stored-layout parser use one bounds check instead of two.
+
+Behavior is preserved on purpose, and the tests say so: the same `tabletop:r1:*` keys, 200/400 caps, id/dimension bounds, `pinned` default `true`, viewport clamp `0.25..1.7`, an unreadable value falls back to the default (`created-desc` for sort), an empty hidden set removes the key, and a storage that throws on read or write degrades silently.
+
+Test-first: `canvas-view-state.test.ts` was written before the module and failed with `Cannot find module`; after the module landed, two expectations were wrong about the default sort (`updated-desc` instead of the code's `created-desc`) and were corrected in the test, not the implementation.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **959 passed / 5 skipped (964)** (dev 953 + 6 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (three pre-existing hook-dependency warnings in `CanvasWorkspace` are unchanged), public scan **0 findings** after the commit. `CanvasWorkspace.tsx` went from 2,259 to 2,146 lines. No UI or user-visible behavior change.
