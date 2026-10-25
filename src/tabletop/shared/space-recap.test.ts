@@ -104,6 +104,42 @@ describe('a recap reports what the room holds', () => {
   });
 });
 
+describe('a recap says who has caught up', () => {
+  it('marks a member unseen when the room moved past what they read', () => {
+    const recap = buildSpaceRecap({
+      space: space(),
+      grants: [],
+      lastSeen: { 'actor-a': 5 },
+    });
+    expect(recap.members).toEqual([{ actorId: 'actor-a', seenRevision: 5, unseen: true }]);
+  });
+
+  it('marks a member seen when they read the current revision', () => {
+    const recap = buildSpaceRecap({ space: space(), grants: [], lastSeen: { 'actor-a': 7 } });
+    expect(recap.members[0]).toEqual({ actorId: 'actor-a', seenRevision: 7, unseen: false });
+  });
+
+  it('treats a member with no record as unseen rather than guessing they read it', () => {
+    const recap = buildSpaceRecap({ space: space(), grants: [] });
+    expect(recap.members[0]).toEqual({ actorId: 'actor-a', unseen: true });
+    expect(recap.members[0]).not.toHaveProperty('seenRevision');
+  });
+
+  it('covers every member, not only the caller', () => {
+    const recap = buildSpaceRecap({
+      space: space({
+        members: [
+          { actorId: 'actor-a', name: 'A', role: 'manager', joinedAt: 1 },
+          { actorId: 'actor-b', name: 'B', role: 'maker', joinedAt: 2 },
+        ],
+      }),
+      grants: [],
+      lastSeen: { 'actor-b': 7 },
+    });
+    expect(recap.members.map(member => `${member.actorId}:${member.unseen}`)).toEqual(['actor-a:true', 'actor-b:false']);
+  });
+});
+
 describe('a recap can be paged without losing what matters', () => {
   function busyRoom(): ReturnType<typeof buildSpaceRecap> {
     return buildSpaceRecap({

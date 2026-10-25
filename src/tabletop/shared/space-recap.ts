@@ -27,11 +27,26 @@ export interface SpaceRecap {
   withdrawn: { workspaceId: string; grantId: string }[];
   /** True when at least one source could not be read at all. */
   incomplete: boolean;
+  /** Who has caught up with this revision, and who has not. */
+  members: MemberRecap[];
+}
+
+export interface MemberRecap {
+  actorId: string;
+  /** Undefined when the member has never been recorded as reading this room. */
+  seenRevision?: number;
+  /** True when the member has not read the current revision. */
+  unseen: boolean;
 }
 
 export interface SpaceRecapInput {
   space: CollaborationSpace;
   grants: readonly RecapGrantInput[];
+  /**
+   * The revision each member last read, when the caller tracks it. A member who has not caught up is
+   * reported as unseen instead of being assumed up to date.
+   */
+  lastSeen?: Record<string, number>;
 }
 
 const TH = {
@@ -85,6 +100,14 @@ export function buildSpaceRecap(input: SpaceRecapInput): SpaceRecap {
     changed,
     withdrawn,
     incomplete,
+    members: input.space.members.map(member => {
+      const seenRevision = input.lastSeen?.[member.actorId];
+      return {
+        actorId: member.actorId,
+        ...(seenRevision === undefined ? {} : { seenRevision }),
+        unseen: seenRevision === undefined || seenRevision < input.space.revision,
+      };
+    }),
   };
 }
 
