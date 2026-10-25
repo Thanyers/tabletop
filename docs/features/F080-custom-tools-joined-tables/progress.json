@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T03:02:00+07:00",
-  "lastVerifiedAt": "2026-10-26T03:02:00+07:00",
+  "updatedAt": "2026-10-26T03:12:00+07:00",
+  "lastVerifiedAt": "2026-10-26T03:12:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: ui-gate วัดจริงแล้ว — joined panel 16/16, authoring panel 14/16 (tablist ลูกศรไม่ขยับ focus, tab คลิกแล้วไม่เปลี่ยน state) ⇒ A11Y-01 ยัง UNVERIFIED และมี defect list ชัดเจนให้แก้รอบหน้า · 13 PASS / 22 UNVERIFIED",
+  "currentCheckpoint": "PR #305 (draft, mergeable): T4A เริ่มแล้ว — recap บริสุทธิ์ 6/6 ผ่าน CI (5bfd86a); ขั้นต่อไปต้องมี source-side query ที่บอก grant+revision ต่อห้อง จึงจะต่อ route ได้ · 13 PASS / 22 UNVERIFIED · ค้าง: room shell A/B/C, paid-AI cap, เปิด CSV ใน Excel, T4B, TOPO load, hosted/human",
   "slices": [
     {
       "alias": "C0",
@@ -602,7 +602,7 @@
       "id": "F080-T4A",
       "jt": "JT-4A",
       "featureId": "F080",
-      "state": "planned",
+      "state": "doing",
       "dependsOn": [
         "F080-T2A",
         "F080-T3B"
@@ -611,11 +611,20 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": null,
-      "checks": [],
+      "candidateSha": "5bfd86a",
+      "checks": [
+        {
+          "name": "room recap derives only what the room holds",
+          "environment": "local unit",
+          "command": "npx vitest run src/tabletop/shared/space-recap.test.ts",
+          "result": "PASS",
+          "evidence": "6/6: current/changed/withdrawn/incomplete/empty are distinguished, a moved source reports from->to, a source the caller could not read makes the recap say it is incomplete instead of guessing, and the recap JSON carries no rows, values or resource names.",
+          "checkedSha": "5bfd86a"
+        }
+      ],
       "findings": [],
       "blocker": null,
-      "nextAction": "context/recap เต็ม + impact/drill-down + lineage รวม revisions"
+      "nextAction": "Wire the recap to real grants and live revisions (needs a source-side query that lists the grants it holds for a space), then impact/lineage."
     },
     {
       "id": "F080-T4B",
