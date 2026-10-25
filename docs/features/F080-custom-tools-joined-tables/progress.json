@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-25T21:55:00+07:00",
-  "lastVerifiedAt": "2026-10-25T21:52:00+07:00",
+  "updatedAt": "2026-10-25T22:15:00+07:00",
+  "lastVerifiedAt": "2026-10-25T22:12:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,31 +18,155 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb",
-    "candidateSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb",
+    "headSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+    "candidateSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
-      { "number": 250, "head": "fix/CI-provider-mock-diagnostics", "draft": false, "title": "CI: ตัวจำลอง AI ในเทสต์ Workers บอกเหตุผลเมื่อปฏิเสธ request" }
+      {
+        "number": 250,
+        "head": "fix/CI-provider-mock-diagnostics",
+        "draft": false,
+        "title": "CI: ตัวจำลอง AI ในเทสต์ Workers บอกเหตุผลเมื่อปฏิเสธ request"
+      }
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "C0 (docs/checkpoint) และ C1 (tool package + bridge contracts) commit ไว้ที่ PR #305 แล้ว; C2 isolated runtime proof กำลังทำ (handwritten package, iframe host, behaviour runner) — ยังไม่มี hosted/live-AI/human acceptance ใด ๆ",
+  "currentCheckpoint": "C0 (docs) + C1 (contracts) + C2 (isolated host + compile adapter + behaviour runner) อยู่ที่ PR #305 draft · UI/ISC/EXEC runner evidence ผ่านในเครื่อง แต่ authority integration, AI authoring, collaboration space, visual choice และ human/hosted acceptance ยังไม่ทำ · ยังไม่มี production release",
   "slices": [
-    { "alias": "C0", "jt": "JT-0", "featureTask": "F080-T0", "state": "review", "dependsOn": [] },
-    { "alias": "C1", "jt": "JT-1A", "featureTask": "F080-T1A", "state": "review", "note": "contracts + validation + reader compatibility commit e4d01aa; storage interface รอ C5", "dependsOn": ["C0"] },
-    { "alias": "C2", "jt": "JT-1A", "featureTask": "F080-T1A", "state": "doing", "dependsOn": ["C1"] },
-    { "alias": "C3", "jt": "JT-1B", "featureTask": "F080-T1B", "state": "planned", "dependsOn": ["C2"] },
-    { "alias": "C4", "jt": "JT-2A", "featureTask": "F080-T2A", "state": "planned", "dependsOn": ["C3"] },
-    { "alias": "C5", "jt": "JT-2B", "featureTask": "F080-T2B", "state": "planned", "dependsOn": ["C1"] },
-    { "alias": "CV", "jt": "JT-V", "featureTask": "F080-T-V", "state": "planned", "dependsOn": ["C0", "C1"] },
-    { "alias": "C6", "jt": "JT-3A", "featureTask": "F080-T3A", "state": "planned", "dependsOn": ["C4", "C5", "CV"] },
-    { "alias": "C7", "jt": "JT-3B", "featureTask": "F080-T3B", "state": "planned", "dependsOn": ["C6"] },
-    { "alias": "C8", "jt": "JT-4A", "featureTask": "F080-T4A", "state": "planned", "dependsOn": ["C4", "C7"] },
-    { "alias": "C9", "jt": "JT-4B", "featureTask": "F080-T4B", "state": "planned", "dependsOn": ["C7", "C8"] },
-    { "alias": "C10", "jt": "JT-5", "featureTask": "F080-T5", "state": "planned", "dependsOn": ["C9"] },
-    { "alias": "CX", "jt": "JT-X", "featureTask": "F080-T-X", "state": "planned", "dependsOn": ["C1", "C7"] },
-    { "alias": "C11", "jt": "closure", "featureTask": "F080-Closure", "state": "planned", "dependsOn": ["C10", "CX"] }
+    {
+      "alias": "C0",
+      "jt": "JT-0",
+      "featureTask": "F080-T0",
+      "state": "review",
+      "dependsOn": []
+    },
+    {
+      "alias": "C1",
+      "jt": "JT-1A",
+      "featureTask": "F080-T1A",
+      "state": "review",
+      "note": "contracts + validation + reader compatibility (e4d01aa)",
+      "dependsOn": [
+        "C0"
+      ]
+    },
+    {
+      "alias": "C2",
+      "jt": "JT-1A",
+      "featureTask": "F080-T1A",
+      "state": "review",
+      "dependsOn": [
+        "C1"
+      ],
+      "note": "host + compile adapter + behaviour runner (ff0ad2c); authority integration ยังไม่ต่อ"
+    },
+    {
+      "alias": "C3",
+      "jt": "JT-1B",
+      "featureTask": "F080-T1B",
+      "state": "doing",
+      "dependsOn": [
+        "C2"
+      ]
+    },
+    {
+      "alias": "C4",
+      "jt": "JT-2A",
+      "featureTask": "F080-T2A",
+      "state": "planned",
+      "dependsOn": [
+        "C3"
+      ]
+    },
+    {
+      "alias": "C5",
+      "jt": "JT-2B",
+      "featureTask": "F080-T2B",
+      "state": "planned",
+      "dependsOn": [
+        "C1"
+      ]
+    },
+    {
+      "alias": "CV",
+      "jt": "JT-V",
+      "featureTask": "F080-T-V",
+      "state": "planned",
+      "dependsOn": [
+        "C0",
+        "C1"
+      ]
+    },
+    {
+      "alias": "C6",
+      "jt": "JT-3A",
+      "featureTask": "F080-T3A",
+      "state": "planned",
+      "dependsOn": [
+        "C4",
+        "C5",
+        "CV"
+      ]
+    },
+    {
+      "alias": "C7",
+      "jt": "JT-3B",
+      "featureTask": "F080-T3B",
+      "state": "planned",
+      "dependsOn": [
+        "C6"
+      ]
+    },
+    {
+      "alias": "C8",
+      "jt": "JT-4A",
+      "featureTask": "F080-T4A",
+      "state": "planned",
+      "dependsOn": [
+        "C4",
+        "C7"
+      ]
+    },
+    {
+      "alias": "C9",
+      "jt": "JT-4B",
+      "featureTask": "F080-T4B",
+      "state": "planned",
+      "dependsOn": [
+        "C7",
+        "C8"
+      ]
+    },
+    {
+      "alias": "C10",
+      "jt": "JT-5",
+      "featureTask": "F080-T5",
+      "state": "planned",
+      "dependsOn": [
+        "C9"
+      ]
+    },
+    {
+      "alias": "CX",
+      "jt": "JT-X",
+      "featureTask": "F080-T-X",
+      "state": "planned",
+      "dependsOn": [
+        "C1",
+        "C7"
+      ]
+    },
+    {
+      "alias": "C11",
+      "jt": "closure",
+      "featureTask": "F080-Closure",
+      "state": "planned",
+      "dependsOn": [
+        "C10",
+        "CX"
+      ]
+    }
   ],
   "tasks": [
     {
@@ -98,13 +222,15 @@
       "id": "F080-T1A",
       "jt": "JT-1A",
       "featureId": "F080",
-      "state": "doing",
-      "dependsOn": ["F080-T0"],
+      "state": "review",
+      "dependsOn": [
+        "F080-T0"
+      ],
       "owner": "lead + backend specialist",
       "branch": "feat/F080-custom-tools",
       "pr": null,
       "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
-      "candidateSha": null,
+      "candidateSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
       "checks": [
         {
           "name": "tool package contract: schema, limits, import graph, write declarations, reader compatibility",
@@ -137,20 +263,65 @@
           "result": "PASS",
           "evidence": "tsc -b clean; eslint clean (0 errors, 0 warnings)",
           "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "compile adapter: TSX→module, behaviour as ESM, entry reachability, budget, syntax errors",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/runtime/tools/compile.test.ts",
+          "result": "PASS",
+          "evidence": "9/9: automatic JSX runtime becomes require(\"react/jsx-runtime\"), behaviour stays ESM with export function, unreachable files are not shipped, relative imports resolve, syntax error is reported against its file, invalid package never reaches the compiler",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "isolated tool host in a sandboxed frame renders and invokes a hand-written package",
+          "environment": "browser (system Edge headless via Playwright), file:// fixture",
+          "command": "node scripts/build-tool-sandbox-runtime.mjs; node scripts/build-tool-host-harness.mjs; node tests/ui/tool-host/browser.mjs",
+          "result": "PASS",
+          "evidence": "13/13 checks: frame sandbox=\"allow-scripts\" only; two source revisions projected; pointer drag between zones; cost computed from the second source; declared behaviour invoked with typed inputs; live projection update keeps package state; keyboard path; page-originated spoof ignored; cookie/storage/network all blocked inside the frame (origin \"null\"); remount clean; no page errors",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "behaviour runner isolation on workerd",
+          "environment": "Cloudflare Workers runtime (workerd) via @cloudflare/vitest-plugin",
+          "command": "npm run test:cloudflare -- cloudflare/tool-behavior-runner.test.ts",
+          "result": "PASS",
+          "evidence": "11/11 (5.1 s), re-run by the lead after the specialist reported it: fetch refused, env binding absent, fresh isolate per run, 5,006 ms timeout, out-of-scope output rejected",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "host-side write-scope validation of behaviour output",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-behavior.test.ts server/tool-behavior-runner.test.ts",
+          "result": "PASS",
+          "evidence": "28/28 shared validation tests + 6/6 local Miniflare runner tests; ok:false never returns a changes list, so no prefix of an out-of-scope proposal can be committed",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "typecheck + lint across the whole slice",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx tsc -b; npx eslint <all changed files>",
+          "result": "PASS",
+          "evidence": "tsc -b clean; eslint clean",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
         }
       ],
       "findings": [
-        "shared/json-budget.ts treats an `undefined` value as unusable, so a TS object that spells an omitted optional field as `undefined` was reported as PACKAGE_BUDGET. Fixed by probing the JSON view of the package (which is what the store and the hash see) and keeping jsonWithinBudget semantics unchanged for wire values."
+        "shared/json-budget.ts treats an `undefined` value as unusable, so a TS object that spells an omitted optional field as `undefined` was reported as PACKAGE_BUDGET. Fixed by probing the JSON view of the package (which is what the store and the hash see) and keeping jsonWithinBudget semantics unchanged for wire values.",
+        "The frame needs `unsafe-eval` in its own CSP to instantiate compiled modules; the host CSP is untouched and the frame has an opaque origin with no cookie/storage/network (verified in the browser harness).",
+        "The bridge parser rejected messages containing `undefined` optional fields because jsonWithinBudget treats undefined as unusable; fixed by probing the JSON view on both the package and the message path, and by omitting absent fields when the host replies.",
+        "HTML5 drag-and-drop cannot be driven reliably by pointer emulation; the fixture uses pointer events, which is also the correct behaviour for touch and keyboard."
       ],
       "blocker": null,
-      "nextAction": "C2: handwritten synthetic package → compile adapter → sandboxed iframe host + bridge + server behaviour runner; ต้องได้ render+invoke จริงและ negative isolation tests ก่อนแตะ AI authoring"
+      "nextAction": "C3: authoring pipeline with an injected generator (fixture generator in tests), human source editing, activation + readback on one table; the live provider stays behind GATE-PAID-AI. In parallel: C5 collaboration-space contract (shared schema only, no migration) and re-run the visual exploration slice."
     },
     {
       "id": "F080-T1B",
       "jt": "JT-1B",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T1A"],
+      "dependsOn": [
+        "F080-T1A"
+      ],
       "owner": "frontend + backend",
       "branch": null,
       "pr": null,
@@ -166,7 +337,10 @@
       "jt": "JT-V",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T0", "F080-T1A"],
+      "dependsOn": [
+        "F080-T0",
+        "F080-T1A"
+      ],
       "owner": "frontend/design specialist",
       "branch": null,
       "pr": null,
@@ -182,7 +356,9 @@
       "jt": "JT-2A",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T1B"],
+      "dependsOn": [
+        "F080-T1B"
+      ],
       "owner": "lead + backend",
       "branch": null,
       "pr": null,
@@ -198,7 +374,9 @@
       "jt": "JT-2B",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T1A"],
+      "dependsOn": [
+        "F080-T1A"
+      ],
       "owner": "backend specialist",
       "branch": null,
       "pr": null,
@@ -214,7 +392,11 @@
       "jt": "JT-3A",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T2A", "F080-T2B", "F080-T-V"],
+      "dependsOn": [
+        "F080-T2A",
+        "F080-T2B",
+        "F080-T-V"
+      ],
       "owner": "frontend + backend",
       "branch": null,
       "pr": null,
@@ -230,7 +412,9 @@
       "jt": "JT-3B",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T3A"],
+      "dependsOn": [
+        "F080-T3A"
+      ],
       "owner": "backend + UI",
       "branch": null,
       "pr": null,
@@ -246,7 +430,10 @@
       "jt": "JT-4A",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T2A", "F080-T3B"],
+      "dependsOn": [
+        "F080-T2A",
+        "F080-T3B"
+      ],
       "owner": "domain + frontend",
       "branch": null,
       "pr": null,
@@ -262,7 +449,10 @@
       "jt": "JT-4B",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T3B", "F080-T4A"],
+      "dependsOn": [
+        "F080-T3B",
+        "F080-T4A"
+      ],
       "owner": "backend + frontend",
       "branch": null,
       "pr": null,
@@ -278,7 +468,9 @@
       "jt": "JT-5",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T4B"],
+      "dependsOn": [
+        "F080-T4B"
+      ],
       "owner": "backend + frontend",
       "branch": null,
       "pr": null,
@@ -294,7 +486,10 @@
       "jt": "JT-X",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T1A", "F080-T3B"],
+      "dependsOn": [
+        "F080-T1A",
+        "F080-T3B"
+      ],
       "owner": "independent export owner",
       "branch": null,
       "pr": null,
@@ -310,7 +505,10 @@
       "jt": "closure",
       "featureId": "F080",
       "state": "planned",
-      "dependsOn": ["F080-T5", "F080-T-X"],
+      "dependsOn": [
+        "F080-T5",
+        "F080-T-X"
+      ],
       "owner": "lead + independent reviewer",
       "branch": null,
       "pr": null,
@@ -329,7 +527,11 @@
       "what": "live AI acceptance (intent-only generation/repair) ต้องมี enforceable call/cost cap ก่อน dispatch",
       "why": "monetary cap ของ product ปิดตาม F036; ต้องมี cap ที่บังคับได้จริงก่อน paid call",
       "neededFrom": "product owner: authorization + cap (แผนเสนอ 3 run × ≤6 calls / USD 0.20 = 18 calls / USD 0.60)",
-      "unblocks": ["EDIT-01 (live part)", "G1-01 (live part)", "HELDOUT-01 (live part)"],
+      "unblocks": [
+        "EDIT-01 (live part)",
+        "G1-01 (live part)",
+        "HELDOUT-01 (live part)"
+      ],
       "workContinues": "fixture/local authoring tests และ runtime/backend slice อื่นเดินต่อได้"
     },
     {
@@ -338,7 +540,9 @@
       "what": "hosted synthetic fixture writes",
       "why": "ต้องมี environment/object/scope/expected rows/rollback ที่อนุมัติก่อน",
       "neededFrom": "product owner: scoped approval พร้อม scope/rollback",
-      "unblocks": ["hosted integration acceptance"],
+      "unblocks": [
+        "hosted integration acceptance"
+      ],
       "workContinues": "disposable local integration ทำต่อได้"
     },
     {
@@ -347,7 +551,10 @@
       "what": "persistent schema/data mutation (D1 migration) สำหรับ collaboration space",
       "why": "R0 ตาม CLAUDE.md: ต้องระบุ environment/object/operation/scope/expected rows/rollback",
       "neededFrom": "product owner: scoped approval เฉพาะเมื่อ C5 ต้อง apply migration; เพิ่มแบบ additive และมี rollback",
-      "unblocks": ["F080-T2B storage apply", "staging migration path"],
+      "unblocks": [
+        "F080-T2B storage apply",
+        "staging migration path"
+      ],
       "workContinues": "เขียน migration draft + ทดสอบบน disposable local DB ได้โดยไม่ apply"
     },
     {
@@ -356,7 +563,9 @@
       "what": "เจ้าของเลือกแนว room shell จาก 3 แนว",
       "why": "D5/แผน §6 ห้ามเลือกแทน",
       "neededFrom": "product owner: เลือก A/B/C จากหลักฐาน prototype",
-      "unblocks": ["F080-T3A room shell"],
+      "unblocks": [
+        "F080-T3A room shell"
+      ],
       "workContinues": "C1–C5/CX เดินต่อได้"
     },
     {
@@ -365,34 +574,37 @@
       "what": "ผู้ใช้จริง 5 คน เว้น 3 วัน ≥4 ผ่าน",
       "why": "agent ทำแทนไม่ได้",
       "neededFrom": "product owner: จัด session จริงตาม test kit",
-      "unblocks": ["HUMAN-01", "Goal closure"],
+      "unblocks": [
+        "HUMAN-01",
+        "Goal closure"
+      ],
       "workContinues": "เตรียม test kit/record sheet และทำงานอิสระที่เหลือ"
     }
   ],
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "commit + push bootstrap (feature doc, checkpoint, changelog, PLAN row) แล้วเปิด draft PR base dev ชื่อขึ้นต้น F080",
-      "verify": "gh pr view --json state,isDraft,baseRefName,headRefName",
-      "expect": "state OPEN, isDraft true, baseRefName dev"
+      "action": "commit + push checkpoint ของ C2 แล้วขอ independent review ของ candidate ff0ad2c",
+      "verify": "gh pr view 305 --json state,isDraft,headRefOid",
+      "expect": "OPEN, isDraft true, headRefOid = ff0ad2c หรือใหม่กว่า"
     },
     {
       "id": "NA-2",
-      "action": "C1: เขียน src/tabletop/shared/tool-package.ts (definitions/ports/behaviors schema + limits) และ tool-protocol.ts (bridge message schema) พร้อม negative tests",
-      "verify": "npm test -- src/tabletop/shared/tool-package.test.ts",
-      "expect": "valid round-trip ผ่าน; cycle/missing/oversize/depth reject ด้วย typed error"
+      "action": "C3: authorization pipeline ที่Inject generator ได้ (fixture generator ก่อน) + source editor ของคน + activation/readback บนโต๊ะเดียว",
+      "verify": "npx vitest run src/tabletop/domain/tool-authoring.test.ts",
+      "expect": "ทั้งทาง AI-fixture และทางคนผ่าน pipeline เดียวกัน; source ที่คนแก้ถูกใช้เป็น base ของรอบถัดไป"
     },
     {
       "id": "NA-3",
-      "action": "C2: พิสูจน์ isolated runtime ด้วย handwritten package (iframe host + bridge + behavior runner) ก่อนแตะ AI",
-      "verify": "node --import tsx tests/tool-host-browser.mjs; npm run test:cloudflare -- cloudflare/tool-behavior-runner.test.ts",
-      "expect": "render+invoke จริงและ negative isolation tests ผ่าน; บันทึก deployed-runtime feasibility"
+      "action": "C5: collaboration space contract ใน shared (schema/reader) โดยยังไม่ apply migration",
+      "verify": "npx vitest run src/tabletop/shared/collaboration-space.test.ts",
+      "expect": "space/สมาชิก/role/connection schema ผ่าน negative tests; reader ทน workspace เก่า"
     },
     {
       "id": "NA-4",
-      "action": "CV: เริ่ม 3 visual prototypes ขนานกับ C1/C2 (fixture contract จาก C1)",
-      "verify": "node --import tsx tests/room-explore-browser.mjs --variant=A|B|C",
-      "expect": "ภารกิจเดียวกันทำได้ 3 แนว + ภาพสรุป + task metrics พร้อมให้เจ้าของเลือก"
+      "action": "CV: ทำ 3 prototype ให้ครบพร้อม driver + ภาพ แล้วถามเจ้าของเลือก",
+      "verify": "node tests/ui/tool-room-explore/run.mjs",
+      "expect": "ภารกิจเดียวกันทำได้ทั้ง 3 แนว + report.json PASS"
     }
   ],
   "blockedItems": [],
