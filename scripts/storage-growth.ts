@@ -344,7 +344,7 @@ export async function runStorageGrowth(options: StorageGrowthOptions): Promise<S
   const repository = new SqlWorkspaceRepository(database);
   try {
     await migrateDatabase(database, 'local');
-    const authority = new CommandAuthority({ repository });
+    const authority = new CommandAuthority({ repository, identity: repository });
     const targets: WorkloadTarget[] = [];
     for (let index = 0; index < options.workspaces; index += 1) {
       const created = await authority.createOrRefreshSession(

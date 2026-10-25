@@ -14,9 +14,6 @@ import type {
   InvitationRecord,
   ModelJobCommitGuard,
   PendingArtifactCleanup,
-  RedeemInvitationInput,
-  RedeemedInvitation,
-  SessionRecord,
   StoredCommand,
   StoredEvent,
   StoredMember,
@@ -511,22 +508,6 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
-  async createSession(_session: SessionRecord): Promise<void> {
-    throw new Error('ROOM_SESSION_STORAGE_UNSUPPORTED');
-  }
-
-  async getSession(_tokenHash: string): Promise<SessionRecord | null> {
-    return null;
-  }
-
-  async getRotatedSession(_tokenHash: string, _ticketHash: string): Promise<SessionRecord | null> {
-    return null;
-  }
-
-  async touchSession(_tokenHash: string, _now: number, _name?: string): Promise<SessionRecord | null> {
-    return null;
-  }
-
   async listWorkspaceReferences(actorId: string, now: number): Promise<WorkspaceReference[]> {
     if (this.boundRoomId === null) return [];
     const workspace = this.workspaceSync(this.boundRoomId);
@@ -618,10 +599,6 @@ export class RoomRepository implements WorkspaceRepository {
       }
       await transaction.insertInvitation(invitation);
     });
-  }
-
-  async redeemInvitation(_input: RedeemInvitationInput): Promise<RedeemedInvitation> {
-    throw new Error('ROOM_INVITE_REDEMPTION_USES_GLOBAL_IDENTITY');
   }
 
   /** F003-T3: replace the table's reusable link (any earlier link stops working at once). */

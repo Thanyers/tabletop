@@ -48,6 +48,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T14 | Canvas browser view state (starred/hidden/seen/sizes/sort/layout) behind one module over an injected storage | T12 | Same keys, caps and fallbacks; blocked storage cannot break the canvas; unit tests cover corrupt values; component keeps React state only |
 | T13 | One owner for the AI prompt caps and for the shared-source limits, with drift tests | T12 | Same values and messages; contract/route/provider/UI import the leaf modules; a reintroduced literal fails a test |
 | T15 | Private chat state (closed cards, job→card ids, follow-ups, chat canvas ids) out of `useTableChat` | T12 | Same key, caps and fallbacks; blocked storage cannot break chat; the poll/retry loop stays for a later task |
+| T17 | Identity port (sessions + one-shot redemption) split from the workspace repository; no adapter implements what it cannot do | T4 | Session methods only where an identity store exists; missing identity fails loudly; Room adapter has no session methods; conformance suites still pass |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -234,3 +235,15 @@ The hook keeps React state and calls the store; it drops from 1,144 to 1,084 lin
 Test-first: `private-chat-store.test.ts` was written before the module and failed with `Cannot find module`; one expectation was wrong about `save` de-duplicating and was corrected in the test, matching the old hook's behavior.
 
 Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **972 passed / 5 skipped (977)** (dev 964 + 8 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. No UI or user-visible behavior change.
+
+### T17 — the identity port
+
+`WorkspaceRepository` promised session storage and one-shot invitation redemption. The Room's adapter implemented them anyway — four methods returning `null` and `createSession` throwing `ROOM_SESSION_STORAGE_UNSUPPORTED` — because the interface required them; the room keeps identity in D1 and in its own invite-link rows, so those methods could never be honest.
+
+The five methods moved to `IdentityRepository`, which only a runtime with an identity store implements (`SqlWorkspaceRepository implements WorkspaceRepository, IdentityRepository`). `CommandAuthority` takes an optional `identity`; when it is absent, its session methods throw `INTERNAL_ERROR` ("Session storage is not available in this runtime") through one `requireIdentity()` guard instead of pretending the session expired. `RoomRepository` no longer has the five methods at all, and the Node runtime, the repository-conformance harness and the four measurement/rehearsal scripts pass their repository for both ports.
+
+Behavior kept: no HTTP route changes, the Room still rejects `/api/session`-style work through the Worker's D1 auth, and the Node flow behaves exactly as before because it passes the same repository twice.
+
+Test-first: `server/identity-port.test.ts` was written before the option existed. It asserts that a runtime without identity fails with `INTERNAL_ERROR` (before the change it reported `SESSION_EXPIRED`), that the injected identity receives `getSession`/`touchSession`, and that `createOrRefreshSession` creates the session through it. Two fixture mistakes were found and fixed in the test, not the code: the server cookie name and the double-hash CSRF fixture (`sha256(sha256('tabletop-r1-csrf-v1:' + token))`).
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **975 passed / 5 skipped (980)** (dev 972 + 3 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (remaining warnings are pre-existing), public scan **0 findings** after the commit. The repository-conformance suites (SQL and Room adapters) still pass, so the split did not change transaction or receipt behavior.

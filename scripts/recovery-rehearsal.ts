@@ -147,7 +147,7 @@ export async function runRecoveryRehearsal(options: RehearsalOptions): Promise<R
     const repository = new SqlWorkspaceRepository(database);
     try {
       await migrateDatabase(database, 'local');
-      const authority = new CommandAuthority({ repository });
+      const authority = new CommandAuthority({ repository, identity: repository });
       const ownerRecord = ownerSessionRecord('owner-rehearsal', now);
       await repository.createSession(ownerRecord);
       const ownerSession: AuthenticatedSession = { record: ownerRecord, csrfToken: 'rehearsal-csrf', expiresAt: ownerRecord.hardExpiresAt };
@@ -230,7 +230,7 @@ export async function runRecoveryRehearsal(options: RehearsalOptions): Promise<R
       const restoredRepository = new SqlWorkspaceRepository(restoredDatabase);
       try {
         await restoredRepository.isReady();
-        const restoredAuthority = new CommandAuthority({ repository: restoredRepository });
+        const restoredAuthority = new CommandAuthority({ repository: restoredRepository, identity: restoredRepository });
         const verifyStartedAt = Date.now();
         const after = await inspect(restoredDatabase, workspace.id);
 

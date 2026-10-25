@@ -31,6 +31,7 @@ import {
   workspaceMemberCapacity,
 } from './limits.js';
 import type {
+  IdentityRepository,
   InvitationRecord,
   ModelJobCommitGuard,
   SessionRecord,
@@ -120,6 +121,12 @@ export interface TrustedInvoiceImport {
 
 export interface AuthorityOptions {
   readonly repository: WorkspaceRepository;
+  /**
+   * F078-T17: session storage. The Node runtime passes its repository for this
+   * too; the Room has no identity store, so its session methods fail loudly
+   * instead of silently returning "no session".
+   */
+  readonly identity?: IdentityRepository;
   readonly secureCookies?: boolean;
   readonly now?: () => number;
   readonly onWorkspaceChanged?: (workspaceId: string, epoch: number) => void;
@@ -245,6 +252,7 @@ function mapDomainError(error: DomainError): AuthorityError {
 
 export class CommandAuthority {
   readonly repository: WorkspaceRepository;
+  private readonly identity: IdentityRepository | null;
   private readonly secureCookies: boolean;
   private readonly now: () => number;
   private readonly workspaceIdFactory: () => string;
@@ -257,6 +265,7 @@ export class CommandAuthority {
 
   constructor(options: AuthorityOptions) {
     this.repository = options.repository;
+    this.identity = options.identity ?? null;
     this.secureCookies = options.secureCookies ?? false;
     this.now = options.now ?? Date.now;
     this.workspaceIdFactory = options.workspaceIdFactory ?? randomId;
@@ -279,6 +288,12 @@ export class CommandAuthority {
     }) : null;
   }
 
+  /** Session storage is optional by design; using it without one is a wiring bug, not an expired session. */
+  private requireIdentity(): IdentityRepository {
+    if (!this.identity) throw new AuthorityError('INTERNAL_ERROR', 'Session storage is not available in this runtime.');
+    return this.identity;
+  }
+
   setWorkspaceChangedHandler(handler: (workspaceId: string, epoch: number) => void): void {
     this.onWorkspaceChanged = handler;
   }
@@ -287,7 +302,7 @@ export class CommandAuthority {
     const name = parseName(input);
     const rawToken = cookieToken(request);
     if (rawToken) {
-      const existing = await this.repository.getSession(sha256(rawToken));
+      const existing = await this.requireIdentity().getSession(sha256(rawToken));
       if (existing && existing.revokedAt === null && expiresAt(existing) > this.now()) {
         const session = await this.authenticate(request);
         this.requireCsrf(request, session);
@@ -314,7 +329,7 @@ export class CommandAuthority {
       rotatedToTokenHash: null,
       rotationTicketHash: null,
     };
-    await this.repository.createSession(record);
+    await this.requireIdentity().createSession(record);
     const session = { record, csrfToken, expiresAt: expiresAt(record) };
     return {
       session,
@@ -327,10 +342,10 @@ export class CommandAuthority {
     const rawToken = cookieToken(request);
     if (!rawToken) throw new AuthorityError('SESSION_REQUIRED');
     const tokenHash = sha256(rawToken);
-    const stored = await this.repository.getSession(tokenHash);
+    const stored = await this.requireIdentity().getSession(tokenHash);
     const now = this.now();
     if (!stored || stored.revokedAt !== null || expiresAt(stored) <= now) throw new AuthorityError('SESSION_EXPIRED');
-    const refreshed = await this.repository.touchSession(tokenHash, now);
+    const refreshed = await this.requireIdentity().touchSession(tokenHash, now);
     if (!refreshed) throw new AuthorityError('SESSION_EXPIRED');
     const csrfToken = csrfForToken(rawToken);
     if (!constantTimeHashEqual(refreshed.csrfHash, csrfToken)) throw new AuthorityError('SESSION_EXPIRED');
@@ -540,7 +555,7 @@ export class CommandAuthority {
     if (!rawSessionToken) throw new AuthorityError('SESSION_REQUIRED');
     const ticketHash = sha256(ticket);
     const sessionTokenHash = sha256(rawSessionToken);
-    const storedSession = await this.repository.getSession(sessionTokenHash);
+    const storedSession = await this.requireIdentity().getSession(sessionTokenHash);
     if (!storedSession) throw new AuthorityError('SESSION_REQUIRED');
     const csrf = request.headers['x-csrf-token'];
     if (typeof csrf !== 'string' || !constantTimeHashEqual(storedSession.csrfHash, csrf)) {
@@ -571,7 +586,7 @@ export class CommandAuthority {
     };
     let redeemed;
     try {
-      redeemed = await this.repository.redeemInvitation({
+      redeemed = await this.requireIdentity().redeemInvitation({
         ticketHash,
         sessionTokenHash,
         nextSession,
@@ -1183,7 +1198,7 @@ export class CommandAuthority {
   }
 
   private async refreshName(session: AuthenticatedSession, name: string): Promise<AuthenticatedSession> {
-    const record = await this.repository.touchSession(session.record.tokenHash, this.now(), name);
+    const record = await this.requireIdentity().touchSession(session.record.tokenHash, this.now(), name);
     if (!record) throw new AuthorityError('SESSION_EXPIRED');
     return { record, csrfToken: session.csrfToken, expiresAt: expiresAt(record) };
   }
