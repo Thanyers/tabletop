@@ -86,13 +86,13 @@ describe('who may ask', () => {
   it('refuses an unauthenticated caller', async () => {
     const response = await handleSpaceProjectionRead(request(good), deps({ authenticate: async () => undefined }));
     expect(response.status).toBe(401);
-    expect(await body(response)).toMatchObject({ code: 'SESSION_EXPIRED' });
+    expect(await body(response)).toMatchObject({ errorCode: 'SESSION_EXPIRED' });
   });
 
   it('refuses a signed-in person who is not a member of the space', async () => {
     const response = await handleSpaceProjectionRead(request(good), deps({ authenticate: async () => ({ actorId: 'outsider' }) }));
     expect(response.status).toBe(403);
-    expect(await body(response)).toMatchObject({ code: 'SPACE_NOT_MEMBER' });
+    expect(await body(response)).toMatchObject({ errorCode: 'SPACE_NOT_MEMBER' });
   });
 
   it('refuses when the destination will not serve its own view (not a member there either)', async () => {
@@ -103,7 +103,7 @@ describe('who may ask', () => {
   it('refuses a workspace that holds no space', async () => {
     const response = await handleSpaceProjectionRead(request(good), deps({ workspaceView: async () => view(undefined) }));
     expect(response.status).toBe(404);
-    expect(await body(response)).toMatchObject({ code: 'SPACE_NOT_FOUND' });
+    expect(await body(response)).toMatchObject({ errorCode: 'SPACE_NOT_FOUND' });
   });
 });
 
@@ -114,14 +114,14 @@ describe('which table a space may ask about', () => {
       deps(),
     );
     expect(response.status).toBe(404);
-    expect(await body(response)).toMatchObject({ code: 'SPACE_SOURCE_NOT_LINKED' });
+    expect(await body(response)).toMatchObject({ errorCode: 'SPACE_SOURCE_NOT_LINKED' });
   });
 
   it('refuses a source whose link was marked left', async () => {
     const left = space({ sources: [{ workspaceId: SOURCE, epoch: 3, addedBy: 'actor-a', addedAt: 1, status: 'left' }] });
     const response = await handleSpaceProjectionRead(request(good), deps({ workspaceView: async () => view(left) }));
     expect(response.status).toBe(404);
-    expect(await body(response)).toMatchObject({ code: 'SPACE_SOURCE_NOT_LINKED' });
+    expect(await body(response)).toMatchObject({ errorCode: 'SPACE_SOURCE_NOT_LINKED' });
   });
 
   it('rejects malformed parameters before asking anyone anything', async () => {
@@ -146,7 +146,7 @@ describe('how the source answer is reported', () => {
       readSourceProjection: async () => ({ ok: false, code: 'SPACE_GRANT_REVOKED', message: 'The source revoked this connection at 4000.' }),
     }));
     expect(response.status).toBe(409);
-    expect(await body(response)).toMatchObject({ ok: false, code: 'SPACE_GRANT_REVOKED' });
+    expect(await body(response)).toMatchObject({ ok: false, errorCode: 'SPACE_GRANT_REVOKED' });
   });
 
   it('reports a stale epoch as a conflict', async () => {

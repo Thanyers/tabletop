@@ -36,7 +36,8 @@ function json(status: number, body: unknown): Response {
 }
 
 function refusal(status: number, code: string, message: string): Response {
-  return json(status, { ok: false, code, message });
+  // Canonical ApiError shape: the browser client and every other route read `errorCode`.
+  return json(status, { ok: false, errorCode: code, message });
 }
 
 /** Which space state (if any) this workspace holds; absent on any non-table or pre-feature workspace. */
