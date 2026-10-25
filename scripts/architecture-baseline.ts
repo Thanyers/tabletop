@@ -366,7 +366,7 @@ export async function runArchitectureBaseline(options: BaselineOptions): Promise
   const repository = new SqlWorkspaceRepository(database);
   try {
     await migrateDatabase(database, 'local');
-    const authority = new CommandAuthority({ repository });
+    const authority = new CommandAuthority({ repository, identity: repository });
     const sessionResult = await authority.createOrRefreshSession(new IncomingMessage(new Socket()), { name: 'Synthetic baseline owner' });
     let workspace = await authority.createWorkspace(sessionResult.session, {
       kind: 'table',

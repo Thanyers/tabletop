@@ -173,23 +173,31 @@ export interface RedeemedInvitation {
   replay: boolean;
 }
 
+/**
+ * F078-T17: sessions and one-shot invitation redemption belong to the identity
+ * store. Only runtimes that own identity implement this; the Room's adapter does
+ * not, so the interface no longer promises it.
+ */
+export interface IdentityRepository {
+  createSession(session: SessionRecord): Promise<void>;
+  getSession(tokenHash: string): Promise<SessionRecord | null>;
+  getRotatedSession(tokenHash: string, ticketHash: string): Promise<SessionRecord | null>;
+  touchSession(tokenHash: string, now: number, name?: string): Promise<SessionRecord | null>;
+  redeemInvitation(input: RedeemInvitationInput): Promise<RedeemedInvitation>;
+}
+
 export interface WorkspaceRepository {
   close(): Promise<void>;
   isReady(): Promise<void>;
   expireWorkspaces(now: number, limit?: number): Promise<number>;
   listPendingArtifactCleanup(limit?: number): Promise<PendingArtifactCleanup[]>;
   completeArtifactCleanup(request: PendingArtifactCleanup): Promise<void>;
-  createSession(session: SessionRecord): Promise<void>;
-  getSession(tokenHash: string): Promise<SessionRecord | null>;
-  getRotatedSession(tokenHash: string, ticketHash: string): Promise<SessionRecord | null>;
-  touchSession(tokenHash: string, now: number, name?: string): Promise<SessionRecord | null>;
   listWorkspaceReferences(actorId: string, now: number): Promise<WorkspaceReference[]>;
   createWorkspace(creation: WorkspaceCreation, now: number): Promise<void>;
   getWorkspace(workspaceId: string): Promise<StoredWorkspace | null>;
   getMember(workspaceId: string, actorId: string): Promise<StoredMember | null>;
   getInvitation(ticketHash: string): Promise<InvitationRecord | null>;
   createInvitation(invitation: InvitationRecord, now: number): Promise<void>;
-  redeemInvitation(input: RedeemInvitationInput): Promise<RedeemedInvitation>;
   withWorkspaceTransaction<T>(
     workspaceId: string,
     operation: (transaction: WorkspaceTransaction) => Promise<T>,
@@ -397,7 +405,7 @@ async function insertSession(executor: SqlExecutor, session: SessionRecord): Pro
   );
 }
 
-export class SqlWorkspaceRepository implements WorkspaceRepository {
+export class SqlWorkspaceRepository implements WorkspaceRepository, IdentityRepository {
   constructor(private readonly database: SqlDatabase) {}
 
   get sqlDatabase(): SqlDatabase {

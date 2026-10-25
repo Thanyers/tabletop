@@ -132,6 +132,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
 
     const authority = new CommandAuthority({
       repository,
+      identity: repository,
       secureCookies: environment === 'production',
       computeRunner: options.computeRunner ?? createNodeComputeRunner(),
       ...(options.now ? { now: options.now } : {}),
