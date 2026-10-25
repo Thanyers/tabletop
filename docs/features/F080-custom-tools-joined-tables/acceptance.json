@@ -154,17 +154,16 @@
       "slice": "F080-T1B",
       "title": "คนแก้ source แล้ว AI แก้ต่อบน version นั้นจริง",
       "status": "UNVERIFIED",
-      "environment": "browser + live provider (แยก gate)",
-      "sha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
+      "environment": "browser (Edge locally / Chromium in CI) + local pipeline",
+      "sha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
       "node": "v22.23.2",
       "commands": [
-        "node --import tsx tests/tool-authoring-browser.mjs",
-        "node --import tsx scripts/tool-authoring-live.mjs --real-ai"
+        "npm run test:tool-authoring:browser"
       ],
-      "evidence": "pipeline half PASS: the authoring pipeline hands the generator the person-edited base version (asserted), routes both authors through validate→compile→trial→activate, and refuses to dispatch without an approved budget. No model call has been made.",
+      "evidence": "human half PASS: a person edits the package source in the panel, a syntax error is reported against the file without starting a pipeline run, fixing it activates through the shared pipeline, and the readback shows version, content hash, route and reviewer; a second edit yields a different content hash. The AI half (a model continuing from that edited source) is proven only against the fixture generator.",
       "expected": "source ที่คนแก้ถูกใช้เป็น input จริงของการแก้ครั้งถัดไป (มี hash ของ base version); ไม่มีเส้นทางแอบกลับไป template; fixture/local แยกจาก live-provider result",
-      "actual": "UNVERIFIED — the fixture generator is not a model; the live-provider half still needs GATE-PAID-AI",
-      "limitations": "live-provider ต้องมี enforceable cap + authorization ก่อน dispatch"
+      "actual": "UNVERIFIED — the human editing path is real and proven in a browser; no model has authored anything and the panel is not mounted in the app yet",
+      "limitations": "live-provider half still needs GATE-PAID-AI; the panel is harness-only for now"
     },
     {
       "id": "EVOLVE-01",
@@ -540,14 +539,14 @@
       "title": "AI-generated source และ source ที่คนแก้ผ่าน pipeline เดียวกัน (compile/type/schema → isolated trial → diagnostics/repair → activate → readback)",
       "status": "UNVERIFIED",
       "environment": "local + browser",
-      "sha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
+      "sha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
       "node": "v22.23.2",
       "commands": [
         "npm test -- src/tabletop/domain/tool-activation-pipeline.test.ts"
       ],
-      "evidence": "structurally proven: AI route and human route share one pipeline and one activation record shape (12/12 authoring tests). The AI side used a fixture generator, not a model.",
+      "evidence": "both authors share one pipeline (`authorToolPackage`) and one activation record shape; the human path now runs through a real UI (8/8 browser checks) and the AI path is exercised with a fixture generator (12/12 unit tests).",
       "expected": "ทั้งสองทางเดินผ่านขั้นเดียวกันและได้ readback ที่เห็น source/diff และกลับไปแก้ได้; ไม่มีทางลัดเฉพาะ AI หรือเฉพาะคน",
-      "actual": "UNVERIFIED — do not read the fixture generator as evidence of AI authoring",
+      "actual": "UNVERIFIED — the AI side is still a fixture generator, not a model",
       "limitations": "activation policy เดิม (auto-apply guards) ต้องไม่ถูกผ่อน"
     },
     {

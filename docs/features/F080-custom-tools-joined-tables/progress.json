@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-27T10:05:00+07:00",
-  "lastVerifiedAt": "2026-10-27T10:05:00+07:00",
+  "updatedAt": "2026-10-26T00:10:00+07:00",
+  "lastVerifiedAt": "2026-10-26T00:10:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "f09f327e059ff33d0736a936e6a45642266f6a0b",
-    "candidateSha": "f09f327e059ff33d0736a936e6a45642266f6a0b",
+    "headSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
+    "candidateSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: C0-C2-C3pipeline-C5-C7protocol · review รอบ 2 (FAIL) ปิดแล้ว 4 ข้อ: authority round-trip test ผ่าน execute() จริงบน PGlite, member validation ที่ authority, membership attestation ชัดเจน, changelog ใหม่ · unit 1037/5 · ค้าง: transport ข้าม Room, UI, export route, hosted/live-AI/human, และ review findings 4-5,7 (client-supplied audit fields, revoked grants ไม่ถูก prune, adjudicateInFlight ยังไม่ re-read state เอง)",
+  "currentCheckpoint": "PR #305: C0-C2-C3 (pipeline + panel)-C5-C7protocol · หน้าจอ authoring จริงพร้อม harness 8/8 และอยู่ใน CI แล้ว · unit 1039/5 · ค้าง: mount panel ในแอปจริง, transport ข้าม Room (ต้องตัดสินวิธี authenticate ข้ามห้อง), export route, room shell (รอเลือก visual), hosted/live-AI/human acceptance",
   "slices": [
     {
       "alias": "C0",
@@ -332,7 +332,7 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6",
+      "candidateSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
       "checks": [
         {
           "name": "single authoring pipeline (human + AI) with pre-dispatch budget and isolated trial",
@@ -341,13 +341,23 @@
           "result": "PASS",
           "evidence": "12/12: an over-budget estimate never calls the generator (the spy generator is never entered); no generator or no budget fails closed; validation → compile → trial → activation for both routes; one repair attempt receives the previous diagnostics; a trial failure blocks activation and keeps the problems; an unchanged hand edit is rejected as NO_CHANGE; the AI route is handed the person-edited base version, not the original",
           "checkedSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6"
+        },
+        {
+          "name": "authoring panel: edit source, check, activate, read back — in a browser",
+          "environment": "browser (system Edge headless locally, Chromium in CI) via file:// harness",
+          "command": "npm run test:tool-authoring:browser",
+          "result": "PASS",
+          "evidence": "8/8: the panel opens on the package with both source files; a syntax error is reported as TOOL_COMPILE_FAILED against ui/main.tsx and — asserted explicitly — never starts a pipeline run; fixing it activates with a readback of version, content hash, route=human, reviewer=manual and requester; a second edit produces a different content hash (so the pipeline used the edited source, not the original); the same job completes with the keyboard only; no page errors",
+          "checkedSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1"
         }
       ],
       "findings": [
-        "Budget enforcement is now structural rather than a log line: the generator is only reachable through a function that refuses when the estimate exceeds the remaining cap, which is what the paid-AI gate requires before any live call."
+        "Budget enforcement is now structural rather than a log line: the generator is only reachable through a function that refuses when the estimate exceeds the remaining cap, which is what the paid-AI gate requires before any live call.",
+        "The panel check runs structure AND compile, because a syntax error is invisible to schema validation; without that the person would only learn about it after a failed activation. The refused check is asserted not to reach the pipeline at all.",
+        "The harness trial is a syntax gate over compiled modules, not an isolation boundary; isolated execution stays proven by the workerd runner tests (ISO-02). The panel is harness-only for now — mounting it in the app is still open."
       ],
       "blocker": null,
-      "nextAction": "source editor UI (human route) + activation/readback on one table + wiring the pipeline behind an authorized generator; live provider only after GATE-PAID-AI approval of calls/usd."
+      "nextAction": "Mount the panel in the workspace UI (one entry point, one place that calls the pipeline) and wire it to the same authority path a real activation would use; the AI route stays behind the paid-AI gate."
     },
     {
       "id": "F080-T-V",
@@ -654,21 +664,21 @@
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "ปิด finding 4-5,7: stamp joinedAt/epoch/server-side, prune revoked grants ด้วย cap ชัดเจน, และบังคับให้ transport re-read grant ก่อน adjudicateInFlight",
-      "verify": "npx vitest run src/tabletop/shared/tool-connection.test.ts src/tabletop/domain/tool-grant.test.ts",
-      "expect": "ไม่มี audit field จาก client; จำนวน grant มีขอบเขต; in-flight ใช้ grant ที่อ่านใหม่"
+      "action": "Mount ToolAuthoringPanel ใน workspace UI จริง (มีที่เดียวที่เรียก pipeline) แล้วให้ activation ผ่าน authority path",
+      "verify": "node --import tsx tests/tool-authoring-browser.mjs (หรือ generic-table-browser)",
+      "expect": "ผู้ใช้เปิด panel จากโต๊ะจริงได้และ readback มาจาก state ที่ commit แล้ว"
     },
     {
       "id": "NA-2",
-      "action": "transport ข้าม Room: internal route ที่เรียก readGrantedProjection + bearer ผูก grant/space/epoch",
-      "verify": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts",
-      "expect": "อ่านเฉพาะ projection ที่อนุญาต; revoke มีผลทันที; ไม่มีสิทธิ์รั่วข้ามห้อง"
+      "action": "ตัดสินวิธี authenticate การอ่านข้ามห้อง (transport): ต้องมีคำตอบเรื่อง signature/capability ก่อนเขียนโค้ด cross-Room",
+      "verify": "n/a (decision)",
+      "expect": "ได้ decision record + แนวทางที่ทดสอบได้โดยไม่ต้องเพิ่ม secret ที่ไม่ได้รับอนุมัติ"
     },
     {
       "id": "NA-3",
-      "action": "C3 UI: source editor + activation/readback",
-      "verify": "node --import tsx tests/tool-authoring-browser.mjs",
-      "expect": "คนแก้ source แล้ว activate/readback ได้"
+      "action": "CX: route export + เปิดไฟล์จริง",
+      "verify": "node --import tsx tests/export-readback.mjs",
+      "expect": "ไฟล์ตรงกับ manifest"
     }
   ],
   "blockedItems": [],
