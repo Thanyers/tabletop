@@ -185,3 +185,21 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - **Contract ที่กระทบ:** `shared/tool-connection.ts` (ใหม่), `TableState.spaceGrants?` (additive), `domain/tool-grant.ts`, `server/authority.ts` allowlist
 - **Rollback:** ลบ field/commands ได้โดยไม่ต้อง migrate; reader ทนการไม่มี field
 - **ข้อจำกัด:** ยังไม่มี transport ข้าม Room (Room A อ่าน Room B), ไม่มี subscription/invalidation จริง, ไม่มี UI; ผลที่ผู้ใช้เห็น/export ไปแล้วเรียกคืนไม่ได้ และต้องรายงานตามนั้น
+
+## D-020 — Transport ข้ามห้องใช้ internal route ของ Worker (ไม่เพิ่ม secret)
+
+- **วันที่:** 2026-10-26
+- **สถานะ:** `accepted` (decision) · resolver พิสูจน์แล้ว · HTTP wiring ยังไม่ทำ
+- **ปัญหา:** การอ่าน projection ข้าม workspace ต้องตอบสองคำถามพร้อมกัน — (1) ผู้ใช้เป็นสมาชิกของ *space* ปลายทางหรือไม่ (คำตอบอยู่ที่ปลายทาง) และ (2) ต้นทางได้ให้ grant ไว้หรือยัง (คำตอบอยู่ที่ต้นทาง) · ทางเลือกที่ต้อง secret ใหม่ (HMAC ระหว่าง Room) ถูกตัดออกเพราะเท่ากับขอ operator config ที่ยังไม่อนุมัติ
+- **ตัดสิน:** ให้ **Worker** เป็นผู้ไกล่เกลี่ย โดยไม่ต้องมี secret:
+  1. client เรียก `GET /api/workspaces/<spaceId>/space/projection?connection=<sourceId>&port=<portId>` ด้วย session ของตน
+  2. Worker authenticate session แล้วอ่าน view ของ workspace ปลายทาง → ตรวจว่า actor เป็นสมาชิกของ space นั้นจริง (นี่คือคำตอบของ (1))
+  3. Worker เรียก Room ต้นทางด้วย `internalRequest(request, '/internal/space-projection')` โดยส่ง `{ grantId, spaceId, actorId, portId }`
+  4. Room ต้นทางเรียก `resolveSpaceProjectionRead()` กับ grant ที่ตัวเองถืออยู่ + epoch ปัจจุบัน + คำยืนยันสมาชิกจากปลายทาง แล้วตอบ projection หรือ code ที่ปฏิเสธ
+  5. ทุกครั้งที่อ่านต้องผ่านขั้นนี้ซ้ำ — ไม่มี cache ให้ต้อง purge เมื่อ revoke
+- **เหตุผลว่าทำไมไม่ต้อง secret:** internal routes ของ Room ถูก match ด้วย path ที่เท่ากับ `/internal/...` เป๊ะ (`cloudflare/room-http.ts:77+`) ขณะที่ Worker ส่งต่อให้ Room เฉพาะ path ที่ match `/api/workspaces/<uuid>` และส่ง URL เดิมไป → client ไม่สามารถทำให้ Room เห็น path `/internal/...` ได้ (แผนเดียวกับที่ `/internal/create`, `/internal/view` ใช้อยู่แล้ว — `cloudflare/index.ts:71`)
+- **การตัดสินใจที่อยู่ในฟังก์ชันเดียว:** `shared/space-projection-read.ts` — grant ต้องเป็นของ space/ต้นทางนั้น, ต้องไม่ถูก revoke ก่อน `now`, ต้องมีคำยืนยันสมาชิกที่ตรงกับ actor, ต้องไม่ stale epoch, ต้องมี port ที่ grant เปิด — คืน `sourceDataRevision`/`grantVersion`/`readAt` ติดไปทุกครั้ง (7/7 tests)
+- **ผลต่อ finding 7:** การ re-read ไม่ใช่หน้าที่ของผู้เรียกอีกต่อไป เพราะจุดตัดสินใจรับ "grant ปัจจุบัน" เป็น input และ transport ต้องอ่าน state ใหม่ภายในจังหวะ commit
+- **ทางเลือกที่ตัดทิ้ง:** ให้ destination เก็บสำเนา grant (revoke ที่ต้นทางจะไม่มีผล) · ให้ client ถือ token แล้วอ่านเอง (ย้ายการตัดสินใจไปฝั่ง client) · ใช้ HMAC secret ระหว่าง Room (ต้องขอ config ใหม่โดยยังไม่จำเป็น)
+- **Rollback:** ลบ route + handler; resolver เป็น pure function ที่ลบได้โดยไม่กระทบ state
+- **ข้อจำกัด:** ยังไม่มี subscription/push (อ่านตาม request) · ยังไม่มี test ระดับ Worker ที่มีสอง workspace จริง — ต้องทำก่อนอ้าง JOIN-01 · ไม่มี global snapshot ข้ามแหล่ง (ตาม D-019)

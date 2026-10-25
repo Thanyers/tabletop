@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T00:10:00+07:00",
+  "updatedAt": "2026-10-26T00:15:00+07:00",
   "lastVerifiedAt": "2026-10-26T00:10:00+07:00",
   "goal": {
     "tool": "native DSH goal",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: C0-C2-C3 (pipeline + panel)-C5-C7protocol · หน้าจอ authoring จริงพร้อม harness 8/8 และอยู่ใน CI แล้ว · unit 1039/5 · ค้าง: mount panel ในแอปจริง, transport ข้าม Room (ต้องตัดสินวิธี authenticate ข้ามห้อง), export route, room shell (รอเลือก visual), hosted/live-AI/human acceptance",
+  "currentCheckpoint": "C0-C2-C3(pipeline+panel)-C5-C7protocol อยู่ที่ PR #305 · resolver ของ cross-room read พร้อม (7/7) และ D-020 ตัดสินวิธี authenticate โดยไม่เพิ่ม secret · ขั้นถัดไปที่ชัดเจน: wire Worker route + Room internal route แล้วทำ Worker-tier test ด้วยสอง workspace จริง",
   "slices": [
     {
       "alias": "C0",
@@ -109,7 +109,8 @@
         "C4",
         "C5",
         "CV"
-      ]
+      ],
+      "note": "resolver + design decision พร้อม (D-020); HTTP wiring กับ Worker-tier test ยังไม่ทำ"
     },
     {
       "alias": "C7",
@@ -459,7 +460,9 @@
       "baseSha": null,
       "candidateSha": null,
       "checks": [],
-      "findings": [],
+      "findings": [
+        "D-020 settles the authentication question for cross-workspace reads without a new secret: the Worker mediates, the destination vouches for space membership, and the source decides against its own grant list through resolveSpaceProjectionRead(). The remaining work is HTTP wiring plus a Worker-tier test with two real workspaces; until that exists, JOIN-01 stays UNVERIFIED and no claim of a live cross-room read should be made."
+      ],
       "blocker": "ต้องได้ผลเลือก visual จากเจ้าของก่อนลงทุน room shell",
       "nextAction": "room shell ตามแนวที่เลือก + shared tool workspace + live multi-source bindings"
     },
@@ -664,21 +667,9 @@
   "nextActions": [
     {
       "id": "NA-1",
-      "action": "Mount ToolAuthoringPanel ใน workspace UI จริง (มีที่เดียวที่เรียก pipeline) แล้วให้ activation ผ่าน authority path",
-      "verify": "node --import tsx tests/tool-authoring-browser.mjs (หรือ generic-table-browser)",
-      "expect": "ผู้ใช้เปิด panel จากโต๊ะจริงได้และ readback มาจาก state ที่ commit แล้ว"
-    },
-    {
-      "id": "NA-2",
-      "action": "ตัดสินวิธี authenticate การอ่านข้ามห้อง (transport): ต้องมีคำตอบเรื่อง signature/capability ก่อนเขียนโค้ด cross-Room",
-      "verify": "n/a (decision)",
-      "expect": "ได้ decision record + แนวทางที่ทดสอบได้โดยไม่ต้องเพิ่ม secret ที่ไม่ได้รับอนุมัติ"
-    },
-    {
-      "id": "NA-3",
-      "action": "CX: route export + เปิดไฟล์จริง",
-      "verify": "node --import tsx tests/export-readback.mjs",
-      "expect": "ไฟล์ตรงกับ manifest"
+      "action": "wire transport: `POST /internal/space-projection` บน Room ต้นทาง (เรียก resolveSpaceProjectionRead กับ state ที่อ่านใหม่) + Worker route `GET /api/workspaces/:spaceId/space/projection` ที่ตรวจสมาชิก space ก่อน แล้วทำ Worker-tier test ด้วยสอง workspace จริง",
+      "verify": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts",
+      "expect": "อ่านได้เฉพาะ projection ที่ grant เปิด; revoke แล้วอ่านไม่ผ่านด้วย SPACE_GRANT_REVOKED; outsider ได้ SPACE_GRANT_AUDIENCE"
     }
   ],
   "blockedItems": [],
