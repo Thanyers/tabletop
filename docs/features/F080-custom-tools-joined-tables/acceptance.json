@@ -242,17 +242,18 @@
       "requirement": "G3",
       "slice": "F080-T3B",
       "title": "authorized action เขียน source target หนึ่งครั้ง; stale/retry/revoked ถูก reject ถูกต้อง",
-      "status": "UNVERIFIED",
-      "environment": "workers integration + authority receipt",
-      "sha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real DOs + D1) · local PGlite authority",
+      "sha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
       "node": "v22.23.2",
       "commands": [
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
         "npx vitest run server/space-action-authority.test.ts"
       ],
-      "evidence": "authority level PASS (5/5): an action through a connection commits exactly one target (the source table) as the grant issuer, the grant is re-checked inside the commit transaction, and refusals are typed for an action the grant does not list, a missing grant, a revoked grant and a wrong workspace. A retry does not double-apply (it is refused), but it does not replay the receipt yet.",
+      "evidence": "an action invoked through a connection commits exactly one target: the source table, as the grant issuer, with the grant re-checked inside the commit transaction. A retry with the same idempotency key replays the stored receipt (duplicate:true, same revision, the row changes once); a revoked grant is refused with SPACE_ACTION_REVOKED; an action the grant does not list with SPACE_ACTION_NOT_GRANTED; a grant issued to another workspace with SPACE_ACTION_FORBIDDEN. The source row really changed (camera.available -> false) in the end-to-end case.",
       "expected": "สำเร็จครั้งเดียวแม้ retry (idempotency/receipt); stale expected revision ถูก reject ก่อน side effect; revoked grant ถูก reject; ไม่มี partial write ใน operation ที่ประกาศ",
-      "actual": "PARTIAL — commit and refusals are proven at the authority; no HTTP route, and retry replays nothing yet",
-      "limitations": "no end-to-end action test through the Worker; stale/retry semantics still short of the acceptance wording"
+      "actual": "PASS at this environment",
+      "limitations": "not exercised against deployed staging; \"stale expected revision\" is enforced by the authority CAS rather than asserted in the e2e; a connection cannot perform multi-authority writes at all, which is the intended scope."
     },
     {
       "id": "REVOKE-01",
@@ -609,17 +610,17 @@
       "requirement": "G3",
       "slice": "F080-T3A",
       "title": "สองโต๊ะเก็บ identity/authority เดิม + สร้างเครื่องมือร่วมที่อ่านทั้งคู่ + authorized action ไปต้นทางจริง",
-      "status": "UNVERIFIED",
-      "environment": "workers + browser",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "Cloudflare tier with two real workspaces + browser harness",
+      "sha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
       "node": "v22.23.2",
       "commands": [
         "node --import tsx tests/joined-tables-browser.mjs"
       ],
-      "evidence": null,
+      "evidence": "two workspaces keep their own identity, authority, members and revisions throughout (nothing is moved or merged); a shared tool reads both sources through the Worker (rows at each source's live revision) and calls one authorized action back to the source, which commits on its own authority exactly once.",
       "expected": "workspace id/authority เดิมไม่ถูกย้ายหรือ merge; shared tool อ่านสองแหล่งและเรียก action ที่ได้รับอนุญาตกลับต้นทางได้จริง",
-      "actual": "not run",
-      "limitations": "two-actor live test ต้องมี readback จากทั้งสองบริบท"
+      "actual": "PASS at this environment",
+      "limitations": "the room shell that visually hosts both tables is not built (waiting on the visual choice), so this is proven at the data/authority level plus the joined panel harness."
     },
     {
       "id": "G3-02",

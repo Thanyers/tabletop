@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T01:50:00+07:00",
-  "lastVerifiedAt": "2026-10-26T01:50:00+07:00",
+  "updatedAt": "2026-10-26T01:58:00+07:00",
+  "lastVerifiedAt": "2026-10-26T01:58:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
-    "candidateSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
+    "headSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
+    "candidateSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: T3B เริ่มแล้ว — action ผ่าน connection commit บน authority ของต้นทางในฐานะ grant issuer (5/5 tests: commit จริง, ไม่มี grant/ไม่อยู่ใน allowlist/ถูก revoke/ผิด workspace ถูกปฏิเสธ) · retry ตอนนี้ \"ถูกปฏิเสธ\" ไม่ใช่ replay (ปลอดภัยแต่ยังไม่ตรงเกณฑ์ JOIN-02) · ยังไม่มี HTTP route ของ action · cloudflare 273/273 · unit 1064/5",
+  "currentCheckpoint": "PR #305: การชนโต๊ะทำงานครบเส้น — อ่าน projection ข้ามห้อง (rows สด) และ **action กลับต้นทางเดียว** ผ่าน Worker→Room ต้นทาง→authority commit ในฐานะ grant issuer พร้อม retry replay และ refusal ครบ (12/12 e2e, 8/8 transport, 5/5 authority) · cloudflare 281/281 · unit 1064/5 · ค้าง: T4A/T4B (context/history/impact/recovery), T5 portable, CX export route, room shell (รอเลือก visual), hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -542,7 +542,7 @@
       "id": "F080-T3B",
       "jt": "JT-3B",
       "featureId": "F080",
-      "state": "doing",
+      "state": "review",
       "dependsOn": [
         "F080-T3A"
       ],
@@ -550,7 +550,7 @@
       "branch": null,
       "pr": null,
       "baseSha": null,
-      "candidateSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081",
+      "candidateSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
       "checks": [
         {
           "name": "connection protocol: grant at the source, audience, effective revocation, in-flight adjudication",
@@ -567,6 +567,14 @@
           "result": "PASS",
           "evidence": "5/5: the borrow action commits on the source table (the camera row becomes unavailable, revision moves); refusals are typed for a grant that does not list the action (SPACE_ACTION_NOT_GRANTED), no grant at all, a revoked grant (SPACE_ACTION_REVOKED) and a grant issued to another workspace (SPACE_ACTION_FORBIDDEN). The guard runs inside the commit transaction, so a revoke cannot race the write, and the issuer is the actor so a connection never exceeds their own rights.",
           "checkedSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081"
+        },
+        {
+          "name": "authorized action end to end through the Worker, with replay and refusals",
+          "environment": "Cloudflare tier (worker.fetch + real DOs + D1)",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-action-transport.test.ts",
+          "result": "PASS",
+          "evidence": "12/12 in the cross e2e (action cases) + 8/8 transport: the borrow action commits on the source (the camera row becomes unavailable), a retry with the same idempotency key returns duplicate:true and the same revision with no second write, a revoked grant is 409 SPACE_ACTION_REVOKED, an action the grant does not list is 404 SPACE_ACTION_NOT_GRANTED, an outsider is 403 and an unlinked table is 404. The commit runs as the grant issuer, and the grant is re-checked inside the commit transaction.",
+          "checkedSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6"
         }
       ],
       "findings": [
@@ -576,10 +584,11 @@
         "Review findings 1, 2, 3 and 6 are closed at f09f327: (1) `authorizeProjectionRead`/`adjudicateInFlight` no longer take a free boolean — the caller must state that the destination verified membership, and an unstated claim is refused; the destination must re-verify before commit and the in-flight check now also rejects an actor outside the grant audience. (2) The authority validates the target of space.addMember/setRole/transferManager against real membership rows, so an outsider actorId cannot be written into a space (proven end-to-end: MEMBER_NOT_FOUND). (3) `server/space-commands-authority.test.ts` runs 6 commands through the real `CommandAuthority.execute()` on PGlite, which is the test that would have caught the blocker.",
         "Still open: (4) joinedAt / epoch / sharedToolWorkspaceId remain client-supplied in space payloads; (5) revoked grants are never pruned so the array can grow; (7) adjudicateInFlight still trusts the grant object it is handed (the transport must re-read before calling it).",
         "Retry semantics are safe but not yet correct for the acceptance: a second call with the same idempotency key is refused with IDEMPOTENCY_MISMATCH instead of replaying the stored ack, because trustedRequestHash includes the expected revision and that moved. No double write happens; making the receipt hash revision-independent for space actions is the next step.",
-        "Action ids are domain-defined and camelCase (e.g. giveBack), so the grant schema was relaxed to a bounded [A-Za-z][A-Za-z0-9_-]{1,39} reference."
+        "Action ids are domain-defined and camelCase (e.g. giveBack), so the grant schema was relaxed to a bounded [A-Za-z][A-Za-z0-9_-]{1,39} reference.",
+        "The source must act as the grant issuer, not as the requester: the first end-to-end attempt failed with every call returning 404 because the requester is not a member of the source table. Fixed by resolving `grantedBy` from the stored grant before the commit; the requester is only used for the destination-side membership check."
       ],
       "blocker": null,
-      "nextAction": "Three steps in order: (1) make the space-action receipt hash revision-independent so a retry replays; (2) add the HTTP route (Worker + /internal/space-action) mirroring the projection read; (3) extend the two-workspace e2e with commit/retry/stale/revoked cases."
+      "nextAction": "Disconnect/rebind of a connection (G3-02) and a third-table topology test, then T4A context/history/impact."
     },
     {
       "id": "F080-T4A",
