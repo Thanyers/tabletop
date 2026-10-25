@@ -7,6 +7,7 @@ import { SESSION_HARD_MS } from './contracts.js';
 import type { Env } from './contracts.js';
 import { cookieName, csrfForToken } from './auth.js';
 import worker from './index.js';
+import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 
 /**
  * F080 / C6 — the cross-workspace projection read, end to end, through the real Worker entry.
@@ -112,6 +113,31 @@ async function fixture(): Promise<Fixture> {
   return { owner, sourceOwner, space: space.id, source: source.id, slug };
 }
 
+/** A table with an active program and rows, built the way a person would: import a source, then activate a change. */
+async function createEquipmentTable(owner: Actor): Promise<WorkspaceView> {
+  const created = await createWorkspace(owner, 'Equipment');
+  const imported = await command(owner, created, 'table.import', {
+    filename: tableScenarioSources.equipment.filename,
+    text: tableScenarioSources.equipment.text,
+  });
+  let current = imported.workspace;
+  const sourceId = (current.domain as { sources?: { id: string }[] }).sources?.[0]?.id;
+  if (!sourceId) throw new Error('EQUIPMENT_SOURCE_MISSING');
+  const change = equipmentChange(sourceId);
+  const steps = [
+    ['evolve.propose', { change }],
+    ['evolve.simulate', {}],
+    ['evolve.validate', {}],
+    ['evolve.approve', {}],
+    ['evolve.activate', {}],
+  ] as const;
+  for (const [type, payload] of steps) {
+    const result = await command(owner, current, type, payload);
+    current = result.workspace;
+  }
+  return current;
+}
+
 describe('two workspaces, one granted projection', () => {
   it('serves the descriptor and rows at the live revision', async () => {
     const setup = await fixture();
@@ -172,6 +198,79 @@ describe('two workspaces, one granted projection', () => {
     const result = await readProjection(setup.owner, setup.space, { source: other.id, grant: 'grant-budget', port: 'budget' });
     expect(result.status).toBe(404);
     expect(result.body).toMatchObject({ errorCode: 'SPACE_SOURCE_NOT_LINKED' });
+  });
+
+  it('serves real rows from a source that has data, with only the granted fields', async () => {
+    const owner = await seedActor('Rows owner');
+    const sourceOwner = await seedActor('Rows source');
+    const space = await createWorkspace(owner, 'Rows space');
+    const source = await createEquipmentTable(sourceOwner);
+
+    const granted = await command(sourceOwner, source, 'source.grantProjection', {
+      grantId: 'grant-equipment',
+      spaceId: 'rows-room',
+      spaceWorkspaceId: space.id,
+      audience: { kind: 'space-members' },
+      // `available` is deliberately not granted.
+      projections: [{ portId: 'equipment', resource: 'equipment', fields: ['name'], maxRows: 5 }],
+      actions: [],
+    });
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'rows-room',
+      title: 'ห้องข้อมูลจริง',
+      sharedToolWorkspaceId: space.id,
+    });
+    await command(owner, created.workspace, 'space.addSource', {
+      source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+    });
+
+    const result = await readProjection(owner, space.id, { source: source.id, grant: 'grant-equipment', port: 'equipment' });
+    expect(result.status).toBe(200);
+    const rows = result.body.rows as { id: string; values: Record<string, unknown> }[];
+    expect(rows.length).toBeGreaterThan(0);
+    // Only the granted field travels; the schema the grant withheld stays behind.
+    for (const row of rows) expect(Object.keys(row.values)).toEqual(['name']);
+    const liveRevision = (source.domain as { dataRevision: number }).dataRevision;
+    expect(result.body.sourceDataRevision).toBe(liveRevision);
+    expect(granted.workspace.revision).toBeTruthy();
+  });
+
+  it('reports a moved source revision on the next read', async () => {
+    const owner = await seedActor('Fresh owner');
+    const sourceOwner = await seedActor('Fresh source');
+    const space = await createWorkspace(owner, 'Fresh space');
+    const source = await createEquipmentTable(sourceOwner);
+
+    await command(sourceOwner, source, 'source.grantProjection', {
+      grantId: 'grant-fresh',
+      spaceId: 'fresh-room',
+      spaceWorkspaceId: space.id,
+      audience: { kind: 'space-members' },
+      projections: [{ portId: 'equipment', resource: 'equipment', fields: ['name'], maxRows: 5 }],
+      actions: [],
+    });
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'fresh-room', title: 'ห้องสด', sharedToolWorkspaceId: space.id,
+    });
+    const linked = await command(owner, created.workspace, 'space.addSource', {
+      source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+    });
+
+    const before = await readProjection(owner, space.id, { source: source.id, grant: 'grant-fresh', port: 'equipment' });
+    expect(before.status).toBe(200);
+    const beforeRevision = Number(before.body.sourceDataRevision);
+
+    // Change the source through its own command path; the space is not told anything.
+    const current = await viewOf(sourceOwner, source.id);
+    await command(sourceOwner, current, 'table.import', {
+      filename: 'notes.txt',
+      text: 'A second file on the source table.',
+    });
+
+    const after = await readProjection(owner, space.id, { source: source.id, grant: 'grant-fresh', port: 'equipment' });
+    expect(after.status).toBe(200);
+    expect(Number(after.body.sourceDataRevision)).toBeGreaterThan(beforeRevision);
+    expect(linked.workspace.id).toBe(space.id);
   });
 
   it('refuses someone who is not in the space', async () => {
