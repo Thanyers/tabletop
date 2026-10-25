@@ -47,6 +47,7 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T12 | Point inverted seams down again: shared export, workspace decision modules, Canvas renderer/geometry out of the legacy tree | T1 | Same functions and inputs; moved tests pass at the new seam; no client import reaches `server/`; no behavior change |
 | T14 | Canvas browser view state (starred/hidden/seen/sizes/sort/layout) behind one module over an injected storage | T12 | Same keys, caps and fallbacks; blocked storage cannot break the canvas; unit tests cover corrupt values; component keeps React state only |
 | T13 | One owner for the AI prompt caps and for the shared-source limits, with drift tests | T12 | Same values and messages; contract/route/provider/UI import the leaf modules; a reintroduced literal fails a test |
+| T15 | Private chat state (closed cards, job→card ids, follow-ups, chat canvas ids) out of `useTableChat` | T12 | Same key, caps and fallbacks; blocked storage cannot break chat; the poll/retry loop stays for a later task |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -219,3 +220,17 @@ Test-first: two drift tests were written before the consolidation and failed on 
 Deliberately left alone: the 4,000-character caps on assistant *answer text*, research snippets and job partial content are different concepts; consolidating them into a prompt cap would change what they bound.
 
 Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **964 passed / 5 skipped (969)** (dev 959 + 5 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (the listed warnings are pre-existing), public scan **0 findings** after the commit. No limit value, guard order or user-facing message changed.
+
+### T15 — private chat state out of the hook
+
+The first slice of the chat-lifecycle work. `useTableChat.tsx` (1,144 lines) carried a second responsibility: per-viewer chat bookkeeping in browser storage — which cards this viewer closed, which card a server job belongs to, which follow-up came from which card, the per-viewer canvas scope, and the chat card's canvas id.
+
+Those live in `src/tabletop/workspace/private-chat-store.ts` now: `createPrivateChatStore(storage)` takes a `Pick<Storage, 'getItem' | 'setItem'>` or `null` and returns `scopeFor`, `chatNodeId`, `chatCardNodeId`, `load`, `save`, `rememberJobCard`, `rememberFollowUp`, `isDismissed` and `dismiss`. `persistentCardId` (job id, then model-job id, then card id) is exported because the hook still uses the same precedence outside the store.
+
+Behavior preserved deliberately, and tested: the same `tabletop:r1:private-chat:*` key, the 80-entry caps on each list, `save`/`load` keeping the given order (de-duplication stays in `dismiss`), corrupt or foreign values falling back to an empty state, dismissal by job id before model-job id before card id, and a shared `table.chat.<jobId>` card id only when `VISIBILITY_POLICY === 'open'` and the job id is a 64-char hex token. A `null` or throwing storage degrades silently.
+
+The hook keeps React state and calls the store; it drops from 1,144 to 1,084 lines. **Deliberately not moved:** the effectful poll/backoff/timeout/retry loop and the assistant confirmation flow. Those are the racy paths (F025/F038/F045) and deserve their own task with a fake clock, not a ride-along on a storage move.
+
+Test-first: `private-chat-store.test.ts` was written before the module and failed with `Cannot find module`; one expectation was wrong about `save` de-duplicating and was corrected in the test, matching the old hook's behavior.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **972 passed / 5 skipped (977)** (dev 964 + 8 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. No UI or user-visible behavior change.
