@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GrantedConnection } from './space-grants';
-import { impactOfSourceChange } from './space-impact';
+import { impactOfSourceChange, drillDownRow } from './space-impact';
 
 /** F080 / JT-4A: impact is derived from what the source granted, not from what a tool claims. */
 
@@ -67,5 +67,31 @@ describe('impact of a changed source', () => {
     }, A);
     expect(impact.summary).not.toContain('tool');
     expect(JSON.stringify(impact)).not.toContain('rows');
+  });
+});
+
+describe('drill down to one row', () => {
+  const rows = [
+    { id: 'row-1', values: { room: 'room-a', price: 1250, secret: 'hidden' } },
+    { id: 'row-2', values: { room: 'room-b', price: 4200 } },
+  ];
+
+  it('returns only the granted fields of the row', () => {
+    const result = drillDownRow(rows, { rowId: 'row-1', fields: ['room', 'price'] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.keys(result.values).sort()).toEqual(['price', 'room']);
+  });
+
+  it('answers an unknown row the same way as one it may not see', () => {
+    expect(drillDownRow(rows, { rowId: 'nope', fields: ['room'] })).toMatchObject({ ok: false, code: 'ROW_NOT_FOUND' });
+  });
+
+  it('never returns a field that was not granted, even when the row has it', () => {
+    const result = drillDownRow(rows, { rowId: 'row-1', fields: ['room'] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.values).not.toHaveProperty('secret');
+    expect(result.values).not.toHaveProperty('price');
   });
 });

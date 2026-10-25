@@ -63,3 +63,26 @@ export function impactOfSourceChange(
 
   return { workspaceId, ports, blocked, summary };
 }
+
+/**
+ * F080 / JT-4A: drill down to one row, with the granted fields only.
+ *
+ * A missing row and a row that exists but is not visible are answered the same way on purpose: the
+ * caller cannot use a drill-down to learn whether some other row exists.
+ */
+export type DrillDownResult =
+  | { ok: true; rowId: string; values: Record<string, unknown> }
+  | { ok: false; code: 'ROW_NOT_FOUND'; message: string };
+
+export function drillDownRow(
+  records: readonly { id: string; values: Record<string, unknown> }[],
+  input: { rowId: string; fields: readonly string[] },
+): DrillDownResult {
+  const row = records.find(entry => entry.id === input.rowId);
+  if (!row) return { ok: false, code: 'ROW_NOT_FOUND', message: 'That row is not part of what this connection exposes.' };
+  const values: Record<string, unknown> = {};
+  for (const field of input.fields) {
+    if (field in row.values) values[field] = row.values[field];
+  }
+  return { ok: true, rowId: row.id, values };
+}
