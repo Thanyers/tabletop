@@ -446,3 +446,93 @@ describe('exporting a granted projection', () => {
     expect(result.text).toContain('SPACE_NOT_MEMBER');
   });
 });
+
+/** Grant one projection from a source table to a space workspace. */
+async function grantProjection(
+  sourceOwner: Actor,
+  source: WorkspaceView,
+  input: { grantId: string; spaceId: string; spaceWorkspaceId: string; portId: string; resource?: string },
+): Promise<void> {
+  await command(sourceOwner, source, 'source.grantProjection', {
+    grantId: input.grantId,
+    spaceId: input.spaceId,
+    spaceWorkspaceId: input.spaceWorkspaceId,
+    audience: { kind: 'space-members' },
+    projections: [{ portId: input.portId, resource: input.resource ?? 'equipment', fields: ['name'], maxRows: 10 }],
+    actions: [],
+  });
+}
+
+describe('three tables and rebinding', () => {
+  it('serves three independent sources at their own revisions', async () => {
+    const owner = await seedActor('Topology owner');
+    const space = await createWorkspace(owner, 'Topology space');
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'topology-room', title: 'ห้องสามโต๊ะ', sharedToolWorkspaceId: space.id,
+    });
+    let current = created.workspace;
+
+    const sources: { id: string; grant: string }[] = [];
+    for (const index of [1, 2, 3]) {
+      const sourceOwner = await seedActor(`Source ${index}`);
+      const source = await createEquipmentTable(sourceOwner);
+      const grantId = `grant-t${index}`;
+      await grantProjection(sourceOwner, source, { grantId, spaceId: 'topology-room', spaceWorkspaceId: space.id, portId: `port${index}` });
+      const linked = await command(owner, current, 'space.addSource', {
+        source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+      });
+      current = linked.workspace;
+      sources.push({ id: source.id, grant: grantId });
+    }
+
+    // All three are linked, and each answers with its own live revision.
+    const spaceView = await viewOf(owner, space.id);
+    const spaceState = (spaceView.domain as { collaborationSpace?: { sources: { workspaceId: string; status: string }[] } }).collaborationSpace;
+    expect(spaceState?.sources).toHaveLength(3);
+    expect(spaceState?.sources.every(source => source.status === 'linked')).toBe(true);
+
+    for (const [index, source] of sources.entries()) {
+      const result = await readProjection(owner, space.id, { source: source.id, grant: source.grant, port: `port${index + 1}` });
+      expect(result.status, `source ${index + 1}`).toBe(200);
+      expect((result.body.rows as unknown[]).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('stops reaching a disconnected table and serves a newly linked one instead', async () => {
+    const owner = await seedActor('Rebind owner');
+    const firstOwner = await seedActor('First source');
+    const secondOwner = await seedActor('Second source');
+    const space = await createWorkspace(owner, 'Rebind space');
+    const first = await createEquipmentTable(firstOwner);
+    const second = await createEquipmentTable(secondOwner);
+
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'rebind-room', title: 'ห้องเชื่อมใหม่', sharedToolWorkspaceId: space.id,
+    });
+    await grantProjection(firstOwner, first, { grantId: 'grant-first', spaceId: 'rebind-room', spaceWorkspaceId: space.id, portId: 'first' });
+    await grantProjection(secondOwner, second, { grantId: 'grant-second', spaceId: 'rebind-room', spaceWorkspaceId: space.id, portId: 'second' });
+    const linkedFirst = await command(owner, created.workspace, 'space.addSource', {
+      source: { workspaceId: first.id, epoch: first.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+    });
+
+    const before = await readProjection(owner, space.id, { source: first.id, grant: 'grant-first', port: 'first' });
+    expect(before.status).toBe(200);
+
+    // Disconnect the first table: the space keeps existing, but that source is no longer reachable.
+    await command(owner, linkedFirst.workspace, 'space.leaveSource', { workspaceId: first.id });
+    const afterLeave = await readProjection(owner, space.id, { source: first.id, grant: 'grant-first', port: 'first' });
+    expect(afterLeave.status).toBe(404);
+    expect(afterLeave.body).toMatchObject({ errorCode: 'SPACE_SOURCE_NOT_LINKED' });
+    // No last-known values are served through the refusal.
+    expect(afterLeave.body.rows).toBeUndefined();
+
+    // Rebind to a different table and read from it.
+    const currentSpace = await viewOf(owner, space.id);
+    await command(owner, currentSpace, 'space.addSource', {
+      source: { workspaceId: second.id, epoch: second.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+    });
+    const rebound = await readProjection(owner, space.id, { source: second.id, grant: 'grant-second', port: 'second' });
+    expect(rebound.status).toBe(200);
+    expect((rebound.body.rows as unknown[]).length).toBeGreaterThan(0);
+  });
+});
