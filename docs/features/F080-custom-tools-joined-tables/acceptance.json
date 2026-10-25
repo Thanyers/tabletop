@@ -440,16 +440,16 @@
       "title": "export จาก declared snapshot/version set เดียว + Thai/numbers/formula escaping + เปิดในแอปปลายทาง",
       "status": "UNVERIFIED",
       "environment": "Cloudflare tier (worker.fetch + real DOs) · local unit",
-      "sha": "fc9d721480332db74adc21b6f33f7c90ba0a962e",
+      "sha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-export-transport.test.ts",
-        "npx vitest run src/tabletop/shared/space-export.test.ts src/tabletop/shared/tool-export.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+        "npx vitest run src/tabletop/shared/space-export-readback.test.ts src/tabletop/shared/space-export.test.ts src/tabletop/shared/tool-export.test.ts"
       ],
-      "evidence": "the export is a real file response produced by the source: rows come from the granted projection at one revision, the manifest travels as headers (x-source-data-revision, x-grant-version), export is a separate grant permission (read-only grant -> 403 EXPORT_NOT_PERMITTED), a revoked grant is 409, Thai text/commas/formula-looking cells are escaped and a UTF-8 BOM is included, and multiple limits are enforced before any file exists.",
+      "evidence": "the produced file is read back by an independent parser (Python csv, UTF-8 forced): header is exactly the granted fields, three rows come back with Thai text intact, a comma inside a value stays one cell, doubled quotes collapse, and a formula-looking cell stays text; the route response carries content-disposition and the source revision; export is a separate grant permission.",
       "expected": "permission + size enforced ที่ server; CSV ภาษาไทย/ตัวเลข/สูตรปลอม (=,+,-,@) escape ถูก; HTML escape ถูก; หลาย collection แยกไฟล์หรือมี manifest; ค่าทั้งหมดมาจาก snapshot/version set เดียวกัน; เปิดไฟล์จริงและนับแถวได้",
-      "actual": "PARTIAL — server-side permission, revision consistency and real content are proven end to end; the produced file has not been opened in a spreadsheet application",
-      "limitations": "EXPORT-01 asks for a readback in the target app (row count, Thai, numbers); that manual step is still outstanding, so this is not PASS yet"
+      "actual": "PARTIAL — everything except opening the file in a spreadsheet application is proven",
+      "limitations": "EXPORT-01 asks for a readback in the target app; Python csv is an independent parser but not a spreadsheet, so the manual step remains"
     },
     {
       "id": "HELDOUT-01",
@@ -628,17 +628,18 @@
       "requirement": "G3",
       "slice": "F080-T3B",
       "title": "disconnect: tool อยู่ต่อแต่ช่องทางที่ถูกถอนใช้ไม่ได้; ไม่ใช้ cached value/AI context เลี่ยง; rebind ได้",
-      "status": "UNVERIFIED",
-      "environment": "workers + browser",
-      "sha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real DOs) · browser harness",
+      "sha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/tool-rebind.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+        "npm run test:tool-joined:browser"
       ],
-      "evidence": "protocol half: after a revoke, readGrantedProjection refuses and the cached projection is unusable from the revocation moment; the connection is terminal and rebinding issues a new grant rather than reviving the old one",
+      "evidence": "after the source connection is dropped, the next read through the Worker is 404 SPACE_SOURCE_NOT_LINKED and the refusal carries no rows (no cached values); the space and its other sources keep working; linking a different table afterwards serves that one. The panel renders a revoked source as an explicit unavailable card with no last-known values.",
       "expected": "หลังถอนโต๊ะ: definition ยังอยู่, read/write ต่อ source ถูกปฏิเสธ, แสดง missing source, rebind ไปแหล่งใหม่ได้โดยไม่เขียนกลับแหล่งเดิม และไม่แสดงค่าเก่าเป็นทางเลี่ยง",
-      "actual": "not run",
-      "limitations": "การเก็บสำเนาข้อมูลต้องมี authorization record แยก"
+      "actual": "PASS at this environment",
+      "limitations": "AI context path does not exist yet (no live provider), so \"cannot be worked around through AI context\" is untested rather than disproven; not exercised against deployed staging."
     },
     {
       "id": "G4-01",

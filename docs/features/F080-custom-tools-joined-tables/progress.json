@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T02:12:00+07:00",
-  "lastVerifiedAt": "2026-10-26T02:12:00+07:00",
+  "updatedAt": "2026-10-26T02:26:00+07:00",
+  "lastVerifiedAt": "2026-10-26T02:26:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e",
-    "candidateSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e",
+    "headSha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074",
+    "candidateSha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305: export route ทำงานครบ (GET /api/workspaces/:space/space/export → source สร้างไฟล์จาก rows จริง + grant flag แยกจากสิทธิ์อ่าน) · e2e 17/17 ใน cross test, export transport 7/7, builder 7/7 · cloudflare 295/295 · unit 1071/5 · ค้าง: เปิดไฟล์ในแอปปลายทาง (EXPORT-01), disconnect/rebind (G3-02), T4A/T4B, T5, room shell (รอเลือก visual), hosted/live-AI/human",
+  "currentCheckpoint": "PR #305: การชนโต๊ะครบทั้งอ่าน/ลงมือ/ถอน-เชื่อมใหม่/สามโต๊ะ + export ที่อ่านกลับด้วย parser อิสระ · cross e2e 19/19 · cloudflare 295/295 · unit 1072/5 · ค้าง: เปิดไฟล์ใน spreadsheet (EXPORT-01), load/limit ของ three-table (TOPO-01), T4A/T4B, T5, room shell (รอเลือก visual), hosted/live-AI/human",
   "slices": [
     {
       "alias": "C0",
@@ -523,6 +523,14 @@
           "result": "PASS",
           "evidence": "7/7: the path builder produces `/api/workspaces/<space>/space/projection?source&grant&port`, escapes values, keeps key order; the fetcher calls exactly that URL with credentials:\"include\", forwards the abort signal, reports a non-JSON body by status and lets a network error reject so the mapping layer can mark one source missing. The e2e test now builds its request with the same helper, so a drift on either side breaks it; the browser harness runs the real fetcher with only the platform fetch scripted.",
           "checkedSha": "3c98044018c76d3158c7b2465fb01e91a6fb0696"
+        },
+        {
+          "name": "three independent sources and disconnect -> rebind",
+          "environment": "Cloudflare tier (worker.fetch + real DOs)",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "19/19 now: a space links three tables and each answers with its own live revision and rows; disconnecting one (space.leaveSource) makes the next read 404 SPACE_SOURCE_NOT_LINKED with no rows in the refusal, while the space keeps existing; linking a different table afterwards serves it. Nothing falls back to cached values.",
+          "checkedSha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074"
         }
       ],
       "findings": [
@@ -536,7 +544,7 @@
         "The two-workspace test that the previous two reviews demanded now exists and passes through the real Worker entry (`worker.fetch` + seeded sessions via `cookieName`/`csrfForToken`). It is the test that would have caught the slug-identity blocker: the impersonation case asserts 404 while the authorized workspace still reads 200."
       ],
       "blocker": "ต้องได้ผลเลือก visual จากเจ้าของก่อนลงทุน room shell",
-      "nextAction": "Bind the panel fetch to the real endpoint (one function: GET /api/workspaces/:space/space/projection with credentials + query), then the remaining JOIN-01 gap closes; after that T3B (authorized action back to one source target)."
+      "nextAction": "T4A: context/recap/impact/lineage on top of the now-complete join path; T5 afterwards."
     },
     {
       "id": "F080-T3B",
