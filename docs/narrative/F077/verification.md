@@ -1,4 +1,13 @@
-# F077 — Revision 10 verification
+# F077 — Revision 11 verification
+
+26 October 2026 · [PR #348](https://github.com/Thanyers/tabletop/pull/348)
+
+- Scope: English root README plus owning task records. The document follows café sales → force-and-motion learning → shared adventure, using the exact EN GIFs/posters already published in the homepage hero. Each case describes a need, an added tool and continued use of the same table.
+- Retained exactly: definition and physical-tool story; current-capability bullet text; start/beta guidance; AGPL section. Removed the older invoice example and separate learning/Encounter illustration assortment from README. App, homepage, film, media source and generated asset bytes unchanged.
+- Node22.23.2 documentation checks: all 13 local references resolve; three GIFs in the intended order with three matching reduced-motion posters. GitHub Markdown API rendered all three picture/GIF/reduced-motion sources. Public scan has zero findings and diff check passes. No new runtime tests authored for this documentation-only change; hosted required validation remains pending.
+- Default-branch publication and actual GitHub rendered readback remain pending. Any required documentation release must exclude unrelated dev runtime work, following the same narrow publication boundary as round 10.
+
+## Revision 10 verification (historical)
 
 26 October 2026 · [PR #306](https://github.com/Thanyers/tabletop/pull/306)
 
