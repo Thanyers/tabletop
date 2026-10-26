@@ -51,9 +51,11 @@ const BASE: ToolPackageDefinition = {
 interface HarnessLog {
   activations: ToolAuthoringResult[];
   hashes: string[];
+  /** What the panel handed the pipeline, so the continuation can be checked at the call boundary. */
+  calls: { route: 'ai' | 'human'; baseContentHash: string | null; version: number | null }[];
 }
 
-const log: HarnessLog = { activations: [], hashes: [] };
+const log: HarnessLog = { activations: [], hashes: [], calls: [] };
 (globalThis as unknown as { __AUTHORING__: HarnessLog }).__AUTHORING__ = log;
 
 async function trial(compiled: CompiledToolPackage): Promise<{ ok: true } | { ok: false; problems: string[] }> {
@@ -74,6 +76,11 @@ function Harness(): React.ReactElement {
   const [activated, setActivated] = useState<{ version: number; hash: string } | undefined>();
 
   const author = async (definition: unknown, baseContentHash: string | undefined): Promise<ToolAuthoringResult> => {
+    log.calls.push({
+      route: AI_ROUTE ? 'ai' : 'human',
+      baseContentHash: baseContentHash ?? null,
+      version: typeof (definition as { version?: unknown }).version === 'number' ? (definition as { version: number }).version : null,
+    });
     // G1-01: the same panel drives the AI route when a generator is supplied. Here the "model" is a
     // fixture so the browser proof costs nothing; the pipeline, the route and the record are the real ones.
     if (AI_ROUTE) {

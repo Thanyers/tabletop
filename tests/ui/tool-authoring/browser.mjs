@@ -131,6 +131,28 @@ try {
   if (!aiHost.includes('v1')) fail('the caller receives the AI activation', aiHost);
   mark('the same panel activates through the AI route (fixture generator) and records it', `route ${aiGenerator} · ${aiHost}`);
 
+  // EDIT-01: a person edits the activated source and the next authoring run continues on that version.
+  const aiVersionOne = await page.getByTestId('readback-version').innerText();
+  const aiHashOne = await page.getByTestId('readback-hash').innerText();
+  await page.getByTestId('source-editor').fill(`${GOOD}// edited after the first activation\n`);
+  await page.getByTestId('activate').click();
+  await page.getByTestId('activation-readback').waitFor();
+  await page.waitForTimeout(300);
+  const aiVersionTwo = await page.getByTestId('readback-version').innerText();
+  const aiHashTwo = await page.getByTestId('readback-hash').innerText();
+  if (aiVersionOne.trim() !== '1') fail('the first activation is version 1', aiVersionOne);
+  if (aiVersionTwo.trim() !== '2') fail('the continuation runs on the next version', `${aiVersionOne} then ${aiVersionTwo}`);
+  if (aiHashTwo === aiHashOne) fail('the continuation used the edited source', `${aiHashOne} vs ${aiHashTwo}`);
+  const continuation = await page.evaluate(() => globalThis.__AUTHORING__.calls.at(-1) ?? null);
+  if (!continuation) fail('the continuation reached the pipeline', 'no call recorded');
+  if (continuation.version !== 2) fail('the continuation is version 2', JSON.stringify(continuation));
+  // The readback shows a shortened hash, so compare the part the panel displays.
+  const shownHash = aiHashOne.trim().replace('…', '').replace('...', '');
+  if (!continuation.baseContentHash || !continuation.baseContentHash.startsWith(shownHash)) {
+    fail('the continuation names the hash it builds on', `${continuation.baseContentHash} vs ${aiHashOne}`);
+  }
+  mark('a person edits the activated source and the next run continues on that version', `v${aiVersionOne} ${aiHashOne.slice(0, 8)}… → v${aiVersionTwo} ${aiHashTwo.slice(0, 8)}…`);
+
   await page.screenshot({ path: join(output, '02-second-edit.png'), fullPage: true });
   await writeFile(join(output, 'report.json'), JSON.stringify({ status: 'PASS', node: process.version, checks, readback, activations }, null, 2));
   console.log(`\n${checks.length} checks passed`);

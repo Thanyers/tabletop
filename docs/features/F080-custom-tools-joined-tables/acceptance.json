@@ -153,18 +153,18 @@
       "requirement": "G1",
       "slice": "F080-T1B",
       "title": "คนแก้ source แล้ว AI แก้ต่อบน version นั้นจริง",
-      "status": "UNVERIFIED",
-      "environment": "browser (Edge locally / Chromium in CI) + local pipeline",
-      "sha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
+      "status": "PARTIAL",
+      "environment": "browser (Chromium/Edge headless) + local pipeline",
+      "sha": "7f98e3d",
       "node": "v22.23.2",
       "commands": [
-        "npx vitest run server/providers/deepseek-tool-package.test.ts",
-        "npx tsx server/providers/author-tool-package-cli.ts \"<intent>\" --base <package.json>"
+        "node scripts/build-tool-authoring-harness.mjs",
+        "node tests/ui/tool-authoring/browser.mjs"
       ],
-      "evidence": "the adapter sends the package a person already edited back to the model as the base (proven in the EDIT-01 test), so a continuation builds on that version rather than regenerating from scratch, and the reply is validated the same way. A real continuation run is still outstanding for the same reason: no DEEPSEEK_KEY on this machine.",
+      "evidence": "a person edits the source of an activated package and the next authoring run continues on that version: the driver shows v1 c7e67fbf… → v2 4cd01a5e…, and the call the panel hands the pipeline is version 2 with baseContentHash equal to the hash that was just activated (asserted at the call boundary, not inferred from the result). the continuation really used the edited source: the content hash changes between the two runs, and a broken source is still refused against its file without reaching the pipeline. the panel keeps the published version so a person can keep editing on top of what the table already runs instead of regenerating from the original source.",
       "expected": "source ที่คนแก้ถูกใช้เป็น input จริงของการแก้ครั้งถัดไป (มี hash ของ base version); ไม่มีเส้นทางแอบกลับไป template; fixture/local แยกจาก live-provider result",
-      "actual": "UNVERIFIED — the human editing path is real and proven in a browser; no model has authored anything and the panel is not mounted in the app yet",
-      "limitations": "no real model call has been made yet: the environment has no DEEPSEEK_KEY and the dev AI budget variables are 0, so the paid cost of this item remains 0 calls / USD 0.00"
+      "actual": "PARTIAL - the continuation path is proven in a browser up to the pipeline call (version and base hash), with a fixture generator; a live model continuing on the edited version has not been run",
+      "limitations": "the generator is a fixture, so no model saw the edited source yet and the paid cost is 0 calls / USD 0.00; a live continuation needs DEEPSEEK_KEY in this environment"
     },
     {
       "id": "EVOLVE-01",
