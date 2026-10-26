@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T07:33:00+07:00",
-  "lastVerifiedAt": "2026-10-26T07:33:00+07:00",
+  "updatedAt": "2026-10-26T08:15:00+07:00",
+  "lastVerifiedAt": "2026-10-26T08:15:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "abb752b",
-    "candidateSha": "abb752b",
+    "headSha": "6b58f62",
+    "candidateSha": "6b58f62",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305 (draft, mergeable): 20 PASS / 15 UNVERIFIED · เพิ่งปิด: PROV-01 (สี่บทบาท provenance), VIS-01 (connection ทำให้แคบลง ไม่รั่วแชท), REVOKE-01 (ทุก surface ที่มีอยู่หยุดหลังถอน), G4-01 (preview ไม่เขียน + dependency พังไม่ promote), SCENARIO-01 (stale promote ปลอดภัย), RECOVERY-01 (changed scope + fail-closed), EXPORT-01 (ผู้ใช้ยืนยันเปิด CSV) · ORACLE-01 = PARTIAL: มี independent oracle แล้วสำหรับ connection surface (เทียบ rows+revision กับ records ดิบของต้นทาง) เหลือ UI source/server logic/formulas/compute · เหลือ 15: UI บน runtime จริง (G1-01, G1-02, G2-01, VISUAL-01, HIST-01, IMPACT-01) · AI จริง (EXEC-01, EDIT-01 — วงเงินอนุมัติแล้วใช้ 0) · EVOLVE-01 second actor · CTX-01 · ORACLE-01 ที่เหลือ · HUMAN-01/hosted · ไม่มีคำถามค้างกับผู้ใช้ (D-022 shell C, D-023 AI cap, D-024 EXPORT-01)",
+  "currentCheckpoint": "PR #305 (draft, mergeable): 26 PASS / 9 UNVERIFIED · ปิดล่าสุด: HIST-01 (pagination partition เป๊ะ + per-member last-seen ตาม D-028), G2-01 (ไฟล์ใหม่ + แก้สองรอบ รักษา ids/values/actions/views/sources), G1-02 (pipeline เดียวสำหรับ human/AI จริงที่ระดับไปป์ไลน์), CTX-01 (brief + สมาชิกที่สองเห็นตรงกัน + included/omitted) · ORACLE-01 ปิดครบ 6 surface (connections/export/formulas/compute/behaviour/UI hash) ด้วย independent expectation · D-030 แก้ D-025: /s/:id เสิร์ฟ SPA ได้ (200) เมื่อ dist ถูก build — 404 ก่อนหน้าเป็น server เก่าบนพอร์ต 8787 · เหลือ 9: AI จริง (G1-01/EXEC-01/EDIT-01 — ต้องมี provider key) · UI ที่ต้องมีคนลงชื่อเข้าใช้ (VISUAL-01/IMPACT-01 — Google OAuth) · HUMAN-01 + hosted/staging · ดู docs/features/F080-custom-tools-joined-tables/closure-checklist.md สำหรับขั้นที่คนต้องทำ",
   "slices": [
     {
       "alias": "C0",

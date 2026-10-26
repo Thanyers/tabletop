@@ -5,7 +5,8 @@ Landing page สำหรับ agent ถัดไป อ่านไฟล์�
 - **Feature entry:** [../F080-custom-tools-joined-tables.md](../F080-custom-tools-joined-tables.md)
 - **Goal:** native DSH goal `goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c` (scope JT ทั้งชุด รวม JT-V/JT-X, dev-only)
 - **Base:** `origin/dev` `a6feb3c1fbe2aa89396ccf9bc3995467d82e438c` · **branch:** `feat/F080-custom-tools`
-- **สถานะ:** 15 PASS / 20 UNVERIFIED (จาก 35) · PR #305 draft · ยังไม่มี production release
+- **สถานะ:** 26 PASS / 9 UNVERIFIED (จาก 35) · PR #305 draft · ยังไม่มี production release
+- **ขั้นที่คนต้องทำต่อ:** [closure-checklist.md](closure-checklist.md)
 - **อ่านต่อ:** `progress.json` (checkpoint ล่าสุด) → `acceptance.json` (เกณฑ์+PASS/FAIL/SKIPPED/UNVERIFIED รายข้อ) → `decisions.md` (D-001…D-026)
 - **สิ่งที่ยังปิดไม่ได้เอง:** VISUAL-01/G1/G2 (ต้องเดินดูบน dev runtime ที่มี session จริง) · hosted/human gate · AI provider จริง (วงเงินอนุมัติแล้ว 3×6 calls ≤USD0.20/run แต่ยังใช้ 0)
 
