@@ -27,7 +27,7 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45 # room for one deploy retry after a slow container step
     permissions:
       contents: write # push the release tag
       issues: write   # open an issue when a deploy fails
@@ -118,7 +118,7 @@ jobs:
         if: env.SKIP != '1'
         run: |
           echo "STAGE=production-deploy" >> "$GITHUB_ENV"
-          npx wrangler deploy --config wrangler.production.json
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.production.json
 
       - name: Production — smoke checks
         if: env.SKIP != '1'
@@ -139,6 +139,18 @@ jobs:
           npx tsx server/changelog.ts notes "$VERSION" > release-notes.md || echo "See CHANGELOG.md for v$VERSION." > release-notes.md
           gh release create "v$VERSION" --verify-tag --title "Tabletop v$VERSION" --notes-file release-notes.md \
             || echo "::warning::Could not publish the GitHub Release for v$VERSION; production is deployed."
+
+      # CD004: a later success closes the issues earlier failures opened; never fails the job.
+      - name: Close deploy-failure issues fixed by this run
+        if: env.SKIP != '1' && success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list -R "$REPO" --state open --author app/github-actions --search '"Deploy failed:" in:title' --json number,title --jq '.[] | select(.title | startswith("Deploy failed:")) | .number' 2>/dev/null); do
+            gh issue close "$n" -R "$REPO" --comment "Fixed: production deployed and passed smoke checks (v$VERSION, ${SHA:0:7}) in $RUN_URL" || true
+          done
 
       - name: Remove deploy configs
         if: always()
