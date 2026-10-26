@@ -44,6 +44,36 @@ const SYSTEM_PROMPT = [
   'Provenance is {origin: "ai", createdAt: <unix ms>}.',
 ].join(' ');
 
+/**
+ * Where the key comes from: the real environment first, then the ignored `.dev.vars` file that the local
+ * Worker also reads. The value is never logged, and the file is gitignored so it cannot be committed.
+ */
+export function resolveDeepSeekKey(input: {
+  env?: Record<string, string | undefined>;
+  readDevVars?: (path: string) => string;
+  devVarsPath?: string;
+}): { key: string; source: 'environment' | 'dev.vars' | 'none' } {
+  const fromEnv = input.env?.DEEPSEEK_KEY?.trim();
+  if (fromEnv) return { key: fromEnv, source: 'environment' };
+
+  const path = input.devVarsPath ?? '.dev.vars';
+  if (input.readDevVars) {
+    let text = '';
+    try {
+      text = input.readDevVars(path);
+    } catch {
+      return { key: '', source: 'none' };
+    }
+    for (const line of text.split(/\r?\n/u)) {
+      const match = /^\s*DEEPSEEK_KEY\s*=\s*(.*)$/u.exec(line);
+      if (!match) continue;
+      const value = match[1].trim().replace(/^["']|["']$/gu, '');
+      if (value) return { key: value, source: 'dev.vars' };
+    }
+  }
+  return { key: '', source: 'none' };
+}
+
 /** Models like to wrap JSON in fences or add a sentence; take the outermost object and parse that. */
 export function extractToolPackageJson(raw: string): unknown {
   const text = raw.trim();

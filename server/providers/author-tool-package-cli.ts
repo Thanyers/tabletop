@@ -10,7 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import { validateToolPackage } from '../../src/tabletop/shared/tool-package.js';
-import { DeepSeekToolPackageGenerator, ToolPackageGenerationFailed } from './deepseek-tool-package.js';
+import { DeepSeekToolPackageGenerator, ToolPackageGenerationFailed, resolveDeepSeekKey } from './deepseek-tool-package.js';
 
 const MAX_CALLS_PER_RUN = 6;
 const MAX_USD_PER_RUN = 0.2;
@@ -29,11 +29,13 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const apiKey = process.env.DEEPSEEK_KEY ?? '';
+  const resolved = resolveDeepSeekKey({ env: process.env, readDevVars: path => readFileSync(path, 'utf8') });
+  const apiKey = resolved.key;
   if (!apiKey) {
-    console.error('DEEPSEEK_KEY is not set; the run would fail closed. Set it in the environment (never commit it).');
+    console.error('No DeepSeek key was found. Put it in .dev.vars (gitignored) as DEEPSEEK_KEY=... or set DEEPSEEK_KEY in the environment.');
     return 2;
   }
+  console.error(`using the key from ${resolved.source}`);
 
   const generator = new DeepSeekToolPackageGenerator({ apiKey });
   const estimate = generator.estimate();

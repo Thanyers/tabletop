@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DeepSeekToolPackageGenerator, extractToolPackageJson, ToolPackageGenerationFailed } from './deepseek-tool-package';
+import { DeepSeekToolPackageGenerator, extractToolPackageJson, resolveDeepSeekKey, ToolPackageGenerationFailed } from './deepseek-tool-package';
 
 /**
  * F080 / G1-01 + EDIT-01: the adapter is proven against the reply shape the DeepSeek endpoint sends.
@@ -91,5 +91,16 @@ describe('authoring a tool package with the DeepSeek account', () => {
 
   it('keeps the outermost object when the model adds a sentence before or after it', () => {
     expect(extractToolPackageJson(`Sure! ${JSON.stringify(definition)} Hope that helps.`)).toMatchObject({ packageId: 'room-planner' });
+  });
+
+  it('finds the key in the environment first, then in the ignored .dev.vars file', () => {
+    expect(resolveDeepSeekKey({ env: { DEEPSEEK_KEY: 'from-env' }, readDevVars: () => 'DEEPSEEK_KEY=from-file' }))
+      .toEqual({ key: 'from-env', source: 'environment' });
+    expect(resolveDeepSeekKey({ env: {}, readDevVars: () => 'DEEPSEEK_KEY="from-file"\nOTHER=1' }))
+      .toEqual({ key: 'from-file', source: 'dev.vars' });
+    expect(resolveDeepSeekKey({ env: {}, readDevVars: () => { throw new Error('ENOENT'); } }))
+      .toEqual({ key: '', source: 'none' });
+    expect(resolveDeepSeekKey({ env: { DEEPSEEK_KEY: '   ' }, readDevVars: () => 'OTHER=1' }))
+      .toEqual({ key: '', source: 'none' });
   });
 });
