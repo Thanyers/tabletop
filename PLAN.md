@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F088 | scroll บนการ์ดเลื่อนข้อมูลในการ์ด ไม่ซูมบอร์ด | `review` | [F088](docs/features/F088-card-wheel-scroll.md) |
 | F085 | การ์ดไม่หายวับตอนโต๊ะอัปเดต (คลิก checkbox ไม่หลุดไปโดนพื้นหลัง) | `review` | [F085](docs/features/F085-cards-stay-visible.md) |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `review` | Codex · `docs/F077-readme-cases` · PR #348; README and owning tracking docs only; homepage/media unchanged |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `done` | Codex · PR #348 / release #351 · default-branch README verified; production 9.1.5 / 0ce11c8; app/media unchanged |
@@ -89,6 +90,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F088-T1 | native wheel listener + `canScrollWithin` ใน `CanvasNodeBody` | `review` | lead (AI) | `fix/F088-card-wheel-scroll` | `ui/CanvasWorkspace.tsx` | — | ไม่มี migration |
 | F085-T1 | ส่ง `measured` เดิมตอนสร้าง node ใหม่ + browser check ว่าการ์ดไม่หายระหว่างรันคำสั่ง | `review` | lead (AI) | `fix/F085-node-flicker` | `ui/CanvasWorkspace.tsx`, `tests/generic-table-browser.mjs` | — | ไม่มี migration |
 | F084-T1 | lane cost สะสมต่อ edge + A* + หยุดเมื่อไม่มีทางชนะ + buffer ซ้ำ | `review` | lead (AI) | `fix/F084-edge-routing-speed` | `shared/edge-routing.ts`, `shared/edge-routing.test.ts` | — | ไม่มี migration |
 | F083-T1 | `cardsClosedOnFirstLook` + `changeHidden`/storage sync + ป้าย closed cards + select chevron | `review` | lead (AI) | `fix/F083-hidden-cards` | `ui/canvas-view-state.ts`, `ui/CanvasWorkspace.tsx`, `ui/canvas-visual-flow.css`, `ui/tabletop.css`, tests | — | ไม่มี migration |

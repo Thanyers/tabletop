@@ -315,6 +315,21 @@ function defaultCanvasPosition(kind: WorkspaceView['kind'], spec: PlanNode) {
   return spec.position;
 }
 
+/** F088: whether the wheel can still move some scroll area between the pointer and the card body. */
+function canScrollWithin(target: Element, body: HTMLElement, deltaX: number, deltaY: number): boolean {
+  for (let element: Element | null = target; element; element = element === body ? null : element.parentElement) {
+    if (!(element instanceof HTMLElement)) continue;
+    const style = getComputedStyle(element);
+    if (deltaY !== 0 && /auto|scroll/u.test(style.overflowY) && element.scrollHeight > element.clientHeight + 1) {
+      if (deltaY < 0 ? element.scrollTop > 0 : element.scrollTop + element.clientHeight < element.scrollHeight - 1) return true;
+    }
+    if (deltaX !== 0 && /auto|scroll/u.test(style.overflowX) && element.scrollWidth > element.clientWidth + 1) {
+      if (deltaX < 0 ? element.scrollLeft > 0 : element.scrollLeft + element.clientWidth < element.scrollWidth - 1) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * A card body that scrolls when its content is taller than the card. While it overflows it carries React Flow's
  * `nowheel` class, so the wheel scrolls the card (and reaches buttons below the fold) instead of zooming the canvas.
@@ -322,6 +337,18 @@ function defaultCanvasPosition(kind: WorkspaceView['kind'], spec: PlanNode) {
 function CanvasNodeBody({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = useState(false);
+  // F088: a scroll area inside the card (a table grid, a long list) scrolls under the wheel too. The canvas zooms
+  // only when nothing under the pointer can move further that way, or with Ctrl/⌘ (pinch) held.
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const keepWheelInCard = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) return;
+      if (event.target instanceof Element && canScrollWithin(event.target, element, event.deltaX, event.deltaY)) event.stopPropagation();
+    };
+    element.addEventListener('wheel', keepWheelInCard, { passive: true });
+    return () => element.removeEventListener('wheel', keepWheelInCard);
+  }, []);
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
