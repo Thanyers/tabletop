@@ -145,3 +145,37 @@ describe('real isolated tool behaviour', () => {
     }
   });
 });
+
+/**
+ * F080 / ORACLE-01 (server behaviour surface): the runner's proposal is compared with a change the
+ * test builds itself, so a drift in how inputs are passed to the module shows up as a difference.
+ */
+describe('behaviour output against an independent expectation', () => {
+  it('agrees with an expectation computed in the test', async () => {
+    const room = 'Atrium';
+    const area = 30;
+    // The expected change is written here, from the module's intent, not produced by the runner.
+    const expected = [{ target: 'self', resource: 'rooms', operation: 'create', values: { room, area } }];
+    const result = await runner().run({
+      ...request,
+      moduleSource: 'export function allocate(inputs) { return [{target:"self",resource:"rooms",operation:"create",values:{room:inputs.room,area:inputs.area}}]; }',
+      inputs: { room, area },
+      declaredWrites: [{ target: 'self', resource: 'rooms', operations: ['create'], maxRows: 5 }],
+      resourceSchema: { rooms: { fields: [{ id: 'room', type: 'text' }, { id: 'area', type: 'number' }] } },
+    });
+    expect(result.output).toEqual(expected);
+  });
+
+  it('passes a numeric input through unchanged, without turning it into text', async () => {
+    const result = await runner().run({
+      ...request,
+      moduleSource: 'export function allocate(inputs) { return [{target:"self",resource:"rooms",operation:"create",values:{room:String(inputs.room),area:inputs.area}}]; }',
+      inputs: { room: 'Atrium', area: 12.5 },
+      declaredWrites: [{ target: 'self', resource: 'rooms', operations: ['create'], maxRows: 5 }],
+      resourceSchema: { rooms: { fields: [{ id: 'room', type: 'text' }, { id: 'area', type: 'number' }] } },
+    });
+    const change = (result.output as { values: { area: unknown } }[])[0];
+    expect(change?.values.area).toBe(12.5);
+    expect(typeof change?.values.area).toBe('number');
+  });
+});
