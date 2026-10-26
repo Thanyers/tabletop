@@ -734,6 +734,7 @@ export default function TabletopApp() {
       <SpaceRoomScreen
         workspaceId={spaceRoomId}
         deps={createSpaceRoomDeps({
+          workspaceId: spaceRoomId,
           loadWorkspace: (id) => tabletopClient.workspace(id),
           actorId: view.actor.actorId,
           viewerLabel: view.actor.name,

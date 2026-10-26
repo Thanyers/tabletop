@@ -34,6 +34,8 @@ interface OkBody {
   projection: { portId: string; fields: string[]; maxRows: number };
   rows: { id: string; values: Record<string, string | number | boolean | null> }[];
   sourceDataRevision: number;
+  grantVersion?: number;
+  readAt?: number;
 }
 
 function isOkBody(value: unknown): value is OkBody {
@@ -80,6 +82,9 @@ export async function readJoinedSources(
           dataRevision: response.body.sourceDataRevision,
           rows: response.body.rows,
           fields: response.body.projection.fields,
+          // Kept because a tool frame's port snapshot reports the revision it was authorized at.
+          ...(typeof response.body.grantVersion === 'number' ? { grantVersion: response.body.grantVersion } : {}),
+          ...(typeof response.body.readAt === 'number' ? { readAt: response.body.readAt } : {}),
         };
       }
       return { ...base, status: statusFor(response.body) };

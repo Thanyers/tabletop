@@ -1,7 +1,7 @@
 import type { WorkspaceView } from '../shared/contracts';
 import type { CollaborationSpace } from '../shared/collaboration-space';
 import { createJoinedProjectionFetcher } from './joined-projection-fetcher';
-import type { SpaceRoomDeps } from './SpaceRoomScreen';
+import type { SpaceRoomDeps, ToolIntentAnswer } from './SpaceRoomScreen';
 
 /**
  * F080 / JT-V: the only place that turns the app's real transport into the room screen's deps.
@@ -9,9 +9,15 @@ import type { SpaceRoomDeps } from './SpaceRoomScreen';
  * Keeping it separate means the screen stays testable and the wiring stays one reviewable function:
  * one call loads the workspace, one loads the recap (which also reports the connections each source
  * holds), and the projection reads reuse the fetcher the joined panel already uses.
+ *
+ * The one write this file can trigger is the tool intent route. It is the room's own command path —
+ * the Worker forwards the intent and the room commits through `table.act` (D-033) — so nothing here
+ * applies a change itself.
  */
 
 export interface SpaceRoomAdapterInput {
+  /** The room this adapter serves; the intent route names it in the path. */
+  workspaceId: string;
   /** The app's existing workspace loader; it already handles auth and notices. */
   loadWorkspace(workspaceId: string): Promise<WorkspaceView>;
   /** The signed-in actor, from the session rather than from the URL. */
@@ -33,6 +39,18 @@ interface RecapPayload {
     members?: { actorId: string; unseen: boolean }[];
   };
   connections?: { workspaceId: string; grantId: string; ports: string[] }[];
+}
+
+/** A refusal is the room's own `{ ok: false, code, message }`, whatever status carried it. */
+function intentRefusal(body: unknown): Extract<ToolIntentAnswer, { ok: false }> | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const record = body as { ok?: unknown; code?: unknown; message?: unknown };
+  if (record.ok !== false || typeof record.code !== 'string') return undefined;
+  return {
+    ok: false,
+    code: record.code,
+    message: typeof record.message === 'string' ? record.message : record.code,
+  };
 }
 
 export function createSpaceRoomDeps(input: SpaceRoomAdapterInput): SpaceRoomDeps {
@@ -87,6 +105,33 @@ export function createSpaceRoomDeps(input: SpaceRoomAdapterInput): SpaceRoomDeps
         grantId: connection.grantId,
         ports: connection.ports,
       }));
+    },
+    async runToolIntent(request) {
+      let response: Response;
+      try {
+        response = await doFetch(`${origin}/api/workspaces/${encodeURIComponent(input.workspaceId)}/space/tool/intent`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({ behaviorId: request.behaviorId, inputs: request.inputs }),
+        });
+      } catch (error) {
+        // A transport failure is still something the frame must be able to finish its promise with.
+        return { ok: false, code: 'TOOL_BEHAVIOR_FAILED', message: error instanceof Error ? error.message : String(error) };
+      }
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        body = null;
+      }
+      const refusal = intentRefusal(body);
+      if (refusal) return refusal;
+      const actionId = typeof body === 'object' && body !== null ? (body as { actionId?: unknown }).actionId : undefined;
+      if (!response.ok || typeof actionId !== 'string') {
+        return { ok: false, code: 'TOOL_BEHAVIOR_FAILED', message: `intent failed: ${response.status}` };
+      }
+      return { ok: true, actionId, ack: body };
     },
   };
 }

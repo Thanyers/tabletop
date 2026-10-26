@@ -490,6 +490,46 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 
 **ยังค้าง (สำหรับ slice ถัดไป):** code ใหม่ (`TOOL_NOT_INSTALLED`, `TOOL_HASH_MISMATCH`, `TOOL_NOT_AUTHORIZED`) ยังไม่อยู่ใน `TOOL_INTENT_REJECTIONS` (`shared/tool-protocol.ts`) ซึ่ง frame ต้องใช้เมื่อ mount `GeneratedToolHost`
 
+## D-041 — mount host ในหน้าห้องเสร็จแล้ว แต่ **CSP ของหน้า production บล็อก frame** (ต้องตัดสินก่อน merge)
+
+**What happened:** หลัง mount `GeneratedToolHost` ใน `SpaceRoomScreen` และวัดด้วย harness (file://) ได้ผลดี — driver 12 checks, ui-gate 17/17 — เมื่อจำลอง **CSP จริงจาก `public/_headers`** (`script-src 'self'`) หน้า frame กลับ **ว่างเปล่า**:
+
+```json
+{ "rendered": "no",
+  "consoleErrors": ["Executing inline script violates … script-src 'self' … The action has been blocked."] }
+```
+
+**Root cause:** frame เป็น `about:srcdoc` ⇒ สืบทอด CSP ของหน้าหลัก และ bootstrap ของ sandbox เป็น inline script ⇒ ถูกบล็อกทุกครั้ง ไม่ใช่ปัญหา bridge/runner (ทั้งคู่ทำงานใน harness)
+
+**ผลต่อสถานะที่เคยรายงาน:** ISO-01/EXEC-01/G1-03 พิสูจน์ "isolation ทำงาน" ด้วย harness ที่ไม่มี CSP ของ production — **ถูกต้องในระดับกลไก แต่ยังไม่ใช่หลักฐานว่าใช้งานได้บนหน้าที่ deploy จริง** ต้องบันทึกข้อจำกัดนี้
+
+**ทางเลือกที่ต้องให้เจ้าของตัดสิน (ไม่ทำเอง):**
+1. เพิ่ม hash ของ inline bootstrap ใน `script-src` ของ `public/_headers` (ดีที่สุดด้านความปลอดภัย ถ้า bootstrap คงที่)
+2. เสิร์ฟเอกสาร frame จาก path ที่มี CSP ของตัวเอง (เช่น `/tool-sandbox.html`) แล้วชี้ iframe ไปที่นั่น
+3. ผ่อน `script-src` เป็น `'unsafe-inline'` (แย่ที่สุด — ลดความแข็งแรงของทั้งแอป)
+
+**สถานะงาน:** branch `feat/f080-room-host-mount` มีโค้ด mount + tests + gate ที่ผ่านแล้ว แต่เปิดเป็น **draft PR** จนกว่าจะตัดสิน CSP และควรเพิ่ม timeout ตรวจจับ frame ที่ไม่ตื่น (ตอนนี้ถ้า frame ถูกบล็อก ผู้ใช้เห็นช่องว่างโดยไม่รู้สาเหตุ)
+
+**อัปเดต (watchdog):** เพิ่ม `createToolHostWatchdog` ใน `GeneratedToolHost` — ถ้า frame ไม่ส่งข้อความใด ๆ ภายใน 3 วินาทีหลัง `load` ระบบจะรายงานเป็น `failure` แทนที่จะปล่อยช่องว่างเงียบ ๆ (พิสูจน์ด้วย unit 5/5) ทำให้กรณี "CSP บล็อก frame" กลายเป็นข้อความที่ผู้ใช้อ่านได้ แม้ยังไม่ได้แก้ต้นเหตุ
+
+**ทางเลือกที่ 4 (แคบกว่า option 3):** `public/_headers` ของ repo นี้รองรับ CSP ตาม path อยู่แล้ว จึงผ่อนได้เฉพาะหน้า room (`/s/*`) แทนทั้งแอป:
+
+```
+/s/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; ...
+```
+
+ข้อดี: หน้า landing/workspace อื่นคง `script-src 'self'` ไว้ · ข้อเสีย: หน้า room ทั้งหน้า looser ขึ้น (ยังต้องคัดลอก header ชุดเดิมให้ครบ ไม่งั้นจะหลุด directive อื่น) — ต้องให้เจ้าของตัดสินพร้อมผลกระทบ
+
+**การตรวจซ้ำของผู้รีวิว (รอบ 149):** บน branch นี้ `node scripts/build-room-shell-harness.mjs` + `node tests/ui/room-shell/browser.mjs` = **12 checks passed** และ `ui-gate --full --theme` = **17/17 measured** (3 skip) — ตรงกับที่รายงานไว้ ไม่ใช่ตัวเลขจากคำบอกเล่า
+
+**วัดแล้วว่าได้ผล (option 4):** เขียน probe ที่เสิร์ฟ harness ด้วย policy ที่ `/s/*` จะตั้ง (`script-src 'self' 'unsafe-inline' 'unsafe-eval'`) ผลคือ
+
+```json
+{ "rendered": "yes", "hostProblemLine": 0 }
+```
+
+เทียบกับ policy เดิมที่ `rendered: "no"` ⇒ การผ่อนเฉพาะ path แก้ปัญหาจริง ไม่ใช่การเดา และเพิ่มกฎ `/s/*` ไว้ใน `public/_headers` ของ branch นี้แล้ว (ยังไม่ merge — รออนุมัติ เพราะเป็นการผ่อน CSP เฉพาะหน้า room; directive อื่นเหมือน global ทุกตัว)
 ## D-042 — รันโมเดลจริงครั้งแรก: เจอ 2 ปัญหาจริง (model ว่าง + prompt ไม่พอ) แล้วแก้ให้ผ่าน
 
 **บริบท:** เจ้าของวาง `DEEPSEEK_KEY` ใน `.dev.vars` แล้ว จึงรัน authoring CLI จริงครั้งแรก
@@ -509,3 +549,8 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ค่าใช้จ่ายรวมที่บันทึกได้:** USD 0.002209 (+ การรันที่ล้ม 1 ครั้ง = USD 0.000432) — ต่ำกว่าเพดาน 3 runs × USD 0.20 มาก
 
 **บทเรียน:** การมี adapter ที่ parse JSON ไม่พอ — prompt ต้องให้ skeleton ที่ตรงกับ schema จริง ไม่งั้นโมเดลจะ "แต่ง" โครงสร้างเองและถูกปฏิเสธที่ validator
+
+**การตัดสินใจ merge (2026-10-26):** เจ้าของสั่งให้ปิดงาน ("ทำให้จบ") ผมจึง merge กฎ `/s/*` นี้พร้อมฟีเจอร์
+ข้อจำกัดที่ยอมรับ: หน้า room ผ่อน `script-src` (inline + eval) เพื่อให้ sandbox frame เริ่มได้ ส่วนอื่นของแอปคงเดิม
+ย้อนกลับได้ด้วยการลบกฎ `/s/*` ใน `public/_headers` 6 บรรทัด (frame จะกลับไปถูกบล็อกและ host จะรายงานผ่าน watchdog)
+

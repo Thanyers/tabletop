@@ -58,7 +58,7 @@ function recapResponse() {
 
 describe('the room adapter', () => {
   it('loads the space from the workspace domain', async () => {
-    const deps = createSpaceRoomDeps({ loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'คุณกานต์' });
+    const deps = createSpaceRoomDeps({ workspaceId: SPACE, loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'คุณกานต์' });
     const space = await deps.loadSpace(SPACE);
     expect(space?.title).toBe('ห้องวางผังกิจกรรม');
     expect(space?.space.sources).toHaveLength(1);
@@ -66,6 +66,7 @@ describe('the room adapter', () => {
 
   it('turns a load failure into nothing, not an exception', async () => {
     const deps = createSpaceRoomDeps({
+      workspaceId: SPACE,
       loadWorkspace: async () => { throw new Error('403'); },
       actorId: 'actor-a',
       viewerLabel: 'A',
@@ -79,7 +80,7 @@ describe('the room adapter', () => {
       calls.push({ url: String(url), ...(init ? { init } : {}) });
       return new Response(JSON.stringify(recapResponse()), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as unknown as typeof fetch;
-    const deps = createSpaceRoomDeps({ loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'A', fetchImpl });
+    const deps = createSpaceRoomDeps({ workspaceId: SPACE, loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'A', fetchImpl });
 
     const recap = await deps.loadRecap(SPACE);
     const connections = await deps.loadConnections(SPACE);
@@ -94,13 +95,52 @@ describe('the room adapter', () => {
 
   it('reports no connections when the room is not readable, instead of guessing one', async () => {
     const fetchImpl = vi.fn(async () => new Response('{}', { status: 403 })) as unknown as typeof fetch;
-    const deps = createSpaceRoomDeps({ loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'A', fetchImpl });
+    const deps = createSpaceRoomDeps({ workspaceId: SPACE, loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'A', fetchImpl });
     expect(await deps.loadConnections(SPACE)).toEqual([]);
     expect(await deps.loadRecap(SPACE)).toBeUndefined();
   });
 
   it('keeps the viewer label a display string rather than an identity', async () => {
-    const deps = createSpaceRoomDeps({ loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'คุณกานต์' });
+    const deps = createSpaceRoomDeps({ workspaceId: SPACE, loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'คุณกานต์' });
     expect(deps.viewerLabel(deps.actorId)).toBe('คุณกานต์');
+  });
+
+  it('posts one declared behaviour to the room intent route and returns the committed action', async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), ...(init ? { init } : {}) });
+      return new Response(JSON.stringify({ ok: true, actionId: 'action-1', revision: 5, duplicate: false }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+    const deps = createSpaceRoomDeps({ workspaceId: SPACE, loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'A', fetchImpl });
+
+    const answer = await deps.runToolIntent({ behaviorId: 'allocate', inputs: { room: 'ห้องประชุม', seats: 6 } });
+
+    expect(answer).toMatchObject({ ok: true, actionId: 'action-1' });
+    expect(calls[0]?.url).toBe(`/api/workspaces/${SPACE}/space/tool/intent`);
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.credentials).toBe('include');
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ behaviorId: 'allocate', inputs: { room: 'ห้องประชุม', seats: 6 } });
+  });
+
+  it('returns a refusal as a value and a lost route as a code, never a rejected promise', async () => {
+    const refusing = vi.fn(async () => new Response(JSON.stringify({ ok: false, code: 'TOOL_NOT_AUTHORIZED', message: 'viewer' }), {
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+    })) as unknown as typeof fetch;
+    const refusingDeps = createSpaceRoomDeps({ workspaceId: SPACE, loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'A', fetchImpl: refusing });
+    expect(await refusingDeps.runToolIntent({ behaviorId: 'allocate', inputs: {} })).toEqual({
+      ok: false,
+      code: 'TOOL_NOT_AUTHORIZED',
+      message: 'viewer',
+    });
+
+    const offline = vi.fn(async () => { throw new Error('network down'); }) as unknown as typeof fetch;
+    const offlineDeps = createSpaceRoomDeps({ workspaceId: SPACE, loadWorkspace: async () => viewWithSpace(), actorId: 'actor-a', viewerLabel: 'A', fetchImpl: offline });
+    const answer = await offlineDeps.runToolIntent({ behaviorId: 'allocate', inputs: {} });
+    expect(answer.ok).toBe(false);
+    if (!answer.ok) expect(answer.message).toContain('network down');
   });
 });

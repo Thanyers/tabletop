@@ -19,6 +19,10 @@ export interface JoinedSource {
   status: JoinedSourceStatus;
   /** Revision the rows were read at. */
   dataRevision: number;
+  /** Grant version the source answered at; absent when the read was refused. */
+  grantVersion?: number;
+  /** When the source authorized the read, on the source's clock; absent when refused. */
+  readAt?: number;
   rows: { id: string; values: Record<string, string | number | boolean | null> }[];
   /** Columns the source grant exposes, in display order. */
   fields: string[];
