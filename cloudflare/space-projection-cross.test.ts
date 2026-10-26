@@ -979,3 +979,90 @@ describe('the room brief survives a reload', () => {
     expect(cleared.workspace.revision).toBeTruthy();
   });
 });
+
+/**
+ * F080 / G2-01: adding data later and editing twice must leave everything outside the edit alone.
+ *
+ * The scope of the edit is one new field per round. Everything else - existing record ids and their
+ * values, the action ids, the canvas view ids and the sources already on the table - must survive both
+ * the second import and the second activation.
+ */
+describe('later files and a second edit keep the rest intact', () => {
+  it('keeps values, row ids, actions, views and earlier sources across two edits and a new file', async () => {
+    const owner = await seedActor('G2 owner');
+    const created = await createWorkspace(owner, 'G2 table');
+    const imported = await command(owner, created, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    const sourceId = (imported.workspace.domain as { sources?: { id: string }[] }).sources?.[0]?.id;
+    if (!sourceId) throw new Error('G2_SOURCE_MISSING');
+
+    const activate = async (start: typeof created, change: unknown) => {
+      let workspace = start;
+      for (const [type, payload] of [
+        ['evolve.propose', { change }],
+        ['evolve.simulate', {}],
+        ['evolve.validate', {}],
+        ['evolve.approve', {}],
+        ['evolve.activate', {}],
+      ] as const) {
+        const result = await command(owner, workspace, type, payload);
+        workspace = result.workspace;
+      }
+      return workspace;
+    };
+
+    const snapshot = (view: typeof created) => {
+      const domain = view.domain as unknown as {
+        records?: Record<string, { id: string; values: Record<string, unknown> }[]>;
+        program?: { actions?: { id: string }[]; canvas?: { views?: { id: string }[] }; collections?: { id: string; fields: { id: string }[] }[] };
+        sources?: { id: string }[];
+      };
+      return {
+        rows: (domain.records?.equipment ?? []).map(row => ({ id: row.id, values: row.values })),
+        actionIds: (domain.program?.actions ?? []).map(action => action.id).sort(),
+        viewIds: (domain.program?.canvas?.views ?? []).map(entry => entry.id).sort(),
+        fieldIds: (domain.program?.collections?.find(collection => collection.id === 'equipment')?.fields ?? []).map(field => field.id).sort(),
+        sourceIds: (domain.sources ?? []).map(source => source.id).sort(),
+      };
+    };
+
+    // Round one: add one field.
+    const firstChange = equipmentChange(sourceId);
+    const collection = firstChange.program.collections?.[0];
+    if (!collection) throw new Error('G2_COLLECTION_MISSING');
+    collection.fields = [...collection.fields, { id: 'note', label: 'Note', type: 'text', required: false }];
+    const afterFirst = await activate(imported.workspace, firstChange);
+    const before = snapshot(afterFirst);
+    expect(before.rows.length).toBeGreaterThan(0);
+
+    // A new file arrives, then a second edit adds one more field.
+    const afterImport = await command(owner, afterFirst, 'table.import', {
+      filename: 'second-file.txt',
+      text: 'A second file for the same table.',
+    });
+    const stored = (afterImport.workspace.domain as unknown as {
+      program: { collections: { id: string; fields: unknown[] }[] } & Record<string, unknown>;
+    }).program;
+    const secondProgram = {
+      ...stored,
+      collections: stored.collections.map(entry => (entry.id === 'equipment'
+        ? { ...entry, fields: [...entry.fields, { id: 'tag', label: 'Tag', type: 'text', required: false }] }
+        : entry)),
+    };
+    const afterSecond = await activate(afterImport.workspace, { kind: 'table', program: secondProgram, initialRecords: {} });
+    const after = snapshot(afterSecond);
+
+    // Everything outside the edit is untouched.
+    expect(after.rows).toEqual(before.rows);
+    expect(after.actionIds).toEqual(before.actionIds);
+    expect(after.viewIds).toEqual(before.viewIds);
+    // Both earlier sources are still on the table, plus the new file.
+    expect(after.sourceIds).toEqual(expect.arrayContaining(before.sourceIds));
+    expect(after.sourceIds.length).toBe(before.sourceIds.length + 1);
+    // Exactly the two fields that were added.
+    // 'note' was added in the first round and is already part of before; only 'tag' is new.
+    expect(after.fieldIds).toEqual([...before.fieldIds, 'tag'].sort());
+  });
+});

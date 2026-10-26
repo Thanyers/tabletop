@@ -577,17 +577,17 @@
       "requirement": "G2",
       "slice": "F080-T2A",
       "title": "เพิ่มไฟล์/ข้อมูลภายหลังและแก้สองรอบ โดย values/row IDs/references/layout นอกขอบเขตแก้คงอยู่",
-      "status": "UNVERIFIED",
-      "environment": "local + browser",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects)",
+      "sha": "5796eff",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/domain/tool-package-evolve.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": null,
+      "evidence": "a later file arrives and a second edit happens: the new file is added to the table and one more field is added by the second activation. everything outside that edit is untouched: the existing rows are deep-equal (ids and values), the action ids and canvas view ids are unchanged, and both earlier sources remain with exactly one new source. exactly the field from the second round is added to the definition, so the edit kept to its declared scope.",
       "expected": "เพิ่มข้อมูลหลังสร้าง package ใช้ได้ทันที; สองรอบแก้ไม่ทำ field/row id/layout ที่ไม่เกี่ยวหาย",
-      "actual": "not run",
-      "limitations": "ต้องเทียบ field-by-field ไม่ใช่แค่ count"
+      "actual": "PASS at this environment",
+      "limitations": "two edit rounds are covered; a third and concurrent editors are not, and the table surface is checked through the API rather than through the canvas UI"
     },
     {
       "id": "G2-02",
