@@ -14,6 +14,7 @@ import {
   type ToolScalar,
 } from '../shared/tool-protocol';
 import { buildToolSandboxDocument } from './tool-sandbox/document';
+import { createToolHostWatchdog } from './tool-host-watchdog';
 
 /**
  * F080: the frame host for one generated tool instance.
@@ -45,6 +46,8 @@ export interface GeneratedToolHostProps {
   /** Accessible name for the frame. */
   title: string;
   initialHeightPx?: number;
+  /** How long the frame gets to say anything before the host reports that it never started (D-041). */
+  readyTimeoutMs?: number;
 }
 
 let runtimePromise: Promise<string> | undefined;
@@ -76,6 +79,16 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
   const portsRef = useRef(props.ports);
   portsRef.current = props.ports;
   const portsSentRef = useRef<ToolPortSnapshot[] | undefined>(undefined);
+
+  /**
+   * D-041: a frame blocked by the page's security policy looks exactly like a slow frame. This turns
+   * "the tool never answered" into a sentence a person can act on instead of an empty box.
+   */
+  const watchdog = useMemo(
+    () => createToolHostWatchdog({ timeoutMs: props.readyTimeoutMs ?? 3000, onTimeout: message => setFailure(message) }),
+    [props.readyTimeoutMs],
+  );
+  useEffect(() => () => watchdog.dispose(), [watchdog]);
 
   /**
    * Depend on stable primitives, not object identity: a caller that writes
@@ -153,6 +166,8 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
       if (!parsed.ok) return;
       const message: ToolFrameMessage = parsed.message;
       if (!toolFrameNonceMatches(message, nonce)) return;
+      // Any well-formed message from this frame proves it started; the watchdog stands down.
+      watchdog.heard();
       if (message.kind === 'resize') {
         setHeight(Math.min(TOOL_BRIDGE_LIMITS.maxHeightPx, Math.max(120, message.height)));
         return;
@@ -212,7 +227,7 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
       ref={frameRef}
       title={title}
       srcDoc={document}
-      onLoad={() => setFrameLoaded(true)}
+      onLoad={() => { setFrameLoaded(true); watchdog.started(); }}
       // No allow-same-origin: the frame must stay an opaque origin with no cookie access.
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
