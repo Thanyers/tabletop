@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { createCanvasViewState, isCanvasPosition, type CardSizes, type CanvasStorage, type SavedCanvasLayout } from './canvas-view-state';
+import { cardsClosedOnFirstLook, createCanvasViewState, isCanvasPosition, type CardSizes, type CanvasStorage, type SavedCanvasLayout } from './canvas-view-state';
 import { Background, BackgroundVariant, Controls, Handle, NodeResizer, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type Edge, type EdgeTypes, type Node, type NodeChange, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Activity, ArrowLeft, BookOpenCheck, Boxes, ChartLine, Database, GripVertical, ListChecks, Play, Scale, Swords, Table2, Workflow, Maximize2, Minimize2, X, LayoutGrid, Eye, EyeOff, MessageSquareText, Trash2, Undo2, Star, Pencil, Search } from 'lucide-react';
 import type { ExecutablePlan, PlanNode } from './types';
@@ -231,11 +231,6 @@ function sharedLayoutForView(view: WorkspaceView): SharedCanvasLayout | null {
  * history. The generated views, chat and notes stay open. Each card is decided once, when this browser first
  * sees it, so a card the person opened again stays open.
  */
-function startsClosed(id: string, ids: readonly string[]): boolean {
-  if (!ids.some((other) => other.startsWith('table.view.'))) return false;
-  return id === 'table.rules' || id === 'table.actions' || id.startsWith('table.collection.') || id === 'workspace.people' || id === 'workspace.history';
-}
-
 /** F054: the Objects order this viewer picked for this table; an unreadable value falls back to the default. */
 
 function portStyle(index: number, length: number): React.CSSProperties {
@@ -735,7 +730,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
       };
     }),
   ], [cardMetaById, hiddenIds, listedAuxiliaryObjects, listedPlanNodes, view]);
-  // First sight of a card decides whether it starts closed (see startsClosed).
+  // F083: table cards this viewer has closed, named on the canvas so a closed card never reads as lost data.
+  const closedTableCards = useMemo(() => cardRows.filter((object) => object.hidden && !object.id.startsWith('workspace.')), [cardRows]);
+  // First sight of a card decides whether it starts closed (see cardsClosedOnFirstLook).
   useEffect(() => {
     if (view.kind !== 'table') return;
     const ids = [...listedPlanNodes.map((spec) => spec.id), ...listedAuxiliaryObjects.map((object) => object.id)];
@@ -744,16 +741,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     const seen = canvasView.seen(workspaceKey);
     const fresh = ids.filter((id) => !seen.has(id));
     if (fresh.length === 0) return;
-    const closing = fresh.filter((id) => startsClosed(id, ids));
+    const closing = cardsClosedOnFirstLook(ids, fresh, seen);
     for (const id of fresh) seen.add(id);
     canvasView.saveSeen(workspaceKey, seen);
     if (closing.length === 0) return;
-    setHiddenIds((current) => {
-      const next = new Set(current);
-      for (const id of closing) next.add(id);
-      canvasView.saveHidden(workspaceKey, next);
-      return next;
-    });
+    setHiddenIds(canvasView.changeHidden(workspaceKey, { hide: closing }));
   }, [listedAuxiliaryObjects, listedPlanNodes, view.kind, workspaceKey]);
   const visibleIds = useMemo(() => new Set([...visiblePlanNodes.map((spec) => spec.id), ...visibleAuxiliaryObjects.map((object) => object.id)]), [visiblePlanNodes, visibleAuxiliaryObjects]);
   const [internalOpenedId, setInternalOpenedId] = useState<string | null>(null);
@@ -1024,12 +1016,19 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [activeOpenedId, openedObjectId, onOpenObject, onSelectNode]);
   // The eye in the Objects panel: show a closed card again without moving the view to it.
   const showObject = useCallback((id: string) => {
-    setHiddenIds((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      canvasView.saveHidden(workspaceKey, next);
-      return next;
-    });
+    setHiddenIds(canvasView.changeHidden(workspaceKey, { show: [id] }));
+  }, [workspaceKey]);
+  // F083: the canvas notice brings back every closed table card at once (people and history stay closed).
+  const showObjects = useCallback((ids: readonly string[]) => {
+    setHiddenIds(canvasView.changeHidden(workspaceKey, { show: ids }));
+  }, [workspaceKey]);
+  // F083: another tab of this table opened or closed a card; follow it so this tab never writes back an old copy.
+  useEffect(() => {
+    const follow = (event: StorageEvent) => {
+      if (canvasView.isHiddenKey(workspaceKey, event.key)) setHiddenIds(canvasView.hidden(workspaceKey));
+    };
+    window.addEventListener('storage', follow);
+    return () => window.removeEventListener('storage', follow);
   }, [workspaceKey]);
   // Header button: the table chat's next message is about this card (e.g. "make it harder").
   const referenceInChat = useMemo(() => view.kind !== 'table' || view.domain.kind !== 'table' ? undefined : (id: string, title: string) => {
@@ -1057,12 +1056,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
   }, [workspaceKey, commitUserPosition]);
 
   const hideObject = useCallback((id: string) => {
-    setHiddenIds((current) => {
-      const next = new Set(current);
-      next.add(id);
-      canvasView.saveHidden(workspaceKey, next);
-      return next;
-    });
+    setHiddenIds(canvasView.changeHidden(workspaceKey, { hide: [id] }));
     if (activeOpenedId === id) {
       if (openedObjectId === undefined) setInternalOpenedId(null);
       onOpenObject?.(null);
@@ -1073,12 +1067,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     const reopening = hiddenIds.has(id);
     if (reopening) {
       // Bring a closed card back; the open-and-focus request below waits for it to be laid out.
-      setHiddenIds((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        canvasView.saveHidden(workspaceKey, next);
-        return next;
-      });
+      setHiddenIds(canvasView.changeHidden(workspaceKey, { show: [id] }));
     } else if (!nodes.some((node) => node.id === id)) return;
     cancelPendingOpenObjectFocus();
     setPreviousView(flow.getViewport());
@@ -2105,6 +2094,9 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
             </div>}
           </nav>
         </div>
+        {closedTableCards.length > 0 && !objectsMenuOpen && <button type="button" className="tt-canvas-closed-notice" data-testid="canvas-closed-notice" title={closedTableCards.map((object) => object.title).join(' · ')} onClick={() => showObjects(closedTableCards.map((object) => object.id))}>
+          <EyeOff size={15} aria-hidden="true" /><span>{closedTableCards.length} closed {closedTableCards.length === 1 ? 'card' : 'cards'}</span><b>Show all</b>
+        </button>}
         {revisionNotice && <div key={revisionNotice.key} className="tt-canvas-revision-change" role="status" aria-live="polite" aria-atomic="true">
           <Activity size={14} aria-hidden="true" /><b>{revisionNotice.message}</b>
         </div>}

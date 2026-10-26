@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F083 | การ์ดที่ถูกซ่อนไม่ดูเหมือนข้อมูลหาย (ป้าย Show all, การ์ดใหม่เปิดไว้, ซิงก์หลายแท็บ) + dropdown ไม่เพี้ยน | `review` | [F083](docs/features/F083-closed-cards-visible.md) |
 | F082 | checkbox กดรัวไม่หาย + ข้อความแก้กฎที่มี "ทำเครื่องหมาย" เป็นร่างกฎ | `review` | [F082](docs/features/F082-checkbox-queue-intent.md) |
 | F081 | ช่องใช่/ไม่เป็น checkbox + กฎ toggle (todo list ติ๊กได้) | `review` | [F081](docs/features/F081-checkbox-toggle.md) |
 | F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `done` | Codex · PR #306 / release #309 · production 9.1.4 / d09d2f2; only hero area changed; README/film/rest unchanged |
@@ -84,6 +85,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F083-T1 | `cardsClosedOnFirstLook` + `changeHidden`/storage sync + ป้าย closed cards + select chevron | `review` | lead (AI) | `fix/F083-hidden-cards` | `ui/canvas-view-state.ts`, `ui/CanvasWorkspace.tsx`, `ui/canvas-visual-flow.css`, `ui/tabletop.css`, tests | — | ไม่มี migration |
 | F082-T1 | คิว checkbox แบบ optimistic + `asksTheBuilder` ใน chat intent | `review` | lead (AI) | `fix/F082-checkbox-queue-intent` | `ui/TableCanvasObjects.tsx`, `shared/chat-intent.ts`, tests | F081 | ไม่มี migration |
 | F081-T1 | effect `toggle` + checkbox ในการ์ดตาราง + checklist ตอนย่อ | `review` | lead (AI) | `feat/F081-checkbox-toggle` | `domain/table.ts`, `shared/table-contracts.ts`, `runtime/generative/validation.ts`, `domain/id-normalization.ts`, `ui/TableCanvasObjects.tsx`, `ui/checkbox-actions.ts`, `ui/record-actions.css`, `server/providers/table-schema-guide.ts`, tests | — | ไม่มี migration |
 | F080-T0 | `done` (merged #305) | `review` | DeepSeek Harness (lead) | `feat/F080-custom-tools` / #305 | `docs/features/F080-*`, `PLAN.md`, `changelog.d/F080-*` | — | C0; ยังไม่มี runtime change · public scan 0 findings · changelog check 13/13 · F080 acceptance 32 PASS / 3 UNVERIFIED · เหลือ G1-01/EDIT-01 (รอ DEEPSEEK_KEY), HUMAN-01 (ผู้ใช้จริง 5 คน) |

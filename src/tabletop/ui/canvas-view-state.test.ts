@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCanvasViewState, isCanvasPosition, type CanvasStorage } from './canvas-view-state';
+import { cardsClosedOnFirstLook, createCanvasViewState, isCanvasPosition, type CanvasStorage } from './canvas-view-state';
 
 /**
  * F078-T14: the Canvas kept six browser-backed view preferences inline in a
@@ -134,5 +134,31 @@ describe('canvas view state', () => {
     expect(isCanvasPosition({ x: Number.NaN, y: 2 })).toBe(false);
     expect(isCanvasPosition({ x: 1e9, y: 0 })).toBe(false);
     expect(isCanvasPosition(null)).toBe(false);
+  });
+
+  // F083: two tabs of one table each held their own copy and wrote it back whole, so an old tab re-closed cards.
+  it('opens and closes cards against what is stored, so an older tab cannot undo another tab', () => {
+    const storage = memoryStorage();
+    const tabA = createCanvasViewState(storage);
+    const tabB = createCanvasViewState(storage);
+    tabA.saveHidden(key, new Set(['table.collection.tasks', 'table.rules']));
+
+    expect([...tabB.changeHidden(key, { show: ['table.collection.tasks'] })]).toEqual(['table.rules']);
+    expect([...tabA.changeHidden(key, { hide: ['table.actions'] })]).toEqual(['table.rules', 'table.actions']);
+    expect([...tabA.changeHidden(key, { show: ['table.rules', 'table.actions'] })]).toEqual([]);
+    expect(storage.data.has(`tabletop:r1:canvas-hidden:${key}`)).toBe(false);
+    expect(tabA.isHiddenKey(key, `tabletop:r1:canvas-hidden:${key}`)).toBe(true);
+    expect(tabA.isHiddenKey(key, `tabletop:r1:canvas-seen:${key}`)).toBe(false);
+    expect(tabA.isHiddenKey(key, null)).toBe(true);
+  });
+
+  it('closes raw tables only on the first look, and keeps a card made later open', () => {
+    const ids = ['table.view.total', 'table.collection.receipts', 'table.rules', 'table.actions', 'workspace.people'];
+    expect(cardsClosedOnFirstLook(ids, ids, new Set())).toEqual(['table.collection.receipts', 'table.rules', 'table.actions', 'workspace.people']);
+    // No summary view yet: nothing to open on, so nothing closes.
+    expect(cardsClosedOnFirstLook(['table.collection.receipts'], ['table.collection.receipts'], new Set())).toEqual([]);
+    // The AI adds a tasks table to a table this browser has already seen.
+    const later = [...ids, 'table.collection.tasks'];
+    expect(cardsClosedOnFirstLook(later, ['table.collection.tasks'], new Set(ids))).toEqual([]);
   });
 });
