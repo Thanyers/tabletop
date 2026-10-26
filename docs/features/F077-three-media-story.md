@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — round 9 content live at 9.1.3 / 4748689; [release #289](https://github.com/Thanyers/tabletop/pull/289); full deployment remains partial ([#291](https://github.com/Thanyers/tabletop/issues/291)) |
+| สถานะ | `review` — round 10 three-case hero / [PR #306](https://github.com/Thanyers/tabletop/pull/306); previous public content 9.1.3 / 4748689, deployment incident [#291](https://github.com/Thanyers/tabletop/issues/291) remains separate |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชัน | 9.1.3 — homepage/README narrative order and copy cleanup; accepted film/media unchanged |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T4 |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T5 |
 
 ## ทำไม
 

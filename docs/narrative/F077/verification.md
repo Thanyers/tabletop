@@ -1,4 +1,15 @@
-# F077 — Revision 9 verification
+# F077 — Revision 10 verification
+
+26 October 2026 · [PR #306](https://github.com/Thanyers/tabletop/pull/306)
+
+- Scope: existing hero GIF area only. Café sales → original physics learning → adventure play; sales opens because the work/control/result is familiar, followed by visibly different learning and play cases. Other page sections/copy, README, film and accepted learning GIF/poster bytes match the starting dev baseline.
+- New EN/TH sales and play GIFs: each 960×540, 216 frames at 12 fps, 18 seconds, infinite loop. Four matching static posters. Each typed request precedes its card; prior cards remain. Sales uses quick entry (225→250), play ties Mira's roll to her initiative row (16→17), then shows health 18→11. Frames and posters inspected in both languages; the independent review's disconnected initiative finding was corrected and rechecked.
+- Rotation starts after the selected image loads and gives each case 18 seconds. Manual selection resets that case's timer. Pause/Resume uses the existing poster behavior. Paused and reduced-motion modes do not rotate, and reduced motion retains manual case selection. No live AI or persisted table data is used by these authored examples.
+- Node22.23.2: scoped ESLint, syntax checks, public scan and diff checks pass. Local build/typecheck and Worker dry-run pass. Local Workers browser suite: 35 PASS groups, no uncaught browser errors; hero assertions cover full sales→learning→play→sales rotation, no early transition, pause, reduced-motion freeze, keyboard selection and EN/TH source selection. That suite preceded the final media-only Mira label/initiative correction; final assets were subsequently rebuilt and visually/metadata checked. No rotation/runtime source changed after the suite.
+- Final-asset offline component UI gate: **13 PASS / 3 FAIL / 4 SKIP**. Retained generic failures: bundled/shared CSS literal lint; positional reduced-motion parity after Pause is removed shifts later element indexes; clicking the already-selected English button is treated as a dead interaction. Missing theme/token/dialog inputs cause four skips. Raw results are retained; none are relabelled PASS. Responsive/contrast/keyboard/target checks that ran are included in that measured result.
+- The production baseline is used for the scope-only release rather than bundling unrelated architecture commits now present on dev: the user's explicit “นอกนั้นห้ามแก้” constrains the publication. This is a bounded exception to the normal release-from-dev starting point, not permission to alter backend, configuration or credentials. Exact-head hosted CI and publication readback remain pending.
+
+## Revision 9 verification (historical)
 
 25 October 2026 · [PR #288](https://github.com/Thanyers/tabletop/pull/288) · [Release #289](https://github.com/Thanyers/tabletop/pull/289)
 

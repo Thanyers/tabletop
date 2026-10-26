@@ -24,7 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
-| F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `doing` | Codex · `feat/F077-three-hero-cases` · hero area/motion sources/assets only; README/film/rest of homepage unchanged |
+| F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `review` | Codex · `feat/F077-three-hero-cases` · PR #306; hero area/motion sources/assets only; README/film/rest of homepage unchanged |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (T0–T4, T5a/T5b, T6a/T6b/T6c, T7a/T7b, T8–T10, T12–T18 done) | [F078](docs/features/F078-architecture-improvements.md) |
 | F079 | Retire/freeze พื้นที่ Procedural (Trio/accounting/Component Lab) — เลือก B freeze แล้ว | `done` | [F079](docs/features/F079-procedural-surface-retirement.md) |
