@@ -365,3 +365,36 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **checks ที่ยัง SKIPPED และเหตุผล (ไม่นับเป็นผ่าน):** DTCG token validity (repo ใช้ CSS custom properties ไม่ใช่ไฟล์ DTCG) · token-pair contrast (ใช้ state-aware contrast ซึ่งวัดจริงและผ่านแทน) · focus trap in dialogs (ทั้งสาม surface ไม่มี modal)
 
 **ข้อจำกัด:** host iframe วัดด้วย driver ของ host harness (sandbox/bridge/ไม่มี cookie-storage-network) ไม่ใช่ ui-gate
+
+## D-033 — behaviour commit ผ่าน "action ที่ประกาศไว้" แทนการเปิดทางเขียนแถวใหม่
+
+**บริบท:** EXEC-01 ต้องการ "custom server algorithm เสนอ state ที่ valid → authority commit; นอก scope = zero write" แต่โดเมนปัจจุบันเขียนแถวได้ทาง action effect และ compute run outputs เท่านั้น (D-031)
+
+**ทางเลือกที่พิจารณา:**
+1. เพิ่มคำสั่ง domain ใหม่ที่รับ changeset ของแถวโดยตรง — ยืดหยุ่นสุด แต่เปิดทางเขียนใหม่ทั้งเส้น (validation/invariant/limit ต้องทำซ้ำ) และเสี่ยงที่สุด
+2. **ใช้ action ที่ประกาศไว้เป็นทาง commit** (เลือกข้อนี้)
+
+**การตัดสินใจ:** behaviour เสนอ `{ actionId, inputs }` และ host ตรวจด้วย `planToolBehaviorAction` ก่อน แล้ว commit ด้วยคำสั่ง `table.act` เดิมของ authority
+
+**เหตุผล:**
+- ไม่มีทางเขียนที่สอง ⇒ invariant/revision/limit/permission/receipt ยังถูกบังคับโดยเส้นทางเดียวกับที่ผู้ใช้กดเอง
+- "นอก scope" ตรวจได้ก่อน commit: action ที่ package ไม่ได้ประกาศ หรือตารางไม่มี → plan คืน `ok:false` และไม่มีคำสั่งถูกส่ง ⇒ zero write
+- ลดความเสี่ยง regression ในโดเมนขนาดใหญ่ (table.ts ~1.3k บรรทัด) ในช่วงท้ายของงาน
+
+**ข้อจำกัดที่ยอมรับ:** behaviour สร้าง/แก้แถว "ดิบ" ไม่ได้ — ต้องมี action ที่ประกาศไว้ในตาราง ถ้าอนาคตต้องการ free-form writes ต้องทำข้อ 1 อย่างตั้งใจพร้อมรีวิว
+
+**หลักฐาน:** `tool-action-proposal.test.ts` 6/6 · e2e `cloudflare/space-projection-cross.test.ts` ("a behaviour proposal is gated before the commit") — declared action commit จริง (row เปลี่ยน), undeclared → plan refuse และ dataRevision ไม่ขยับ
+
+## D-034 — adapter สำหรับ DeepSeek authoring + CLI สำหรับรันจริง (ยังไม่รันเพราะยังไม่มี key ในเครื่อง)
+
+**สิ่งที่เพิ่ม:** `server/providers/deepseek-tool-package.ts` (`DeepSeekToolPackageGenerator`) และ `author-tool-package-cli.ts`
+
+- ใช้ endpoint/model เดิมของโปรเจกต์ (`api.deepseek.com/chat/completions`, `deepseek-flash`) และคีย์จาก `DEEPSEEK_KEY` ใน environment (ไม่พิมพ์ ไม่เก็บลงไฟล์)
+- `response_format: json_object` + ตัวดึง JSON ที่รับมือ reply ที่มี ```fence``` หรือมีข้อความนำ/ตาม
+- คืน `{definition, usage:{calls, promptTokens, completionTokens, usd}}` ให้ pipeline ตรวจต่อด้วย `validateToolPackage` — reply ที่ไม่ใช่ package ที่ถูกต้องจะถูกปฏิเสธก่อนถึง isolated trial
+- CLI บังคับเพดานที่อนุมัติ: **≤6 calls และ ≤USD 0.20 ต่อ run** (ถ้า estimate เกินจะไม่ยิง request) และพิมพ์สรุป calls/usd/withinCap
+
+**สถานะ:** adapter พิสูจน์แล้วด้วย fetch ปลอม 7/7 (ไม่มีค่าใช้จ่าย) — **ยังไม่มีการเรียกโมเดลจริง** เพราะเครื่องนี้ไม่มี `DEEPSEEK_KEY` (ไม่มี `.dev.vars`/`.env`) และ `AI_DAILY_BUDGET_MICRO_USD` ใน wrangler เป็น 0
+
+**ขั้นปิด G1-01/EDIT-01:** ตั้ง `DEEPSEEK_KEY` ใน environment ของเครื่อง dev แล้วรัน
+`npx tsx server/providers/author-tool-package-cli.ts "<intent>"` (และ `--base <package.json>` สำหรับ EDIT-01) แล้วบันทึกผล `calls/usd/withinCap` ลง acceptance ของสองข้อนั้น
