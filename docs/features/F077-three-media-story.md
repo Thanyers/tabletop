@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — round 8 / [PR #285](https://github.com/Thanyers/tabletop/pull/285), [release #286](https://github.com/Thanyers/tabletop/pull/286); production 9.1.2 / abe4aaf |
+| สถานะ | `review` — round 10 three-case hero / [PR #306](https://github.com/Thanyers/tabletop/pull/306); previous public content 9.1.3 / 4748689, deployment incident [#291](https://github.com/Thanyers/tabletop/issues/291) remains separate |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.2 — scoped hero motion and realistic adaptation imagery published; README and R6 film unchanged |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 และ F077-T2 |
+| เวอร์ชัน | 9.1.3 — homepage/README narrative order and copy cleanup; accepted film/media unchanged |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T5 |
 
 ## ทำไม
 
