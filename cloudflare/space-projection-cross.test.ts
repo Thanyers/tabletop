@@ -764,3 +764,54 @@ describe('a preview does not touch the table', () => {
   });
 
 });
+
+/**
+ * F080 / G4-01 (second half): promote refuses a change that breaks a dependency.
+ *
+ * The change is built from the scenario's own program (so it is a wire-valid program) and only adds
+ * an action whose parameter points at a collection that does not exist. Nothing else is edited, so a
+ * refusal can only come from the dependency check, and the table must still hold no program after.
+ */
+describe('a broken dependency never promotes', () => {
+  it('refuses a change whose action references a missing collection', async () => {
+    const owner = await seedActor('Dependency owner');
+    const created = await createWorkspace(owner, 'Dependency table');
+    const imported = await command(owner, created, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    const sourceId = (imported.workspace.domain as { sources?: { id: string }[] }).sources?.[0]?.id;
+    if (!sourceId) throw new Error('DEPENDENCY_SOURCE_MISSING');
+
+    const change = equipmentChange(sourceId);
+    change.program.actions = [...change.program.actions, {
+      id: 'ghost-action',
+      title: 'Ghost',
+      description: 'points at a collection that does not exist',
+      roles: ['owner'],
+      parameters: [{ id: 'target', label: 'Target', type: 'record', collection: 'ghost-collection' }],
+      conditions: [],
+      effects: [],
+      requireTurn: false,
+      advanceTurn: false,
+    }];
+
+    const proposed = await command(owner, imported.workspace, 'evolve.propose', { change });
+    let refused: { status: number; code: string } | undefined;
+    try {
+      await command(owner, proposed.workspace, 'evolve.simulate', {});
+      await command(owner, proposed.workspace, 'evolve.validate', {});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const match = /failed: (\d+) (\w+)/u.exec(message);
+      refused = { status: Number(match?.[1] ?? 0), code: match?.[2] ?? message };
+    }
+    expect(refused, 'a change with a missing collection must not validate').toBeDefined();
+    expect(refused?.status).toBe(422);
+    expect(refused?.code.startsWith('TABLE_')).toBe(true);
+
+    // Nothing was promoted: a refused change leaves no program behind.
+    const after = await viewOf(owner, imported.workspace.id);
+    expect((after.domain as { program?: unknown }).program ?? null).toBeNull();
+  });
+});

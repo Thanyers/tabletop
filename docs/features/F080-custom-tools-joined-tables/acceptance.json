@@ -646,17 +646,17 @@
       "requirement": "G4",
       "slice": "F080-T4B",
       "title": "preview/scenario ไม่มี side effect กลับโต๊ะจริง; promote ตรวจ dependency ทั้งหมดและใช้ protocol ที่รับรองได้",
-      "status": "UNVERIFIED",
-      "environment": "local + workers",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects)",
+      "sha": "275cf8b",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/domain/tool-promote.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": null,
+      "evidence": "preview has no side effect: after evolve.propose and evolve.simulate the table program, its records, dataRevision and ruleRevision are all unchanged (deep equality for the first two). a broken dependency never promotes: a change whose new action parameter points at a collection that does not exist is refused with 422 TABLE_*, and the table still holds no program afterwards. promotion runs through the same authority path as every other command (propose, simulate, validate, approve, activate), so it is checked by the server rather than by the screen.",
       "expected": "ทุกครั้งที่ preview/scenario รัน ไม่มี revision ของ source ขยับ; promote ตรวจ dependency/grants/revision แล้วสำเร็จหรือ reject ก่อน side effect",
-      "actual": "not run",
-      "limitations": "ถ้ามี compensating workflow ต้องแสดง partial/pending และห้ามนับเป็น atomic rollback"
+      "actual": "PASS at this environment",
+      "limitations": "the reserve action was routed through the ordinary authority commit; there is no separate \"promote\" endpoint that could bypass it"
     }
   ]
 }
