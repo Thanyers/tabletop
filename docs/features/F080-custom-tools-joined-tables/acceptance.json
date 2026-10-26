@@ -473,18 +473,19 @@
       "requirement": "G6",
       "slice": "ทุก slice",
       "title": "keyboard/focus/contrast/responsive 320/414px/reduced motion ของ host + custom UI",
-      "status": "UNVERIFIED",
-      "environment": "browser (local chromium)",
-      "sha": "4f9bd8b",
+      "status": "PASS",
+      "environment": "browser (Chromium) via ui-gate with the repo theme",
+      "sha": "7ce2f44",
       "node": "v22.23.2",
       "commands": [
-        "node C:/Users/mokun/.agents/skills/ui-gate/gate.mjs test-results/tool-joined-harness/index.html --full",
-        "node C:/Users/mokun/.agents/skills/ui-gate/gate.mjs test-results/tool-authoring-harness/index.html --full"
+        "node \"C:/Users/mokun/.agents/skills/ui-gate/gate.mjs\" test-results/room-shell-harness/index.html --full --theme=src/tabletop/ui/tabletop-tokens.css",
+        "node \"C:/Users/mokun/.agents/skills/ui-gate/gate.mjs\" test-results/tool-joined-harness/index.html --full --theme=src/tabletop/ui/tabletop-tokens.css",
+        "node \"C:/Users/mokun/.agents/skills/ui-gate/gate.mjs\" test-results/tool-authoring-harness/index.html --full --theme=src/tabletop/ui/tabletop-tokens.css"
       ],
-      "evidence": "ui-gate on both rendered surfaces: joined panel 16/16 measured, authoring panel 16/16 measured (was 14/16 before this round). Checks that ran and passed include axe-core ARIA/landmarks, state-aware contrast in light and dark, touch targets (WCAG 2.5.8), keyboard reachability, prefers-reduced-motion, horizontal overflow at 280/320/414, and RTL. Two real defects were found and fixed: the check button gave no feedback when a source passed, and the file tablist changed selection without moving focus (the handler targeted a wrapper that did not exist).",
+      "evidence": "all three custom surfaces measure 17/17 with the theme supplied: keyboard reachability and operability, axe ARIA/labels/landmarks, state-aware contrast in light and dark, horizontal overflow at 280/320/414, mobile-first base layer, touch targets (WCAG 2.5.8), prefers-reduced-motion, no clipped content, and every var() resolving to the theme. the two earlier real defects found by the same gate were fixed and re-measured: the authoring check button gave no feedback, and its tablist changed selection without moving focus. three checks stay skipped and are not counted as passes: DTCG token validity (this repo uses CSS custom properties, not DTCG files), token-pair contrast (the state-aware contrast check runs instead and passes), and dialog focus trap (these surfaces have no modal).",
       "expected": "gate รายงาน N/N จริง; ทุก flow ถึงด้วย keyboard; focus ไม่ติดอยู่ใน iframe; contrast ผ่าน WCAG AA; 320/414px ไม่มี horizontal overflow; reduced motion ไม่พัง",
-      "actual": "PARTIAL - every measured check passes, but four checks were SKIPPED (theme vars, DTCG tokens, contrast token pairs, focus trap) so this is not a full a11y pass",
-      "limitations": "ui-gate reports 16 measured checks; theme/token/DTCG/contrast-pair/focus-trap checks were SKIPPED (need --theme and --focustrap), so this is not a full a11y pass. Fixes for the authoring defects are the next task."
+      "actual": "PASS on the measured checks at this environment",
+      "limitations": "the host iframe surface is covered by the host harness driver (sandbox, bridge, no cookie/storage/network), not by ui-gate; dialog focus trap is not applicable because no dialog exists; the two skipped token checks would need DTCG token files this repo does not use"
     },
     {
       "id": "VISUAL-01",

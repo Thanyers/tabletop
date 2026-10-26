@@ -355,3 +355,13 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 4. เทสต์: ผลที่ valid → เขียนจริง; resource ที่ไม่ประกาศ/ผิด schema → 4xx และ **zero write**; revision stale → ปฏิเสธก่อนเขียน
 
 **ห้าม:** ให้ behaviour เขียนนอก declaredWrites หรือข้าม authority แม้แต่กรณีเดียว — เพราะนั่นคือช่องที่ทั้งฟีเจอร์นี้มีไว้ปิด
+
+## D-032 — A11Y-01 วัดด้วย ui-gate + theme: 17/17 ทั้งสาม surface
+
+**สิ่งที่รัน:** ui-gate กับ `--full --theme=src/tabletop/ui/tabletop-tokens.css` บน room shell, joined panel และ authoring panel
+
+**ผล:** 17/17 measured ทั้งสาม (เพิ่ม check "ทุก var(--…) resolve กับ theme" จากการให้ theme)
+
+**checks ที่ยัง SKIPPED และเหตุผล (ไม่นับเป็นผ่าน):** DTCG token validity (repo ใช้ CSS custom properties ไม่ใช่ไฟล์ DTCG) · token-pair contrast (ใช้ state-aware contrast ซึ่งวัดจริงและผ่านแทน) · focus trap in dialogs (ทั้งสาม surface ไม่มี modal)
+
+**ข้อจำกัด:** host iframe วัดด้วย driver ของ host harness (sandbox/bridge/ไม่มี cookie-storage-network) ไม่ใช่ ui-gate
