@@ -33,6 +33,10 @@
 
 ## การตัดสินใจ
 
+### Round 10 / F077-T5 — three hero GIF cases
+
+User scope (26 October 2026): change only the homepage hero GIF area. Rotate three 18-second prompt-first cases: café sales (opens; concrete everyday value), existing physics learning, then adventure play (breadth beyond work). Preserve the accepted learning GIF bytes and its original animation style. Each new case types before adding a usable card, retains earlier cards and visibly uses a control. Add compact case selectors within the existing hero area; retain Pause/Resume and static posters with no automatic rotation under reduced motion. English and Thai stay aligned. README, film, other page sections and backend are outside scope.
+
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
 | 2026-10-24 | รอบ5: เล่าปากกา/ค้อน/เก้าอี้ที่ปรับเพื่อคน → ปัญหาsoftwareที่คนต้องปรับตาม → Tabletop → ตัวอย่าง; white/logo-only outro; voice conversationalกระตือรือร้น | ผู้ใช้ปฏิเสธintroเปิดcaseทันทีและเสียงเรียบ; referenceใหม่เน้นภาพตามความหมายและtimingคำพูด |
