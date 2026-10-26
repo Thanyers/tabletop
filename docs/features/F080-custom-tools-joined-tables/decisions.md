@@ -410,3 +410,24 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **Correct behavior:** เมื่อเพิ่ม "สัญญาใหม่" ให้ package ต้องแก้ schema พร้อมเทสต์ที่วิ่งผ่าน `validateToolPackage` จริง ไม่ใช่เทสต์ที่ประกอบ object เอง — และควรมีเทสต์ต่อ adapter → pipeline ไว้กันสัญญาไม่ตรงกัน
 
 **หลักฐาน:** 404/404 ใน `src/tabletop/shared` + `src/tabletop/runtime/tools` · `deepseek-tool-package.pipeline.test.ts` 2/2 (AI route activate จริงพร้อม usage, และ reply ที่ไม่ใช่ package ไม่ถูก activate)
+
+## D-036 — สถานะจริงของ "ผลิตภัณฑ์": authoring panel กับ tool surface ยังไม่ถูก mount ในหน้าใช้งาน
+
+**สิ่งที่ตรวจ (2026-10-26):**
+
+- `ToolAuthoringPanel` ถูกใช้แค่ใน browser harness (`tests/ui/tool-authoring/`) — **ไม่มีหน้าจอผลิตภัณฑ์ใด mount มัน**
+- `SpaceRoomScreen` ส่งเข้า `RoomShell`: `joinedSources` (จริง, `JoinedProjectionView` ถูก render ในซอง), `tables`, `recap` — แต่
+  - `tool` slot = **placeholder note** ไม่ใช่ `GeneratedToolHost`
+  - `authoring` slot = **ไม่ถูกส่ง**
+  - `onDisconnectSource` = no-op
+- ไม่มี Worker route สำหรับ authoring (`cloudflare/*.ts` ไม่มี route tool package) และ Room ไม่มี tool store
+
+**ผลต่อ acceptance:** G1-01/EDIT-01 พิสูจน์ได้เฉพาะระดับ harness + pipeline (PARTIAL) — ไม่ใช่ "ผู้ใช้สร้าง/ใช้ในหน้าจริง" และรายการที่ limitation เขียนว่า "not rendered in a product screen" (HIST-01, IMPACT-01) ก็เป็นเพราะเหตุนี้
+
+**สไลซ์ที่ต้องทำต่อ (ยังไม่เริ่ม):**
+1. Room: tool store (per workspace) + คำสั่งติดตั้ง/เปิดเวอร์ชันผ่าน authority (ใช้ `ToolActivationRecord` ที่มีอยู่)
+2. Worker: route `/api/workspaces/:id/tools` (อ่านรายการ), `/tools/:packageId/author` (human + AI, ต้องมี `DEEPSEEK_KEY` และ budget), `/tools/:packageId/activate`
+3. UI: mount `ToolAuthoringPanel` ในช่อง `authoring` และ `GeneratedToolHost` ในช่อง `tool`, ต่อ `onDisconnectSource` กับคำสั่งถอนจริง
+4. เทสต์: browser harness ของ room shell ต้องเห็น tool จริงและ authoring จริง (ไม่ใช่ placeholder)
+
+**ทำไมไม่ทำในรอบนี้:** เป็นงาน 3 ชั้น (Room + Worker + UI) ที่ต้องมี key เพื่อทดสอบ AI route จริง และแตะ authority/store ซึ่งควรทำเป็นสไลซ์ของตัวเองพร้อมรีวิว
