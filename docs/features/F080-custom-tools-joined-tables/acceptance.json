@@ -312,18 +312,18 @@
       "requirement": "G4 / WP-1A",
       "slice": "F080-T4A",
       "title": "goal/decision context: เริ่มไม่มี brief ได้, แก้/ยกเลิกโดยผู้มีสิทธิ์แล้ว reload/สมาชิกอื่นเห็นตรงกัน, ระบุ included/omitted AI context",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "environment": "Cloudflare tier (worker.fetch + real Durable Objects) + local unit",
-      "sha": "7693ca3",
+      "sha": "91eb22a",
       "node": "v22.23.2",
       "commands": [
         "npx vitest run src/tabletop/shared/space-brief.test.ts src/tabletop/shared/collaboration-space-command.test.ts",
-        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
+        "npm run test:cloudflare -- cloudflare/room.test.ts cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": "a room works without a brief: the AI context report says so explicitly instead of inventing one. editing is authorised and persisted: space.setBrief and space.clearBrief are ordinary space commands, refused for a participant, and a fresh read after the commit returns the same text with its author and time; clearing removes it again. included and omitted AI context are both named: the brief and each connected source (with the revision read) are included, while unlinked sources, withdrawn connections, chat, the member list and other rooms are listed as omitted with a reason.",
+      "evidence": "a room works without a brief, and the AI context report says so instead of inventing one. editing is authorised and persisted: space.setBrief and space.clearBrief are ordinary space commands refused for a participant; a fresh read returns the same text with its author and time, and clearing removes it. a second member who joins by invite reads the same brief with the owner as its author, through the member's own view (62/62 in the room suite). included and omitted AI context are both named: the brief and each connected source with the revision read are included, while unlinked sources, withdrawn connections, chat, the member list and other rooms are listed as omitted with a reason.",
       "expected": "context สร้างจากศูนย์ได้; การแก้เห็นตรงกันหลัง reload; ระบุได้ว่า AI ใช้ context อะไรและตัดอะไร; ข้อความจากเอกสารไม่ override สิทธิ์/คำสั่งล่าสุด",
-      "actual": "PARTIAL - brief lifecycle, permissions and the included/omitted report are proven; a second member reading the same room is not (that needs an invite flow this suite does not drive)",
-      "limitations": "the \"another member sees the same\" half of the criterion is untested; the report is not shown in a product screen yet"
+      "actual": "PASS at this environment",
+      "limitations": "the report is not rendered in a product screen yet, and nothing is sent to a model (AI authoring stays at 0 calls)"
     },
     {
       "id": "HIST-01",
