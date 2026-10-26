@@ -33,6 +33,10 @@
 
 ## การตัดสินใจ
 
+### Round 12 / F077-T7 — bilingual README and consistent mark
+
+26 October 2026: remove production-process commentary and the animation-source link from the public README; keep useful product guidance and legal terms. Add a complete Thai README with reciprocal English/ไทย links and existing Thai GIF/poster assets. Match the README and browser icon to the homepage's existing four-color, tilted mark. Preserve the accepted homepage narrative, animations and film. Review other README copy for repetition and implementation details.
+
 ### Round 11 / F077-T6 — README parity with the published cases
 
 26 October 2026: align the English root README with the published café sales → physics learning → adventure play sequence. Reuse the exact EN hero GIFs and matching reduced-motion posters, with one short explanation per case. Retain the hammer/chair concept, supported-capability qualifications, beta/start guidance and exact AGPL section. Replace the older disconnected invoice/learning/Encounter image assortment in README; do not modify homepage source, media bytes, film, backend or deployment configuration. The default-branch README must match the publication; isolate any required documentation release from unrelated dev architecture work.

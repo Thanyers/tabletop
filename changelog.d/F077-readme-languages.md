@@ -1,0 +1,1 @@
+- Simplify the README, add English/Thai navigation with matching GIFs, and align the browser/README icon with the homepage mark. Existing homepage content, animations and film stay unchanged.

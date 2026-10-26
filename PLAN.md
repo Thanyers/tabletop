@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F077-T7 | Clean README copy, add Thai/English navigation, align icon with homepage mark | `review` | Codex · `docs/F077-readme-languages` · PR #364 · README.md, README.th.md, public/favicon.svg and owning docs |
 | F086 | แหล่งเว็บของร่างที่ใช้อัตโนมัติยังเพิ่มเข้าโต๊ะและอ้างอิงได้ | `review` | [F086](docs/features/F086-applied-draft-web-sources.md) |
 | F087 | ช่องแชทลอยเป็น island ไม่มีแถบพื้นหลังบังบอร์ด | `review` | [F087](docs/features/F087-composer-island.md) |
 | F085 | การ์ดไม่หายวับตอนโต๊ะอัปเดต (คลิก checkbox ไม่หลุดไปโดนพื้นหลัง) | `review` | [F085](docs/features/F085-cards-stay-visible.md) |

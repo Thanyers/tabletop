@@ -216,3 +216,8 @@ Sync before delivery: merged `origin/dev` at `694d556`; preserved F077 and indep
 [CIรอบ2ของ31ac96f](https://github.com/Thanyers/tabletop/actions/runs/40068985937) failedที่ `Check dependency advisories` (4 moderate/3 high) ทำให้local-validationFAIL; งานนี้ไม่แก้rootdependenciesและคง [draft PR259](https://github.com/Thanyers/tabletop/pull/259) ผลcurrentheadต้องอ่านใหม่หลังpush ไม่มีmergeหรือdeploy
 
 MP4 รอบ3: 1,395,144 bytes; SHA-256 `a3b7809a90f752a8a03822e5bd971ee16cba9f4496f35d1c4f136b6446ba77b0`. รวมMP4/poster/8stills 2,871,261 bytes.
+# Round 12 — bilingual README cleanup
+
+26 October 2026, F077-T7 / PR #364. Removed the public production-process note, animation-source link and redundant demo wording. Added reciprocal English/ไทย links and a complete Thai README with the existing Thai GIFs/posters. Browser and README favicon now uses the homepage colors and -5 degree tile geometry. Homepage copy, animation sources/media and film are unchanged.
+
+Local verification on Node 22.23.2: 13 local references per README resolve; three correctly ordered GIF/poster pairs per language; reciprocal language links; both legal sections match the prior English text exactly. `node scripts/check-public-files.mjs`: 0 findings. `git diff --check`: pass. No new runtime tests for this documentation/static-icon change. Actual GitHub rendering confirms all six GIFs and both icons load, headings match each language, and English → ไทย navigation works. Independent read-only review found no material concerns in content parity, links or mark fidelity. Required CI pending.
