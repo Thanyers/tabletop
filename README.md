@@ -2,6 +2,8 @@
 
 # tabletop.
 
+**English** · [ไทย](README.th.md)
+
 ## Tools that keep adapting to you.
 
 Tabletop is a shared canvas where you and AI shape tools for work, learning, and play. Describe what you need, use the tables, buttons, charts, and rules you create, and ask for changes as you go.
@@ -55,9 +57,7 @@ Start with a turn-order table for the group. Add a roll button that updates Mira
 
 Each addition answers something that came up while using the table. Keep the useful parts and shape the next change around them.
 
-**[Try the café example](https://tabletop.ptchrr.workers.dev/#board)** · **[Explore the prepared demos](https://tabletop.ptchrr.workers.dev/demo)** · **[Watch the narrated story](https://tabletop.ptchrr.workers.dev/#film)**
-
-<sub>Illustrative examples with sample data. The café walkthrough uses prepared requests without calling AI or saving changes to your tables. [Animation source](docs/showcase/motion/src/hero-entry.jsx)</sub>
+**[Try the café example](https://tabletop.ptchrr.workers.dev/#board)** · **[Explore the demos](https://tabletop.ptchrr.workers.dev/demo)** · **[Watch the story](https://tabletop.ptchrr.workers.dev/#film)**
 
 ## What you can do today
 
@@ -73,14 +73,7 @@ Each addition answers something that came up while using the table. Keep the use
 2. Describe what you want to do and check the tools and rules AI prepares.
 3. Add data, use the tools, and ask for changes as your work develops.
 
-<details>
-<summary>Before you try it</summary>
-
-Tabletop is a beta. AI drafts may need revision. Check calculations, rules, and compatibility with existing data before applying changes.
-
-Prepared demos reset when refreshed. Rooms created after signing in save work for later. See the [user guide (Thai)](docs/USER_GUIDE_TH.md) for supported files, limits, and controls.
-
-</details>
+Tabletop is in beta. Review AI-generated calculations and rules before using them. See the [user guide (Thai)](docs/USER_GUIDE_TH.md) for how to get started.
 
 [Product principles](product.md) · [Documentation](docs/README.md) · [Development and build instructions](CONTRIBUTING.md)
 
