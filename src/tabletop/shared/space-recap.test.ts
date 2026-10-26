@@ -192,3 +192,31 @@ describe('a recap can be paged without losing what matters', () => {
     expect(page.hasMore).toBe(false);
   });
 });
+
+describe('pagination partitions the recap exactly', () => {
+  it('partitions the entries exactly: no duplicate, nothing missing, order kept', () => {
+    const recap = buildSpaceRecap({
+      space: space(),
+      grants: [
+        { grant: grant(A), liveDataRevision: 4 },
+        { grant: grant(B, { sourceWorkspaceId: B, grantId: 'grant-b' }), liveDataRevision: 12 },
+        { grant: grant('44444444-4444-4444-8444-444444444444', { sourceWorkspaceId: '44444444-4444-4444-8444-444444444444', grantId: 'grant-c', status: 'revoked' }), liveDataRevision: 1 },
+      ],
+    });
+    const whole = recapEntries(recap);
+
+    // Walk every page size and rebuild the list from the pages.
+    for (const pageSize of [1, 2, 3, 5, 10]) {
+      const pages = paginateRecap(recap, { page: 1, pageSize }).pages;
+      const rebuilt: string[] = [];
+      for (let page = 1; page <= pages; page += 1) {
+        const currentPage = paginateRecap(recap, { page, pageSize });
+        expect(currentPage.page).toBe(page);
+        rebuilt.push(...currentPage.entries.map(entry => `${entry.kind}:${entry.grantId}`));
+      }
+      expect(rebuilt).toEqual(whole.map(entry => `${entry.kind}:${entry.grantId}`));
+      // No duplicates.
+      expect(new Set(rebuilt).size).toBe(rebuilt.length);
+    }
+  });
+});
