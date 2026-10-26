@@ -724,3 +724,43 @@ describe('an additive program update keeps identities', () => {
     expect(after.fieldIds).toEqual([...before.fieldIds, 'note'].sort());
   });
 });
+
+/**
+ * F080 / G4-01 (first half): a preview must not write back to the real table.
+ *
+ * Proposing and simulating a change is what a person does to see an outcome. If simulating already
+ * moved the table, the "preview" would be an edit; the check is that the table's own data, program and
+ * revisions are untouched while the proposal exists.
+ */
+describe('a preview does not touch the table', () => {
+  it('leaves program, records and revisions unchanged after propose and simulate', async () => {
+    const owner = await seedActor('Preview owner');
+    const created = await createWorkspace(owner, 'Preview table');
+    const imported = await command(owner, created, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    const sourceId = (imported.workspace.domain as { sources?: { id: string }[] }).sources?.[0]?.id;
+    if (!sourceId) throw new Error('PREVIEW_SOURCE_MISSING');
+    const before = await viewOf(owner, imported.workspace.id);
+
+    const proposed = await command(owner, before, 'evolve.propose', { change: equipmentChange(sourceId) });
+    const simulated = await command(owner, proposed.workspace, 'evolve.simulate', {});
+
+    const domainOf = (view: typeof before) => view.domain as unknown as {
+      program?: unknown;
+      records?: Record<string, unknown[]>;
+      dataRevision?: number;
+      ruleRevision?: number;
+    };
+    const beforeDomain = domainOf(before);
+    const afterDomain = domainOf(simulated.workspace);
+
+    // The table's own content is untouched by a preview.
+    expect(afterDomain.program).toEqual(beforeDomain.program);
+    expect(afterDomain.records).toEqual(beforeDomain.records);
+    expect(afterDomain.dataRevision).toBe(beforeDomain.dataRevision);
+    expect(afterDomain.ruleRevision).toBe(beforeDomain.ruleRevision);
+  });
+
+});
