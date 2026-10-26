@@ -446,3 +446,16 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 5. **เทสต์**: worker e2e (ติดตั้ง → อ่าน → hash ตรง/ไม่ตรง), browser (host รัน UI ของ package ที่ติดตั้งจริง), isolation ยังต้องผ่าน
 
 **ทำไมไม่ทำในรอบนี้:** เป็นงาน 5 ชั้นที่แตะการเก็บ state + authority + route + UI พร้อมกัน และต้องมีการทดสอบ isolation ซ้ำ — ไม่ควรทำครึ่ง ๆ กลาง ๆ ในโค้ดที่ merge ลง dev แล้ว
+
+## D-038 — D-037 slice 1 merge แล้ว; slice 2 (mount host) ผูกกับ "ทางรัน behaviour" ที่ยังไม่มี
+
+**ทำแล้ว (PR #341):** `SpaceToolInstallation.definition?` + `verifyToolInstall` ใน Room (hash proof ก่อน authority) + แยก `toolPackageContentCanonical` · เทสต์ 6/6 · room+cross 94/94 · shared+domain 659/659
+
+**สิ่งที่ตรวจเพิ่มเพื่อจะต่อ slice 2:** `GeneratedToolHost` ต้องการ `compiled`, `ports` snapshot, `presentation` และ **`onIntent`** ซึ่งคือ "รัน behaviour หนึ่งตัวผ่านทาง authority"
+
+- ทางรัน behaviour จาก client ยังไม่มี route (มีแค่ runner ใน Room/Node + plan ใน shared)
+- ถ้า mount host โดยไม่มี `onIntent` จริง = ได้ UI ที่กดแล้วไม่เกิดอะไร ⇒ เป็นของหลอก ไม่ควร merge
+
+**จึงหยุดที่ slice 1 และบันทึกเงื่อนไข:** ต้องมี route `POST /api/workspaces/:id/space/tool/intent` ที่ runner → `validateToolBehaviorOutput` → `planToolBehaviorAction` → `table.act` (D-033) ก่อน แล้วค่อย mount host
+
+**หมายเหตุ:** การ mount host ไม่ได้เป็นเกตของ acceptance ที่ยังค้าง (G1-01/EDIT-01 = provider key, HUMAN-01 = ผู้ใช้จริง) — เป็นงานต่อยอดคุณภาพผลิตภัณฑ์
