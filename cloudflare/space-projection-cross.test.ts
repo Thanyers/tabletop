@@ -907,3 +907,46 @@ describe('an independent oracle checks the connection surface', () => {
     expect(Number(afterMove.body.sourceDataRevision)).toBeGreaterThan(Number(served.body.sourceDataRevision));
   });
 });
+
+/**
+ * F080 / ORACLE-01 (export surface): two independent paths must agree on the same data.
+ *
+ * The projection and the export are produced by different code and different requests. Comparing them
+ * catches a serializer or a narrowing that drifted on one side only, which no single-path test can.
+ */
+describe('the export agrees with the projection', () => {
+  it('serves the same rows in the same order through both paths', async () => {
+    const owner = await seedActor('Export oracle owner');
+    const sourceOwner = await seedActor('Export oracle source');
+    const space = await createWorkspace(owner, 'Export oracle space');
+    const source = await createEquipmentTable(sourceOwner);
+    await command(sourceOwner, source, 'source.grantProjection', {
+      grantId: 'grant-cross',
+      spaceId: 'cross-room',
+      spaceWorkspaceId: space.id,
+      audience: { kind: 'space-members' },
+      projections: [{ portId: 'equipment', resource: 'equipment', fields: ['name'], maxRows: 5 }],
+      actions: [],
+      exportAllowed: true,
+    });
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'cross-room', title: 'ห้องเทียบสองทาง', sharedToolWorkspaceId: space.id,
+    });
+    await command(owner, created.workspace, 'space.addSource', {
+      source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+    });
+
+    const projected = await readProjection(owner, space.id, { source: source.id, grant: 'grant-cross', port: 'equipment' });
+    expect(projected.status).toBe(200);
+    const projectionRows = (projected.body.rows as { id: string; values: Record<string, unknown> }[]).map(row => String(row.values.name));
+
+    const exported = await downloadExport(owner, space.id, source.id, 'grant=grant-cross&port=equipment');
+    expect(exported.status).toBe(200);
+    const lines = exported.text.replace(/^\uFEFF/u, '').split('\r\n').filter(Boolean);
+    // Header is the granted field, then one line per row, in the same order.
+    expect(lines[0]).toBe('name');
+    expect(lines.slice(1)).toEqual(projectionRows);
+    // The file's provenance header matches the revision the projection reported.
+    expect(exported.headers.get('x-source-data-revision')).toBe(String(projected.body.sourceDataRevision));
+  });
+});

@@ -350,15 +350,15 @@
       "title": "independent oracle ตรวจผลและ freshness; before/after รวม UI source/version, server logic, formulas, compute, connections",
       "status": "UNVERIFIED",
       "environment": "Cloudflare tier (worker.fetch + real Durable Objects)",
-      "sha": "206bd76",
+      "sha": "8662573",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": "connection surface: the rows the route serves are recomputed independently from the source table's own records and compared exactly, and the revision the response claims equals the source dataRevision. freshness: after the source imports another file, the next read reports a higher sourceDataRevision, so a stale answer cannot pass the oracle.",
+      "evidence": "connection surface: the rows the route serves are recomputed independently from the source table's own records and compared exactly, and the revision the response claims equals the source dataRevision; after the source imports another file the next read reports a higher revision, so a stale answer cannot pass. export surface: the CSV downloaded from the same grant carries exactly the same values in the same order as the projection response, with the granted field as its only column and the same source revision in its provenance header. The two paths are separate code, so a drift on one side is visible.",
       "expected": "oracle คำนวณผลคาดหวังแยกจาก implementation แล้วตรงกับผลจริง; before/after diff ครอบคลุมทุก layer; historical input ที่ไม่มีให้บอกว่า reproduce ไม่ได้",
-      "actual": "PARTIAL - the connection surface has an independent oracle; UI source/version, server logic, formulas and compute do not yet",
-      "limitations": "the oracle recomputes projections only; a package's UI source, its server behaviour, formulas and compute results are not covered by it yet"
+      "actual": "PARTIAL - connections and export are covered by an independent comparison; UI source/version, server logic, formulas and compute are not yet",
+      "limitations": "the oracle compares projections and their export; a package's UI source, its server behaviour, formulas and compute results still have no independent check"
     },
     {
       "id": "IMPACT-01",
