@@ -350,16 +350,16 @@
       "title": "independent oracle ตรวจผลและ freshness; before/after รวม UI source/version, server logic, formulas, compute, connections",
       "status": "UNVERIFIED",
       "environment": "Cloudflare tier (worker.fetch + real Durable Objects)",
-      "sha": "899c599",
+      "sha": "1da68ec",
       "node": "v22.23.2",
       "commands": [
         "npx vitest run src/tabletop/shared/computed-oracle.test.ts",
-        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/compute-runner.test.ts"
       ],
-      "evidence": "connection surface: the rows the route serves are recomputed independently from the source table's own records and compared exactly, and the revision the response claims equals the source dataRevision; after the source imports another file the next read reports a higher revision. export surface: the CSV downloaded from the same grant carries exactly the same values in the same order as the projection response, with the granted field as its only column and the same revision in its provenance header. formula surface: five expressions (a field, a literal, a product, a difference of a product, a nested sum) are evaluated by an arithmetic written in the test from the specification and agree with the engine; division by zero is refused rather than returned as a number.",
+      "evidence": "connection surface: the rows the route serves are recomputed independently from the source table's own records and compared exactly; the revision matches, and a moved source raises it on the next read. export surface: the CSV from the same grant carries the same values in the same order as the projection, with the granted field as its only column and the same revision in its provenance header. formula surface: five expressions are evaluated by arithmetic written in the test and agree with the engine; division by zero is refused. compute surface: the isolated runner's total is compared with arithmetic performed in the test, including a zero, a negative and fractions, on a payload the module did not produce.",
       "expected": "oracle คำนวณผลคาดหวังแยกจาก implementation แล้วตรงกับผลจริง; before/after diff ครอบคลุมทุก layer; historical input ที่ไม่มีให้บอกว่า reproduce ไม่ได้",
-      "actual": "PARTIAL - connections, export and formulas are covered by independent checks; UI source/version, server logic and compute runs are not",
-      "limitations": "the oracle compares projections, their export and formula arithmetic; a package's UI source, its server behaviour and the compute runner output still have no independent check"
+      "actual": "PARTIAL - four surfaces have independent checks (connections, export, formulas, compute); a package's UI source/version and its server behaviour still do not",
+      "limitations": "the UI source hash and the server behaviour output have no independent oracle yet; hosted behaviour is untested"
     },
     {
       "id": "IMPACT-01",
