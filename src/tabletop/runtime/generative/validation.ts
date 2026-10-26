@@ -256,7 +256,7 @@ export function validateGenerativeProgram(program: TableProgram, records?: Recor
         }
       }
       for (const effect of action.effects) {
-        if (!('expression' in effect.value)) continue;
+        if (effect.op === 'toggle' || !('expression' in effect.value)) continue;
         const expressionIssues = validateGenerativeExpression(effect.value.expression, program, action, records);
         for (const issue of expressionIssues) addIssue(issue);
         if (expressionIssues.length > 0) continue;

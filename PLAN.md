@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F081 | ช่องใช่/ไม่เป็น checkbox + กฎ toggle (todo list ติ๊กได้) | `review` | [F081](docs/features/F081-checkbox-toggle.md) |
 | F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `done` | Codex · PR #306 / release #309 · production 9.1.4 / d09d2f2; only hero area changed; README/film/rest unchanged |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
 | F078 | Behavior-preserving architecture: contract, baseline, gates และ conformance ก่อน refactor | `doing` (T0–T4, T5a/T5b, T6a/T6b/T6c, T7a/T7b, T8–T10, T12–T18 done) | [F078](docs/features/F078-architecture-improvements.md) |
@@ -82,6 +83,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F081-T1 | effect `toggle` + checkbox ในการ์ดตาราง + checklist ตอนย่อ | `review` | lead (AI) | `feat/F081-checkbox-toggle` | `domain/table.ts`, `shared/table-contracts.ts`, `runtime/generative/validation.ts`, `domain/id-normalization.ts`, `ui/TableCanvasObjects.tsx`, `ui/checkbox-actions.ts`, `ui/record-actions.css`, `server/providers/table-schema-guide.ts`, tests | — | ไม่มี migration |
 | F080-T0 | bootstrap: feature doc + checkpoint (index/progress/acceptance/decisions) + feature/PR mapping + baseline แยก evidence level | `review` | DeepSeek Harness (lead) | `feat/F080-custom-tools` / #305 | `docs/features/F080-*`, `PLAN.md`, `changelog.d/F080-*` | — | C0; ยังไม่มี runtime change · public scan 0 findings · changelog check 13/13 |
 | F080-T1A | package/instance/binding/connection/version contract + isolated UI/server capability spike (C1–C2) | `review` | DeepSeek Harness (lead + backend/frontend) | `feat/F080-custom-tools` / #305 | `src/tabletop/shared/tool-{package,protocol,behavior,projection}.ts`, `runtime/tools/`, `cloudflare/tool-behavior-runner.ts`, `server/local-tool-behavior-runner.ts`, `ui/{GeneratedToolHost.tsx,tool-sandbox/}`, `tests/ui/tool-host/` | F080-T0 | unit 896/5 · worker 11/11 · browser 13/13 · tsc 3 config · lint 0 · build ผ่าน · ยังไม่มี authority integration/AI authoring |
 | F080-T1B | AI + human authoring pipeline เดียว (validate→compile→isolated trial→activate) พร้อม budget ที่บังคับก่อน dispatch (C3) | `doing` | DeepSeek Harness (lead) | `feat/F080-custom-tools` / #305 | `runtime/tools/authoring.ts`, `shared/tool-behavior-request.ts`, source editor (ยังไม่ทำ) | F080-T1A | 12/12 authoring tests · 11/11 behaviour-request tests · live provider ยังติด GATE-PAID-AI |

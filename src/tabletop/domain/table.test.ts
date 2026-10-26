@@ -49,7 +49,7 @@ describe('file-driven generic table authority', () => {
     expect(() => act(state, 'advance', { boat: 'blue' }, member)).toThrow('your turn');
     expect(() => act(state, 'advance', { boat: 'blue' })).toThrow('your own boat');
     state = act(state, 'advance', { boat: 'red' });
-    const edit = gameChange(initial.sources[0].id); edit.initialRecords = {}; edit.program.actions[0].effects[0].value = { literal: 3 };
+    const edit = gameChange(initial.sources[0].id); edit.initialRecords = {}; Object.assign(edit.program.actions[0].effects[0], { value: { literal: 3 } });
     edit.program.assumptions = ['Owner proposes three points per move.'];
     state = activate(state, edit); expect(state.records.boats[0].values.score).toBe(2); expect(state.turn).toBe('member-1');
     state = act(JSON.parse(JSON.stringify(state)), 'advance', { boat: 'blue' }, member);
@@ -108,11 +108,11 @@ describe('file-driven generic table authority', () => {
   });
   it('validates effect types, record bounds and composite uniqueness at every atomic commit', () => {
     const initial = source('shifts'), change = shiftsChange(initial.sources[0].id);
-    change.program.actions[0].effects[0].value = { literal: 'night' };
+    Object.assign(change.program.actions[0].effects[0], { value: { literal: 'night' } });
     const active = activate(initial, change);
     expect(() => act(active, 'swap', { first: 'ada', second: 'bo' })).toThrow('One person per shift');
     expect(active.records.people[0].values.slot).toBe('morning');
-    const wrong = structuredClone(change); wrong.program.actions[0].effects[0].value = { literal: 3 };
+    const wrong = structuredClone(change); Object.assign(wrong.program.actions[0].effects[0], { value: { literal: 3 } });
     expect(() => applyTableChange(initial, wrong)).toThrow('does not match');
   });
   it('does not depend on known scenario or collection names', () => {
