@@ -950,3 +950,32 @@ describe('the export agrees with the projection', () => {
     expect(exported.headers.get('x-source-data-revision')).toBe(String(projected.body.sourceDataRevision));
   });
 });
+
+/**
+ * F080 / CTX-01: the brief is written through the normal command path and is there after a reload.
+ *
+ * The second clause of the criterion asks that an edit by someone with permission is visible after a
+ * reload and to another member. A separate member needs an invite flow that this file does not drive,
+ * so this proves the persisted half: the value a fresh read returns is the one that was committed.
+ */
+describe('the room brief survives a reload', () => {
+  it('stores the brief with its author, and clears it again', async () => {
+    const owner = await seedActor('Brief owner');
+    const space = await createWorkspace(owner, 'Brief space');
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'brief-room', title: 'ห้องมี brief', sharedToolWorkspaceId: space.id,
+    });
+
+    const saved = await command(owner, created.workspace, 'space.setBrief', { text: 'วางผังห้องให้ผู้จัดกิจกรรมลงทะเบียน' });
+    const reloaded = await viewOf(owner, space.id);
+    const state = (reloaded.domain as { collaborationSpace?: { brief?: { text: string; updatedBy: string; updatedAt: number } } }).collaborationSpace;
+    expect(state?.brief?.text).toBe('วางผังห้องให้ผู้จัดกิจกรรมลงทะเบียน');
+    expect(state?.brief?.updatedBy).toBe(owner.id);
+    expect(state?.brief?.updatedAt).toBeGreaterThan(0);
+
+    const cleared = await command(owner, saved.workspace, 'space.clearBrief', {});
+    const after = (await viewOf(owner, space.id)).domain as { collaborationSpace?: { brief?: unknown } };
+    expect(after.collaborationSpace?.brief ?? null).toBeNull();
+    expect(cleared.workspace.revision).toBeTruthy();
+  });
+});

@@ -313,17 +313,17 @@
       "slice": "F080-T4A",
       "title": "goal/decision context: เริ่มไม่มี brief ได้, แก้/ยกเลิกโดยผู้มีสิทธิ์แล้ว reload/สมาชิกอื่นเห็นตรงกัน, ระบุ included/omitted AI context",
       "status": "UNVERIFIED",
-      "environment": "local + browser",
-      "sha": "not-run",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects) + local unit",
+      "sha": "7693ca3",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/domain/tool-context.test.ts",
-        "node --import tsx tests/tool-context-browser.mjs"
+        "npx vitest run src/tabletop/shared/space-brief.test.ts src/tabletop/shared/collaboration-space-command.test.ts",
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": null,
+      "evidence": "a room works without a brief: the AI context report says so explicitly instead of inventing one. editing is authorised and persisted: space.setBrief and space.clearBrief are ordinary space commands, refused for a participant, and a fresh read after the commit returns the same text with its author and time; clearing removes it again. included and omitted AI context are both named: the brief and each connected source (with the revision read) are included, while unlinked sources, withdrawn connections, chat, the member list and other rooms are listed as omitted with a reason.",
       "expected": "context สร้างจากศูนย์ได้; การแก้เห็นตรงกันหลัง reload; ระบุได้ว่า AI ใช้ context อะไรและตัดอะไร; ข้อความจากเอกสารไม่ override สิทธิ์/คำสั่งล่าสุด",
-      "actual": "not run",
-      "limitations": "ไม่อนุมานสิทธิ์แก้จากสิทธิ์อ่าน"
+      "actual": "PARTIAL - brief lifecycle, permissions and the included/omitted report are proven; a second member reading the same room is not (that needs an invite flow this suite does not drive)",
+      "limitations": "the \"another member sees the same\" half of the criterion is untested; the report is not shown in a product screen yet"
     },
     {
       "id": "HIST-01",

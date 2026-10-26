@@ -142,6 +142,11 @@ export interface CollaborationSpace {
    * reports as unseen instead of assuming the member is up to date (decision D-021).
    */
   seen?: Record<string, number>;
+  /**
+   * The room's own statement of what it is for. Absent means the room has none, which the AI context
+   * report says out loud instead of inventing one (CTX-01).
+   */
+  brief?: { text: string; updatedBy: string; updatedAt: number };
 }
 
 const idSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,39}$/u);
@@ -176,6 +181,11 @@ export const collaborationSpaceSchema: z.ZodType<CollaborationSpace> = z.strictO
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
   seen: z.record(z.string().min(1).max(160), z.number().int().nonnegative()).optional(),
+  brief: z.strictObject({
+    text: z.string().min(1).max(600),
+    updatedBy: z.string().min(1).max(160),
+    updatedAt: z.number().int().nonnegative(),
+  }).optional(),
 });
 
 export type SpaceProblemCode = 'SPACE_SCHEMA' | 'SPACE_MEMBER' | 'SPACE_SOURCE' | 'SPACE_BUDGET';
@@ -263,6 +273,8 @@ export function spaceMayReadSource(
 
 export type SpaceCommand =
   | { type: 'space.seen'; revision: number }
+  | { type: 'space.setBrief'; text: string }
+  | { type: 'space.clearBrief' }
   | { type: 'space.rename'; title: string }
   | { type: 'space.addMember'; member: SpaceMember }
   | { type: 'space.removeMember'; actorId: string }
@@ -342,6 +354,19 @@ export function decideSpace(space: CollaborationSpace, actorId: string, command:
       if (next.sources.some(source => source.workspaceId === command.source.workspaceId)) return { ok: false, code: 'SPACE_DUPLICATE', message: 'That table is already referenced.' };
       if (command.source.workspaceId === space.sharedToolWorkspaceId) return { ok: false, code: 'SPACE_INVALID', message: 'The shared-tool workspace cannot also be a source.' };
       next.sources = [...next.sources, { ...command.source, addedBy: actorId, addedAt: now }];
+      return { ok: true, space: next };
+    }
+    case 'space.setBrief': {
+      // Whoever may bind tools may state the room's purpose; the record keeps who and when.
+      if (!spaceAllows(role, 'tool.bind')) return { ok: false, code: 'SPACE_FORBIDDEN', message: 'Only a maker or the manager may write the room brief.' };
+      const text = command.text.trim();
+      if (text.length === 0 || text.length > 600) return { ok: false, code: 'SPACE_INVALID', message: 'The brief needs 1 to 600 characters.' };
+      next.brief = { text, updatedBy: actorId, updatedAt: now };
+      return { ok: true, space: next };
+    }
+    case 'space.clearBrief': {
+      if (!spaceAllows(role, 'tool.bind')) return { ok: false, code: 'SPACE_FORBIDDEN', message: 'Only a maker or the manager may clear the room brief.' };
+      delete next.brief;
       return { ok: true, space: next };
     }
     case 'space.seen': {

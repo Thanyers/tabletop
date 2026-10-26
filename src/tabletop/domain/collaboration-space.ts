@@ -153,6 +153,8 @@ function toSpaceCommand(parsed: Exclude<ReturnType<typeof parseSpaceCommand>, { 
     case 'space.addSource': return { type: 'space.addSource', source: parsed.source };
     case 'space.leaveSource': return { type: 'space.leaveSource', workspaceId: parsed.workspaceId };
     case 'space.seen': return { type: 'space.seen', revision: parsed.revision };
+    case 'space.setBrief': return { type: 'space.setBrief', text: parsed.text };
+    case 'space.clearBrief': return { type: 'space.clearBrief' };
   }
 }
 
@@ -166,6 +168,8 @@ function spaceLabel(type: string): string {
     case 'space.addSource': return 'Source table linked to the space.';
     case 'space.leaveSource': return 'Source table unlinked from the space.';
     case 'space.seen': return 'Reading position recorded.';
+    case 'space.setBrief': return 'Room brief saved.';
+    case 'space.clearBrief': return 'Room brief cleared.';
     default: return 'Space updated.';
   }
 }

@@ -23,6 +23,9 @@ export const SPACE_COMMANDS = [
   'space.leaveSource',
   // F080 / D-021: a member records how far they have read, through the normal command path.
   'space.seen',
+  // F080 / CTX-01: the room's brief, and the right to withdraw it.
+  'space.setBrief',
+  'space.clearBrief',
 ] as const;
 export type SpaceCommandType = typeof SPACE_COMMANDS[number];
 
@@ -63,6 +66,8 @@ const addSourceSchema = z.strictObject({
 
 const leaveSourceSchema = z.strictObject({ workspaceId: z.string().uuid() });
 const seenSchema = z.strictObject({ revision: z.number().int().nonnegative() });
+const setBriefSchema = z.strictObject({ text: z.string().min(1).max(600) });
+const clearBriefSchema = z.strictObject({});
 
 export type ParsedSpaceCommand =
   | { ok: true; type: 'space.create'; spaceId: string; title: string; sharedToolWorkspaceId: string }
@@ -74,6 +79,8 @@ export type ParsedSpaceCommand =
   | { ok: true; type: 'space.addSource'; source: { workspaceId: string; epoch: number; addedBy: string; addedAt: number; status: 'linked' } }
   | { ok: true; type: 'space.leaveSource'; workspaceId: string }
   | { ok: true; type: 'space.seen'; revision: number }
+  | { ok: true; type: 'space.setBrief'; text: string }
+  | { ok: true; type: 'space.clearBrief' }
   | { ok: false; code: 'SPACE_PAYLOAD'; message: string };
 
 function failure(error: z.ZodError): ParsedSpaceCommand {
@@ -128,6 +135,14 @@ export function parseSpaceCommand(type: string, payload: unknown): ParsedSpaceCo
     case 'space.seen': {
       const parsed = seenSchema.safeParse(payload);
       return parsed.success ? { ok: true, type: 'space.seen', revision: parsed.data.revision } : failure(parsed.error);
+    }
+    case 'space.setBrief': {
+      const parsed = setBriefSchema.safeParse(payload);
+      return parsed.success ? { ok: true, type: 'space.setBrief', text: parsed.data.text } : failure(parsed.error);
+    }
+    case 'space.clearBrief': {
+      const parsed = clearBriefSchema.safeParse(payload ?? {});
+      return parsed.success ? { ok: true, type: 'space.clearBrief' } : failure(parsed.error);
     }
     default: {
       // `pick` keeps the "unused" import honest for schemas that only exist for future commands.

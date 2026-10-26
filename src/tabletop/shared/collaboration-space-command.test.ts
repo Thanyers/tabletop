@@ -114,3 +114,56 @@ describe('space.seen records how far a member has read', () => {
     expect(earlier.space.seen).toEqual({ 'actor-b': 6 });
   });
 });
+
+describe('the room brief', () => {
+  const base = (overrides: Partial<CollaborationSpace> = {}): CollaborationSpace => ({
+    schemaVersion: COLLABORATION_SPACE_SCHEMA_VERSION,
+    spaceId: 'activity-room',
+    title: 'room',
+    sharedToolWorkspaceId: '99999999-9999-4999-8999-999999999999',
+    managerActorId: 'actor-a',
+    members: [
+      { actorId: 'actor-a', name: 'A', role: 'manager', joinedAt: 1 },
+      { actorId: 'actor-b', name: 'B', role: 'maker', joinedAt: 2 },
+      { actorId: 'actor-c', name: 'C', role: 'participant', joinedAt: 3 },
+    ],
+    sources: [],
+    revision: 5,
+    epoch: 1,
+    createdAt: 1,
+    updatedAt: 5,
+    ...overrides,
+  } as CollaborationSpace);
+
+  it('is in the closed vocabulary and parses only a text body', () => {
+    expect(SPACE_COMMANDS).toContain('space.setBrief');
+    expect(SPACE_COMMANDS).toContain('space.clearBrief');
+    expect(parseSpaceCommand('space.setBrief', { text: 'plan the rooms' })).toEqual({ ok: true, type: 'space.setBrief', text: 'plan the rooms' });
+    expect(parseSpaceCommand('space.setBrief', { text: '' }).ok).toBe(false);
+    expect(parseSpaceCommand('space.setBrief', { text: 'x', extra: 1 }).ok).toBe(false);
+    expect(parseSpaceCommand('space.clearBrief', {}).ok).toBe(true);
+  });
+
+  it('records who wrote it and when, and bumps the revision', () => {
+    const decision = decideSpace(base(), 'actor-b', { type: 'space.setBrief', text: '  plan the rooms  ' }, 42);
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) return;
+    expect(decision.space.brief).toEqual({ text: 'plan the rooms', updatedBy: 'actor-b', updatedAt: 42 });
+    expect(decision.space.revision).toBe(6);
+  });
+
+  it('refuses a participant, and refuses a brief that is only whitespace', () => {
+    expect(decideSpace(base(), 'actor-c', { type: 'space.setBrief', text: 'x' }, 1))
+      .toMatchObject({ ok: false, code: 'SPACE_FORBIDDEN' });
+    expect(decideSpace(base(), 'actor-b', { type: 'space.setBrief', text: '   ' }, 1))
+      .toMatchObject({ ok: false, code: 'SPACE_INVALID' });
+  });
+
+  it('clears the brief so a room can go back to having none', () => {
+    const withBrief = base({ brief: { text: 'old purpose', updatedBy: 'actor-a', updatedAt: 2 } });
+    const cleared = decideSpace(withBrief, 'actor-b', { type: 'space.clearBrief' }, 10);
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    expect(cleared.space.brief).toBeUndefined();
+  });
+});
