@@ -158,12 +158,13 @@
       "sha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:tool-authoring:browser"
+        "npx vitest run server/providers/deepseek-tool-package.test.ts",
+        "npx tsx server/providers/author-tool-package-cli.ts \"<intent>\" --base <package.json>"
       ],
-      "evidence": "human half PASS: a person edits the package source in the panel, a syntax error is reported against the file without starting a pipeline run, fixing it activates through the shared pipeline, and the readback shows version, content hash, route and reviewer; a second edit yields a different content hash. The AI half (a model continuing from that edited source) is proven only against the fixture generator.",
+      "evidence": "the adapter sends the package a person already edited back to the model as the base (proven in the EDIT-01 test), so a continuation builds on that version rather than regenerating from scratch, and the reply is validated the same way. A real continuation run is still outstanding for the same reason: no DEEPSEEK_KEY on this machine.",
       "expected": "source ที่คนแก้ถูกใช้เป็น input จริงของการแก้ครั้งถัดไป (มี hash ของ base version); ไม่มีเส้นทางแอบกลับไป template; fixture/local แยกจาก live-provider result",
       "actual": "UNVERIFIED — the human editing path is real and proven in a browser; no model has authored anything and the panel is not mounted in the app yet",
-      "limitations": "live-provider half still needs GATE-PAID-AI; the panel is harness-only for now"
+      "limitations": "no real model call has been made yet: the environment has no DEEPSEEK_KEY and the dev AI budget variables are 0, so the paid cost of this item remains 0 calls / USD 0.00"
     },
     {
       "id": "EVOLVE-01",
@@ -533,12 +534,13 @@
       "sha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
       "node": "v22.23.2",
       "commands": [
-        "node tests/ui/tool-host/browser.mjs"
+        "npx vitest run server/providers/deepseek-tool-package.test.ts",
+        "npx tsx server/providers/author-tool-package-cli.ts \"<intent>\""
       ],
-      "evidence": "a package written by hand (not by a model) goes intent → compile → mount → invoke; no model call exists yet",
+      "evidence": "the DeepSeek adapter that turns an intent into a package is implemented and proven against the reply shape the endpoint sends (7/7, injected fetch, no charge): JSON-only request, fenced or prose-wrapped replies handled, usage and cost reported, and a reply that is not a valid package is rejected before the isolated trial. The CLI enforces the approved ceiling (<=6 calls, <=USD 0.20) and refuses to spend when the estimate exceeds it. A real model run is still outstanding because this machine has no DEEPSEEK_KEY.",
       "expected": "จากข้อความ intent เปล่า ได้ package ที่ mount ได้และมี behavior ที่ commit ได้จริง; source ที่ใช้คือชุดที่เก็บ/versioned ไม่ใช่ template ที่ regenerate",
       "actual": "UNVERIFIED — the \"intent-only\" half needs a model, which needs an approved call/cost cap first",
-      "limitations": "fixture authoring does not substitute for live AI; see GATE-PAID-AI"
+      "limitations": "no real model call has been made yet: the environment has no DEEPSEEK_KEY and the dev AI budget variables are 0, so the paid cost of this item remains 0 calls / USD 0.00"
     },
     {
       "id": "G1-02",
