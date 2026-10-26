@@ -16,6 +16,12 @@ const origin = `http://127.0.0.1:${port}`;
 const hash = text => createHash('sha256').update(text).digest('hex');
 const csrf = token => createHash('sha256').update(`tabletop-csrf-v1:${token}`).digest('base64url');
 const output = resolve('test-results/cloudflare-browser');
+// CI runs this suite as two parallel jobs. Each part starts its own Miniflare, D1 and accounts:
+// part 1 = A + C (landing, DM account flow), part 2 = B + D (demos, generic tables). Unset = all, in order.
+const workersPart = process.env.TT_WORKERS_PART ?? '';
+if (!['', '1', '2'].includes(workersPart)) throw new Error(`TT_WORKERS_PART must be 1, 2 or unset, got "${workersPart}"`);
+const runPart1 = workersPart !== '2';
+const runPart2 = workersPart !== '1';
 const importedSourceNote = 'Already cited by the current program; text omitted to keep the request small, rows are in records. Keep evidence that cites it exactly as is; never write a new quote from it.';
 let providerCalls = 0;
 let tableAIReply = null;
@@ -204,11 +210,13 @@ try {
     if (open) await expect(options).toHaveAttribute('open', '');
     else await expect(options).not.toHaveAttribute('open');
   }
-  const welcomeIdentityCounts = () => db.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM web_sessions) AS sessions, (SELECT COUNT(*) FROM oauth_states) AS oauth, (SELECT COUNT(*) FROM rooms) AS rooms').first();
-  const beforeWelcome = await welcomeIdentityCounts();
-  const anonymous = await newPage();
+  let anonymous; let dm; let pip;
   const landingHeadingEn = 'Tools that keep adapting to you.';
   const landingHeadingTh = 'เครื่องมือค่อย ๆ ปรับให้เข้ากับคุณ';
+  if (runPart1) { // A: anonymous landing, language, sign-in failure and /version
+  const welcomeIdentityCounts = () => db.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM web_sessions) AS sessions, (SELECT COUNT(*) FROM oauth_states) AS oauth, (SELECT COUNT(*) FROM rooms) AS rooms').first();
+  const beforeWelcome = await welcomeIdentityCounts();
+  anonymous = await newPage();
   await expect(anonymous.getByRole('heading', { level: 1 })).toHaveText(landingHeadingEn);
   await expect(anonymous.getByRole('main')).toHaveAttribute('id', 'main-content');
   await expect(anonymous.getByRole('main')).toHaveAttribute('tabindex', '-1');
@@ -431,6 +439,8 @@ try {
   expect(await servedVersion.json()).toEqual(builtVersion);
   expect(Object.keys(builtVersion).sort()).toEqual(['built_at', 'sha', 'version']);
   mark('GET /version reports the build identity written next to the static assets');
+  }
+  if (runPart2) { // B: public Canvas demo and Auto demo in their own cookie-less context
 
   // Both public experiences must stay separate from authenticated application sessions.
   const publicDemoRequests = []; const publicDemoSockets = [];
@@ -520,8 +530,10 @@ try {
   expect(providerCalls).toBe(0);
   await demoContext.close();
   mark('Public Auto demo plays nine recorded stories without sign-in, API calls, sockets, cookies, AI or room creation; narrow controls and reload work');
+  }
 
-  const dm = await newPage(actors[0]);
+  if (runPart1) { // C: DM account multiplayer, invitations, navigation and Ask AI (reuses the anonymous page from A)
+  dm = await newPage(actors[0]);
   dm.on('response', async response => {
     if (/\/model(?:\/[a-f0-9]{64})?$/.test(new URL(response.url()).pathname)) {
       const body = await response.json().catch(() => null);
@@ -600,7 +612,7 @@ try {
   await anonymous.goto(origin);
   const mira = anonymous;
   await expect(mira.locator('.tt-canvas-panel')).toBeVisible();
-  const pip = await newPage(actors[2], `${origin}/#invite=${pipInvite.body.ticket}`);
+  pip = await newPage(actors[2], `${origin}/#invite=${pipInvite.body.ticket}`);
   await expect(pip.locator('.tt-canvas-panel')).toBeVisible();
   expect(await mira.evaluate(() => sessionStorage.getItem('tabletop.pendingInvite'))).toBeNull();
   await expect.poll(async () => (await api(dm, `/api/workspaces/${room.id}`)).body.members.length).toBe(3);
@@ -901,6 +913,8 @@ try {
   await dm.goto(`${origin}/t/${room.id}`); await dm.waitForLoadState('networkidle');
   await expect(dm.locator('.tt-canvas-panel')).toBeVisible();
   mark('An unknown path shows the landing page at `/`');
+  }
+  if (runPart2) { // D: generic tables (tests/generic-table-browser.mjs) with their own owner/member accounts
   await verifyGenericTableBrowser({
     actors: { owners: genericOwners, members: genericMembers },
     newPage,
@@ -910,6 +924,8 @@ try {
     getProviderCalls: () => providerCalls,
     mark,
   });
+  }
+  if (dm && pip) {
   await dm.screenshot({ path: join(output, 'dm-desktop.png'), fullPage: true });
   await pip.setViewportSize({ width: 390, height: 844 }); await pip.reload();
   await expect(pip.getByRole('button', { name: 'Canvas', exact: true })).toHaveCount(0);
@@ -917,12 +933,13 @@ try {
   await expect(pip.getByTestId('canvas-object-menu-trigger')).toBeVisible();
   await expect(pip.locator('.tt-canvas-panel')).toBeVisible();
   await pip.screenshot({ path: join(output, 'player-mobile.png'), fullPage: true });
+  }
   expect(errors).toEqual([]);
   mark('Desktop and mobile render without uncaught browser errors');
-  await writeFile(join(output, 'report.json'), JSON.stringify({ checks, errors, runtime: 'local Cloudflare Workers, D1 and SQLite Durable Objects', googleLogin: 'synthetic session fixtures; OAuth verified separately', ai: 'synthetic outbound provider, real local ledger and room commit; no paid calls', providerCalls }, null, 2));
+  await writeFile(join(output, 'report.json'), JSON.stringify({ part: workersPart || 'all', checks, errors, runtime: 'local Cloudflare Workers, D1 and SQLite Durable Objects', googleLogin: 'synthetic session fixtures; OAuth verified separately', ai: 'synthetic outbound provider, real local ledger and room commit; no paid calls', providerCalls }, null, 2));
 } catch (error) {
   for (let i = 0; i < pages.length; i++) if (!pages[i].isClosed()) await pages[i].screenshot({ path: join(output, `failure-${i}.png`) }).catch(() => {});
-  await writeFile(join(output, 'report.json'), JSON.stringify({ checks, errors, providerCalls, modelStatuses, failure: String(error) }, null, 2));
+  await writeFile(join(output, 'report.json'), JSON.stringify({ part: workersPart || 'all', checks, errors, providerCalls, modelStatuses, failure: String(error) }, null, 2));
   throw error;
 } finally {
   await browser?.close(); await mf.dispose();
