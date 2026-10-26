@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SPACE_LIMITS, SPACE_ROLES } from './collaboration-space';
+import { toolPackageDefinitionSchema } from './tool-package';
 
 /**
  * F080: the wire shape of a collaboration-space command.
@@ -78,6 +79,7 @@ const installToolSchema = z.strictObject({
     contentHash: z.string().regex(/^[a-f0-9]{64}$/u),
     route: z.enum(['human', 'ai']),
     title: z.string().min(1).max(SPACE_LIMITS.maxTitleChars),
+    definition: toolPackageDefinitionSchema.optional(),
   }),
 });
 
