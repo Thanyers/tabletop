@@ -29,6 +29,8 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
+- **F077-T6 — review (2026-10-26):** English README now presents café sales → force-and-motion learning → shared adventure in the same order as the published homepage hero. All three cases use the existing EN hero GIFs and reduced-motion posters; explanations follow request → added tool → use on the same table. Removed the older mismatched invoice/learning/Encounter image assortment. Origin/hammer/chair text, current capability bullets, start/beta guidance and exact AGPL section preserved. Node22.23.2: 13 local references resolve; three GIF/poster pairs are in the intended order; GitHub Markdown API renders three picture/GIF/reduced-motion sources; public scan and diff checks pass. App/homepage/film/media bytes unchanged. Hosted exact-head validation and default-branch publication pending. [PR #348](https://github.com/Thanyers/tabletop/pull/348).
+
 ### F080 custom tools + joined tables (2026-10-26)
 
 - `F080 acceptance 32 PASS / 3 UNVERIFIED · เหลือ G1-01/EDIT-01 (รอ DEEPSEEK_KEY), HUMAN-01 (ผู้ใช้จริง 5 คน)`
