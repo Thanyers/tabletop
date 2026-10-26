@@ -144,6 +144,22 @@
   color: var(--tt-ink);
 }
 
+/* F080 / D-036: the room states which tool version it runs. */
+.tt-room__tool {
+  display: grid;
+  gap: var(--tt-space-1);
+  padding: var(--tt-space-3);
+  background: var(--tt-cream-0);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-small);
+}
+
+.tt-room__tool-title,
+.tt-room__tool-line {
+  margin: 0;
+  color: var(--tt-ink);
+}
+
 .tt-room__facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
