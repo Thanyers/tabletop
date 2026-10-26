@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T07:22:00+07:00",
-  "lastVerifiedAt": "2026-10-26T07:22:00+07:00",
+  "updatedAt": "2026-10-26T07:33:00+07:00",
+  "lastVerifiedAt": "2026-10-26T07:33:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "9b0fdcf",
-    "candidateSha": "9b0fdcf",
+    "headSha": "abb752b",
+    "candidateSha": "abb752b",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305 (draft, mergeable): 15 PASS / 20 UNVERIFIED · ปิดแล้ว: JT-0, JT-1A/B, JT-2A/B, JT-3A/B, JT-5 (portable+held-out), JT-X (export, ผู้ใช้ยืนยันการอ่านกลับ), JOIN-01/02, G3-01/02, ACL-01, HELDOUT-01, COPY-01, EXPORT-01, PROV-01 · T4A: recap+pagination+last-seen+impact+deep-link ACL+drill-down ทำครบระดับ data/API (HIST-01/IMPACT-01 เหลือ UI), TOPO-01 วัดได้ 15 reads/78ms local · T4B: EVOLVE-01 additive path ผ่าน (23/23) เหลือ second-actor reload; RECOVERY-01/SCENARIO-01 ยังไม่เริ่ม · VT-V: RoomShell (variant C) + SpaceRoomScreen + adapter + route /s/:id mount ใน TabletopApp แล้ว; ui-gate 16/16, driver 6/6 ใน CI; ยังไม่เดินดูบน runtime จริง (D-025: asset config ไม่เปิด SPA fallback) · ค้างจากผู้ใช้: ไม่มีคำถามค้าง (D-022 shell C, D-023 paid-AI cap, D-024 EXPORT-01) — AI usage ยัง 0 call / USD 0.00",
+  "currentCheckpoint": "PR #305 (draft, mergeable): 20 PASS / 15 UNVERIFIED · เพิ่งปิด: PROV-01 (สี่บทบาท provenance), VIS-01 (connection ทำให้แคบลง ไม่รั่วแชท), REVOKE-01 (ทุก surface ที่มีอยู่หยุดหลังถอน), G4-01 (preview ไม่เขียน + dependency พังไม่ promote), SCENARIO-01 (stale promote ปลอดภัย), RECOVERY-01 (changed scope + fail-closed), EXPORT-01 (ผู้ใช้ยืนยันเปิด CSV) · ORACLE-01 = PARTIAL: มี independent oracle แล้วสำหรับ connection surface (เทียบ rows+revision กับ records ดิบของต้นทาง) เหลือ UI source/server logic/formulas/compute · เหลือ 15: UI บน runtime จริง (G1-01, G1-02, G2-01, VISUAL-01, HIST-01, IMPACT-01) · AI จริง (EXEC-01, EDIT-01 — วงเงินอนุมัติแล้วใช้ 0) · EVOLVE-01 second actor · CTX-01 · ORACLE-01 ที่เหลือ · HUMAN-01/hosted · ไม่มีคำถามค้างกับผู้ใช้ (D-022 shell C, D-023 AI cap, D-024 EXPORT-01)",
   "slices": [
     {
       "alias": "C0",
