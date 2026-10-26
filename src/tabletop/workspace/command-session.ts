@@ -269,9 +269,14 @@ export function createWorkspaceCommandSession(deps: WorkspaceCommandDeps): Works
   const addWebSources = async (targetView: WorkspaceView, sources: AddableWebSource[]): Promise<void> => {
     if (sources.length === 0) return;
     try {
+      const current = deps.readWorkspace() ?? targetView;
+      const before = current.domain.kind === 'table' ? current.domain.sources.length : 0;
       const latest = await runCommand('table.addWebSources', { sources });
       if (!latest) return;
-      deps.notify(`${sources.length} web source${sources.length === 1 ? '' : 's'} added to ${targetView.title}. Verify each one before asking AI to use it in a rule change.`, 'success');
+      // F086: the server stops at the table's source limit, so name what was actually added, not what was offered.
+      const added = latest.domain.kind === 'table' ? Math.max(0, latest.domain.sources.length - before) : sources.length;
+      const skipped = sources.length - added;
+      deps.notify(`${added} web source${added === 1 ? '' : 's'} added to ${latest.title}.${skipped > 0 ? ` ${skipped} did not fit: a table holds at most ${MAX_TABLE_SOURCES} sources.` : ''} Verify each one before asking AI to use it in a rule change.`, 'success');
     } catch (error) {
       deps.notify(errorText(error), 'error');
     }

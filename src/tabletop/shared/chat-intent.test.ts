@@ -48,6 +48,15 @@ describe('classifyChatIntent', () => {
     expect(intent('ทำเครื่องหมายว่าโอนแล้ว ฟ้า ถึง แพร')).toBe('act');
   });
 
+  // F086: asking a rule to cite verified web sources is a rule edit, even with "ยืนยัน" in it and no table word.
+  it('drafts a rule edit that asks for evidence or sources, but not a bare "change this rule"', () => {
+    expect(intent('แก้กฎ VAT ให้อ้างอิงแหล่งที่ยืนยันแล้วจากกรมสรรพากรและเว็บรัฐบาล เป็นหลักฐานของอัตรา 7%')).toBe('edit');
+    expect(intent('ใส่หลักฐานอ้างอิงให้กฎ VAT')).toBe('edit');
+    expect(intent('Make the VAT rule cite the verified sources')).toBe('edit');
+    expect(intent('Change this rule')).toBe('ask');
+    expect(intent('แก้กฎนี้หน่อย')).toBe('ask');
+  });
+
   it('uses an existing create action for plain data requests', () => {
     expect(intent('Add a record', { hasCreateAction: true })).toBe('act');
     expect(intent('Add a record to this table', { hasCreateAction: true })).toBe('act');

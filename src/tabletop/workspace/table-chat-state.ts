@@ -2,6 +2,7 @@ import type { ModelJob } from '../client';
 import type { WorkspaceView } from '../shared/contracts';
 import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_JOB_THINKING_TAIL_CHARS, headWithin, parseModelJobResearch, tailWithin, type ModelFailureDetails, type ModelJobResearch, type ModelJobSearchProgress, type ModelTimeoutSource } from '../shared/model-job-progress';
 import { classifyChatIntent } from '../shared/chat-intent';
+import { MAX_TABLE_SOURCES } from '../shared/table-source-limits';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 
 export interface TableChatRequestContext {
@@ -394,6 +395,28 @@ export function addableWebSources(research: ModelJobResearch | undefined): Addab
       authority: source.authority,
       summary: headWithin(summary, MAX_JOB_RESEARCH_SUMMARY_CHARS),
     }));
+}
+
+/**
+ * F086: the researched sources that are not on the table yet. A draft the server put into use on its own (F039) is
+ * otherwise "finished" and leaves the canvas, which took its sources (and the only way to add them) with it.
+ * URLs compare the way the server stores them (fragment dropped).
+ */
+export function webSourcesNotOnTable(research: ModelJobResearch | undefined, tableSources: readonly { url?: string }[]): AddableWebSource[] {
+  const onTable = new Set(tableSources.flatMap((source) => source.url ? [comparableUrl(source.url)] : []));
+  // A table holds at most MAX_TABLE_SOURCES sources; offering more than fit would leave the card asking forever.
+  const room = Math.max(0, MAX_TABLE_SOURCES - tableSources.length);
+  return addableWebSources(research).filter((source) => !onTable.has(comparableUrl(source.url))).slice(0, room);
+}
+
+function comparableUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return raw;
+  }
 }
 
 /** F064 slice B: `26 Jul 2026`, or nothing when the provider gave no usable date. */
