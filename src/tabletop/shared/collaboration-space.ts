@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { jsonWithinBudget } from './json-budget';
+import { toolPackageDefinitionSchema, validateToolPackage, type ToolPackageDefinition } from './tool-package';
 
 /**
  * F080: a collaboration space is a place where several independent table workspaces meet.
@@ -169,6 +170,12 @@ export interface SpaceToolInstallation {
   title: string;
   installedBy: string;
   installedAt: number;
+  /**
+   * D-037: the package this room runs. The Worker proves the hash before the command is applied, so a
+   * definition here is the one the reference names; the room can compile and render it without asking
+   * another workspace.
+   */
+  definition?: ToolPackageDefinition;
 }
 
 const idSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,39}$/u);
@@ -216,6 +223,7 @@ export const collaborationSpaceSchema: z.ZodType<CollaborationSpace> = z.strictO
     title: titleSchema,
     installedBy: actorSchema,
     installedAt: z.number().int().nonnegative(),
+    definition: toolPackageDefinitionSchema.optional(),
   }).optional(),
 });
 
@@ -414,7 +422,25 @@ export function decideSpace(space: CollaborationSpace, actorId: string, command:
       if (title.length === 0 || title.length > SPACE_LIMITS.maxTitleChars) return { ok: false, code: 'SPACE_INVALID', message: 'Use a tool title of 1 to 80 characters.' };
       // Replacing a different package is refused: change the room's tool on purpose, not by accident.
       if (next.tool && next.tool.packageId !== packageId) return { ok: false, code: 'SPACE_INVALID', message: 'Uninstall the current tool before installing a different package.' };
-      next.tool = { packageId, version: command.tool.version, contentHash: command.tool.contentHash, route: command.tool.route, title, installedBy: actorId, installedAt: now };
+      // D-037: a definition may travel with the reference, but it must be a valid package that names
+      // the same id and version; the Worker proves the hash before this command is applied.
+      if (command.tool.definition) {
+        const validation = validateToolPackage(command.tool.definition);
+        if (!validation.ok) return { ok: false, code: 'SPACE_INVALID', message: 'The installed package does not validate.' };
+        if (validation.package.packageId !== packageId || validation.package.version !== command.tool.version) {
+          return { ok: false, code: 'SPACE_INVALID', message: 'The package does not match the id and version being installed.' };
+        }
+      }
+      next.tool = {
+        packageId,
+        version: command.tool.version,
+        contentHash: command.tool.contentHash,
+        route: command.tool.route,
+        title,
+        installedBy: actorId,
+        installedAt: now,
+        ...(command.tool.definition ? { definition: command.tool.definition } : {}),
+      };
       return { ok: true, space: next };
     }
     case 'space.uninstallTool': {

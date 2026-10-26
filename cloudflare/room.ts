@@ -10,6 +10,7 @@ import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/
 import { projectionCursor } from '../server/projection-cursor.js';
 import { resolveSpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 import { projectGrantRows } from '../src/tabletop/shared/tool-grant-rows.js';
+import { verifyToolInstall } from './tool-install-verify.js';
 import { buildSpaceExport } from '../src/tabletop/shared/space-export.js';
 import { selectGrantsForSpace } from '../src/tabletop/shared/space-grants.js';
 import { authenticateHash, authenticateRequest, requireMutation, requireOrigin } from './auth.js';
@@ -373,6 +374,8 @@ export class Room extends DurableObject<Env> {
     this.requireRoomId(workspaceId);
     const authorized = await this.authorize(request, workspaceId);
     requireMutation(request, this.env, authorized.session);
+    // D-037: an installed tool definition must hash to the reference before the domain stores it.
+    verifyToolInstall(envelope);
     return this.authority.execute(authorized.session, envelope, workspaceId);
   }
 

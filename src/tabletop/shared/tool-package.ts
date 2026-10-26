@@ -617,14 +617,14 @@ export function canonicalJson(value: unknown): string {
 }
 
 /**
- * Content hash of the parts that define behaviour. Provenance and version are excluded, so
- * re-activating the same source twice produces the same hash and a diff stays meaningful.
+ * The exact text a content hash is computed over (D-037).
+ *
+ * Hashing is asynchronous on the Worker (crypto.subtle), while the domain is synchronous, so the text
+ * is exposed separately: a caller that can only await computes this string, hashes it, and gets the
+ * same digest as `toolPackageContentHash`.
  */
-export function toolPackageContentHash(
-  definition: ToolPackageDefinition,
-  hash: (value: unknown) => string,
-): string {
-  return hash(canonicalJson({
+export function toolPackageContentCanonical(definition: ToolPackageDefinition): string {
+  return canonicalJson({
     schemaVersion: definition.schemaVersion,
     packageId: definition.packageId,
     title: definition.title,
@@ -636,7 +636,18 @@ export function toolPackageContentHash(
     behaviors: definition.behaviors,
     imports: definition.imports,
     runtimeProfile: definition.runtimeProfile,
-  }));
+  });
+}
+
+/**
+ * Content hash of the parts that define behaviour. Provenance and version are excluded, so
+ * re-activating the same source twice produces the same hash and a diff stays meaningful.
+ */
+export function toolPackageContentHash(
+  definition: ToolPackageDefinition,
+  hash: (value: unknown) => string,
+): string {
+  return hash(toolPackageContentCanonical(definition));
 }
 
 export function toolPackageRef(definition: ToolPackageDefinition, hash: (value: unknown) => string): ToolPackageRef {
