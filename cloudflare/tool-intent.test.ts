@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { TOOL_INTENT_REJECTIONS } from '../src/tabletop/shared/tool-protocol.js';
 import { runInDurableObject } from 'cloudflare:test';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -318,5 +319,36 @@ describe('running a behaviour of the installed tool', () => {
       expect(dataRevision(after)).toBe(dataRevision(testCase.room));
       expect(availability(after)).toBe(true);
     }
+  });
+});
+
+/**
+ * D-040 drift test: the route answers with codes, and a package branches on them, so every code the
+ * route can return has to exist in the shared vocabulary. Keep this list next to the route.
+ */
+describe('the intent route speaks the shared refusal vocabulary', () => {
+  const routeCodes = [
+    'TOOL_INTENT_PAYLOAD',
+    'TOOL_NOT_INSTALLED',
+    'TOOL_NOT_AUTHORIZED',
+    'TOOL_HASH_MISMATCH',
+    'TOOL_COMPILE_FAILED',
+    'TOOL_UNKNOWN_BEHAVIOR',
+    'TOOL_BEHAVIOR_FAILED',
+    'TOOL_BEHAVIOR_TIMEOUT',
+    'TOOL_OUTPUT_INVALID',
+    'TOOL_WRITE_OUT_OF_SCOPE',
+    'ACTION_NOT_DECLARED',
+    'ACTION_NOT_FOUND',
+    'INPUT_NOT_DECLARED',
+    'INPUT_MISSING',
+    'INPUT_WRONG_TYPE',
+    'NO_PROPOSAL',
+  ];
+
+  it('uses only codes declared in TOOL_INTENT_REJECTIONS', () => {
+    const vocabulary = new Set<string>(TOOL_INTENT_REJECTIONS);
+    const missing = routeCodes.filter(code => !vocabulary.has(code));
+    expect(missing).toEqual([]);
   });
 });

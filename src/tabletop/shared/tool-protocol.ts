@@ -310,6 +310,17 @@ export const TOOL_INTENT_REJECTIONS = [
   'TOOL_BEHAVIOR_TIMEOUT',
   'TOOL_OUTPUT_INVALID',
   'TOOL_BUSY',
+  // D-040: the room's intent route emits these, so a package can branch on why a run did not commit.
+  'TOOL_NOT_INSTALLED',
+  'TOOL_HASH_MISMATCH',
+  'TOOL_COMPILE_FAILED',
+  'TOOL_INTENT_PAYLOAD',
+  'ACTION_NOT_DECLARED',
+  'ACTION_NOT_FOUND',
+  'INPUT_NOT_DECLARED',
+  'INPUT_MISSING',
+  'INPUT_WRONG_TYPE',
+  'NO_PROPOSAL',
 ] as const;
 
 export type ToolIntentRejection = typeof TOOL_INTENT_REJECTIONS[number];
