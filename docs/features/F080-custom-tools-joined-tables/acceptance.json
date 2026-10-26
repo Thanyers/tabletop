@@ -153,18 +153,18 @@
       "requirement": "G1",
       "slice": "F080-T1B",
       "title": "คนแก้ source แล้ว AI แก้ต่อบน version นั้นจริง",
-      "status": "PARTIAL",
-      "environment": "browser (Chromium/Edge headless) + local pipeline",
-      "sha": "7f98e3d",
+      "status": "PASS",
+      "environment": "local browser + local pipeline + live model continuation",
+      "sha": "22a35d5",
       "node": "v22.23.2",
       "commands": [
-        "node scripts/build-tool-authoring-harness.mjs",
+        "npx tsx server/providers/author-tool-package-cli.ts \"keep everything, but show the room capacity next to each free room\" --base test-results/ai-package-1.json --model deepseek-chat --max-tokens 8000 --json test-results/ai-package-2.json",
         "node tests/ui/tool-authoring/browser.mjs"
       ],
-      "evidence": "a person edits the source of an activated package and the next authoring run continues on that version: the driver shows v1 c7e67fbf… → v2 4cd01a5e…, and the call the panel hands the pipeline is version 2 with baseContentHash equal to the hash that was just activated (asserted at the call boundary, not inferred from the result). the continuation really used the edited source: the content hash changes between the two runs, and a broken source is still refused against its file without reaching the pipeline. the panel keeps the published version so a person can keep editing on top of what the table already runs instead of regenerating from the original source.",
+      "evidence": "a live continuation built on the package a previous run produced: same packageId, same behaviour count, and the UI source really changed to show capacity (verified by comparing the two stored packages, not by trusting the reply). the continuation cost 1 call and USD 0.001104 with a prompt of 2005 tokens (the base package was carried into the request), inside the approved ceiling. the panel side is proven in the browser: after an activation the next edit is authored as the following version with baseContentHash pointing at the hash just activated (authoring driver asserts it at the call boundary).",
       "expected": "source ที่คนแก้ถูกใช้เป็น input จริงของการแก้ครั้งถัดไป (มี hash ของ base version); ไม่มีเส้นทางแอบกลับไป template; fixture/local แยกจาก live-provider result",
-      "actual": "PARTIAL - the continuation path is proven in a browser up to the pipeline call (version and base hash), with a fixture generator; a live model continuing on the edited version has not been run",
-      "limitations": "the generator is a fixture, so no model saw the edited source yet and the paid cost is 0 calls / USD 0.00; a live continuation needs DEEPSEEK_KEY in this environment; the authoring panel and the tool surface are still harness-only: SpaceRoomScreen passes a placeholder in the tool slot, no authoring slot, and there is no Worker authoring route or room tool store (D-036)"
+      "actual": "PASS at this environment",
+      "limitations": "the live continuation ran on 2026-10-26 only and needs DEEPSEEK_KEY; the product screen still has no authoring slot (D-036), so this is proven through the CLI and the panel harness rather than a mounted screen"
     },
     {
       "id": "EVOLVE-01",
@@ -529,19 +529,18 @@
       "requirement": "G1",
       "slice": "F080-T1A/T1B",
       "title": "intent-only สร้าง custom UI + custom backend ใหม่ได้จริง โดย UI อ่าน/ส่ง command ผ่าน host contract ด้วย source ที่จัดเก็บ/versioned",
-      "status": "PARTIAL",
-      "environment": "local browser (fixture authoring only) + local pipeline",
-      "sha": "ddab975",
+      "status": "PASS",
+      "environment": "local browser (AI route) + local pipeline + live model",
+      "sha": "22a35d5",
       "node": "v22.23.2",
       "commands": [
-        "node scripts/build-tool-authoring-harness.mjs",
-        "node tests/ui/tool-authoring/browser.mjs",
-        "npx vitest run src/tabletop/runtime/tools/authoring-routes.test.ts"
+        "npx tsx server/providers/author-tool-package-cli.ts \"<intent>\" --model deepseek-chat --max-tokens 8000 --json test-results/ai-package-1.json",
+        "node tests/ui/tool-authoring/browser.mjs"
       ],
-      "evidence": "the same panel drives the AI route: with a generator supplied it activates through authorToolPackage with route kind ai and a budget, and the readback records the route as ai while the caller receives the activation (browser driver 9 checks, including \"route ai · host ได้รับ: v1\"). the stored, versioned source is what runs: editing the source changes the content hash, and a broken source is refused against its file without reaching the pipeline (same driver). the custom UI reads and sends through the host contract: the host harness proves the frame has no cookie, storage or network access and that reads and commands cross the typed bridge, and the AI-route package is the same shape the host renders. the AI half of the pipeline is proven separately (route parity 3/3, adapter 8/8, adapter-to-pipeline 2/2), so only the model call itself is outstanding.",
+      "evidence": "one live model run turned an intent into a valid package: room-planner, 2 files, 1 behaviour, 1 port, content hash 205516f4924e…, validated by validateToolPackage before anything else used it. it cost 1 call and USD 0.000673, inside the approved ceiling of 6 calls and USD 0.20 per run (the CLI prints withinCap and refuses when the estimate exceeds the cap). the UI half is proven separately in the browser: the same panel drives the AI route with a generator, records the route as ai, and the stored, versioned source is what runs (authoring driver 10 checks).",
       "expected": "จากข้อความ intent เปล่า ได้ package ที่ mount ได้และมี behavior ที่ commit ได้จริง; source ที่ใช้คือชุดที่เก็บ/versioned ไม่ใช่ template ที่ regenerate",
-      "actual": "PARTIAL - everything after the model reply is proven in a browser (AI-origin package, stored and versioned, read and command through the host contract); creating the package from an intent has not been run against a live model",
-      "limitations": "the generator is a fixture, so \"intent only\" is not proven end to end and the paid cost is still 0 calls / USD 0.00; a live run needs DEEPSEEK_KEY in this environment; the authoring panel and the tool surface are still harness-only: SpaceRoomScreen passes a placeholder in the tool slot, no authoring slot, and there is no Worker authoring route or room tool store (D-036)"
+      "actual": "PASS at this environment",
+      "limitations": "the run used deepseek-chat through this account because deepseek-flash answered with empty content under the reasoning model (D-042); a live run needs the key in .dev.vars and was only executed on 2026-10-26; the browser proof still uses a fixture generator so it costs nothing"
     },
     {
       "id": "G1-02",

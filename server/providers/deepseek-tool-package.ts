@@ -37,12 +37,19 @@ export class ToolPackageGenerationFailed extends Error {
 
 const SYSTEM_PROMPT = [
   'You author one Tabletop tool package as strict JSON. Reply with JSON only, no prose and no code fences.',
-  `The JSON must satisfy: schemaVersion ${TOOL_PACKAGE_SCHEMA_VERSION}, runtimeProfile "${TOOL_PACKAGE_RUNTIME_PROFILE}", and packageId must match ^[a-z][a-z0-9-]{2,39}$.`,
+  'Use EXACTLY these keys and no others. Every key below is required unless marked optional:',
+  '{"schemaVersion":1,"packageId":"<kebab-case 3-40 chars>","version":1,"title":"<1-80 chars>",',
+  '"description":"<1-400 chars>","uiEntry":"ui/main.tsx","behaviorEntry":"behavior/run.ts",',
+  '"files":[{"path":"ui/main.tsx","language":"tsx","text":"<source>"},{"path":"behavior/run.ts","language":"ts","text":"<source>"}],',
+  '"ports":[{"id":"<kebab>","label":"<1-80 chars>","direction":"in","kind":"records","fields":["<field id>"],"maxRows":10}],',
+  '"behaviors":[{"id":"<kebab>","label":"<1-80 chars>","entry":"<exported function name>","inputs":[{"id":"<kebab>","label":"<text>","kind":"number|text|boolean","required":true}],"writes":[{"target":"self","resource":"<collection id>","operations":["create"],"maxRows":10}],"actions":["<table action id>"]}],',
+  '"imports":{"react":"19.3.0"},"runtimeProfile":"tabletop-tool-1","provenance":{"origin":"ai","createdAt":<unix ms>}}',
+  'port objects have only id, label, direction, kind, fields, maxRows - never name or description.',
+  'behaviors must be an array even when it is empty; writes and actions may be empty arrays.',
   `Allowed UI imports are exactly ${Object.keys(TOOL_PACKAGE_PINNED_IMPORTS).join(', ')}; the imports object must pin each one.`,
-  'Files are a list of {path, language, text}: at least one uiEntry file and at least one behaviorEntry file.',
-  'Ports describe the joined data the UI may read; behaviours may only write to the resources their writes array declares, and may only propose actions listed in their actions array.',
-  'Provenance is {origin: "ai", createdAt: <unix ms>}.',
-].join(' ');
+  'The ui module exports a React component named Tool taking no arguments. The behaviour module exports the function named by its entry, returns an array of changes and optionally {changes, proposal:{actionId, inputs}}.',
+  'A behaviour may only write resources its writes declare, and may only propose actions listed in its actions array (all ids lowercase kebab-case).',
+].join('\n');
 
 /**
  * Where the key comes from: the real environment first, then the ignored `.dev.vars` file that the local
