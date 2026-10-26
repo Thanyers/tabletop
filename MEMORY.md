@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-26 — บัญชี gh ที่ active ผิด ทำให้ merge ไม่ผ่าน (ไม่ใช่ ruleset)
+- **What happened:** merge PR #305 และ #307 สำเร็จ แต่ PR #308 ถูกปฏิเสธด้วย `does not have the correct permissions to execute MergePullRequest`, REST merge ตอบ 404 และ `collaborators/.../permission` ตอบ 403 — ทั้งที่ `mergeStateStatus` เป็น CLEAN และ `local-validation` เขียว
+- **Root cause:** `gh auth status` มีสองบัญชีในเครื่อง (Thanyers = งานส่วนตัว, Patcharrr = งานออฟฟิศ) และ active account เป็น **Patcharrr** ซึ่งมีสิทธิ์เพียง `pull` บน `Thanyers/tabletop` (`permissions.push = false`) ⇒ token ใช้ได้แต่ไม่มีสิทธิ์เขียน repo นี้
+- **Correct behavior:** ก่อนเขียน repo นี้ ให้ `gh auth switch --user Thanyers` แล้ว `gh auth setup-git` และยืนยันด้วย `gh api repos/Thanyers/tabletop --jq .permissions.push` ต้องเป็น `true`; ถ้าเจอ "does not have the correct permissions" ให้สงสัยบัญชีก่อน ruleset และห้ามใช้ `--admin` หรือ force push เพื่อข้าม
+
 ### 2026-10-25 — Correct assets can still tell the story in the wrong order
 - **What happened:** the homepage opened a café case and its film before explaining the tools-to-software idea; README opened a learning animation before that idea. Repeated authoring labels interrupted both.
 - **Root cause:** sections were added where they were implemented instead of in the order a new reader needs them.
