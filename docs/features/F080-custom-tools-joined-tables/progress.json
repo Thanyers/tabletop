@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "32 PASS / 3 UNVERIFIED · dev = f20ff80 (PR #321 EXEC-01, #322 DeepSeek adapter, #323 key จาก .dev.vars) · host จริง (staging จาก pipeline): scripts/verify-host.mjs → 9 PASS / 0 FAIL / 2 SKIPPED ที่ sha 15fe74d — route ใหม่มีจริงและ 401, /s/:id เสิร์ฟ SPA · เหลือ: G1-01/EDIT-01 รอ DEEPSEEK_KEY ในเครื่อง (adapter + CLI พร้อม, ยัง 0 call/USD 0.00) · HUMAN-01 รอผู้ใช้จริง 5 คน × 3 วัน · D-035: เพิ่ม actions? ใน ToolBehavior (เจอจาก integration test ที่ต่อ adapter เข้า pipeline)",
+  "currentCheckpoint": "32 PASS / 2 PARTIAL (G1-01, EDIT-01) / 1 UNVERIFIED (HUMAN-01) · dev = b47e3ca · D-036: ผลิตภัณฑ์ยังไม่ mount authoring panel/tool host — RoomShell ใช้ placeholder, ไม่มี Worker authoring route และ Room ไม่มี tool store · สไลซ์ถัดไป (ยังไม่เริ่ม): room tool store + authority install/activate → Worker routes → mount UI → browser test ที่เห็น tool จริง · G1-01/EDIT-01 = PARTIAL เพราะพิสูจน์ถึงขอบเขต pipeline ด้วย fixture generator (0 call / USD 0.00)",
   "slices": [
     {
       "alias": "C0",
