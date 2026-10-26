@@ -431,3 +431,18 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 4. เทสต์: browser harness ของ room shell ต้องเห็น tool จริงและ authoring จริง (ไม่ใช่ placeholder)
 
 **ทำไมไม่ทำในรอบนี้:** เป็นงาน 3 ชั้น (Room + Worker + UI) ที่ต้องมี key เพื่อทดสอบ AI route จริง และแตะ authority/store ซึ่งควรทำเป็นสไลซ์ของตัวเองพร้อมรีวิว
+
+## D-037 — สไลซ์ถัดไปของ D-036: ต้องมี "ที่เก็บ package source" ก่อนจะรัน tool ในห้องได้
+
+**สิ่งที่ตรวจ:** `TableState`/โดเมนโต๊ะ **ไม่มี** ที่เก็บ tool package — มีเพียง `space.tool` ที่เป็น reference (packageId/version/contentHash) ที่เพิ่งเพิ่มใน D-036 และ `tool-grant` สำหรับ source grants
+
+**ผลคือ:** หน้าห้องตอนนี้แสดง **การ์ดข้อมูลของเครื่องมือ** ได้ (ทำแล้วใน slice 2) แต่ยัง **รัน UI ของเครื่องมือไม่ได้** เพราะ client ไม่มี source/compiled ของ package
+
+**ดีไซน์ที่ต้องทำต่อ (ยังไม่เริ่ม):**
+1. **Store**: เก็บ `definition` ของ package ที่ activate แล้วไว้กับ shared-tool workspace (จำกัดด้วย `TOOL_PACKAGE_LIMITS` ทั้งจำนวนไฟล์และไบต์) — ต้องตัดสินว่าจะเก็บใน `TableState` (JSON, มีผลกับขนาด state) หรือแยกที่เก็บ
+2. **คำสั่ง**: `space.installTool` รับ definition เพิ่ม (หรือคำสั่ง `tool.save` แยก) โดย authority ตรวจ hash ตรงกับ definition จริง (`toolPackageContentHash`) ⇒ contentHash ใน reference ต้องพิสูจน์ได้ ไม่ใช่ค่าที่ client อ้าง
+3. **Route**: `GET /api/workspaces/:id/space/tool` คืน reference + definition (เฉพาะสมาชิก, เคารพ visibility) ให้ client compile เองด้วย `compileToolPackage`
+4. **UI**: mount `GeneratedToolHost` ในช่อง `tool` แทนการ์ด และ `ToolAuthoringPanel` ในช่อง `authoring`
+5. **เทสต์**: worker e2e (ติดตั้ง → อ่าน → hash ตรง/ไม่ตรง), browser (host รัน UI ของ package ที่ติดตั้งจริง), isolation ยังต้องผ่าน
+
+**ทำไมไม่ทำในรอบนี้:** เป็นงาน 5 ชั้นที่แตะการเก็บ state + authority + route + UI พร้อมกัน และต้องมีการทดสอบ isolation ซ้ำ — ไม่ควรทำครึ่ง ๆ กลาง ๆ ในโค้ดที่ merge ลง dev แล้ว

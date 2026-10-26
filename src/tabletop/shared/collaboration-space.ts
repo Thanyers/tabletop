@@ -147,6 +147,28 @@ export interface CollaborationSpace {
    * report says out loud instead of inventing one (CTX-01).
    */
   brief?: { text: string; updatedBy: string; updatedAt: number };
+  /**
+   * The tool version this room runs (D-036). Absent means the room has no tool installed, which the
+   * room shell shows as an empty slot instead of pretending one exists.
+   */
+  tool?: SpaceToolInstallation;
+}
+
+/**
+ * F080 / D-036: which tool package version a room runs.
+ *
+ * The room stores the reference (id, version, content hash) rather than the package source: the
+ * source lives with the tool workspace, and an installed version is identified by its hash so a room
+ * cannot be switched to a different package under the same name.
+ */
+export interface SpaceToolInstallation {
+  packageId: string;
+  version: number;
+  contentHash: string;
+  route: 'human' | 'ai';
+  title: string;
+  installedBy: string;
+  installedAt: number;
 }
 
 const idSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,39}$/u);
@@ -185,6 +207,15 @@ export const collaborationSpaceSchema: z.ZodType<CollaborationSpace> = z.strictO
     text: z.string().min(1).max(600),
     updatedBy: z.string().min(1).max(160),
     updatedAt: z.number().int().nonnegative(),
+  }).optional(),
+  tool: z.strictObject({
+    packageId: idSchema,
+    version: z.number().int().min(1).max(10_000),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/u),
+    route: z.enum(['human', 'ai']),
+    title: titleSchema,
+    installedBy: actorSchema,
+    installedAt: z.number().int().nonnegative(),
   }).optional(),
 });
 
@@ -281,7 +312,9 @@ export type SpaceCommand =
   | { type: 'space.setRole'; actorId: string; role: SpaceRole }
   | { type: 'space.transferManager'; actorId: string }
   | { type: 'space.addSource'; source: SpaceSourceRef }
-  | { type: 'space.leaveSource'; workspaceId: string };
+  | { type: 'space.leaveSource'; workspaceId: string }
+  | { type: 'space.installTool'; tool: Omit<SpaceToolInstallation, 'installedBy' | 'installedAt'> }
+  | { type: 'space.uninstallTool' };
 
 export type SpaceDecision =
   | { ok: true; space: CollaborationSpace }
@@ -367,6 +400,26 @@ export function decideSpace(space: CollaborationSpace, actorId: string, command:
     case 'space.clearBrief': {
       if (!spaceAllows(role, 'tool.bind')) return { ok: false, code: 'SPACE_FORBIDDEN', message: 'Only a maker or the manager may clear the room brief.' };
       delete next.brief;
+      return { ok: true, space: next };
+    }
+    case 'space.installTool': {
+      // D-036: installing a tool version is a maker action, and the domain stamps who and when so the
+      // room cannot claim an installation that the record does not support.
+      if (!spaceAllows(role, 'tool.author')) return { ok: false, code: 'SPACE_FORBIDDEN', message: 'Only a maker or the manager may install a tool in this room.' };
+      const packageId = command.tool.packageId.trim();
+      if (!/^[a-z0-9][a-z0-9-]{2,39}$/u.test(packageId)) return { ok: false, code: 'SPACE_INVALID', message: 'Use a package id of 3 to 40 lowercase characters.' };
+      if (!Number.isInteger(command.tool.version) || command.tool.version < 1 || command.tool.version > 10_000) return { ok: false, code: 'SPACE_INVALID', message: 'Use a version between 1 and 10000.' };
+      if (!/^[a-f0-9]{64}$/u.test(command.tool.contentHash)) return { ok: false, code: 'SPACE_INVALID', message: 'An installation needs the content hash of the version it runs.' };
+      const title = command.tool.title.trim();
+      if (title.length === 0 || title.length > SPACE_LIMITS.maxTitleChars) return { ok: false, code: 'SPACE_INVALID', message: 'Use a tool title of 1 to 80 characters.' };
+      // Replacing a different package is refused: change the room's tool on purpose, not by accident.
+      if (next.tool && next.tool.packageId !== packageId) return { ok: false, code: 'SPACE_INVALID', message: 'Uninstall the current tool before installing a different package.' };
+      next.tool = { packageId, version: command.tool.version, contentHash: command.tool.contentHash, route: command.tool.route, title, installedBy: actorId, installedAt: now };
+      return { ok: true, space: next };
+    }
+    case 'space.uninstallTool': {
+      if (!spaceAllows(role, 'tool.author')) return { ok: false, code: 'SPACE_FORBIDDEN', message: 'Only a maker or the manager may remove the room tool.' };
+      delete next.tool;
       return { ok: true, space: next };
     }
     case 'space.seen': {

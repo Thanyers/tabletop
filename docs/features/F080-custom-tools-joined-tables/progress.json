@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T12:40:00+07:00",
-  "lastVerifiedAt": "2026-10-26T12:40:00+07:00",
+  "updatedAt": "2026-10-26T13:58:00+07:00",
+  "lastVerifiedAt": "2026-10-26T13:58:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,7 +18,7 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "f20ff80",
+    "headSha": "ad8930a",
     "candidateSha": "4db0727",
     "pr": 305,
     "prState": "draft",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "32 PASS / 2 PARTIAL (G1-01, EDIT-01) / 1 UNVERIFIED (HUMAN-01) · dev = b47e3ca · D-036: ผลิตภัณฑ์ยังไม่ mount authoring panel/tool host — RoomShell ใช้ placeholder, ไม่มี Worker authoring route และ Room ไม่มี tool store · สไลซ์ถัดไป (ยังไม่เริ่ม): room tool store + authority install/activate → Worker routes → mount UI → browser test ที่เห็น tool จริง · G1-01/EDIT-01 = PARTIAL เพราะพิสูจน์ถึงขอบเขต pipeline ด้วย fixture generator (0 call / USD 0.00)",
+  "currentCheckpoint": "32 PASS / 2 PARTIAL (G1-01, EDIT-01) / 1 UNVERIFIED (HUMAN-01) · dev = ad8930a · D-036 slice1-2 merged: space.installTool/uninstallTool (reference + hash + audit stamp) และหน้าห้องแสดงการ์ดเครื่องมือจริง (browser 7/7, ui-gate 17/17) · D-037: การรัน UI ของ tool ในห้องต้องมี package store + route ก่อน (design 5 ข้อบันทึกไว้ ยังไม่เริ่ม) · ค้างจากภายนอก: DEEPSEEK_KEY (G1-01/EDIT-01 — 0 call/USD 0.00) และผู้ใช้จริง 5 คน (HUMAN-01) · regression ล่าสุด: unit 1221/5 skipped · Worker 325/325",
   "slices": [
     {
       "alias": "C0",
