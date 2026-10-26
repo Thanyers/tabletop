@@ -10,6 +10,10 @@ import worker from './index.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { spaceProjectionUrl } from '../src/tabletop/shared/space-projection-url.js';
 import { planToolBehaviorAction } from '../src/tabletop/shared/tool-action-proposal.js';
+import { compileToolPackage } from '../src/tabletop/runtime/tools/compile.js';
+import { validateToolBehaviorOutput } from '../src/tabletop/shared/tool-behavior.js';
+import { createCloudflareToolBehaviorRunner } from './tool-behavior-runner.js';
+import { env as cloudflareEnv } from 'cloudflare:workers';
 
 /**
  * F080 / C6 — the cross-workspace projection read, end to end, through the real Worker entry.
@@ -1163,5 +1167,138 @@ describe('a behaviour proposal is gated before the commit', () => {
     expect((untouched.domain as { dataRevision?: number }).dataRevision)
       .toBe((afterCommit.domain as { dataRevision?: number }).dataRevision);
     expect(availability(untouched)).toBe(false);
+  });
+});
+
+/**
+ * F080 / EXEC-01: the proposal comes from a behaviour that really ran in an isolate.
+ *
+ * Everything before the commit is production code: compile the package, build the request from the
+ * compiled module, run it through the Cloudflare runner, validate its output, plan the action, then
+ * commit through the ordinary table.act command. A behaviour that proposes nothing leaves the table
+ * untouched.
+ */
+describe('a real behaviour proposes the action the authority commits', () => {
+  const packageDefinition = () => ({
+    schemaVersion: 1,
+    packageId: 'room-planner',
+    version: 1,
+    title: 'Room planner',
+    description: 'reserve a room from the joined data',
+    uiEntry: 'ui/main.tsx',
+    behaviorEntry: 'behavior/run.ts',
+    files: [
+      { path: 'ui/main.tsx', language: 'tsx', text: 'export function Tool(){ return <p>rooms</p>; }\n' },
+      {
+        path: 'behavior/run.ts',
+        language: 'ts',
+        text: 'export function reserve() { return { changes: [], proposal: { actionId: "borrow", inputs: { item: "camera" } } }; }\n',
+      },
+    ],
+    ports: [],
+    behaviors: [{ id: 'reserve', label: 'reserve', entry: 'reserve', inputs: [], writes: [], actions: ['borrow'] }],
+    imports: { react: '19.3.0' },
+    runtimeProfile: 'tabletop-tool-1',
+    provenance: { origin: 'human', createdAt: 1_760_000_000_000 },
+  });
+
+  it('runs the behaviour in the isolate, validates it, plans and commits through table.act', async () => {
+    const owner = await seedActor('Runner owner');
+    const created = await createWorkspace(owner, 'Runner table');
+    const imported = await command(owner, created, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    const sourceId = (imported.workspace.domain as { sources?: { id: string }[] }).sources?.[0]?.id;
+    if (!sourceId) throw new Error('RUNNER_SOURCE_MISSING');
+    let current = imported.workspace;
+    for (const [type, payload] of [
+      ['evolve.propose', { change: equipmentChange(sourceId) }],
+      ['evolve.simulate', {}],
+      ['evolve.validate', {}],
+      ['evolve.approve', {}],
+      ['evolve.activate', {}],
+    ] as const) {
+      current = (await command(owner, current, type, payload)).workspace;
+    }
+
+    const definition = packageDefinition();
+    const compiled = compileToolPackage(definition as never, () => 'c'.repeat(64));
+    expect(compiled.ok, JSON.stringify(compiled.ok ? null : compiled.problems)).toBe(true);
+    if (!compiled.ok) return;
+
+    // Build the request the contract expects from the module this package actually compiled to.
+    const request = {
+      packageId: definition.packageId,
+      packageVersion: definition.version,
+      contentHash: 'c'.repeat(64),
+      runtimeProfile: definition.runtimeProfile,
+      moduleSource: compiled.compiled.behaviorModule,
+      entry: 'reserve',
+      inputs: {},
+      declaredWrites: [],
+      resourceSchema: {},
+      expected: { instanceRevision: 1, grantVersion: 1 },
+    };
+    const result = await createCloudflareToolBehaviorRunner({ loader: cloudflareEnv.COMPUTE_LOADER }).run(request as never);
+    expect(result.proposal).toEqual({ actionId: 'borrow', inputs: { item: 'camera' } });
+
+    const validation = validateToolBehaviorOutput(result, request as never);
+    expect(validation.ok, JSON.stringify(validation.ok ? null : validation.problems)).toBe(true);
+    if (!validation.ok) return;
+
+    const programActions = (current.domain as { program?: { actions?: unknown[] } }).program?.actions ?? [];
+    const planned = planToolBehaviorAction({
+      declaredActions: definition.behaviors[0]!.actions ?? [],
+      programActions: programActions as never,
+      proposal: validation.proposal,
+    });
+    expect(planned, JSON.stringify(planned)).toMatchObject({ ok: true, actionId: 'borrow' });
+
+    const committed = await command(owner, current, 'table.act', { actionId: 'borrow', inputs: { item: 'camera' } });
+    const availability = (view: typeof committed.workspace) => (view.domain as unknown as {
+      records?: Record<string, { id: string; values: { available?: unknown } }[]>;
+    }).records?.equipment?.find(row => row.id === 'camera')?.values.available;
+    expect(availability(committed.workspace)).toBe(false);
+  });
+
+  it('refuses a behaviour that proposes an action the package did not declare, with zero write', async () => {
+    const definition = {
+      ...packageDefinition(),
+      files: [
+        { path: 'ui/main.tsx', language: 'tsx', text: 'export function Tool(){ return <p>rooms</p>; }\n' },
+        {
+          path: 'behavior/run.ts',
+          language: 'ts',
+          text: 'export function reserve() { return { changes: [], proposal: { actionId: "delete-all", inputs: {} } }; }\n',
+        },
+      ],
+      behaviors: [{ id: 'reserve', label: 'reserve', entry: 'reserve', inputs: [], writes: [], actions: ['borrow'] }],
+    };
+    const compiled = compileToolPackage(definition as never, () => 'c'.repeat(64));
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const request = {
+      packageId: definition.packageId,
+      packageVersion: definition.version,
+      contentHash: 'c'.repeat(64),
+      runtimeProfile: definition.runtimeProfile,
+      moduleSource: compiled.compiled.behaviorModule,
+      entry: 'reserve',
+      inputs: {},
+      declaredWrites: [],
+      resourceSchema: {},
+      expected: { instanceRevision: 1, grantVersion: 1 },
+    };
+    const result = await createCloudflareToolBehaviorRunner({ loader: cloudflareEnv.COMPUTE_LOADER }).run(request as never);
+    const validation = validateToolBehaviorOutput(result, request as never);
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+    const planned = planToolBehaviorAction({
+      declaredActions: definition.behaviors[0]!.actions,
+      programActions: [{ id: 'borrow', title: 'Borrow', description: '', roles: ['owner'], parameters: [], conditions: [], effects: [], requireTurn: false, advanceTurn: false }] as never,
+      proposal: validation.proposal,
+    });
+    expect(planned).toMatchObject({ ok: false, code: 'ACTION_NOT_DECLARED' });
   });
 });
