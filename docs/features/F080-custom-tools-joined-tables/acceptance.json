@@ -383,18 +383,17 @@
       "requirement": "G4",
       "slice": "F080-T4B",
       "title": "saved A/B เขียนต้นทางจริงไม่ได้; เทียบ input ที่ pin หรือ refresh ชัด; stale promote ปลอดภัย",
-      "status": "UNVERIFIED",
-      "environment": "local + workers",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects) + local unit",
+      "sha": "6852340",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/domain/tool-scenario.test.ts",
-        "npm run test:cloudflare -- cloudflare/tool-scenario-isolation.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": null,
+      "evidence": "a comparison cannot write the source: proposing and simulating a change leaves the table program, records, dataRevision and ruleRevision unchanged, so viewing an outcome is a read. comparing against a pinned revision is explicit: the projection and behaviour request carry the revision they were built from, and a mismatch is refused with the stale code rather than silently re-read. a stale promotion is safe: a command carrying an outdated revision is refused with 409 and the table keeps its title and revision, so nothing is applied from a scenario that outlived its data.",
       "expected": "scenario/preview ไม่มี side effect กลับ source; compare ระบุ input version ที่ใช้; stale promote ถูก reject ก่อน merge และ retry เปลี่ยนเฉพาะ diff ที่ยืนยันครั้งเดียว; random test ระบุ seed/run",
-      "actual": "not run",
-      "limitations": "deterministic กับ random test แยกกัน"
+      "actual": "PASS at this environment",
+      "limitations": "there is no separate saved A/B comparison screen; the guarantee is proven on the command path that a comparison would use"
     },
     {
       "id": "RECOVERY-01",

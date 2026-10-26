@@ -815,3 +815,43 @@ describe('a broken dependency never promotes', () => {
     expect((after.domain as { program?: unknown }).program ?? null).toBeNull();
   });
 });
+
+/**
+ * F080 / SCENARIO-01: a saved comparison cannot quietly write, and a stale promotion is refused.
+ *
+ * The first half is covered by the preview test (the table does not move). This second half sends a
+ * command carrying an outdated revision and expects a refusal with no state change, which is what
+ * "promote a stale scenario safely" has to mean.
+ */
+describe('a stale promotion is refused', () => {
+  it('rejects a command built on an outdated revision and leaves the table untouched', async () => {
+    const owner = await seedActor('Stale owner');
+    const created = await createWorkspace(owner, 'Stale table');
+    const staleView = await viewOf(owner, created.id);
+
+    // Move the table on by one command, so the captured revision is now history.
+    await command(owner, staleView, 'workspace.rename', { title: 'Renamed after capture' });
+    const current = await viewOf(owner, created.id);
+    expect(current.revision).not.toBe(staleView.revision);
+
+    const response = await worker.fetch(request(`/api/workspaces/${created.id}/commands`, owner, {
+      method: 'POST',
+      body: {
+        commandId: randomUUID(),
+        expectedRevision: staleView.revision,
+        expectedEpoch: current.epoch,
+        type: 'workspace.rename',
+        payload: { title: 'Should never apply' },
+      },
+    }), bindings);
+    const body = await response.json() as { errorCode?: string; code?: string };
+    expect(response.status).toBe(409);
+    const code = body.errorCode ?? body.code;
+    expect(code === 'STALE_REVISION' || code === 'REVISION_CONFLICT').toBe(true);
+
+    // The refused command did not apply.
+    const after = await viewOf(owner, created.id);
+    expect(after.title).toBe(current.title);
+    expect(after.revision).toBe(current.revision);
+  });
+});
