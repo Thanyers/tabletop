@@ -459,3 +459,18 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **จึงหยุดที่ slice 1 และบันทึกเงื่อนไข:** ต้องมี route `POST /api/workspaces/:id/space/tool/intent` ที่ runner → `validateToolBehaviorOutput` → `planToolBehaviorAction` → `table.act` (D-033) ก่อน แล้วค่อย mount host
 
 **หมายเหตุ:** การ mount host ไม่ได้เป็นเกตของ acceptance ที่ยังค้าง (G1-01/EDIT-01 = provider key, HUMAN-01 = ผู้ใช้จริง) — เป็นงานต่อยอดคุณภาพผลิตภัณฑ์
+
+## D-039 — เพิ่มช่อง `proposal` ใน behaviour ABI (เพราะของเดิม "ไม่มีทางส่งคำเสนอ action")
+
+**What happened:** ก่อนทำ route ตาม D-038 มีการตรวจว่าผลของ behaviour จะเสนอ action ได้หรือไม่ พบว่า **ไม่ได้** — `ToolBehaviorResult` มีแค่ `output` (row changes), wire จาก isolate คือ `{ changes }` และ `validateToolBehaviorOutput` ปฏิเสธ key อื่นทั้งหมด ⇒ `planToolBehaviorAction` (D-033) ไม่มีทางได้รับ proposal จาก behaviour จริง; e2e ที่ปิด EXEC-01 ก่อนหน้านี้ **ประกอบ proposal เองในเทสต์**
+
+**Root cause:** D-033 ตัดสินกลไก commit (ผ่าน `table.act`) แต่ไม่ได้ขยาย ABI ให้ behaviour ส่งคำเสนอ — และเทสต์ที่เขียนไว้ไม่ผ่าน runner จริงจึงไม่จับช่องว่างนี้
+
+**การตัดสินใจ:** เพิ่ม `proposal?: { actionId, inputs }` แบบ **additive**
+- `ToolBehaviorResult.proposal?` + `toolBehaviorProposalSchema` (actionId ตามรูปแบบ id, inputs เป็น primitive)
+- wire รับ `{ changes, proposal? }` และ entry wrapper ส่งผ่านทั้งสองแบบ (list เดิม หรือ `{ changes, proposal }`)
+- `validateToolBehaviorOutput` ยอมรับ key `proposal` และตรวจ schema (ไม่ใช่ปล่อยผ่าน) แล้วแนบไปกับผลลัพธ์; การตรวจสิทธิ์/การประกาศ action ยังเป็นของ `planToolBehaviorAction`
+
+**Backward compatibility:** behaviour ที่คืน list ยังทำงานเหมือนเดิม 100% (wire ไม่มี proposal, validator คืน `changes` เท่านั้น)
+
+**ผลต่อ EXEC-01:** ต้องลดเป็น **PARTIAL** เพราะหลักฐานเดิมใช้ proposal ที่เทสต์สร้างเอง ไม่ได้มาจาก behaviour จริง — จะกลับเป็น PASS เมื่อ e2e รัน behaviour ผ่าน runner แล้วได้ proposal จากมันจริง

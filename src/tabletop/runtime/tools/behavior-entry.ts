@@ -23,11 +23,15 @@ export default { async fetch(request) {
   try { body = await request.json(); } catch { return new Response('The behaviour request is not JSON.', {status:422}); }
   const run = behaviour[body.entry];
   if (typeof run !== 'function') return new Response('The behaviour entry is missing.', {status:422});
-  let changes;
-  try { changes = await run(body.inputs); } catch { return new Response('The behaviour failed.', {status:422}); }
+  let result;
+  try { result = await run(body.inputs); } catch { return new Response('The behaviour failed.', {status:422}); }
+  // D-039: a behaviour may return the legacy change list, or { changes, proposal }.
+  const payload = Array.isArray(result)
+    ? { changes: result }
+    : { changes: result && Array.isArray(result.changes) ? result.changes : [], ...(result && result.proposal !== undefined ? { proposal: result.proposal } : {}) };
   let encoded;
   try {
-    encoded = JSON.stringify({ changes }, (_key, value) => {
+    encoded = JSON.stringify(payload, (_key, value) => {
       if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Non-finite output');
       return value;
     });

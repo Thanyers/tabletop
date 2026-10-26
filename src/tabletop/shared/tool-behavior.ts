@@ -86,9 +86,20 @@ export interface ToolBehaviorRequest {
   expected: { instanceRevision: number; grantVersion: number };
 }
 
+/** D-039: a behaviour may propose one declared action instead of (or with) row changes. */
+export interface ToolBehaviorProposal {
+  actionId: string;
+  inputs: Record<string, string | number | boolean>;
+}
+
 /** Runner output is untrusted: it must pass {@link validateToolBehaviorOutput} before commit. */
 export interface ToolBehaviorResult {
   output: ToolBehaviorProposedChange[];
+  /**
+   * D-039: the action this run wants the authority to perform. Until this channel existed the
+   * proposal had to be built by the caller, so no real behaviour could produce one.
+   */
+  proposal?: ToolBehaviorProposal;
 }
 
 /** The adapter both hosts implement; one fresh isolate per `run`. */
@@ -145,8 +156,14 @@ export const toolBehaviorProposedChangeSchema: z.ZodType<ToolBehaviorProposedCha
   values: z.record(idSchema, valueSchema).optional(),
 });
 
+export const toolBehaviorProposalSchema: z.ZodType<ToolBehaviorProposal> = z.strictObject({
+  actionId: z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/u),
+  inputs: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u), inputValueSchema),
+});
+
 export const toolBehaviorResultSchema: z.ZodType<ToolBehaviorResult> = z.strictObject({
   output: z.array(toolBehaviorProposedChangeSchema).max(TOOL_BEHAVIOR_LIMITS.maxChanges),
+  proposal: toolBehaviorProposalSchema.optional(),
 });
 
 export const toolBehaviorRequestSchema: z.ZodType<ToolBehaviorRequest> = z.strictObject({
@@ -192,7 +209,7 @@ export const toolBehaviorRequestSchema: z.ZodType<ToolBehaviorRequest> = z.stric
 export type ToolBehaviorOutputProblemCode = 'TOOL_OUTPUT_INVALID' | 'TOOL_WRITE_OUT_OF_SCOPE';
 
 export type ToolBehaviorOutputValidation =
-  | { ok: true; changes: ToolBehaviorProposedChange[] }
+  | { ok: true; changes: ToolBehaviorProposedChange[]; proposal?: ToolBehaviorProposal }
   | { ok: false; code: ToolBehaviorOutputProblemCode; problems: string[] };
 
 interface OutputProblem {
@@ -244,7 +261,20 @@ export function validateToolBehaviorOutput(result: unknown, request: ToolBehavio
   }
   const raw = result as Record<string, unknown>;
   for (const key of Object.keys(raw)) {
-    if (key !== 'output') reject('TOOL_OUTPUT_INVALID', `output: unexpected key "${key}".`);
+    if (key !== 'output' && key !== 'proposal') reject('TOOL_OUTPUT_INVALID', `output: unexpected key "${key}".`);
+  }
+  // D-039: a proposal is optional and is checked again by `planToolBehaviorAction`; here it only has
+  // to be well formed, so a run cannot smuggle an arbitrary object into the commit path.
+  let proposal: ToolBehaviorProposal | undefined;
+  if (raw.proposal !== undefined) {
+    const parsedProposal = toolBehaviorProposalSchema.safeParse(raw.proposal);
+    if (!parsedProposal.success) {
+      for (const issue of parsedProposal.error.issues) {
+        reject('TOOL_OUTPUT_INVALID', `proposal.${issue.path.join('.')}: ${issue.message}`);
+      }
+    } else {
+      proposal = parsedProposal.data;
+    }
   }
   if (!Array.isArray(raw.output)) {
     reject('TOOL_OUTPUT_INVALID', 'output: the changes must be an array.');
@@ -323,13 +353,14 @@ export function validateToolBehaviorOutput(result: unknown, request: ToolBehavio
   }
 
   if (problems.length > 0) return conclude();
-  if (serialisedBytes({ output: changes }) > TOOL_BEHAVIOR_LIMITS.maxOutputBytes) {
+  const shaped = proposal === undefined ? { output: changes } : { output: changes, proposal };
+  if (serialisedBytes(shaped) > TOOL_BEHAVIOR_LIMITS.maxOutputBytes) {
     return { ok: false, code: 'TOOL_OUTPUT_INVALID', problems: [`output: the changes exceed ${TOOL_BEHAVIOR_LIMITS.maxOutputBytes} bytes.`] };
   }
-  return { ok: true, changes };
+  return proposal === undefined ? { ok: true, changes } : { ok: true, changes, proposal };
 }
 
-const toolBehaviorWireSchema = z.strictObject({ changes: z.array(z.unknown()) });
+const toolBehaviorWireSchema = z.strictObject({ changes: z.array(z.unknown()), proposal: z.unknown().optional() });
 
 /**
  * Read the body a sandbox produced. The runner has already byte-capped it, but the wire is
@@ -348,7 +379,10 @@ export function readToolBehaviorResult(body: string): ToolBehaviorResult {
   }
   const wire = toolBehaviorWireSchema.safeParse(value);
   if (!wire.success) throw new ToolBehaviorRunError('TOOL_OUTPUT_INVALID');
-  const parsed = toolBehaviorResultSchema.safeParse({ output: wire.data.changes });
+  const parsed = toolBehaviorResultSchema.safeParse({
+    output: wire.data.changes,
+    ...(wire.data.proposal === undefined ? {} : { proposal: wire.data.proposal }),
+  });
   if (!parsed.success) throw new ToolBehaviorRunError('TOOL_OUTPUT_INVALID');
   return parsed.data;
 }
