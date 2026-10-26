@@ -349,16 +349,16 @@
       "slice": "F080-T4A",
       "title": "independent oracle ตรวจผลและ freshness; before/after รวม UI source/version, server logic, formulas, compute, connections",
       "status": "UNVERIFIED",
-      "environment": "local (disposable)",
-      "sha": "not-run",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects)",
+      "sha": "206bd76",
       "node": "v22.23.2",
       "commands": [
-        "node --import tsx scripts/tool-oracle-check.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": null,
+      "evidence": "connection surface: the rows the route serves are recomputed independently from the source table's own records and compared exactly, and the revision the response claims equals the source dataRevision. freshness: after the source imports another file, the next read reports a higher sourceDataRevision, so a stale answer cannot pass the oracle.",
       "expected": "oracle คำนวณผลคาดหวังแยกจาก implementation แล้วตรงกับผลจริง; before/after diff ครอบคลุมทุก layer; historical input ที่ไม่มีให้บอกว่า reproduce ไม่ได้",
-      "actual": "not run",
-      "limitations": "hash ไม่ใช่ exact input replay"
+      "actual": "PARTIAL - the connection surface has an independent oracle; UI source/version, server logic, formulas and compute do not yet",
+      "limitations": "the oracle recomputes projections only; a package's UI source, its server behaviour, formulas and compute results are not covered by it yet"
     },
     {
       "id": "IMPACT-01",

@@ -855,3 +855,55 @@ describe('a stale promotion is refused', () => {
     expect(after.revision).toBe(current.revision);
   });
 });
+
+/**
+ * F080 / ORACLE-01 (connection surface): what the route served can be recomputed from the source.
+ *
+ * The check is deliberately outside the route: read the source table's own records, project them with
+ * the same granted fields, and compare against the HTTP answer at the revision it claims. If the two
+ * disagree, either the route or the projection is wrong. A second read after the source moves must
+ * report a different revision, which is what freshness means here.
+ */
+describe('an independent oracle checks the connection surface', () => {
+  it('recomputes the served rows from the source and notices when the source moves', async () => {
+    const owner = await seedActor('Oracle owner');
+    const sourceOwner = await seedActor('Oracle source');
+    const space = await createWorkspace(owner, 'Oracle space');
+    const source = await createEquipmentTable(sourceOwner);
+    await command(sourceOwner, source, 'source.grantProjection', {
+      grantId: 'grant-oracle',
+      spaceId: 'oracle-room',
+      spaceWorkspaceId: space.id,
+      audience: { kind: 'space-members' },
+      projections: [{ portId: 'equipment', resource: 'equipment', fields: ['name'], maxRows: 5 }],
+      actions: [],
+    });
+    const created = await command(owner, space, 'space.create', {
+      spaceId: 'oracle-room', title: 'ห้องตรวจสอบ', sharedToolWorkspaceId: space.id,
+    });
+    await command(owner, created.workspace, 'space.addSource', {
+      source: { workspaceId: source.id, epoch: source.epoch, addedBy: owner.id, addedAt: Date.now(), status: 'linked' },
+    });
+
+    const served = await readProjection(owner, space.id, { source: source.id, grant: 'grant-oracle', port: 'equipment' });
+    expect(served.status).toBe(200);
+
+    // The oracle reads the source directly and projects the same fields itself.
+    const sourceView = await viewOf(sourceOwner, source.id);
+    const sourceDomain = sourceView.domain as unknown as {
+      records?: Record<string, { id: string; values: Record<string, unknown> }[]>;
+      dataRevision?: number;
+    };
+    const expectedRows = (sourceDomain.records?.equipment ?? []).map(row => ({ id: row.id, values: { name: row.values.name } }));
+
+    expect(served.body.rows).toEqual(expectedRows);
+    expect(served.body.sourceDataRevision).toBe(sourceDomain.dataRevision);
+
+    // The source moves; the oracle must see a different revision on the next read.
+    const current = await viewOf(sourceOwner, source.id);
+    await command(sourceOwner, current, 'table.import', { filename: 'oracle-extra.txt', text: 'one more file' });
+    const afterMove = await readProjection(owner, space.id, { source: source.id, grant: 'grant-oracle', port: 'equipment' });
+    expect(afterMove.status).toBe(200);
+    expect(Number(afterMove.body.sourceDataRevision)).toBeGreaterThan(Number(served.body.sourceDataRevision));
+  });
+});
