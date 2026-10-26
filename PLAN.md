@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F077-T7 | Clean README copy, add Thai/English navigation, align icon with homepage mark | `doing` | Codex · `docs/F077-readme-languages` · README.md, README.th.md, public/favicon.svg and owning docs |
 | F085 | การ์ดไม่หายวับตอนโต๊ะอัปเดต (คลิก checkbox ไม่หลุดไปโดนพื้นหลัง) | `review` | [F085](docs/features/F085-cards-stay-visible.md) |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `review` | Codex · `docs/F077-readme-cases` · PR #348; README and owning tracking docs only; homepage/media unchanged |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `done` | Codex · PR #348 / release #351 · default-branch README verified; production 9.1.5 / 0ce11c8; app/media unchanged |
