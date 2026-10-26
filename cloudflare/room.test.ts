@@ -3679,7 +3679,13 @@ describe('F080 a second member reads the same room', () => {
     expect(memberState.collaborationSpace?.brief?.text).toBe('Plan the rooms so people can register.');
     expect(memberState.collaborationSpace?.brief?.updatedBy).toBe(owner.id);
 
-    // The redeem answer is not the same shape as a workspace read, so this test compares the brief
-    // itself rather than assuming a shared revision field.
+    // F080 / EVOLVE-01: the member's own read carries the same domain as the owner's, so the
+    // definition and its identities are not per-viewer.
+    const ownerRead = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner, { method: 'GET' });
+    const memberRead = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, member, { method: 'GET' });
+    expect(ownerRead.response.status).toBe(200);
+    expect(memberRead.response.status).toBe(200);
+    expect(memberRead.body.domain).toEqual(ownerRead.body.domain);
+    // The projection revision is per viewer, so only the domain is compared here.
   });
 });

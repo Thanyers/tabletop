@@ -170,17 +170,17 @@
       "requirement": "G2",
       "slice": "F080-T2A",
       "title": "สอง update รักษา data/IDs/references/layout ที่ไม่เกี่ยวข้อง + actor ที่สอง reload เห็นตรงกัน",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "environment": "Cloudflare tier (worker.fetch + real Durable Objects)",
-      "sha": "09b02fd",
+      "sha": "bb7bc4d",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/room.test.ts"
       ],
-      "evidence": "after a first activation, a second update that edits the stored program (adding one field) keeps every record id, every action id, every canvas view id and every previous field id exactly as they were, while the new field is the only addition. the refusals seen earlier were the domain rule at domain/table.ts:508: a field present before must be byte-identical after, so a program rebuilt from the scenario source is refused as a rule change rather than being accepted as \"the same program\".",
+      "evidence": "two updates keep what they did not touch: after a first activation, a second update that adds one field keeps every record id, action id, canvas view id and previous field id, and the new field is the only addition. a second actor reloading sees the same thing: a member who joins by invite reads a domain deep-equal to the owner's, so the definition and its identities are not per-viewer. the refusal seen in earlier attempts is the domain rule that a retained field must be byte-identical, which is why a regenerated program is refused rather than accepted as \"the same\".",
       "expected": "ค่าที่อยู่นอกขอบเขตแกยังเท่าเดิม (เทียบราย field/row id/layout revision); actor ที่สอง reload แล้วได้ state ตรงกัน",
-      "actual": "PARTIAL - the additive update keeps identities end to end; a second actor reloading and seeing the same state is not covered (joining a table needs an invite)",
-      "limitations": "only the additive edit is proven; unrelated-layout preservation is asserted by id equality, and a second member reload is untested"
+      "actual": "PASS at this environment",
+      "limitations": "the projection revision string is per viewer by design, so \"sees the same\" is asserted on the domain and not on that string"
     },
     {
       "id": "PROV-01",
