@@ -9,6 +9,7 @@ import { cookieName, csrfForToken } from './auth.js';
 import worker from './index.js';
 import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/table-scenarios.js';
 import { spaceProjectionUrl } from '../src/tabletop/shared/space-projection-url.js';
+import { planToolBehaviorAction } from '../src/tabletop/shared/tool-action-proposal.js';
 
 /**
  * F080 / C6 — the cross-workspace projection read, end to end, through the real Worker entry.
@@ -1099,5 +1100,68 @@ describe('a wrong epoch is refused without a partial write', () => {
     expect(after.title).toBe(current.title);
     expect(after.revision).toBe(current.revision);
     expect(after.epoch).toBe(current.epoch);
+  });
+});
+
+/**
+ * F080 / EXEC-01: the plan gates the commit, and the commit is the ordinary table.act command.
+ *
+ * A declared action proposal is applied through the authority (the row really changes); an undeclared
+ * one never produces a command, so the table does not move at all.
+ */
+describe('a behaviour proposal is gated before the commit', () => {
+  it('commits through the declared action, and refuses out of scope with zero write', async () => {
+    const owner = await seedActor('Proposal owner');
+    const created = await createWorkspace(owner, 'Proposal table');
+    const imported = await command(owner, created, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    const sourceId = (imported.workspace.domain as { sources?: { id: string }[] }).sources?.[0]?.id;
+    if (!sourceId) throw new Error('PROPOSAL_SOURCE_MISSING');
+    let current = imported.workspace;
+    for (const [type, payload] of [
+      ['evolve.propose', { change: equipmentChange(sourceId) }],
+      ['evolve.simulate', {}],
+      ['evolve.validate', {}],
+      ['evolve.approve', {}],
+      ['evolve.activate', {}],
+    ] as const) {
+      const result = await command(owner, current, type, payload);
+      current = result.workspace;
+    }
+
+    const programActions = (current.domain as { program?: { actions?: unknown[] } }).program?.actions ?? [];
+    const declared = ['borrow'];
+    const proposed = planToolBehaviorAction({
+      declaredActions: declared,
+      programActions: programActions as never,
+      proposal: { actionId: 'borrow', inputs: { item: 'camera' } },
+    });
+    expect(proposed, JSON.stringify(proposed)).toMatchObject({ ok: true });
+
+    // The commit is the ordinary action command, not a new write path.
+    const committed = await command(owner, current, 'table.act', {
+      actionId: 'borrow',
+      inputs: { item: 'camera' },
+    });
+    const afterCommit = committed.workspace;
+    const availability = (view: typeof afterCommit) => (view.domain as unknown as {
+      records?: Record<string, { id: string; values: { available?: unknown } }[]>;
+    }).records?.equipment?.find(row => row.id === 'camera')?.values.available;
+    expect(availability(afterCommit)).toBe(false);
+
+    // An action the package never declared is refused by the plan, so no command is sent.
+    const refused = planToolBehaviorAction({
+      declaredActions: declared,
+      programActions: programActions as never,
+      proposal: { actionId: 'giveBack', inputs: { item: 'camera' } },
+    });
+    expect(refused).toMatchObject({ ok: false, code: 'ACTION_NOT_DECLARED' });
+
+    const untouched = await viewOf(owner, afterCommit.id);
+    expect((untouched.domain as { dataRevision?: number }).dataRevision)
+      .toBe((afterCommit.domain as { dataRevision?: number }).dataRevision);
+    expect(availability(untouched)).toBe(false);
   });
 });
