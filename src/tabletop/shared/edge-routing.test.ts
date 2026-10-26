@@ -296,4 +296,19 @@ describe('routeConnections', () => {
     const [alone] = routeConnections(rects, [{ id: 'only', source: 'source', target: 'first' }]);
     expect(alone!.points[0]).toEqual({ x: 100, y: 150 });
   });
+
+  // F084: a 22-card bill-split table with 40 lines froze the canvas for ~20 s on load (8.7 s per routing pass).
+  // The search now aims at the target and stops once nothing left can beat the best route; the layout is the real one.
+  it('routes a busy table quickly', () => {
+    const cards: [string, number, number, number, number][] = [["sources",48,1927,380,264],["rules",-1120,889,400,226],["c.receipts",-576,200,480,235],["c.members",-1824,-48,480,235],["c.settlements",-1200,-193,480,453],["c.tasks",-576,1585,480,379],["c.owner_summary",3736,120,480,217],["actions",-1130,509,420,155],["note",-220,756,320,412],["v.paid_by_member",48,48,400,321],["v.balance_by_member",592,48,400,343],["v.total_spend",1136,48,400,207],["v.share_per_person",1680,48,400,229],["v.transfer_total",48,441,400,229],["v.unsettled_amount",1136,327,400,229],["v.unsettled_count",1680,349,400,229],["v.transfer_controls",2224,349,400,641],["v.tour_share",2224,48,400,229],["v.tasks_remaining",-496,1435,400,229],["v.tasks_by_owner",592,1134,400,343],["v.tasks_controls",1136,1134,400,649],["chat",1824,1134,400,475]];
+    const lines = `rules>c.receipts rules>c.members rules>c.settlements rules>c.tasks rules>c.owner_summary rules>actions c.members>v.paid_by_member c.receipts>v.paid_by_member c.members>v.balance_by_member c.receipts>v.balance_by_member c.settlements>v.balance_by_member c.receipts>v.total_spend c.receipts>v.share_per_person c.settlements>v.transfer_total c.settlements>v.unsettled_amount c.settlements>v.unsettled_count actions>v.transfer_controls c.settlements>v.transfer_controls c.receipts>v.tour_share c.tasks>v.tasks_remaining c.members>v.tasks_by_owner c.tasks>v.tasks_by_owner actions>v.tasks_controls c.tasks>v.tasks_controls v.paid_by_member>v.balance_by_member v.paid_by_member>v.share_per_person v.total_spend>v.balance_by_member v.total_spend>v.share_per_person v.share_per_person>v.balance_by_member v.share_per_person>v.tour_share v.transfer_total>v.unsettled_amount v.transfer_total>v.transfer_controls v.unsettled_amount>v.unsettled_count v.unsettled_count>v.transfer_controls c.members>v.transfer_controls c.tasks>c.owner_summary c.owner_summary>v.tasks_by_owner c.members>c.tasks c.receipts>c.settlements c.members>c.settlements`.split(' ');
+    const rects = cards.map(([id, x, y, width, height]) => rect(id, x, y, width, height));
+    const links = lines.map((line, index) => { const [source, target] = line.split('>'); return { id: `line-${index}`, source: source!, target: target! }; });
+    const started = performance.now();
+    const routes = routeConnections(rects, links, { clearance: 18, cornerRadius: 12, crossableIds: ['note'], portSpacing: 12, laneSpacing: 16 });
+    const elapsed = performance.now() - started;
+    expect(routes.filter((route) => route.hidden)).toEqual([]);
+    expect(elapsed).toBeLessThan(2500);
+  });
 });
+
