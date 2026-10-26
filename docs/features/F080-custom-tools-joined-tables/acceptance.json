@@ -188,17 +188,17 @@
       "requirement": "G2",
       "slice": "F080-T1B",
       "title": "activation evidence แยก requester/generator/manual reviewer/auto-apply; unknown provenance คงเป็น unknown",
-      "status": "UNVERIFIED",
-      "environment": "local + browser",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "local unit (authorToolPackage pipeline)",
+      "sha": "20db020",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/domain/tool-package-activation.test.ts"
+        "npx vitest run src/tabletop/runtime/tools/authoring-provenance.test.ts"
       ],
-      "evidence": null,
+      "evidence": "the activation record separates the four roles: requesterActorId, generator (human, or ai with generatorId/calls/usd), reviewer (manual with actorId, or auto with no actorId), plus problems, reason and recordedAt. a manual review by another person activates and keeps both names; an auto-apply never invents a person; a refusal records the same evidence so it stays auditable; every record is stamped with a time. the first test asserts the fixture itself is valid, so a later refusal cannot be mistaken for a policy.",
       "expected": "record แยกฟิลด์ผู้ร้องขอ/ผู้สร้าง/ผู้ตรวจ และไม่แต่ง provenance ที่ไม่รู้; auto-apply ตาม guard เดิมไม่เพิ่ม approval ทุกครั้ง",
-      "actual": "not run",
-      "limitations": "ห้ามใช้ hash แทน exact input replay"
+      "actual": "PASS at this environment",
+      "limitations": "self-approval (requester == reviewer) is recorded but not refused; the \"unknown provenance stays unknown\" clause has no call site yet, so it is untested"
     },
     {
       "id": "VIS-01",

@@ -274,3 +274,7 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ขั้นถัดไปที่ควรทำ:** ไล่หาว่ามี guard ที่ไหนอ่าน `route.kind`/reviewer (เช่น wrapper หรือ policy module) แล้วเขียนเทสต์ที่ valid จริง; ห้ามสรุปซ้ำจนกว่าจะมี `record.reason` ของเคส valid มายืนยัน
 
 **ผลต่อ acceptance:** `PROV-01` คงเป็น UNVERIFIED — ไม่ใช่เพราะขาดข้อมูลแยกบทบาท แต่เพราะเส้นทาง manual review ยังไม่ผ่านการพิสูจน์
+
+**D-026 (แก้ไข 2026-10-26):** ข้อสรุปเดิมผิด — เมื่อใช้ package ที่ valid จริง (`runtimeProfile = tabletop-tool-1`, import pin ของ repo, และประกาศ behaviour ที่ตรงกับ `behaviorEntry`) reviewer แบบ `manual` **activate สำเร็จ** ทั้งกรณีผู้สั่งเองและคนอื่น (พิสูจน์ด้วย probe: `ok: true` ทั้งสองกรณี) ⇒ ไม่มีนโยบายปิดกั้น manual review; ที่ถูกปฏิเสธก่อนหน้าคือ fixture ที่ผิด และถูกรายงานเป็น `TOOL_PACKAGE_INVALID` ไม่ใช่เหตุผลด้าน reviewer
+
+**บทเรียน:** เทสต์ที่ assert เฉพาะ "ฟิลด์มีค่า" โดยไม่ assert `ok` และไม่พิมพ์ `record.problems` ทำให้เข้าใจผิดได้ — ตอนนี้เทสต์แรกของ PROV-01 บังคับให้ fixture ต้อง valid ก่อน (ถ้าไม่ valid จะเห็น problems ทันที)
