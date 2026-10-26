@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T08:15:00+07:00",
-  "lastVerifiedAt": "2026-10-26T08:15:00+07:00",
+  "updatedAt": "2026-10-26T08:35:00+07:00",
+  "lastVerifiedAt": "2026-10-26T08:35:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,8 +18,8 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "6b58f62",
-    "candidateSha": "6b58f62",
+    "headSha": "8478c39",
+    "candidateSha": "8478c39",
     "pr": 305,
     "prState": "draft",
     "openPrsAtStart": [
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "PR #305 (draft, mergeable): 26 PASS / 9 UNVERIFIED · ปิดล่าสุด: HIST-01 (pagination partition เป๊ะ + per-member last-seen ตาม D-028), G2-01 (ไฟล์ใหม่ + แก้สองรอบ รักษา ids/values/actions/views/sources), G1-02 (pipeline เดียวสำหรับ human/AI จริงที่ระดับไปป์ไลน์), CTX-01 (brief + สมาชิกที่สองเห็นตรงกัน + included/omitted) · ORACLE-01 ปิดครบ 6 surface (connections/export/formulas/compute/behaviour/UI hash) ด้วย independent expectation · D-030 แก้ D-025: /s/:id เสิร์ฟ SPA ได้ (200) เมื่อ dist ถูก build — 404 ก่อนหน้าเป็น server เก่าบนพอร์ต 8787 · เหลือ 9: AI จริง (G1-01/EXEC-01/EDIT-01 — ต้องมี provider key) · UI ที่ต้องมีคนลงชื่อเข้าใช้ (VISUAL-01/IMPACT-01 — Google OAuth) · HUMAN-01 + hosted/staging · ดู docs/features/F080-custom-tools-joined-tables/closure-checklist.md สำหรับขั้นที่คนต้องทำ",
+  "currentCheckpoint": "งาน F080 อยู่บน dev แล้ว (PR #305 merge commit 25c85d5, dev CI success) + PR #307 เพิ่ม HUMAN-01 protocol · acceptance: 26 PASS / 9 UNVERIFIED — ทุกข้อที่เหลือติดเงื่อนไขภายนอก ไม่ใช่โค้ดค้าง · เหลือ: AI จริง (G1-01/EXEC-01/EDIT-01 ต้องมี provider key; วงเงิน D-023 ยังใช้ 0 call/USD 0.00) · UI ที่ต้องมีบัญชี Google (VISUAL-01/IMPACT-01) · HUMAN-01 (มี protocol) · hosted/staging (มี staging-verification.md) · ขั้นตอนปิดเกต: closure-checklist.md · human-01-protocol.md · staging-verification.md",
   "slices": [
     {
       "alias": "C0",
