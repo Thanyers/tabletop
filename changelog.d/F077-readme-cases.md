@@ -1,1 +1,0 @@
-- Align the English README with the published café sales, physics learning and adventure play cases, using the same three hero GIFs and static posters. Preserve the origin story, current-capability/beta guidance and license; homepage, film and media bytes are unchanged.
