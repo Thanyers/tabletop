@@ -70,6 +70,14 @@ function harness(options: { authorized?: AuthorizedWorkspace; env?: Env } = {}) 
     createInvite: vi.fn(async () => ({ ticket: 'ticket-1', expiresAt: 1_700_300_000_000 })),
   } as unknown as CommandAuthority;
   const scheduleDirectorySync = vi.fn();
+  const readSpaceProjection = vi.fn(async (input: { grantId: string; spaceId: string; spaceWorkspaceId: string; actorId: string; portId: string }) => ({
+    ok: true as const,
+    grantId: input.grantId,
+    projection: { portId: input.portId, resource: 'costs', fields: ['price'], maxRows: 25 },
+    sourceDataRevision: 7,
+    grantVersion: 1,
+    readAt: 5_000,
+  }));
   const deps: RoomHttpDeps = {
     env: () => options.env ?? ENV,
     repository,
@@ -80,8 +88,9 @@ function harness(options: { authorized?: AuthorizedWorkspace; env?: Env } = {}) 
     redeemInvite: vi.fn(async () => view.workspace),
     joinByInviteLink: vi.fn(async () => view.workspace),
     scheduleDirectorySync,
+    readSpaceProjection,
   };
-  return { deps, repository, authority, scheduleDirectorySync, view };
+  return { deps, repository, authority, scheduleDirectorySync, readSpaceProjection, view };
 }
 
 const handle = (deps: RoomHttpDeps, req: Request, requestId = 'req-1') => {
@@ -97,6 +106,7 @@ describe('room-http route table', () => {
     ['POST', '/internal/join-link', 'internal.join-link', 'room-http'],
     ['GET', '/internal/view', 'internal.view', 'room-http'],
     ['GET', '/internal/metadata', 'internal.metadata', 'room-http'],
+    ['POST', '/internal/space-projection', 'internal.space-projection', 'room-http'],
     ['GET', `/api/workspaces/${ROOM}`, 'workspace.view', 'room-http'],
     ['GET', `/api/workspaces/${ROOM}/events`, 'events', 'room-http'],
     ['POST', `/api/workspaces/${ROOM}/commands`, 'commands', 'room-http'],
@@ -264,5 +274,42 @@ describe('room-http moved routes', () => {
     const req = request(`/api/workspaces/${ROOM}/commands`, { method: 'POST' });
     const match = { handler: 'room-http' as const, name: 'unknown.route', workspaceId: ROOM };
     await expect(createRoomHttp(deps).handle(req, match, 'req-1')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+
+describe('internal space projection', () => {
+  const payload = { grantId: 'grant-budget', spaceId: 'activity-room', spaceWorkspaceId: ROOM, actorId: 'actor-1', portId: 'budget' };
+  const body = JSON.stringify(payload);
+  const post = (value: string) => request('/internal/space-projection', { method: 'POST', body: value, headers: { 'content-type': 'application/json' } });
+
+  it('answers 200 with the source decision', async () => {
+    const { deps, readSpaceProjection } = harness();
+    const response = await handle(deps, post(body));
+    expect(response.status).toBe(200);
+    const echo = await response.json() as { ok: boolean; grantId: string };
+    expect(echo).toMatchObject({ ok: true, grantId: 'grant-budget' });
+    expect(readSpaceProjection).toHaveBeenCalledWith(payload);
+  });
+
+  it('rejects a malformed body before the resolver runs', async () => {
+    const { deps, readSpaceProjection } = harness();
+    const response = await handle(deps, post(JSON.stringify({ grantId: 'grant-budget' })));
+    expect(response.status).toBe(400);
+    expect(readSpaceProjection).not.toHaveBeenCalled();
+  });
+
+  it('maps a revocation to 409, not to a missing grant', async () => {
+    const { deps, readSpaceProjection } = harness();
+    readSpaceProjection.mockResolvedValueOnce({ ok: false, code: 'SPACE_GRANT_REVOKED', message: 'revoked at 4000' });
+    const response = await handle(deps, post(body));
+    expect(response.status).toBe(409);
+  });
+
+  it('maps an unknown grant to 404', async () => {
+    const { deps, readSpaceProjection } = harness();
+    readSpaceProjection.mockResolvedValueOnce({ ok: false, code: 'SPACE_GRANT_NOT_FOUND', message: 'nope' });
+    const response = await handle(deps, post(body));
+    expect(response.status).toBe(404);
   });
 });

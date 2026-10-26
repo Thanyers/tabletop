@@ -10,11 +10,24 @@ import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
 import { displayWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { tableCapabilitySummary } from '../src/tabletop/shared/table-capabilities.js';
 import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
+import { handleSpaceProjectionRead } from './space-projection-transport.js';
+import { handleSpaceAction } from './space-action-transport.js';
+import { handleSpaceExport } from './space-export-transport.js';
+import { handleSpaceRecap } from './space-recap-transport.js';
+import type { SpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 export { Room } from './room.js';
 export { Billing } from './billing.js';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|invite-link|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}|images(?:/img_[0-9a-f]{32})?))?$`, 'u');
+/** F080: a cross-workspace projection read. Answered by the Worker, not forwarded to the destination Room. */
+const spaceProjectionRoute = new RegExp(`^/api/workspaces/(${uuid})/space/projection$`, 'u');
+/** F080: an action invoked through a connection; answered by the Worker, committed by the source. */
+const spaceActionRoute = new RegExp(`^/api/workspaces/(${uuid})/space/action$`, 'u');
+/** F080: a download of one granted projection, produced by the source. */
+const spaceExportRoute = new RegExp(`^/api/workspaces/(${uuid})/space/export$`, 'u');
+/** F080: what happened in this room, derived from the connections its sources hold. */
+const spaceRecapRoute = new RegExp(`^/api/workspaces/(${uuid})/space/recap$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
 const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
 const joinLinkSchema = z.strictObject({ link: z.string().max(100) });
@@ -146,9 +159,120 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);
   if (method === 'GET' && path === '/api/admin/workspaces') return adminWorkspaces(request, env);
   const session = await authenticateRequest(request, env);
+  const spaceProjection = spaceProjectionRoute.exec(path);
+  if (method === 'GET' && spaceProjection?.[1]) {
+    // F080 (D-020): the Worker answers the membership question and asks the source table for the
+    // grant decision. No secret changes hands: the source is reached over its own /internal route.
+    const spaceId = spaceProjection[1];
+    // Each call fans out to two Durable Objects, and the answers differ per grant/port, so an
+    // unlimited caller could enumerate a linked table's connections.
+    await limit(env, `space-projection:${session.record.actorId}`, 60, 60_000);
+    return handleSpaceProjectionRead(request, {
+      authenticate: async () => ({ actorId: session.record.actorId }),
+      workspaceView: async (original, workspaceId) => {
+        const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
+        // A destination outage is not an authorization denial; let the handler see the status.
+        if (response.status === 401 || response.status === 403 || response.status === 404) return undefined;
+        if (!response.ok) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<WorkspaceView>();
+      },
+      readSourceProjection: async (original, sourceWorkspaceId, projectionBody) => {
+        // Only the destination needs the caller's credentials; do not forward a session cookie into
+        // another tenant's Room, which uses neither the cookie nor the CSRF token.
+        const forwarded = new Request(new URL('/internal/space-projection', original.url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(projectionBody),
+        });
+        const response = await room(env, sourceWorkspaceId).fetch(forwarded);
+        // A 5xx means the source could not answer; never report that as "not granted".
+        if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<SpaceProjectionRead | { ok: false; code: string; message: string }>();
+      },
+    }, { spaceId });
+  }
   if (!['GET', 'HEAD'].includes(method)) {
     requireMutation(request, env, session);
     await limit(env, `mutate:${session.record.actorId}`, 120, 60_000);
+  }
+  const spaceAction = spaceActionRoute.exec(path);
+  if (method === 'POST' && spaceAction?.[1]) {
+    // F080: the Worker answers membership and asks the source to commit the action.
+    const spaceId = spaceAction[1];
+    await limit(env, `space-action:${session.record.actorId}`, 30, 60_000);
+    return handleSpaceAction(request, {
+      authenticate: async () => ({ actorId: session.record.actorId }),
+      workspaceView: async (original, workspaceId) => {
+        const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
+        if (response.status === 401 || response.status === 403 || response.status === 404) return undefined;
+        if (!response.ok) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<WorkspaceView>();
+      },
+      executeSourceAction: async (_original, sourceWorkspaceId, body) => {
+        // The source needs the request, not the caller's cookies.
+        const forwarded = new Request(new URL('/internal/space-action', request.url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const response = await room(env, sourceWorkspaceId).fetch(forwarded);
+        if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<{ ok: true; revision: string; duplicate: boolean } | { ok: false; code: string; message: string }>();
+      },
+    }, { spaceId });
+  }
+  const spaceExport = spaceExportRoute.exec(path);
+  if (method === 'GET' && spaceExport?.[1]) {
+    const spaceId = spaceExport[1];
+    await limit(env, `space-export:${session.record.actorId}`, 30, 60_000);
+    return handleSpaceExport(request, {
+      authenticate: async () => ({ actorId: session.record.actorId }),
+      workspaceView: async (original, workspaceId) => {
+        const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
+        if (response.status === 401 || response.status === 403 || response.status === 404) return undefined;
+        if (!response.ok) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<WorkspaceView>();
+      },
+      exportSourceProjection: async (_original, sourceWorkspaceId, body) => {
+        const forwarded = new Request(new URL('/internal/space-export', request.url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const response = await room(env, sourceWorkspaceId).fetch(forwarded);
+        if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json();
+      },
+    }, { spaceId });
+  }
+  const spaceRecap = spaceRecapRoute.exec(path);
+  if (method === 'GET' && spaceRecap?.[1]) {
+    const spaceId = spaceRecap[1];
+    await limit(env, `space-recap:${session.record.actorId}`, 30, 60_000);
+    return handleSpaceRecap(request, {
+      authenticate: async () => ({ actorId: session.record.actorId }),
+      workspaceView: async (original, workspaceId) => {
+        const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
+        if (response.status === 401 || response.status === 403 || response.status === 404) return undefined;
+        if (!response.ok) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<WorkspaceView>();
+      },
+      listSourceGrants: async (original, sourceWorkspaceId, body) => {
+        const forwarded = new Request(new URL('/internal/space-grants', original.url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const response = await room(env, sourceWorkspaceId).fetch(forwarded);
+        if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        const answer = await response.json<{ ok: boolean; grants?: { liveDataRevision?: number }[] }>();
+        if (!answer.ok || !answer.grants) return [];
+        return answer.grants.map(entry => {
+          const { liveDataRevision, ...connection } = entry as { liveDataRevision?: number } & Record<string, unknown>;
+          return { connection: connection as never, ...(liveDataRevision === undefined ? {} : { liveDataRevision }) };
+        });
+      },
+    }, { spaceId });
   }
   if (method === 'POST' && path === '/api/session') return sessionView(request, env);
   if (method === 'POST' && path === '/api/workspaces') {

@@ -1,3 +1,6 @@
+/** How many activity entries a table keeps. One owner, so no command trims to a different depth. */
+export const TABLE_ACTIVITY_LIMIT = 100;
+
 import { z } from 'zod';
 import { DomainError, type ActorContext } from '../shared/contracts';
 import type { Permission } from '../shared/permissions';

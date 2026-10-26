@@ -1,0 +1,9 @@
+- เพิ่ม checkpoint ของงาน F080 (custom tools + joined tables): feature doc, index, progress, acceptance registry และ decision log (docs-only slice)
+- เพิ่ม contract ของ tool package และ bridge ระหว่าง host กับ sandboxed frame (`shared/tool-package.ts`, `tool-protocol.ts`) พร้อม negative tests: pinned import allowlist, import graph/cycle/depth, declared write targets, reader compatibility
+- เพิ่ม compile adapter (Sucrase, pure JS จึงรันได้ทั้ง browser/Node/Worker) + host ที่ mount generated UI ใน iframe `sandbox="allow-scripts"` พร้อม CSP ปิด และ typed nonce bridge; frame อ่านคุกกี้/สตอเรจ/เน็ตเวิร์กไม่ได้ (พิสูจน์จาก http origin + คุกกี้จริงใน CI)
+- เพิ่ม isolated server-behaviour runner (workerd `loader.load` + `env:{}`/`globalOutbound:null`) และ host-side write-scope validation ที่ปฏิเสธผลนอก declared writes ก่อนถึง commit
+- เพิ่ม authoring pipeline เดียวสำหรับ AI และคน (validate→compile→isolated trial→activate) พร้อม budget ที่บังคับก่อน dispatch และ provenance แยก requester/generator/reviewer
+- เพิ่ม collaboration space แบบ additive บน workspace state (ไม่มี migration) + คำสั่ง space ผ่าน command path เดิม และ connection protocol ที่ให้ grant อยู่ที่ต้นทาง, revoke มี effective point และคำขอ in-flight ถูกปฏิเสธ
+- เพิ่ม export contract (CSV/HTML) ที่มีสิทธิ์แยก, ตรง revision เดียวกัน, กันสูตร/HTML และแยกไฟล์ต่อ collection; ยังไม่มี route
+- หมายเหตุ: authority integration ของ behaviour, transport ข้าม Room, UI และ hosted/live-AI/human acceptance ยังไม่ทำ
+- เพิ่มทางอ่าน projection ข้าม workspace (Worker ไกล่เกลี่ย + internal route ของ Room ต้นทาง ไม่มี secret ใหม่) โดย grant ผูกกับ workspace id ของเจ้าของห้อง ไม่ใช่ชื่อห้อง และมี rate limit ต่อผู้ใช้; ยังคืนเฉพาะ descriptor ของ grant ไม่มีแถวข้อมูล และยังไม่มี two-workspace test

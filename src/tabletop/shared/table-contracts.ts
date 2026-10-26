@@ -3,6 +3,8 @@ import type { DomainBase } from './contracts';
 import type { GenerativeCanvas, GenerativeExpression } from './generative-contracts';
 import type { RollSpec, TablePendingRoll } from './roll';
 import type { ComputeRunRecord, TableComputeProgram } from './table-compute';
+import type { CollaborationSpace } from './collaboration-space';
+import type { ToolProjectionGrant } from './tool-connection';
 
 /** Data-only program with a bounded arithmetic AST and optional closed canvas descriptors. */
 export type TableValue = string | number | boolean | null | string[];
@@ -120,4 +122,15 @@ export interface TableState extends DomainBase {
   pendingRolls?: TablePendingRoll[];
   actionRevision: number;
   activity: { actorId: string; action: string; at: number }[];
+  /**
+   * F080: the collaboration space this workspace hosts, when it hosts one. Optional and absent in
+   * older workspaces, so reading stored state never fails because the field was not there — the
+   * same additive shape notes and card metadata used.
+   */
+  collaborationSpace?: CollaborationSpace;
+  /**
+   * F080: projections this table has granted to a collaboration space, recorded at the source.
+   * The destination only holds a reference, so revoking here is enough to close the connection.
+   */
+  spaceGrants?: ToolProjectionGrant[];
 }
