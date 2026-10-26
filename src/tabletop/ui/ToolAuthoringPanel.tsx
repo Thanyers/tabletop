@@ -63,14 +63,25 @@ export function ToolAuthoringPanel(props: ToolAuthoringPanelProps): React.ReactE
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const tablistRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * EDIT-01: after an activation the panel continues on that version. The next edit is authored
+   * against the hash that was just activated, and its version is the next one, so a person can keep
+   * working on top of what the table already runs instead of regenerating from the original source.
+   */
+  const [published, setPublished] = useState<{ version: number; hash: string } | undefined>();
+
+  const baseContentHash = published?.hash ?? props.initial.provenance.baseContentHash;
+
   /** Rebuild the definition the person is editing, keeping everything except the source text. */
   const draft = useMemo<ToolPackageDefinition>(() => ({
     ...props.initial,
+    version: published ? published.version + 1 : props.initial.version,
+    ...(baseContentHash ? { provenance: { ...props.initial.provenance, baseContentHash } } : {}),
     files: props.initial.files.map(file => ({
       ...file,
       text: files.find(edited => edited.path === file.path)?.text ?? file.text,
     })),
-  }), [files, props.initial]);
+  }), [files, props.initial, published, baseContentHash]);
 
   const active = files.find(file => file.path === activePath) ?? files[0];
 
@@ -101,13 +112,16 @@ export function ToolAuthoringPanel(props: ToolAuthoringPanelProps): React.ReactE
     if (!check()) return;
     setBusy(true);
     try {
-      const activation = await props.author(draft, props.initial.provenance.baseContentHash);
+      const activation = await props.author(draft, baseContentHash);
       setResult(activation);
-      if (activation.ok) props.onActivated?.(activation.definition, activation.contentHash);
+      if (activation.ok) {
+        props.onActivated?.(activation.definition, activation.contentHash);
+        setPublished({ version: activation.record.version ?? activation.definition.version, hash: activation.contentHash });
+      }
     } finally {
       setBusy(false);
     }
-  }, [check, draft, props]);
+  }, [baseContentHash, check, draft, props]);
 
   const status = busy
     ? 'กำลังตรวจและเปิดใช้…'
