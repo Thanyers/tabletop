@@ -33,7 +33,25 @@ const DATA_NOUN = /\b(?:records?|rows?|entries|data|mock\w*|samples?)\b|รา�
 /** Something the builder can act on; a change verb without one is conversation, not a rule edit. */
 const TOPIC = /\b(?:tables?|collections?|columns?|fields?|records?|rows?|data|cards?|charts?|forms?|buttons?|views?|ui|dashboards?)\b|ตาราง|คอลัมน์|ฟิลด์|ข้อมูล|รายการ|การ์ด|กราฟ|ปุ่ม|ฟอร์ม|หน้าจอ/iu;
 /** Changing one existing record: this belongs to an action, not to the builder. */
+/** F082: words about the rules themselves; with a change verb (or "new/instead") they ask the builder, not an action. */
+const RULE_NOUN = /\b(?:rules?|conditions?|formulas?|calculat\w*)\b|กฎ|เงื่อนไข|สูตร|คำนวณ/iu;
+const RULE_CHANGE = /\b(?:instead|new)\b|ใหม่|แทน/iu;
 const DATA_ACTION = /\b(?:mark|set|move|assign|approve|reject|confirm|delete|remove)\b[^.!?]{0,60}\b(?:status|paid|unpaid|done|to|from|row|record)\b|\b(?:change|update|edit)\b[^.!?]{0,60}\b(?:status|paid|unpaid|row|record|cell)\b|ทำเครื่องหมาย|จ่ายแล้ว|เปลี่ยนสถานะ|ยืนยัน|อนุมัติ|ปฏิเสธ/iu;
+
+const DATA_ACTION_ANYWHERE = new RegExp(DATA_ACTION.source, 'giu');
+
+/**
+ * F082: a request to change the table's own structure or rules, even when it names a record action inside it
+ * ("add a todo table with a button to mark it done"). Action phrases are removed first so the "ทำ" in
+ * "ทำเครื่องหมาย" no longer reads as a change verb.
+ */
+function asksTheBuilder(prompt: string): boolean {
+  if (STRUCTURE.test(prompt)) return true;
+  const rest = prompt.replace(DATA_ACTION_ANYWHERE, ' ');
+  if (UI_NOUN.test(rest) && CHANGE_VERB.test(rest)) return true;
+  // A bare "Change this rule" names no rule or table yet, so it stays a conversation until one is picked.
+  return RULE_NOUN.test(rest) && TOPIC.test(rest) && (CHANGE_VERB.test(rest) || RULE_CHANGE.test(rest));
+}
 
 export function classifyChatIntent(input: ChatIntentInput): ChatIntent {
   const prompt = input.prompt.trim();
@@ -42,6 +60,7 @@ export function classifyChatIntent(input: ChatIntentInput): ChatIntent {
   if (GREETING.test(prompt)) return 'ask';
   // A question never becomes a draft, even when it mentions a form or a table.
   if (QUESTION.test(prompt)) return 'ask';
+  if (asksTheBuilder(prompt)) return fallback;
   if (DATA_ACTION.test(prompt)) return 'act';
 
   if (CHANGE_VERB.test(prompt)) {

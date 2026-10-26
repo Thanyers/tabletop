@@ -37,6 +37,17 @@ describe('classifyChatIntent', () => {
     expect(intent('Mark this record as done')).toBe('act');
   });
 
+  // F082: real messages from the bill-split trial that named a record action inside a rule request.
+  it('keeps a rule or structure request as an edit even when it names a record action', () => {
+    expect(intent('เพิ่มตาราง todo list สิ่งที่ต้องทำหลังทริป พร้อมฟอร์มเพิ่มงาน ปุ่มทำเครื่องหมายว่าเสร็จ และการ์ดนับงานที่เหลือ')).toBe('edit');
+    expect(intent('ปรับกฎของตาราง tasks ให้ช่อง done ทำเครื่องหมายและเอาออกได้ในกฎเดียว')).toBe('edit');
+    expect(intent('ใบเสร็จหมวดทัวร์เรือหารแค่ 4 คน รายการที่ทำเครื่องหมายว่าโอนแล้วให้คงไว้ แล้วคำนวณยอดโอนใหม่')).toBe('edit');
+    expect(intent('Add a button to mark a task as done')).toBe('edit');
+    // Still an action: no rule or structure is being asked for.
+    expect(intent('กดปุ่มทำเครื่องหมายว่าจ่ายแล้วให้แถวนี้')).toBe('act');
+    expect(intent('ทำเครื่องหมายว่าโอนแล้ว ฟ้า ถึง แพร')).toBe('act');
+  });
+
   it('uses an existing create action for plain data requests', () => {
     expect(intent('Add a record', { hasCreateAction: true })).toBe('act');
     expect(intent('Add a record to this table', { hasCreateAction: true })).toBe('act');
