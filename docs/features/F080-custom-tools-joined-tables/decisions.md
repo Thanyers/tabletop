@@ -317,3 +317,20 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **การตัดสินใจของผู้ใช้:** ให้ AI ลองสตาร์ท dev server ในเครื่อง (ไม่ใช่ production) และขับ browser เอง แล้วรายงานหลักฐานจริง
 
 **ขอบเขต:** dev-only; ห้าม deploy, ห้ามแตะ production data/config; ถ้าติด auth flow ให้รายงานตรง ๆ ว่า UNVERIFIED
+
+## D-030 — `/s/:id` เสิร์ฟแอปได้เมื่อ build เสร็จ และการเดินดูต้องผ่าน Google sign-in
+
+**สิ่งที่ทดลอง (2026-10-26, dev-only):**
+1. `npm run dev:cloudflare` บนพอร์ต 8787 **ล้มเหลว** เพราะมี server อื่นถือพอร์ตอยู่แล้ว (ไม่ใช่ของ session นี้ — ไม่ได้ไปฆ่า)
+2. สตาร์ท wrangler บนพอร์ต **8788** พร้อม `dist` ที่ build แล้ว ผลคือ:
+   - `/healthz` → 200 json
+   - `/` → **200 text/html**
+   - `/t/<uuid>` → **200 text/html**
+   - `/s/<uuid>` → **200 text/html**
+3. เปิดหน้าแรกในเบราว์เซอร์จริง (UI Lab) → ได้ landing page พร้อมปุ่ม **"Continue with Google"**
+
+**แก้ D-025:** ข้อสรุปเดิมที่ว่า path ของแอป "อาจ 404" ไม่ถูกต้องสำหรับ build ปกติ — เมื่อ `dist` มี `index.html` asset layer ตอบ SPA ให้ทุก client route รวม `/s/:id` (404 ที่เห็นก่อนหน้าเป็น server เก่าที่ค้างอยู่บนพอร์ต 8787)
+
+**ข้อจำกัดที่ยังเหลือ:** แอปที่ลงชื่อเข้าใช้ต้องผ่าน **Google OAuth** ซึ่งไม่มีในเครื่องนี้ ⇒ ผมเดินดูหน้า `/s/:id` แบบมี session ไม่ได้ จึงยังไม่พิสูจน์ VISUAL-01/G1/G2 ในระดับ UI จริง
+
+**ไม่มีการกระทำกับ production:** ไม่มี deploy, ไม่แตะ production data/config; ปิด dev server ที่สตาร์ทเองแล้ว
