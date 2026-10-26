@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+## 9.1.5 — 2026-10-26
+
+PATCH: Align the English README with the published café, physics and adventure cases and their existing GIFs. Documentation-only release from production 9.1.4 to exclude unrelated dev work; app, homepage, film, assets, backend, schema and configuration unchanged. Rollback target 9.1.4.
+
+- Align the English README with the published café sales, physics learning and adventure play cases, using the same three hero GIFs and static posters. Preserve the origin story, current-capability/beta guidance and license; homepage, film and media bytes are unchanged.
+
 ## 9.1.4 — 2026-10-26
 
 PATCH: Rotate three prompt-first hero GIF cases to show work, learning, and play. This scope-only release starts from production 9.1.3 to honor the user's no-other-changes instruction; other homepage content, README, accepted learning animation, film, backend, schema, bindings and credentials are unchanged. Rollback target 9.1.3.

@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — round 10 three-case hero / [PR #306](https://github.com/Thanyers/tabletop/pull/306); previous public content 9.1.3 / 4748689, deployment incident [#291](https://github.com/Thanyers/tabletop/issues/291) remains separate |
+| สถานะ | `review` — round 11 README alignment / [PR #348](https://github.com/Thanyers/tabletop/pull/348); published hero remains 9.1.4 / d09d2f2 |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.3 — homepage/README narrative order and copy cleanup; accepted film/media unchanged |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T5 |
+| เวอร์ชัน | 9.1.4 — three-case hero rotation only; README, film and other page content unchanged |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T6 |
 
 ## ทำไม
 
@@ -32,6 +32,10 @@
 | F077-T2 | Apply English README and improve homepage visual story | Hero shows a useful evolving table; physical additions visibly answer a person's need; no README navigation; language/auth/reduced-motion behavior retained |
 
 ## การตัดสินใจ
+
+### Round 11 / F077-T6 — README parity with the published cases
+
+26 October 2026: align the English root README with the published café sales → physics learning → adventure play sequence. Reuse the exact EN hero GIFs and matching reduced-motion posters, with one short explanation per case. Retain the hammer/chair concept, supported-capability qualifications, beta/start guidance and exact AGPL section. Replace the older disconnected invoice/learning/Encounter image assortment in README; do not modify homepage source, media bytes, film, backend or deployment configuration. The default-branch README must match the publication; isolate any required documentation release from unrelated dev architecture work.
 
 ### Round 10 / F077-T5 — three hero GIF cases
 
