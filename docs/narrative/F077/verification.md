@@ -2,10 +2,13 @@
 
 26 October 2026 · [PR #348](https://github.com/Thanyers/tabletop/pull/348)
 
+- Published on the default branch through [release #351](https://github.com/Thanyers/tabletop/pull/351), main `0ce11c8`. [Exact-head full CI](https://github.com/Thanyers/tabletop/actions/runs/40294440122) passed all three browser suites and fast checks on `13a781d`; main validation reused its identical Git tree. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/40295626873) completed Worker/Container settings, smoke and GitHub Release publication. Production readback at 15:59 Asia/Bangkok: 9.1.5 / 0ce11c8, built_at 2026-10-26T08:56:08Z; health/readiness 200. Staging snapshot remains 0.0.0-dev / ec3a65d at that read, not a claim about the later closeout.
+- Actual GitHub main rendering shows the café/physics/adventure headings in order and all three GIFs loaded. Main README blob `68b48a5ee8ce1f915c40e91d36188cff913ae407` equals the approved local file. Application, homepage, film, media, backend, dependencies and deployment source have no diff from production 9.1.4; only documentation and release metadata changed. Release Notes HTML generated locally (33 releases, latest 9.1.5); publishing to the existing private Claude artifact remains unavailable to this agent.
+
 - Scope: English root README plus owning task records. The document follows café sales → force-and-motion learning → shared adventure, using the exact EN GIFs/posters already published in the homepage hero. Each case describes a need, an added tool and continued use of the same table.
 - Retained exactly: definition and physical-tool story; current-capability bullet text; start/beta guidance; AGPL section. Removed the older invoice example and separate learning/Encounter illustration assortment from README. App, homepage, film, media source and generated asset bytes unchanged.
-- Node22.23.2 documentation checks: all 13 local references resolve; three GIFs in the intended order with three matching reduced-motion posters. GitHub Markdown API rendered all three picture/GIF/reduced-motion sources. Public scan has zero findings and diff check passes. No new runtime tests authored for this documentation-only change; hosted required validation remains pending.
-- Default-branch publication and actual GitHub rendered readback remain pending. Any required documentation release must exclude unrelated dev runtime work, following the same narrow publication boundary as round 10.
+- Node22.23.2 documentation checks: all 13 local references resolve; three GIFs in the intended order with three matching reduced-motion posters. GitHub Markdown API rendered all three picture/GIF/reduced-motion sources. Public scan has zero findings and diff check passes. No new runtime tests authored for this documentation-only change; hosted exact-head full validation passed as recorded above.
+- The documentation release excluded unrelated dev runtime work, following the same narrow publication boundary as round 10. Default-branch publication and GitHub rendered readback completed as recorded above.
 
 ## Revision 10 verification (historical)
 

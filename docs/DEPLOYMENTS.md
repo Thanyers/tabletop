@@ -1,18 +1,25 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **26 ตุลาคม 2569 เวลา 08:57 น. (Asia/Bangkok)**: production รายงาน **9.1.4 / d09d2f2**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40256468104) ผ่านครบ รวม Container settings, smoke และ GitHub Release publication. Health/readiness/capabilities ตอบ 200 และ GIF ทั้งสามที่เสิร์ฟมี hash ตรงกับ source. Staging snapshot ที่อ่านได้คือ **0.0.0-dev / 8478c39**; ไม่ใช่คำยืนยันว่า closeout บน dev รุ่นถัดไป deploy แล้ว. Incident #291 ปิดหลัง replacement release นี้สำเร็จ; ผลล้มเหลวของ 9.1.3 ยังคงเป็นประวัติเดิม
+ตรวจ `/version` ออนไลน์ล่าสุด **26 ตุลาคม 2569 เวลา 15:59 น. (Asia/Bangkok)**: production รายงาน **9.1.5 / 0ce11c8**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40295626873) ผ่านครบ รวม Container settings, smoke และ GitHub Release publication. Health/readiness ตอบ 200. รุ่นนี้จัด README ให้ตรงกับ Hero สามเคส โดย app/homepage/film/media/backend/configuration ไม่เปลี่ยนจาก 9.1.4. Staging snapshot **0.0.0-dev / ec3a65d** เป็นการอ่าน ณ เวลานั้น ไม่ใช่ผล deploy ของ closeout รุ่นถัดไป
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [d09d2f2](https://github.com/Thanyers/tabletop/commit/d09d2f2dc28c10a6ac2f558e3ecba65aeb3b3f21) — PR #309 | `8478c39` — observed snapshot |
-| Release | v9.1.4 / 9.1.4 — deploy/smoke passed | dev / 0.0.0-dev |
+| Source | [0ce11c8](https://github.com/Thanyers/tabletop/commit/0ce11c89352195d9b507ab0cd84e11e6acd050c3) — PR #351 | `ec3a65d` — observed snapshot |
+| Release | v9.1.5 / 9.1.5 — deploy/smoke passed | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.1.5 — README parity with published hero cases (26 October 2026)
+
+- [Release PR #351](https://github.com/Thanyers/tabletop/pull/351), main `0ce11c8`; [exact-head full CI](https://github.com/Thanyers/tabletop/actions/runs/40294440122) passed all three browser suites and fast checks. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/40295626873) passed Container settings, smoke and GitHub Release publication. Production readback: 9.1.5 / 0ce11c8, built_at 2026-10-26T08:56:08Z; health/readiness 200.
+- Default-branch README now presents café sales → physics learning → adventure play using the same EN hero GIFs/posters. Origin, capability/beta/start guidance and AGPL text preserved; all 13 local references resolve. Actual GitHub rendering and README blob checked against the approved source. [F077 evidence](narrative/F077/verification.md).
+- This scope-only documentation release starts from verified production 9.1.4 and excludes unrelated dev runtime work. App, homepage, film, media, backend, dependencies and deployment configuration have no diff from that baseline. Rollback reference 9.1.4; no live AI or production data mutation used for validation.
+- Release Notes HTML generated from the main-equivalent changelog (33 releases, latest 9.1.5). The existing private Claude artifact cannot be published with this agent's tools; the ignored file is the handoff without a replacement public URL.
 
 ## Release 9.1.4 — scope-only three-case hero (26 October 2026)
 
@@ -283,7 +290,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 
 ## ประวัติ release ที่เกี่ยวข้อง
 
-| Release | v9.1.4 / 9.1.4 — deploy/smoke passed | dev / 0.0.0-dev |
+| Release | v9.1.5 / 9.1.5 — deploy/smoke passed | dev / 0.0.0-dev |
 | --- | --- | --- |
 | 21 ต.ค. `v3.4.0` / `442e074` | F031 thinking/caps/compact guide/180s, F030 corpus rounds | [PR #102](https://github.com/Thanyers/tabletop/pull/102), [run 39629734074](https://github.com/Thanyers/tabletop/actions/runs/39629734074) |
 | 21 ต.ค. `v3.3.2` / `957074d` | F025 refresh race, F026 clarify language, F027 reject hint, F028 minimal fallback, F029 corpus | [PR #96](https://github.com/Thanyers/tabletop/pull/96), [run 39611292996](https://github.com/Thanyers/tabletop/actions/runs/39611292996), [PR #97](https://github.com/Thanyers/tabletop/pull/97) |
