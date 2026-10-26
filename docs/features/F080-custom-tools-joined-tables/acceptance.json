@@ -101,7 +101,7 @@
       "requirement": "G1",
       "slice": "F080-T1A",
       "title": "custom server algorithm สร้าง proposed state ที่ valid แล้ว authority commit; output นอก scope/invalid = zero write",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "environment": "local unit (plans) + Cloudflare tier (gated commit e2e)",
       "sha": "0264fa4",
       "node": "v22.23.2",
