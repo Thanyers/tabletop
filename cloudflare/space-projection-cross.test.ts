@@ -11,6 +11,7 @@ import { equipmentChange, tableScenarioSources } from '../src/tabletop/testing/t
 import { spaceProjectionUrl } from '../src/tabletop/shared/space-projection-url.js';
 import { planToolBehaviorAction } from '../src/tabletop/shared/tool-action-proposal.js';
 import { compileToolPackage } from '../src/tabletop/runtime/tools/compile.js';
+import { buildToolBehaviorRequest } from '../src/tabletop/shared/tool-behavior-request.js';
 import { validateToolBehaviorOutput } from '../src/tabletop/shared/tool-behavior.js';
 import { createCloudflareToolBehaviorRunner } from './tool-behavior-runner.js';
 import { env as cloudflareEnv } from 'cloudflare:workers';
@@ -1227,23 +1228,23 @@ describe('a real behaviour proposes the action the authority commits', () => {
     expect(compiled.ok, JSON.stringify(compiled.ok ? null : compiled.problems)).toBe(true);
     if (!compiled.ok) return;
 
-    // Build the request the contract expects from the module this package actually compiled to.
-    const request = {
-      packageId: definition.packageId,
-      packageVersion: definition.version,
-      contentHash: 'c'.repeat(64),
-      runtimeProfile: definition.runtimeProfile,
-      moduleSource: compiled.compiled.behaviorModule,
-      entry: 'reserve',
+    // The production builder is what turns the compiled module into a request; using it here means the
+    // e2e would fail if that builder ever produced a shape the runner rejects.
+    const built = buildToolBehaviorRequest({
+      package: definition as never,
+      compiled: compiled.compiled,
+      behaviorId: 'reserve',
       inputs: {},
-      declaredWrites: [],
       resourceSchema: {},
       expected: { instanceRevision: 1, grantVersion: 1 },
-    };
-    const result = await createCloudflareToolBehaviorRunner({ loader: cloudflareEnv.COMPUTE_LOADER }).run(request as never);
+    });
+    expect(built.ok, JSON.stringify(built)).toBe(true);
+    if (!built.ok) return;
+    const request = built.request;
+    const result = await createCloudflareToolBehaviorRunner({ loader: cloudflareEnv.COMPUTE_LOADER }).run(request);
     expect(result.proposal).toEqual({ actionId: 'borrow', inputs: { item: 'camera' } });
 
-    const validation = validateToolBehaviorOutput(result, request as never);
+    const validation = validateToolBehaviorOutput(result, request);
     expect(validation.ok, JSON.stringify(validation.ok ? null : validation.problems)).toBe(true);
     if (!validation.ok) return;
 
@@ -1278,20 +1279,19 @@ describe('a real behaviour proposes the action the authority commits', () => {
     const compiled = compileToolPackage(definition as never, () => 'c'.repeat(64));
     expect(compiled.ok).toBe(true);
     if (!compiled.ok) return;
-    const request = {
-      packageId: definition.packageId,
-      packageVersion: definition.version,
-      contentHash: 'c'.repeat(64),
-      runtimeProfile: definition.runtimeProfile,
-      moduleSource: compiled.compiled.behaviorModule,
-      entry: 'reserve',
+    const built = buildToolBehaviorRequest({
+      package: definition as never,
+      compiled: compiled.compiled,
+      behaviorId: 'reserve',
       inputs: {},
-      declaredWrites: [],
       resourceSchema: {},
       expected: { instanceRevision: 1, grantVersion: 1 },
-    };
-    const result = await createCloudflareToolBehaviorRunner({ loader: cloudflareEnv.COMPUTE_LOADER }).run(request as never);
-    const validation = validateToolBehaviorOutput(result, request as never);
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const request = built.request;
+    const result = await createCloudflareToolBehaviorRunner({ loader: cloudflareEnv.COMPUTE_LOADER }).run(request);
+    const validation = validateToolBehaviorOutput(result, request);
     expect(validation.ok).toBe(true);
     if (!validation.ok) return;
     const planned = planToolBehaviorAction({
