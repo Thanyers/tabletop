@@ -1,14 +1,14 @@
 import { RoleSettings } from './ui/RoleSettings';
 import { viewerCan } from './shared/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Search, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Search, Send, ShieldCheck, Table2, Users, X , FilterX } from 'lucide-react';
 import { NODE_TABLE_MEMBER_SEATS, TABLE_MEMBER_SEATS, tableMemberSeatLimit, type CaseKind, type Seat, type SessionView, type WorkspaceView } from './shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
 import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
 import { relativeTime } from './ui/relative-time';
-import { NO_TABLE_FILTER, filterTables, isFiltered, listDate, type TableListFilter, type TableOwnership, type TableRecency, type TableSort } from './ui/table-list-filter';
+import { NO_TABLE_FILTER, filterTables, listDate, type TableListFilter, type TableOwnership, type TableRecency, type TableSort } from './ui/table-list-filter';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, isInviteLink, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
@@ -885,6 +885,9 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
   const hasTimes = session.workspaces.some((workspace) => workspace.updatedAt !== undefined);
   // Clearing the filters keeps the sort, which is a preference rather than a filter.
   const clearFilters = () => setFilter((current) => ({ ...NO_TABLE_FILTER, sort: current.sort }));
+  // The filter icon clears the dropdowns only; the search box has its own clear button.
+  const filtersActive = filter.kind !== 'all' || filter.ownership !== 'all' || filter.recency !== 'any';
+  const clearDropdowns = () => setFilter((current) => ({ ...NO_TABLE_FILTER, sort: current.sort, query: current.query }));
   const changeSort = (sort: TableSort) => { setFilter((current) => ({ ...current, sort })); saveTableSort(sort); };
   return <main className="tt-chooser"><ChooserHeader session={session} account={account} busy={busy} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} onHome={onHome} />
     <NoticeBanner notice={notice} onDismiss={onDismissNotice} />
@@ -898,7 +901,7 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
         </div>
         {/* One toolbar: search first, then each filter as a pill that holds its label and value (F053). */}
         <div className="tt-table-toolbar">
-          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>
+          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} />{query && <button type="button" className="tt-table-search__clear" aria-label="Clear search" title="Clear search" onClick={(event) => { setQuery(''); event.currentTarget.parentElement?.querySelector('input')?.focus(); }}><X size={14} aria-hidden="true" /></button>}</label>
         {session.workspaces.length > 1 && <div className="tt-table-filters" role="group" aria-label="Filter tables">
           <label><span>Sort</span><select value={filter.sort} onChange={(event) => changeSort(event.target.value as TableSort)}>
             <option value="updated">Last updated</option>
@@ -919,7 +922,7 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
             <option value="week">Last 7 days</option>
             <option value="month">Last 30 days</option>
           </select></label>}
-          {isFiltered(filter) && <button type="button" className="tt-table-filters__clear" onClick={clearFilters}><X size={13} aria-hidden="true" />Clear</button>}
+          <button type="button" className="tt-table-filters__reset" aria-label="Clear filters" title={filtersActive ? 'Clear filters' : 'No filters to clear'} disabled={!filtersActive} onClick={clearDropdowns}><FilterX size={16} aria-hidden="true" /></button>
         </div>}
         </div>
         {visibleWorkspaces.map((workspace) => {

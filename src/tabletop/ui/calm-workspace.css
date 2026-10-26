@@ -489,3 +489,11 @@
 @media (max-width: 520px) {
   .tt-chooser .tt-table-search { flex-basis: 100%; }
 }
+
+/* /tables: the search box clears with its own ×; the filter icon clears the dropdowns (always in place, dimmed when there is nothing to clear). */
+.tt-chooser .tt-table-search input::-webkit-search-cancel-button { display: none; }
+.tt-chooser .tt-table-search__clear { display: inline-grid; flex: none; place-items: center; width: 24px; height: 24px; margin-right: -4px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tt-muted); cursor: pointer; }
+.tt-chooser .tt-table-search__clear:hover { background: var(--tt-canvas); color: var(--tt-ink); }
+.tt-chooser .tt-table-filters__reset { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--tt-line); border-radius: 9px; background: var(--tt-paper, #fff); color: var(--tt-moss, #356e5d); cursor: pointer; }
+.tt-chooser .tt-table-filters__reset:hover:not(:disabled) { border-color: var(--tt-moss, #356e5d); background: var(--tt-green-2, #e8f0e4); }
+.tt-chooser .tt-table-filters__reset:disabled { color: var(--tt-muted); opacity: .45; cursor: default; }
