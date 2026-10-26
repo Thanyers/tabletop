@@ -5,6 +5,12 @@
 
 ## Lessons
 
+### 2026-10-26 — run บน dev ขึ้น `cancelled` เป็นเรื่องปกติ ไม่ใช่ failure
+- **What happened:** หลาย commit บน `dev` มี run ที่จบด้วย `cancelled` (เช่น `ad8930a`, `a400496`) ขณะที่ staging รายงาน sha เก่ากว่า ทำให้ดูเหมือน CI/deploy ค้าง
+- **Root cause:** workflow ใช้ concurrency กลุ่มเดียว (CD002: run บน `dev` อาจกำลัง deploy staging รวม D1 migration) ⇒ merge ใหม่ทำให้ run เก่าถูกยกเลิก และ staging deploy ผูกกับ run ที่ชนะเท่านั้น
+- **Correct behavior:** อ่านผลของ **commit ที่เป็น head** และดู run ล่าสุด ไม่ตีความ `cancelled` เป็นแดง; ถ้าจะยืนยัน deploy ให้เทียบ `/version` ของ staging กับ sha ของ dev แล้วรอ run ของ head จบ (rerun ด้วย SHA เดิมได้เมื่อจำเป็น)
+
+
 ### 2026-10-26 — dev CI แดงเพราะเทสต์เบราว์เซอร์เดิม flaky (ไม่ใช่ F080)
 - **What happened:** run `40261590989` (commit `69ea166`, merge ของ F080-G2-02) จบด้วย `failure`; job `Account multiplayer and AI browser acceptance on Workers` ล้มที่ step 8 ด้วย `ExpectError: expect(locator).toHaveAttribute(expected) failed` สองครั้งติด (ล้มแล้ว retry ก็ล้ม) จึงทำให้ `local-validation` fail ตาม
 - **Root cause:** เป็น flake ของ suite เบราว์เซอร์เดิม (account multiplayer / AI บน Workers) ไม่ใช่ไฟล์ที่ F080 เพิ่ม — commit ถัดไปบน `dev` (`4db0727`) มีโค้ดชุดเดียวกันและผ่าน
