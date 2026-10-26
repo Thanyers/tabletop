@@ -118,7 +118,10 @@ export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
     id, title: text, description: text, roles: z.array(z.enum(['owner', 'participant'])).min(1).max(2),
     parameters: z.array(parameterSchema).max(TABLE_LIMITS.parametersPerAction),
     conditions: z.array(z.strictObject({ left: operand, op: z.enum(['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'contains']), right: operand, message: text })).max(TABLE_LIMITS.conditionsPerAction),
-    effects: z.array(z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand })).max(TABLE_LIMITS.effectsPerAction),
+    effects: z.array(z.union([
+      z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand }),
+      z.strictObject({ record: id, field: id, op: z.literal('toggle') }),
+    ])).max(TABLE_LIMITS.effectsPerAction),
     creates: z.array(z.strictObject({ collection: id, values: z.record(id, operand) })).max(MAX_TABLE_ACTION_CREATES).optional(),
     requireTurn: z.boolean(), advanceTurn: z.boolean(),
   })).max(TABLE_LIMITS.actions),
@@ -435,7 +438,9 @@ export function checkProgram(program: TableProgram, sources?: readonly TableSour
       assert(c.op === 'eq' || c.op === 'neq' ? l === r || l === 'null' || r === 'null' : c.op === 'contains' ? l === 'list' && r === 'text' : l === 'number' && r === 'number', 'TABLE_SCHEMA', 'Condition operand types are incompatible.');
     }
     for (const e of action.effects) {
-      const f = resolveField(e.record, e.field), t = operandType(e.value);
+      const f = resolveField(e.record, e.field);
+      if (e.op === 'toggle') { assert(f.type === 'boolean', 'TABLE_SCHEMA', 'Only a yes/no field can be toggled.'); continue; }
+      const t = operandType(e.value);
       assert(e.op === 'add' ? f.type === 'number' && t === 'number' : t === f.type || t === 'null' && !f.required, 'TABLE_SCHEMA', 'Effect value does not match its field.');
     }
     for (const create of action.creates ?? []) {
@@ -1313,6 +1318,8 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const row = next.records[p.collection!].find(row => row.id === input.inputs[p.id])!;
     const key = `${p.collection}.${row.id}.${effect.field}`;
     assert(!touched.has(key), 'TABLE_INPUT', 'Two parameters point at the same effect target.'); touched.add(key);
+    // F081: a toggle flips the stored yes/no value; an unset value counts as no.
+    if (effect.op === 'toggle') { row.values[effect.field] = row.values[effect.field] !== true; continue; }
     const resolved = resolve(action, state, resolvedInputs, effect.value, ctx, evaluateExpression);
     if (effect.op === 'add') { const old = row.values[effect.field]; assert(typeof old === 'number' && typeof resolved === 'number', 'TABLE_VALUE', 'Only numeric values can be added.'); row.values[effect.field] = old + resolved; }
     else row.values[effect.field] = structuredClone(resolved);

@@ -26,7 +26,10 @@ export interface TableSource {
 export interface TableParameter { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'record' | 'roll'; collection?: string; min?: number; max?: number; choices?: string[]; roll?: RollSpec }
 export type TableOperand = { literal: TableValue } | { input: string } | { record: string; field: string } | { system: 'actor' | 'seat' | 'turn' } | { expression: GenerativeExpression };
 export interface TableCondition { left: TableOperand; op: 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains'; right: TableOperand; message: string }
-export interface TableEffect { record: string; field: string; op: 'set' | 'add'; value: TableOperand }
+/** F081: `toggle` flips a yes/no field and takes no value, so one action both checks and unchecks a box. */
+export type TableEffect =
+  | { record: string; field: string; op: 'set' | 'add'; value: TableOperand }
+  | { record: string; field: string; op: 'toggle' };
 export interface TableCreate { collection: string; values: Record<string, TableOperand> }
 export interface TableAction { id: string; title: string; description: string; roles: ('owner' | 'participant')[]; parameters: TableParameter[]; conditions: TableCondition[]; effects: TableEffect[]; creates?: TableCreate[]; requireTurn: boolean; advanceTurn: boolean }
 export interface TableInvariant { id: string; collection: string; fields: string[]; message: string }

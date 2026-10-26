@@ -106,7 +106,7 @@ PARAM{id,label,type:text|number|boolean|record|roll,collection?,min?,max?,choice
     conditions:[],effects:[{record:"target",field:"damage_taken",op:"add",value:{input:"damage"}}],
     requireTurn:false,advanceTurn:false}
 CONDITION{left:OPERAND,op:eq|neq|lt|lte|gt|gte|contains,right:OPERAND,message}
-EFFECT{record:PARAM_ID,field:FIELD_ID,op:set|add,value:OPERAND}
+EFFECT{record:PARAM_ID,field:FIELD_ID,op:set|add,value:OPERAND} | {record,field,op:"toggle"} (flips a boolean; prefer it for done/checked so one action checks and unchecks)
 CREATE{collection:COLLECTION_ID,values:{FIELD_ID:OPERAND}}
 INVARIANT{id,collection,fields:[FIELD_ID 1..6],message}
 EVIDENCE{sourceId:string<=100,quote:string<=500}

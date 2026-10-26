@@ -143,14 +143,14 @@ describe('bounded generic generative runtime', () => {
     for (let depth = 0; depth < 40; depth += 1) deep = { op: 'not', value: deep };
     expect(expressionWithinBounds(deep)).toBe(false);
     const tooDeep = structuredClone(cafeQueueChange);
-    tooDeep.program.actions[0].effects[0].value = { expression: deep };
+    Object.assign(tooDeep.program.actions[0].effects[0], { value: { expression: deep } });
     expect(() => parseBoundedTableChange(tooDeep)).toThrow('depth');
 
     const cyclic: { op: string; value?: unknown } = { op: 'not' };
     cyclic.value = cyclic;
     expect(expressionWithinBounds(cyclic)).toBe(false);
     const failedAction = structuredClone(loanAmortizationChange);
-    failedAction.program.actions[0].effects[0].value = { expression: { op: 'math', fn: 'divide', args: [{ op: 'literal', value: 1 }, { op: 'literal', value: 0 }] } };
+    Object.assign(failedAction.program.actions[0].effects[0], { value: { expression: { op: 'math', fn: 'divide', args: [{ op: 'literal', value: 1 }, { op: 'literal', value: 0 }] } } });
     const before = activate(failedAction);
     const snapshot = JSON.stringify(before);
     expect(() => run(before, 'recalculate', { loan: 'loan-1' })).toThrow('Division by zero');

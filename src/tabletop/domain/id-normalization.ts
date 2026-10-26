@@ -252,7 +252,7 @@ export function normalizeGeneratedTableChange(value: unknown): unknown {
       const fields = oldCollection ? context.fields.get(oldCollection) : undefined;
       if (fields) effect.field = renameIn(fields, effect.field);
       effect.record = renameIn(context.parameters.get(oldAction), effect.record);
-      rewriteOperand(effect.value, oldAction, context);
+      if ('value' in effect) rewriteOperand(effect.value, oldAction, context);
     }
     for (const create of objects(action.creates)) {
       const oldCollection = typeof create.collection === 'string' ? create.collection : '';
