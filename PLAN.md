@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F077-T7 | Clean README copy, add Thai/English navigation, align icon with homepage mark | `review` | Codex · `docs/F077-readme-languages` · PR #364 · README.md, README.th.md, public/favicon.svg and owning docs |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `review` | Codex · `docs/F077-readme-cases` · PR #348; README and owning tracking docs only; homepage/media unchanged |
 | F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `done` | Codex · PR #306 / release #309 · production 9.1.4 / d09d2f2; only hero area changed; README/film/rest unchanged |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
