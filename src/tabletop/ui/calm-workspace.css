@@ -437,9 +437,6 @@
 /* F053: table list search and last-updated time. */
 .tt-chooser .tt-existing-tables__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .tt-chooser .tt-existing-tables__head h2 { margin: 0; }
-.tt-chooser .tt-table-search { display: flex; flex: 0 1 240px; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid var(--tt-line); border-radius: 9px; color: var(--tt-muted); background: var(--tt-paper); }
-.tt-chooser .tt-table-search:focus-within { border-color: var(--tt-moss, #356e5d); }
-.tt-chooser .tt-table-search input { flex: 1; min-width: 0; border: 0; outline: 0; color: var(--tt-ink); background: transparent; font: inherit; font-size: 13px; }
 .tt-chooser .tt-existing-tables__times { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--tt-muted); font-size: 12px; line-height: 1.3; text-align: right; white-space: nowrap; }
 .tt-chooser .tt-existing-tables__updated { display: flex; flex-direction: column; align-items: flex-end; }
 .tt-chooser .tt-existing-tables__updated b { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; color: var(--tt-ink); font-weight: 600; }
@@ -472,9 +469,23 @@
 @media (max-width: 640px) { .tt-app .tt-canvas-selection-bar > span { display: none; } }
 
 /* /tables: filters under the search, and a visible date on each row (F053). */
-.tt-chooser .tt-table-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 6px; }
-.tt-chooser .tt-table-filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--tt-muted); font-size: 12px; }
-.tt-chooser .tt-table-filters select { min-height: 30px; padding: 0 8px; border: 1px solid var(--tt-line); border-radius: 8px; background: var(--tt-paper, #fff); color: var(--tt-ink); font: inherit; font-size: 13px; }
-.tt-chooser .tt-table-filters__clear { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--tt-moss, #356e5d); font: inherit; font-size: 13px; cursor: pointer; }
+
+/* /tables toolbar: search, then filter pills (label and value inside one frame), every control 34px tall.
+   Selects use Chromium's customizable select (F073), so the closed control is laid out here: centred text,
+   the app's chevron, no border of its own inside the pill. */
+.tt-chooser .tt-existing-tables__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tt-chooser .tt-table-filters__count { color: var(--tt-muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tt-chooser .tt-table-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 8px; }
+.tt-chooser .tt-table-search { display: flex; flex: 1 1 220px; align-items: center; gap: 6px; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--tt-line); border-radius: 9px; background: var(--tt-paper, #fff); color: var(--tt-muted); }
+.tt-chooser .tt-table-search:focus-within { border-color: var(--tt-moss, #356e5d); }
+.tt-chooser .tt-table-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; color: var(--tt-ink); background: transparent; font: inherit; font-size: 13px; }
+.tt-chooser .tt-table-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tt-chooser .tt-table-filters label { display: inline-flex; align-items: center; height: 34px; padding: 0 4px 0 10px; border: 1px solid var(--tt-line); border-radius: 9px; background: var(--tt-paper, #fff); color: var(--tt-muted); font-size: 12px; line-height: 1; cursor: pointer; }
+.tt-chooser .tt-table-filters label:focus-within { border-color: var(--tt-moss, #356e5d); }
+.tt-chooser .tt-table-filters select { display: inline-flex; align-items: center; height: 32px; min-height: 0; margin: 0; padding: 0 8px 0 6px; border: 0; border-radius: 7px; background: transparent; color: var(--tt-ink); font: inherit; font-size: 13px; font-weight: 600; line-height: 1; cursor: pointer; }
+.tt-chooser .tt-table-filters select:focus-visible { outline: 0; }
+.tt-chooser .tt-table-filters__clear { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--tt-moss, #356e5d); font: inherit; font-size: 13px; cursor: pointer; }
 .tt-chooser .tt-table-filters__clear:hover { background: var(--tt-canvas); }
-.tt-chooser .tt-table-filters__count { margin-left: auto; color: var(--tt-muted); font-size: 12px; }
+@media (max-width: 520px) {
+  .tt-chooser .tt-table-search { flex-basis: 100%; }
+}
