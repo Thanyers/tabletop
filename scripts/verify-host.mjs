@@ -69,6 +69,17 @@ for (const path of [
   record(label, response.status === 401 ? 'PASS' : response.status === 404 ? 'FAIL' : 'FAIL', `status ${response.status}`);
 }
 
+// 4b. the tool intent route exists on this host and refuses without a session (D-038)
+{
+  const path = `/api/workspaces/${unknownRoom}/space/tool/intent`;
+  const response = await fetchStatus(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ behaviorId: 'reserve', inputs: {} }),
+  });
+  record(`refuses ${path} without a session`, response.status === 401 ? 'PASS' : response.status === 404 ? 'FAIL' : 'FAIL', `status ${response.status}`);
+}
+
 // 5. what this script cannot prove
 record('a signed-in member reaches the room and its joined data', 'SKIPPED', 'needs a session');
 record('revoke/export/action behave on this host', 'SKIPPED', 'needs a session');

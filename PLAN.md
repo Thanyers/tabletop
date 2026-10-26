@@ -26,6 +26,8 @@
 | --- | --- | --- | --- |
 | F086 | แหล่งเว็บของร่างที่ใช้อัตโนมัติยังเพิ่มเข้าโต๊ะและอ้างอิงได้ | `review` | [F086](docs/features/F086-applied-draft-web-sources.md) |
 | F087 | ช่องแชทลอยเป็น island ไม่มีแถบพื้นหลังบังบอร์ด | `review` | [F087](docs/features/F087-composer-island.md) |
+| F085 | การ์ดไม่หายวับตอนโต๊ะอัปเดต (คลิก checkbox ไม่หลุดไปโดนพื้นหลัง) | `review` | [F085](docs/features/F085-cards-stay-visible.md) |
+| F077-T6 | Align English README with the published café, physics and adventure hero cases | `review` | Codex · `docs/F077-readme-cases` · PR #348; README and owning tracking docs only; homepage/media unchanged |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `done` | Codex · PR #348 / release #351 · default-branch README verified; production 9.1.5 / 0ce11c8; app/media unchanged |
 | F084 | โต๊ะที่มีการ์ด/เส้นเยอะไม่ค้างตอนเปิด (edge routing เร็วขึ้น ~40×) | `review` | [F084](docs/features/F084-edge-routing-speed.md) |
 | F083 | การ์ดที่ถูกซ่อนไม่ดูเหมือนข้อมูลหาย (ป้าย Show all, การ์ดใหม่เปิดไว้, ซิงก์หลายแท็บ) + dropdown ไม่เพี้ยน | `review` | [F083](docs/features/F083-closed-cards-visible.md) |
@@ -91,6 +93,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F086-T1 | `webSourcesNotOnTable` + การ์ด applied แสดงแหล่ง/ปุ่ม + แจ้งจำนวนจริง + intent อ้างอิงกฎ | `review` | lead (AI) | `fix/F086-applied-draft-sources` | `ui/useTableChat.tsx`, `workspace/table-chat-state.ts`, `workspace/command-session.ts`, `shared/chat-intent.ts`, tests | — | ไม่มี migration |
 | F087-T1 | composer padding 0 + ยกปุ่มซูมบนมือถือ | `review` | lead (AI) | `fix/F086-applied-draft-sources` | `ui/calm-workspace.css` | — | CSS อย่างเดียว |
+| F085-T1 | ส่ง `measured` เดิมตอนสร้าง node ใหม่ + browser check ว่าการ์ดไม่หายระหว่างรันคำสั่ง | `review` | lead (AI) | `fix/F085-node-flicker` | `ui/CanvasWorkspace.tsx`, `tests/generic-table-browser.mjs` | — | ไม่มี migration |
 | F084-T1 | lane cost สะสมต่อ edge + A* + หยุดเมื่อไม่มีทางชนะ + buffer ซ้ำ | `review` | lead (AI) | `fix/F084-edge-routing-speed` | `shared/edge-routing.ts`, `shared/edge-routing.test.ts` | — | ไม่มี migration |
 | F083-T1 | `cardsClosedOnFirstLook` + `changeHidden`/storage sync + ป้าย closed cards + select chevron | `review` | lead (AI) | `fix/F083-hidden-cards` | `ui/canvas-view-state.ts`, `ui/CanvasWorkspace.tsx`, `ui/canvas-visual-flow.css`, `ui/tabletop.css`, tests | — | ไม่มี migration |
 | F082-T1 | คิว checkbox แบบ optimistic + `asksTheBuilder` ใน chat intent | `review` | lead (AI) | `fix/F082-checkbox-queue-intent` | `ui/TableCanvasObjects.tsx`, `shared/chat-intent.ts`, tests | F081 | ไม่มี migration |
