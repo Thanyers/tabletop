@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — round 10 three-case hero / [PR #306](https://github.com/Thanyers/tabletop/pull/306); previous public content 9.1.3 / 4748689, deployment incident [#291](https://github.com/Thanyers/tabletop/issues/291) remains separate |
+| สถานะ | `done` — round 10 / [PR #306](https://github.com/Thanyers/tabletop/pull/306), [release #309](https://github.com/Thanyers/tabletop/pull/309); production 9.1.4 / d09d2f2; deployment/smoke passed |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.3 — homepage/README narrative order and copy cleanup; accepted film/media unchanged |
+| เวอร์ชัน | 9.1.4 — three-case hero rotation only; README, film and other page content unchanged |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T5 |
 
 ## ทำไม

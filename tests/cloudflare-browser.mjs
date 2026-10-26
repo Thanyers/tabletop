@@ -274,17 +274,23 @@ try {
   await anonymous.locator('.tt-public-welcome__hero-story').screenshot({ path: join(output, 'hero-cafe-poster.png') });
   await anonymous.getByRole('button', { name: 'Resume animation', exact: true }).click();
   await expect(conceptImage).toHaveAttribute('src', /hero-sales-en[^/]*\.gif$/);
-  await expect.poll(() => conceptImage.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
-  await anonymous.clock.fastForward(17_999);
+  const settleHeroImage = async () => {
+    await expect.poll(() => conceptImage.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
+    // Decoding can finish before React handles load and installs its passive-effect timer.
+    // Drive three browser frames before testing the 18-second boundary (50 ms tolerance).
+    await anonymous.clock.runFor(50);
+  };
+  await settleHeroImage();
+  await anonymous.clock.fastForward(17_900);
   await expect(anonymous.locator('[data-hero-case]')).toHaveAttribute('data-hero-case', 'sales');
-  await anonymous.clock.fastForward(1);
+  await anonymous.clock.fastForward(100);
   await expect(anonymous.locator('[data-hero-case]')).toHaveAttribute('data-hero-case', 'learning');
   await expect(conceptImage).toHaveAttribute('src', /hero-evolution-en[^/]*\.gif$/);
-  await expect.poll(() => conceptImage.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await settleHeroImage();
   await anonymous.clock.fastForward(18_000);
   await expect(anonymous.locator('[data-hero-case]')).toHaveAttribute('data-hero-case', 'play');
   await expect(conceptImage).toHaveAttribute('src', /hero-play-en[^/]*\.gif$/);
-  await expect.poll(() => conceptImage.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await settleHeroImage();
   await anonymous.clock.fastForward(18_000);
   await expect(anonymous.locator('[data-hero-case]')).toHaveAttribute('data-hero-case', 'sales');
   await anonymous.emulateMedia({ reducedMotion: 'reduce' });

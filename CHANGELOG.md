@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+## 9.1.4 — 2026-10-26
+
+PATCH: Rotate three prompt-first hero GIF cases to show work, learning, and play. This scope-only release starts from production 9.1.3 to honor the user's no-other-changes instruction; other homepage content, README, accepted learning animation, film, backend, schema, bindings and credentials are unchanged. Rollback target 9.1.3.
+
+- Rotate three prompt-first homepage hero GIF examples: café sales, physics learning, and adventure play. Open with café sales, retain manual case selection and Pause/Resume, and show static posters without rotation for reduced motion. Other page content, README, and the narrated film remain unchanged.
+
 ## 9.1.3 — 2026-10-24
 
 PATCH: Reorder the homepage and README story and remove redundant public copy. Accepted video and all media remain unchanged; no backend, schema, binding, secret or data changes. Rollback target 9.1.2.
