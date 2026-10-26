@@ -537,10 +537,10 @@
         "npx tsx server/providers/author-tool-package-cli.ts \"<intent>\" --model deepseek-chat --max-tokens 8000 --json test-results/ai-package-1.json",
         "node tests/ui/tool-authoring/browser.mjs"
       ],
-      "evidence": "one live model run turned an intent into a valid package: room-planner, 2 files, 1 behaviour, 1 port, content hash 205516f4924e…, validated by validateToolPackage before anything else used it. it cost 1 call and USD 0.000673, inside the approved ceiling of 6 calls and USD 0.20 per run (the CLI prints withinCap and refuses when the estimate exceeds the cap). the UI half is proven separately in the browser: the same panel drives the AI route with a generator, records the route as ai, and the stored, versioned source is what runs (authoring driver 10 checks).",
+      "evidence": "one live model run turned an intent into a valid package: room-planner, 2 files, 1 behaviour, 1 port, content hash 205516f4924e…, validated by validateToolPackage before anything else used it. it cost 1 call and USD 0.000673, inside the approved ceiling of 6 calls and USD 0.20 per run (the CLI prints withinCap and refuses when the estimate exceeds the cap). a second, different intent (a room-opening checklist) produced another valid package with no flags at all, so the default configuration works and the result is not specific to one prompt (see ai-live-runs-2026-10-26.md). The UI half is proven separately in the browser: the same panel drives the AI route with a generator, records the route as ai, and the stored, versioned source is what runs (authoring driver 10 checks).",
       "expected": "จากข้อความ intent เปล่า ได้ package ที่ mount ได้และมี behavior ที่ commit ได้จริง; source ที่ใช้คือชุดที่เก็บ/versioned ไม่ใช่ template ที่ regenerate",
       "actual": "PASS at this environment",
-      "limitations": "the run used deepseek-chat through this account because deepseek-flash answered with empty content under the reasoning model (D-042); a live run needs the key in .dev.vars and was only executed on 2026-10-26; the browser proof still uses a fixture generator so it costs nothing"
+      "limitations": "live runs happened on 2026-10-26 only and need the key in .dev.vars; the browser proof still uses a fixture generator so it costs nothing"
     },
     {
       "id": "G1-02",
