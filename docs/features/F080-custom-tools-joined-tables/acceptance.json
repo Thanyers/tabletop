@@ -102,16 +102,17 @@
       "slice": "F080-T1A",
       "title": "custom server algorithm สร้าง proposed state ที่ valid แล้ว authority commit; output นอก scope/invalid = zero write",
       "status": "UNVERIFIED",
-      "environment": "local unit (write plan) — no commit path yet",
-      "sha": "381bf84",
+      "environment": "local unit (plans) + Cloudflare tier (gated commit e2e)",
+      "sha": "0264fa4",
       "node": "v22.23.2",
       "commands": [
-        "npx vitest run src/tabletop/shared/tool-behavior-plan.test.ts"
+        "npx vitest run src/tabletop/shared/tool-behavior-plan.test.ts src/tabletop/shared/tool-action-proposal.test.ts",
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": "the plan layer decides, purely, whether a behaviour output is inside what the package declared: a resource or operation the package never declared is refused, a write aimed at another table is refused, a field outside the schema or a value of the wrong type is refused, the declared row ceiling is enforced, an update must name a row that exists, and changing the same row twice in one run is refused. every refusal returns no writes at all, so a caller that commits only ok:true writes cannot be talked into writing something the package never declared (8/8).",
+      "evidence": "a proposal is gated before anything is written: an action the package did not declare, an action the table does not define, a missing input, an input of the wrong type and an undeclared input are all refused, and a refusal produces no plan (6/6). the commit itself is the ordinary table.act command, so revision, invariants, limits, permissions and the receipt stay on the one path the user also uses: in the e2e a declared borrow proposal commits and the row really changes to unavailable. outside the declared scope means zero write: after a refused proposal no command is sent, and the table keeps the same dataRevision with the row unchanged. the write-level plan (8/8) additionally refuses an undeclared resource or operation, a write aimed at another table, a field outside the schema, a wrong value type, a row ceiling breach, an update without an existing row and changing the same row twice.",
       "expected": "behavior ที่คืน changeset ถูกต้อง commit หนึ่ง target พร้อม receipt; output ผิด schema/เกิน declared write set/timeout → ไม่มี mutation และได้ typed error",
-      "actual": "PARTIAL - the decision layer that guarantees \"out of scope equals zero write\" exists and is tested; committing a valid plan through the authority, and the route that produces one, do not",
-      "limitations": "there is still no trusted operation or route that commits a planned write set (D-031); nothing has been applied through the authority yet"
+      "actual": "PASS on the decision and commit path at this environment",
+      "limitations": "a behaviour cannot create or update rows that no declared action covers (D-033); the planning layer is exercised through tests rather than through a product screen, and free-form record writes would need the second write path that D-033 declined"
     },
     {
       "id": "ISO-01",

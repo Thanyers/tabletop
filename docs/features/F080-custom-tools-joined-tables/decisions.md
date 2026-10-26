@@ -365,3 +365,22 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **checks ที่ยัง SKIPPED และเหตุผล (ไม่นับเป็นผ่าน):** DTCG token validity (repo ใช้ CSS custom properties ไม่ใช่ไฟล์ DTCG) · token-pair contrast (ใช้ state-aware contrast ซึ่งวัดจริงและผ่านแทน) · focus trap in dialogs (ทั้งสาม surface ไม่มี modal)
 
 **ข้อจำกัด:** host iframe วัดด้วย driver ของ host harness (sandbox/bridge/ไม่มี cookie-storage-network) ไม่ใช่ ui-gate
+
+## D-033 — behaviour commit ผ่าน "action ที่ประกาศไว้" แทนการเปิดทางเขียนแถวใหม่
+
+**บริบท:** EXEC-01 ต้องการ "custom server algorithm เสนอ state ที่ valid → authority commit; นอก scope = zero write" แต่โดเมนปัจจุบันเขียนแถวได้ทาง action effect และ compute run outputs เท่านั้น (D-031)
+
+**ทางเลือกที่พิจารณา:**
+1. เพิ่มคำสั่ง domain ใหม่ที่รับ changeset ของแถวโดยตรง — ยืดหยุ่นสุด แต่เปิดทางเขียนใหม่ทั้งเส้น (validation/invariant/limit ต้องทำซ้ำ) และเสี่ยงที่สุด
+2. **ใช้ action ที่ประกาศไว้เป็นทาง commit** (เลือกข้อนี้)
+
+**การตัดสินใจ:** behaviour เสนอ `{ actionId, inputs }` และ host ตรวจด้วย `planToolBehaviorAction` ก่อน แล้ว commit ด้วยคำสั่ง `table.act` เดิมของ authority
+
+**เหตุผล:**
+- ไม่มีทางเขียนที่สอง ⇒ invariant/revision/limit/permission/receipt ยังถูกบังคับโดยเส้นทางเดียวกับที่ผู้ใช้กดเอง
+- "นอก scope" ตรวจได้ก่อน commit: action ที่ package ไม่ได้ประกาศ หรือตารางไม่มี → plan คืน `ok:false` และไม่มีคำสั่งถูกส่ง ⇒ zero write
+- ลดความเสี่ยง regression ในโดเมนขนาดใหญ่ (table.ts ~1.3k บรรทัด) ในช่วงท้ายของงาน
+
+**ข้อจำกัดที่ยอมรับ:** behaviour สร้าง/แก้แถว "ดิบ" ไม่ได้ — ต้องมี action ที่ประกาศไว้ในตาราง ถ้าอนาคตต้องการ free-form writes ต้องทำข้อ 1 อย่างตั้งใจพร้อมรีวิว
+
+**หลักฐาน:** `tool-action-proposal.test.ts` 6/6 · e2e `cloudflare/space-projection-cross.test.ts` ("a behaviour proposal is gated before the commit") — declared action commit จริง (row เปลี่ยน), undeclared → plan refuse และ dataRevision ไม่ขยับ
