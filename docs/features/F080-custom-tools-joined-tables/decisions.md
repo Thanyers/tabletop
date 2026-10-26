@@ -398,3 +398,15 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 
 **ขั้นปิด G1-01/EDIT-01:** ตั้ง `DEEPSEEK_KEY` ใน environment ของเครื่อง dev แล้วรัน
 `npx tsx server/providers/author-tool-package-cli.ts "<intent>"` (และ `--base <package.json>` สำหรับ EDIT-01) แล้วบันทึกผล `calls/usd/withinCap` ลง acceptance ของสองข้อนั้น
+
+## D-035 — เพิ่ม `actions?` ใน `ToolBehavior` (แก้ข้อบกพร่องของ D-033 ที่เจอจาก integration test)
+
+**What happened:** เทสต์ที่ต่อ adapter เข้า pipeline จริงล้มด้วย `PACKAGE_SCHEMA behaviors.0: Unrecognized key: "actions"` — D-033 ใช้ `declaredActions` จาก package แต่ **schema ยังไม่มีฟิลด์นั้น** เทสต์เดี่ยว ๆ ของ D-033 (ที่ส่ง array ตรง ๆ) จึงไม่จับข้อผิดพลาดนี้
+
+**Root cause:** ผมเพิ่มชั้น plan ที่อ้างฟิลด์ของ package โดยไม่ได้แก้ schema ก่อน — และเทสต์ที่เขียนไว้ bypass การตรวจ schema ด้วยการส่ง `declaredActions` เข้าไปเอง
+
+**การแก้:** เพิ่ม `actions?: string[]` (สูงสุด `TOOL_PACKAGE_LIMITS.maxActions` = 8) ใน `ToolBehavior` + `toolBehaviorSchema` แบบ **optional** เพื่อให้ package เดิมยัง validate ผ่านและ hash ไม่เปลี่ยนเมื่อไม่ใช้ฟิลด์นี้
+
+**Correct behavior:** เมื่อเพิ่ม "สัญญาใหม่" ให้ package ต้องแก้ schema พร้อมเทสต์ที่วิ่งผ่าน `validateToolPackage` จริง ไม่ใช่เทสต์ที่ประกอบ object เอง — และควรมีเทสต์ต่อ adapter → pipeline ไว้กันสัญญาไม่ตรงกัน
+
+**หลักฐาน:** 404/404 ใน `src/tabletop/shared` + `src/tabletop/runtime/tools` · `deepseek-tool-package.pipeline.test.ts` 2/2 (AI route activate จริงพร้อม usage, และ reply ที่ไม่ใช่ package ไม่ถูก activate)
