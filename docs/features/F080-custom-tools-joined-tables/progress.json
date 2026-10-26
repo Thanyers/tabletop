@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "งาน F080 อยู่บน dev แล้ว (PR #305 merge commit 25c85d5, dev CI success) + PR #307 เพิ่ม HUMAN-01 protocol · acceptance: 26 PASS / 9 UNVERIFIED — ทุกข้อที่เหลือติดเงื่อนไขภายนอก ไม่ใช่โค้ดค้าง · เหลือ: AI จริง (G1-01/EXEC-01/EDIT-01 ต้องมี provider key; วงเงิน D-023 ยังใช้ 0 call/USD 0.00) · UI ที่ต้องมีบัญชี Google (VISUAL-01/IMPACT-01) · HUMAN-01 (มี protocol) · hosted/staging (มี staging-verification.md) · ขั้นตอนปิดเกต: closure-checklist.md · human-01-protocol.md · staging-verification.md",
+  "currentCheckpoint": "PR #305/#307/#308/#310 merge เข้า dev แล้ว (dev = 13f8e62) · acceptance 26 PASS / 9 UNVERIFIED · แก้ D-031: EXEC-01 เป็นช่องว่างของโค้ด (ไม่มีทาง commit ผล behaviour) ไม่ใช่เกตภายนอก — ต้องออกแบบ trusted operation + domain command ก่อน · ที่เหลือติดภายนอกจริง: G1-01/EDIT-01 (AI provider), VISUAL-01/IMPACT-01 (บัญชีลงชื่อเข้าใช้), A11Y-01 (รัน ui-gate เพิ่มด้วย --theme/--focustrap), TOPO-01 (วัด load เพิ่ม/สรุป), G2-02 (รวมหลักฐาน), HUMAN-01 (protocol พร้อม)",
   "slices": [
     {
       "alias": "C0",

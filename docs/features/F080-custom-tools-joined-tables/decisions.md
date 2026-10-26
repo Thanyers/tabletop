@@ -334,3 +334,24 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ข้อจำกัดที่ยังเหลือ:** แอปที่ลงชื่อเข้าใช้ต้องผ่าน **Google OAuth** ซึ่งไม่มีในเครื่องนี้ ⇒ ผมเดินดูหน้า `/s/:id` แบบมี session ไม่ได้ จึงยังไม่พิสูจน์ VISUAL-01/G1/G2 ในระดับ UI จริง
 
 **ไม่มีการกระทำกับ production:** ไม่มี deploy, ไม่แตะ production data/config; ปิด dev server ที่สตาร์ทเองแล้ว
+
+## D-031 — EXEC-01 ยังเป็นช่องว่างของโค้ด: ยังไม่มีทาง commit ผลของ behaviour
+
+**สิ่งที่ตรวจ (2026-10-26):** ค้นทั้ง `cloudflare/index.ts`, `cloudflare/room-http.ts` และ `src/tabletop` ไม่พบ route หรือ trusted operation ที่รับผลจาก tool behaviour ไป commit — มีเพียง
+
+- `shared/tool-behavior.ts` (สัญญา + `validateToolBehaviorOutput`)
+- `shared/tool-behavior-request.ts` (`buildToolBehaviorRequest`, `checkToolBehaviorFreshness`)
+- `cloudflare/tool-behavior-runner.ts` + `server/local-tool-behavior-runner.ts` (รันใน isolate)
+- `shared/permissions` + space matrix มี `tool.run` แล้ว
+
+⇒ behaviour ถูก **validate** ได้ แต่ไม่มีเส้นทางให้ authority **commit** ซึ่งเป็นครึ่งหลังของ EXEC-01 ("authority commit; output นอก scope = zero write")
+
+**ผลต่อการรายงานรอบก่อน:** ผมเคยสรุปว่า 9 ข้อที่เหลือ "ติดเงื่อนไขภายนอกทั้งหมด" — **ไม่ถูก** ข้อนี้เป็นงานโค้ดที่ยังไม่ได้ทำ
+
+**แนวทางที่ควรทำต่อ (ต้องออกแบบก่อนเขียน):**
+1. trusted operation ใหม่ `tool-behavior` ใน `server/authority.ts` ที่รับ changeset ที่ผ่าน `validateToolBehaviorOutput` แล้ว และเขียนเฉพาะ resource ที่ **ประกาศไว้** ใน `declaredWrites` (in-port เท่านั้น)
+2. domain: ต้องมีคำสั่งที่รับ record create/update จากผล behaviour ได้ (ปัจจุบัน records เปลี่ยนผ่าน action/compute เท่านั้น) — นี่คือส่วนที่ต้องออกแบบ ไม่ใช่แค่ต่อ route
+3. route: Worker ตรวจ `tool.run` + freshness (`checkToolBehaviorFreshness`) → Room รันใน isolate → validate → commit ด้วย idempotency key
+4. เทสต์: ผลที่ valid → เขียนจริง; resource ที่ไม่ประกาศ/ผิด schema → 4xx และ **zero write**; revision stale → ปฏิเสธก่อนเขียน
+
+**ห้าม:** ให้ behaviour เขียนนอก declaredWrites หรือข้าม authority แม้แต่กรณีเดียว — เพราะนั่นคือช่องที่ทั้งฟีเจอร์นี้มีไว้ปิด
