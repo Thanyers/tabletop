@@ -68,10 +68,38 @@ async function trial(compiled: CompiledToolPackage): Promise<{ ok: true } | { ok
   return { ok: true };
 }
 
+const AI_ROUTE = new URLSearchParams(window.location.search).get('route') === 'ai';
+
 function Harness(): React.ReactElement {
   const [activated, setActivated] = useState<{ version: number; hash: string } | undefined>();
 
   const author = async (definition: unknown, baseContentHash: string | undefined): Promise<ToolAuthoringResult> => {
+    // G1-01: the same panel drives the AI route when a generator is supplied. Here the "model" is a
+    // fixture so the browser proof costs nothing; the pipeline, the route and the record are the real ones.
+    if (AI_ROUTE) {
+      const result = await authorToolPackage(
+        {
+          route: { kind: 'ai', actorId: 'actor-generator', prompt: 'make a room planner', ...(baseContentHash ? { baseContentHash } : {}) },
+          reviewer: { kind: 'manual', actorId: 'actor-editor' },
+          budget: { maxCalls: 3, maxUsd: 0.2, usedCalls: 0, usedUsd: 0 },
+        },
+        {
+          trial,
+          hash: fixtureHash,
+          now: 1_760_000_100_000,
+          maxRepairAttempts: 1,
+          generator: {
+            id: 'fixture-generator',
+            estimate: () => ({ calls: 1, usd: 0.01 }),
+            generate: async () => ({ definition, usage: { calls: 1, usd: 0.01 } }),
+          } as never,
+        },
+      );
+      log.activations.push(result);
+      if (result.ok) log.hashes.push(result.contentHash);
+      return result;
+    }
+
     const result = await authorToolPackage(
       { route: { kind: 'human', actorId: 'actor-editor', definition, ...(baseContentHash ? { baseContentHash } : {}) }, reviewer: { kind: 'manual', actorId: 'actor-editor' } },
       { trial, hash: fixtureHash, now: 1_760_000_100_000, maxRepairAttempts: 1 },
