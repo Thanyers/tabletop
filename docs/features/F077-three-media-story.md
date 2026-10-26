@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| สถานะ | `review` — round 11 README alignment / [PR #348](https://github.com/Thanyers/tabletop/pull/348); published hero remains 9.1.4 / d09d2f2 |
+| สถานะ | `done` — round 11 README parity / [PR #348](https://github.com/Thanyers/tabletop/pull/348), [release #351](https://github.com/Thanyers/tabletop/pull/351); default-branch README and production 9.1.5 / 0ce11c8 verified |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.4 — three-case hero rotation only; README, film and other page content unchanged |
+| เวอร์ชัน | 9.1.5 — English README aligned with the three published hero cases; app, homepage and media unchanged |
 | งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T6 |
 
 ## ทำไม
