@@ -48,7 +48,7 @@ async function main(): Promise<number> {
     const validation = validateToolPackage(result.definition);
     if (!validation.ok) {
       console.error('the model reply is not a valid tool package:');
-      for (const problem of validation.problems ?? []) console.error(`  - ${typeof problem === 'string' ? problem : JSON.stringify(problem)}`);
+      for (const problem of validation.problems) console.error(`  - ${problem.code} ${problem.path}: ${problem.message}`);
       console.error(`usage so far: ${JSON.stringify(result.usage)}`);
       return 1;
     }
@@ -57,11 +57,11 @@ async function main(): Promise<number> {
       writeFileSync(argv[outIndex + 1], `${JSON.stringify(result.definition, null, 2)}\n`, 'utf8');
     }
     const summary = {
-      packageId: validation.definition?.packageId ?? null,
-      version: validation.definition?.version ?? null,
-      files: validation.definition?.files?.length ?? 0,
-      behaviours: validation.definition?.behaviors?.length ?? 0,
-      ports: validation.definition?.ports?.length ?? 0,
+      packageId: validation.package.packageId,
+      version: validation.package.version,
+      files: validation.package.files.length,
+      behaviours: validation.package.behaviors.length,
+      ports: validation.package.ports.length,
       calls: result.usage.calls,
       usd: result.usage.usd,
       promptTokens: result.usage.promptTokens,
