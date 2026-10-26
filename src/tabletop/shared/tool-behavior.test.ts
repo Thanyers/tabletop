@@ -251,3 +251,39 @@ describe('behaviour wire result', () => {
     expect(() => readToolBehaviorResult(body)).toThrow(ToolBehaviorRunError);
   });
 });
+
+describe('a behaviour may propose a declared action (D-039)', () => {
+  it('accepts a result that carries a proposal next to an empty change list', () => {
+    const validation = validateToolBehaviorOutput(
+      { output: [], proposal: { actionId: 'reserve', inputs: { room: 'Studio', people: 2 } } },
+      makeRequest(),
+    );
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+    expect(validation.changes).toEqual([]);
+    expect(validation.proposal).toEqual({ actionId: 'reserve', inputs: { room: 'Studio', people: 2 } });
+  });
+
+  it('refuses a malformed proposal rather than dropping it silently', () => {
+    expect(validateToolBehaviorOutput({ output: [], proposal: { actionId: 'Reserve!', inputs: {} } }, makeRequest()))
+      .toMatchObject({ ok: false, code: 'TOOL_OUTPUT_INVALID' });
+    expect(validateToolBehaviorOutput({ output: [], proposal: { actionId: 'reserve', inputs: { room: { nested: true } } } }, makeRequest()))
+      .toMatchObject({ ok: false, code: 'TOOL_OUTPUT_INVALID' });
+    expect(validateToolBehaviorOutput({ output: [], proposal: 'reserve' }, makeRequest()))
+      .toMatchObject({ ok: false, code: 'TOOL_OUTPUT_INVALID' });
+  });
+
+  it('keeps refusing unknown keys', () => {
+    expect(validateToolBehaviorOutput({ output: [], surprise: 1 }, makeRequest()))
+      .toMatchObject({ ok: false, code: 'TOOL_OUTPUT_INVALID' });
+  });
+
+  it('reads a wire body that carries a proposal', () => {
+    const body = JSON.stringify({ changes: [], proposal: { actionId: 'reserve', inputs: { room: 'Studio' } } });
+    expect(readToolBehaviorResult(body)).toEqual({ output: [], proposal: { actionId: 'reserve', inputs: { room: 'Studio' } } });
+  });
+
+  it('still reads a wire body with no proposal', () => {
+    expect(readToolBehaviorResult(JSON.stringify({ changes: [] }))).toEqual({ output: [] });
+  });
+});

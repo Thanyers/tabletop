@@ -101,18 +101,18 @@
       "requirement": "G1",
       "slice": "F080-T1A",
       "title": "custom server algorithm สร้าง proposed state ที่ valid แล้ว authority commit; output นอก scope/invalid = zero write",
-      "status": "PASS",
-      "environment": "local unit (plans) + Cloudflare tier (gated commit e2e)",
+      "status": "PARTIAL",
+      "environment": "local unit (plans + ABI) + Cloudflare tier (gated commit e2e)",
       "sha": "0264fa4",
       "node": "v22.23.2",
       "commands": [
         "npx vitest run src/tabletop/shared/tool-behavior-plan.test.ts src/tabletop/shared/tool-action-proposal.test.ts",
         "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": "a proposal is gated before anything is written: an action the package did not declare, an action the table does not define, a missing input, an input of the wrong type and an undeclared input are all refused, and a refusal produces no plan (6/6). the commit itself is the ordinary table.act command, so revision, invariants, limits, permissions and the receipt stay on the one path the user also uses: in the e2e a declared borrow proposal commits and the row really changes to unavailable. outside the declared scope means zero write: after a refused proposal no command is sent, and the table keeps the same dataRevision with the row unchanged. the write-level plan (8/8) additionally refuses an undeclared resource or operation, a write aimed at another table, a field outside the schema, a wrong value type, a row ceiling breach, an update without an existing row and changing the same row twice.",
+      "evidence": "the plan layer refuses anything outside the declaration: an undeclared resource or operation, a write aimed at another table, a field outside the schema, a wrong value type, a row ceiling breach, an update without an existing row and changing the same row twice (8/8). the action plan refuses an undeclared action, an action the table does not define, a missing input, a wrong type, an undeclared input and an empty proposal (6/6). the commit is the ordinary table.act command: in the e2e a declared borrow proposal commits and the row really becomes unavailable, while a refused proposal sends no command and dataRevision does not move. a behaviour can now actually produce that proposal: the ABI carries `{ changes, proposal }` and the validator accepts and re-checks it (33/33 in the behaviour suites, 5 new cases).",
       "expected": "behavior ที่คืน changeset ถูกต้อง commit หนึ่ง target พร้อม receipt; output ผิด schema/เกิน declared write set/timeout → ไม่มี mutation และได้ typed error",
-      "actual": "PASS on the decision and commit path at this environment",
-      "limitations": "a behaviour cannot create or update rows that no declared action covers (D-033); the planning layer is exercised through tests rather than through a product screen, and free-form record writes would need the second write path that D-033 declined"
+      "actual": "PARTIAL - the gate, the commit path and the ABI channel are proven, but the e2e that closed this item built the proposal in the test instead of running a behaviour through the runner; that is what the next change must fix",
+      "limitations": "no route yet runs a behaviour from the product and commits its proposal (D-038); a behaviour that returns in-scope row changes has no write path by design (D-033), and the product surface still shows the installed tool as a card"
     },
     {
       "id": "ISO-01",
