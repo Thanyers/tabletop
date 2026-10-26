@@ -1,18 +1,25 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **26 ตุลาคม 2569 เวลา 15:59 น. (Asia/Bangkok)**: production รายงาน **9.1.5 / 0ce11c8**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40295626873) ผ่านครบ รวม Container settings, smoke และ GitHub Release publication. Health/readiness ตอบ 200. รุ่นนี้จัด README ให้ตรงกับ Hero สามเคส โดย app/homepage/film/media/backend/configuration ไม่เปลี่ยนจาก 9.1.4. Staging snapshot **0.0.0-dev / ec3a65d** เป็นการอ่าน ณ เวลานั้น ไม่ใช่ผล deploy ของ closeout รุ่นถัดไป
+ตรวจ `/version` ออนไลน์ล่าสุด **26 ตุลาคม 2569 เวลา 17:28 น. (Asia/Bangkok)**: production รายงาน **9.1.6 / b809d9b**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40307321305) ผ่านครบ รวม Container settings, smoke และ GitHub Release publication. Health/readiness 200; favicon ที่ให้บริการตรงกับ source และ README ทั้งสองภาษาบน main ตรวจแล้ว. Staging snapshot **0.0.0-dev / b7a486b** เป็นการอ่าน ณ เวลานั้น ไม่ใช่ผล deploy ของ closeout.
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [0ce11c8](https://github.com/Thanyers/tabletop/commit/0ce11c89352195d9b507ab0cd84e11e6acd050c3) — PR #351 | `ec3a65d` — observed snapshot |
-| Release | v9.1.5 / 9.1.5 — deploy/smoke passed | dev / 0.0.0-dev |
+| Source | [b809d9b](https://github.com/Thanyers/tabletop/commit/b809d9b69f279f044b77e88bb4470763c3ae34e3) — PR #366 | `b7a486b` — observed snapshot |
+| Release | v9.1.6 / 9.1.6 — deploy/smoke passed | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.1.6 — bilingual README and consistent icon (26 October 2026)
+
+- [Release PR #366](https://github.com/Thanyers/tabletop/pull/366), main `b809d9b`; [exact-head full CI](https://github.com/Thanyers/tabletop/actions/runs/40305987823) passed all three browser suites and fast checks. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/40307321305) succeeded including Container settings, smoke and GitHub Release publication.
+- README removes production-process commentary and adds reciprocal English/ไทย links with existing localized GIFs. Browser and README favicon match the homepage mark. Both main README pages and served favicon verified. Production version 9.1.6 / b809d9b; health/readiness 200.
+- Scope-only publication from production 9.1.5 excludes unrelated dev work. Homepage copy/layout, animations, film, runtime, schema, dependencies and configuration unchanged. Rollback reference 9.1.5. No AI calls or production data writes used for validation.
+- Release Notes generated from the main-equivalent release tree: 34 releases, latest 9.1.6, 0 fragments. Existing private artifact cannot be updated by available tools; generated HTML is the handoff.
 
 ## Release 9.1.5 — README parity with published hero cases (26 October 2026)
 
@@ -290,7 +297,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 
 ## ประวัติ release ที่เกี่ยวข้อง
 
-| Release | v9.1.5 / 9.1.5 — deploy/smoke passed | dev / 0.0.0-dev |
+| Release | v9.1.6 / 9.1.6 — deploy/smoke passed | dev / 0.0.0-dev |
 | --- | --- | --- |
 | 21 ต.ค. `v3.4.0` / `442e074` | F031 thinking/caps/compact guide/180s, F030 corpus rounds | [PR #102](https://github.com/Thanyers/tabletop/pull/102), [run 39629734074](https://github.com/Thanyers/tabletop/actions/runs/39629734074) |
 | 21 ต.ค. `v3.3.2` / `957074d` | F025 refresh race, F026 clarify language, F027 reject hint, F028 minimal fallback, F029 corpus | [PR #96](https://github.com/Thanyers/tabletop/pull/96), [run 39611292996](https://github.com/Thanyers/tabletop/actions/runs/39611292996), [PR #97](https://github.com/Thanyers/tabletop/pull/97) |

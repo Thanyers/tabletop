@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+## 9.1.6 — 2026-10-26
+
+PATCH: Clean the README, add English/Thai navigation and match its icon to the homepage. Scope-only release from production 9.1.5; app behavior, homepage content, animations and film unchanged. Rollback target 9.1.5.
+
+- Simplify the README, add English/Thai navigation with matching GIFs, and align the browser/README icon with the homepage mark. Existing homepage content, animations and film stay unchanged.
+
 ## 9.1.5 — 2026-10-26
 
 PATCH: Align the English README with the published café, physics and adventure cases and their existing GIFs. Documentation-only release from production 9.1.4 to exclude unrelated dev work; app, homepage, film, assets, backend, schema and configuration unchanged. Rollback target 9.1.4.
