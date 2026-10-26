@@ -155,6 +155,8 @@ function toSpaceCommand(parsed: Exclude<ReturnType<typeof parseSpaceCommand>, { 
     case 'space.seen': return { type: 'space.seen', revision: parsed.revision };
     case 'space.setBrief': return { type: 'space.setBrief', text: parsed.text };
     case 'space.clearBrief': return { type: 'space.clearBrief' };
+    case 'space.installTool': return { type: 'space.installTool', tool: parsed.tool };
+    case 'space.uninstallTool': return { type: 'space.uninstallTool' };
   }
 }
 

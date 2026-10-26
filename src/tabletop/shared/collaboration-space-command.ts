@@ -26,6 +26,9 @@ export const SPACE_COMMANDS = [
   // F080 / CTX-01: the room's brief, and the right to withdraw it.
   'space.setBrief',
   'space.clearBrief',
+  // F080 / D-036: the tool package version this room runs.
+  'space.installTool',
+  'space.uninstallTool',
 ] as const;
 export type SpaceCommandType = typeof SPACE_COMMANDS[number];
 
@@ -68,6 +71,15 @@ const leaveSourceSchema = z.strictObject({ workspaceId: z.string().uuid() });
 const seenSchema = z.strictObject({ revision: z.number().int().nonnegative() });
 const setBriefSchema = z.strictObject({ text: z.string().min(1).max(600) });
 const clearBriefSchema = z.strictObject({});
+const installToolSchema = z.strictObject({
+  tool: z.strictObject({
+    packageId: idSchema,
+    version: z.number().int().min(1).max(10_000),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/u),
+    route: z.enum(['human', 'ai']),
+    title: z.string().min(1).max(SPACE_LIMITS.maxTitleChars),
+  }),
+});
 
 export type ParsedSpaceCommand =
   | { ok: true; type: 'space.create'; spaceId: string; title: string; sharedToolWorkspaceId: string }
@@ -81,6 +93,8 @@ export type ParsedSpaceCommand =
   | { ok: true; type: 'space.seen'; revision: number }
   | { ok: true; type: 'space.setBrief'; text: string }
   | { ok: true; type: 'space.clearBrief' }
+  | { ok: true; type: 'space.installTool'; tool: { packageId: string; version: number; contentHash: string; route: 'human' | 'ai'; title: string } }
+  | { ok: true; type: 'space.uninstallTool' }
   | { ok: false; code: 'SPACE_PAYLOAD'; message: string };
 
 function failure(error: z.ZodError): ParsedSpaceCommand {
@@ -143,6 +157,14 @@ export function parseSpaceCommand(type: string, payload: unknown): ParsedSpaceCo
     case 'space.clearBrief': {
       const parsed = clearBriefSchema.safeParse(payload ?? {});
       return parsed.success ? { ok: true, type: 'space.clearBrief' } : failure(parsed.error);
+    }
+    case 'space.installTool': {
+      const parsed = installToolSchema.safeParse(payload);
+      return parsed.success ? { ok: true, type: 'space.installTool', tool: parsed.data.tool } : failure(parsed.error);
+    }
+    case 'space.uninstallTool': {
+      const parsed = clearBriefSchema.safeParse(payload ?? {});
+      return parsed.success ? { ok: true, type: 'space.uninstallTool' } : failure(parsed.error);
     }
     default: {
       // `pick` keeps the "unused" import honest for schemas that only exist for future commands.

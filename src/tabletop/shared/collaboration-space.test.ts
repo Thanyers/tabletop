@@ -225,3 +225,73 @@ describe('space reader compatibility', () => {
     expect(result.space?.members).toHaveLength(1);
   });
 });
+
+describe('installing the room tool (D-036)', () => {
+  const hash = 'a'.repeat(64);
+  const install = (overrides: Record<string, unknown> = {}) => ({
+    type: 'space.installTool' as const,
+    tool: { packageId: 'room-planner', version: 1, contentHash: hash, route: 'human' as const, title: 'Room planner', ...overrides },
+  });
+
+  it('lets a maker install a version and records who and when', () => {
+    const space = makeSpace();
+    const decision = decideSpace(space, 'actor-b', install(), 42);
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) return;
+    expect(decision.space.tool).toEqual({
+      packageId: 'room-planner',
+      version: 1,
+      contentHash: hash,
+      route: 'human',
+      title: 'Room planner',
+      installedBy: 'actor-b',
+      installedAt: 42,
+    });
+    expect(decision.space.revision).toBe(space.revision + 1);
+    // Installing a tool does not touch the sources or their grants.
+    expect(decision.space.sources).toEqual(space.sources);
+  });
+
+  it('refuses a participant, an outsider and a payload without the version hash', () => {
+    const space = makeSpace();
+    expect(decideSpace(space, 'actor-c', install(), 10)).toMatchObject({ ok: false, code: 'SPACE_FORBIDDEN' });
+    expect(decideSpace(space, 'outsider', install(), 10)).toMatchObject({ ok: false, code: 'SPACE_NOT_MEMBER' });
+    expect(decideSpace(space, 'actor-b', install({ contentHash: 'nope' }), 10)).toMatchObject({ ok: false, code: 'SPACE_INVALID' });
+    expect(decideSpace(space, 'actor-b', install({ version: 0 }), 10)).toMatchObject({ ok: false, code: 'SPACE_INVALID' });
+    expect(decideSpace(space, 'actor-b', install({ packageId: 'Bad Id' }), 10)).toMatchObject({ ok: false, code: 'SPACE_INVALID' });
+  });
+
+  it('allows a new version of the same package and refuses swapping the package silently', () => {
+    const installed = decideSpace(makeSpace(), 'actor-b', install(), 10);
+    expect(installed.ok).toBe(true);
+    if (!installed.ok) return;
+
+    const upgraded = decideSpace(installed.space, 'actor-b', install({ version: 2, contentHash: 'b'.repeat(64) }), 20);
+    expect(upgraded.ok).toBe(true);
+    if (!upgraded.ok) return;
+    expect(upgraded.space.tool?.version).toBe(2);
+
+    const swapped = decideSpace(installed.space, 'actor-b', install({ packageId: 'other-tool' }), 20);
+    expect(swapped).toMatchObject({ ok: false, code: 'SPACE_INVALID' });
+  });
+
+  it('removes the tool on request and is a no-op for a room without one', () => {
+    const installed = decideSpace(makeSpace(), 'actor-b', install(), 10);
+    if (!installed.ok) throw new Error('install should succeed');
+    const removed = decideSpace(installed.space, 'actor-b', { type: 'space.uninstallTool' }, 30);
+    expect(removed.ok).toBe(true);
+    if (!removed.ok) return;
+    expect(removed.space.tool).toBeUndefined();
+
+    const empty = decideSpace(makeSpace(), 'actor-b', { type: 'space.uninstallTool' }, 30);
+    expect(empty.ok).toBe(true);
+    if (!empty.ok) return;
+    expect(empty.space.tool).toBeUndefined();
+  });
+
+  it('keeps validating rooms that were written before the field existed', () => {
+    const result = readCollaborationSpace(makeSpace());
+    expect(result.problems).toEqual([]);
+    expect(result.space?.tool).toBeUndefined();
+  });
+});
