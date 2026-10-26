@@ -350,15 +350,16 @@
       "title": "independent oracle ตรวจผลและ freshness; before/after รวม UI source/version, server logic, formulas, compute, connections",
       "status": "UNVERIFIED",
       "environment": "Cloudflare tier (worker.fetch + real Durable Objects)",
-      "sha": "8662573",
+      "sha": "899c599",
       "node": "v22.23.2",
       "commands": [
+        "npx vitest run src/tabletop/shared/computed-oracle.test.ts",
         "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": "connection surface: the rows the route serves are recomputed independently from the source table's own records and compared exactly, and the revision the response claims equals the source dataRevision; after the source imports another file the next read reports a higher revision, so a stale answer cannot pass. export surface: the CSV downloaded from the same grant carries exactly the same values in the same order as the projection response, with the granted field as its only column and the same source revision in its provenance header. The two paths are separate code, so a drift on one side is visible.",
+      "evidence": "connection surface: the rows the route serves are recomputed independently from the source table's own records and compared exactly, and the revision the response claims equals the source dataRevision; after the source imports another file the next read reports a higher revision. export surface: the CSV downloaded from the same grant carries exactly the same values in the same order as the projection response, with the granted field as its only column and the same revision in its provenance header. formula surface: five expressions (a field, a literal, a product, a difference of a product, a nested sum) are evaluated by an arithmetic written in the test from the specification and agree with the engine; division by zero is refused rather than returned as a number.",
       "expected": "oracle คำนวณผลคาดหวังแยกจาก implementation แล้วตรงกับผลจริง; before/after diff ครอบคลุมทุก layer; historical input ที่ไม่มีให้บอกว่า reproduce ไม่ได้",
-      "actual": "PARTIAL - connections and export are covered by an independent comparison; UI source/version, server logic, formulas and compute are not yet",
-      "limitations": "the oracle compares projections and their export; a package's UI source, its server behaviour, formulas and compute results still have no independent check"
+      "actual": "PARTIAL - connections, export and formulas are covered by independent checks; UI source/version, server logic and compute runs are not",
+      "limitations": "the oracle compares projections, their export and formula arithmetic; a package's UI source, its server behaviour and the compute runner output still have no independent check"
     },
     {
       "id": "IMPACT-01",
