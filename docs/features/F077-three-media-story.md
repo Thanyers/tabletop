@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — round 9 content live at 9.1.3 / 4748689; [release #289](https://github.com/Thanyers/tabletop/pull/289); full deployment remains partial ([#291](https://github.com/Thanyers/tabletop/issues/291)) |
+| สถานะ | `review` — round 10 three-case hero / [PR #306](https://github.com/Thanyers/tabletop/pull/306); previous public content 9.1.3 / 4748689, deployment incident [#291](https://github.com/Thanyers/tabletop/issues/291) remains separate |
 | เจ้าของฟีเจอร์ | Codex |
 | เวอร์ชัน | 9.1.3 — homepage/README narrative order and copy cleanup; accepted film/media unchanged |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T4 |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T5 |
 
 ## ทำไม
 
@@ -32,6 +32,10 @@
 | F077-T2 | Apply English README and improve homepage visual story | Hero shows a useful evolving table; physical additions visibly answer a person's need; no README navigation; language/auth/reduced-motion behavior retained |
 
 ## การตัดสินใจ
+
+### Round 10 / F077-T5 — three hero GIF cases
+
+User scope (26 October 2026): change only the homepage hero GIF area. Rotate three 18-second prompt-first cases: café sales (opens; concrete everyday value), existing physics learning, then adventure play (breadth beyond work). Preserve the accepted learning GIF bytes and its original animation style. Each new case types before adding a usable card, retains earlier cards and visibly uses a control. Add compact case selectors within the existing hero area; retain Pause/Resume and static posters with no automatic rotation under reduced motion. English and Thai stay aligned. README, film, other page sections and backend are outside scope.
 
 | วันที่ | การตัดสินใจ | เหตุผล |
 | --- | --- | --- |
