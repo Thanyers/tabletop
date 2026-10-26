@@ -131,6 +131,8 @@ export interface ToolBehavior {
   entry: string;
   inputs: ToolBehaviorInput[];
   writes: ToolWriteDeclaration[];
+  /** Table actions this behaviour may propose; the commit goes through the ordinary action path. */
+  actions?: string[];
 }
 
 /** How the source reached the package; the authority records who activated it separately. */
@@ -276,6 +278,12 @@ export const toolBehaviorSchema: z.ZodType<ToolBehavior> = z.strictObject({
     required: z.boolean(),
   })).max(TOOL_PACKAGE_LIMITS.maxBehaviorInputs),
   writes: z.array(toolWriteDeclarationSchema).max(TOOL_PACKAGE_LIMITS.maxWritesPerBehavior),
+  /**
+   * F080 / EXEC-01 (D-033): the table actions this behaviour may propose. A behaviour commits by
+   * proposing one of these, so the authority applies it through the ordinary action path. Optional so
+   * packages written before this field keep validating.
+   */
+  actions: z.array(idSchema).max(TOOL_PACKAGE_LIMITS.maxActions).optional(),
 });
 
 export const toolPackageProvenanceSchema: z.ZodType<ToolPackageProvenance> = z.strictObject({
