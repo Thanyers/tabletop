@@ -894,8 +894,11 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
       {session.workspaces.length > 0 && <div className="tt-existing-tables">
         <div className="tt-existing-tables__head">
           <h2>Pick up where you left off</h2>
-          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>
+          {session.workspaces.length > 1 && <small className="tt-table-filters__count" role="status">{visibleWorkspaces.length} of {session.workspaces.length}</small>}
         </div>
+        {/* One toolbar: search first, then each filter as a pill that holds its label and value (F053). */}
+        <div className="tt-table-toolbar">
+          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>
         {session.workspaces.length > 1 && <div className="tt-table-filters" role="group" aria-label="Filter tables">
           <label><span>Sort</span><select value={filter.sort} onChange={(event) => changeSort(event.target.value as TableSort)}>
             <option value="updated">Last updated</option>
@@ -917,8 +920,8 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
             <option value="month">Last 30 days</option>
           </select></label>}
           {isFiltered(filter) && <button type="button" className="tt-table-filters__clear" onClick={clearFilters}><X size={13} aria-hidden="true" />Clear</button>}
-          <small className="tt-table-filters__count" role="status">{visibleWorkspaces.length} of {session.workspaces.length}</small>
         </div>}
+        </div>
         {visibleWorkspaces.map((workspace) => {
           const updatedAt = workspace.updatedAt;
           return <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span>
