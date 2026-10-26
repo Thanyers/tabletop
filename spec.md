@@ -33,8 +33,9 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 - `F080 acceptance 32 PASS / 3 UNVERIFIED · เหลือ G1-01/EDIT-01 (รอ DEEPSEEK_KEY), HUMAN-01 (ผู้ใช้จริง 5 คน)`
 - อยู่บน `dev` ทั้งหมด: PR #305 (งานหลัก) #307/#308/#310/#312/#313/#314/#315/#316/#317 (เอกสาร/checkpoint) #321 (EXEC-01) #322/#323/#326 (DeepSeek adapter + schema `actions`) #324 (host verification)
-- ผลตรวจบน dev ล่าสุด (`34ddbca`): unit **1216 passed / 5 skipped** (155 ไฟล์) · Worker tier **323/323** · typecheck 3 config ผ่าน · `check-public-files` 0 findings
+- ผลตรวจบน dev ล่าสุด (`ad8930a`): unit **1221 passed / 5 skipped** (155 ไฟล์) · Worker tier **325/325** · typecheck 3 config ผ่าน · `check-public-files` 0 findings
 - host จริง (staging จาก pipeline): `node scripts/verify-host.mjs --url <host>` → **9 PASS / 0 FAIL / 2 SKIPPED** ที่ sha `f20ff80` (ดู `docs/features/F080-custom-tools-joined-tables/host-verification.md`)
+- D-036: ห้องเก็บ tool reference + แสดงการ์ดเครื่องมือในหน้าจริงแล้ว; D-037 บันทึกว่าการรัน UI ของ tool ต้องมี package store + route (ยังไม่เริ่ม)
 - ยังไม่ปิด Goal: ต้องมี DEEPSEEK_KEY (G1-01/EDIT-01 — ยัง 0 call/USD 0.00) และผู้ใช้จริง (HUMAN-01)
 
 - **F081 checkbox + toggle (2026-10-26, branch `feat/F081-checkbox-toggle`, `review`):** effect `op: "toggle"` สลับช่องใช่/ไม่ (`domain/table.ts`) · checkbox ในการ์ดตารางเลือกกฎผ่าน `checkboxAction` (`ui/checkbox-actions.ts`) · การ์ดย่อเป็น checklist เมื่อติ๊กได้สองทาง · schema guide สอน AI ใช้ toggle · ผลตรวจ (Node 26.3.1): unit **1200 passed / 5 skipped** (ใหม่ 6), `test:cloudflare` **324 passed**, `test:cloudflare:browser` 35 PASS, lint 0 errors, build ผ่าน ([F081](docs/features/F081-checkbox-toggle.md))
