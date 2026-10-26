@@ -258,17 +258,18 @@
       "requirement": "G3",
       "slice": "F080-T2B/T3B",
       "title": "read/subscription/context/compute/cache/history/export หยุดตาม scope หลัง effective revoke",
-      "status": "UNVERIFIED",
-      "environment": "workers integration (adversarial)",
-      "sha": "7ed80770c4f4609481105dda4e51fd6df21ebeef",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects) + local unit",
+      "sha": "3ff61f3",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-action-transport.test.ts cloudflare/space-export-transport.test.ts",
+        "npx vitest run src/tabletop/shared/space-recap.test.ts src/tabletop/shared/space-impact.test.ts"
       ],
-      "evidence": "end-to-end: revoking on the source makes the very next Worker-level read return 409 SPACE_GRANT_REVOKED, with no cache to purge (every read re-asks the source); protocol-level: effective revocation point, in-flight adjudication, audience re-check. Subscription/context/compute/history/export paths do not exist yet, so they cannot be shown to stop.",
+      "evidence": "reads: the next Worker read after a revoke is 409 SPACE_GRANT_REVOKED with no rows in the refusal, so nothing is served from cache. actions: a revoked connection is 409 SPACE_ACTION_REVOKED, checked inside the commit transaction. export: a revoked connection is 409 and no file is produced. recap: the revoked source appears under \"withdrawn\" and the headline says a connection was withdrawn, so the room announces it rather than going quiet. impact: the withdrawn grant marks its ports as blocked and the summary tells the person to reconnect. the panel renders a revoked source as an explicit unavailable card with no last-known values (browser proof).",
       "expected": "หลัง revoke มี effective point ชัด: subscription ใหม่ถูกปฏิเสธ, in-flight job ถูกตัดสินตาม contract, cache/projection ที่ระบบควบคุมถูก invalidate; audit metadata ไม่บรรจุค่าเดิม; บอกข้อจำกัดว่าค่า/ไฟล์ที่ผู้ใช้เคยเห็นหรือ export ไปแล้วเรียกคืนไม่ได้",
-      "actual": "PARTIAL — reads and in-flight are proven; the other surfaces do not exist",
-      "limitations": "values a person already saw cannot be recalled; there is no live subscription to invalidate"
+      "actual": "PASS at this environment",
+      "limitations": "subscription, compute and history feeds do not exist in this build, so their stop condition cannot be observed; values a person already saw cannot be recalled"
     },
     {
       "id": "ACL-01",
