@@ -1,12 +1,9 @@
-import { ArrowDownRight, ArrowUpRight, BookOpen, FileText, Pause, Play, UsersRound } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, BookOpen, FileText, UsersRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { landingCopy, landingLanguages, languageOptionLabel, readLandingLanguage, saveLandingLanguage, type LandingCopy, type LandingLanguage } from './landing-copy';
 import { NarrativeSalesDemo } from './NarrativeSalesDemo';
 import { PhysicalAdaptationStories } from './PhysicalAdaptationStories';
-import storyGif from '../../../docs/showcase/hero-evolution-th.gif';
-import storyPoster from '../../../docs/showcase/hero-evolution-th-poster.png';
-import storyGifEn from '../../../docs/showcase/hero-evolution-en.gif';
-import storyPosterEn from '../../../docs/showcase/hero-evolution-en-poster.png';
+import { HeroCaseRotation } from './HeroCaseRotation';
 import physicsImage from '../../../docs/showcase/physics.png';
 import encounterImage from '../../../docs/showcase/encounter.png';
 import './public-welcome.css';
@@ -25,7 +22,6 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
   primaryHref?: string;
 }) {
   const [language, setLanguage] = useState<LandingLanguage>(readLandingLanguage);
-  const [storyPaused, setStoryPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia(reducedMotionQuery).matches);
 
   useEffect(() => {
@@ -53,9 +49,6 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
   };
 
   const copy = landingCopy[language];
-  const localizedStoryGif = language === 'en' ? storyGifEn : storyGif;
-  const localizedStoryPoster = language === 'en' ? storyPosterEn : storyPoster;
-  const storySource = reducedMotion || storyPaused ? localizedStoryPoster : localizedStoryGif;
 
   return <div className="tt-account-gate tt-public-welcome" lang={language}>
     <a className="tt-public-welcome__skip" href="#main-content">{language === 'en' ? 'Skip to content' : 'ข้ามไปยังเนื้อหา'}</a>
@@ -90,12 +83,7 @@ export function PublicWelcome({ children, headerAction, notice, primaryHref = '#
             <a className="tt-public-welcome__secondary-link" href="#film">{copy.hero.secondary} <ArrowDownRight size={15} aria-hidden="true" /></a>
           </div>
         </div>
-        <figure className="tt-public-welcome__hero-story">
-          <img src={storySource} width={960} height={540} loading="eager" decoding="async" alt={copy.process.storyAlt} />
-          {!reducedMotion && <button className="tt-public-welcome__motion-toggle" type="button" onClick={() => setStoryPaused((paused) => !paused)} aria-label={storyPaused ? (language === 'en' ? 'Resume animation' : 'เล่นภาพเคลื่อนไหวต่อ') : (language === 'en' ? 'Pause animation' : 'หยุดภาพเคลื่อนไหวชั่วคราว')}>
-            {storyPaused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
-          </button>}
-        </figure>
+        <HeroCaseRotation language={language} />
       </section>
 
       <section className="tt-public-welcome__why" id="why" aria-labelledby="tt-public-welcome-why-title">
