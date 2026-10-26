@@ -25,6 +25,11 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `review` | Codex · `feat/F077-three-hero-cases` · PR #306; hero area/motion sources/assets only; README/film/rest of homepage unchanged |
+| F077-T6 | Align English README with the published café, physics and adventure hero cases | `doing` | Codex · `docs/F077-readme-cases` · README and owning tracking docs only; homepage/media unchanged |
+| F083 | การ์ดที่ถูกซ่อนไม่ดูเหมือนข้อมูลหาย (ป้าย Show all, การ์ดใหม่เปิดไว้, ซิงก์หลายแท็บ) + dropdown ไม่เพี้ยน | `review` | [F083](docs/features/F083-closed-cards-visible.md) |
+| F082 | checkbox กดรัวไม่หาย + ข้อความแก้กฎที่มี "ทำเครื่องหมาย" เป็นร่างกฎ | `review` | [F082](docs/features/F082-checkbox-queue-intent.md) |
+| F081 | ช่องใช่/ไม่เป็น checkbox + กฎ toggle (todo list ติ๊กได้) | `review` | [F081](docs/features/F081-checkbox-toggle.md) |
+| F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `done` | Codex · PR #306 / release #309 · production 9.1.4 / d09d2f2; only hero area changed; README/film/rest unchanged |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
 | F077-T4 | Reorder homepage and README story; remove repetitive or distracting public copy | `review` | Codex · `fix/F077-narrative-order` · public narrative only; accepted film/media preserved |
 | F077-T3 | Limit homepage correction to a looping prompt-first hero without nested frames, removed hero note and realistic hammer/chair images | `done` | Codex · PR #285, release #286 · production 9.1.2 / abe4aaf |

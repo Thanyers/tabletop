@@ -33,6 +33,10 @@
 
 ## การตัดสินใจ
 
+### Round 11 / F077-T6 — README parity with the published cases
+
+26 October 2026: align the English root README with the published café sales → physics learning → adventure play sequence. Reuse the exact EN hero GIFs and matching reduced-motion posters, with one short explanation per case. Retain the hammer/chair concept, supported-capability qualifications, beta/start guidance and exact AGPL section. Replace the older disconnected invoice/learning/Encounter image assortment in README; do not modify homepage source, media bytes, film, backend or deployment configuration. The default-branch README must match the publication; isolate any required documentation release from unrelated dev architecture work.
+
 ### Round 10 / F077-T5 — three hero GIF cases
 
 User scope (26 October 2026): change only the homepage hero GIF area. Rotate three 18-second prompt-first cases: café sales (opens; concrete everyday value), existing physics learning, then adventure play (breadth beyond work). Preserve the accepted learning GIF bytes and its original animation style. Each new case types before adding a usable card, retains earlier cards and visibly uses a control. Add compact case selectors within the existing hero area; retain Pause/Resume and static posters with no automatic rotation under reduced motion. English and Thai stay aligned. README, film, other page sections and backend are outside scope.
