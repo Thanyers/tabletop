@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T14:30:00+07:00",
-  "lastVerifiedAt": "2026-10-26T14:30:00+07:00",
+  "updatedAt": "2026-10-26T16:25:00+07:00",
+  "lastVerifiedAt": "2026-10-26T16:25:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,7 +18,7 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "8cb7a18",
+    "headSha": "042d7eb",
     "candidateSha": "4db0727",
     "pr": 305,
     "prState": "draft",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "32 PASS / 2 PARTIAL (G1-01, EDIT-01) / 1 UNVERIFIED (HUMAN-01) · dev = 8cb7a18 · D-036 slice1-2: space.installTool/uninstallTool + การ์ดเครื่องมือในหน้าห้อง (browser 7/7) · D-037 slice1 (PR #341): definition เก็บกับห้องได้ + Worker พิสูจน์ SHA-256 ก่อน authority (6/6, room 94/94) · D-038: slice 2 (mount GeneratedToolHost) ต้องมี route รัน behaviour + onIntent ก่อน — ยังไม่เริ่ม และไม่ใช่เกต acceptance · HUMAN-01 kit + checker พร้อม (scripts/check-human-01-results.mjs) · ค้างจากภายนอก: DEEPSEEK_KEY และผู้ใช้จริง",
+  "currentCheckpoint": "32 PASS / 2 PARTIAL (G1-01, EDIT-01) / 1 UNVERIFIED (HUMAN-01) · dev = 042d7eb · regression ล่าสุดบน dev: unit 1230 passed / 5 skipped (155 ไฟล์) · Worker tier 342/342 (23 ไฟล์) · D-038 server side merged: intent route รัน behaviour จริงแล้ว commit ผ่าน table.act (tool-intent 6/6 รวม drift test ของ refusal codes) · D-041: mount GeneratedToolHost ทำเสร็จใน draft PR #356 แต่ production CSP (script-src self) บล็อก srcdoc frame — ต้องให้เจ้าของเลือกวิธีแก้ก่อน merge · ค้างจากภายนอก: DEEPSEEK_KEY (G1-01/EDIT-01 — 0 call/USD 0.00) · ผู้ใช้จริง 5 คน (HUMAN-01) · การตัดสิน CSP",
   "slices": [
     {
       "alias": "C0",
