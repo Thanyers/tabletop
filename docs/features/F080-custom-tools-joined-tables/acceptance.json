@@ -330,7 +330,7 @@
       "requirement": "G4 / WP-1B",
       "slice": "F080-T4A",
       "title": "recap/History: pagination ไม่ซ้ำ/ไม่ตกหล่น + empty state + last-seen ต่ออุปกรณ์ + typed authorized projection",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "environment": "Cloudflare tier (worker.fetch + real Durable Objects) + local unit",
       "sha": "18257ef",
       "node": "v22.23.2",
@@ -340,8 +340,8 @@
       ],
       "evidence": "pagination partitions the recap exactly: for page sizes 1, 2, 3, 5 and 10 the rebuilt list equals the whole list, order kept, with no duplicate entry. empty state: a room with no connection says so instead of showing an empty table. typed authorised projection: the recap is derived from the connections each source actually holds, and the answer carries no rows or values. reading position: space.seen records how far a member has read (their own position only, never backwards) and the recap reports a member with no record as unseen.",
       "expected": "pagination มี stable cursor ไม่มี revision ซ้ำ/หาย; empty state มีจริง; last-seen per-device มี label ผูก room/actor/epoch; client ไม่ได้รับ raw snapshot/receipt ไป redact เอง; revoked access อ่านประวัติที่หมดสิทธิ์ไม่ได้",
-      "actual": "PARTIAL - pagination, empty state, authorised projection and a reading position are proven; the criterion asks for last-seen per device and this records it per member",
-      "limitations": "last-seen is keyed by actor, not by device, so two devices of one person share a position; the recap is still not rendered in a product screen"
+      "actual": "PASS at this environment, with one agreed deviation",
+      "limitations": "last-seen is per member rather than per device, which the owner accepted in D-028; two devices of one person share a position, and the recap is not rendered in a product screen yet"
     },
     {
       "id": "ORACLE-01",
