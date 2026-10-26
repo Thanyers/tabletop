@@ -1066,3 +1066,38 @@ describe('later files and a second edit keep the rest intact', () => {
     expect(after.fieldIds).toEqual([...before.fieldIds, 'tag'].sort());
   });
 });
+
+/**
+ * F080 / G2-02: a stale epoch is refused and nothing is written.
+ *
+ * The revision guard is covered by the stale-promotion test; this is the other half of the same
+ * contract - an epoch that no longer matches must not apply anything either.
+ */
+describe('a wrong epoch is refused without a partial write', () => {
+  it('rejects a command carrying an epoch the table does not have', async () => {
+    const owner = await seedActor('Epoch owner');
+    const created = await createWorkspace(owner, 'Epoch table');
+    const current = await viewOf(owner, created.id);
+
+    const response = await worker.fetch(request(`/api/workspaces/${created.id}/commands`, owner, {
+      method: 'POST',
+      body: {
+        commandId: randomUUID(),
+        expectedRevision: current.revision,
+        expectedEpoch: current.epoch + 1,
+        type: 'workspace.rename',
+        payload: { title: 'Should never apply' },
+      },
+    }), bindings);
+    const body = await response.json() as { errorCode?: string; code?: string };
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    const code = body.errorCode ?? body.code ?? '';
+    expect(code.includes('EPOCH') || code.includes('STALE')).toBe(true);
+
+    // Nothing was applied: same title, same revision, same epoch.
+    const after = await viewOf(owner, created.id);
+    expect(after.title).toBe(current.title);
+    expect(after.revision).toBe(current.revision);
+    expect(after.epoch).toBe(current.epoch);
+  });
+});

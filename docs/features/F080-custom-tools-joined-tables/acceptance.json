@@ -595,17 +595,17 @@
       "requirement": "G2",
       "slice": "F080-T3A",
       "title": "reload และ actor ที่สองเห็น authoritative state ตรงกัน; stale revision/epoch/revoked/retry ไม่มี partial write",
-      "status": "UNVERIFIED",
-      "environment": "workers + browser",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects) + local unit",
+      "sha": "c3b1e3c",
       "node": "v22.23.2",
       "commands": [
-        "npm run test:cloudflare -- cloudflare/tool-authority.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/room.test.ts"
       ],
-      "evidence": null,
+      "evidence": "reload and a second actor agree: a member who joins by invite reads a domain deep-equal to the owner's, so the authoritative state is not per-viewer. a stale revision is refused with 409 and the table keeps its title and revision - nothing is applied. a wrong epoch is refused and title, revision and epoch are all unchanged afterwards. a revoked connection is refused on read, action and export (409 each) with no rows or file produced. a retry with the same idempotency key replays the receipt: duplicate true, same revision, and the target row changed once.",
       "expected": "อ่านซ้ำได้ state เดียวกัน; ทุกกรณี stale/revoked/retry จบแบบไม่มี partial write ภายใน supported command",
-      "actual": "not run",
-      "limitations": "cross-table in-flight scope ต้องรายงานตาม protocol ที่มีจริง"
+      "actual": "PASS at this environment",
+      "limitations": "the projection revision string is per viewer by design, so agreement is asserted on the domain; concurrency (two writers at the same moment) is not exercised"
     },
     {
       "id": "G3-01",
