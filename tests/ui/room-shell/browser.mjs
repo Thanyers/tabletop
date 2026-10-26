@@ -73,6 +73,18 @@ try {
   if (pageErrors.length > 0) fail('no uncaught page errors', pageErrors.join(' | '));
   mark('no uncaught page errors');
 
+  // D-036: the product screen shows the tool the room installed, not a placeholder.
+  await page.goto(`${pathToFileURL(pages).href}?screen=space`);
+  await page.getByTestId('room-tool-title').waitFor();
+  const toolTitle = await page.getByTestId('room-tool-title').innerText();
+  const toolVersion = await page.getByTestId('room-tool-version').innerText();
+  const toolOwner = await page.getByTestId('room-tool-owner').innerText();
+  if (!toolTitle.includes('เครื่องมือ')) fail('the room shows the installed tool title', toolTitle);
+  if (!toolVersion.includes('v2') || !toolVersion.includes('AI')) fail('the room shows the installed version and route', toolVersion);
+  if (!toolOwner.includes('actor-b')) fail('the room shows who installed it', toolOwner);
+  if (await page.getByTestId('space-room-note').count() !== 0) fail('the placeholder is not shown when a tool is installed', 'placeholder present');
+  mark('the product room screen shows the installed tool version', `${toolTitle} · ${toolVersion}`);
+
   await writeFile(join(output, 'report.json'), JSON.stringify({ status: 'PASS', node: process.version, checks }, null, 2));
   console.log(`\n${checks.length} checks passed`);
 } catch (error) {

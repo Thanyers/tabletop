@@ -4,6 +4,7 @@ import type { JoinedSource } from './JoinedProjectionView';
 import type { JoinedReadDeps } from './joined-projection-client';
 import { readJoinedSources } from './joined-projection-client';
 import { RoomShell, type RoomRecapView, type RoomTableSummary } from './RoomShell';
+import { ToolInstallationCard } from './ToolInstallationCard';
 
 /**
  * F080 / JT-V: the room screen — the part that turns three answers into one shell.
@@ -115,7 +116,7 @@ export function SpaceRoomScreen(props: SpaceRoomScreenProps): React.ReactElement
       onRefreshData={load}
       onDisconnectSource={async () => { /* revoking belongs to the source; the shell only reports it */ }}
       recap={recap}
-      tool={<p data-testid="space-room-note" style={{ margin: 0 }}>{note || 'เครื่องมือของห้องนี้ยังไม่ถูกเลือก'}</p>}
+      tool={space?.space?.tool ? <ToolInstallationCard tool={space.space.tool} /> : <p data-testid="space-room-note" style={{ margin: 0 }}>{note || 'เครื่องมือของห้องนี้ยังไม่ถูกเลือก'}</p>}
     />
   );
 }

@@ -4,6 +4,8 @@ import { RoomShell, type RoomRecapView, type RoomTableSummary } from '../../../s
 import type { JoinedSource } from '../../../src/tabletop/ui/JoinedProjectionView';
 import { readJoinedSources, type JoinedSourceRequest, type ProjectionResponse } from '../../../src/tabletop/ui/joined-projection-client';
 import { createJoinedProjectionFetcher } from '../../../src/tabletop/ui/joined-projection-fetcher';
+import { SpaceRoomScreen, type SpaceRoomDeps } from '../../../src/tabletop/ui/SpaceRoomScreen';
+import type { CollaborationSpace } from '../../../src/tabletop/shared/collaboration-space';
 
 /**
  * F080 / JT-V harness: the room shell (variant C) with the real client mapping in the loop.
@@ -137,7 +139,48 @@ function Harness(): React.ReactElement {
   );
 }
 
+/**
+ * F080 / D-036: the real product screen with an installed tool, so the room's own view (not the
+ * harness slot) is what the browser proves.
+ */
+const SPACE_WITH_TOOL: CollaborationSpace = {
+  schemaVersion: 1,
+  spaceId: 'activity-room',
+  title: 'ห้องวางผังกิจกรรม',
+  sharedToolWorkspaceId: '33333333-3333-4333-8333-333333333333',
+  managerActorId: 'actor-a',
+  members: [
+    { actorId: 'actor-a', name: 'A', role: 'manager', joinedAt: 1 },
+    { actorId: 'actor-b', name: 'B', role: 'maker', joinedAt: 2 },
+  ],
+  sources: [],
+  revision: 3,
+  epoch: 1,
+  createdAt: 1,
+  updatedAt: 2,
+  tool: {
+    packageId: 'room-planner',
+    version: 2,
+    contentHash: 'c'.repeat(64),
+    route: 'ai',
+    title: 'เครื่องมือวางผังห้อง',
+    installedBy: 'actor-b',
+    installedAt: 5,
+  },
+} as CollaborationSpace;
+
+function SpaceScreenHarness(): React.ReactElement {
+  const deps: SpaceRoomDeps = {
+    actorId: 'actor-a',
+    viewerLabel: () => 'คุณกันต์ · ผู้จัดการห้อง',
+    loadSpace: async () => ({ title: SPACE_WITH_TOOL.title, space: SPACE_WITH_TOOL }),
+    loadRecap: async () => ({ headline: 'มี 1 แหล่งข้อมูลเปลี่ยน', incomplete: false, changed: [], withdrawn: [] }),
+    fetchProjection: async () => ({ ok: false, status: 404, body: { ok: false, errorCode: 'SPACE_SOURCE_NOT_LINKED' } }),
+  };
+  return <SpaceRoomScreen workspaceId={SPACE} deps={deps} />;
+}
+
 const container = document.getElementById('root');
 if (!container) throw new Error('The room shell harness has no root element.');
 container.className = 'tt-app';
-createRoot(container).render(<Harness />);
+createRoot(container).render(new URLSearchParams(window.location.search).get('screen') === 'space' ? <SpaceScreenHarness /> : <Harness />);
