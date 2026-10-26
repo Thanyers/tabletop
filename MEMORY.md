@@ -9,6 +9,11 @@
 - **What happened:** ตอนส่งข้อความเข้าแชทโต๊ะบน staging ด้วย `document.querySelector('textarea')` + native setter สคริปต์ไปเจอช่อง caption ของการ์ดรูป (F073) ก่อนช่องแชท แล้วกด Enter ทำให้คำบรรยายรูปที่ผู้ใช้แปะไว้ถูกบันทึกทับ · ค่าเดิมไม่มีใน log ต้องเดาจาก screenshot ว่าเป็นค่าว่างแล้วล้างกลับ
 - **Root cause:** การ์ด note/รูปบน canvas ก็เป็น `<textarea>` และอยู่ก่อนช่องแชทใน DOM · selector กว้างเกินไป และไม่ได้อ่านค่าเดิมเก็บไว้ก่อนเขียน
 - **Correct behavior:** เลือกช่องแชทด้วย `textarea:not(.tt-note__text)` แล้วเช็ค `placeholder === 'Ask, add something, or change this table'` ก่อนเขียน · ก่อนแตะข้อมูลบนโต๊ะที่คนอื่นใช้ ให้ดึง `/api/workspaces/<id>` เก็บ `notes` ไว้ใน scratchpad ก่อนเสมอ
+### 2026-10-26 — run บน dev ขึ้น `cancelled` เป็นเรื่องปกติ ไม่ใช่ failure
+- **What happened:** หลาย commit บน `dev` มี run ที่จบด้วย `cancelled` (เช่น `ad8930a`, `a400496`) ขณะที่ staging รายงาน sha เก่ากว่า ทำให้ดูเหมือน CI/deploy ค้าง
+- **Root cause:** workflow ใช้ concurrency กลุ่มเดียว (CD002: run บน `dev` อาจกำลัง deploy staging รวม D1 migration) ⇒ merge ใหม่ทำให้ run เก่าถูกยกเลิก และ staging deploy ผูกกับ run ที่ชนะเท่านั้น
+- **Correct behavior:** อ่านผลของ **commit ที่เป็น head** และดู run ล่าสุด ไม่ตีความ `cancelled` เป็นแดง; ถ้าจะยืนยัน deploy ให้เทียบ `/version` ของ staging กับ sha ของ dev แล้วรอ run ของ head จบ (rerun ด้วย SHA เดิมได้เมื่อจำเป็น)
+
 
 ### 2026-10-26 — dev CI แดงเพราะเทสต์เบราว์เซอร์เดิม flaky (ไม่ใช่ F080)
 - **What happened:** run `40261590989` (commit `69ea166`, merge ของ F080-G2-02) จบด้วย `failure`; job `Account multiplayer and AI browser acceptance on Workers` ล้มที่ step 8 ด้วย `ExpectError: expect(locator).toHaveAttribute(expected) failed` สองครั้งติด (ล้มแล้ว retry ก็ล้ม) จึงทำให้ `local-validation` fail ตาม
