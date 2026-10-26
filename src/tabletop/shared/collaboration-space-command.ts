@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SPACE_LIMITS, SPACE_ROLES } from './collaboration-space';
-import { toolPackageDefinitionSchema } from './tool-package';
+import { toolPackageDefinitionSchema, type ToolPackageDefinition } from './tool-package';
 
 /**
  * F080: the wire shape of a collaboration-space command.
@@ -95,7 +95,7 @@ export type ParsedSpaceCommand =
   | { ok: true; type: 'space.seen'; revision: number }
   | { ok: true; type: 'space.setBrief'; text: string }
   | { ok: true; type: 'space.clearBrief' }
-  | { ok: true; type: 'space.installTool'; tool: { packageId: string; version: number; contentHash: string; route: 'human' | 'ai'; title: string } }
+  | { ok: true; type: 'space.installTool'; tool: { packageId: string; version: number; contentHash: string; route: 'human' | 'ai'; title: string; definition?: ToolPackageDefinition } }
   | { ok: true; type: 'space.uninstallTool' }
   | { ok: false; code: 'SPACE_PAYLOAD'; message: string };
 

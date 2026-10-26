@@ -474,3 +474,18 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **Backward compatibility:** behaviour ที่คืน list ยังทำงานเหมือนเดิม 100% (wire ไม่มี proposal, validator คืน `changes` เท่านั้น)
 
 **ผลต่อ EXEC-01:** ต้องลดเป็น **PARTIAL** เพราะหลักฐานเดิมใช้ proposal ที่เทสต์สร้างเอง ไม่ได้มาจาก behaviour จริง — จะกลับเป็น PASS เมื่อ e2e รัน behaviour ผ่าน runner แล้วได้ proposal จากมันจริง
+
+## D-040 — route ที่รัน tool ในห้อง: refusal เป็นค่า, hash callback, gate `tool.run`, และที่มาของ `expected`
+
+**บริบท:** D-038 slice 2 — `POST /api/workspaces/:id/space/tool/intent` → Room → runner → validate → plan → `table.act`
+
+**การตัดสินใจ 4 ข้อ:**
+
+1. **refusal เป็นค่า ไม่ throw** — ทุกการปฏิเสธคืน `{ok:false, code, message}` ⇒ route ตอบ code ที่มีความหมาย (ไม่ใช่ 500) และ **ไม่มีคำสั่งถูกส่งเข้า authority**; ยัง throw เฉพาะข้อผิดพลาดจริง (storage) เท่านั้น ต่างจากคำสั่งอื่นที่ใช้ `AuthorityError` เพราะเส้นนี้เป็น "การพยายามรัน" ที่ต้องอธิบายเหตุผลให้ผู้ใช้เห็น
+2. **hash callback ของ `compileToolPackage`** ต้อง hash **canonical string** ตรง ๆ (ไม่ใช่ `JSON.stringify` ซ้อน) เพื่อให้ `compiled.contentHash` เท่ากับ hash ที่ install ไว้ — มิฉะนั้นทุกการรันจะถูกปฏิเสธด้วย `TOOL_HASH_MISMATCH`
+3. **gate `tool.run`** — ใช้ matrix ของ space (`viewer` ไม่มี `tool.run`) ⇒ `TOOL_NOT_AUTHORIZED`; ไม่อ้างว่า "สมาชิกทุกคนรันได้"
+4. **`expected` ของ request** — ห้องไม่ได้เก็บ `ToolInstance` (D-037 เก็บ reference+definition) จึงไม่มี `instanceRevision`/`grantVersion` ของ connection; ใช้ `domain.dataRevision` และ `space.revision` และความสดจริงถูกบังคับด้วย `expectedRevision` ของ `table.act` (ไม่ใช่ `checkToolBehaviorFreshness` ซึ่งยังไม่มีผู้เรียกใน production)
+
+**ช่องว่างที่พบระหว่างทำ (แก้ในรอบนี้):** `ParsedSpaceCommand` ของ `space.installTool` ไม่มีฟิลด์ `definition` ในชนิด แม้ schema รับและ runtime ส่งต่อครบ ⇒ อ่านโค้ดแล้วเข้าใจผิดว่า definition ไม่ถูกพาไป
+
+**ยังค้าง (สำหรับ slice ถัดไป):** code ใหม่ (`TOOL_NOT_INSTALLED`, `TOOL_HASH_MISMATCH`, `TOOL_NOT_AUTHORIZED`) ยังไม่อยู่ใน `TOOL_INTENT_REJECTIONS` (`shared/tool-protocol.ts`) ซึ่ง frame ต้องใช้เมื่อ mount `GeneratedToolHost`

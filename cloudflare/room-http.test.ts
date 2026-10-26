@@ -3,7 +3,7 @@ import type { AuthorizedWorkspace, CommandAuthority } from '../server/authority.
 import { sha256 } from '../server/codec.js';
 import { createDomain } from '../src/tabletop/domain/index.js';
 import type { Env } from './contracts.js';
-import { createRoomHttp, matchRoomRoute, type RoomHttpDeps } from './room-http.js';
+import { createRoomHttp, matchRoomRoute, type RoomHttpDeps, type ToolIntentRun } from './room-http.js';
 import type { RoomRepository } from './room-repository.js';
 import type { WorkspaceView } from '../src/tabletop/shared/contracts.js';
 
@@ -70,6 +70,11 @@ function harness(options: { authorized?: AuthorizedWorkspace; env?: Env } = {}) 
     createInvite: vi.fn(async () => ({ ticket: 'ticket-1', expiresAt: 1_700_300_000_000 })),
   } as unknown as CommandAuthority;
   const scheduleDirectorySync = vi.fn();
+  const runToolIntent = vi.fn(async (): Promise<ToolIntentRun> => ({
+    ok: true as const,
+    actionId: 'borrow',
+    ack: { ok: true as const, commandId: 'command-1', duplicate: false, workspace: view.workspace },
+  }));
   const readSpaceProjection = vi.fn(async (input: { grantId: string; spaceId: string; spaceWorkspaceId: string; actorId: string; portId: string }) => ({
     ok: true as const,
     grantId: input.grantId,
@@ -89,8 +94,9 @@ function harness(options: { authorized?: AuthorizedWorkspace; env?: Env } = {}) 
     joinByInviteLink: vi.fn(async () => view.workspace),
     scheduleDirectorySync,
     readSpaceProjection,
+    runToolIntent,
   };
-  return { deps, repository, authority, scheduleDirectorySync, readSpaceProjection, view };
+  return { deps, repository, authority, scheduleDirectorySync, readSpaceProjection, runToolIntent, view };
 }
 
 const handle = (deps: RoomHttpDeps, req: Request, requestId = 'req-1') => {
@@ -311,5 +317,35 @@ describe('internal space projection', () => {
     readSpaceProjection.mockResolvedValueOnce({ ok: false, code: 'SPACE_GRANT_NOT_FOUND', message: 'nope' });
     const response = await handle(deps, post(body));
     expect(response.status).toBe(404);
+  });
+});
+
+describe('internal space tool intent', () => {
+  const post = (value: string) => request('/internal/space-tool-intent', {
+    method: 'POST', body: value, headers: { 'content-type': 'application/json' },
+  });
+
+  it('runs the behaviour through the room and answers with the committed action', async () => {
+    const { deps, runToolIntent } = harness();
+    const response = await handle(deps, post(JSON.stringify({ behaviorId: 'reserve', inputs: { item: 'camera' } })));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, actionId: 'borrow' });
+    expect(runToolIntent).toHaveBeenCalledWith(expect.anything(), ROOM, { behaviorId: 'reserve', inputs: { item: 'camera' } });
+  });
+
+  it('rejects a malformed intent before the room runs anything', async () => {
+    const { deps, runToolIntent } = harness();
+    const response = await handle(deps, post(JSON.stringify({ behaviorId: 'Reserve', inputs: {} })));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ ok: false, code: 'TOOL_INTENT_PAYLOAD' });
+    expect(runToolIntent).not.toHaveBeenCalled();
+  });
+
+  it('reports a refusal with the code, not as a thrown failure', async () => {
+    const { deps, runToolIntent } = harness();
+    runToolIntent.mockResolvedValueOnce({ ok: false, code: 'ACTION_NOT_DECLARED', message: 'not declared' });
+    const response = await handle(deps, post(JSON.stringify({ behaviorId: 'reserve', inputs: {} })));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ ok: false, code: 'ACTION_NOT_DECLARED' });
   });
 });

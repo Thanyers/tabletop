@@ -14,7 +14,9 @@ import { handleSpaceProjectionRead } from './space-projection-transport.js';
 import { handleSpaceAction } from './space-action-transport.js';
 import { handleSpaceExport } from './space-export-transport.js';
 import { handleSpaceRecap } from './space-recap-transport.js';
+import { handleToolIntent } from './tool-intent-transport.js';
 import type { SpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
+import type { ToolIntentRun } from './room-http.js';
 export { Room } from './room.js';
 export { Billing } from './billing.js';
 
@@ -28,6 +30,8 @@ const spaceActionRoute = new RegExp(`^/api/workspaces/(${uuid})/space/action$`, 
 const spaceExportRoute = new RegExp(`^/api/workspaces/(${uuid})/space/export$`, 'u');
 /** F080: what happened in this room, derived from the connections its sources hold. */
 const spaceRecapRoute = new RegExp(`^/api/workspaces/(${uuid})/space/recap$`, 'u');
+/** F080 / D-038: one behaviour of the tool this room installed; the room runs it and commits its proposal. */
+const spaceToolIntentRoute = new RegExp(`^/api/workspaces/(${uuid})/space/tool/intent$`, 'u');
 const ticketPattern = new RegExp(`^(${uuid})_([A-Za-z0-9_-]{43})$`, 'u');
 const createSchema = z.object({ kind: z.enum(['invoice', 'teaching', 'encounter', 'table']), title: z.string().max(120).optional() }).strict();
 const joinLinkSchema = z.strictObject({ link: z.string().max(100) });
@@ -218,6 +222,29 @@ async function route(request: Request, env: Env): Promise<Response> {
         const response = await room(env, sourceWorkspaceId).fetch(forwarded);
         if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
         return await response.json<{ ok: true; revision: string; duplicate: boolean } | { ok: false; code: string; message: string }>();
+      },
+    }, { spaceId });
+  }
+  const toolIntent = spaceToolIntentRoute.exec(path);
+  if (method === 'POST' && toolIntent?.[1]) {
+    // F080 / D-038: the Worker answers membership; the room runs the behaviour and commits through
+    // the ordinary table.act command. A refusal comes back as a code, so a package can branch on it.
+    const spaceId = toolIntent[1];
+    await limit(env, `space-tool-intent:${session.record.actorId}`, 30, 60_000);
+    return handleToolIntent(request, {
+      authenticate: async () => ({ actorId: session.record.actorId }),
+      workspaceView: async (original, workspaceId) => {
+        const response = await room(env, workspaceId).fetch(internalRequest(original, '/internal/view'));
+        if (response.status === 401 || response.status === 403 || response.status === 404) return undefined;
+        if (!response.ok) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<WorkspaceView>();
+      },
+      runToolIntent: async (original, workspaceId, input) => {
+        // The room authorizes the caller itself, so it needs the session, not a vouched body.
+        const forwarded = internalRequest(original, '/internal/space-tool-intent', input);
+        const response = await room(env, workspaceId).fetch(forwarded);
+        if (response.status >= 500) throw new AuthorityError('DATABASE_UNAVAILABLE');
+        return await response.json<ToolIntentRun>();
       },
     }, { spaceId });
   }

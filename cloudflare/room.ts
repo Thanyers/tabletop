@@ -7,6 +7,13 @@ import { CommandAuthority } from '../server/authority.js';
 import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
+import { compileToolPackage } from '../src/tabletop/runtime/tools/compile.js';
+import { buildToolBehaviorRequest } from '../src/tabletop/shared/tool-behavior-request.js';
+import { planToolBehaviorAction } from '../src/tabletop/shared/tool-action-proposal.js';
+import { toolPackageContentCanonical, type ToolWriteDeclaration } from '../src/tabletop/shared/tool-package.js';
+import { spaceAllows, spaceRoleOf } from '../src/tabletop/shared/collaboration-space.js';
+import { ToolBehaviorRunError, validateToolBehaviorOutput, type ToolBehaviorResourceSchemaMap, type ToolBehaviorResult } from '../src/tabletop/shared/tool-behavior.js';
+import { createCloudflareToolBehaviorRunner } from './tool-behavior-runner.js';
 import { projectionCursor } from '../server/projection-cursor.js';
 import { resolveSpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
 import { projectGrantRows } from '../src/tabletop/shared/tool-grant-rows.js';
@@ -22,7 +29,7 @@ import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
 import { tailWithin, MAX_JOB_THINKING_TAIL_CHARS, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
-import { createRoomHttp, json, matchRoomRoute, readBodyBytes, readJson, type RoomHttp, type RoomRouteMatch } from './room-http.js';
+import { createRoomHttp, json, matchRoomRoute, parseToolIntentInput, readBodyBytes, readJson, type RoomHttp, type RoomRouteMatch, type ToolIntentRun } from './room-http.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange } from './room-repository.js';
 import {
   boundedFailureDetails,
@@ -181,6 +188,30 @@ function parsePeerAttachment(value: unknown): PeerAttachment | null {
   return value as unknown as PeerAttachment;
 }
 
+type TableDomainView = Extract<WorkspaceView['domain'], { kind: 'table' }>;
+
+/** F080 / D-038: a refused run is a value, so the route answers with a code and nothing was committed. */
+function toolIntentRefusal(code: string, message: string): ToolIntentRun {
+  return { ok: false, code, message };
+}
+
+/**
+ * F080 / D-038: the field allowlist this run is granted.
+ *
+ * The behaviour says which resources it may write; the table decides which fields those resources
+ * have, so the schema comes from the program's own collections and never from the caller. A declared
+ * resource the program does not define still gets an empty allowlist, which refuses every cell rather
+ * than silently widening the run.
+ */
+function toolResourceSchema(domain: TableDomainView, writes: readonly ToolWriteDeclaration[]): ToolBehaviorResourceSchemaMap {
+  const schema: ToolBehaviorResourceSchemaMap = {};
+  for (const write of writes) {
+    const collection = domain.program?.collections.find(entry => entry.id === write.resource);
+    schema[write.resource] = { fields: (collection?.fields ?? []).map(field => ({ id: field.id, type: field.type })) };
+  }
+  return schema;
+}
+
 export class Room extends DurableObject<Env> {
   readonly repository: RoomRepository;
   readonly authority: CommandAuthority;
@@ -291,6 +322,8 @@ export class Room extends DurableObject<Env> {
         return selectGrantsForSpace(Array.isArray(domain.spaceGrants) ? domain.spaceGrants : [], input.spaceWorkspaceId)
           .map(connection => ({ ...connection, liveDataRevision: live }));
       },
+      // F080 / D-038: the room runs the behaviour, plans the action and commits it through table.act.
+      runToolIntent: (request, workspaceId, input) => this.runToolIntent(request, workspaceId, input),
       // F080: the export is built here because only this table can see its rows and its export flag.
       exportSpaceProjection: async input => {
         const workspaceId = this.requireBoundRoomId();
@@ -377,6 +410,95 @@ export class Room extends DurableObject<Env> {
     // D-037: an installed tool definition must hash to the reference before the domain stores it.
     verifyToolInstall(envelope);
     return this.authority.execute(authorized.session, envelope, workspaceId);
+  }
+
+  /**
+   * F080 / D-038: run one behaviour of the tool this room installed, then commit its proposal.
+   *
+   * The pipeline is the one the e2e already proves with production pieces: re-prove the content
+   * hash, compile the stored definition, build the request from the package (never from the caller),
+   * run it in an isolate, validate the output and plan the action. Only then does the ordinary
+   * `table.act` command run, so there is still exactly one write path and a refusal leaves the table
+   * untouched. Every refusal is returned as a code instead of thrown.
+   */
+  async runToolIntent(request: Request, workspaceId: string, input: unknown): Promise<ToolIntentRun> {
+    this.requireRoomId(workspaceId);
+    const authorized = await this.authorize(request, workspaceId);
+    requireMutation(request, this.env, authorized.session);
+    requireWorkspaceWritable(this.env, authorized.workspace.kind);
+
+    const parsed = parseToolIntentInput(input);
+    if (!parsed) return toolIntentRefusal('TOOL_INTENT_PAYLOAD', 'A behaviour id and its declared inputs are required.');
+    const domain = authorized.workspace.domain;
+    if (domain.kind !== 'table') return toolIntentRefusal('TOOL_NOT_INSTALLED', 'Only a table room can run a tool.');
+    const space = domain.collaborationSpace;
+    const tool = space?.tool;
+    // D-036: no installation means no tool to run, and the room says so instead of pretending.
+    if (!space || !tool) return toolIntentRefusal('TOOL_NOT_INSTALLED', 'This room has no tool installed.');
+    // The space decides who may run its tool; a viewer is in the room but not allowed to make it act.
+    const role = spaceRoleOf(space, authorized.context.actorId);
+    if (!role || !spaceAllows(role, 'tool.run')) return toolIntentRefusal('TOOL_NOT_AUTHORIZED', 'This member may not run the room tool.');
+    // D-037: a reference without its package source cannot be compiled or run.
+    const definition = tool.definition;
+    if (!definition) return toolIntentRefusal('TOOL_NOT_INSTALLED', 'The installed tool has no package source to run.');
+    // D-038: prove the reference again before any stored source reaches the isolate.
+    if (sha256(toolPackageContentCanonical(definition)) !== tool.contentHash) {
+      return toolIntentRefusal('TOOL_HASH_MISMATCH', 'The installed tool does not match its recorded content hash.');
+    }
+    const compiled = compileToolPackage(definition, value => sha256(typeof value === 'string' ? value : JSON.stringify(value)));
+    if (!compiled.ok) {
+      const problem = compiled.problems[0];
+      return toolIntentRefusal(problem?.code ?? 'TOOL_COMPILE_FAILED',
+        problem ? `${problem.path}: ${problem.message}` : 'The installed package did not compile.');
+    }
+    const behavior = definition.behaviors.find(entry => entry.id === parsed.behaviorId);
+    if (!behavior) return toolIntentRefusal('TOOL_UNKNOWN_BEHAVIOR', `The installed package has no behaviour "${parsed.behaviorId}".`);
+    const built = buildToolBehaviorRequest({
+      package: definition,
+      compiled: compiled.compiled,
+      behaviorId: behavior.id,
+      inputs: parsed.inputs,
+      resourceSchema: toolResourceSchema(domain, behavior.writes),
+      // The revisions this room authorized the run at, so a behaviour can report what it read.
+      expected: { instanceRevision: domain.dataRevision, grantVersion: space.revision },
+    });
+    if (!built.ok) return toolIntentRefusal(built.code, built.message);
+
+    const runner = createCloudflareToolBehaviorRunner({ loader: this.env.COMPUTE_LOADER });
+    let result: ToolBehaviorResult;
+    try {
+      result = await runner.run(built.request);
+    } catch (error) {
+      const code = error instanceof ToolBehaviorRunError ? error.code : 'TOOL_BEHAVIOR_FAILED';
+      return toolIntentRefusal(code, 'The behaviour did not finish.');
+    }
+    const validation = validateToolBehaviorOutput(result, built.request);
+    if (!validation.ok) {
+      return toolIntentRefusal(validation.code, validation.problems[0] ?? 'The behaviour returned an unusable result.');
+    }
+    const planned = planToolBehaviorAction({
+      declaredActions: behavior.actions ?? [],
+      programActions: domain.program?.actions ?? [],
+      proposal: validation.proposal,
+    });
+    if (!planned.ok) return toolIntentRefusal(planned.code, planned.message);
+
+    // D-033 / D-038: the commit is the ordinary action command, with a fresh id and this room's
+    // revision and epoch. Nothing else in this method writes state.
+    try {
+      const ack = await this.authority.execute(authorized.session, {
+        commandId: randomId(),
+        expectedRevision: authorized.workspace.revision,
+        expectedEpoch: authorized.workspace.epoch,
+        type: 'table.act',
+        payload: { actionId: planned.actionId, inputs: planned.inputs },
+      }, workspaceId);
+      return { ok: true, actionId: planned.actionId, ack };
+    } catch (error) {
+      // A domain refusal (a failed condition, a stale revision) is still a refusal, not a crash.
+      if (error instanceof AuthorityError) return toolIntentRefusal(error.code, error.message);
+      throw error;
+    }
   }
 
   async create(request: Request, input: unknown): Promise<WorkspaceView> {
