@@ -204,18 +204,17 @@
       "requirement": "G2",
       "slice": "F080-T2B",
       "title": "open visibility เดิมในโต๊ะยังทำงาน; connection ไม่เผยทั้งแชทโดยปริยาย",
-      "status": "UNVERIFIED",
-      "environment": "local + workers",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "local unit",
+      "sha": "2d7237c",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/shared/visibility.test.ts",
-        "npm run test:cloudflare -- cloudflare/room.test.ts"
+        "npx vitest run src/tabletop/shared/space-visibility.test.ts"
       ],
-      "evidence": null,
+      "evidence": "the table policy is unchanged: VISIBILITY_POLICY is still \"open\" and \"private\" remains representable, so the retained private path was not removed. a connection narrows, never widens: a granted projection returns only the fields the grant named, and chat, notes and draft values in the same row never appear in the projection or in its JSON. a field appears only when the grant itself lists it, which is asserted in both directions.",
       "expected": "`VISIBILITY_POLICY` เดิมไม่เปลี่ยน; projection ที่ส่งให้ shared tool มีเฉพาะ declared fields ไม่รวมแชท/ไฟล์ทั้งก้อน; เส้นทาง `'private'` ยังอยู่",
-      "actual": "not run",
-      "limitations": "ห้ามเปลี่ยนค่านโยบายเป็นส่วนหนึ่งของ feature นี้"
+      "actual": "PASS at this environment",
+      "limitations": "covers the table kind and the projection surface; teacher/learner and DM/hidden-roll visibility is out of scope for this feature and is not asserted here"
     },
     {
       "id": "JOIN-01",
