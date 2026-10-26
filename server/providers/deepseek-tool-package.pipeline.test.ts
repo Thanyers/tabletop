@@ -89,7 +89,9 @@ describe('the DeepSeek adapter drives the authoring pipeline', () => {
     if (!result.ok) return;
     expect(result.record.status).toBe('activated');
     expect(result.record.generator).toMatchObject({ kind: 'ai', generatorId: 'deepseek-tool-package', calls: 1 });
-    expect(result.record.generator.usd).toBeGreaterThan(0);
+    const generatorRecord = result.record.generator;
+    if (generatorRecord.kind !== 'ai') throw new Error('the record should name the AI generator');
+    expect(generatorRecord.usd).toBeGreaterThan(0);
     expect(result.contentHash).toMatch(/^[a-f0-9]{64}$/u);
   });
 
