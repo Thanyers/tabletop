@@ -48,11 +48,29 @@ export function isCanvasPosition(value: unknown): value is CanvasPoint & { pinne
     && (point.pinned === undefined || typeof point.pinned === 'boolean');
 }
 
+/**
+ * Which newly listed cards start closed. A table with its own summary views opens on those, so on this browser's first
+ * look the raw tables, Rules, Actions, people and history start closed. F083: a card that appears after that first look
+ * was just made (a table or summary the AI added on request), so it stays open instead of vanishing as it is created.
+ */
+export function cardsClosedOnFirstLook(ids: readonly string[], fresh: readonly string[], seen: ReadonlySet<string>): string[] {
+  if (seen.size > 0 || !ids.some((id) => id.startsWith('table.view.'))) return [];
+  return fresh.filter((id) => id === 'table.rules' || id === 'table.actions' || id.startsWith('table.collection.')
+    || id === 'workspace.people' || id === 'workspace.history');
+}
+
 export interface CanvasViewState {
   starred(workspaceKey: string): ReadonlySet<string>;
   saveStarred(workspaceKey: string, ids: ReadonlySet<string>): void;
   hidden(workspaceKey: string): ReadonlySet<string>;
   saveHidden(workspaceKey: string, ids: ReadonlySet<string>): void;
+  /**
+   * F083: hide or show some cards against what is stored now, not against this tab's copy, so a second tab with an
+   * older copy cannot put back cards the viewer already opened elsewhere. Returns the stored set after the change.
+   */
+  changeHidden(workspaceKey: string, change: { hide?: readonly string[]; show?: readonly string[] }): ReadonlySet<string>;
+  /** F083: whether a `storage` event key belongs to this table's closed cards, so other tabs can follow along. */
+  isHiddenKey(workspaceKey: string, storageKey: string | null): boolean;
   seen(workspaceKey: string): Set<string>;
   saveSeen(workspaceKey: string, ids: ReadonlySet<string>): void;
   cardSizes(workspaceKey: string): CardSizes;
@@ -103,6 +121,11 @@ export function createCanvasViewState(storage: CanvasStorage | null): CanvasView
     } catch {
       return new Set();
     }
+  }
+
+  function writeHidden(workspaceKey: string, ids: ReadonlySet<string>): void {
+    if (ids.size === 0) remove(hiddenKey(workspaceKey));
+    else write(hiddenKey(workspaceKey), JSON.stringify([...ids].slice(0, MAX_MARKED_CARDS)));
   }
 
   function readCardSizes(workspaceKey: string): CardSizes {
@@ -163,10 +186,15 @@ export function createCanvasViewState(storage: CanvasStorage | null): CanvasView
       write(starredKey(workspaceKey), JSON.stringify([...ids].slice(-MAX_MARKED_CARDS)));
     },
     hidden: (workspaceKey) => readIdSet(workspaceKey, hiddenKey, MAX_MARKED_CARDS, true),
-    saveHidden(workspaceKey, ids) {
-      if (ids.size === 0) remove(hiddenKey(workspaceKey));
-      else write(hiddenKey(workspaceKey), JSON.stringify([...ids].slice(0, MAX_MARKED_CARDS)));
+    saveHidden: writeHidden,
+    changeHidden(workspaceKey, change) {
+      const next = readIdSet(workspaceKey, hiddenKey, MAX_MARKED_CARDS, true);
+      for (const id of change.show ?? []) next.delete(id);
+      for (const id of change.hide ?? []) next.add(id);
+      writeHidden(workspaceKey, next);
+      return next;
     },
+    isHiddenKey: (workspaceKey, storageKey) => storageKey === null || storageKey === hiddenKey(workspaceKey),
     seen: (workspaceKey) => readIdSet(workspaceKey, seenKey, MAX_SEEN_CARDS, false),
     saveSeen(workspaceKey, ids) {
       write(seenKey(workspaceKey), JSON.stringify([...ids].slice(-MAX_SEEN_CARDS)));

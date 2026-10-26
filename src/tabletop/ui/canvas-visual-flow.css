@@ -82,6 +82,30 @@
 .tt-flow-wrap .tt-canvas-objects__trigger > svg { color: var(--tt-moss); }
 .tt-flow-wrap .tt-canvas-objects__trigger small { color: #81918a; font: 600 10px var(--tt-mono); }
 .tt-flow-wrap .tt-canvas-objects__trigger:hover { border-color: #a9c7ba; background: #fff; }
+
+/* F083: closed table cards are named on the canvas, so a closed card never reads as lost data. */
+.tt-flow-wrap .tt-canvas-closed-notice {
+  display: inline-flex;
+  min-height: 40px;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #e5d6a8;
+  border-radius: 7px;
+  color: #6b5a26;
+  background: #fdf8e8ef;
+  box-shadow: 0 3px 12px #2435480b;
+  font: 600 12px/1 Manrope, 'Noto Sans Thai', sans-serif;
+  pointer-events: auto;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.tt-flow-wrap .tt-canvas-closed-notice > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-flow-wrap .tt-canvas-closed-notice b { color: var(--tt-moss); font-weight: 800; white-space: nowrap; }
+.tt-flow-wrap .tt-canvas-closed-notice:hover { border-color: #d6c27e; background: #fffaf0; }
+.tt-flow-wrap .tt-canvas-closed-notice:focus-visible { outline: 2px solid var(--tt-blue); outline-offset: 2px; }
 .tt-flow-wrap .tt-canvas-objects__trigger:focus-visible,
 .tt-flow-wrap .tt-canvas-objects__panel button:focus-visible,
 .tt-flow-wrap .tt-canvas-node button:focus-visible { outline: 2px solid var(--tt-blue); outline-offset: 2px; }
