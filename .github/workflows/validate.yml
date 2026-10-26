@@ -510,7 +510,7 @@ jobs:
     # Cancellation and unsuccessful validation still prevent deployment.
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.local-validation.result == 'success' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40 # room for one deploy retry after a slow container step
     concurrency:
       group: staging-deploy
       cancel-in-progress: false
@@ -525,6 +525,17 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WRANGLER_SEND_METRICS: "false"
     steps:
+      # CD004: a later success closes the issues earlier failures opened; never fails the job.
+      - name: Close dev browser-suite issues fixed by this run
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list -R "$REPO" --state open --author app/github-actions --search '"dev: browser suites failing after merge" in:title' --json number,title --jq '.[] | select(.title | startswith("dev: browser suites failing after merge")) | .number' 2>/dev/null); do
+            gh issue close "$n" -R "$REPO" --comment "Fixed: the full suite passed after the merge of ${GITHUB_SHA:0:7} in $RUN_URL" || true
+          done
       - name: Record start
         run: |
           echo "JOB_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -565,13 +576,24 @@ jobs:
       - name: Staging — deploy
         run: |
           echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
-          npx wrangler deploy --config wrangler.staging.json
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json
       - name: Staging — smoke checks
         run: |
           echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
           npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" --compute | tee -a "$GITHUB_STEP_SUMMARY"
           echo "STAGE=done" >> "$GITHUB_ENV"
           echo "Deployed dev $SHA ($VERSION) to staging." >> "$GITHUB_STEP_SUMMARY"
+      # CD004: a later success closes the issues earlier failures opened; never fails the job.
+      - name: Close staging-failure issues fixed by this run
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list -R "$REPO" --state open --author app/github-actions --search '"Staging deploy failed" in:title' --json number,title --jq '.[] | select(.title | startswith("Staging deploy failed")) | .number' 2>/dev/null); do
+            gh issue close "$n" -R "$REPO" --comment "Fixed: staging deployed and passed smoke checks at ${SHA:0:7} in $RUN_URL" || true
+          done
       - name: Remove deploy config
         if: always()
         run: rm -f wrangler.staging.json

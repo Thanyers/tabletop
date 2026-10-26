@@ -1,0 +1,1 @@
+- **Deploy ลองซ้ำเองและปิด issue เอง (CD004):** `wrangler deploy` ของ staging และ production ลองซ้ำอีก 1 ครั้งหลังพัก 60 วินาทีก่อนนับว่าล้ม (ปัญหาชั่วคราวฝั่ง Cloudflare ส่วนใหญ่ผ่านในรอบสอง) · รอบที่สำเร็จภายหลังปิด issue "Deploy failed", "Staging deploy failed" และ "dev: browser suites failing after merge" ที่ระบบเปิดไว้ให้เอง
