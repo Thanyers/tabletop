@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — round 11 README parity / [PR #348](https://github.com/Thanyers/tabletop/pull/348), [release #351](https://github.com/Thanyers/tabletop/pull/351); default-branch README and production 9.1.5 / 0ce11c8 verified |
+| สถานะ | `done` — round 12 bilingual README cleanup / PR #364, release #366; main README pages and production 9.1.6 / b809d9b favicon verified |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.5 — English README aligned with the three published hero cases; app, homepage and media unchanged |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T6 |
+| เวอร์ชัน | 9.1.6 — English/Thai README and consistent favicon; homepage content and media unchanged |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T7 |
 
 ## ทำไม
 
