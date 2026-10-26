@@ -16,7 +16,7 @@ const MAX_CALLS_PER_RUN = 6;
 const MAX_USD_PER_RUN = 0.2;
 
 function usage(): string {
-  return 'usage: npx tsx server/providers/author-tool-package-cli.ts "<intent>" [--base <package.json>] [--json <out.json>]';
+  return 'usage: npx tsx server/providers/author-tool-package-cli.ts "<intent>" [--base <package.json>] [--json <out.json>] [--model <name>] [--max-tokens <n>]';
 }
 
 async function main(): Promise<number> {
@@ -24,6 +24,8 @@ async function main(): Promise<number> {
   const intent = argv.find(argument => !argument.startsWith('--') && argv[argv.indexOf(argument) - 1] !== '--base' && argv[argv.indexOf(argument) - 1] !== '--json');
   const baseIndex = argv.indexOf('--base');
   const outIndex = argv.indexOf('--json');
+  const modelIndex = argv.indexOf('--model');
+  const maxTokensIndex = argv.indexOf('--max-tokens');
   if (!intent) {
     console.error(usage());
     return 2;
@@ -37,7 +39,13 @@ async function main(): Promise<number> {
   }
   console.error(`using the key from ${resolved.source}`);
 
-  const generator = new DeepSeekToolPackageGenerator({ apiKey });
+  // This account answers through a reasoning model that can spend the whole budget on reasoning and
+  // leave `content` empty, so the model and the ceiling are both adjustable per run.
+  const generator = new DeepSeekToolPackageGenerator({
+    apiKey,
+    ...(modelIndex >= 0 ? { model: argv[modelIndex + 1] } : {}),
+    ...(maxTokensIndex >= 0 ? { maxTokens: Number(argv[maxTokensIndex + 1]) } : {}),
+  });
   const estimate = generator.estimate();
   if (estimate.calls > MAX_CALLS_PER_RUN || estimate.usd > MAX_USD_PER_RUN) {
     console.error(`estimate exceeds the approved cap: ${JSON.stringify(estimate)}`);

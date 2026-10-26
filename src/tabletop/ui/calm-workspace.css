@@ -30,7 +30,8 @@
 .tt-app .tt-table-assistant-panel:has(.tt-table-assistant__rules-mode) > .tt-table-assistant.is-compact { height: 100%; max-height: 100%; }
 .tt-app .tt-canvas-panel--assistant { padding-bottom: calc(var(--tt-assistant-height, 300px) + 28px); }
 .tt-app .tt-canvas-panel { position: relative; background: var(--tt-canvas); border-right: 0; }
-.tt-app .tt-canvas-panel--composer { padding-bottom: 96px; }
+/* F087: the composer floats over the board as an island; the board runs underneath instead of stopping above a bare strip. */
+.tt-app .tt-canvas-panel--composer { padding-bottom: 0; }
 .tt-app .tt-flow-wrap .react-flow { background: var(--tt-canvas); }
 .tt-app .tt-flow-wrap .react-flow__controls-button { width: 36px; height: 36px; }
 .tt-app .tt-canvas-node__body { font-size: 14px; }
@@ -262,7 +263,9 @@
   .tt-app .tt-main--with-assistant .tt-table-assistant-panel { right: 8px; bottom: 8px; width: calc(100% - 16px); max-height: 46dvh; overflow: hidden; border: 1px solid var(--tt-card-edge); }
   .tt-app .tt-main--with-assistant .tt-table-assistant-panel:has(.tt-table-assistant__rules-mode) { height: 46dvh; }
   .tt-app .tt-canvas-panel--assistant { padding-right: 0; padding-bottom: calc(var(--tt-assistant-height, 300px) + 16px); }
-  .tt-app .tt-canvas-panel--composer { padding-bottom: 90px; }
+  .tt-app .tt-canvas-panel--composer { padding-bottom: 0; }
+  /* F087: the full-width composer would cover the zoom buttons; lift them above it. */
+  .tt-app .tt-canvas-panel--composer .react-flow__controls { margin-bottom: 76px; }
   .tt-app .tt-flow-wrap .tt-canvas-node, .tt-app .tt-flow-wrap .tt-canvas-node.is-expanded { max-width: calc(100vw - 32px); }
   .tt-app .tt-canvas-composer { bottom: 8px; width: calc(100% - 20px); }
   .tt-app .tt-flow-wrap .react-flow__controls-button { width: 36px; height: 36px; }

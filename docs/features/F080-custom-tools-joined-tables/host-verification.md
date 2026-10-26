@@ -5,23 +5,24 @@
 ## ผลล่าสุด
 
 - host: `https://tabletop-staging.ptchrr.workers.dev` (staging ที่ deploy จาก pipeline เอง)
-- deployed sha: `15fe74d`
-- ผล: **9 PASS / 0 FAIL / 2 SKIPPED**
+- deployed sha: `5ba5d8b`
+- ผล: **10 PASS / 0 FAIL / 2 SKIPPED**
 
 ```
 ﻿PASS    worker answers /healthz - status 200
 PASS    health body is json - parsed
-PASS    reports the deployed revision - sha 15fe74d
+PASS    reports the deployed revision - sha 5ba5d8b
 PASS    serves the app shell at / - 200 text/html
 PASS    serves the room route /s/:id - 200 text/html
 PASS    refuses /api/workspaces/11111111-1111-4111-8111-111111111111 without a session - status 401
 PASS    refuses /api/workspaces/11111111-1111-4111-8111-111111111111/space/recap without a session - status 401
 PASS    refuses /api/workspaces/11111111-1111-4111-8111-111111111111/space/export?source=11111111-1111-4111-8111-111111111111&grant=g&port=p without a session - status 401
 PASS    refuses /api/session without a session - status 401
+PASS    refuses /api/workspaces/11111111-1111-4111-8111-111111111111/space/tool/intent without a session - status 401
 SKIPPED a signed-in member reaches the room and its joined data - needs a session
 SKIPPED revoke/export/action behave on this host - needs a session
 
-host https://tabletop-staging.ptchrr.workers.dev · sha 15fe74d · 9 PASS / 0 FAIL / 2 SKIPPED
+host https://tabletop-staging.ptchrr.workers.dev · sha 5ba5d8b · 10 PASS / 0 FAIL / 2 SKIPPED
 ```
 
 ## อ่านผลอย่างไร

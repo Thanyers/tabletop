@@ -1,6 +1,6 @@
 # Tabletop — แผนและชุดร่างสามสื่อ
 
-วันที่ 26 ตุลาคม 2026 · รอบ 10 เผยแพร่แล้ว: Hero วนสามเคส ร้านกาแฟ → ฟิสิกส์ → ผจญภัย · production 9.1.4 / d09d2f2 · หน้าเว็บส่วนอื่นและวิดีโอเดิมไม่เปลี่ยน · [ผล deploy](../../DEPLOYMENTS.md)
+วันที่ 26 ตุลาคม 2026 · รอบ 11 เผยแพร่แล้ว: README เรียงร้านกาแฟ → ฟิสิกส์ → ผจญภัยและใช้ GIF ชุดเดียวกับ Hero · production 9.1.5 / 0ce11c8 · app/homepage/film/media ไม่เปลี่ยน · [ผล deploy](../../DEPLOYMENTS.md)
 
 เปิด [หน้ารวมร่าง](review.html) เพื่อดูคลิปและข้อความ; [หน้าเว็บ TH/EN](landing-copy.md), [README ภาษาอังกฤษ](../../../README.md) ([ร่างเดิม](readme-draft.md)), [storyboard และ prompt ผลิตวิดีโอ](video-brief.md), [หลักฐานและขอบเขต](evidence.md)
 

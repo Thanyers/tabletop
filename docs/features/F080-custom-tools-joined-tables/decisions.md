@@ -530,3 +530,27 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 ```
 
 เทียบกับ policy เดิมที่ `rendered: "no"` ⇒ การผ่อนเฉพาะ path แก้ปัญหาจริง ไม่ใช่การเดา และเพิ่มกฎ `/s/*` ไว้ใน `public/_headers` ของ branch นี้แล้ว (ยังไม่ merge — รออนุมัติ เพราะเป็นการผ่อน CSP เฉพาะหน้า room; directive อื่นเหมือน global ทุกตัว)
+## D-042 — รันโมเดลจริงครั้งแรก: เจอ 2 ปัญหาจริง (model ว่าง + prompt ไม่พอ) แล้วแก้ให้ผ่าน
+
+**บริบท:** เจ้าของวาง `DEEPSEEK_KEY` ใน `.dev.vars` แล้ว จึงรัน authoring CLI จริงครั้งแรก
+
+**ปัญหาที่ 1 — `deepseek-flash` คืน content ว่าง:** คำขอสำเร็จ (200) แต่ `message.content = ""` เพราะบัญชีนี้ตอบผ่าน reasoning model ที่ใส่ข้อความไว้ใน `reasoning_content` และใช้ token หมดไปกับการคิด ⇒ CLI รายงาน `EMPTY_REPLY`
+**แก้:** CLI รับ `--model` และ `--max-tokens` (ค่าเริ่มต้นยังเป็น `deepseek-flash`) และรันจริงด้วย `deepseek-chat` + 8000 tokens ⇒ ได้ content
+
+**ปัญหาที่ 2 — โมเดลเดาโครงสร้างผิด:** reply เป็น JSON ที่ใช้ key เอง (ports มี `name`/`description`, ไม่มี `version`/`title`/`uiEntry`/`behaviors`) ⇒ `validateToolPackage` ปฏิเสธ 20 ข้อ
+**แก้:** `SYSTEM_PROMPT` ใส่ **skeleton JSON เต็ม** พร้อมกฎ ("ports มีเฉพาะ id/label/direction/kind/fields/maxRows", "behaviors ต้องเป็น array") ⇒ รันครั้งถัดไปผ่าน validation ทันที
+
+**ผลจริง:** 2 การรันที่ถูกต้อง
+| รายการ | calls | USD | ผล |
+|---|---|---|---|
+| G1-01 | 1 | 0.000673 | package `room-planner` v1 (2 ไฟล์, 1 behaviour, 1 port) hash `205516f4924e…` |
+| EDIT-01 | 1 | 0.001104 | ต่อจาก base เดิม — UI เปลี่ยนเป็นแสดง capacity จริง, hash `5b9d65c21966…` |
+
+**ค่าใช้จ่ายรวมที่บันทึกได้:** USD 0.002209 (+ การรันที่ล้ม 1 ครั้ง = USD 0.000432) — ต่ำกว่าเพดาน 3 runs × USD 0.20 มาก
+
+**บทเรียน:** การมี adapter ที่ parse JSON ไม่พอ — prompt ต้องให้ skeleton ที่ตรงกับ schema จริง ไม่งั้นโมเดลจะ "แต่ง" โครงสร้างเองและถูกปฏิเสธที่ validator
+
+**การตัดสินใจ merge (2026-10-26):** เจ้าของสั่งให้ปิดงาน ("ทำให้จบ") ผมจึง merge กฎ `/s/*` นี้พร้อมฟีเจอร์
+ข้อจำกัดที่ยอมรับ: หน้า room ผ่อน `script-src` (inline + eval) เพื่อให้ sandbox frame เริ่มได้ ส่วนอื่นของแอปคงเดิม
+ย้อนกลับได้ด้วยการลบกฎ `/s/*` ใน `public/_headers` 6 บรรทัด (frame จะกลับไปถูกบล็อกและ host จะรายงานผ่าน watchdog)
+

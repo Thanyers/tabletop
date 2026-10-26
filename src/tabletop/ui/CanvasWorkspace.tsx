@@ -1217,6 +1217,11 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
     }
     setNodes((existing) => {
       const previousPositions = new Map(existing.map((node) => [node.id, node.position]));
+      // F085: React Flow hides a node (visibility: hidden) until it has a measured size, and it only keeps the size that
+      // comes on the node object. Rebuilding every card without it made each card vanish for a frame on every table
+      // update (a click in that frame fell through to the canvas) and re-measured every card each time.
+      const previousMeasured = new Map(existing.flatMap((node) => node.measured ? [[node.id, node.measured] as const] : []));
+      const keepMeasured = (id: string) => { const measured = previousMeasured.get(id); return measured ? { measured } : {}; };
       const planNodes = visiblePlanNodes.map((spec): CanvasNode => ({
         id: spec.id,
         type: 'tabletopObject',
@@ -1237,6 +1242,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         })(),
         selected: spec.id === selectedNodeId || multiIds.has(spec.id),
         ...sizedNode(cardSizes[spec.id]),
+        ...keepMeasured(spec.id),
         zIndex: activeOpenedId === spec.id ? 20 : spec.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'plan',
@@ -1299,6 +1305,7 @@ function CanvasInner({ view, plan, selectedNodeId, onSelectNode, onCommand, busy
         })(),
         selected: object.id === selectedNodeId || multiIds.has(object.id),
         ...sizedNode(cardSizes[object.id]),
+        ...keepMeasured(object.id),
         zIndex: activeOpenedId === object.id ? 20 : object.id === selectedNodeId ? 10 : 0,
         data: {
           kind: 'auxiliary',

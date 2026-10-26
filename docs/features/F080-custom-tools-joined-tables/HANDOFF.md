@@ -46,6 +46,18 @@
 ### 3.4 Hosted gate
 `node scripts/verify-host.mjs --url https://tabletop-staging.ptchrr.workers.dev` → **9 PASS / 0 FAIL / 2 SKIPPED** (SKIPPED = flow ที่ต้องมี session) · ขั้นที่เหลืออยู่ใน [staging-verification.md](staging-verification.md)
 
+## 3.5 สถานะล่าสุดของ D-038…D-041 (สำคัญกว่าหัวข้อ 3.2 ด้านบน)
+
+| รายการ | สถานะจริง |
+|---|---|
+| D-038 server (intent route) | **merge แล้ว** — `POST /api/workspaces/:id/space/tool/intent` รัน behaviour ใน isolate → validate → plan → commit ผ่าน `table.act` (tool-intent 6/6) |
+| D-039 (behaviour ส่ง proposal ได้) | **merge แล้ว** — ABI `{ changes, proposal }` + validator ตรวจ (33/33) |
+| D-040 (refusal vocabulary) | **merge แล้ว** — code ที่ route คืนอยู่ใน `TOOL_INTENT_REJECTIONS` + drift test |
+| D-038 UI (mount host) | **draft PR #356 พร้อม merge** เมื่อตัดสิน CSP — driver 12 checks, ui-gate 17/17, watchdog 5/5 |
+| D-041 (CSP) | **รอเจ้าของตัดสิน** — frame `about:srcdoc` สืบทอด `script-src 'self'` และ bootstrap เป็น inline ⇒ ถูกบล็อกบนหน้าที่ deploy จริง |
+
+⇒ ข้อ 3.2 ด้านบน (mount host) **ทำเสร็จแล้ว** เหลือเพียงการตัดสิน CSP; และข้อจำกัดนี้ถูกบันทึกไว้ใน limitation ของ ISO-01/EXEC-01/G1-03 แล้ว
+
 ## 4. ข้อควรระวังที่เรียนรู้มาแล้ว (บันทึกใน MEMORY/decisions)
 
 - `gh` มีสองบัญชีในเครื่อง — ถ้าเจอ "does not have the correct permissions" ให้ `gh auth switch --user Thanyers` (ดู MEMORY)
