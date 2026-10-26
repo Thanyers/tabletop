@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T16:25:00+07:00",
-  "lastVerifiedAt": "2026-10-26T16:25:00+07:00",
+  "updatedAt": "2026-10-26T16:42:00+07:00",
+  "lastVerifiedAt": "2026-10-26T16:42:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,7 +18,7 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "042d7eb",
+    "headSha": "389c945",
     "candidateSha": "4db0727",
     "pr": 305,
     "prState": "draft",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "32 PASS / 2 PARTIAL (G1-01, EDIT-01) / 1 UNVERIFIED (HUMAN-01) · dev = 042d7eb · regression ล่าสุดบน dev: unit 1230 passed / 5 skipped (155 ไฟล์) · Worker tier 342/342 (23 ไฟล์) · D-038 server side merged: intent route รัน behaviour จริงแล้ว commit ผ่าน table.act (tool-intent 6/6 รวม drift test ของ refusal codes) · D-041: mount GeneratedToolHost ทำเสร็จใน draft PR #356 แต่ production CSP (script-src self) บล็อก srcdoc frame — ต้องให้เจ้าของเลือกวิธีแก้ก่อน merge · ค้างจากภายนอก: DEEPSEEK_KEY (G1-01/EDIT-01 — 0 call/USD 0.00) · ผู้ใช้จริง 5 คน (HUMAN-01) · การตัดสิน CSP",
+  "currentCheckpoint": "32 PASS / 2 PARTIAL (G1-01, EDIT-01) / 1 UNVERIFIED (HUMAN-01) · dev = 389c945 · ตรวจซ้ำบน dev head: tool-host driver 16 checks · room-shell driver 7 checks · unit 1230/5 skipped · Worker 342/342 · D-038 UI (mount GeneratedToolHost + watchdog) อยู่ใน draft PR #356: driver 12 checks, ui-gate 17/17, watchdog 5/5 — พร้อม merge เมื่ออนุมัติ CSP · D-041 วัดแล้ว: policy ที่ผ่อน script-src เฉพาะ /s/* ทำให้ frame เริ่มทำงาน (rendered: yes) และกฎพร้อมใน branch นั้น; ต้องรออนุมัติเพราะเป็นการผ่อนความปลอดภัยเฉพาะหน้า room · ค้างจากภายนอก: DEEPSEEK_KEY (G1-01/EDIT-01 — 0 call/USD 0.00) · ผู้ใช้จริง 5 คน (HUMAN-01) · การอนุมัติ CSP",
   "slices": [
     {
       "alias": "C0",
