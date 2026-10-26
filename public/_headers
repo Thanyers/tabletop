@@ -4,3 +4,10 @@
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+
+# F080 / D-041: the room page hosts a tool sandbox in an about:srcdoc frame, which inherits this
+# policy. Its bootstrap is inline (the frame has no network by design), so this path alone allows
+# inline and eval. Measured with test-results/probe-option4.mjs: the frame renders with this policy
+# and is blocked without it. Every other directive is identical to the global rule above.
+/s/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'

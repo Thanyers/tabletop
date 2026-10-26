@@ -522,3 +522,11 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 ข้อดี: หน้า landing/workspace อื่นคง `script-src 'self'` ไว้ · ข้อเสีย: หน้า room ทั้งหน้า looser ขึ้น (ยังต้องคัดลอก header ชุดเดิมให้ครบ ไม่งั้นจะหลุด directive อื่น) — ต้องให้เจ้าของตัดสินพร้อมผลกระทบ
 
 **การตรวจซ้ำของผู้รีวิว (รอบ 149):** บน branch นี้ `node scripts/build-room-shell-harness.mjs` + `node tests/ui/room-shell/browser.mjs` = **12 checks passed** และ `ui-gate --full --theme` = **17/17 measured** (3 skip) — ตรงกับที่รายงานไว้ ไม่ใช่ตัวเลขจากคำบอกเล่า
+
+**วัดแล้วว่าได้ผล (option 4):** เขียน probe ที่เสิร์ฟ harness ด้วย policy ที่ `/s/*` จะตั้ง (`script-src 'self' 'unsafe-inline' 'unsafe-eval'`) ผลคือ
+
+```json
+{ "rendered": "yes", "hostProblemLine": 0 }
+```
+
+เทียบกับ policy เดิมที่ `rendered: "no"` ⇒ การผ่อนเฉพาะ path แก้ปัญหาจริง ไม่ใช่การเดา และเพิ่มกฎ `/s/*` ไว้ใน `public/_headers` ของ branch นี้แล้ว (ยังไม่ merge — รออนุมัติ เพราะเป็นการผ่อน CSP เฉพาะหน้า room; directive อื่นเหมือน global ทุกตัว)
