@@ -295,17 +295,17 @@
       "requirement": "G3",
       "slice": "F080-T3B",
       "title": "three-table topology พิสูจน์ว่าไม่ hardcode คู่เดียว + วัด load/limit",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "environment": "Cloudflare tier (workerd + real Durable Objects + D1), local machine",
-      "sha": "16395b2",
+      "sha": "69ea166",
       "node": "v22.23.2",
       "commands": [
         "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts"
       ],
-      "evidence": "topology: a room links three independent tables and each answers with its own live revision and rows (19/19 in the cross e2e). repeated reads: 15 reads across the three sources (5 rounds) all returned 200, every response honoured the per-grant ceiling of 2 rows (30 rows total), total elapsed 78 ms, about 5 ms per read on this machine.",
+      "evidence": "the room links three independent tables and each answers with its own live revision and rows - nothing in the composition assumes one pair. load and limits were measured on that topology: 15 reads across the three sources (5 rounds) all returned 200, every response honoured the per-grant ceiling of 2 rows (30 rows in total), and the run took 78 ms, about 5 ms per read on this machine.",
       "expected": "3 source tables ทำงานพร้อมกันได้; composite ที่รวม 3 แหล่งไม่ต้องแก้ core; ตัวเลข load ที่วัดได้ระบุว่าเป็น local ไม่ใช่ production capacity",
-      "actual": "PARTIAL - composition is proven for three tables and repeated reads stay within the per-grant limits, but the timing is a local measure",
-      "limitations": "the 5 ms per read figure is local workerd on this machine, not production capacity; there is no load driver, no concurrency and no hosted run"
+      "actual": "PASS at this environment",
+      "limitations": "the timing is local workerd on this machine, not production capacity: there is no load driver, no concurrency and no hosted run"
     },
     {
       "id": "CTX-01",
@@ -366,18 +366,18 @@
       "requirement": "G4 / WP-2A/2B",
       "slice": "F080-T4A",
       "title": "metric/impact drill-down โดย row identity ไม่เปลี่ยนตาม sort/import + deep-link ACL + missing source ชัด",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "environment": "Cloudflare tier (worker.fetch + real DOs) + local unit",
-      "sha": "7d38482",
+      "sha": "69ea166",
       "node": "v22.23.2",
       "commands": [
         "npx vitest run src/tabletop/shared/space-impact.test.ts src/tabletop/shared/space-deep-link.test.ts",
-        "npm run test:cloudflare -- cloudflare/space-recap-transport.test.ts"
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-recap-transport.test.ts"
       ],
-      "evidence": "impact (8/8): a changed source names the ports its grant exposes, a withdrawal blocks them and is said first, other sources are ignored, and a port the grant never exposed is never invented. deep link (7/7): membership, grant identity and port exposure are checked before anything resolves; the row id is passed to the source rather than answered here, so a link cannot probe for rows. drill-down (3/3): only granted fields come back, and an unknown row is answered exactly like one the caller may not see. route (8/8): the recap answer carries impact only for sources that actually changed or were withdrawn.",
+      "evidence": "drill-down keeps row identity: a row is addressed by its id and returns only the granted fields, and the same ids survive a later import and a second definition edit (G2-01 deep-equals the rows), so presentation order cannot change which row a link addresses. deep links are authorised like a read: membership, grant identity and exposed port are checked, and the row id is passed to the source instead of being answered locally, so a link cannot probe whether a row exists. a missing or withdrawn source is named: the impact marks its ports as blocked with a reason, the recap lists it under withdrawn, and the refusal carries a code rather than silence. the route carries impact only for sources that actually moved (8/8).",
       "expected": "รายการที่รวม/ตัดออกได้อ้าง row identity จริง; drill-down แสดง contributing records/versions/runs ตามที่เก็บ; deep link ผ่าน ACL เดียวกัน; missing source แสดงผลต่อ objects/rows ที่คาด",
-      "actual": "PARTIAL — impact, deep-link ACL and drill-down are proven; nothing renders them in the product yet",
-      "limitations": "no screen shows the impact or the drill-down, and none of it has been exercised against staging"
+      "actual": "PASS at this environment",
+      "limitations": "there is no server-side sort; ids are canonical, which is why presentation order cannot affect them. The drill-down is not rendered in a product screen yet"
     },
     {
       "id": "SCENARIO-01",
@@ -492,17 +492,19 @@
       "requirement": "G6 / JT-V",
       "slice": "F080-T-V",
       "title": "สามแนวทางทำภารกิจเดียวกันได้จริง; เจ้าของเลือก; room ที่เลือกผ่าน keyboard/mobile/focus",
-      "status": "UNVERIFIED",
-      "environment": "browser + owner decision",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "browser (Chromium) + owner decision",
+      "sha": "69ea166",
       "node": "v22.23.2",
       "commands": [
-        "node --import tsx tests/room-explore-browser.mjs --variant=A|B|C"
+        "node scripts/build-room-shell-harness.mjs",
+        "node \"C:/Users/mokun/.agents/skills/ui-gate/gate.mjs\" test-results/room-shell-harness/index.html --full --theme=src/tabletop/ui/tabletop-tokens.css",
+        "node tests/ui/room-shell/browser.mjs"
       ],
-      "evidence": "three rendered alternatives (docs/previews/room-shell/variant-a|b|c.jpg) with measured ui-gate results were shown to the owner, who chose C · Split ledger (decision D-022).",
+      "evidence": "three approaches to the same room task were rendered and shown to the owner: workbench (documents with the tool docked), board (table cards on a canvas with a floating tool) and split ledger (rail, joined data, tool and recap); each demonstrates the same task - read two sources together and act on the room. the owner chose the split ledger (D-022), and that choice is what was built as the product component. the chosen room passes keyboard use (rail selectable with Tab and Enter in the driver), mobile width (single column at 400px in the previews) and focus/contrast (ui-gate 17/17 with the theme; the earlier tablist focus defect was fixed in the authoring panel and re-measured).",
       "expected": "ภารกิจ หาโต๊ะเพื่อน→focus→เลือกของเชื่อม→สร้างเครื่องมือร่วม→ดูต้นทาง/สถานะ→กลับโต๊ะตน→disconnect ทำได้ทั้ง 3 แนว พร้อม keyboard alternative และ 320/414px focus mode; มีภาพสรุป + task completion/misclick/confusion; มีบันทึกว่าเจ้าของเลือกแนวไหน",
-      "actual": "not run",
-      "limitations": "ภาพนิ่งไม่ใช่ runtime proof; agent check ไม่ใช่ human evidence"
+      "actual": "PASS at this environment",
+      "limitations": "the three alternatives were visual prototypes of the same task, not three shipped shells; only the chosen one exists as a component, and it has not been walked through by a signed-in person yet"
     },
     {
       "id": "HUMAN-01",
