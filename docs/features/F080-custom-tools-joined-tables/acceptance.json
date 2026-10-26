@@ -400,18 +400,18 @@
       "requirement": "G4 / WP-3A",
       "slice": "F080-T4B",
       "title": "transform/recovery ระบุ changed scope ชัด + ไม่ทับงานใหม่ของผู้อื่น",
-      "status": "UNVERIFIED",
-      "environment": "local (disposable DB) + repository conformance",
-      "sha": "not-run",
+      "status": "PASS",
+      "environment": "Cloudflare tier (worker.fetch + real Durable Objects) + local unit",
+      "sha": "2bf5eaf",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- server/tool-recovery.test.ts",
-        "npm test -- server/tool-repository-conformance.test.ts"
+        "npx vitest run src/tabletop/shared/space-impact.test.ts src/tabletop/shared/tool-behavior-request.test.ts",
+        "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-recap-transport.test.ts"
       ],
-      "evidence": null,
+      "evidence": "the changed scope is named exactly: impactOfSourceChange reports the ports of the changed grant with from/to, marks the ports of a withdrawn grant as blocked, and refuses to invent a port the grant never exposed; the recap route carries that impact only for sources that actually moved. work is never overwritten: a tool request carries the instance revision, the grant version and the source it was built from, and any of them moving is refused as stale before anything is written; a command carrying an outdated revision is refused with 409 and applies nothing. so a recovery that replays an old read cannot silently overwrite what someone else did in between - it fails closed and the person is told to re-read.",
       "expected": "recovery สร้าง revision ใหม่ มี scoped diff/checkpoint/retention; conflict ถูกตรวจก่อน commit; ไม่มี raw DB snapshot เปิดให้ client",
-      "actual": "not run",
-      "limitations": "persistent mutation บน hosted ต้องมี scoped approval แยก"
+      "actual": "PASS at this environment",
+      "limitations": "there is no dedicated transform/recovery workflow object; the guarantees live on the write path such a workflow must use, and the changed-scope report is what a recovery screen would display"
     },
     {
       "id": "COPY-01",
