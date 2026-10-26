@@ -472,21 +472,50 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   const contextId = useId().replace(/:/g, '');
   const actionSelectId = `${contextId}-tt-table-record-action`;
   // F081: yes/no fields are checkboxes that run the rule which toggles (or sets) that field for the row.
+  // F082: clicks never get lost while an earlier one is saving: each click shows its result at once and waits
+  // its turn in a queue; the queue re-reads the latest row before each step and skips a step already true.
   const checkRole = view.actor.role === 'owner' ? 'owner' : 'participant';
-  const [checking, setChecking] = useState<string | null>(null);
+  const [pendingChecks, setPendingChecks] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const checkQueue = useRef<{ key: string; rowId: string; fieldId: string; wanted: boolean }[]>([]);
+  const checkRunning = useRef(false);
+  const latestState = useRef(state);
+  latestState.current = state;
+  const settleCheck = (key: string) => setPendingChecks((current) => {
+    if (!current.has(key) || checkQueue.current.some((job) => job.key === key)) return current;
+    const next = new Map(current); next.delete(key); return next;
+  });
+  const runCheckQueue = async () => {
+    if (checkRunning.current) return;
+    checkRunning.current = true;
+    try {
+      for (let job = checkQueue.current.shift(); job; job = checkQueue.current.shift()) {
+        const current = latestState.current;
+        const row = current.records[collectionId]?.find((item) => item.id === job!.rowId);
+        const actual = row?.values[job.fieldId] === true;
+        const match = row && actual !== job.wanted
+          ? checkboxAction(current.program?.actions ?? [], collectionId, job.fieldId, row.values[job.fieldId], checkRole) : null;
+        if (match) await onCommand('table.act', { actionId: match.action.id, inputs: { [match.parameterId]: job.rowId } });
+        settleCheck(job.key);
+      }
+    } finally { checkRunning.current = false; }
+  };
   const checkbox = (row: TableRecord, field: TableField) => {
-    const checked = row.values[field.id] === true;
-    const match = checkboxAction(state.program?.actions ?? [], collectionId, field.id, row.values[field.id], checkRole);
+    const key = `${row.id}.${field.id}`;
+    const stored = row.values[field.id] === true;
+    const checked = pendingChecks.get(key) ?? stored;
+    const match = checkboxAction(state.program?.actions ?? [], collectionId, field.id, checked, checkRole);
     const label = `${field.label}: ${recordSummary(row, collection, view.members, { omitYesNo: true })}`;
-    const toggle = async () => {
-      if (!match || busy !== null || checking) return;
-      setChecking(`${row.id}.${field.id}`);
-      try { await onCommand('table.act', { actionId: match.action.id, inputs: { [match.parameterId]: row.id } }); }
-      finally { setChecking(null); }
+    const click = () => {
+      if (!match) return;
+      const wanted = !checked;
+      setPendingChecks((current) => new Map(current).set(key, wanted));
+      checkQueue.current.push({ key, rowId: row.id, fieldId: field.id, wanted });
+      void runCheckQueue();
     };
     return <input type="checkbox" className="tt-table-checkbox nodrag" checked={checked} aria-label={label}
+      aria-busy={pendingChecks.has(key) || undefined}
       title={match ? match.action.title : checkboxUnavailableReason(checked)}
-      disabled={!match || busy !== null || checking !== null} onChange={() => void toggle()} />;
+      disabled={!match} onChange={click} />;
   };
   // A collapsed card reads as a checklist only when a yes/no field can be ticked both ways (a toggle, or a pair of
   // set rules); a field changed by other means (e.g. equipment availability) keeps the plain preview.
@@ -541,7 +570,7 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
     {expanded && collection && viewerCan(view, 'data.import') && !computeWriter && <TableRowImport collection={collection} existingRecords={state.records[collectionId] ?? []} fixedRecordIds={fixedRecordIds} busy={busy} onCommand={onCommand} />}
     {expanded && collection && computeWriter && <p className="tt-table-readonly-inline" role="status">This table is filled by a calculation. Run it from Rules to refresh these results; rows cannot be imported directly here.</p>}
     {!expanded && collection && checkField && rows.length > 0 ? <ul className="tt-table-checklist tt-table-collection__preview" aria-label={`${collection.title} checklist`}>
-      {rows.slice(0, CHECKLIST_PREVIEW_ROWS).map((row) => <li key={row.id} className={row.values[checkField.id] === true ? 'is-done' : undefined}>
+      {rows.slice(0, CHECKLIST_PREVIEW_ROWS).map((row) => <li key={row.id} className={(pendingChecks.get(`${row.id}.${checkField.id}`) ?? row.values[checkField.id] === true) ? 'is-done' : undefined}>
         <label>{checkbox(row, checkField)}<span>{recordSummary(row, collection, view.members, { omitYesNo: true })}</span></label>
       </li>)}
       {rows.length > CHECKLIST_PREVIEW_ROWS && <li className="tt-table-checklist__more">+{rows.length - CHECKLIST_PREVIEW_ROWS} more — open the card to see all</li>}

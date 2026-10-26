@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F082 | checkbox กดรัวไม่หาย + ข้อความแก้กฎที่มี "ทำเครื่องหมาย" เป็นร่างกฎ | `review` | [F082](docs/features/F082-checkbox-queue-intent.md) |
 | F081 | ช่องใช่/ไม่เป็น checkbox + กฎ toggle (todo list ติ๊กได้) | `review` | [F081](docs/features/F081-checkbox-toggle.md) |
 | F077-T5 | Rotate three prompt-first hero GIF cases: café sales, physics learning, adventure play | `done` | Codex · PR #306 / release #309 · production 9.1.4 / d09d2f2; only hero area changed; README/film/rest unchanged |
 | F077-T1 | เรื่องเล่าสามสื่อ + English homepage + narrated Remotion | `done` | Codex · [release9.1.0/#274](https://github.com/Thanyers/tabletop/pull/274) · คลิป93.2s+homepageEnglish/THขึ้นproduction48d9b98; fullreleaseCI/deploy/smokeผ่าน; servedmediahashตรง; READMEยังเป็นร่าง |
@@ -83,6 +84,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F082-T1 | คิว checkbox แบบ optimistic + `asksTheBuilder` ใน chat intent | `review` | lead (AI) | `fix/F082-checkbox-queue-intent` | `ui/TableCanvasObjects.tsx`, `shared/chat-intent.ts`, tests | F081 | ไม่มี migration |
 | F081-T1 | effect `toggle` + checkbox ในการ์ดตาราง + checklist ตอนย่อ | `review` | lead (AI) | `feat/F081-checkbox-toggle` | `domain/table.ts`, `shared/table-contracts.ts`, `runtime/generative/validation.ts`, `domain/id-normalization.ts`, `ui/TableCanvasObjects.tsx`, `ui/checkbox-actions.ts`, `ui/record-actions.css`, `server/providers/table-schema-guide.ts`, tests | — | ไม่มี migration |
 | F080-T0 | `done` (merged #305) | `review` | DeepSeek Harness (lead) | `feat/F080-custom-tools` / #305 | `docs/features/F080-*`, `PLAN.md`, `changelog.d/F080-*` | — | C0; ยังไม่มี runtime change · public scan 0 findings · changelog check 13/13 · F080 acceptance 32 PASS / 3 UNVERIFIED · เหลือ G1-01/EDIT-01 (รอ DEEPSEEK_KEY), HUMAN-01 (ผู้ใช้จริง 5 คน) |
 | F080-T1A | `done` (merged #305) | `review` | DeepSeek Harness (lead + backend/frontend) | `feat/F080-custom-tools` / #305 | `src/tabletop/shared/tool-{package,protocol,behavior,projection}.ts`, `runtime/tools/`, `cloudflare/tool-behavior-runner.ts`, `server/local-tool-behavior-runner.ts`, `ui/{GeneratedToolHost.tsx,tool-sandbox/}`, `tests/ui/tool-host/` | F080-T0 | unit 896/5 · worker 11/11 · browser 13/13 · tsc 3 config · lint 0 · build ผ่าน · ยังไม่มี authority integration/AI authoring · F080 acceptance 32 PASS / 3 UNVERIFIED · เหลือ G1-01/EDIT-01 (รอ DEEPSEEK_KEY), HUMAN-01 (ผู้ใช้จริง 5 คน) |
