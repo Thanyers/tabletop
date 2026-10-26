@@ -5,6 +5,12 @@
 
 ## Lessons
 
+### 2026-10-26 — dev CI แดงเพราะเทสต์เบราว์เซอร์เดิม flaky (ไม่ใช่ F080)
+- **What happened:** run `40261590989` (commit `69ea166`, merge ของ F080-G2-02) จบด้วย `failure`; job `Account multiplayer and AI browser acceptance on Workers` ล้มที่ step 8 ด้วย `ExpectError: expect(locator).toHaveAttribute(expected) failed` สองครั้งติด (ล้มแล้ว retry ก็ล้ม) จึงทำให้ `local-validation` fail ตาม
+- **Root cause:** เป็น flake ของ suite เบราว์เซอร์เดิม (account multiplayer / AI บน Workers) ไม่ใช่ไฟล์ที่ F080 เพิ่ม — commit ถัดไปบน `dev` (`4db0727`) มีโค้ดชุดเดียวกันและผ่าน
+- **Correct behavior:** ก่อนสรุปว่า merge ทำให้ dev แดง ให้เปิด jobs ของ run (`gh api repos/.../actions/runs/<id>/jobs`) ดูว่าจบ job ไหน/step ใด แล้วดึง log ด้วย `gh api --allow-escape-sequences .../jobs/<jobId>/logs`; ถ้าเป็น `toHaveAttribute` ใน suite เบราว์เซอร์เดิม ให้ถือเป็น flake ที่ต้องเก็บ ไม่ใช่ rollback งานที่ merge แล้ว
+
+
 ### 2026-10-26 — Wait for rendered state before advancing an animation clock
 - **What happened:** the local hero rotation check passed, but the first Linux release browser job saw sales instead of learning at its frozen-clock boundary. The decoded image could report complete before React processed its load state and installed the rotation timer. The authored adventure roll also initially showed a result without updating the named character's existing row; independent review caught that disconnect.
 - **Root cause:** readiness was inferred from one lower-level signal rather than the state change under test; visual control output was checked without its linked table readback.
