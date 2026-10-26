@@ -1060,6 +1060,32 @@ async function verifyDelayedLayoutAckDoesNotCrossTables({ owner, tableId, api, p
   }
 }
 
+/**
+ * F085: cards that were on screen must stay on screen while the table updates. React Flow hides a node it has no size
+ * for, and the canvas used to drop every card's size on each update, so cards blinked out and a click in that moment
+ * fell through to the canvas (rapid checkbox clicks were lost on staging).
+ */
+async function watchCardsStayVisible(page) {
+  await page.evaluate(() => {
+    const blinked = new Set();
+    const visible = new Set([...document.querySelectorAll('.react-flow__node')].filter((node) => getComputedStyle(node).visibility !== 'hidden').map((node) => node.dataset.id));
+    const started = performance.now();
+    const flow = document.querySelector('.react-flow');
+    const check = () => {
+      for (const node of document.querySelectorAll('.react-flow__node')) {
+        if (visible.has(node.dataset.id) && getComputedStyle(node).visibility === 'hidden') blinked.add(`${node.dataset.id}@${Math.round(performance.now() - started)}${flow === document.querySelector('.react-flow') ? '' : ':new-flow'}`);
+      }
+    };
+    const timer = setInterval(check, 8);
+    window.__ttCardBlinks = { blinked, stop: () => { clearInterval(timer); check(); } };
+  });
+}
+
+async function cardsThatBlinked(page) {
+  await page.waitForTimeout(400);
+  return page.evaluate(() => { const watch = window.__ttCardBlinks; watch.stop(); return [...watch.blinked]; });
+}
+
 async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
   const editor = await openCanvasObject(page, 'table.actions');
   await expect(editor).toHaveAttribute('data-canvas-object', 'table.actions');
@@ -1078,9 +1104,11 @@ async function performAction(page, actionTitle, inputs, expectedStatus = 200) {
   // Keep a failed UI click as the primary error so the runner can save its
   // screenshot; the response waiter is still awaited and must succeed below.
   void responsePromise.catch(() => {});
+  await watchCardsStayVisible(page);
   await form.getByRole('button', { name: actionTitle, exact: true }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(expectedStatus);
+  expect(await cardsThatBlinked(page)).toEqual([]);
   if (expectedStatus !== 200) {
     const failure = await response.json();
     expect(failure.message).toEqual(expect.any(String));
