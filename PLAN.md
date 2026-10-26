@@ -26,6 +26,7 @@
 | --- | --- | --- | --- |
 | F085 | การ์ดไม่หายวับตอนโต๊ะอัปเดต (คลิก checkbox ไม่หลุดไปโดนพื้นหลัง) | `review` | [F085](docs/features/F085-cards-stay-visible.md) |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `review` | Codex · `docs/F077-readme-cases` · PR #348; README and owning tracking docs only; homepage/media unchanged |
+| F077-T6 | Align English README with the published café, physics and adventure hero cases | `done` | Codex · PR #348 / release #351 · default-branch README verified; production 9.1.5 / 0ce11c8; app/media unchanged |
 | F084 | โต๊ะที่มีการ์ด/เส้นเยอะไม่ค้างตอนเปิด (edge routing เร็วขึ้น ~40×) | `review` | [F084](docs/features/F084-edge-routing-speed.md) |
 | F083 | การ์ดที่ถูกซ่อนไม่ดูเหมือนข้อมูลหาย (ป้าย Show all, การ์ดใหม่เปิดไว้, ซิงก์หลายแท็บ) + dropdown ไม่เพี้ยน | `review` | [F083](docs/features/F083-closed-cards-visible.md) |
 | F082 | checkbox กดรัวไม่หาย + ข้อความแก้กฎที่มี "ทำเครื่องหมาย" เป็นร่างกฎ | `review` | [F082](docs/features/F082-checkbox-queue-intent.md) |
