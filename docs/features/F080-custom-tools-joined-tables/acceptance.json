@@ -529,18 +529,19 @@
       "requirement": "G1",
       "slice": "F080-T1A/T1B",
       "title": "intent-only สร้าง custom UI + custom backend ใหม่ได้จริง โดย UI อ่าน/ส่ง command ผ่าน host contract ด้วย source ที่จัดเก็บ/versioned",
-      "status": "UNVERIFIED",
-      "environment": "local browser (fixture authoring only)",
-      "sha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+      "status": "PARTIAL",
+      "environment": "local browser (fixture authoring only) + local pipeline",
+      "sha": "ddab975",
       "node": "v22.23.2",
       "commands": [
-        "npx vitest run server/providers/deepseek-tool-package.test.ts",
-        "npx tsx server/providers/author-tool-package-cli.ts \"<intent>\""
+        "node scripts/build-tool-authoring-harness.mjs",
+        "node tests/ui/tool-authoring/browser.mjs",
+        "npx vitest run src/tabletop/runtime/tools/authoring-routes.test.ts"
       ],
-      "evidence": "the DeepSeek adapter that turns an intent into a package is implemented and proven against the reply shape the endpoint sends (7/7, injected fetch, no charge): JSON-only request, fenced or prose-wrapped replies handled, usage and cost reported, and a reply that is not a valid package is rejected before the isolated trial. The CLI enforces the approved ceiling (<=6 calls, <=USD 0.20) and refuses to spend when the estimate exceeds it. A real model run is still outstanding because this machine has no DEEPSEEK_KEY.",
+      "evidence": "the same panel drives the AI route: with a generator supplied it activates through authorToolPackage with route kind ai and a budget, and the readback records the route as ai while the caller receives the activation (browser driver 9 checks, including \"route ai · host ได้รับ: v1\"). the stored, versioned source is what runs: editing the source changes the content hash, and a broken source is refused against its file without reaching the pipeline (same driver). the custom UI reads and sends through the host contract: the host harness proves the frame has no cookie, storage or network access and that reads and commands cross the typed bridge, and the AI-route package is the same shape the host renders. the AI half of the pipeline is proven separately (route parity 3/3, adapter 8/8, adapter-to-pipeline 2/2), so only the model call itself is outstanding.",
       "expected": "จากข้อความ intent เปล่า ได้ package ที่ mount ได้และมี behavior ที่ commit ได้จริง; source ที่ใช้คือชุดที่เก็บ/versioned ไม่ใช่ template ที่ regenerate",
-      "actual": "UNVERIFIED — the \"intent-only\" half needs a model, which needs an approved call/cost cap first",
-      "limitations": "no real model call has been made yet: the environment has no DEEPSEEK_KEY and the dev AI budget variables are 0, so the paid cost of this item remains 0 calls / USD 0.00"
+      "actual": "PARTIAL - everything after the model reply is proven in a browser (AI-origin package, stored and versioned, read and command through the host contract); creating the package from an intent has not been run against a live model",
+      "limitations": "the generator is a fixture, so \"intent only\" is not proven end to end and the paid cost is still 0 calls / USD 0.00; a live run needs DEEPSEEK_KEY in this environment"
     },
     {
       "id": "G1-02",

@@ -120,6 +120,17 @@ try {
   if (pageErrors.length > 0) fail('no uncaught page errors', pageErrors.join(' | '));
   mark('no uncaught page errors');
 
+  // G1-01: the same panel drives the AI route when a generator is supplied; the record must say so.
+  await page.goto(`${pathToFileURL(pages).href}?route=ai`);
+  await page.getByTestId('package-title').waitFor();
+  await page.getByTestId('activate').click();
+  await page.getByTestId('activation-readback').waitFor();
+  const aiGenerator = await page.getByTestId('readback-generator').innerText();
+  if (aiGenerator !== 'ai') fail('the AI route is recorded', aiGenerator);
+  const aiHost = await page.getByTestId('host-readback').innerText();
+  if (!aiHost.includes('v1')) fail('the caller receives the AI activation', aiHost);
+  mark('the same panel activates through the AI route (fixture generator) and records it', `route ${aiGenerator} · ${aiHost}`);
+
   await page.screenshot({ path: join(output, '02-second-edit.png'), fullPage: true });
   await writeFile(join(output, 'report.json'), JSON.stringify({ status: 'PASS', node: process.version, checks, readback, activations }, null, 2));
   console.log(`\n${checks.length} checks passed`);
