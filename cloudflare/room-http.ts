@@ -12,7 +12,8 @@ import { PROJECTION_CURSOR_PATTERN } from './room-job-view.js';
 import type { RoomRepository } from './room-repository.js';
 import { requireWorkspaceWritable } from './table-mode.js';
 import { prepareWebEvidenceCommand } from './web-evidence.js';
-import { isSeat, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { isSeat, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { TOOL_PACKAGE_LIMITS } from '../src/tabletop/shared/tool-package.js';
 
 /**
  * F078-T6c: the Room's HTTP surface as one module.
@@ -92,6 +93,52 @@ const spaceProjectionRequestSchema = z.strictObject({
   portId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
 });
 
+/**
+ * F080 / D-038: one behaviour of the room's installed tool.
+ *
+ * Only the behaviour id and its declared scalar inputs travel here; the package, the compiled
+ * module, the field allowlists and the expected revisions are all read from the room's own state,
+ * so a caller cannot widen the scope of the run by sending more than it may ask for.
+ */
+const toolIntentRequestSchema = z.strictObject({
+  behaviorId: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/u),
+  inputs: z.record(z.string().min(1).max(40), z.union([z.string().max(2_000), z.number().finite(), z.boolean(), z.null()])),
+}).superRefine((value, context) => {
+  if (Object.keys(value.inputs).length > TOOL_PACKAGE_LIMITS.maxBehaviorInputs) {
+    context.addIssue({ code: 'custom', path: ['inputs'], message: `At most ${TOOL_PACKAGE_LIMITS.maxBehaviorInputs} inputs.` });
+  }
+});
+
+export interface ToolIntentInput {
+  behaviorId: string;
+  inputs: Record<string, string | number | boolean | null>;
+}
+
+/**
+ * F080 / D-038: what one tool intent run reports.
+ *
+ * A refusal is a value, never a throw: the route answers with the code and nothing was committed,
+ * which is what lets a package tell "the authority said no" apart from a transport or runtime fault.
+ */
+export type ToolIntentRun =
+  | { ok: true; actionId: string; ack: CommandAck }
+  | { ok: false; code: string; message: string };
+
+export function parseToolIntentInput(value: unknown): ToolIntentInput | undefined {
+  const parsed = toolIntentRequestSchema.safeParse(value);
+  return parsed.success ? { behaviorId: parsed.data.behaviorId, inputs: parsed.data.inputs } : undefined;
+}
+
+/** The status a refusal is reported with; the code, not the status, is the contract. */
+export function toolIntentStatus(answer: ToolIntentRun): number {
+  if (answer.ok) return 200;
+  if (answer.code === 'TOOL_INTENT_PAYLOAD' || answer.code === 'TOOL_UNKNOWN_BEHAVIOR' || answer.code === 'TOOL_BEHAVIOR_INPUT_INVALID') return 400;
+  if (answer.code === 'TOOL_NOT_INSTALLED') return 404;
+  if (answer.code === 'TOOL_NOT_AUTHORIZED') return 403;
+  if (answer.code === 'TOOL_HASH_MISMATCH' || answer.code === 'TOOL_STALE_REVISION') return 409;
+  return 422;
+}
+
 export interface RoomHttpDeps {
   env(): Env;
   readonly repository: RoomRepository;
@@ -150,6 +197,11 @@ export interface RoomHttpDeps {
     | { ok: true; filename: string; format: 'csv' | 'html'; content: string; sourceDataRevision: number; grantVersion: number }
     | { ok: false; code: string; message: string }
   >;
+  /**
+   * F080 / D-038: run one behaviour of this room's installed tool. The room compiles, runs and plans;
+   * the commit is the ordinary `table.act` command, so a refusal here never reaches the authority.
+   */
+  runToolIntent(request: Request, workspaceId: string, input: ToolIntentInput): Promise<ToolIntentRun>;
 }
 
 export interface RoomHttp {
@@ -179,6 +231,10 @@ export function matchRoomRoute(request: Request, boundRoomId: string | null): Ro
   }
   if (request.method === 'POST' && url.pathname === '/internal/space-action') {
     return { handler: 'room-http', name: 'internal.space-action' };
+  }
+  // F080 / D-038: the room runs the behaviour only after the Worker answered the membership question.
+  if (request.method === 'POST' && url.pathname === '/internal/space-tool-intent') {
+    return { handler: 'room-http', name: 'internal.space-tool-intent' };
   }
   if (request.method === 'POST' && url.pathname === '/internal/space-export') {
     return { handler: 'room-http', name: 'internal.space-export' };
@@ -241,6 +297,8 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
         return internalSpaceProjection(request, requestId);
       case 'internal.space-action':
         return internalSpaceAction(request, requestId);
+      case 'internal.space-tool-intent':
+        return internalSpaceToolIntent(request, requestId);
       case 'internal.space-export':
         return internalSpaceExport(request, requestId);
       case 'internal.space-grants':
@@ -299,6 +357,13 @@ export function createRoomHttp(deps: RoomHttpDeps): RoomHttp {
         : answer.code === 'SPACE_ACTION_FAILED' ? 422
           : 404;
     return json(status, answer, { 'x-request-id': requestId });
+  }
+
+  async function internalSpaceToolIntent(request: Request, requestId: string): Promise<Response> {
+    const parsed = parseToolIntentInput(await readJson(request));
+    if (!parsed) return json(400, { ok: false, code: 'TOOL_INTENT_PAYLOAD', message: 'Invalid tool intent request.' }, { 'x-request-id': requestId });
+    const answer = await deps.runToolIntent(request, deps.requireBoundRoomId(), parsed);
+    return json(toolIntentStatus(answer), answer, { 'x-request-id': requestId });
   }
 
   async function internalSpaceGrants(request: Request, requestId: string): Promise<Response> {
