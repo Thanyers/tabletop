@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
 import { MAX_JOB_PARTIAL_CONTENT_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_THINKING_TAIL_CHARS, type ModelFailureDetails, type ModelJobSearchProgress } from '../shared/model-job-progress';
 import {
-  addableWebSources, canApplyWorkspaceRefresh, DRAFT_SOURCE_TITLE_CHARS, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
+  addableWebSources, webSourcesNotOnTable, canApplyWorkspaceRefresh, DRAFT_SOURCE_TITLE_CHARS, draftFailureSummary, draftInFlight, draftLimitMs, draftLimitSeconds, draftPartialLabel,
   draftPollLimitMs, draftRefreshBackoffMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, formatSourceDate, historyCard,
   LIVE_SEARCH_QUERY_CHARS, LIVE_THINKING_LINE_CHARS, liveSearchLine, liveSearchParts, liveThinkingLine, nextQueuedDraft, isUncertainRequest, mergeChatHistory, sameChatRequestScope, tableChatMode, type ChatCard,
 } from './table-chat-state';
@@ -362,6 +362,21 @@ describe('web sources on a finished draft card (F064)', () => {
     expect(items).toHaveLength(MAX_JOB_RESEARCH_SOURCES);
     expect(items[0]?.summary).toBe('Keep this.');
     for (const item of items) expect(item.url.startsWith('https://')).toBe(true);
+  });
+
+  // F086: an auto-applied draft keeps offering its sources until they are on the table.
+  it('offers only the sources that are not on the table yet, matching URLs the way the server stores them', () => {
+    const research = { queries: [], sources: [
+      source({ title: 'Added', url: 'https://who.int/bmi#asia', summary: 'Asian cut-offs.' }),
+      source({ title: 'Still to add', url: 'https://example.go.th/x', summary: 'Keep this.' }),
+    ] };
+    expect(webSourcesNotOnTable(research, [{ url: 'https://who.int/bmi' }, {}]).map((item) => item.title)).toEqual(['Still to add']);
+    expect(webSourcesNotOnTable(research, [{ url: 'https://who.int/bmi' }, { url: 'https://example.go.th/x' }])).toEqual([]);
+    expect(webSourcesNotOnTable(undefined, [])).toEqual([]);
+    // Room for one more source: only one is offered; a full table offers none, so the card can finish.
+    const many = { queries: [], sources: Array.from({ length: 3 }, (_, index) => source({ title: `S${index}`, url: `https://example${index}.go.th/x`, summary: 'Keep.' })) };
+    expect(webSourcesNotOnTable(many, [{}, {}, {}]).map((item) => item.title)).toEqual(['S0']);
+    expect(webSourcesNotOnTable(many, [{}, {}, {}, {}])).toEqual([]);
   });
 });
 
