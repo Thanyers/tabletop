@@ -17,7 +17,7 @@ import { rememberConsent } from './table-chat-consent';
 import { createPrivateChatStore, type PrivateChatStorage } from '../workspace/private-chat-store';
 import { runJobPollLoop } from '../workspace/job-poll-loop';
 import { viewerCan } from '../shared/permissions';
-import { addableWebSources, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from '../workspace/table-chat-state';
+import { addableWebSources, webSourcesNotOnTable, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from '../workspace/table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -711,12 +711,18 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   // A card can finish before this page ever renders its waiting phase (a fast draft, a reload during the
   // last poll), so a card created after the page opened counts as seen too. Otherwise the card is removed
   // by `isFinishedResult` below and no notice replaces it: it would vanish silently.
+  // F086: web sources an auto-applied draft found that this member could still add to the table.
+  const sourcesToAdd = useCallback((card: ChatCard) => card.kind === 'draft' && options.webEvidence === true && table && viewerCan(table, 'files.add') && !readOnly
+    ? webSourcesNotOnTable(card.modelJob?.research, table.domain.sources)
+    : [], [options.webEvidence, table, readOnly]);
   const mountedAtRef = useRef(Date.now());
   const watchedCardsRef = useRef(new Set<string>());
   const notifiedCardsRef = useRef(new Set<string>());
   useEffect(() => {
     for (const card of cards) {
-      if (!isFinishedResult(card)) {
+      // F086: an applied draft that still offers sources says "rules added" on its own card, so no second notice.
+      if (card.kind === 'draft' && card.modelJob?.autoApply === 'applied' && sourcesToAdd(card).length > 0) notifiedCardsRef.current.add(card.id);
+      if (!isFinishedResult(card, sourcesToAdd(card))) {
         if (card.phase === 'sending' || card.phase === 'waiting' || card.confirming || card.confirmationPending) watchedCardsRef.current.add(card.id);
         continue;
       }
@@ -730,11 +736,11 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         optionsRef.current.notify(`Done: “${request}”`, 'success', { label: 'Table history', run: () => optionsRef.current.focusObject('workspace.history') });
       }
     }
-  }, [cards]);
+  }, [cards, sourcesToAdd]);
   const currentLocalState = chatStore.load(scope);
   // A result stays on the canvas only while it asks for something (answer, review, confirm, retry, an error);
   // a finished one becomes a notification (below) instead.
-  const displayCards = modeChatCards.filter((card) => !chatStore.isDismissed(card, currentLocalState) && !isFinishedResult(card));
+  const displayCards = modeChatCards.filter((card) => !chatStore.isDismissed(card, currentLocalState) && !isFinishedResult(card, sourcesToAdd(card)));
   const operationBusy = externalBusy || confirmBusy;
   const followUps = currentLocalState.followUps;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
@@ -987,10 +993,24 @@ function ChatCardContent({ card, chosen, view, readOnly, webEvidence, retryDisab
   }
   // F039: a draft the server put into use on its own.
   if (card.kind === 'draft' && card.modelJob?.autoApply === 'applied' && !card.pollError) {
+    // F086: the web sources it used stay on this card until someone adds them to the table, so they can be verified
+    // and cited (F064 slice C); before, the card left the canvas with them.
+    const sources = draftSources(card.modelJob?.research);
+    const toAdd = webEvidence && viewerCan(view, 'files.add') && !readOnly ? webSourcesNotOnTable(card.modelJob?.research, view.domain.sources) : [];
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       <p><Sparkles size={14} /> The new rules were added to the table. Remove any rule you do not want from the Rules card.</p>
+      {toAdd.length > 0 && <p className="tt-chat-card__hint">Add the web sources it used to the table, then verify them on the Files card so AI can cite them.</p>}
+      {sources.length > 0 && <details className="tt-chat-card__sources" data-testid="draft-sources">
+        <summary>{draftSourcesLabel(sources.length)}</summary>
+        <ul>
+          {sources.map((source) => <li key={source.url}>
+            <a href={source.url} target="_blank" rel="noopener">{source.title}</a>
+            <span>{[source.dateLabel, `authority ${source.authority}`].filter(Boolean).join(' · ')}</span>
+          </li>)}
+        </ul>
+      </details>}
       {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
-      <div className="tt-card-cta"><button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />View rules</button>{dismissButton}</div>
+      <div className="tt-card-cta">{toAdd.length > 0 && <button type="button" className="tt-button tt-button--quiet" data-testid="draft-add-sources" disabled={busy || card.checking} onClick={() => void onAddWebSources?.(view, toAdd)}>Add to table sources</button>}<button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />View rules</button>{dismissButton}</div>
     </div>;
   }
   if (card.kind === 'draft') {
@@ -1074,8 +1094,9 @@ function ChatCardContent({ card, chosen, view, readOnly, webEvidence, retryDisab
 }
 
 /** A result with nothing left to do: rules that went into use, or an AI proposal that was confirmed. */
-function isFinishedResult(card: ChatCard): boolean {
+function isFinishedResult(card: ChatCard, sourcesToAdd: readonly unknown[] = []): boolean {
   if (card.pollError || card.requestError || card.error) return false;
-  if (card.kind === 'draft') return card.modelJob?.autoApply === 'applied';
+  // F086: rules in use but web sources still to offer: the card stays until they are added or it is closed.
+  if (card.kind === 'draft') return card.modelJob?.autoApply === 'applied' && sourcesToAdd.length === 0;
   return card.job?.result?.kind === 'action-proposal' && card.job.confirmationStatus === 'confirmed' && !card.confirming && !card.confirmationPending;
 }
