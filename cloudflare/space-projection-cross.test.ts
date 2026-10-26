@@ -654,3 +654,73 @@ describe('three tables under repeated reads', () => {
     console.log(JSON.stringify({ reads, rowsSeen, elapsedMs: elapsed, averageMs: Math.round(elapsed / reads) }));
   });
 });
+
+/**
+ * F080 / EVOLVE-01: the second update edits the program the table holds.
+ *
+ * domain/table.ts:508 requires every retained field to be byte-identical to its previous definition,
+ * so a program rebuilt from the scenario source is refused as a rule change. Editing the stored
+ * program is the path a person takes in the UI, and the one this test follows.
+ */
+describe('an additive program update keeps identities', () => {
+  it('keeps record ids, actions and canvas views when a field is added', async () => {
+    const owner = await seedActor('Evolve additive owner');
+    const created = await createWorkspace(owner, 'Evolve additive table');
+    const imported = await command(owner, created, 'table.import', {
+      filename: tableScenarioSources.equipment.filename,
+      text: tableScenarioSources.equipment.text,
+    });
+    const sourceId = (imported.workspace.domain as { sources?: { id: string }[] }).sources?.[0]?.id;
+    if (!sourceId) throw new Error('EVOLVE_SOURCE_MISSING');
+
+    const runCycle = async (start: typeof created, change: unknown) => {
+      let workspace = start;
+      for (const [type, payload] of [
+        ['evolve.propose', { change }],
+        ['evolve.simulate', {}],
+        ['evolve.validate', {}],
+        ['evolve.approve', {}],
+        ['evolve.activate', {}],
+      ] as const) {
+        const result = await command(owner, workspace, type, payload);
+        workspace = result.workspace;
+      }
+      return workspace;
+    };
+
+    const first = await runCycle(imported.workspace, equipmentChange(sourceId));
+    const snapshot = (view: typeof created) => {
+      const domain = view.domain as unknown as {
+        records?: Record<string, { id: string }[]>;
+        program?: { actions?: { id: string }[]; canvas?: { views?: { id: string }[] }; collections?: { id: string; fields: { id: string }[] }[] };
+        dataRevision?: number;
+      };
+      return {
+        recordIds: (domain.records?.equipment ?? []).map(row => row.id).sort(),
+        actionIds: (domain.program?.actions ?? []).map(action => action.id).sort(),
+        viewIds: (domain.program?.canvas?.views ?? []).map(entry => entry.id).sort(),
+        fieldIds: (domain.program?.collections?.find(collection => collection.id === 'equipment')?.fields ?? []).map(field => field.id).sort(),
+      };
+    };
+    const before = snapshot(first);
+    expect(before.recordIds.length).toBeGreaterThan(0);
+
+    const stored = (first.domain as unknown as {
+      program: { collections: { id: string; fields: unknown[] }[] } & Record<string, unknown>;
+    }).program;
+    const secondProgram = {
+      ...stored,
+      collections: stored.collections.map(collection => (collection.id === 'equipment'
+        ? { ...collection, fields: [...collection.fields, { id: 'note', label: 'Note', type: 'text', required: false }] }
+        : collection)),
+    };
+    // A rule edit must not carry initial records; the existing rows stay as they are.
+    const second = await runCycle(first, { kind: 'table', program: secondProgram, initialRecords: {} });
+    const after = snapshot(second);
+
+    expect(after.recordIds).toEqual(before.recordIds);
+    expect(after.actionIds).toEqual(before.actionIds);
+    expect(after.viewIds).toEqual(before.viewIds);
+    expect(after.fieldIds).toEqual([...before.fieldIds, 'note'].sort());
+  });
+});
