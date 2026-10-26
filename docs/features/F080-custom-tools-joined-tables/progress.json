@@ -1,0 +1,810 @@
+{
+  "schemaVersion": 1,
+  "feature": "F080",
+  "updatedAt": "2026-10-26T08:15:00+07:00",
+  "lastVerifiedAt": "2026-10-26T08:15:00+07:00",
+  "goal": {
+    "tool": "native DSH goal",
+    "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
+    "revision": 1,
+    "status": "active",
+    "scope": "JT full set incl. JT-V and JT-X",
+    "note": "ไม่มี active Goal มาก่อนใน session นี้ จึงสร้างใหม่แทนการรับช่วง; ไม่มี Goal อื่นที่ชน scope"
+  },
+  "repo": {
+    "name": "Thanyers/tabletop",
+    "baseBranch": "dev",
+    "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
+    "fetchedAt": "2026-10-25T21:41:00+07:00",
+    "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
+    "branch": "feat/F080-custom-tools",
+    "headSha": "6b58f62",
+    "candidateSha": "6b58f62",
+    "pr": 305,
+    "prState": "draft",
+    "openPrsAtStart": [
+      {
+        "number": 250,
+        "head": "fix/CI-provider-mock-diagnostics",
+        "draft": false,
+        "title": "CI: ตัวจำลอง AI ในเทสต์ Workers บอกเหตุผลเมื่อปฏิเสธ request"
+      }
+    ],
+    "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
+  },
+  "currentCheckpoint": "PR #305 (draft, mergeable): 26 PASS / 9 UNVERIFIED · ปิดล่าสุด: HIST-01 (pagination partition เป๊ะ + per-member last-seen ตาม D-028), G2-01 (ไฟล์ใหม่ + แก้สองรอบ รักษา ids/values/actions/views/sources), G1-02 (pipeline เดียวสำหรับ human/AI จริงที่ระดับไปป์ไลน์), CTX-01 (brief + สมาชิกที่สองเห็นตรงกัน + included/omitted) · ORACLE-01 ปิดครบ 6 surface (connections/export/formulas/compute/behaviour/UI hash) ด้วย independent expectation · D-030 แก้ D-025: /s/:id เสิร์ฟ SPA ได้ (200) เมื่อ dist ถูก build — 404 ก่อนหน้าเป็น server เก่าบนพอร์ต 8787 · เหลือ 9: AI จริง (G1-01/EXEC-01/EDIT-01 — ต้องมี provider key) · UI ที่ต้องมีคนลงชื่อเข้าใช้ (VISUAL-01/IMPACT-01 — Google OAuth) · HUMAN-01 + hosted/staging · ดู docs/features/F080-custom-tools-joined-tables/closure-checklist.md สำหรับขั้นที่คนต้องทำ",
+  "slices": [
+    {
+      "alias": "C0",
+      "jt": "JT-0",
+      "featureTask": "F080-T0",
+      "state": "review",
+      "dependsOn": []
+    },
+    {
+      "alias": "C1",
+      "jt": "JT-1A",
+      "featureTask": "F080-T1A",
+      "state": "review",
+      "note": "contracts + validation + reader compatibility (e4d01aa)",
+      "dependsOn": [
+        "C0"
+      ]
+    },
+    {
+      "alias": "C2",
+      "jt": "JT-1A",
+      "featureTask": "F080-T1A",
+      "state": "review",
+      "dependsOn": [
+        "C1"
+      ],
+      "note": "host + compile adapter + behaviour runner (ff0ad2c); authority integration ยังไม่ต่อ"
+    },
+    {
+      "alias": "C3",
+      "jt": "JT-1B",
+      "featureTask": "F080-T1B",
+      "state": "doing",
+      "dependsOn": [
+        "C2"
+      ],
+      "note": "pipeline + budget enforcement + fixture generator (73df3e6); live provider ยังติด GATE-PAID-AI, source editor UI ยังไม่ทำ"
+    },
+    {
+      "alias": "C4",
+      "jt": "JT-2A",
+      "featureTask": "F080-T2A",
+      "state": "planned",
+      "dependsOn": [
+        "C3"
+      ]
+    },
+    {
+      "alias": "C5",
+      "jt": "JT-2B",
+      "featureTask": "F080-T2B",
+      "state": "review",
+      "dependsOn": [
+        "C1"
+      ],
+      "note": "contract + storage + space commands ผ่าน authority path (e812e83/ae3daf5); route ของ connection/projection ยังไม่ทำ"
+    },
+    {
+      "alias": "CV",
+      "jt": "JT-V",
+      "featureTask": "F080-T-V",
+      "state": "planned",
+      "dependsOn": [
+        "C0",
+        "C1"
+      ]
+    },
+    {
+      "alias": "C6",
+      "jt": "JT-3A",
+      "featureTask": "F080-T3A",
+      "state": "doing",
+      "dependsOn": [
+        "C4",
+        "C5",
+        "CV"
+      ],
+      "note": "transport wired (c23a867): GET /api/workspaces/:space/space/projection → Worker → POST /internal/space-projection → resolveSpaceProjectionRead; ยังไม่พิสูจน์ end-to-end ด้วยสอง workspace"
+    },
+    {
+      "alias": "C7",
+      "jt": "JT-3B",
+      "featureTask": "F080-T3B",
+      "state": "doing",
+      "dependsOn": [
+        "C6"
+      ],
+      "note": "protocol + grant/revoke commands + in-flight adjudication (ae3daf5); ไม่มี transport ข้าม Room และไม่มี UI"
+    },
+    {
+      "alias": "C8",
+      "jt": "JT-4A",
+      "featureTask": "F080-T4A",
+      "state": "planned",
+      "dependsOn": [
+        "C4",
+        "C7"
+      ]
+    },
+    {
+      "alias": "C9",
+      "jt": "JT-4B",
+      "featureTask": "F080-T4B",
+      "state": "planned",
+      "dependsOn": [
+        "C7",
+        "C8"
+      ]
+    },
+    {
+      "alias": "C10",
+      "jt": "JT-5",
+      "featureTask": "F080-T5",
+      "state": "planned",
+      "dependsOn": [
+        "C9"
+      ]
+    },
+    {
+      "alias": "CX",
+      "jt": "JT-X",
+      "featureTask": "F080-T-X",
+      "state": "doing",
+      "dependsOn": [
+        "C1",
+        "C7"
+      ],
+      "note": "contract + tests commit ecb63c9; ยังไม่มี route/end-user file open"
+    },
+    {
+      "alias": "C11",
+      "jt": "closure",
+      "featureTask": "F080-Closure",
+      "state": "planned",
+      "dependsOn": [
+        "C10",
+        "CX"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "F080-T0",
+      "jt": "JT-0",
+      "featureId": "F080",
+      "state": "review",
+      "dependsOn": [],
+      "owner": "lead",
+      "branch": "feat/F080-custom-tools",
+      "pr": "305 (draft)",
+      "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
+      "candidateSha": "3d078481303fecc06a9256f67fa583db6fcc9412",
+      "checks": [
+        {
+          "name": "git root/branch/HEAD/status ของ checkout อ้างอิง",
+          "environment": "local",
+          "command": "git rev-parse --show-toplevel; git rev-parse --abbrev-ref HEAD; git rev-parse HEAD; git status --porcelain=v1 -b",
+          "result": "PASS",
+          "evidence": "checkout อ้างอิงอยู่ที่ branch อื่นที่ไม่ใช่ dev และ clean; งานนี้จึงแยก worktree ใหม่จาก origin/dev ไม่แตะ checkout เดิม",
+          "checkedSha": "b7710897c2fac44fae1de9a5d1d46892740624c2"
+        },
+        {
+          "name": "fetch origin/dev",
+          "environment": "local",
+          "command": "git fetch origin --prune; git rev-parse origin/dev",
+          "result": "PASS",
+          "evidence": "origin/dev = a6feb3c1fbe2",
+          "checkedSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c"
+        },
+        {
+          "name": "feature ID ว่าง",
+          "environment": "GitHub + git",
+          "command": "gh pr list --state open; git branch -r; grep F080 PLAN.md",
+          "result": "PASS",
+          "evidence": "ไม่มี F080 ใน PLAN.md/docs/features/remote branches; open PR มีเฉพาะ #250 ที่ไม่เกี่ยวกับ scope นี้",
+          "checkedSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c"
+        },
+        {
+          "name": "checkpoint artifacts ครบ 4 ไฟล์ + feature entry + changelog fragment",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "node scripts/check-public-files.mjs; npx tsx server/changelog.ts check",
+          "result": "PASS",
+          "evidence": "public scan 1017 files / 0 findings; changelog.d 13 fragments OK",
+          "checkedSha": "3d078481303fecc06a9256f67fa583db6fcc9412"
+        }
+      ],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "commit bootstrap แล้ว push + เปิด draft PR ชื่อขึ้นต้น F080; จากนั้นเริ่ม C1 (tool-package contract) ทันที"
+    },
+    {
+      "id": "F080-T1A",
+      "jt": "JT-1A",
+      "featureId": "F080",
+      "state": "review",
+      "dependsOn": [
+        "F080-T0"
+      ],
+      "owner": "lead + backend specialist",
+      "branch": "feat/F080-custom-tools",
+      "pr": null,
+      "baseSha": "a6feb3c1fbe2aa89396ccf9bc3995467d82e438c",
+      "candidateSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+      "checks": [
+        {
+          "name": "tool package contract: schema, limits, import graph, write declarations, reader compatibility",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-package.test.ts",
+          "result": "PASS",
+          "evidence": "27/27 tests: valid round-trip + hash stability + 15 negative cases (unknown field, entry/behaviour mismatch, unpinned import, node:/https:/absolute import, missing target, cycle, depth, write target, duplicate path, language mismatch, char budget, deep value)",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "host↔frame bridge protocol: closed methods, nonce identity, size/length bounds",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-protocol.test.ts",
+          "result": "PASS",
+          "evidence": "16/16 tests: unknown kind/method rejected, wrong protocol version, oversize and deep payload rejected, records/scalar snapshot mismatch, height and log bounds, nonce mismatch drop, rejection vocabulary closed",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "controlled RED: cycle guard removed must make its test fail",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "patch `if (inStack.has(path))` → `if (false)`; npx vitest run tool-package.test.ts -t cycle; restore",
+          "result": "PASS",
+          "evidence": "test failed while the guard was disabled (1 failed / 24 skipped) and passed again after restore; the test is not vacuous",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "typecheck + lint for the new modules",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx tsc -b; npx eslint src/tabletop/shared/tool-package.ts src/tabletop/shared/tool-protocol.ts <tests>",
+          "result": "PASS",
+          "evidence": "tsc -b clean; eslint clean (0 errors, 0 warnings)",
+          "checkedSha": "e4d01aa9d2162736632ff5bc0c85c8c6d37a14fb"
+        },
+        {
+          "name": "compile adapter: TSX→module, behaviour as ESM, entry reachability, budget, syntax errors",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/runtime/tools/compile.test.ts",
+          "result": "PASS",
+          "evidence": "9/9: automatic JSX runtime becomes require(\"react/jsx-runtime\"), behaviour stays ESM with export function, unreachable files are not shipped, relative imports resolve, syntax error is reported against its file, invalid package never reaches the compiler",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "isolated tool host in a sandboxed frame renders and invokes a hand-written package",
+          "environment": "browser (system Edge headless via Playwright), file:// fixture",
+          "command": "node scripts/build-tool-sandbox-runtime.mjs; node scripts/build-tool-host-harness.mjs; node tests/ui/tool-host/browser.mjs",
+          "result": "PASS",
+          "evidence": "13/13 checks: frame sandbox=\"allow-scripts\" only; two source revisions projected; pointer drag between zones; cost computed from the second source; declared behaviour invoked with typed inputs; live projection update keeps package state; keyboard path; page-originated spoof ignored; cookie/storage/network all blocked inside the frame (origin \"null\"); remount clean; no page errors",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "behaviour runner isolation on workerd",
+          "environment": "Cloudflare Workers runtime (workerd) via @cloudflare/vitest-plugin",
+          "command": "npm run test:cloudflare -- cloudflare/tool-behavior-runner.test.ts",
+          "result": "PASS",
+          "evidence": "11/11 (5.1 s), re-run by the lead after the specialist reported it: fetch refused, env binding absent, fresh isolate per run, 5,006 ms timeout, out-of-scope output rejected",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "host-side write-scope validation of behaviour output",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-behavior.test.ts server/tool-behavior-runner.test.ts",
+          "result": "PASS",
+          "evidence": "28/28 shared validation tests + 6/6 local Miniflare runner tests; ok:false never returns a changes list, so no prefix of an out-of-scope proposal can be committed",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        },
+        {
+          "name": "typecheck + lint across the whole slice",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx tsc -b; npx eslint <all changed files>",
+          "result": "PASS",
+          "evidence": "tsc -b clean; eslint clean",
+          "checkedSha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143"
+        }
+      ],
+      "findings": [
+        "shared/json-budget.ts treats an `undefined` value as unusable, so a TS object that spells an omitted optional field as `undefined` was reported as PACKAGE_BUDGET. Fixed by probing the JSON view of the package (which is what the store and the hash see) and keeping jsonWithinBudget semantics unchanged for wire values.",
+        "The frame needs `unsafe-eval` in its own CSP to instantiate compiled modules; the host CSP is untouched and the frame has an opaque origin with no cookie/storage/network (verified in the browser harness).",
+        "The bridge parser rejected messages containing `undefined` optional fields because jsonWithinBudget treats undefined as unusable; fixed by probing the JSON view on both the package and the message path, and by omitting absent fields when the host replies.",
+        "HTML5 drag-and-drop cannot be driven reliably by pointer emulation; the fixture uses pointer events, which is also the correct behaviour for touch and keyboard.",
+        "Independent review FAILED the candidate and found real defects; fixed in the follow-up commit: (a) a projection update arriving before the frame mounted was dropped — ports are now re-sent on frame load; (b) an inline `presentation={{…}}` remounted the frame on every parent render — the effect now depends on primitive fields; (c) a write declaration could target an `out` port — rejected now; (d) a behaviour module importing a pinned library passed validation and failed only in the isolate — all imports are rejected now; (e) the SDK promise could hang when the host dropped a message — intents now settle as abandoned on timeout and on the pending cap; (f) my own fixture encoded the wrong behaviour ABI (`{changes}` instead of a bare list).",
+        "Reviewer findings still OPEN (do not mark PASS): ISO-01 must be re-run from an http origin (downgraded to UNVERIFIED); the behaviour runner needs `behaviorId` + package-derived declared writes and must read `request.expected`, otherwise TOOL_STALE_REVISION/TOOL_SOURCE_REVOKED are unreachable; spec.md has no F080 entry yet; the frame runtime is ~685 KB inlined per instance and undocumented; the 64 KiB bridge bound is only enforced for string payloads; no CI job runs the tool-host harness; several declared limits/rejection codes are unenforced."
+      ],
+      "blocker": null,
+      "nextAction": "C3: authoring pipeline with an injected generator (fixture generator in tests), human source editing, activation + readback on one table; the live provider stays behind GATE-PAID-AI. In parallel: C5 collaboration-space contract (shared schema only, no migration) and re-run the visual exploration slice."
+    },
+    {
+      "id": "F080-T1B",
+      "jt": "JT-1B",
+      "featureId": "F080",
+      "state": "doing",
+      "dependsOn": [
+        "F080-T1A"
+      ],
+      "owner": "frontend + backend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
+      "checks": [
+        {
+          "name": "single authoring pipeline (human + AI) with pre-dispatch budget and isolated trial",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/runtime/tools/authoring.test.ts",
+          "result": "PASS",
+          "evidence": "12/12: an over-budget estimate never calls the generator (the spy generator is never entered); no generator or no budget fails closed; validation → compile → trial → activation for both routes; one repair attempt receives the previous diagnostics; a trial failure blocks activation and keeps the problems; an unchanged hand edit is rejected as NO_CHANGE; the AI route is handed the person-edited base version, not the original",
+          "checkedSha": "73df3e6a8012c59bd795c4cf190666584dacd2e6"
+        },
+        {
+          "name": "authoring panel: edit source, check, activate, read back — in a browser",
+          "environment": "browser (system Edge headless locally, Chromium in CI) via file:// harness",
+          "command": "npm run test:tool-authoring:browser",
+          "result": "PASS",
+          "evidence": "8/8: the panel opens on the package with both source files; a syntax error is reported as TOOL_COMPILE_FAILED against ui/main.tsx and — asserted explicitly — never starts a pipeline run; fixing it activates with a readback of version, content hash, route=human, reviewer=manual and requester; a second edit produces a different content hash (so the pipeline used the edited source, not the original); the same job completes with the keyboard only; no page errors",
+          "checkedSha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1"
+        }
+      ],
+      "findings": [
+        "Budget enforcement is now structural rather than a log line: the generator is only reachable through a function that refuses when the estimate exceeds the remaining cap, which is what the paid-AI gate requires before any live call.",
+        "The panel check runs structure AND compile, because a syntax error is invisible to schema validation; without that the person would only learn about it after a failed activation. The refused check is asserted not to reach the pipeline at all.",
+        "The harness trial is a syntax gate over compiled modules, not an isolation boundary; isolated execution stays proven by the workerd runner tests (ISO-02). The panel is harness-only for now — mounting it in the app is still open."
+      ],
+      "blocker": null,
+      "nextAction": "Mount the panel in the workspace UI (one entry point, one place that calls the pipeline) and wire it to the same authority path a real activation would use; the AI route stays behind the paid-AI gate."
+    },
+    {
+      "id": "F080-T-V",
+      "jt": "JT-V",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": [
+        "F080-T0",
+        "F080-T1A"
+      ],
+      "owner": "frontend/design specialist",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": "ต้องให้เจ้าของเลือกแนวภาพหลังทำครบ 3 แนว (ไม่เลือกแทน) — ไม่บล็อก runtime/backend slice อื่น",
+      "nextAction": "ทำ 3 interactive prototypes ด้วยภารกิจเดียวกัน + ภาพสรุป แล้วถามเจ้าของหนึ่งคำถามพร้อมหลักฐาน"
+    },
+    {
+      "id": "F080-T2A",
+      "jt": "JT-2A",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": [
+        "F080-T1B"
+      ],
+      "owner": "lead + backend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "nested imports, pinned versions, selective update, minimum-context diff และ recovery"
+    },
+    {
+      "id": "F080-T2B",
+      "jt": "JT-2B",
+      "featureId": "F080",
+      "state": "review",
+      "dependsOn": [
+        "F080-T1A"
+      ],
+      "owner": "backend specialist",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561",
+      "checks": [
+        {
+          "name": "collaboration space contract: role×verb matrix, source-link invariants, commands, reader compatibility",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/collaboration-space.test.ts",
+          "result": "PASS",
+          "evidence": "21/21: matrix keeps administration to the manager; a participant can run but not author/rebind; no space role can decide a source grant; export needs a separate unexpired grant; membership alone never reads a source; addMember/setRole/transferManager leave sources byte-identical; a second manager is refused; leaving marks the link `left` instead of deleting history; reader tolerates absent/old/newer schema and skips only the unreadable entries",
+          "checkedSha": "71a359191efd8d9f8077be3b811ffe67712acfad"
+        },
+        {
+          "name": "collaboration space storage path without a migration",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/domain/collaboration-space.test.ts; npx vitest run src/tabletop",
+          "result": "PASS",
+          "evidence": "9/9: a workspace that never had a space reads as {space: undefined, problems: []}; create makes the owner the single manager and bumps actionRevision; addMember leaves `sources` byte-identical; leaveSource marks `left` instead of deleting; JSON round-trip is unchanged; a newer space schema is reported without discarding the workspace. Full src suite 801/801 shows the TableState addition regressed nothing.",
+          "checkedSha": "878f995d4a0548c14bd74a8cce2a2c08223ee561"
+        },
+        {
+          "name": "space commands reach the real command path (domain + authority allowlist)",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/domain/collaboration-space.test.ts server/collaboration-space-commands.test.ts src/tabletop/shared/collaboration-space-command.test.ts",
+          "result": "PASS",
+          "evidence": "17/17 domain tests (create by owner only, member add/role change through handleTableCommand, maker may link a source but not manage members, unknown type still returns null, malformed payload rejected before state) · 12/12 payload-parsing tests · 7/7 authority wiring tests (every space command allowed for kind `table` only, invented commands refused, trusted operations stay additive not permissive)",
+          "checkedSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c"
+        }
+      ],
+      "findings": [
+        "The plan matrix has no \"grant a source\" verb at all — encoded as an absence in SPACE_VERBS plus a test that asserts it, so a future verb addition fails the test rather than widening access silently.",
+        "No strict schema guards stored domain state (no domainStateSchema/tableStateSchema in server/; it is read back through parseJsonValue), so the space can live as an optional field on the hosting workspace — the same additive shape notes/cardMeta used. That removes the D1 migration this slice was gated on.",
+        "Encoding incident: PowerShell Add-Content/Set-Content rewrote decisions.md double-encoded (243 U+FFFD) and it reached a commit; repaired by restoring the last valid blob and rewriting through the editor tool. A strict-UTF-8 + mojibake scan now runs before commit (MEMORY.md records the rule)."
+      ],
+      "blocker": null,
+      "nextAction": "connection/projection route on top of this storage: propose → source grant → bind → authorized read → subscribe/invalidate → revoke, with the role×verb matrix enforced server-side; needs no D1 migration but does touch the Room route table."
+    },
+    {
+      "id": "F080-T3A",
+      "jt": "JT-3A",
+      "featureId": "F080",
+      "state": "review",
+      "dependsOn": [
+        "F080-T2A",
+        "F080-T2B",
+        "F080-T-V"
+      ],
+      "owner": "frontend + backend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": "c23a8674d395903458d2fcd8e024a6185ad4c505",
+      "checks": [
+        {
+          "name": "cross-workspace projection transport: worker handler decisions",
+          "environment": "Cloudflare tier (vitest.cloudflare) with faked Rooms",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts cloudflare/room-http.test.ts",
+          "result": "PASS",
+          "evidence": "13/13 transport tests + 32/32 route-table tests: unauthenticated → 401, non-member → 403, workspace without a space → 404, unlinked source → 404, revoked grant → 409, unknown grant → 404, malformed parameters rejected before any Room is asked, non-GET → 405; the acting actor and space identity passed to the source come from the session and stored state, never from the query",
+          "checkedSha": "c23a8674d395903458d2fcd8e024a6185ad4c505"
+        },
+        {
+          "name": "internal projection route: harness dependency, route table and handler statuses",
+          "environment": "Cloudflare tier (vitest.cloudflare) with the real route table",
+          "command": "npm run test:cloudflare -- cloudflare/room-http.test.ts cloudflare/space-projection-transport.test.ts",
+          "result": "PASS",
+          "evidence": "37/37 room-http (route row POST /internal/space-projection, 200 with the resolver answer, 400 for a malformed body before the resolver runs, 409 for a revocation, 404 for an unknown grant — and the harness now provides the new required dep, so the handler cannot be silently unexercised) + 13/13 transport with the canonical errorCode body",
+          "checkedSha": "880237341017c3f3b11a0c12295505bdc6ef4d29"
+        },
+        {
+          "name": "two-workspace end-to-end: authorization identity, revocation, impersonation",
+          "environment": "Cloudflare tier via `worker.fetch` with real Durable Objects and D1",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "6/6: two workspaces (space owner A, source owner B) and two sessions; a member of the granted workspace reads the descriptor (200); a workspace that reuses the space slug and links the same table gets 404 SPACE_GRANT_NOT_FOUND while the authorized workspace still reads 200; a revoke on the source makes the very next read 409 SPACE_GRANT_REVOKED; an unexposed port is 404 SPACE_GRANT_PORT; an unknown grant is 404; a source the space never linked is 404 SPACE_SOURCE_NOT_LINKED; someone outside the space is 403 SPACE_NOT_MEMBER. Whole tier 271/271.",
+          "checkedSha": "7ed80770c4f4609481105dda4e51fd6df21ebeef"
+        },
+        {
+          "name": "granted rows served at the live revision",
+          "environment": "Cloudflare tier (worker.fetch + real DOs) + local unit",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts; npx vitest run src/tabletop/shared/tool-grant-rows.test.ts",
+          "result": "PASS",
+          "evidence": "e2e: the 200 body now carries `rows` and `sourceDataRevision` equal to the source view's live dataRevision. Unit 5/5: rows carry only the granted fields, are clamped to the grant ceiling, keep the revision when empty, and turn list values into display text. Row *content* is proven at unit level; the e2e source table has no data yet, so rows are empty there.",
+          "checkedSha": "07a1267f40b345e86ba6c8d353409a327c7735a3"
+        },
+        {
+          "name": "joined data panel: two sources, live refresh, revoke and reconnect",
+          "environment": "browser (Edge locally, Chromium in CI) with a fake transport",
+          "command": "npm run test:tool-joined:browser",
+          "result": "PASS",
+          "evidence": "8/8: both sources render with their own revisions (3 / 7) and 4 rows total; a refresh moves both revisions (4 / 9) and replaces the old values; disconnecting one source shows an explicit \"revoked\" status, removes its table entirely and leaves no last-known value on screen, while the other source keeps its data; reconnect restores it at a new revision (10); the same actions work from the keyboard; the view delegates transport to its caller (never fakes a read)",
+          "checkedSha": "07a1267f40b345e86ba6c8d353409a327c7735a3"
+        },
+        {
+          "name": "real rows from a table with data, and propagation on a later read",
+          "environment": "Cloudflare tier (worker.fetch + real DOs + D1)",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "8/8 now: a source built through the real command path (import → evolve.propose/simulate/validate/approve/activate) serves rows whose keys are exactly the granted field (`name` only, `available` withheld) at the source's live dataRevision; after the source owner imports another file through its own path, the next read reports a higher sourceDataRevision with no notification to the space.",
+          "checkedSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73"
+        },
+        {
+          "name": "client transport maps endpoint answers to panel states",
+          "environment": "local unit + browser",
+          "command": "npx vitest run src/tabletop/ui/joined-projection-client.test.ts; npm run test:tool-joined:browser",
+          "result": "PASS",
+          "evidence": "8/8 unit: asks every source with space/source/grant/port (never a caller-supplied actor), maps 409 revoked→revoked, 409 stale→stale, 404/unlinked/unknown-code→missing, keeps other sources when one read throws, never shows rows on a refusal even when the body carries them, treats a 200 with a malformed body as missing, passes the abort signal. Browser 8/8 now runs this same client against a scripted transport.",
+          "checkedSha": "4c6dabb289d60a79e7abe2352f0e2da5aba3cb73"
+        },
+        {
+          "name": "one URL contract shared by the browser fetcher and the end-to-end test",
+          "environment": "local unit + Cloudflare tier",
+          "command": "npx vitest run src/tabletop/ui/joined-projection-fetcher.test.ts; npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "7/7: the path builder produces `/api/workspaces/<space>/space/projection?source&grant&port`, escapes values, keeps key order; the fetcher calls exactly that URL with credentials:\"include\", forwards the abort signal, reports a non-JSON body by status and lets a network error reject so the mapping layer can mark one source missing. The e2e test now builds its request with the same helper, so a drift on either side breaks it; the browser harness runs the real fetcher with only the platform fetch scripted.",
+          "checkedSha": "3c98044018c76d3158c7b2465fb01e91a6fb0696"
+        },
+        {
+          "name": "three independent sources and disconnect -> rebind",
+          "environment": "Cloudflare tier (worker.fetch + real DOs)",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts",
+          "result": "PASS",
+          "evidence": "19/19 now: a space links three tables and each answers with its own live revision and rows; disconnecting one (space.leaveSource) makes the next read 404 SPACE_SOURCE_NOT_LINKED with no rows in the refusal, while the space keeps existing; linking a different table afterwards serves it. Nothing falls back to cached values.",
+          "checkedSha": "133e2c0cd31cdb0d51ead7e17114bfe16b205074"
+        }
+      ],
+      "findings": [
+        "D-020 settles the authentication question for cross-workspace reads without a new secret: the Worker mediates, the destination vouches for space membership, and the source decides against its own grant list through resolveSpaceProjectionRead(). The remaining work is HTTP wiring plus a Worker-tier test with two real workspaces; until that exists, JOIN-01 stays UNVERIFIED and no claim of a live cross-room read should be made.",
+        "The wiring is not yet proven end-to-end: the Room-side dep (readSpaceProjection) and the Worker route are implemented and typecheck, but no test stands up two workspaces and performs a real cross-room read. That is the exact shape of gap that hid the earlier COMMAND_IDENTITY_SPOOF blocker, so JOIN-01/REVOKE-01 stay UNVERIFIED until a two-workspace Worker-tier test exists.",
+        "REVIEW ROUND 3 (verdict FAIL — correct, BLOCKER): the grant bound itself to a space *slug* the destination chooses, so a workspace that reused the slug of another space could read through its grant. Fixed by giving ToolProjectionGrant a spaceWorkspaceId (uuid) and comparing the workspace id the Worker actually read; the slug is now display data only, and a renamed space keeps its access (asserted).",
+        "Also fixed in the same pass: a source Room 5xx was reported as 404 \"not granted\" (now 503 DATABASE_UNAVAILABLE), a destination outage was reported as a membership denial (status now passed through), the route is rate-limited (60/min per actor, because each call fans out to two DOs), and the caller session cookie is no longer forwarded into the source tenant.",
+        "OPEN from review round 3: (a) the new Room route/handler still has no test and room-http.test.ts does not provide the new required dep; (b) the refusal body uses `code` where the repo contract is `errorCode` (src/tabletop/shared/contracts.ts:116); (c) the endpoint returns a grant descriptor, not rows, so JOIN-01 cannot pass until rows are wired and `sourceDataRevision` becomes live; (d) the 401/405 branches are unreachable in production; (e) spaceId regexes disagree (collaboration-space.ts allows a leading digit, room-http/tool-connection do not); (f) the Room read skips the authority schema-version gate; (g) PLAN/spec still lack the T3A row and the new counts.",
+        "Review findings 5 and 3 from round 3 are closed: the Room route/handler has tests and the harness provides `readSpaceProjection`; refusal bodies now use the repo contract { ok:false, errorCode, message } instead of an invented `code` field.",
+        "The two-workspace end-to-end test was attempted and withdrawn rather than committed failing: the room.test.ts fixtures use `cookieName(bindings,\"session\")` for the cookie and `csrfForToken(token)` for the mutation token, so a hand-built session yields 401 on /internal/create. Next attempt should import those two helpers (auth.ts / server side) instead of re-deriving them.",
+        "The two-workspace test that the previous two reviews demanded now exists and passes through the real Worker entry (`worker.fetch` + seeded sessions via `cookieName`/`csrfForToken`). It is the test that would have caught the slug-identity blocker: the impersonation case asserts 404 while the authorized workspace still reads 200."
+      ],
+      "blocker": "ต้องได้ผลเลือก visual จากเจ้าของก่อนลงทุน room shell",
+      "nextAction": "T4A: context/recap/impact/lineage on top of the now-complete join path; T5 afterwards."
+    },
+    {
+      "id": "F080-T3B",
+      "jt": "JT-3B",
+      "featureId": "F080",
+      "state": "review",
+      "dependsOn": [
+        "F080-T3A"
+      ],
+      "owner": "backend + UI",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6",
+      "checks": [
+        {
+          "name": "connection protocol: grant at the source, audience, effective revocation, in-flight adjudication",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-connection.test.ts src/tabletop/domain/tool-grant.test.ts",
+          "result": "PASS",
+          "evidence": "14/14 protocol tests: a read is authorized per port/audience/epoch; revocation is reported before a stale epoch so neither masks the other; the effective revocation point stops serving cached projections; an in-flight request is rejected when the grant was revoked or the source reset; the connection lifecycle is closed (revoked is terminal, missing is recoverable) · 10/10 grant command tests: epoch/dataRevision/issuer/time/version are stamped by the source (a client-supplied sourceEpoch or grantVersion is a payload error), duplicate ids and the live-grant cap are refused, revoke bumps grantVersion and is idempotent, and readGrantedProjection refuses after revoke/non-member/unexposed-port/stale-epoch",
+          "checkedSha": "ae3daf5559258ab1f4d71262bd89cc3555ba924c"
+        },
+        {
+          "name": "an action through a connection commits on the source authority",
+          "environment": "local (PGlite) via CommandAuthority.executeSpaceAction",
+          "command": "npx vitest run server/space-action-authority.test.ts",
+          "result": "PASS",
+          "evidence": "5/5: the borrow action commits on the source table (the camera row becomes unavailable, revision moves); refusals are typed for a grant that does not list the action (SPACE_ACTION_NOT_GRANTED), no grant at all, a revoked grant (SPACE_ACTION_REVOKED) and a grant issued to another workspace (SPACE_ACTION_FORBIDDEN). The guard runs inside the commit transaction, so a revoke cannot race the write, and the issuer is the actor so a connection never exceeds their own rights.",
+          "checkedSha": "b1e093dbf3448ada3c5e8e59d39252415ba2f081"
+        },
+        {
+          "name": "authorized action end to end through the Worker, with replay and refusals",
+          "environment": "Cloudflare tier (worker.fetch + real DOs + D1)",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-action-transport.test.ts",
+          "result": "PASS",
+          "evidence": "12/12 in the cross e2e (action cases) + 8/8 transport: the borrow action commits on the source (the camera row becomes unavailable), a retry with the same idempotency key returns duplicate:true and the same revision with no second write, a revoked grant is 409 SPACE_ACTION_REVOKED, an action the grant does not list is 404 SPACE_ACTION_NOT_GRANTED, an outsider is 403 and an unlinked table is 404. The commit runs as the grant issuer, and the grant is re-checked inside the commit transaction.",
+          "checkedSha": "3fbdc73066a7bbe6f57f8e258f6b9b544497cee6"
+        }
+      ],
+      "findings": [
+        "REVIEW ROUND 2 (independent, verdict FAIL — correct): the authority calls assertIdentityFieldsAbsent on every command, so space.removeMember / space.setRole / space.transferManager / space.leaveSource were rejected with COMMAND_IDENTITY_SPOOF before the domain ran. My previous \"space commands reach the command path\" claim was therefore overstated and is corrected here. Fixed by extracting commandNamesItsOwnTarget() (precedent: access.assign) and exempting the commands whose payload names a target, with a regression test that also proves ordinary commands still reject {actorId}.",
+        "Also fixed in b4a94a0: a whitespace-only title was stored after trim and permanently wedged the workspace (now SPACE_INVALID); space/grant commands trimmed activity to 48 while the table keeps 100 (now one shared TABLE_ACTIVITY_LIMIT in helpers); a grant could name a resource/field the table does not have (now SOURCE_GRANT_PROJECTION); projectionUsableAt failed open on a revoked grant with no revokedAt (now fails closed).",
+        "OPEN review findings (do not treat the slice as closed): (1) readGrantedProjection takes isSpaceMember from the caller instead of deriving it from the space state; (2) space.addMember does not check the target is a workspace member; (3) adjudicateInFlight does not re-read the grant, so an audience/role change between read and commit is invisible; (4) joinedAt/epoch/sharedToolWorkspaceId are still client-supplied in space payloads; (5) revoked grants are never pruned (the cap counts live grants only); (6) there is still no CommandAuthority.execute round-trip test for any space/grant command; (7) the changelog fragment is stale.",
+        "Review findings 1, 2, 3 and 6 are closed at f09f327: (1) `authorizeProjectionRead`/`adjudicateInFlight` no longer take a free boolean — the caller must state that the destination verified membership, and an unstated claim is refused; the destination must re-verify before commit and the in-flight check now also rejects an actor outside the grant audience. (2) The authority validates the target of space.addMember/setRole/transferManager against real membership rows, so an outsider actorId cannot be written into a space (proven end-to-end: MEMBER_NOT_FOUND). (3) `server/space-commands-authority.test.ts` runs 6 commands through the real `CommandAuthority.execute()` on PGlite, which is the test that would have caught the blocker.",
+        "Still open: (4) joinedAt / epoch / sharedToolWorkspaceId remain client-supplied in space payloads; (5) revoked grants are never pruned so the array can grow; (7) adjudicateInFlight still trusts the grant object it is handed (the transport must re-read before calling it).",
+        "Retry semantics are safe but not yet correct for the acceptance: a second call with the same idempotency key is refused with IDEMPOTENCY_MISMATCH instead of replaying the stored ack, because trustedRequestHash includes the expected revision and that moved. No double write happens; making the receipt hash revision-independent for space actions is the next step.",
+        "Action ids are domain-defined and camelCase (e.g. giveBack), so the grant schema was relaxed to a bounded [A-Za-z][A-Za-z0-9_-]{1,39} reference.",
+        "The source must act as the grant issuer, not as the requester: the first end-to-end attempt failed with every call returning 404 because the requester is not a member of the source table. Fixed by resolving `grantedBy` from the stored grant before the commit; the requester is only used for the destination-side membership check."
+      ],
+      "blocker": null,
+      "nextAction": "Disconnect/rebind of a connection (G3-02) and a third-table topology test, then T4A context/history/impact."
+    },
+    {
+      "id": "F080-T4A",
+      "jt": "JT-4A",
+      "featureId": "F080",
+      "state": "doing",
+      "dependsOn": [
+        "F080-T2A",
+        "F080-T3B"
+      ],
+      "owner": "domain + frontend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": "5bfd86a",
+      "checks": [
+        {
+          "name": "room recap derives only what the room holds",
+          "environment": "local unit",
+          "command": "npx vitest run src/tabletop/shared/space-recap.test.ts",
+          "result": "PASS",
+          "evidence": "6/6: current/changed/withdrawn/incomplete/empty are distinguished, a moved source reports from->to, a source the caller could not read makes the recap say it is incomplete instead of guessing, and the recap JSON carries no rows, values or resource names.",
+          "checkedSha": "5bfd86a"
+        }
+      ],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "Wire the recap to real grants and live revisions (needs a source-side query that lists the grants it holds for a space), then impact/lineage."
+    },
+    {
+      "id": "F080-T4B",
+      "jt": "JT-4B",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": [
+        "F080-T3B",
+        "F080-T4A"
+      ],
+      "owner": "backend + frontend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "scoped transforms/recovery + saved A/B + promote ที่ไม่ทับงานใหม่"
+    },
+    {
+      "id": "F080-T5",
+      "jt": "JT-5",
+      "featureId": "F080",
+      "state": "doing",
+      "dependsOn": [
+        "F080-T4B"
+      ],
+      "owner": "backend + frontend",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": "780b587173cac9658aafbd3d18339652c3ee11cf",
+      "checks": [
+        {
+          "name": "portable bundles: definitions only, hash-guarded, mapped to a different schema",
+          "environment": "local unit",
+          "command": "npx vitest run src/tabletop/shared/tool-portable.test.ts",
+          "result": "PASS",
+          "evidence": "9/9: a bundle carries the package, its reference, the runtime profile and the input mapping; planted markers in records/grants/members never reach it (the strict schema refuses the extra keys outright); an edited source fails BUNDLE_HASH_MISMATCH; a newer bundle version is refused; a malformed mapping is refused; a mapping to different local field ids bridges the same data.",
+          "checkedSha": "780b587173cac9658aafbd3d18339652c3ee11cf"
+        },
+        {
+          "name": "held-out learning and play packages on the unchanged host",
+          "environment": "local unit + browser (Edge locally, Chromium in CI)",
+          "command": "npx vitest run src/tabletop/testing/heldout-tools.test.ts; npm run test:tool-host:browser",
+          "result": "PASS",
+          "evidence": "5/5: both packages validate and compile; no host file mentions their ids or distinctive tokens; no per-package switch exists in the sandbox or compiler. Browser 16/16: the learning package renders its questions from a records port and invokes its submit behaviour, and the play package renders its boats and invokes advance — both through the same GeneratedToolHost, with no host change in this slice.",
+          "checkedSha": "780b587173cac9658aafbd3d18339652c3ee11cf"
+        }
+      ],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "Retention/expiry for copied definitions (COPY-01), then mounting the panel and the joined view in the real workspace UI, and T4A."
+    },
+    {
+      "id": "F080-T-X",
+      "jt": "JT-X",
+      "featureId": "F080",
+      "state": "review",
+      "dependsOn": [
+        "F080-T1A",
+        "F080-T3B"
+      ],
+      "owner": "independent export owner",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e",
+      "checks": [
+        {
+          "name": "export contract: own permission, revision consistency, Thai/number/formula/HTML escaping, per-collection files",
+          "environment": "local (Windows, Node v22.23.2)",
+          "command": "npx vitest run src/tabletop/shared/tool-export.test.ts",
+          "result": "PASS",
+          "evidence": "13/13: CSV quotes commas/quotes/newlines, keeps Thai and numbers intact, prefixes formula-looking cells so a spreadsheet shows text, caps one cell; UTF-8 BOM by default because Excel on Windows turns BOM-less UTF-8 Thai into mojibake; HTML escapes <script> and sets default-src none; export is refused for a missing/stale permission, an empty selection, a revision mismatch (including one source read at another revision), an uncovered field set and a row overflow; a successful run emits one file per collection plus a manifest that records the snapshot, the withheld fields and the producedAt time",
+          "checkedSha": "ecb63c96eae5eb3a9cb35b79a90a494cc2865fa3"
+        },
+        {
+          "name": "export end to end through the Worker with its own permission",
+          "environment": "Cloudflare tier (worker.fetch + real DOs) · local unit",
+          "command": "npm run test:cloudflare -- cloudflare/space-projection-cross.test.ts cloudflare/space-export-transport.test.ts; npx vitest run src/tabletop/shared/space-export.test.ts",
+          "result": "PASS",
+          "evidence": "17/17 in the cross e2e incl. export cases: a CSV downloads with the real source rows (Field camera) and only the granted field as a column, the response carries content-disposition plus x-source-data-revision/x-grant-version, the HTML variant works, a read-only grant is 403 EXPORT_NOT_PERMITTED, a revoked grant is 409, an outsider is 403; transport 7/7 and builder 7/7 (permission, revision consistency, Thai/comma quoting, row cap).",
+          "checkedSha": "fc9d721480332db74adc21b6f33f7c90ba0a962e"
+        }
+      ],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "Open a produced file in a spreadsheet/browser (the last step of EXPORT-01), then disconnect/rebind (G3-02)."
+    },
+    {
+      "id": "F080-Closure",
+      "jt": "closure",
+      "featureId": "F080",
+      "state": "planned",
+      "dependsOn": [
+        "F080-T5",
+        "F080-T-X"
+      ],
+      "owner": "lead + independent reviewer",
+      "branch": null,
+      "pr": null,
+      "baseSha": null,
+      "candidateSha": null,
+      "checks": [],
+      "findings": [],
+      "blocker": null,
+      "nextAction": "integration/review/checks/staging + external acceptances; ห้าม production"
+    }
+  ],
+  "externalGates": [
+    {
+      "id": "GATE-PAID-AI",
+      "state": "blocked",
+      "what": "live AI acceptance (intent-only generation/repair) ต้องมี enforceable call/cost cap ก่อน dispatch",
+      "why": "monetary cap ของ product ปิดตาม F036; ต้องมี cap ที่บังคับได้จริงก่อน paid call",
+      "neededFrom": "product owner: authorization + cap (แผนเสนอ 3 run × ≤6 calls / USD 0.20 = 18 calls / USD 0.60)",
+      "unblocks": [
+        "EDIT-01 (live part)",
+        "G1-01 (live part)",
+        "HELDOUT-01 (live part)"
+      ],
+      "workContinues": "มี enforceable pre-dispatch budget แล้ว (`checkToolAiBudget` + generator ที่เข้าถึงได้เฉพาะผ่าน `authorToolPackage`) · fixture-generator tests และ slice อื่นเดินต่อได้ · ยังต้องให้เจ้าของอนุมัติตัวเลข cap ก่อนเรียก provider จริง"
+    },
+    {
+      "id": "GATE-HOSTED-WRITE",
+      "state": "not_requested",
+      "what": "hosted synthetic fixture writes",
+      "why": "ต้องมี environment/object/scope/expected rows/rollback ที่อนุมัติก่อน",
+      "neededFrom": "product owner: scoped approval พร้อม scope/rollback",
+      "unblocks": [
+        "hosted integration acceptance"
+      ],
+      "workContinues": "disposable local integration ทำต่อได้"
+    },
+    {
+      "id": "GATE-PERSISTENT-MUTATION",
+      "state": "not_requested",
+      "what": "persistent schema/data mutation (D1 migration) สำหรับ collaboration space",
+      "why": "R0 ตาม CLAUDE.md: ต้องระบุ environment/object/operation/scope/expected rows/rollback",
+      "neededFrom": "product owner: scoped approval เฉพาะเมื่อ C5 ต้อง apply migration; เพิ่มแบบ additive และมี rollback",
+      "unblocks": [
+        "F080-T2B storage apply",
+        "staging migration path"
+      ],
+      "workContinues": "เขียน migration draft + ทดสอบบน disposable local DB ได้โดยไม่ apply"
+    },
+    {
+      "id": "GATE-VISUAL-CHOICE",
+      "state": "not_requested",
+      "what": "เจ้าของเลือกแนว room shell จาก 3 แนว",
+      "why": "D5/แผน §6 ห้ามเลือกแทน",
+      "neededFrom": "product owner: เลือก A/B/C จากหลักฐาน prototype",
+      "unblocks": [
+        "F080-T3A room shell"
+      ],
+      "workContinues": "C1–C5/CX เดินต่อได้"
+    },
+    {
+      "id": "GATE-HUMAN-STUDY",
+      "state": "blocked",
+      "what": "ผู้ใช้จริง 5 คน เว้น 3 วัน ≥4 ผ่าน",
+      "why": "agent ทำแทนไม่ได้",
+      "neededFrom": "product owner: จัด session จริงตาม test kit",
+      "unblocks": [
+        "HUMAN-01",
+        "Goal closure"
+      ],
+      "workContinues": "เตรียม test kit/record sheet และทำงานอิสระที่เหลือ"
+    }
+  ],
+  "nextActions": [
+    {
+      "id": "NA-1",
+      "action": "wire transport: `POST /internal/space-projection` บน Room ต้นทาง (เรียก resolveSpaceProjectionRead กับ state ที่อ่านใหม่) + Worker route `GET /api/workspaces/:spaceId/space/projection` ที่ตรวจสมาชิก space ก่อน แล้วทำ Worker-tier test ด้วยสอง workspace จริง",
+      "verify": "npm run test:cloudflare -- cloudflare/space-projection-transport.test.ts",
+      "expect": "อ่านได้เฉพาะ projection ที่ grant เปิด; revoke แล้วอ่านไม่ผ่านด้วย SPACE_GRANT_REVOKED; outsider ได้ SPACE_GRANT_AUDIENCE"
+    }
+  ],
+  "blockedItems": [],
+  "productionStatement": "ยังไม่มี production release; ห้าม merge main/release tag/deploy จากงานนี้"
+}

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทางเลือก B · ห้องมุมเฉียง</title>
+<style>
+  :root{
+    --ink:#2f1b33; --muted:#5f4a68; --line:#e3d9ee; --paper:#fffdfb; --desk:#f1ecf9;
+    --violet:#5b3fc4; --violet-soft:#efe9fd; --red:#a3231b;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:radial-gradient(120% 90% at 50% 0%,#fbf8ff 0%,var(--desk) 70%);
+    color:var(--ink); font-family:"Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif;
+    font-size:16px; line-height:1.55;
+  }
+  h1,h2,h3{margin:0; line-height:1.3}
+  p{margin:0}
+  button{font:inherit; color:inherit}
+  :focus-visible{outline:3px solid #2f1b33; outline-offset:3px; border-radius:8px}
+  [hidden]{display:none !important}
+  .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  .page{max-width:1320px;margin:0 auto;padding:24px 20px 40px}
+  .masthead{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
+  .eyebrow{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--violet);font-weight:700}
+  h1{font-size:clamp(24px,3.2vw,34px)}
+  .lede{color:var(--muted);max-width:70ch}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:18px;align-items:start}
+  .stage{
+    position:relative;height:560px;border-radius:22px;border:1px solid var(--line);
+    background:linear-gradient(160deg,#fbf8ff 0%,#f6f1fb 55%,#efe8f8 100%);
+    perspective:1800px; perspective-origin:50% 34%; overflow:hidden;
+  }
+  .stage-chip{position:absolute;left:16px;top:14px;z-index:2;font-size:12px;color:var(--muted);letter-spacing:.04em}
+  .plane{
+    position:absolute;left:8%;right:8%;top:16%;bottom:16%;
+    transform:rotateX(18deg) rotateZ(-6deg);
+    transform-style:preserve-3d;
+    border-radius:20px;border:2px solid #dfd3f1;
+    background:
+      repeating-linear-gradient(0deg,rgba(91,63,196,.08) 0 1px,transparent 1px 34px),
+      repeating-linear-gradient(90deg,rgba(91,63,196,.08) 0 1px,transparent 1px 34px),
+      linear-gradient(150deg,#fffefd,#faf6ff);
+    box-shadow:0 34px 50px -28px rgba(47,27,51,.38),0 2px 0 #e6dcf4;
+  }
+  .plane::after{
+    content:"ผนังด้านใน · ห้องทำงาน";position:absolute;left:16px;bottom:-30px;font-size:11px;
+    color:var(--muted);letter-spacing:.08em;transform-origin:left center;
+  }
+
+  .table{
+    position:absolute;padding:14px;border-radius:14px;border:2px solid #d9cbea;
+    background:var(--paper);transform-style:preserve-3d;transform:translateZ(26px);
+    box-shadow:6px 8px 0 #e4d9f3,6px 8px 0 2px #d9cbea,0 18px 26px -18px rgba(47,27,51,.5);
+    transition:box-shadow .2s ease,border-color .2s ease,transform .2s ease;
+  }
+  .table[data-focused="true"]{
+    border:3px solid var(--violet);transform:translateZ(36px);
+    box-shadow:7px 9px 0 #ded1f5,7px 9px 0 2px var(--violet),0 24px 34px -18px rgba(47,27,51,.5);
+  }
+  .t-mine{left:5%;top:8%;width:42%}
+  .t-budget{right:4%;top:44%;width:46%}
+  .face{transform:none}
+  .table-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .table h3{font-size:clamp(15px,1.5vw,18px)}
+  .rev{font-size:12px;color:var(--muted);font-weight:600}
+  .tag{
+    display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;
+    padding:2px 8px;border-radius:999px;border:1px solid var(--violet);background:var(--violet-soft);color:#3c2a86;
+  }
+  .tag::before{content:"";display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid currentColor}
+  .focus-btn{
+    margin-inline-start:auto;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    background:#fff;font-size:12px;font-weight:700;cursor:pointer;
+  }
+  .focus-btn:hover{background:var(--violet-soft)}
+  .vals{margin:8px 0 0;display:grid;gap:4px}
+  .vals .row{display:flex;justify-content:space-between;gap:10px;font-size:13px;border-bottom:1px dotted #e8e0f1;padding-bottom:3px}
+  .vals dt{color:var(--muted)}
+  .vals dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
+
+  .panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .card{border:1px solid var(--line);border-radius:16px;background:var(--paper);padding:14px;display:flex;flex-direction:column;gap:10px}
+  .card-title{font-size:14px}
+  .hint{font-size:12px;color:var(--muted)}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;width:100%;
+    padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:#fff;
+    font-weight:700;cursor:pointer;transition:background .18s ease,transform .18s ease;
+  }
+  .btn.primary{background:var(--violet);border-color:var(--violet);color:#fff}
+  .btn.primary:hover:not(:disabled){background:#4a30a8}
+  .btn.ghost:hover:not(:disabled){background:var(--violet-soft)}
+  .btn.danger{border-color:#e2b7b2;color:var(--red)}
+  .btn.danger:hover:not(:disabled){background:#fdf1f0}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+
+  .port{
+    display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;text-align:left;
+    padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;cursor:pointer;
+    transition:border-color .18s ease,background .18s ease;
+  }
+  .port[aria-pressed="true"]{border-color:var(--violet);background:var(--violet-soft)}
+  .port:disabled{cursor:not-allowed;opacity:.7}
+  .port-name{font-weight:700;font-size:14px}
+  .port-src{grid-column:1;font-size:12px;color:var(--muted)}
+  .port-state{
+    grid-column:2;grid-row:1 / span 2;align-self:center;font-size:12px;font-weight:700;
+    padding:2px 8px;border-radius:999px;border:1px solid currentColor;
+  }
+  .port[aria-pressed="true"] .port-state{color:#3c2a86}
+
+  .status{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:#fff}
+  .status .shape{display:inline-grid;place-items:center;width:26px;height:26px;font-size:17px;border-radius:50%;border:2px solid currentColor}
+  .status[data-state="live"]{border-color:#1c7a4e;color:#155c3b;background:#f0f8f3}
+  .status[data-state="stale"]{border-color:#8a5a00;color:#6d4700;background:#fdf6e8}
+  .status[data-state="revoked"]{border-color:#a3231b;color:#8a1d16;background:#fdf1f0}
+  .status-text{font-weight:700;font-size:14px}
+  .legend{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)}
+  .legend li{display:inline-flex;align-items:center;gap:4px}
+
+  .sources{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:6px}
+  .sources li{font-size:13px;padding:6px 10px;border-radius:10px;background:#faf6ff;border:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+  .sources li[data-revoked="true"]{border-color:#e2b7b2;background:#fdf1f0;color:#8a1d16}
+  .sources li::after{content:"พอร์ต";font-size:11px;color:var(--muted)}
+  .sources li[data-revoked="true"]::after{content:"ถูกถอน";color:#8a1d16}
+  .tool-values{margin:0;display:grid;gap:6px}
+  .tool-values .row{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:6px 0;border-bottom:1px solid #eee6f6}
+  .tool-values dt{color:var(--muted)}
+  .tool-values dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+  .tool-note{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .warn{margin:10px 0;font-size:12px;color:#8a1d16;background:#fdf1f0;border:1px solid #e2b7b2;border-radius:10px;padding:8px 10px}
+  .live{margin:0;font-size:13px;color:#3c2a86;background:var(--violet-soft);border:1px solid #d8cbf5;border-radius:12px;padding:8px 12px}
+  .empty{font-size:13px;color:var(--muted);border:1px dashed #d9cbea;border-radius:12px;padding:12px;text-align:center}
+
+  @media (max-width:1024px){
+    .layout{grid-template-columns:1fr}
+    .stage{height:500px}
+  }
+  @media (max-width:560px){
+    .page{padding:16px 12px 32px}
+    .stage{height:auto;perspective:none;overflow:visible;padding:12px;display:flex;flex-direction:column;gap:12px}
+    .stage-chip{position:static;order:-1}
+    .plane{position:static;inset:auto;transform:none;background:transparent;border:0;box-shadow:none;border-radius:0;
+      display:flex;flex-direction:column;gap:12px;padding:0}
+    .plane::after{display:none}
+    .table{position:static;width:auto;transform:none;box-shadow:0 2px 0 rgba(47,27,51,.05)}
+    .table[data-focused="true"]{transform:none;box-shadow:0 8px 20px rgba(91,63,196,.18)}
+    .face{transform:none}
+    .table[data-focused="false"] .vals{display:none}
+    .table[data-focused="false"]{border-style:dashed;background:#fbf9fe}
+    .legend{font-size:11px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{transition:none !important;animation:none !important;scroll-behavior:auto !important}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow">F080 · ต้นแบบเชิงภาพ · ทางเลือก B</p>
+    <h1>ห้องมุมเฉียง</h1>
+    <p class="lede">ห้องเดียวกันมองจากมุมเฉียง ระนาบพื้นถูกฉายด้วย CSS transform และโต๊ะยกขึ้นเป็นแผ่นหนา เนื้อหาหันกลับมาหาผู้อ่านเพื่อให้ยังอ่านได้</p>
+  </header>
+
+  <main class="layout">
+    <section aria-labelledby="room-h">
+      <h2 id="room-h" class="visually-hidden">ห้องทำงานมุมเฉียง</h2>
+      <div class="stage">
+        <p class="stage-chip">ห้องทำงาน · ฉายแบบ axonometric (CSS)</p>
+        <div class="plane">
+          <section class="table t-mine" data-table="mine" aria-labelledby="h-mine" data-focused="true">
+            <div class="face">
+              <div class="table-head">
+                <h3 id="h-mine">ผังกิจกรรม <span class="rev">rev 3</span></h3>
+                <span class="tag" hidden>กำลังดู</span>
+                <button class="focus-btn" type="button" data-testid="table-mine" aria-pressed="true" aria-label="ดูตาราง ผังกิจกรรม">ดูตาราง</button>
+              </div>
+              <dl class="vals" data-testid="mine-values">
+                <div class="row"><dt>เวทีกลาง</dt><dd>1 จุด</dd></div>
+                <div class="row"><dt>ซุ้มอาหาร</dt><dd>8 ซุ้ม</dd></div>
+                <div class="row"><dt>ป้ายทางเข้า</dt><dd>2 ป้าย</dd></div>
+              </dl>
+            </div>
+          </section>
+
+          <section class="table t-budget" data-table="budget" aria-labelledby="h-budget" data-focused="false">
+            <div class="face">
+              <div class="table-head">
+                <h3 id="h-budget">งบประมาณ <span class="rev">rev 7</span></h3>
+                <span class="tag" hidden>กำลังดู</span>
+                <button class="focus-btn" type="button" data-testid="table-budget" aria-pressed="false" aria-label="ดูตาราง งบประมาณ">ดูตาราง</button>
+              </div>
+              <dl class="vals" data-testid="budget-values">
+                <div class="row"><dt>ราคาต่อหน่วย</dt><dd>1,240 บาท</dd></div>
+                <div class="row"><dt>จำนวนอุปกรณ์</dt><dd>6 ชุด</dd></div>
+                <div class="row"><dt>เพดานรวม</dt><dd>42,000 บาท</dd></div>
+              </dl>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel" aria-labelledby="panel-h">
+      <h2 id="panel-h" class="visually-hidden">แผงควบคุมเครื่องมือ</h2>
+
+      <p class="live" role="status" aria-live="polite" data-testid="live-status">พร้อมใช้งาน · ยังไม่มีเครื่องมือที่แชร์</p>
+
+      <section class="card" aria-labelledby="ports-h">
+        <h3 id="ports-h" class="card-title">พอร์ตข้อมูล</h3>
+        <button class="port" type="button" data-testid="port-price" aria-pressed="false">
+          <span class="port-name">ราคาต่อหน่วย</span>
+          <span class="port-src">งบประมาณ · rev 7</span>
+          <span class="port-state">ปิด</span>
+        </button>
+        <button class="port" type="button" data-testid="port-devices" aria-pressed="false">
+          <span class="port-name">จำนวนอุปกรณ์</span>
+          <span class="port-src">ผังกิจกรรม · rev 3</span>
+          <span class="port-state">ปิด</span>
+        </button>
+        <p class="hint">เปิดทั้งสองพอร์ต (ต่างตารางกัน) แล้วจึงสร้างเครื่องมือได้</p>
+        <button class="btn primary" type="button" data-testid="create-shared-tool" disabled>สร้างเครื่องมือที่แชร์</button>
+      </section>
+
+      <section class="card" aria-labelledby="status-h">
+        <h3 id="status-h" class="card-title">สถานะการเชื่อมต่อ · งบประมาณ</h3>
+        <div class="status" data-testid="status-budget" data-state="idle">
+          <span class="shape" aria-hidden="true">○</span>
+          <span class="status-text">ยังไม่เชื่อมต่อ</span>
+        </div>
+        <button class="btn ghost" type="button" data-testid="status-refresh" disabled>ตรวจข้อมูลอีกครั้ง</button>
+        <ul class="legend" aria-label="สัญลักษณ์สถานะ">
+          <li><span aria-hidden="true">●</span> เชื่อมอยู่</li>
+          <li><span aria-hidden="true">▲</span> ข้อมูลเก่า</li>
+          <li><span aria-hidden="true">✕</span> ถูกถอน</li>
+        </ul>
+      </section>
+
+      <section class="card" aria-labelledby="tool-h">
+        <h3 id="tool-h" class="card-title">เครื่องมือที่แชร์</h3>
+        <p class="empty" data-testid="tool-empty">ยังไม่มีเครื่องมือ — เลือกพอร์ตทั้งสองแล้วกด “สร้างเครื่องมือที่แชร์”</p>
+        <div data-testid="shared-tool" hidden>
+          <p class="tool-note">แถวที่เชื่อมกันใช้ข้อมูลจากสองตาราง</p>
+          <ul class="sources" data-testid="shared-sources">
+            <li data-testid="source-mine">ผังกิจกรรม · rev 3</li>
+            <li data-testid="source-budget">งบประมาณ · rev 7</li>
+          </ul>
+          <dl class="tool-values">
+            <div class="row"><dt>ราคาต่อหน่วย</dt><dd data-testid="value-price">—</dd></div>
+            <div class="row"><dt>จำนวนอุปกรณ์</dt><dd data-testid="value-devices">—</dd></div>
+          </dl>
+          <p class="warn" data-testid="tool-warning" hidden>งบประมาณถูกถอน — แถวที่เชื่อมกันจึงไม่พร้อมใช้ทั้งแถว</p>
+          <button class="btn danger" type="button" data-testid="disconnect-budget" disabled>ตัดการเชื่อมงบประมาณ</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var DATA = { mine: { name: 'ผังกิจกรรม', rev: 3 }, budget: { name: 'งบประมาณ', rev: 7 } };
+  var PRICE = '1,240 บาท';
+  var DEVICES = '6 ชุด';
+  var UNAVAILABLE = 'ไม่พร้อมใช้ — เชื่อมใหม่';
+  var state = { focus: 'mine', price: false, devices: false, tool: false, revoked: false, status: 'idle' };
+
+  function q(id) { return document.querySelector('[data-testid="' + id + '"]'); }
+  var el = {
+    tables: { mine: document.querySelector('[data-table="mine"]'), budget: document.querySelector('[data-table="budget"]') },
+    buttons: { mine: q('table-mine'), budget: q('table-budget') },
+    tags: { mine: document.querySelector('[data-table="mine"] .tag'), budget: document.querySelector('[data-table="budget"] .tag') },
+    ports: { price: q('port-price'), devices: q('port-devices') },
+    portState: {
+      price: q('port-price').querySelector('.port-state'),
+      devices: q('port-devices').querySelector('.port-state')
+    },
+    create: q('create-shared-tool'),
+    refresh: q('status-refresh'),
+    status: q('status-budget'),
+    statusShape: q('status-budget').querySelector('.shape'),
+    statusText: q('status-budget').querySelector('.status-text'),
+    tool: q('shared-tool'),
+    empty: q('tool-empty'),
+    sourceBudget: q('source-budget'),
+    warning: q('tool-warning'),
+    valuePrice: q('value-price'),
+    valueDevices: q('value-devices'),
+    disconnect: q('disconnect-budget'),
+    live: q('live-status')
+  };
+
+  function say(message) { el.live.textContent = message; }
+
+  function statusView() {
+    if (state.revoked) return { key: 'revoked', shape: '✕', text: 'ถูกถอน' };
+    if (state.status === 'stale') return { key: 'stale', shape: '▲', text: 'ข้อมูลเก่า · ค้าง 1 วัน' };
+    if (state.status === 'live') return { key: 'live', shape: '●', text: 'เชื่อมอยู่ · ใช้งานได้' };
+    return { key: 'idle', shape: '○', text: 'ยังไม่เชื่อมต่อ' };
+  }
+
+  function render() {
+    ['mine', 'budget'].forEach(function (key) {
+      var on = state.focus === key;
+      el.tables[key].setAttribute('data-focused', String(on));
+      el.buttons[key].setAttribute('aria-pressed', String(on));
+      el.buttons[key].setAttribute('aria-label', (on ? 'กำลังดูตาราง ' : 'ดูตาราง ') + DATA[key].name);
+      el.tags[key].hidden = !on;
+    });
+
+    var locked = state.tool || state.revoked;
+    ['price', 'devices'].forEach(function (key) {
+      el.ports[key].setAttribute('aria-pressed', String(state[key]));
+      el.ports[key].disabled = locked;
+      el.portState[key].textContent = state.revoked ? 'ขาด' : (state[key] ? 'เปิด' : 'ปิด');
+    });
+
+    el.create.disabled = !(state.price && state.devices) || state.tool;
+    el.refresh.disabled = state.status !== 'live' && state.status !== 'stale';
+    el.empty.hidden = state.tool;
+    el.tool.hidden = !state.tool;
+
+    var view = statusView();
+    el.status.setAttribute('data-state', view.key);
+    el.statusShape.textContent = view.shape;
+    el.statusText.textContent = view.text;
+
+    if (state.tool) {
+      el.valuePrice.textContent = state.revoked ? UNAVAILABLE : PRICE;
+      el.valueDevices.textContent = state.revoked ? UNAVAILABLE : DEVICES;
+      el.sourceBudget.textContent = 'งบประมาณ · rev 7' + (state.revoked ? ' (ถูกถอน)' : '');
+      el.sourceBudget.setAttribute('data-revoked', String(state.revoked));
+      el.warning.hidden = !state.revoked;
+      el.disconnect.disabled = state.revoked;
+      el.disconnect.textContent = state.revoked ? 'ตัดการเชื่อมแล้ว' : 'ตัดการเชื่อมงบประมาณ';
+    }
+  }
+
+  function focusTable(key) {
+    state.focus = key;
+    render();
+    say('กำลังดู ' + DATA[key].name + ' · rev ' + DATA[key].rev);
+  }
+
+  ['mine', 'budget'].forEach(function (key) {
+    el.buttons[key].addEventListener('click', function () { focusTable(key); });
+    el.tables[key].addEventListener('click', function (event) {
+      if (event.target.closest('button')) return;
+      focusTable(key);
+    });
+  });
+
+  ['price', 'devices'].forEach(function (key) {
+    el.ports[key].addEventListener('click', function () {
+      if (el.ports[key].disabled) return;
+      state[key] = !state[key];
+      render();
+      say((state[key] ? 'เชื่อมพอร์ต ' : 'ยกเลิกพอร์ต ') + (key === 'price' ? 'ราคาต่อหน่วย' : 'จำนวนอุปกรณ์'));
+    });
+  });
+
+  el.create.addEventListener('click', function () {
+    if (el.create.disabled) return;
+    state.tool = true;
+    state.status = 'live';
+    render();
+    say('สร้างเครื่องมือแล้ว · ผังกิจกรรม rev 3 + งบประมาณ rev 7 · เชื่อมอยู่');
+  });
+
+  el.refresh.addEventListener('click', function () {
+    if (el.refresh.disabled) return;
+    state.status = state.status === 'live' ? 'stale' : 'live';
+    render();
+    say(state.status === 'stale' ? 'ข้อมูลเก่า · ค้าง 1 วัน' : 'เชื่อมอยู่ · ใช้งานได้');
+  });
+
+  el.disconnect.addEventListener('click', function () {
+    if (el.disconnect.disabled) return;
+    state.revoked = true;
+    state.status = 'revoked';
+    render();
+    say('ตัดการเชื่อมงบประมาณแล้ว · ราคาและจำนวนอุปกรณ์ไม่พร้อมใช้');
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

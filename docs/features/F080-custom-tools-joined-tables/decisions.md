@@ -1,0 +1,336 @@
+# F080 — Decision log
+
+Log การตัดสินใจที่ผูกกับ contract/สถาปัตยกรรมของ Goal นี้ บันทึก **ก่อน** ทำ downstream ที่พึ่งมัน; การเปลี่ยน default ต้องมี rationale + evidence และไม่เขียนทับประวัติ
+
+สถานะที่ใช้: `accepted` (ตัดสินแล้วและมีหลักฐาน) · `default` (ค่าเริ่มต้นที่ใช้ได้ แต่ยังเปลี่ยนได้ด้วยหลักฐาน) · `proven` (พิสูจน์ด้วยผลตรวจจริงแล้ว) · `superseded` · `open`
+
+---
+
+## D-001 — Feature ID = F080
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `accepted`
+- **ตัดสิน:** ใช้ `F080` เป็น feature ID หลัก และ `F080-T*` เป็นงานย่อย
+- **เหตุผล/หลักฐาน:** ที่ `origin/dev` `a6feb3c1` ไม่มี `docs/features/F080*`, ไม่มีแถว `F080` ใน `PLAN.md`, ไม่มี remote branch ที่ใช้ `F080`, และ open PR มีเพียง #250 (`fix/CI-provider-mock-diagnostics`) · ตัวสูงสุดที่ถูกใช้คือ F079 · แผนห้ามถือว่า F080 ถูกจองก่อนตรวจ จึงตรวจแล้วค่อยจอง
+- **ทางเลือกที่ตัดทิ้ง:** ใช้ F081 เพื่อ "เว้นที่" — ไม่มีเหตุ เพราะไม่มีผู้ถือ F080 · ใช้ชื่อ `JT-*` เป็น ID จริง — แผนระบุให้ JT เป็น alias เท่านั้น
+- **Contract ที่กระทบ:** `PLAN.md`, `changelog.d/`, `docs/features/F080*`, ชื่อ branch `feat/F080-*`
+- **Rollback:** ไม่ต้องมี; การ rename ภายหลังทำได้ก่อน merge
+
+## D-002 — Checkpoint เดียวที่ `docs/features/F080-custom-tools-joined-tables/`
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `accepted`
+- **ตัดสิน:** ใช้ directory เดียว มี `index.md`, `progress.json`, `acceptance.json`, `decisions.md`; feature entry คือ `docs/features/F080-custom-tools-joined-tables.md` ชี้เข้าดirectory
+- **เหตุผล/หลักฐาน:** execution guide §2 กำหนด schema นี้และห้ามใช้ chat history เป็นสถานะงานหลัก · แยกไฟล์ของ tracked checkpoint ออกจาก `test-results/` (ignored) ที่เก็บ evidence ที่มี local path/identity
+- **ทางเลือกที่ตัดทิ้ง:** เก็บทุกอย่างใน `spec.md` — โตเกินและชน hotspot ทุก PR · ใช้ GitHub issue เป็น checkpoint — repo ไม่ใช้ issue tracker เป็นกระดานงาน
+- **Contract ที่กระทบ:** `docs/features/**`, `PLAN.md`, `spec.md` (สรุปสถานะตอนจบ slice)
+- **Rollback:** ย้าย directory ได้โดยไม่กระทบ runtime
+
+## D-003 — PR slice = C0…C11 ตาม dependency
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `accepted`
+- **ตัดสิน:** หนึ่ง PR ต่อหนึ่ง slice (แตกย่อยได้) ตาม execution guide §4; lead ถือ shared contracts/integration/spec/PLAN, specialists ถือ runtime/UI ของ slice
+- **เหตุผล/หลักฐาน:** แผน §8 ห้าม mega-PR และห้ามรวม compiler + space permission + room visuals พร้อมกัน · bootstrap เอกสารไม่ต้องรอ human/hosted acceptance
+- **ทางเลือกที่ตัดทิ้ง:** PR เดียวทั้ง Goal — review ไม่ได้จริงและปิดความเสี่ยง authority/isolation ไม่ได้
+- **Rollback:** แต่ละ PR revert ได้อิสระถ้าไม่มี migration ที่ apply แล้ว
+
+## D-004 — Collaboration space เป็น aggregate ใหม่ที่อ้าง source workspace IDs เดิม
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `default` (ยังต้องพิสูจน์ใน C5/T2B ด้วย schema/route จริง)
+- **ตัดสิน:** ไม่ rename/move/clone source tables; เพิ่ม aggregate ของห้องซึ่งถือ shared-tool workspace/layout/membership และ refs ไป source workspace IDs; ใช้ repository/authority abstraction เดิม
+- **เหตุผล/หลักฐาน:** `cloudflare/room-repository.ts` ผูก Room กับ workspace เดียว และ transaction commit อยู่ใน Room นั้น; `TableState` มีหนึ่ง `TableProgram` (`src/tabletop/shared/table-contracts.ts:31-43`, `:78-123`) จึงไม่มีที่ให้เก็บหลายโต๊ะเป็น authority เดียว — ต้องไม่ยัดทุกโต๊ะลง program เดียวแล้วเรียกว่า joined
+- **ทางเลือกที่ตัดทิ้ง:** ใช้ Room เดิมเป็นห้องรวม — Room DO รองรับ workspace เดียว; การวาดหลายโต๊ะบน canvas ไม่ได้สร้างหลาย authority
+- **Contract ที่กระทบ:** schema/storage ใหม่ (เพิ่มอย่างเดียว), route ใหม่, `src/tabletop/shared/permissions.ts` (role×verb ของห้องเป็นคนละชุดกับ source grant)
+- **Rollback/migration:** เพิ่ม table/case ใหม่แบบ additive; ถ้าต้องมี D1 migration ต้องขอ scoped approval ก่อน apply (ห้าม apply จากมือ/`--remote`)
+
+## D-005 — Server behavior เกาะ execution seam เดิม (ComputeRunner/orchestrator)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `default` (พิสูจน์ใน C2/T1A)
+- **ตัดสิน:** เริ่ม JavaScript บน seam ของ `ComputeRunner`/`cloudflare/compute-runner.ts`/`server/table-compute-orchestrator.ts` ที่มีอยู่ แทนการสร้าง runtime stack ใหม่; แยก execute ออกจาก commit (isolate รันแบบไม่มี DB/network/credential → parse → authority ตรวจสิทธิ์/revision/grants อีกครั้ง → validate whole state → commit หนึ่ง target พร้อม receipt)
+- **เหตุผล/หลักฐาน:** มี isolated runner + limits + orchestrator ที่ตรวจ revision/authority อยู่แล้ว; Python เดิมต้องไม่ regress และ custom behavior ไม่ต้องรอภาษาใหม่
+- **ทางเลือกที่ตัดทิ้ง:** ให้ generated code เรียก privileged host method/SQL ตรง ๆ — ขัด authority/receipt และขัด reject-before-side-effect
+- **Rollback:** adapter ใหม่ห่อ seam เดิม; ปิด adapter = ปิด custom behavior โดยไม่กระทบ compute เดิม
+
+## D-006 — Compiler location: ตัดสินหลังทดลอง ไม่เดา
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `superseded` โดย D-013 (เลือก Sucrase เป็น compiler แล้ว)
+- **ตัดสิน (ชั่วคราว):** ยังไม่ล็อกระหว่าง (a) trusted deployment-compatible compile adapter และ (b) isolated client compiler ที่ artifact ยังถือว่า untrusted; ต้องทดลองทั้งสองทางเท่าที่จำเป็นใน C2 แล้วเลือกจาก deployability/resource limits/source reproducibility
+- **เหตุผล/หลักฐาน:** `package.json` ของ dev ไม่มี direct compiler dependency สำหรับ package authoring (มี Vite/esbuild ผ่าน transitive เท่านั้น) · ห้ามสมมติว่า transitive esbuild ใช้เป็น deployed runtime compiler ได้ · ห้ามอ้าง server-verified source-to-bundle ถ้า compile อยู่ client อย่างเดียว
+- **ทางเลือกที่ตัดทิ้ง:** เพิ่ม compiler service ใหม่ต่อ package — ยังไม่มีหลักฐานว่าราคา/น้ำหนักคุ้ม
+- **Rollback:** ทั้งสองทางเลือกไม่ผูก schema ถาวร; artifact มี `contentHash`/`buildHash` แยกจาก source อยู่แล้ว
+
+## D-007 — UI isolation = sandboxed iframe + typed channel ต่อ instance
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `default` (ต้องผ่าน ISO-01 ก่อนอ้างว่าปลอดภัย)
+- **ตัดสิน:** generated UI รันใน sandboxed iframe แยกสิทธิ์จาก host ใช้ SDK/protocol รุ่นชัด และ channel ผูกกับ frame instance จริง; รับเฉพาะ typed message/allowed method; iframe ไม่ได้ session cookie/token/DB credential; host ไม่เชื่อ actor/source/workspace ID ที่ iframe ส่งมาเอง
+- **เหตุผล/หลักฐาน:** แผน §4.2 และ execution guide T2; `allow-scripts` + `allow-same-origin` บน same-origin untrusted content ไม่ถือว่าปลอดภัย
+- **ทางเลือกที่ตัดทิ้ง:** รัน generated component ใน host React tree — ไม่มีขอบเขตสิทธิ์และ host ไม่สามารถบังคับ limits ได้
+- **ข้อจำกัดที่บันทึกไว้:** iframe ไม่แก้ปัญหา browser UI thread/CPU; ต้องวัด hang/recovery และ **ห้ามอ้าง hard CPU isolation ของ UI** ถ้าตัด execution ไม่ได้
+
+## D-008 — Custom ที่นับว่าผ่าน ต้องไม่เพิ่ม renderer/host special case
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `accepted` (เป็นเกณฑ์ ไม่ใช่ตัวเลือก)
+- **ตัดสิน:** เพิ่ม generic package host ครั้งเดียว; หลัง host พร้อม การรับ package ของโจทย์ใหม่ (รวมโจทย์เรียนรู้/เล่น held-out) ต้องไม่แก้ host ตามโจทย์ การเพิ่มชนิดการ์ดหรือเรียก CRUD เดิมไม่นับเป็น custom
+- **เหตุผล/หลักฐาน:** แผน §1/§7 G1/G6 และ CLAUDE.md ห้ามเพิ่ม scenario-name switch ให้เคสตัวอย่างผ่าน
+- **Rollback:** ไม่มี — เป็นเกณฑ์รับ
+
+## D-009 — Visual room shell ต้องให้เจ้าของเลือก (ห้ามเลือกแทน)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `open`
+- **ตัดสิน:** ทำ 3 แนว (top-down / isometric / composable canvas) ด้วยภารกิจเดียวกัน เก็บภาพ+interactive evidence แล้ว **ถามเจ้าของเลือกหนึ่งครั้ง** ก่อนสร้าง room shell; ระหว่างรอเดินงาน runtime/backend/export ต่อ
+- **เหตุผล/หลักฐาน:** D5 + แผน §6 "ไม่อ้างว่าได้รับอนุมัติภาพใดแล้วจากคำว่าเหมือนเล่นเกม"
+- **Rollback:** prototype ไม่ผูก production path
+
+## D-010 — ข้อมูล live / code pinned: แยก lifecycle
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `accepted` (เกณฑ์)
+- **ตัดสิน:** ข้อมูลที่เชื่อมเป็น live พร้อม source revision/freshness; package/formula/schema dependency อ้างรุ่นที่เลือก (immutable version) และ instance ที่อ้างรุ่นเก่าไม่เปลี่ยนเอง; update มี impact/compatibility check + compatible rollback/compensating revision
+- **เหตุผล/หลักฐาน:** D8; แผน §4.3
+- **Rollback:** downstream reroll ไปรุ่นก่อนได้เพราะ version immutable
+
+## D-011 — Single-target write เท่านั้นใน operation ที่ประกาศ
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `accepted` (เกณฑ์)
+- **ตัดสิน:** action เขียนหนึ่ง target authority; ข้อมูลจากแหล่งอื่นเป็น input ณ revision ที่ระบุ; operation ที่ต้องเขียนหลาย authority หรือรักษา invariant ข้ามโต๊ะถูก **reject ก่อน side effect** จนมี protocol ที่พิสูจน์ได้ (coordinator/compensation ที่แสดง partial/pending/recovery) ไม่มี all-or-nothing จากสอง writes ต่อกัน
+- **เหตุผล/หลักฐาน:** แผน §4.4; execution guide T5
+- **Rollback:** ไม่มี side effect เกิดขึ้นเมื่อ reject
+
+## D-013 — Compiler: pure-JS transform (Sucrase) ใน platform adapter
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (local compile + render + invoke; ยังไม่พิสูจน์บน staging Worker)
+- **ตัดสิน:** ใช้ `sucrase@3.35.0` (pin แน่นอน) เป็น compiler ที่รันได้ทั้ง browser/Node/Worker แทน native binary
+- **เหตุผล/หลักฐาน:** ทางเลือก (a) trusted deployment-compatible adapter ต้องรันได้บน staging ซึ่งเป็น Cloudflare Worker — native esbuild รันไม่ได้ และ esbuild-wasm หนัก/ต้องเสิร์ฟ asset เพิ่ม · Sucrase เป็น pure JS จึงให้ผลเหมือนกันทุก environment · artifact ยังถือว่า untrusted (sandbox/bridge/authority เป็นตัวคุม) · UI compile เป็น CommonJS เพื่อโหลดผ่าน registry ใน frame; behaviour compile เป็น ESM เพราะ isolate import `./module.js` (และ validation บังคับให้ behaviour module self-contained ไม่มี relative import)
+- **ทางเลือกที่ตัดทิ้ง:** ให้ client compile แล้วอ้างว่า server verified — ทำไม่ได้ตามที่ตัดสิน; เพิ่ม compiler service ใหม่ — ยังไม่มีหลักฐานคุ้ม
+- **Contract ที่กระทบ:** `package.json` (+`sucrase`), `src/tabletop/runtime/tools/compile.ts`, `TOOL_COMPILE_LIMITS`
+- **Rollback:** เปลี่ยน adapter ได้โดยไม่แตะ schema; artifact มี `contentHash` แยกจาก source อยู่แล้ว
+- **ข้อจำกัดที่บันทึก:** ไม่มี type-check ในขั้น compile (ตรวจได้แค่ parse + schema) — ต้องบอกผู้ใช้ตามจริง ไม่ใช่ "type-safe"
+
+## D-014 — Frame CSP อนุญาต `'unsafe-eval'` เฉพาะใน sandbox
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (browser harness ผ่าน 13 checks)
+- **ตัดสิน:** `TOOL_SANDBOX_CSP` = `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'` และไม่ใส่ `frame-ancestors` (meta ไม่รองรับ)
+- **เหตุผล/หลักฐาน:** ต้อง instantiate โมดูลที่ compile มาเป็นข้อความ; frame มี opaque origin (sandbox ไม่มี `allow-same-origin`) และ browser harness ยืนยันว่า `document.cookie` โยน SecurityError, `localStorage` ถูกบล็อก, `fetch` ล้มเหลว, `location.origin === 'null'` · `unsafe-eval` จึงไม่ขยายสิทธิ์ของ host
+- **ทางเลือกที่ตัดทิ้ง:** ใช้ `blob:`/`import()` แทน eval — ต้องเปิด `script-src blob:` และพึ่ง behavior ของ opaque origin ที่ยังไม่พิสูจน์; คง eval ที่แคบและพิสูจน์ได้
+- **Rollback:** แก้ที่ `ui/tool-sandbox/document.ts` ที่เดียว
+- **ข้อจำกัด:** iframe ไม่ได้ให้ hard CPU isolation — ยังต้องวัด hang/recovery แยก
+
+## D-015 — ใช้ binding `COMPUTE_LOADER` เดิมกับ tool behaviour (ยังไม่แยก binding ใหม่)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `default` (เปลี่ยนได้เมื่อมีเหตุผลด้านโควตา/การแยก)
+- **ตัดสิน:** `cloudflare/tool-behavior-runner.ts` รับ `loader?: WorkerLoader` และใช้ binding เดียวกับ compute แทนการเพิ่ม `TOOL_LOADER` ใน `wrangler.jsonc`
+- **เหตุผล/หลักฐาน:** `wrangler.jsonc` มี `worker_loaders[0] = COMPUTE_LOADER` อยู่แล้ว และ `server/compute-deploy-config.ts` ตรวจ config ตอน deploy — เพิ่ม binding ใหม่จะแตะ config ของ operator ทันทีโดยยังไม่มีเหตุผลด้านโควตา · `loader.load()` สร้าง isolate ใหม่ต่อครั้งอยู่แล้ว จึงแยกกันได้ในระดับ execution
+- **ทางเลือกที่ตัดทิ้ง:** เพิ่ม binding/DO class ใหม่ (ต้อง wrangler migration + staging config) — เลื่อนไปจนมีหลักฐานว่าโควตาหรือ isolation ต้องการ
+- **Rollback:** เปลี่ยนเป็น binding แยกได้โดยแก้ที่จุดสร้าง runner เท่านั้น
+- **ข้อจำกัด:** สองความสามารถแชร์โควตาของ loader เดียวกัน — ต้องวัดโหลดก่อนสรุป capacity
+
+## D-012 — ไม่อัปเดต `CHANGELOG.md` ตรง ๆ
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `accepted`
+- **ตัดสิน:** ทุก PR เขียน fragment ใน `changelog.d/F080-*.md` และรัน `npx tsx server/changelog.ts check`
+- **เหตุผล/หลักฐาน:** `changelog.d/README.md` และ CI `fast-checks`
+- **Rollback:** ไม่ต้องมี
+
+## D-016 — Authoring pipeline เดียว + budget ที่บังคับก่อน dispatch
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (pipeline + budget), `open` (live provider)
+- **ตัดสิน:** ทั้ง AI และคนใช้ `authorToolPackage()` เส้นเดียว: validate → compile → isolated trial → activate พร้อม record ที่แยก requester / generator / reviewer และ **generator ถูกเรียกได้เฉพาะผ่านฟังก์ชันที่ตรวจ budget ก่อน** (ถ้า estimate เกิน cap จะไม่เรียกเลย) · declaredWrites มาจาก package ผ่าน `buildToolBehaviorRequest()` ไม่ใช่จากผู้เรียก และ `checkToolBehaviorFreshness()` บังคับ `TOOL_STALE_REVISION`/`TOOL_SOURCE_REVOKED` ก่อน side effect
+- **เหตุผล/หลักฐาน:** `authoring.test.ts` 12/12 (พิสูจน์ว่า generator ไม่ถูกเรียกเมื่อเกิน budget, repair ได้ diagnostics, trial failure บล็อก activation, hand edit ที่ไม่เปลี่ยนอะไรถูก reject, AI ได้ base ที่คนแก้) · `tool-behavior-request.test.ts` 11/11 (scope มาจาก package, freshness codes ทำงานจริง)
+- **ทางเลือกที่ตัดทิ้ง:** ให้ UI/route เรียก generator เองแล้วค่อยตรวจ budget ทีหลัง — ตรวจไม่ทันต้นทุนจริง · ให้ caller ส่ง declaredWrites เอง — ขยาย scope ได้เกิน package
+- **Contract ที่กระทบ:** `runtime/tools/authoring.ts`, `shared/tool-behavior-request.ts`
+- **Rollback:** ปิด generator = AI route fail closed โดย pipeline/คนยังทำงาน
+- **ข้อจำกัด:** ยังไม่มีการเรียก model จริง (GATE-PAID-AI) · source editor UI ยังไม่ทำ · ยังไม่มี readback บนโต๊ะจริง
+
+## D-017 — เก็บ collaboration space เป็น optional field บน workspace (ไม่มี migration)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (storage round-trip) · `open` (route/grants)
+- **ตัดสิน:** `TableState.collaborationSpace?: CollaborationSpace` — เพิ่มแบบ optional แบบเดียวกับ `notes` (F037) และ `cardMeta` (F054) ไม่มีตาราง/คอลัมน์/migration ใหม่ และไม่มี D1 change ที่ต้องขออนุมัติ
+- **เหตุผล/หลักฐาน:** ไม่มี zod schema เข้มงวดครอบ domain state ที่เก็บลง storage (grep ใน `server/` ไม่พบ `domainStateSchema`/`tableStateSchema`; อ่านกลับผ่าน `parseJsonValue`) จึงเพิ่ม field ได้โดยไม่ต้องแก้ codec · `domain/collaboration-space.test.ts` 9/9 (workspace ที่ไม่มี space อ่านสะอาด, create ทำให้ owner เป็น manager คนเดียว, addMember ไม่แตะ `sources`, JSON round-trip เท่าเดิม, schemaVersion ใหม่ถูกปฏิเสธโดยไม่ทำ workspace พัง) · `npx vitest run src/tabletop` 801/801 ยืนยันว่าไม่มี regression
+- **ทางเลือกที่ตัดทิ้ง:** สร้างตาราง/aggregate ใหม่ใน DO SQLite — ต้องมี migration + scoped approval โดยยังไม่ได้อะไรเพิ่มในระดับ storage · เก็บทุกอย่างใน `TableProgram` — ชนเพดาน 64 KiB และทำให้ space ผูกกับ rule revision
+- **Contract ที่กระทบ:** `shared/table-contracts.ts` (field เดียว), `domain/collaboration-space.ts` (ใหม่), `shared/collaboration-space.ts` (มีอยู่)
+- **Rollback:** ลบ field ออกได้ทันทีเพราะ reader ทนการไม่มี field; ไม่มี schema ที่ apply ไปแล้วให้ย้อน
+- **ข้อจำกัด:** ยังไม่มี route/command ผ่าน authority (จะทำใน C6/C7) · space ยังไม่ผูก connection/projection จริง · ถ้าต้อง query space ข้าม workspace จะต้องมี index/migration แยกและขออนุมัติ
+
+## D-018 — Space commands เดินผ่าน command path เดิม (ไม่เพิ่ม route)
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven`
+- **ตัดสิน:** เพิ่ม `SPACE_COMMANDS` เข้า `publicCommands.table` และ hook ใน `handleTableCommand` ครั้งเดียว แทนการเปิด endpoint ใหม่ · payload ถูก parse ที่ขอบเขตด้วย zod (strict) แล้วจึงถึง domain · `space.create` สงวนให้ owner; ที่เหลือใช้ role×verb ของ space
+- **เหตุผล/หลักฐาน:** `domain/collaboration-space.test.ts` 17/17 (รวม maker link source ได้แต่จัดการสมาชิกไม่ได้), `shared/collaboration-space-command.test.ts` 12/12, `server/collaboration-space-commands.test.ts` 7/7 (allowlist ต่อ kind, invented command ถูกปฏิเสธ, trusted operation เป็นส่วนเพิ่มไม่ใช่ทางข้ามสิทธิ์)
+- **ทางเลือกที่ตัดทิ้ง:** route ใหม่ `/api/spaces/...` — เพิ่ม surface + auth ที่ต้องพิสูจน์ซ้ำ โดยยังไม่ได้อะไรเพิ่ม
+- **Rollback:** ลบ 2 บรรทัด (import + spread) และ hook 1 บรรทัด
+- **ข้อจำกัด:** ยังไม่มี UI/route เฉพาะของ connection และยังไม่มีการทดสอบผ่าน HTTP จริง
+
+## D-019 — Connection protocol: grant ที่ต้นทาง, revoke มี effective point, in-flight ต้องถูกปฏิเสธ
+
+- **วันที่:** 2026-10-25
+- **สถานะ:** `proven` (protocol) · `open` (transport)
+- **ตัดสิน:** `TOOL_CONNECTION_PROTOCOL` เป็นแหล่งความจริงเดียว (snapshot/freshness/commit owner/atomicity/in-flight/revocation/recovery) · grant เก็บที่ source ใน `TableState.spaceGrants` และ client ระบุได้แค่ space/audience/projections/actions — epoch/dataRevision/issuer/เวลา/version ถูกประทับจาก state จริง · `authorizeProjectionRead` ตรวจ revoke ก่อน stale epoch · `adjudicateInFlight` ปฏิเสธคำขอที่ค้างเมื่อ grant ถูกถอนหรือ source reset · `projectionUsableAt` ปิด cache ตั้งแต่ `revokedAt`
+- **เหตุผล/หลักฐาน:** `tool-connection.test.ts` 14/14, `tool-grant.test.ts` 10/10, `server/collaboration-space-commands.test.ts` 7/7; ยืนยันว่าไม่มี distributed atomicity และไม่มีการเขียนหลาย authority ใน operation เดียว
+- **ทางเลือกที่ตัดทิ้ง:** ให้ destination เก็บสำเนา grant เอง — จะทำให้ revoke ที่ source ไม่มีผล; re-read ก่อน write แล้วหวังว่าปิด race ได้ — แผนห้ามไว้ชัด
+- **Contract ที่กระทบ:** `shared/tool-connection.ts` (ใหม่), `TableState.spaceGrants?` (additive), `domain/tool-grant.ts`, `server/authority.ts` allowlist
+- **Rollback:** ลบ field/commands ได้โดยไม่ต้อง migrate; reader ทนการไม่มี field
+- **ข้อจำกัด:** ยังไม่มี transport ข้าม Room (Room A อ่าน Room B), ไม่มี subscription/invalidation จริง, ไม่มี UI; ผลที่ผู้ใช้เห็น/export ไปแล้วเรียกคืนไม่ได้ และต้องรายงานตามนั้น
+
+## D-020 — Transport ข้ามห้องใช้ internal route ของ Worker (ไม่เพิ่ม secret)
+
+- **วันที่:** 2026-10-26
+- **สถานะ:** `accepted` (decision) · resolver พิสูจน์แล้ว · HTTP wiring ยังไม่ทำ
+- **ปัญหา:** การอ่าน projection ข้าม workspace ต้องตอบสองคำถามพร้อมกัน — (1) ผู้ใช้เป็นสมาชิกของ *space* ปลายทางหรือไม่ (คำตอบอยู่ที่ปลายทาง) และ (2) ต้นทางได้ให้ grant ไว้หรือยัง (คำตอบอยู่ที่ต้นทาง) · ทางเลือกที่ต้อง secret ใหม่ (HMAC ระหว่าง Room) ถูกตัดออกเพราะเท่ากับขอ operator config ที่ยังไม่อนุมัติ
+- **ตัดสิน:** ให้ **Worker** เป็นผู้ไกล่เกลี่ย โดยไม่ต้องมี secret:
+  1. client เรียก `GET /api/workspaces/<spaceId>/space/projection?connection=<sourceId>&port=<portId>` ด้วย session ของตน
+  2. Worker authenticate session แล้วอ่าน view ของ workspace ปลายทาง → ตรวจว่า actor เป็นสมาชิกของ space นั้นจริง (นี่คือคำตอบของ (1))
+  3. Worker เรียก Room ต้นทางด้วย `internalRequest(request, '/internal/space-projection')` โดยส่ง `{ grantId, spaceId, actorId, portId }`
+  4. Room ต้นทางเรียก `resolveSpaceProjectionRead()` กับ grant ที่ตัวเองถืออยู่ + epoch ปัจจุบัน + คำยืนยันสมาชิกจากปลายทาง แล้วตอบ projection หรือ code ที่ปฏิเสธ
+  5. ทุกครั้งที่อ่านต้องผ่านขั้นนี้ซ้ำ — ไม่มี cache ให้ต้อง purge เมื่อ revoke
+- **เหตุผลว่าทำไมไม่ต้อง secret:** internal routes ของ Room ถูก match ด้วย path ที่เท่ากับ `/internal/...` เป๊ะ (`cloudflare/room-http.ts:77+`) ขณะที่ Worker ส่งต่อให้ Room เฉพาะ path ที่ match `/api/workspaces/<uuid>` และส่ง URL เดิมไป → client ไม่สามารถทำให้ Room เห็น path `/internal/...` ได้ (แผนเดียวกับที่ `/internal/create`, `/internal/view` ใช้อยู่แล้ว — `cloudflare/index.ts:71`)
+- **การตัดสินใจที่อยู่ในฟังก์ชันเดียว:** `shared/space-projection-read.ts` — grant ต้องเป็นของ space/ต้นทางนั้น, ต้องไม่ถูก revoke ก่อน `now`, ต้องมีคำยืนยันสมาชิกที่ตรงกับ actor, ต้องไม่ stale epoch, ต้องมี port ที่ grant เปิด — คืน `sourceDataRevision`/`grantVersion`/`readAt` ติดไปทุกครั้ง (7/7 tests)
+- **ผลต่อ finding 7:** การ re-read ไม่ใช่หน้าที่ของผู้เรียกอีกต่อไป เพราะจุดตัดสินใจรับ "grant ปัจจุบัน" เป็น input และ transport ต้องอ่าน state ใหม่ภายในจังหวะ commit
+- **ทางเลือกที่ตัดทิ้ง:** ให้ destination เก็บสำเนา grant (revoke ที่ต้นทางจะไม่มีผล) · ให้ client ถือ token แล้วอ่านเอง (ย้ายการตัดสินใจไปฝั่ง client) · ใช้ HMAC secret ระหว่าง Room (ต้องขอ config ใหม่โดยยังไม่จำเป็น)
+- **Rollback:** ลบ route + handler; resolver เป็น pure function ที่ลบได้โดยไม่กระทบ state
+- **ข้อจำกัด:** ยังไม่มี subscription/push (อ่านตาม request) · ยังไม่มี test ระดับ Worker ที่มีสอง workspace จริง — ต้องทำก่อนอ้าง JOIN-01 · ไม่มี global snapshot ข้ามแหล่ง (ตาม D-019)
+
+## D-021 — last-seen เป็นคำสั่งของห้อง ไม่ใช่ค่าที่ route เดา
+
+**บริบท:** recap ต้องบอกว่าใครอ่านถึง revision ไหน (เกณฑ์ HIST-01) และ `buildSpaceRecap` รับ `lastSeen` ได้แล้ว (15/15) แต่ยังไม่มีที่เก็บค่าจริง
+
+**การตัดสินใจ:** เก็บ last-seen เป็นฟิลด์ของ space state (`seen: Record<actorId, revision>`) และเขียนผ่านคำสั่ง `space.seen` ตามห่วงโซ่ปกติ (schema → parse → apply → activity) ไม่ให้ route เขียนข้อมูลเอง
+
+**เหตุผล:** (1) การอ่านไม่ควรเปลี่ยนข้อมูล — ถ้า route เขียน last-seen ระหว่าง GET จะทำให้การอ่านกลายเป็นการเขียน และเกิด race กับ revision (2) คำสั่งเดินผ่าน authority เดิม จึงได้ actor/permission/receipt ฟรี (3) ฟิลด์นี้ additive ⇒ ไม่ต้อง migration
+
+**ผลที่ต้องตามมา:** `applySpaceCommand` ต้อง bump `revision` ตามกติกาเดิม, recap ต้องอ่าน `seen` จาก state แล้วส่งเข้า `buildSpaceRecap`, และ member ที่ยังไม่เคยเรียกจะยัง `unseen: true` ตามที่ตกลงไว้
+
+**ขั้นที่ยังไม่ทำ:** ห่วงโซ่นี้ยังไม่ลงโค้ด — ต้องแก้พร้อมกัน 6 จุดใน `shared/collaboration-space-command.ts` (array, schema, union, parse switch, apply case) และ `shared/collaboration-space.ts` (type)
+
+**แผนที่ไฟล์ที่ตรวจแล้ว (สำหรับลงมือรอบถัดไป):**
+
+| ไฟล์ | จุดที่ต้องแก้ |
+| --- | --- |
+| `shared/collaboration-space-command.ts` | `SPACE_COMMANDS` (บรรทัด ~15-24), schema ใหม่, union `ParsedSpaceCommand`, `case 'space.seen'` ใน `parseSpaceCommand` (~บรรทัด 120) |
+| `shared/collaboration-space.ts` | ฟิลด์ `seen?: Record<string, number>` ของ state + `case 'space.seen'` ใน `applySpaceCommand` (ไม่ได้อยู่ในไฟล์ command) + bump `revision` |
+| `domain/collaboration-space.ts` | `toSpaceCommand` (~บรรทัด 154) และ `spaceLabel` (~บรรทัด 166) |
+| `cloudflare/space-recap-transport.ts` | ส่ง `lastSeen` (อ่านจาก state) เข้า `buildSpaceRecap` |
+| `shared/collaboration-space-command.test.ts` | เปลี่ยน `it.todo` 6 ข้อเป็นเทสต์จริง (สัญญาเขียนไว้แล้ว) |
+
+**สถานะ:** ยังไม่ลงโค้ด — สัญญา (todo 6 ข้อ) และแผนที่ไฟล์พร้อมแล้ว
+
+## D-022 — room shell คือ C · Split ledger
+
+**บริบท:** เสนอสามแนวพร้อมภาพจริงและผล ui-gate (14/16 measured, 4 skipped) ในรอบที่ 16
+
+**การตัดสินใจของผู้ใช้ (2026-10-26):** เลือก **C · Split ledger** — รายชื่อโต๊ะซ้าย, ตารางข้อมูลรวมกลาง, แผงเครื่องมือ/recap ขวา
+
+**เหตุผล:** ตรงกับจุดขาย joined tables ที่สุด และมีที่ให้ recap/impact โดยไม่ต้องเพิ่มหน้าจอใหม่; จอแคบยุบเป็นคอลัมน์เดียวได้
+
+**ผลที่ต้องตามมา:** shell ต้องใช้ token ของ repo (ไม่ใช่ hex ใน mockup), ต้องผ่าน ui-gate ด้วยตัวเลขจริงก่อนอ้างว่าเสร็จ, และเป็นที่ mount ของ `ToolAuthoringPanel`, `JoinedProjectionView` และ recap/impact
+
+## D-023 — วงเงิน paid-AI สำหรับ dev
+
+**การตัดสินใจของผู้ใช้ (2026-10-26):** อนุมัติ **3 runs × ≤6 calls, ≤USD 0.20/run** (รวม ≤18 calls / ≤USD 0.60) สำหรับการทดสอบ AI authoring บน dev เท่านั้น
+
+**ขอบเขตที่ผูกไว้:** ต้องมี budget check ก่อน dispatch ทุกครั้ง (`checkToolAiBudget`), ห้ามใช้กับ production, และต้องรายงานจำนวน call/ค่าใช้จ่ายจริงที่ใช้ไป
+
+## D-024 — EXPORT-01 ปิดด้วยการอ่านกลับของผู้ใช้
+
+**การตัดสินใจของผู้ใช้ (2026-10-26):** เปิด `test-results/export-sample/budget.csv` ใน Excel แล้ว **ถูกต้อง** — 3 แถว, ไทยไม่เพี้ยน, `ห้องโถง, ใหญ่` อยู่เซลล์เดียว, `'=1+1` ไม่กลายเป็นสูตร
+
+**ผล:** `EXPORT-01` = PASS ที่ environment `human` โดยมีผู้ใช้เป็นผู้ยืนยัน ไม่ใช่ inference ของ AI
+
+## D-025 — `/s/:id` เป็น client route และไม่แก้ asset config ของ production
+
+**สิ่งที่ตรวจพบ (2026-10-26):**
+- `wrangler.jsonc` ตั้ง `assets.not_found_handling = "none"` และ `run_worker_first = ["/api/*", "/healthz", "/readyz", "/version", "/internal/*"]`
+- Worker ไม่มีโค้ดเสิร์ฟ `index.html` สำหรับ path ของแอป (ค้นแล้ว: ไม่มี `parseRoute`/`text/html` ใน `cloudflare/index.ts`)
+- ⇒ path อย่าง `/t/:id` หรือ `/s/:id` ไม่มีไฟล์จริงให้ asset service ตอบ และไม่ถูกจัดเข้า worker-first
+
+**ผลที่บันทึกไว้ตรง ๆ:** การเปิด `/s/:id` ตรง ๆ ใน production **อาจ 404** เช่นเดียวกับ `/t/:id` ที่มีอยู่ก่อนแล้ว — เป็นข้อจำกัดเดิมของ repo ไม่ใช่ข้อถอยหลังของงานนี้ การนำทางภายในแอป (history/popstate) ยังทำงาน
+
+**ทำไมไม่แก้:** การเปลี่ยน `not_found_handling` เป็น `single-page-application` คือการเปลี่ยนพฤติกรรมการเสิร์ฟของ **production** ซึ่งอยู่นอกขอบเขตที่อนุญาต (dev-only, no production config) จึงต้องขออนุมัติแยกพร้อมผลกระทบ
+
+**ถ้าจะปิดช่องนี้ภายหลัง:** เปลี่ยน `assets.not_found_handling` เป็น `"single-page-application"` (หรือเพิ่ม `_redirects` แบบ rewrite ไป `/index.html` ที่ status 200) แล้วทดสอบทั้ง `/t/:id` และ `/s/:id` บน staging ก่อน
+
+## D-026 — PROV-01 ยังไม่ปิด: หลักฐานแยกบทบาทได้ แต่เส้นทาง manual review ยังอธิบายไม่ได้
+
+**สิ่งที่ยืนยันแล้ว (จากโค้ดและ probe):** `ToolActivationRecord` มี `requesterActorId`, `generator` (human | ai+generatorId+calls+usd), `reviewer` (auto | manual+actorId), `problems`, `reason`, `recordedAt` — แยกสี่บทบาทจริง และกรณี `auto` ไม่แต่งชื่อคนขึ้นมา
+
+**สิ่งที่ยังอธิบายไม่ได้ (timebox หมดแล้ว):** ใน fixture ที่ถือว่า valid แล้ว reviewer แบบ `auto` activate สำเร็จ แต่ `manual` ไม่ activate ทั้งกรณีผู้สั่งเองและคนอื่น ทั้งที่โค้ดที่อ่าน (`authorToolPackage`) ไม่ได้ใช้ `reviewer` ในการตัดสิน ⇒ มีการปฏิเสธอยู่ก่อนถึงจุดนั้น ยังไม่ได้ระบุว่าเกิดจากที่ใด
+
+**สิ่งที่ต้องแก้ในรายงานรอบก่อน:** ผมเคยสรุปว่า "manual review ไม่เคย activate เพราะนโยบาย" — ที่จริงเทสต์ชุดแรกใช้ package ที่ผิด (`runtimeProfile` และ import pin ไม่ตรง) จึงถูกปฏิเสธด้วย `TOOL_PACKAGE_INVALID` ข้อสรุปนั้นจึงไม่ถูกต้อง และผมถอนคำกล่าวนั้น
+
+**ขั้นถัดไปที่ควรทำ:** ไล่หาว่ามี guard ที่ไหนอ่าน `route.kind`/reviewer (เช่น wrapper หรือ policy module) แล้วเขียนเทสต์ที่ valid จริง; ห้ามสรุปซ้ำจนกว่าจะมี `record.reason` ของเคส valid มายืนยัน
+
+**ผลต่อ acceptance:** `PROV-01` คงเป็น UNVERIFIED — ไม่ใช่เพราะขาดข้อมูลแยกบทบาท แต่เพราะเส้นทาง manual review ยังไม่ผ่านการพิสูจน์
+
+**D-026 (แก้ไข 2026-10-26):** ข้อสรุปเดิมผิด — เมื่อใช้ package ที่ valid จริง (`runtimeProfile = tabletop-tool-1`, import pin ของ repo, และประกาศ behaviour ที่ตรงกับ `behaviorEntry`) reviewer แบบ `manual` **activate สำเร็จ** ทั้งกรณีผู้สั่งเองและคนอื่น (พิสูจน์ด้วย probe: `ok: true` ทั้งสองกรณี) ⇒ ไม่มีนโยบายปิดกั้น manual review; ที่ถูกปฏิเสธก่อนหน้าคือ fixture ที่ผิด และถูกรายงานเป็น `TOOL_PACKAGE_INVALID` ไม่ใช่เหตุผลด้าน reviewer
+
+**บทเรียน:** เทสต์ที่ assert เฉพาะ "ฟิลด์มีค่า" โดยไม่ assert `ok` และไม่พิมพ์ `record.problems` ทำให้เข้าใจผิดได้ — ตอนนี้เทสต์แรกของ PROV-01 บังคับให้ fixture ต้อง valid ก่อน (ถ้าไม่ valid จะเห็น problems ทันที)
+
+## D-027 — EVOLVE-01 ยังไม่ปิด: update รอบสองถูกปฏิเสธด้วย TABLE_PRESERVE_DATA
+
+**สิ่งที่พยายาม:** สร้างโต๊ะที่มี program+records (import → evolve ครบวงจร) แล้ว activate change รอบสองที่แก้แค่ `program.title` จากนั้นเทียบ record ids / action ids / canvas view ids ก่อน-หลัง
+
+**ผล:** `evolve.simulate` ตอบ `422 TABLE_PRESERVE_DATA`
+
+**สิ่งที่รู้จากโค้ด:** guard อยู่ที่ `src/tabletop/domain/table.ts:381` — "A rule edit must retain every current field definition unless a numeric field is promoted with the same id and collection" ⇒ การ activate ซ้ำต้องรักษา field definitions เดิม (หรือ promote numeric field ด้วย id/collection เดิม) ซึ่ง change ที่สร้างจาก `equipmentChange(sourceId)` ควรผ่าน แต่กลับไม่ผ่าน — ยังไม่ทราบสาเหตุ
+
+**สิ่งที่ยังไม่ได้ลอง (สำหรับรอบหน้า):** (1) พิมพ์ diff ที่ guard เห็นจริง (`nextProgram` vs `program`) เพื่อดูว่า field ใดถูกมองว่าเปลี่ยน (2) ตรวจว่า `equipmentChange` สร้าง `computedColumns`/`fields` ชุดใหม่ที่ id ไม่ตรงกับของเดิมหรือไม่ (3) ใช้ change ที่ผู้ใช้แก้ผ่าน UI จริงแทนการสร้างใหม่จาก scenario
+
+**สิ่งที่ถอนออก:** เทสต์ที่เขียนไว้ถูกลบก่อน commit เพื่อไม่ให้ CI แดง — ไม่มีการอ้างว่า EVOLVE-01 ผ่าน
+
+**D-027 (เพิ่ม 2026-10-26):** ลองเส้นทางที่โดเมนรองรับตรง ๆ คือ update แบบ *additive* (เพิ่ม field ใหม่ ไม่แตะของเดิม) — ผลคือ `evolve.propose` ตอบ `422 INVALID_COMMAND` เพราะ payload ของ change ที่ประกอบเองไม่ผ่าน schema (field ที่เพิ่มต้องมีรูปตาม `TableField` ครบ)
+
+**สรุปสถานะ EVOLVE-01:** ยังไม่มีเทสต์ที่ผ่าน — ทั้งเส้นทาง title-only (`TABLE_PRESERVE_DATA`) และ additive (`INVALID_COMMAND`) ถูกปฏิเสธจากสิ่งที่ผมยังไม่เข้าใจ
+
+**หยุดตาม timebox:** สมมติฐานที่ลองแล้ว 2 ข้อจากเพดาน ~5 และ context ต่อรอบใกล้หมด การเดาต่อจะทำให้สรุปผิดซ้ำแบบรอบ 71
+
+**ทางที่ควรทำต่อ (ต้องอ่านข้อมูลจริงก่อน ไม่ใช่เดา):**
+1. พิมพ์ schema ของ change (`TableChange`) และของ field ที่ถูกต้อง แล้วสร้าง payload ให้ตรงชนิด
+2. พิมพ์ diff ที่ `assertPromotedFieldSafe` เห็นจริงในเคส title-only (ว่า field ใดถูกมองว่าถูกลบ)
+3. ถ้า guard ปฏิเสธ update ที่ไม่แตะ field จริง นั่นคือบั๊กของโดเมน ต้องแจ้งเป็น finding ไม่ใช่ปรับเทสต์ให้ผ่าน
+
+**ไม่มีการอ้างว่า EVOLVE-01 ผ่าน และไม่มีเทสต์ที่ล้มค้างใน CI**
+
+## D-028 — last-seen เป็น per-member (ผู้ใช้อนุมัติให้ยกเว้นเกณฑ์ per-device)
+
+**การตัดสินใจของผู้ใช้ (2026-10-26):** ให้เก็บ reading position **ต่อสมาชิก** ไม่ต้องแยกต่ออุปกรณ์
+
+**เหตุผล:** หนึ่งคนมีหลายอุปกรณ์แต่เป็นคนเดียวกัน การมีตำแหน่งเดียวต่อคนอ่านง่ายกว่า และไม่ต้องเพิ่ม device key ใน state/คำสั่ง
+
+**ผลต่อ acceptance:** `HIST-01` ปิดได้ โดยต้องระบุส่วนเบี่ยงเบนนี้ไว้ใน limitation อย่างชัดเจน ไม่ใช่เงียบ
+
+## D-029 — จะลองเดินดูหน้า `/s/:id` บน dev runtime
+
+**การตัดสินใจของผู้ใช้:** ให้ AI ลองสตาร์ท dev server ในเครื่อง (ไม่ใช่ production) และขับ browser เอง แล้วรายงานหลักฐานจริง
+
+**ขอบเขต:** dev-only; ห้าม deploy, ห้ามแตะ production data/config; ถ้าติด auth flow ให้รายงานตรง ๆ ว่า UNVERIFIED
+
+## D-030 — `/s/:id` เสิร์ฟแอปได้เมื่อ build เสร็จ และการเดินดูต้องผ่าน Google sign-in
+
+**สิ่งที่ทดลอง (2026-10-26, dev-only):**
+1. `npm run dev:cloudflare` บนพอร์ต 8787 **ล้มเหลว** เพราะมี server อื่นถือพอร์ตอยู่แล้ว (ไม่ใช่ของ session นี้ — ไม่ได้ไปฆ่า)
+2. สตาร์ท wrangler บนพอร์ต **8788** พร้อม `dist` ที่ build แล้ว ผลคือ:
+   - `/healthz` → 200 json
+   - `/` → **200 text/html**
+   - `/t/<uuid>` → **200 text/html**
+   - `/s/<uuid>` → **200 text/html**
+3. เปิดหน้าแรกในเบราว์เซอร์จริง (UI Lab) → ได้ landing page พร้อมปุ่ม **"Continue with Google"**
+
+**แก้ D-025:** ข้อสรุปเดิมที่ว่า path ของแอป "อาจ 404" ไม่ถูกต้องสำหรับ build ปกติ — เมื่อ `dist` มี `index.html` asset layer ตอบ SPA ให้ทุก client route รวม `/s/:id` (404 ที่เห็นก่อนหน้าเป็น server เก่าที่ค้างอยู่บนพอร์ต 8787)
+
+**ข้อจำกัดที่ยังเหลือ:** แอปที่ลงชื่อเข้าใช้ต้องผ่าน **Google OAuth** ซึ่งไม่มีในเครื่องนี้ ⇒ ผมเดินดูหน้า `/s/:id` แบบมี session ไม่ได้ จึงยังไม่พิสูจน์ VISUAL-01/G1/G2 ในระดับ UI จริง
+
+**ไม่มีการกระทำกับ production:** ไม่มี deploy, ไม่แตะ production data/config; ปิด dev server ที่สตาร์ทเองแล้ว

@@ -3,7 +3,9 @@ import { DomainError, SEATS, TABLE_TURN_SEATS, TABLE_TURN_SEAT_PATTERN, type Act
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue, TableSource } from '../shared/table-contracts';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
 import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
-import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
+import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload, TABLE_ACTIVITY_LIMIT } from './helpers';
+import { handleSpaceCommand } from './collaboration-space';
+import { handleSourceGrantCommand } from './tool-grant';
 import { liveCanvasCardIds, pruneCardMeta, touchCardMeta } from './table-card-meta';
 import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
@@ -995,6 +997,12 @@ function updateComputeRun(state: TableState, payload: unknown, ctx: ActorContext
 }
 
 export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): TableCommandDecision | null {
+  // F080: collaboration-space commands live in their own module and report a refusal by throwing.
+  const spaceDecision = handleSpaceCommand(state, type, payload, ctx);
+  if (spaceDecision) return spaceDecision;
+  // F080: a projection grant is the source table's decision, so it is handled here too.
+  const grantDecision = handleSourceGrantCommand(state, type, payload, ctx);
+  if (grantDecision) return grantDecision;
   if (type === 'table.compute.run') return queueComputeRun(state, payload, ctx, true);
   if (type === 'table.compute.queue') return queueComputeRun(state, payload, ctx, false);
   if (type === 'table.compute.update') return updateComputeRun(state, payload, ctx);
@@ -1115,7 +1123,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const next = structuredClone(state);
     next.computedColumns = structuredClone(legacyColumns);
     next.dataRevision += 1;
-    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Computed columns updated (${combinedColumns.length})`, at: ctx.now }].slice(-100);
+    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Computed columns updated (${combinedColumns.length})`, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT);
     return { state: next, label: `Computed columns updated (${combinedColumns.length}).` };
   }
   if (type === 'table.importRows') {
@@ -1214,7 +1222,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     assert(referenceIssues.length === 0, 'TABLE_INPUT', referenceIssues[0] ?? 'The replacement would leave an invalid rule reference. No rows were imported.');
     validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn }, state.computeRuns, state);
     next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
-    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-100);
+    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT);
     return { state: next, label: input.mode === 'replace'
       ? `Replaced ${collection.title} with ${created.length} rows.`
       : `Imported ${created.length} rows into ${collection.title}.` };
@@ -1333,7 +1341,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   if (action.advanceTurn) next.turn = program.turnOrder[(program.turnOrder.indexOf(state.turn ?? '') + 1) % program.turnOrder.length];
   validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn }, state.computeRuns, state);
   next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
-  next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-100);
+  next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT);
   return {
     state: next,
     label: action.title,

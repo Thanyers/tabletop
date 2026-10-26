@@ -7,7 +7,9 @@ export type AppRoute =
   | { name: 'tables' }
   | { name: 'new' }
   | { name: 'join' }
-  | { name: 'table'; id: string };
+  | { name: 'table'; id: string }
+  /** F080: a collaboration room, addressed by the workspace that hosts it. */
+  | { name: 'space'; id: string };
 
 const tableId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
@@ -20,11 +22,14 @@ export function parseRoute(pathname: string): AppRoute | null {
   if (path === '/join') return { name: 'join' };
   const match = /^\/t\/([^/]+)$/u.exec(path);
   if (match && tableId.test(match[1])) return { name: 'table', id: match[1] };
+  const room = /^\/s\/([^/]+)$/u.exec(path);
+  if (room && tableId.test(room[1])) return { name: 'space', id: room[1] };
   return null;
 }
 
 export function routePath(route: AppRoute): string {
   if (route.name === 'table') return `/t/${route.id}`;
+  if (route.name === 'space') return `/s/${route.id}`;
   return route.name === 'landing' ? '/' : `/${route.name}`;
 }
 

@@ -8,6 +8,10 @@ import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
 import { projectionCursor } from '../server/projection-cursor.js';
+import { resolveSpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
+import { projectGrantRows } from '../src/tabletop/shared/tool-grant-rows.js';
+import { buildSpaceExport } from '../src/tabletop/shared/space-export.js';
+import { selectGrantsForSpace } from '../src/tabletop/shared/space-grants.js';
 import { authenticateHash, authenticateRequest, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
 import { redactString, respondToTablePrompt, type IdentityReplacement } from './table-assistant.js';
@@ -220,6 +224,99 @@ export class Room extends DurableObject<Env> {
       redeemInvite: (request, ticket) => this.redeemInvite(request, ticket),
       joinByInviteLink: (request, token) => this.joinByInviteLink(request, token),
       scheduleDirectorySync: () => this.scheduleDirectorySync(),
+      // F080: the Worker vouches that the caller is in the destination space; this table decides
+      // the rest against its own grant list, read fresh for this request.
+      readSpaceProjection: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as { kind: string; spaceGrants?: Parameters<typeof resolveSpaceProjectionRead>[0]['grants'] };
+        const answer = resolveSpaceProjectionRead({
+          grants: Array.isArray(domain.spaceGrants) && domain.kind === 'table' ? domain.spaceGrants : [],
+          grantId: input.grantId,
+          spaceId: input.spaceId,
+          spaceWorkspaceId: input.spaceWorkspaceId,
+          sourceWorkspaceId: workspace.id,
+          sourceEpoch: workspace.epoch,
+          actorId: input.actorId,
+          portId: input.portId,
+          membership: { verifiedBy: 'destination', actorId: input.actorId },
+          now: Date.now(),
+        });
+        if (!answer.ok) return answer;
+        // Rows are read from the state this request already holds, at its own revisions, so the
+        // response cannot mix revisions even under load.
+        const records = (domain as { records?: Record<string, { id: string; values: Record<string, unknown> }[]>; dataRevision?: number; ruleRevision?: number });
+        const rows = projectGrantRows({
+          portId: answer.projection.portId,
+          fields: answer.projection.fields,
+          maxRows: answer.projection.maxRows,
+          dataRevision: records.dataRevision ?? 0,
+          ruleRevision: records.ruleRevision ?? 0,
+          grantVersion: answer.grantVersion,
+          label: 'source',
+          records: records.records?.[answer.projection.resource] ?? [],
+          readAt: Date.now(),
+        });
+        return { ...answer, rows: rows.rows, sourceDataRevision: rows.sourceDataRevision };
+      },
+      // F080: an action through a connection commits as the grant issuer, on this table's authority.
+      executeSpaceAction: async input => {
+        try {
+          const ack = await this.authority.executeSpaceAction({
+            actorId: input.actorId,
+            workspaceId: this.requireBoundRoomId(),
+            grantId: input.grantId,
+            spaceWorkspaceId: input.spaceWorkspaceId,
+            actionId: input.actionId,
+            inputs: input.inputs,
+            idempotencyKey: input.idempotencyKey,
+          });
+          return { ok: true as const, revision: ack.workspace.revision, duplicate: ack.duplicate };
+        } catch (error) {
+          const code = error instanceof AuthorityError ? error.code : 'SPACE_ACTION_FAILED';
+          return { ok: false as const, code, message: error instanceof Error ? error.message : 'The action failed.' };
+        }
+      },
+      // F080: a recap needs to know which connections this table holds for that room.
+      listSpaceGrants: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as unknown as {
+          spaceGrants?: Parameters<typeof selectGrantsForSpace>[0];
+          dataRevision?: number;
+        };
+        // The live revision travels with the answer, so a recap can compare without a second read.
+        const live = domain.dataRevision ?? 0;
+        return selectGrantsForSpace(Array.isArray(domain.spaceGrants) ? domain.spaceGrants : [], input.spaceWorkspaceId)
+          .map(connection => ({ ...connection, liveDataRevision: live }));
+      },
+      // F080: the export is built here because only this table can see its rows and its export flag.
+      exportSpaceProjection: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as unknown as {
+          kind?: string;
+          spaceGrants?: Parameters<typeof buildSpaceExport>[0]['grant'][];
+          records?: Record<string, { id: string; values: Record<string, unknown> }[]>;
+          dataRevision?: number;
+          ruleRevision?: number;
+        };
+        const grant = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
+        if (!grant) return { ok: false as const, code: 'SPACE_GRANT_NOT_FOUND', message: 'That connection is not granted to this space.' };
+        const projection = grant.projections.find(entry => entry.portId === input.portId);
+        return buildSpaceExport({
+          grant,
+          portId: input.portId,
+          actorId: input.actorId,
+          spaceWorkspaceId: input.spaceWorkspaceId,
+          sourceEpoch: workspace.epoch,
+          dataRevision: domain.dataRevision ?? 0,
+          ruleRevision: domain.ruleRevision ?? 0,
+          records: projection ? domain.records?.[projection.resource] ?? [] : [],
+          format: input.format,
+          producedAt: Date.now(),
+        });
+      },
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }

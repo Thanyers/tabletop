@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Room shell — three alternatives</title>
+<style>
+  :root {
+    --ink: #12181f;
+    --ink-soft: #4a5663;
+    --line: #cdd6de;
+    --paper: #f6f8fa;
+    --card: #ffffff;
+    --accent: #1f5f8b;
+    --accent-soft: #e6f0f7;
+    --warn: #8a4b12;
+    --warn-soft: #fdf1e3;
+    --radius: 12px;
+    --gap: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.6 "Noto Sans Thai", system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  header.bar {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 20px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+  }
+  header.bar h1 { font-size: 17px; margin: 0; }
+  header.bar .who { font-size: 13px; color: var(--ink-soft); margin-left: auto; }
+  nav.variants { display: flex; gap: 6px; padding: 10px 20px 0; }
+  nav.variants a {
+    padding: 5px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--ink);
+    font-size: 13px;
+    background: var(--card);
+  }
+  nav.variants a[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main { padding: 16px 20px 28px; }
+
+  /* Shared pieces */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+  .panel-head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 10px 12px; border-bottom: 1px solid var(--line);
+  }
+  .panel-head h2 { font-size: 14px; margin: 0; }
+  .panel-head .meta { font-size: 12px; color: var(--ink-soft); margin-left: auto; }
+  .chip {
+    font-size: 12px; padding: 1px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); border: 1px solid #c9dcea;
+  }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: #ecd3b5; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eef1f4; }
+  th { font-weight: 600; color: var(--ink-soft); font-size: 12px; }
+  button.act {
+    font: inherit; font-size: 13px; padding: 3px 12px; border-radius: 8px;
+    border: 1px solid var(--accent); background: var(--card); color: var(--accent); cursor: pointer;
+  }
+  button.act.primary { background: var(--accent); color: #fff; }
+  .stack { display: grid; gap: var(--gap); }
+
+  /* A — Workbench: documents left, tool docked right */
+  .workbench { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--gap); align-items: start; }
+  .doc { padding: 12px; }
+  .doc h3 { margin: 0 0 4px; font-size: 14px; }
+  .doc p { margin: 0; font-size: 13px; color: var(--ink-soft); }
+  .tool-dock { position: sticky; top: 14px; }
+
+  /* B — Board: cards on a canvas, tool floats */
+  .board {
+    position: relative; min-height: 420px; padding: 18px;
+    background:
+      radial-gradient(circle at 1px 1px, #dfe6ec 1px, transparent 0) 0 0 / 18px 18px,
+      var(--paper);
+    border: 1px solid var(--line); border-radius: var(--radius);
+  }
+  .board-card { position: absolute; width: 260px; padding: 12px; }
+  .board-card h3 { margin: 0 0 4px; font-size: 14px; }
+  .float-tool { position: absolute; right: 18px; bottom: 18px; width: 360px; }
+
+  /* C — Split ledger: list, joined grid, context rail */
+  .ledger { display: grid; grid-template-columns: 200px 1fr 260px; gap: var(--gap); align-items: start; }
+  .ledger .list { padding: 8px; }
+  .ledger .list li { list-style: none; padding: 7px 8px; border-radius: 8px; font-size: 13px; }
+  .ledger .list li[aria-current="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .rail { padding: 12px; }
+  .rail h3 { margin: 0 0 6px; font-size: 13px; }
+  .rail p { margin: 0 0 10px; font-size: 12px; color: var(--ink-soft); }
+
+  @media (max-width: 900px) {
+    .workbench, .ledger { grid-template-columns: 1fr; }
+    .board-card, .float-tool { position: static; width: auto; margin-bottom: 10px; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>ห้องวางผังกิจกรรม</h1>
+  <span class="chip">เชื่อม 2/2 แหล่ง</span>
+  <span class="who">คุณกานต์ · ผู้จัดการห้อง</span>
+</header>
+
+<nav class="variants" aria-label="แนวหน้าจอ">
+  <a href="?v=a" data-variant="a">A · Workbench</a>
+  <a href="?v=b" data-variant="b">B · Board</a>
+  <a href="?v=c" data-variant="c">C · Split ledger</a>
+</nav>
+
+<main id="stage"></main>
+
+<script>
+  const VARIANTS = {
+    a: `
+      <div class="workbench">
+        <div class="stack">
+          <section class="card doc">
+            <h3>ผังพื้นที่กิจกรรม</h3>
+            <p>ห้องอเนกประสงค์ 60 ตร.ม. · ห้องประชุม 24 ตร.ม.</p>
+          </section>
+          <section class="card">
+            <div class="panel-head"><h2>งบประมาณ</h2><span class="meta">rev 9</span></div>
+            <table>
+              <thead><tr><th>ห้อง</th><th>ราคา</th></tr></thead>
+              <tbody>
+                <tr><td>ห้องอเนกประสงค์</td><td>5,000</td></tr>
+                <tr><td>ห้องประชุม</td><td>1,250</td></tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+        <div class="card tool-dock">
+          <div class="panel-head"><h2>เครื่องมือ: ผังรวม</h2><span class="chip">ใช้งาน</span></div>
+          <div style="padding:12px" class="stack">
+            <p style="margin:0;font-size:13px;color:var(--ink-soft)">ลากห้องลงโซน แล้วกดบันทึก</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="act primary">บันทึกผัง</button>
+              <button class="act">อ่านข้อมูลใหม่</button>
+            </div>
+          </div>
+        </div>
+      </div>`,
+    b: `
+      <div class="board">
+        <section class="card board-card" style="left:18px;top:18px">
+          <h3>ผังพื้นที่กิจกรรม</h3>
+          <p style="margin:0;font-size:13px;color:var(--ink-soft)">2 ห้อง · rev 4</p>
+        </section>
+        <section class="card board-card" style="left:300px;top:120px">
+          <h3>งบประมาณ</h3>
+          <p style="margin:0;font-size:13px;color:var(--ink-soft)">2 รายการ · rev 9</p>
+        </section>
+        <section class="card board-card" style="left:80px;top:250px">
+          <h3>ผู้จัดกิจกรรม</h3>
+          <p style="margin:0;font-size:13px;color:var(--ink-soft)">3 คน · rev 2</p>
+        </section>
+        <section class="card float-tool">
+          <div class="panel-head"><h2>เครื่องมือ: ผังรวม</h2><span class="chip warn">1 แหล่งถูกถอน</span></div>
+          <div style="padding:12px" class="stack">
+            <p style="margin:0;font-size:13px">งบประมาณไม่พร้อมใช้ — ต้องเชื่อมต่อใหม่</p>
+            <div style="display:flex;gap:8px"><button class="act">เชื่อมใหม่</button><button class="act primary">ใช้ผังเดิม</button></div>
+          </div>
+        </section>
+      </div>`,
+    c: `
+      <div class="ledger">
+        <nav class="card list" aria-label="โต๊ะในห้อง">
+          <ul style="margin:0;padding:0">
+            <li aria-current="true">ผังพื้นที่กิจกรรม</li>
+            <li>งบประมาณ</li>
+            <li>ผู้จัดกิจกรรม</li>
+          </ul>
+        </nav>
+        <section class="card">
+          <div class="panel-head"><h2>ข้อมูลรวม</h2><span class="meta">2 แหล่ง · 4 แถว</span></div>
+          <table>
+            <thead><tr><th>ห้อง</th><th>พื้นที่</th><th>ราคา</th></tr></thead>
+            <tbody>
+              <tr><td>ห้องอเนกประสงค์</td><td>60</td><td>5,000</td></tr>
+              <tr><td>ห้องประชุม</td><td>24</td><td>1,250</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <aside class="card rail">
+          <h3>เครื่องมือ: ผังรวม</h3>
+          <p>อ่านจาก 2 แหล่ง · อัปเดตล่าสุด rev 9</p>
+          <button class="act primary">บันทึกผัง</button>
+          <button class="act" style="margin-left:6px">อ่านใหม่</button>
+        </aside>
+      </div>`,
+  };
+
+  const chosen = new URLSearchParams(location.search).get('v') || 'a';
+  document.getElementById('stage').innerHTML = VARIANTS[chosen] || VARIANTS.a;
+  for (const link of document.querySelectorAll('nav.variants a')) {
+    if (link.dataset.variant === chosen) link.setAttribute('aria-current', 'page');
+  }
+</script>
+</body>
+</html>

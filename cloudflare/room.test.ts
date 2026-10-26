@@ -3645,3 +3645,47 @@ describe('Cloudflare room Durable Object', () => {
     expect(workspace.epoch).toBe(joined.body.epoch);
   });
 });
+
+describe('F080 a second member reads the same room', () => {
+  it('a second member reads the same room brief after the owner writes it', async () => {
+    const owner = newActor('Brief owner');
+    const member = newActor('Brief member');
+    await Promise.all([saveActor(owner), saveActor(member)]);
+    const { roomId, stub, workspace } = await createRoom(owner, 'table');
+
+    let current = workspace;
+    for (const [type, payload] of [
+      ['space.create', { spaceId: 'brief-room', title: 'Shared room', sharedToolWorkspaceId: roomId }],
+      ['space.setBrief', { text: 'Plan the rooms so people can register.' }],
+    ] as const) {
+      const result = await issueCommand(stub, current, owner, type, payload);
+      if (!('ok' in result.body) || !result.body.ok) throw new Error(`BRIEF_TEST_${type.toUpperCase()}_FAILED`);
+      current = result.body.workspace;
+    }
+
+    const invitation = await call<{ ticket: string }>(stub, `/api/workspaces/${roomId}/invites`, owner, {
+      method: 'POST', body: { seat: 'member-1' }, mutation: true,
+    });
+    expect(invitation.response.status).toBe(201);
+    const joined = await call<WorkspaceView>(stub, '/internal/redeem', member, {
+      method: 'POST', body: { ticket: invitation.body.ticket.slice(`${roomId}_`.length) }, mutation: true,
+    });
+    expect(joined.response.status).toBe(200);
+
+    // The member's own view carries the brief the owner committed, with the owner as its author.
+    const memberState = joined.body.domain as unknown as {
+      collaborationSpace?: { brief?: { text: string; updatedBy: string } };
+    };
+    expect(memberState.collaborationSpace?.brief?.text).toBe('Plan the rooms so people can register.');
+    expect(memberState.collaborationSpace?.brief?.updatedBy).toBe(owner.id);
+
+    // F080 / EVOLVE-01: the member's own read carries the same domain as the owner's, so the
+    // definition and its identities are not per-viewer.
+    const ownerRead = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, owner, { method: 'GET' });
+    const memberRead = await call<WorkspaceView>(stub, `/api/workspaces/${roomId}`, member, { method: 'GET' });
+    expect(ownerRead.response.status).toBe(200);
+    expect(memberRead.response.status).toBe(200);
+    expect(memberRead.body.domain).toEqual(ownerRead.body.domain);
+    // The projection revision is per viewer, so only the domain is compared here.
+  });
+});
