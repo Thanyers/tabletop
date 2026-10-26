@@ -278,3 +278,15 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **D-026 (แก้ไข 2026-10-26):** ข้อสรุปเดิมผิด — เมื่อใช้ package ที่ valid จริง (`runtimeProfile = tabletop-tool-1`, import pin ของ repo, และประกาศ behaviour ที่ตรงกับ `behaviorEntry`) reviewer แบบ `manual` **activate สำเร็จ** ทั้งกรณีผู้สั่งเองและคนอื่น (พิสูจน์ด้วย probe: `ok: true` ทั้งสองกรณี) ⇒ ไม่มีนโยบายปิดกั้น manual review; ที่ถูกปฏิเสธก่อนหน้าคือ fixture ที่ผิด และถูกรายงานเป็น `TOOL_PACKAGE_INVALID` ไม่ใช่เหตุผลด้าน reviewer
 
 **บทเรียน:** เทสต์ที่ assert เฉพาะ "ฟิลด์มีค่า" โดยไม่ assert `ok` และไม่พิมพ์ `record.problems` ทำให้เข้าใจผิดได้ — ตอนนี้เทสต์แรกของ PROV-01 บังคับให้ fixture ต้อง valid ก่อน (ถ้าไม่ valid จะเห็น problems ทันที)
+
+## D-027 — EVOLVE-01 ยังไม่ปิด: update รอบสองถูกปฏิเสธด้วย TABLE_PRESERVE_DATA
+
+**สิ่งที่พยายาม:** สร้างโต๊ะที่มี program+records (import → evolve ครบวงจร) แล้ว activate change รอบสองที่แก้แค่ `program.title` จากนั้นเทียบ record ids / action ids / canvas view ids ก่อน-หลัง
+
+**ผล:** `evolve.simulate` ตอบ `422 TABLE_PRESERVE_DATA`
+
+**สิ่งที่รู้จากโค้ด:** guard อยู่ที่ `src/tabletop/domain/table.ts:381` — "A rule edit must retain every current field definition unless a numeric field is promoted with the same id and collection" ⇒ การ activate ซ้ำต้องรักษา field definitions เดิม (หรือ promote numeric field ด้วย id/collection เดิม) ซึ่ง change ที่สร้างจาก `equipmentChange(sourceId)` ควรผ่าน แต่กลับไม่ผ่าน — ยังไม่ทราบสาเหตุ
+
+**สิ่งที่ยังไม่ได้ลอง (สำหรับรอบหน้า):** (1) พิมพ์ diff ที่ guard เห็นจริง (`nextProgram` vs `program`) เพื่อดูว่า field ใดถูกมองว่าเปลี่ยน (2) ตรวจว่า `equipmentChange` สร้าง `computedColumns`/`fields` ชุดใหม่ที่ id ไม่ตรงกับของเดิมหรือไม่ (3) ใช้ change ที่ผู้ใช้แก้ผ่าน UI จริงแทนการสร้างใหม่จาก scenario
+
+**สิ่งที่ถอนออก:** เทสต์ที่เขียนไว้ถูกลบก่อน commit เพื่อไม่ให้ CI แดง — ไม่มีการอ้างว่า EVOLVE-01 ผ่าน
