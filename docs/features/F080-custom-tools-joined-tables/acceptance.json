@@ -102,17 +102,16 @@
       "slice": "F080-T1A",
       "title": "custom server algorithm สร้าง proposed state ที่ valid แล้ว authority commit; output นอก scope/invalid = zero write",
       "status": "UNVERIFIED",
-      "environment": "local + workerd",
-      "sha": "ff0ad2ccfb9181bb39989c6ad5a4ab625b0bd143",
+      "environment": "local unit (write plan) — no commit path yet",
+      "sha": "381bf84",
       "node": "v22.23.2",
       "commands": [
-        "npx vitest run src/tabletop/shared/tool-behavior.test.ts",
-        "npm run test:cloudflare -- cloudflare/tool-behavior-runner.test.ts"
+        "npx vitest run src/tabletop/shared/tool-behavior-plan.test.ts"
       ],
-      "evidence": "runner half PASS: 28/28 host-side output validation tests (undeclared target/resource, disallowed operation, rows over maxRows, unknown field, type contradiction, non-finite numbers, byte cap, >200 changes) and 11/11 workerd runner tests; ok:false never returns a changes list so no prefix can be committed",
+      "evidence": "the plan layer decides, purely, whether a behaviour output is inside what the package declared: a resource or operation the package never declared is refused, a write aimed at another table is refused, a field outside the schema or a value of the wrong type is refused, the declared row ceiling is enforced, an update must name a row that exists, and changing the same row twice in one run is refused. every refusal returns no writes at all, so a caller that commits only ok:true writes cannot be talked into writing something the package never declared (8/8).",
       "expected": "behavior ที่คืน changeset ถูกต้อง commit หนึ่ง target พร้อม receipt; output ผิด schema/เกิน declared write set/timeout → ไม่มี mutation และได้ typed error",
-      "actual": "PARTIAL — the isolated executor and the output validator exist; no authority route yet calls them and no receipt/idempotency path is wired, so \"authority commits a valid proposed state\" is not demonstrated",
-      "limitations": "integration with CommandAuthority.executeTrusted (revision/epoch/permission re-check, single commit, receipt) is the next slice; do not read this item as a runtime commit acceptance"
+      "actual": "PARTIAL - the decision layer that guarantees \"out of scope equals zero write\" exists and is tested; committing a valid plan through the authority, and the route that produces one, do not",
+      "limitations": "there is still no trusted operation or route that commits a planned write set (D-031); nothing has been applied through the authority yet"
     },
     {
       "id": "ISO-01",
