@@ -73,8 +73,8 @@ try {
   if (pageErrors.length > 0) fail('no uncaught page errors', pageErrors.join(' | '));
   mark('no uncaught page errors');
 
-  // D-036: the product screen shows the tool the room installed, not a placeholder.
-  await page.goto(`${pathToFileURL(pages).href}?screen=space`);
+  // D-036: a room that holds only the version reference shows the installation card, not a host.
+  await page.goto(`${pathToFileURL(pages).href}?screen=space&tool=reference`);
   await page.getByTestId('room-tool-title').waitFor();
   const toolTitle = await page.getByTestId('room-tool-title').innerText();
   const toolVersion = await page.getByTestId('room-tool-version').innerText();
@@ -82,8 +82,52 @@ try {
   if (!toolTitle.includes('เครื่องมือ')) fail('the room shows the installed tool title', toolTitle);
   if (!toolVersion.includes('v2') || !toolVersion.includes('AI')) fail('the room shows the installed version and route', toolVersion);
   if (!toolOwner.includes('actor-b')) fail('the room shows who installed it', toolOwner);
-  if (await page.getByTestId('space-room-note').count() !== 0) fail('the placeholder is not shown when a tool is installed', 'placeholder present');
-  mark('the product room screen shows the installed tool version', `${toolTitle} · ${toolVersion}`);
+  if (await page.getByTestId('space-room-note').count() !== 0) fail('the placeholder is not shown when a tool is referenced', 'placeholder present');
+  mark('a room that holds only the tool reference keeps the installation card', `${toolTitle} · ${toolVersion}`);
+
+  // D-040: with a package definition the room mounts the real host frame instead of the card.
+  await page.goto(`${pathToFileURL(pages).href}?screen=space`);
+  const toolFrame = page.locator('iframe[title="เครื่องมือวางผังห้อง"]');
+  await toolFrame.waitFor({ state: 'attached' });
+  const sandbox = await toolFrame.getAttribute('sandbox');
+  if (sandbox !== 'allow-scripts') fail('the room tool frame keeps the sandbox attribute', String(sandbox));
+  const packageView = page.frameLocator('iframe[title="เครื่องมือวางผังห้อง"]');
+  await packageView.locator('[data-testid="room-tool-package"]').waitFor();
+  if (await page.getByTestId('room-tool-title').count() !== 0) fail('the card is not shown when the host mounted', 'room-tool-title present');
+  if (await page.getByTestId('space-room-note').count() !== 0) fail('the placeholder is not shown when the host mounted', 'placeholder present');
+  mark('the product room screen mounts the installed package in a sandboxed host frame');
+  await page.screenshot({ path: join(output, 'space-tool-host.png'), fullPage: true });
+
+  const loadsBefore = await page.evaluate(() => globalThis.__ROOM_HARNESS__.loads);
+  await packageView.getByTestId('room-tool-check').click();
+  await packageView.locator('[data-testid="room-tool-package-note"]').filter({ hasText: 'บันทึกแล้ว' }).waitFor();
+  const intents = await page.evaluate(() => globalThis.__ROOM_HARNESS__.intents);
+  if (intents.length !== 1) fail('one intent reached the room dep', JSON.stringify(intents));
+  if (intents[0].behaviorId !== 'check-room') fail('the intent names a declared behaviour', JSON.stringify(intents[0]));
+  if (intents[0].inputs?.note !== 'จากห้อง') fail('the intent carries the frame inputs', JSON.stringify(intents[0].inputs));
+  const loadsAfter = await page.evaluate(() => globalThis.__ROOM_HARNESS__.loads);
+  if (loadsAfter <= loadsBefore) fail('a committed intent re-reads the room', `${loadsBefore} -> ${loadsAfter}`);
+  // A re-read replaces every object the room returns; the frame must keep its own state across it.
+  const packageCount = await packageView.getByTestId('room-tool-package-count').innerText();
+  if (!packageCount.includes('n = 1')) fail('the frame survives the re-read after a commit', packageCount);
+  mark('a declared behaviour goes through runToolIntent and a commit re-reads the room', `${JSON.stringify(intents[0].inputs)} · loads ${loadsBefore}->${loadsAfter}`);
+
+  // A package that does not compile keeps the card and states the problem instead of failing silently.
+  await page.goto(`${pathToFileURL(pages).href}?screen=space&tool=broken`);
+  await page.getByTestId('room-tool-problem').waitFor();
+  const problem = await page.getByTestId('room-tool-problem').innerText();
+  if (!problem.includes('ui/main.tsx')) fail('the compile problem names the file it came from', problem);
+  if (await page.getByTestId('room-tool-title').count() !== 1) fail('the card stays when the package does not compile', 'no card');
+  mark('a package that fails to compile keeps the card and states the problem', problem);
+
+  // And a room with no tool still shows the empty slot rather than an empty box.
+  await page.goto(`${pathToFileURL(pages).href}?screen=space&tool=none`);
+  await page.getByTestId('space-room-note').waitFor();
+  if (await page.getByTestId('room-tool-title').count() !== 0) fail('a room with no tool shows no card', 'card present');
+  mark('a room with no tool keeps the empty slot', await page.getByTestId('space-room-note').innerText());
+
+  if (pageErrors.length > 0) fail('no uncaught page errors on the product screen', pageErrors.join(' | '));
+  mark('the product screen raises no uncaught errors');
 
   await writeFile(join(output, 'report.json'), JSON.stringify({ status: 'PASS', node: process.version, checks }, null, 2));
   console.log(`\n${checks.length} checks passed`);

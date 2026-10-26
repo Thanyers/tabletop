@@ -489,3 +489,23 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ช่องว่างที่พบระหว่างทำ (แก้ในรอบนี้):** `ParsedSpaceCommand` ของ `space.installTool` ไม่มีฟิลด์ `definition` ในชนิด แม้ schema รับและ runtime ส่งต่อครบ ⇒ อ่านโค้ดแล้วเข้าใจผิดว่า definition ไม่ถูกพาไป
 
 **ยังค้าง (สำหรับ slice ถัดไป):** code ใหม่ (`TOOL_NOT_INSTALLED`, `TOOL_HASH_MISMATCH`, `TOOL_NOT_AUTHORIZED`) ยังไม่อยู่ใน `TOOL_INTENT_REJECTIONS` (`shared/tool-protocol.ts`) ซึ่ง frame ต้องใช้เมื่อ mount `GeneratedToolHost`
+
+## D-041 — mount host ในหน้าห้องเสร็จแล้ว แต่ **CSP ของหน้า production บล็อก frame** (ต้องตัดสินก่อน merge)
+
+**What happened:** หลัง mount `GeneratedToolHost` ใน `SpaceRoomScreen` และวัดด้วย harness (file://) ได้ผลดี — driver 12 checks, ui-gate 17/17 — เมื่อจำลอง **CSP จริงจาก `public/_headers`** (`script-src 'self'`) หน้า frame กลับ **ว่างเปล่า**:
+
+```json
+{ "rendered": "no",
+  "consoleErrors": ["Executing inline script violates … script-src 'self' … The action has been blocked."] }
+```
+
+**Root cause:** frame เป็น `about:srcdoc` ⇒ สืบทอด CSP ของหน้าหลัก และ bootstrap ของ sandbox เป็น inline script ⇒ ถูกบล็อกทุกครั้ง ไม่ใช่ปัญหา bridge/runner (ทั้งคู่ทำงานใน harness)
+
+**ผลต่อสถานะที่เคยรายงาน:** ISO-01/EXEC-01/G1-03 พิสูจน์ "isolation ทำงาน" ด้วย harness ที่ไม่มี CSP ของ production — **ถูกต้องในระดับกลไก แต่ยังไม่ใช่หลักฐานว่าใช้งานได้บนหน้าที่ deploy จริง** ต้องบันทึกข้อจำกัดนี้
+
+**ทางเลือกที่ต้องให้เจ้าของตัดสิน (ไม่ทำเอง):**
+1. เพิ่ม hash ของ inline bootstrap ใน `script-src` ของ `public/_headers` (ดีที่สุดด้านความปลอดภัย ถ้า bootstrap คงที่)
+2. เสิร์ฟเอกสาร frame จาก path ที่มี CSP ของตัวเอง (เช่น `/tool-sandbox.html`) แล้วชี้ iframe ไปที่นั่น
+3. ผ่อน `script-src` เป็น `'unsafe-inline'` (แย่ที่สุด — ลดความแข็งแรงของทั้งแอป)
+
+**สถานะงาน:** branch `feat/f080-room-host-mount` มีโค้ด mount + tests + gate ที่ผ่านแล้ว แต่เปิดเป็น **draft PR** จนกว่าจะตัดสิน CSP และควรเพิ่ม timeout ตรวจจับ frame ที่ไม่ตื่น (ตอนนี้ถ้า frame ถูกบล็อก ผู้ใช้เห็นช่องว่างโดยไม่รู้สาเหตุ)

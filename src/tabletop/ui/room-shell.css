@@ -160,6 +160,19 @@
   color: var(--tt-ink);
 }
 
+/* F080 / D-040: the installed package's own UI, mounted in the room's tool slot. */
+.tt-room__tool-host {
+  display: grid;
+  gap: var(--tt-space-2);
+  min-width: 0;
+}
+
+.tt-room__tool-note {
+  margin: 0;
+  color: var(--tt-muted);
+  font-size: var(--tt-type-small);
+}
+
 .tt-room__facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
