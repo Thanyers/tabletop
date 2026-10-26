@@ -1,0 +1,1 @@
+- Bring the scope-only hero release history and the frame-synchronized rotation browser check back to dev; retain publication readback and validation limits in the owning F077 documents. Documentation and test synchronization only.

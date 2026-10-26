@@ -1,1 +1,0 @@
-- Rotate three prompt-first homepage hero GIF examples: café sales, physics learning, and adventure play. Open with café sales, retain manual case selection and Pause/Resume, and show static posters without rotation for reduced motion. Other page content, README, and the narrated film remain unchanged.
