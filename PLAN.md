@@ -25,6 +25,7 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F077-T6 | Align English README with the published café, physics and adventure hero cases | `review` | Codex · `docs/F077-readme-cases` · PR #348; README and owning tracking docs only; homepage/media unchanged |
+| F084 | โต๊ะที่มีการ์ด/เส้นเยอะไม่ค้างตอนเปิด (edge routing เร็วขึ้น ~40×) | `review` | [F084](docs/features/F084-edge-routing-speed.md) |
 | F083 | การ์ดที่ถูกซ่อนไม่ดูเหมือนข้อมูลหาย (ป้าย Show all, การ์ดใหม่เปิดไว้, ซิงก์หลายแท็บ) + dropdown ไม่เพี้ยน | `review` | [F083](docs/features/F083-closed-cards-visible.md) |
 | F082 | checkbox กดรัวไม่หาย + ข้อความแก้กฎที่มี "ทำเครื่องหมาย" เป็นร่างกฎ | `review` | [F082](docs/features/F082-checkbox-queue-intent.md) |
 | F081 | ช่องใช่/ไม่เป็น checkbox + กฎ toggle (todo list ติ๊กได้) | `review` | [F081](docs/features/F081-checkbox-toggle.md) |
@@ -86,6 +87,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F084-T1 | lane cost สะสมต่อ edge + A* + หยุดเมื่อไม่มีทางชนะ + buffer ซ้ำ | `review` | lead (AI) | `fix/F084-edge-routing-speed` | `shared/edge-routing.ts`, `shared/edge-routing.test.ts` | — | ไม่มี migration |
 | F083-T1 | `cardsClosedOnFirstLook` + `changeHidden`/storage sync + ป้าย closed cards + select chevron | `review` | lead (AI) | `fix/F083-hidden-cards` | `ui/canvas-view-state.ts`, `ui/CanvasWorkspace.tsx`, `ui/canvas-visual-flow.css`, `ui/tabletop.css`, tests | — | ไม่มี migration |
 | F082-T1 | คิว checkbox แบบ optimistic + `asksTheBuilder` ใน chat intent | `review` | lead (AI) | `fix/F082-checkbox-queue-intent` | `ui/TableCanvasObjects.tsx`, `shared/chat-intent.ts`, tests | F081 | ไม่มี migration |
 | F081-T1 | effect `toggle` + checkbox ในการ์ดตาราง + checklist ตอนย่อ | `review` | lead (AI) | `feat/F081-checkbox-toggle` | `domain/table.ts`, `shared/table-contracts.ts`, `runtime/generative/validation.ts`, `domain/id-normalization.ts`, `ui/TableCanvasObjects.tsx`, `ui/checkbox-actions.ts`, `ui/record-actions.css`, `server/providers/table-schema-guide.ts`, tests | — | ไม่มี migration |

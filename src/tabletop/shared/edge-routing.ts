@@ -126,6 +126,8 @@ interface SearchGrid {
   nodeCount: number;
   obstacleForCard: Map<string, Obstacle>;
   obstacles: Obstacle[];
+  /** F084: one search buffer per grid, reset only where the last search wrote, instead of two new arrays per search. */
+  search: { distance: Float64Array; previous: Int32Array; touched: number[] };
 }
 
 interface SearchResult {
@@ -141,9 +143,15 @@ interface CandidateRoute {
 }
 
 /** Straight runs already taken in this batch, keyed by their lane coordinate. */
+/**
+ * Straight runs already taken by placed routes, kept per grid edge: `shared[node * 4 + slot]` is how much of that edge
+ * lies on a lane earlier routes use. F084: the search used to rescan every earlier interval on every step, which made a
+ * 40-line table take seconds; each run is now added once, in the same order, so costs are unchanged.
+ */
 interface LaneOccupancy {
-  horizontal: Map<number, Array<[number, number]>>;
-  vertical: Map<number, Array<[number, number]>>;
+  shared: Float64Array;
+  rowsByLane: Map<number, number[]>;
+  columnsByLane: Map<number, number[]>;
 }
 
 interface ResolvedRoute {
@@ -283,7 +291,7 @@ export function routeConnections(
   // Routes are placed one after another, and each remembers its straight runs.
   // Later routes pay a small cost for reusing a lane, so parallel connections
   // settle into separate lanes instead of drawing one line on top of another.
-  const occupancy: LaneOccupancy = { horizontal: new Map(), vertical: new Map() };
+  const occupancy = laneOccupancy(grid);
   const resolved: ResolvedRoute[] = [];
 
   for (const item of routable) {
@@ -305,7 +313,7 @@ export function routeConnections(
       ? placeLabel(label, result.points, labelObstacles, labelBounds, settings.labelGap)
       : null;
     if (labelPlacement) labelBounds.push(labelPlacement.bounds);
-    rememberLanes(occupancy, result.points);
+    rememberLanes(occupancy, grid, result.points);
     resolved.push({
       index: item.index,
       source: item.link.source,
@@ -395,7 +403,8 @@ function routeOne(
       node !== null && !blockedStub(to.anchor, to.lead, grid.obstacles, target.id));
     if (usableTargets.length === 0) continue;
 
-    const search = shortestPaths(grid, start, from.outwardDirection, usableTargets, settings, occupancy);
+    const startStub = manhattan(from.anchor, from.lead);
+    const search = shortestPaths(grid, start, from.outwardDirection, usableTargets, settings, occupancy, startStub, best?.cost ?? Number.POSITIVE_INFINITY);
     for (const candidate of usableTargets) {
       const arrivalDirection = opposite(candidate.endpoint.outwardDirection);
       const targetState = candidate.node! * 5 + arrivalDirection;
@@ -455,6 +464,7 @@ function buildGrid(
       xs, ys, xIndexes, yIndexes, pointX: new Float64Array(), pointY: new Float64Array(),
       neighbors: new Int32Array(), neighborLengths: new Float64Array(), nodeCount: 0,
       obstacleForCard, obstacles: [...obstacles],
+      search: { distance: new Float64Array(), previous: new Int32Array(), touched: [] },
     };
   }
 
@@ -496,6 +506,11 @@ function buildGrid(
   return {
     xs, ys, xIndexes, yIndexes, pointX, pointY, neighbors, neighborLengths,
     nodeCount, obstacleForCard, obstacles: [...obstacles],
+    search: {
+      distance: new Float64Array(nodeCount * 5).fill(Number.POSITIVE_INFINITY),
+      previous: new Int32Array(nodeCount * 5).fill(-1),
+      touched: [],
+    },
   };
 }
 
@@ -506,44 +521,73 @@ function shortestPaths(
   targets: readonly { node: number | null; endpoint: SideEndpoint }[],
   settings: RoutingSettings,
   occupancy: LaneOccupancy,
+  startStub = 0,
+  bestSoFar = Number.POSITIVE_INFINITY,
 ): SearchResult {
   const bendPenalty = settings.bendPenalty;
-  const stateCount = grid.nodeCount * 5;
-  const distance = new Float64Array(stateCount).fill(Number.POSITIVE_INFINITY);
-  const previous = new Int32Array(stateCount).fill(-1);
+  // The previous search's answer has been read by now (routeOne reads each one before starting the next).
+  const { distance, previous, touched } = grid.search;
+  for (const state of touched) {
+    distance[state] = Number.POSITIVE_INFINITY;
+    previous[state] = -1;
+  }
+  touched.length = 0;
   const startState = start * 5;
   distance[startState] = 0;
+  touched.push(startState);
   const heap = new MinHeap();
   heap.push(startState, 0);
   const unfinished = new Set<number>();
+  const goals: number[] = [];
+  const targetStubs = new Map<number, number>();
   for (const target of targets) {
     if (target.node === null) continue;
-    unfinished.add(target.node * 5 + opposite(target.endpoint.outwardDirection));
+    const state = target.node * 5 + opposite(target.endpoint.outwardDirection);
+    unfinished.add(state);
+    targetStubs.set(state, Math.min(targetStubs.get(state) ?? Number.POSITIVE_INFINITY, manhattan(target.endpoint.lead, target.endpoint.anchor)));
+    goals.push(grid.pointX[target.node]!, grid.pointY[target.node]!);
   }
+  // F084: the cheapest whole route found so far (this search or an earlier side). Once everything left costs more,
+  // no remaining target can win, so the search stops; routeOne only replaces a route with a strictly cheaper one.
+  let bound = bestSoFar;
+  // F084: A* toward the nearest target lead. Every step costs at least its own length, so the straight-line
+  // (Manhattan) distance never overestimates and the cheapest route is still the one found; the search just stops
+  // exploring the far side of the canvas. The heap holds cost-so-far plus this estimate.
+  const estimate = (node: number): number => {
+    const x = grid.pointX[node]!;
+    const y = grid.pointY[node]!;
+    let best = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < goals.length; index += 2) best = Math.min(best, Math.abs(x - goals[index]!) + Math.abs(y - goals[index + 1]!));
+    return best;
+  };
 
   while (heap.size > 0) {
     const entry = heap.pop()!;
-    if (entry.priority > distance[entry.state]! + EPSILON) continue;
-    if (unfinished.delete(entry.state) && unfinished.size === 0) break;
     const node = Math.floor(entry.state / 5);
+    const reached = distance[entry.state]!;
+    if (entry.priority > reached + estimate(node) + EPSILON) continue;
+    if (entry.priority + startStub > bound + EPSILON) break;
+    if (unfinished.delete(entry.state)) {
+      bound = Math.min(bound, reached + startStub + targetStubs.get(entry.state)!);
+      if (unfinished.size === 0) break;
+    }
     const priorDirection = entry.state % 5;
-    const from = { x: grid.pointX[node]!, y: grid.pointY[node]! };
     for (let slot = 0; slot < 4; slot += 1) {
       const neighbor = grid.neighbors[node * 4 + slot]!;
       if (neighbor < 0) continue;
       const direction = DIRECTIONS[slot]!;
       if (priorDirection === 0 && direction !== initialDirection) continue;
       const bendCost = priorDirection !== 0 && direction !== priorDirection ? bendPenalty : 0;
-      const to = { x: grid.pointX[neighbor]!, y: grid.pointY[neighbor]! };
       const nextState = neighbor * 5 + direction;
-      const candidate = entry.priority
+      const candidate = reached
         + grid.neighborLengths[node * 4 + slot]!
         + bendCost
-        + laneCost(from, to, occupancy, settings.separationCost);
+        + laneCost(occupancy, node * 4 + slot, settings.separationCost);
       if (candidate + EPSILON >= distance[nextState]!) continue;
+      if (distance[nextState] === Number.POSITIVE_INFINITY) touched.push(nextState);
       distance[nextState] = candidate;
       previous[nextState] = entry.state;
-      heap.push(nextState, candidate);
+      heap.push(nextState, candidate + estimate(neighbor));
     }
   }
   return { distance, previous };
@@ -844,37 +888,42 @@ function segmentInfos(points: readonly RoutingPoint[]): SegmentInfo[] {
   return segments;
 }
 
+function laneOccupancy(grid: SearchGrid): LaneOccupancy {
+  const rowsByLane = new Map<number, number[]>();
+  const columnsByLane = new Map<number, number[]>();
+  grid.ys.forEach((value, index) => { const lane = laneKey(value); rowsByLane.set(lane, [...rowsByLane.get(lane) ?? [], index]); });
+  grid.xs.forEach((value, index) => { const lane = laneKey(value); columnsByLane.set(lane, [...columnsByLane.get(lane) ?? [], index]); });
+  return { shared: new Float64Array(grid.nodeCount * 4), rowsByLane, columnsByLane };
+}
+
 /** Straight runs taken by already placed routes, so later routes can keep their own lane. */
-function rememberLanes(occupancy: LaneOccupancy, points: readonly RoutingPoint[]): void {
+function rememberLanes(occupancy: LaneOccupancy, grid: SearchGrid, points: readonly RoutingPoint[]): void {
+  if (grid.nodeCount === 0) return;
+  const width = grid.xs.length;
   for (const segment of segmentInfos(points)) {
     if (segment.high - segment.low <= EPSILON) continue;
-    const table = segment.horizontal ? occupancy.horizontal : occupancy.vertical;
     const lane = laneKey(segment.fixed);
-    const interval: [number, number] = [segment.low, segment.high];
-    const existing = table.get(lane);
-    if (existing) existing.push(interval);
-    else table.set(lane, [interval]);
+    // Every grid edge on this lane gets the part of the run it shares, both ways (east/west or south/north).
+    const lines = (segment.horizontal ? occupancy.rowsByLane : occupancy.columnsByLane).get(lane) ?? [];
+    const stops = segment.horizontal ? grid.xs : grid.ys;
+    for (const line of lines) {
+      for (let index = 0; index < stops.length - 1; index += 1) {
+        const overlap = Math.max(0, Math.min(segment.high, stops[index + 1]!) - Math.max(segment.low, stops[index]!));
+        if (overlap <= 0) continue;
+        const node = segment.horizontal ? line * width + index : index * width + line;
+        const next = segment.horizontal ? node + 1 : node + width;
+        const [forward, backward] = segment.horizontal ? [0, 2] : [1, 3];
+        occupancy.shared[node * 4 + forward]! += overlap;
+        occupancy.shared[next * 4 + backward]! += overlap;
+      }
+    }
   }
 }
 
 /** Cost of drawing along a lane another route already uses. 0 when the lane is free. */
-function laneCost(
-  from: RoutingPoint,
-  to: RoutingPoint,
-  occupancy: LaneOccupancy,
-  costPerUnit: number,
-): number {
+function laneCost(occupancy: LaneOccupancy, edge: number, costPerUnit: number): number {
   if (costPerUnit <= 0) return 0;
-  const horizontal = Math.abs(from.y - to.y) <= EPSILON;
-  if (!horizontal && Math.abs(from.x - to.x) > EPSILON) return 0;
-  const table = horizontal ? occupancy.horizontal : occupancy.vertical;
-  const intervals = table.get(laneKey(horizontal ? from.y : from.x));
-  if (!intervals || intervals.length === 0) return 0;
-  const low = horizontal ? Math.min(from.x, to.x) : Math.min(from.y, to.y);
-  const high = horizontal ? Math.max(from.x, to.x) : Math.max(from.y, to.y);
-  let shared = 0;
-  for (const [start, end] of intervals) shared += Math.max(0, Math.min(high, end) - Math.max(low, start));
-  return shared * costPerUnit;
+  return occupancy.shared[edge]! * costPerUnit;
 }
 
 function laneKey(value: number): number {
