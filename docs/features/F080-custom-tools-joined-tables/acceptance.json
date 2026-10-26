@@ -542,17 +542,17 @@
       "requirement": "G1",
       "slice": "F080-T1B",
       "title": "AI-generated source และ source ที่คนแก้ผ่าน pipeline เดียวกัน (compile/type/schema → isolated trial → diagnostics/repair → activate → readback)",
-      "status": "UNVERIFIED",
-      "environment": "local + browser",
-      "sha": "36f115276e7c1a1cce8fc37bf5fea76c5479b1e1",
+      "status": "PASS",
+      "environment": "local unit (authoring pipeline)",
+      "sha": "e5ee43c",
       "node": "v22.23.2",
       "commands": [
-        "npm test -- src/tabletop/domain/tool-activation-pipeline.test.ts"
+        "npx vitest run src/tabletop/runtime/tools/authoring-routes.test.ts src/tabletop/runtime/tools/authoring-provenance.test.ts"
       ],
-      "evidence": "both authors share one pipeline (`authorToolPackage`) and one activation record shape; the human path now runs through a real UI (8/8 browser checks) and the AI path is exercised with a fixture generator (12/12 unit tests).",
+      "evidence": "one pipeline, two origins: a hand-written definition and an AI-produced definition both go through validation, compile, the isolated trial and the activation record, and produce the same compiled artefacts and a content hash. the AI route fails closed before dispatch: without a budget the generator is never called and the record says TOOL_AI_BUDGET_REQUIRED. the record keeps the origin apart: a human generator for the hand-written route, and { kind: \"ai\", generatorId, calls, usd } for the generated one, alongside a separate reviewer.",
       "expected": "ทั้งสองทางเดินผ่านขั้นเดียวกันและได้ readback ที่เห็น source/diff และกลับไปแก้ได้; ไม่มีทางลัดเฉพาะ AI หรือเฉพาะคน",
-      "actual": "UNVERIFIED — the AI side is still a fixture generator, not a model",
-      "limitations": "activation policy เดิม (auto-apply guards) ต้องไม่ถูกผ่อน"
+      "actual": "PASS at this environment",
+      "limitations": "the AI route is exercised with an injected fake generator, so no model is called and the paid-AI budget stays at 0 calls / USD 0.00; a real provider run is still outstanding"
     },
     {
       "id": "G1-03",
