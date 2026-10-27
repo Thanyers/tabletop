@@ -60,6 +60,8 @@ describe('web sources as table evidence (F064 C)', () => {
     const quote = 'อัตรา VAT 7%';
 
     expect(() => applyTableChange(base, changeWith(quote, sourceId))).toThrow('Prompt-only tables cannot cite');
+    // F090: the same text is the repair issue, so it names the fix.
+    expect(() => applyTableChange(base, changeWith(quote, sourceId))).toThrow('Set program.evidence to []');
     const verified = review(base, sourceId, 'verified');
     expect(verified.sources[0].status).toBe('verified');
     const active = applyTableChange(verified, changeWith(quote, sourceId));

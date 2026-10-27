@@ -492,7 +492,8 @@ export function applyTableChange(state: TableState, raw: TableChange, actor?: Pi
   // F064 C: a web source that is only provided (or rejected) is not citable, so such a table behaves
   // like a prompt-only table until someone verifies a source.
   const citableSources = state.sources.filter((source) => source.origin !== 'web' || source.status === 'verified');
-  if (citableSources.length === 0) assert(change.program.evidence.length === 0, 'TABLE_EVIDENCE', 'Prompt-only tables cannot cite a source that is not on the table.');
+  // F090: this text is also the repair issue the drafter reads, so it names the fix, not only the rule.
+  if (citableSources.length === 0) assert(change.program.evidence.length === 0, 'TABLE_EVIDENCE', 'Prompt-only tables cannot cite a source that is not on the table. Set program.evidence to [] (in a table-patch, omit addEvidence); put web research links and short quotes in record fields, notes or assumptions instead.');
   else {
     assert(change.program.evidence.length > 0, 'TABLE_EVIDENCE', 'Cite at least one uploaded source.');
     for (const evidence of change.program.evidence) {

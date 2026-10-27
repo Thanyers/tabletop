@@ -24,6 +24,7 @@
 
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
+| F090 | ผลค้นเว็บไม่ถูกใส่เป็น evidence ของโต๊ะที่ไม่มีไฟล์แหล่งที่มา | `review` | [F090](docs/features/F090-research-not-evidence.md) |
 | F077-T7 | Clean README copy, add Thai/English navigation, align icon with homepage mark | `done` | Codex · PR #364 / release #366 · production 9.1.6 / b809d9b; both main README pages and served favicon verified |
 | F086 | แหล่งเว็บของร่างที่ใช้อัตโนมัติยังเพิ่มเข้าโต๊ะและอ้างอิงได้ | `review` | [F086](docs/features/F086-applied-draft-web-sources.md) |
 | F087 | ช่องแชทลอยเป็น island ไม่มีแถบพื้นหลังบังบอร์ด | `review` | [F087](docs/features/F087-composer-island.md) |
@@ -92,6 +93,7 @@
 
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| F090-T1 | prompt research ≠ evidence + ข้อความตรวจบอกวิธีแก้ | `review` | lead (AI) | `fix/F090-research-not-evidence` | `server/providers/deepseek-changes.ts`, `domain/table.ts`, tests | — | ไม่มี migration |
 | F086-T1 | `webSourcesNotOnTable` + การ์ด applied แสดงแหล่ง/ปุ่ม + แจ้งจำนวนจริง + intent อ้างอิงกฎ | `review` | lead (AI) | `fix/F086-applied-draft-sources` | `ui/useTableChat.tsx`, `workspace/table-chat-state.ts`, `workspace/command-session.ts`, `shared/chat-intent.ts`, tests | — | ไม่มี migration |
 | F087-T1 | composer padding 0 + ยกปุ่มซูมบนมือถือ | `review` | lead (AI) | `fix/F086-applied-draft-sources` | `ui/calm-workspace.css` | — | CSS อย่างเดียว |
 | F085-T1 | ส่ง `measured` เดิมตอนสร้าง node ใหม่ + browser check ว่าการ์ดไม่หายระหว่างรันคำสั่ง | `review` | lead (AI) | `fix/F085-node-flicker` | `ui/CanvasWorkspace.tsx`, `tests/generic-table-browser.mjs` | — | ไม่มี migration |
