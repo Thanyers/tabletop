@@ -10,6 +10,7 @@ import { isTableReadOnly, requireWorkspaceWritable } from './table-mode.js';
 import { displayWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { tableCapabilitySummary } from '../src/tabletop/shared/table-capabilities.js';
 import { computeRuntimeCapabilities } from '../src/tabletop/shared/compute-runtime-profiles.js';
+import { readToolSandboxOrigin } from '../src/tabletop/shared/tool-sandbox-origin.js';
 import { handleSpaceProjectionRead } from './space-projection-transport.js';
 import { handleSpaceAction } from './space-action-transport.js';
 import { handleSpaceExport } from './space-export-transport.js';
@@ -135,6 +136,26 @@ async function buildVersion(request: Request, env: Env): Promise<Response> {
   return Response.json(info, { headers: { 'Cache-Control': 'no-store' } });
 }
 
+/** D-044: an unusable `TOOL_SANDBOX_ORIGIN` is reported once per isolate, and never as a request failure. */
+let toolSandboxOriginReported = false;
+
+/**
+ * F080 / D-044: the sandbox origin to publish, or `undefined` to leave the field out.
+ *
+ * Absent is the documented default. A value the app cannot vouch for is reported once — with its
+ * reason and length, never the value itself — and then simply not published, so a bad variable can
+ * neither break `/api/capabilities` nor send a tool frame to an origin nobody reviewed.
+ */
+function toolSandboxOrigin(env: Env): string | undefined {
+  const configured = readToolSandboxOrigin(env.TOOL_SANDBOX_ORIGIN, env.PUBLIC_ORIGIN);
+  if (configured.ok) return configured.origin;
+  if (configured.problem === 'absent' || toolSandboxOriginReported) return undefined;
+  toolSandboxOriginReported = true;
+  const length = typeof env.TOOL_SANDBOX_ORIGIN === 'string' ? env.TOOL_SANDBOX_ORIGIN.length : 0;
+  console.warn(`TOOL_SANDBOX_ORIGIN is not usable (${configured.problem}, ${length} characters); tool frames keep using the inline document.`);
+  return undefined;
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   // F051: pages come before the origin check, as they did when the asset server answered them.
@@ -157,7 +178,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === 'GET' && path === '/api/capabilities') {
     const enabled = Boolean(env.DEEPSEEK_KEY);
     const compute = computeRuntimeCapabilities({ javascript: Boolean(env.COMPUTE_LOADER), python: env.TABLE_COMPUTE_PYTHON === 'enabled' });
-    return Response.json({ uploads: false, images: true, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), compute, webEvidence: env.TABLE_WEB_EVIDENCE !== 'off', model: { enabled,
+    const sandboxOrigin = toolSandboxOrigin(env);
+    return Response.json({ uploads: false, images: true, tableReadOnly: isTableReadOnly(env), inviteLinks: true, memberSeats: MAX_TABLE_MEMBER_SEATS, tableAssistant: { available: true }, table: tableCapabilitySummary(), compute, ...(sandboxOrigin === undefined ? {} : { toolSandboxOrigin: sandboxOrigin }), webEvidence: env.TABLE_WEB_EVIDENCE !== 'off', model: { enabled,
       reason: enabled ? 'DeepSeek Flash proposes changes for your review.' : 'AI is awaiting a provider key.' } });
   }
   if (method === 'GET' && path === '/api/session') return sessionView(request, env);

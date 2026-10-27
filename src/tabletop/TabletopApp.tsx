@@ -738,6 +738,8 @@ export default function TabletopApp() {
           loadWorkspace: (id) => tabletopClient.workspace(id),
           actorId: view.actor.actorId,
           viewerLabel: view.actor.name,
+          // F080 / D-044: the sandbox origin travels from the Worker's capabilities to the frame host.
+          ...(capabilities.toolSandboxOrigin ? { toolSandboxOrigin: capabilities.toolSandboxOrigin } : {}),
         })}
       />
     </div>
