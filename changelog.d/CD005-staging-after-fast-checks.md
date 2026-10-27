@@ -1,1 +1,0 @@
-- **Staging deploy เร็วขึ้น (CD005):** merge เข้า `dev` แล้ว deploy staging ทันทีที่เช็คเร็วผ่าน ไม่ต้องรอ browser suites · browser suites ยังรันคู่กัน ถ้าล้มจะเปิด/comment issue เหมือนเดิม และ issue นั้นปิดเองโดย job ใหม่ `close-dev-failure` เมื่อชุดเต็มผ่าน · production ยังรอชุดเต็มของ release PR
