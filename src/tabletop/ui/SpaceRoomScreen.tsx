@@ -40,6 +40,8 @@ export interface SpaceRoomDeps extends JoinedReadDeps {
   /** Who is looking, for the header. */
   viewerLabel(actorId: string): string;
   actorId: string;
+  /** F080 / D-044: origin that serves the sandbox document; absent keeps the srcdoc path. */
+  toolSandboxOrigin?: string;
   /**
    * The connections each source says it holds for this room.
    *
@@ -206,6 +208,7 @@ export function SpaceRoomScreen(props: SpaceRoomScreenProps): React.ReactElement
           presentation={presentation}
           onIntent={onIntent}
           title={tool.title}
+          {...(props.deps.toolSandboxOrigin ? { sandboxOrigin: props.deps.toolSandboxOrigin } : {})}
         />
         {intentNote ? <p className="tt-room__tool-note" role="status" data-testid="room-tool-intent">{intentNote}</p> : null}
       </div>

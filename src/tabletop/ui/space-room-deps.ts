@@ -24,6 +24,11 @@ export interface SpaceRoomAdapterInput {
   actorId: string;
   /** A display label for the header; never an email or an id. */
   viewerLabel: string;
+  /**
+   * F080 / D-044: origin serving the sandbox document, already validated by the capabilities parser.
+   * Absent keeps the inline `srcDoc` frame the room had before this field existed.
+   */
+  toolSandboxOrigin?: string;
   /** API origin, empty for same-origin. */
   origin?: string;
   /** Injected for tests. */
@@ -79,6 +84,7 @@ export function createSpaceRoomDeps(input: SpaceRoomAdapterInput): SpaceRoomDeps
   return {
     actorId: input.actorId,
     viewerLabel: () => input.viewerLabel,
+    ...(input.toolSandboxOrigin ? { toolSandboxOrigin: input.toolSandboxOrigin } : {}),
     fetchProjection: createJoinedProjectionFetcher({
       origin,
       ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
