@@ -20,6 +20,8 @@ export interface SpaceRoomAdapterInput {
   workspaceId: string;
   /** The app's existing workspace loader; it already handles auth and notices. */
   loadWorkspace(workspaceId: string): Promise<WorkspaceView>;
+  /** D-053: tables the viewer could link into this room (from the session list). */
+  sourceCandidates?: { workspaceId: string; title: string }[];
   /** The signed-in actor, from the session rather than from the URL. */
   actorId: string;
   /** A display label for the header; never an email or an id. */
@@ -63,6 +65,48 @@ export function createSpaceRoomDeps(input: SpaceRoomAdapterInput): SpaceRoomDeps
   const doFetch = input.fetchImpl ?? fetch;
   /** One recap request per workspace per load; the screen asks twice in a row. */
   const recapCache = new Map<string, Promise<RecapPayload | undefined>>();
+
+
+  /**
+   * Send one space command with the room's current revision.
+   *
+   * Reading first is what keeps a link or an install from being refused for a stale revision that the
+   * person had no way to see.
+   */
+  const sendSpaceCommand = async (type: string, payload: unknown, success: string): Promise<{ ok: boolean; message: string }> => {
+    let current;
+    try {
+      current = await input.loadWorkspace(input.workspaceId);
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+    let response: Response;
+    try {
+      response = await doFetch(`${origin}/api/workspaces/${encodeURIComponent(input.workspaceId)}/commands`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          commandId: globalThis.crypto.randomUUID(),
+          expectedRevision: current.revision,
+          expectedEpoch: current.epoch,
+          type,
+          payload,
+        }),
+      });
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+    if (response.ok) return { ok: true, message: success };
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch { body = null; }
+    const message = typeof body === 'object' && body !== null && typeof (body as { message?: unknown }).message === 'string'
+      ? String((body as { message: string }).message)
+      : `ไม่สำเร็จ: ${response.status}`;
+    return { ok: false, message };
+  };
 
   const loadRecap = (workspaceId: string): Promise<RecapPayload | undefined> => {
     const cached = recapCache.get(workspaceId);
@@ -183,5 +227,14 @@ export function createSpaceRoomDeps(input: SpaceRoomAdapterInput): SpaceRoomDeps
         : `ติดตั้งไม่สำเร็จ: ${response.status}`;
       return { ok: false, message };
     },
+    /** D-053: link a table into this room through the ordinary command. */
+    async linkSource(workspaceId) {
+      return sendSpaceCommand('space.addSource', { source: { workspaceId, epoch: 0, addedBy: input.actorId, addedAt: Date.now(), status: 'linked' } }, 'เชื่อมโต๊ะแล้ว');
+    },
+    /** D-053: unlink a table again. */
+    async unlinkSource(workspaceId) {
+      return sendSpaceCommand('space.leaveSource', { workspaceId }, 'ถอดโต๊ะออกจากห้องแล้ว');
+    },
+    sourceCandidates: input.sourceCandidates,
   };
 }

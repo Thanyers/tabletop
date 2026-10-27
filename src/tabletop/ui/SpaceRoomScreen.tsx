@@ -9,6 +9,8 @@ import { compileRoomTool, toolInstanceId, toolNonce, toolPortSnapshots, toolPres
 import { RoomShell, type RoomRecapView, type RoomTableSummary } from './RoomShell';
 import { ToolInstallationCard } from './ToolInstallationCard';
 import { ToolInstallPanel } from './ToolInstallPanel';
+import { RoomSourcesPanel, type LinkedSource } from './RoomSourcesPanel';
+import type { SourceCandidate } from './RoomSourcesPanel';
 import type { ToolInstallTool } from './tool-install-input';
 
 /**
@@ -57,6 +59,10 @@ export interface SpaceRoomDeps extends JoinedReadDeps {
    * A refusal is a value, not an exception (D-040): the frame gets the code so the package can branch
    * on it, and the screen can say why nothing was committed.
    */
+  /** D-053: tables the viewer could link here; absent when the caller does not know them. */
+  sourceCandidates?: SourceCandidate[];
+  linkSource?(workspaceId: string): Promise<{ ok: boolean; message: string }>;
+  unlinkSource?(workspaceId: string): Promise<{ ok: boolean; message: string }>;
   /** D-051: install a package in this room; absent when the caller may not author. */
   installTool?(tool: ToolInstallTool): Promise<{ ok: boolean; message: string }>;
   runToolIntent(input: {
@@ -243,6 +249,20 @@ export function SpaceRoomScreen(props: SpaceRoomScreenProps): React.ReactElement
       activeTableId={activeTableId}
       onSelectTable={setActiveTableId}
       joinedSources={sources}
+      sources={props.deps.linkSource ? (
+        <RoomSourcesPanel
+          roomId={props.workspaceId}
+          candidates={props.deps.sourceCandidates ?? []}
+          linked={sources.map((source): LinkedSource => ({
+            workspaceId: source.workspaceId,
+            title: source.label,
+            status: source.status === 'revoked' || source.status === 'missing' ? 'revoked' : 'linked',
+          }))}
+          linkSource={props.deps.linkSource}
+          unlinkSource={props.deps.unlinkSource ?? (async () => ({ ok: false, message: 'ถอดโต๊ะไม่ได้ในบริบทนี้' }))}
+        />
+      ) : undefined}
+
       onRefreshData={load}
       onDisconnectSource={async () => { /* revoking belongs to the source; the shell only reports it */ }}
       recap={recap}
