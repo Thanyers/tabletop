@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-27T11:20:00+07:00",
-  "lastVerifiedAt": "2026-10-27T11:20:00+07:00",
+  "updatedAt": "2026-10-27T15:05:00+07:00",
+  "lastVerifiedAt": "2026-10-27T15:05:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,7 +18,7 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "200b53f",
+    "headSha": "7dd52a2",
     "candidateSha": "4db0727",
     "pr": 305,
     "prState": "draft",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "34 PASS / 1 UNVERIFIED (HUMAN-01) จาก 35 · dev = 200b53f · D-044 ปิดครบ: sandbox worker ของตัวเอง (staging + release pipeline), capabilities → client → room, frame-src ระบุ origin และ script-src ยัง he้ม · ยืนยันบน staging ด้วยเบราว์เซอร์ (mount สำเร็จ) · D-045: error bridge ใน sandbox frame — tool ที่ล้มหลัง start รายงานเหตุผลจริงแทน Script error · D-046: 3B พบว่า /s/:id โหลด workspace ได้แต่แอปจบที่ /t/<id> (page/pathForProjection) ⇒ room shell ไม่เรนเดอร์ — ต้องแก้ route/state + เพิ่ม regression test · ค้าง: HUMAN-01 (ผู้ใช้จริง 5 คน เว้น 3 วัน) และบั๊ก D-046",
+  "currentCheckpoint": "34 PASS / 1 UNVERIFIED (HUMAN-01) จาก 35 · dev = 7dd52a2 · sandbox origin (D-044) ทำงานบน staging: room /s/<id> ฝัง frame จาก tabletop-sandbox-staging.ptchrr.workers.dev แล้ว UI ของ package ที่ AI สร้างขึ้นจริง (\"Room Planner - No rooms available in the joined data.\", errors: []) ทั้งที่แอปหลักยัง script-src self · D-045 error bridge: tool ที่ล้มรายงานสาเหตุจริงแทน \"Script error.\" · D-046 deep link: เปิด /s/<id> แล้วอยู่ที่ห้อง (เดิมถูกเขียนเป็น /t/<id>) · D-047 runtime เสิร์ฟจาก sandbox origin เอง (/runtime.js + CORS) — driver 19/19 · D-048 prompt บอก SDK จริง (sdk/ports/presentation + ไม่มี hook useToolState) — package ที่ AI สร้าง render ได้ 1 call / USD 0.001036 · D-050..D-055 UI ครบวงจรบนหน้าโต๊ะ/ห้อง: สร้างห้อง · ติดตั้ง tool (hash คำนวณเอง) · เชื่อม/ถอดโต๊ะ · ให้สิทธิ์อ่าน (source.grantProjection) — ui-gate 17/17 ทุกชิ้น · HUMAN-01 พร้อมรัน: kit + checker ที่รันจริงแล้ว 3 สถานะ (ไฟล์ไม่มี = ข้อความ+exit 2 · template ว่าง = FAIL ซื่อสัตย์ · ผลถูกต้อง = 5 passed 0 failed) · ค้าง: HUMAN-01 (ผู้ใช้จริง 5 คน เว้น 3 วัน ≥4 ผ่าน) — agent ทำแทนไม่ได้ · ไม่มีการแตะ production เลย",
   "slices": [
     {
       "alias": "C0",
