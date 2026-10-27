@@ -1,18 +1,24 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **26 ตุลาคม 2569 เวลา 17:28 น. (Asia/Bangkok)**: production รายงาน **9.1.6 / b809d9b**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40307321305) ผ่านครบ รวม Container settings, smoke และ GitHub Release publication. Health/readiness 200; favicon ที่ให้บริการตรงกับ source และ README ทั้งสองภาษาบน main ตรวจแล้ว. Staging snapshot **0.0.0-dev / b7a486b** เป็นการอ่าน ณ เวลานั้น ไม่ใช่ผล deploy ของ closeout.
+ตรวจ `/version` ออนไลน์ล่าสุด **27 ตุลาคม 2569 เวลา 15:59 น. (Asia/Bangkok)**: production รายงาน **9.2.0 / 467cb37**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40476842884) ผ่านครบ รวม sandbox Worker, smoke และ GitHub Release publication. Health/readiness 200; `/api/capabilities` ประกาศ `toolSandboxOrigin` และ sandbox `runtime.js` ตอบ 200. Staging snapshot **0.0.0-dev / b17ce90** เป็นการอ่าน ณ เวลานั้น.
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [b809d9b](https://github.com/Thanyers/tabletop/commit/b809d9b69f279f044b77e88bb4470763c3ae34e3) — PR #366 | `b7a486b` — observed snapshot |
-| Release | v9.1.6 / 9.1.6 — deploy/smoke passed | dev / 0.0.0-dev |
+| Source | [467cb37](https://github.com/Thanyers/tabletop/commit/467cb378a1e57d7c7e67b5ed41d0ea8d0b3ff3af) — PR #399 | `b17ce90` — observed snapshot |
+| Release | v9.2.0 / 9.2.0 — deploy/smoke passed | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.2.0 — custom tools sandbox origin and canvas fixes (27 October 2026)
+
+- [Release PR #399](https://github.com/Thanyers/tabletop/pull/399), main `467cb37`; [exact-head full CI](https://github.com/Thanyers/tabletop/actions/runs/40475961603) passed all three browser suites (Workers split 1/2 + 2/2) and fast checks. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/40476842884) succeeded: sandbox assets Worker, app with `TOOL_SANDBOX_ORIGIN`, smoke and GitHub Release publication. Readback 9.2.0 / 467cb37, built_at 2026-10-27T08:55:37Z; health/readiness 200.
+- MINOR from dev `b17ce90`: F080 custom tools on their own sandbox origin with joined-table sources, F081 checkbox toggles, F082–F087 canvas/card fixes, /tables filter controls, F078 internal refactors, F079 Procedural surface frozen to `legacy/`, CI/CD changes (CD004/CD005, CI009/CI010). No D1 migration; no config needed before deploy (sandbox Worker uses default names). Rollback target 9.1.6.
+- The first full CI on the release head failed on the hero clock check (Workers 1/2, both attempts; the same race had failed two dev runs that day). Fixed on the release branch with a test-only wait for `data-hero-loaded` (`b8b0352`); part 1 then passed 3/3 locally (23 PASS each) and in CI. The changelog line for that fix sits in `changelog.d/` for the next release because the 9.2.0 section was already cut.
 
 ## Release 9.1.6 — bilingual README and consistent icon (26 October 2026)
 
@@ -297,7 +303,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 
 ## ประวัติ release ที่เกี่ยวข้อง
 
-| Release | v9.1.6 / 9.1.6 — deploy/smoke passed | dev / 0.0.0-dev |
+| Release | v9.2.0 / 9.2.0 — deploy/smoke passed | dev / 0.0.0-dev |
 | --- | --- | --- |
 | 21 ต.ค. `v3.4.0` / `442e074` | F031 thinking/caps/compact guide/180s, F030 corpus rounds | [PR #102](https://github.com/Thanyers/tabletop/pull/102), [run 39629734074](https://github.com/Thanyers/tabletop/actions/runs/39629734074) |
 | 21 ต.ค. `v3.3.2` / `957074d` | F025 refresh race, F026 clarify language, F027 reject hint, F028 minimal fallback, F029 corpus | [PR #96](https://github.com/Thanyers/tabletop/pull/96), [run 39611292996](https://github.com/Thanyers/tabletop/actions/runs/39611292996), [PR #97](https://github.com/Thanyers/tabletop/pull/97) |
