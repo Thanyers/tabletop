@@ -590,3 +590,13 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 6. **ทดสอบ**: unit สำหรับ origin/nonce guard; browser harness ที่ใช้สอง origin; staging verify ด้วย `verify-host.mjs`
 
 **สิ่งที่ยังไม่เปลี่ยน:** CSP ของแอปหลัก (`script-src 'self'`) · X-Frame-Options ของแอป (frame ไม่ได้ฝังแอป) · ไม่มี token ใน URL (package ส่งผ่าน postMessage เท่านั้น)
+
+**ยืนยันบน staging จริง (2026-10-27, dev `2f3c98c`):**
+
+- sandbox worker ขึ้นจริง: `https://tabletop-sandbox-staging.ptchrr.workers.dev/frame.html` → **200** พร้อม CSP ของตัวเอง (`script-src 'self' 'unsafe-eval'`, `frame-ancestors` ระบุ origin แอป)
+- `/api/capabilities` ของ staging คืน `toolSandboxOrigin: https://tabletop-sandbox-staging.ptchrr.workers.dev`
+- หน้า `/s/:id` ส่ง `frame-src 'self' blob: <sandbox prod> <sandbox staging>` และ **`script-src 'self'` ยังเข้ม**
+- ทดสอบด้วยเบราว์เซอร์จริงบน staging: ฝัง frame จาก sandbox origin แล้วส่ง init → frame **mount สำเร็จ** (`reply: "mounted"`, `rootText: "mounted:probe-package"`)
+- `scripts/verify-host.mjs` เพิ่มการตรวจ 4 ข้อ (publish origin · frame 200 · policy ของ frame · frame-src ระบุ origin) ⇒ staging ตอนนี้ **14 PASS / 0 FAIL / 2 SKIPPED**
+
+⇒ ทางที่ 2 ทำงานได้จริงบน host โดยไม่ผ่อน `script-src` ของแอปหลัก
