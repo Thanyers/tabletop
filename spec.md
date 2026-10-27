@@ -43,6 +43,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 - D-036: ห้องเก็บ tool reference + แสดงการ์ดเครื่องมือในหน้าจริงแล้ว; D-037 บันทึกว่าการรัน UI ของ tool ต้องมี package store + route (ยังไม่เริ่ม)
 - ยังไม่ปิด Goal: ต้องมี DEEPSEEK_KEY (G1-01/EDIT-01 — ยัง 0 call/USD 0.00) และผู้ใช้จริง (HUMAN-01)
 
+- **F088 card wheel scroll (2026-10-26, branch `fix/F088-card-wheel-scroll`, `review`):** `CanvasNodeBody` หยุด wheel ไม่ให้ถึงตัวซูมเมื่อพื้นที่เลื่อนใต้เมาส์ยังเลื่อนได้ (`canScrollWithin`) · Ctrl/⌘ และเลื่อนสุดแล้วยังซูม ([F088](docs/features/F088-card-wheel-scroll.md))
 - **F086 applied draft web sources (2026-10-26, branch `fix/F086-applied-draft-sources`, `review`):** การ์ดร่างที่ใช้อัตโนมัติแสดงแหล่งเว็บ + ปุ่ม Add to table sources และค้างจนเพิ่มครบ/โต๊ะเต็ม (`webSourcesNotOnTable`) · แจ้งจำนวนที่เพิ่มจริง · intent: กฎ + อ้างอิง/หลักฐาน → ร่างกฎ · ลองครบวงใน local: ค้น 6 → เพิ่ม 4 → verify 2 → evidence 4 ข้อ ([F086](docs/features/F086-applied-draft-web-sources.md))
 - **F087 composer island (2026-10-26, `review`):** `.tt-canvas-panel--composer` ไม่มี padding-bottom บอร์ดต่อใต้ช่องแชท · มือถือยกปุ่มซูม ([F087](docs/features/F087-composer-island.md))
 - **F085 cards stay visible (2026-10-26, branch `fix/F085-node-flicker`, `review`):** effect ที่สร้าง node ใน `CanvasWorkspace` ส่ง `measured` เดิมไปด้วย React Flow จึงไม่ซ่อนการ์ด (`visibility: hidden`) ทุกครั้งที่โต๊ะอัปเดต · browser check ใน `performAction` ว่าการ์ดที่เห็นอยู่ไม่หายระหว่างรันคำสั่ง ([F085](docs/features/F085-cards-stay-visible.md))
