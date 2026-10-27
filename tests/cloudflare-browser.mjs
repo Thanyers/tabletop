@@ -289,8 +289,10 @@ try {
   await expect(conceptImage).toHaveAttribute('src', /hero-sales-en[^/]*\.gif$/);
   const settleHeroImage = async () => {
     await expect.poll(() => conceptImage.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
-    // Decoding can finish before React handles load and installs its passive-effect timer.
-    // Drive three browser frames before testing the 18-second boundary (50 ms tolerance).
+    // `complete` can turn true before React handles onLoad, and the 18-second timer starts only
+    // after that. Wait for the rendered load flag, then drive three frames so the passive
+    // effect installs the timer before testing the boundary (50 ms tolerance).
+    await expect(anonymous.locator('[data-hero-case]')).toHaveAttribute('data-hero-loaded', 'true');
     await anonymous.clock.runFor(50);
   };
   await settleHeroImage();
