@@ -490,6 +490,46 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 
 **ยังค้าง (สำหรับ slice ถัดไป):** code ใหม่ (`TOOL_NOT_INSTALLED`, `TOOL_HASH_MISMATCH`, `TOOL_NOT_AUTHORIZED`) ยังไม่อยู่ใน `TOOL_INTENT_REJECTIONS` (`shared/tool-protocol.ts`) ซึ่ง frame ต้องใช้เมื่อ mount `GeneratedToolHost`
 
+## D-041 — mount host ในหน้าห้องเสร็จแล้ว แต่ **CSP ของหน้า production บล็อก frame** (ต้องตัดสินก่อน merge)
+
+**What happened:** หลัง mount `GeneratedToolHost` ใน `SpaceRoomScreen` และวัดด้วย harness (file://) ได้ผลดี — driver 12 checks, ui-gate 17/17 — เมื่อจำลอง **CSP จริงจาก `public/_headers`** (`script-src 'self'`) หน้า frame กลับ **ว่างเปล่า**:
+
+```json
+{ "rendered": "no",
+  "consoleErrors": ["Executing inline script violates … script-src 'self' … The action has been blocked."] }
+```
+
+**Root cause:** frame เป็น `about:srcdoc` ⇒ สืบทอด CSP ของหน้าหลัก และ bootstrap ของ sandbox เป็น inline script ⇒ ถูกบล็อกทุกครั้ง ไม่ใช่ปัญหา bridge/runner (ทั้งคู่ทำงานใน harness)
+
+**ผลต่อสถานะที่เคยรายงาน:** ISO-01/EXEC-01/G1-03 พิสูจน์ "isolation ทำงาน" ด้วย harness ที่ไม่มี CSP ของ production — **ถูกต้องในระดับกลไก แต่ยังไม่ใช่หลักฐานว่าใช้งานได้บนหน้าที่ deploy จริง** ต้องบันทึกข้อจำกัดนี้
+
+**ทางเลือกที่ต้องให้เจ้าของตัดสิน (ไม่ทำเอง):**
+1. เพิ่ม hash ของ inline bootstrap ใน `script-src` ของ `public/_headers` (ดีที่สุดด้านความปลอดภัย ถ้า bootstrap คงที่)
+2. เสิร์ฟเอกสาร frame จาก path ที่มี CSP ของตัวเอง (เช่น `/tool-sandbox.html`) แล้วชี้ iframe ไปที่นั่น
+3. ผ่อน `script-src` เป็น `'unsafe-inline'` (แย่ที่สุด — ลดความแข็งแรงของทั้งแอป)
+
+**สถานะงาน:** branch `feat/f080-room-host-mount` มีโค้ด mount + tests + gate ที่ผ่านแล้ว แต่เปิดเป็น **draft PR** จนกว่าจะตัดสิน CSP และควรเพิ่ม timeout ตรวจจับ frame ที่ไม่ตื่น (ตอนนี้ถ้า frame ถูกบล็อก ผู้ใช้เห็นช่องว่างโดยไม่รู้สาเหตุ)
+
+**อัปเดต (watchdog):** เพิ่ม `createToolHostWatchdog` ใน `GeneratedToolHost` — ถ้า frame ไม่ส่งข้อความใด ๆ ภายใน 3 วินาทีหลัง `load` ระบบจะรายงานเป็น `failure` แทนที่จะปล่อยช่องว่างเงียบ ๆ (พิสูจน์ด้วย unit 5/5) ทำให้กรณี "CSP บล็อก frame" กลายเป็นข้อความที่ผู้ใช้อ่านได้ แม้ยังไม่ได้แก้ต้นเหตุ
+
+**ทางเลือกที่ 4 (แคบกว่า option 3):** `public/_headers` ของ repo นี้รองรับ CSP ตาม path อยู่แล้ว จึงผ่อนได้เฉพาะหน้า room (`/s/*`) แทนทั้งแอป:
+
+```
+/s/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; ...
+```
+
+ข้อดี: หน้า landing/workspace อื่นคง `script-src 'self'` ไว้ · ข้อเสีย: หน้า room ทั้งหน้า looser ขึ้น (ยังต้องคัดลอก header ชุดเดิมให้ครบ ไม่งั้นจะหลุด directive อื่น) — ต้องให้เจ้าของตัดสินพร้อมผลกระทบ
+
+**การตรวจซ้ำของผู้รีวิว (รอบ 149):** บน branch นี้ `node scripts/build-room-shell-harness.mjs` + `node tests/ui/room-shell/browser.mjs` = **12 checks passed** และ `ui-gate --full --theme` = **17/17 measured** (3 skip) — ตรงกับที่รายงานไว้ ไม่ใช่ตัวเลขจากคำบอกเล่า
+
+**วัดแล้วว่าได้ผล (option 4):** เขียน probe ที่เสิร์ฟ harness ด้วย policy ที่ `/s/*` จะตั้ง (`script-src 'self' 'unsafe-inline' 'unsafe-eval'`) ผลคือ
+
+```json
+{ "rendered": "yes", "hostProblemLine": 0 }
+```
+
+เทียบกับ policy เดิมที่ `rendered: "no"` ⇒ การผ่อนเฉพาะ path แก้ปัญหาจริง ไม่ใช่การเดา และเพิ่มกฎ `/s/*` ไว้ใน `public/_headers` ของ branch นี้แล้ว (ยังไม่ merge — รออนุมัติ เพราะเป็นการผ่อน CSP เฉพาะหน้า room; directive อื่นเหมือน global ทุกตัว)
 ## D-042 — รันโมเดลจริงครั้งแรก: เจอ 2 ปัญหาจริง (model ว่าง + prompt ไม่พอ) แล้วแก้ให้ผ่าน
 
 **บริบท:** เจ้าของวาง `DEEPSEEK_KEY` ใน `.dev.vars` แล้ว จึงรัน authoring CLI จริงครั้งแรก
@@ -509,3 +549,198 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ค่าใช้จ่ายรวมที่บันทึกได้:** USD 0.002209 (+ การรันที่ล้ม 1 ครั้ง = USD 0.000432) — ต่ำกว่าเพดาน 3 runs × USD 0.20 มาก
 
 **บทเรียน:** การมี adapter ที่ parse JSON ไม่พอ — prompt ต้องให้ skeleton ที่ตรงกับ schema จริง ไม่งั้นโมเดลจะ "แต่ง" โครงสร้างเองและถูกปฏิเสธที่ validator
+
+**การตัดสินใจ merge (2026-10-26):** เจ้าของสั่งให้ปิดงาน ("ทำให้จบ") ผมจึง merge กฎ `/s/*` นี้พร้อมฟีเจอร์
+ข้อจำกัดที่ยอมรับ: หน้า room ผ่อน `script-src` (inline + eval) เพื่อให้ sandbox frame เริ่มได้ ส่วนอื่นของแอปคงเดิม
+ย้อนกลับได้ด้วยการลบกฎ `/s/*` ใน `public/_headers` 6 บรรทัด (frame จะกลับไปถูกบล็อกและ host จะรายงานผ่าน watchdog)
+
+## D-043 — per-path CSP **ใช้ไม่ได้** กับ Cloudflare Pages: header ซ้อนกันและเบราว์เซอร์บังคับส่วนที่แคบที่สุด
+
+**What happened:** หลัง merge D-041 และ deploy ขึ้น staging (sha `4079c8e`) ตรวจ header จริงพบว่า `/s/*` ได้ **สอง** policy (จาก `/*` และจาก `/s/*`) ไม่ใช่ policy เดียวที่ถูก override
+
+**วัดแล้ว:** เสิร์ฟ harness ด้วย header สองชุดเหมือน host จริง → `{ "policiesSent": 2, "rendered": "no" }` และ console ระบุ `script-src 'self'` บล็อก inline script อยู่ดี ⇒ การผ่อนเฉพาะ path **ไม่ได้ผล** และการอ้างว่าแก้ได้จะเป็นการอ้างเกินจริง
+
+**การแก้:** revert กฎ `/s/*` ออกจาก `public/_headers` (หน้า room กลับไปใช้ policy เข้มเดิม) และให้ `createToolHostWatchdog` รายงานว่า frame เริ่มไม่ได้ แทนการปล่อยกล่องว่าง
+
+**ทางที่เหลือจริง ๆ (ต้องให้เจ้าของเลือก):**
+1. ผ่อน `script-src` ที่ `/*` ทั้งแอป (ทำงานแน่ แต่ลดความแข็งแรงทั้งระบบ)
+2. เสิร์ฟ sandbox document จาก origin/path ที่แยกจริง (เช่น Worker อีกตัว) ซึ่งมี CSP ของตัวเอง — ไม่ลดความปลอดภัยของแอปหลัก แต่เป็นงานโครงสร้างพื้นฐาน
+3. ยอมรับว่า tool รันได้เฉพาะใน harness จนกว่าจะทำข้อ 1 หรือ 2
+
+**ผลต่อสถานะ:** ISO-01/EXEC-01/G1-03 ยังถูกต้องในระดับกลไก (isolation ทำงาน) แต่ **ยังไม่ทำงานบนหน้าที่ deploy** และถูกบันทึกไว้ใน limitation ทุกข้อแล้ว
+
+## D-044 — เจ้าของเลือกทางที่ 2: แยก sandbox ไปคนละ origin (พิสูจน์ด้วย PoC แล้วว่าได้ผล)
+
+**การตัดสินใจของเจ้าของ (2026-10-27):** เลือกทางที่ 2 — sandbox มี origin ของตัวเอง ไม่ผ่อน CSP ของแอปหลัก
+
+**PoC ที่วัดจริง (ก่อนลงโค้ดจริง):** เสิร์ฟสอง origin บนเครื่อง — app origin ใช้ policy เดิม (`script-src 'self'`) และ sandbox origin ใช้ policy ของตัวเอง (`default-src 'none'; script-src 'self' 'unsafe-eval'; connect-src 'none'`) — iframe `sandbox="allow-scripts"` ชี้ข้าม origin, parent ส่ง package ผ่าน `postMessage`, frame eval แล้วรายงานกลับ
+
+```json
+{ "appCspStrict": true, "frameText": "mounted:poc", "state": "mounted" }
+```
+
+⇒ **แอปหลักคง CSP เข้มได้** และ tool ยังรันได้ — ไม่ต้อง `'unsafe-inline'` ที่ไหนเลย (frame โหลด bootstrap เป็นไฟล์ `/frame.js` จาก origin ของตัวเอง)
+
+**ดีไซน์ที่จะทำ (สไลซ์ถัดไป):**
+1. **Worker ใหม่** `tabletop-sandbox` / `tabletop-sandbox-staging` — static assets: `frame.html` + `frame.js` + `_headers` ของตัวเอง (`frame-ancestors` จำกัดเฉพาะ origin ของแอป)
+2. **App worker**: เพิ่ม var `TOOL_SANDBOX_ORIGIN` และส่งให้ client; `GeneratedToolHost` ตั้ง `src` เป็น origin นั้นแทน `srcDoc`
+3. **Handshake**: frame → `ready` → parent ส่ง `init { nonce, runtimeScript, modules, ports, presentation }` → frame mount แล้วรายงาน `mounted`/`log`/`intent`; parent ตรวจ `event.origin` **และ** nonce ก่อนรับทุกข้อความ
+4. **Intents** ยังผ่าน parent → `POST /api/workspaces/:id/space/tool/intent` (ทางเขียนเดียว ไม่เปลี่ยน)
+5. **CI**: deploy sandbox worker ในงาน staging (และ release job สำหรับ production) — ไม่ deploy จากเครื่อง
+6. **ทดสอบ**: unit สำหรับ origin/nonce guard; browser harness ที่ใช้สอง origin; staging verify ด้วย `verify-host.mjs`
+
+**สิ่งที่ยังไม่เปลี่ยน:** CSP ของแอปหลัก (`script-src 'self'`) · X-Frame-Options ของแอป (frame ไม่ได้ฝังแอป) · ไม่มี token ใน URL (package ส่งผ่าน postMessage เท่านั้น)
+
+**ยืนยันบน staging จริง (2026-10-27, dev `2f3c98c`):**
+
+- sandbox worker ขึ้นจริง: `https://tabletop-sandbox-staging.ptchrr.workers.dev/frame.html` → **200** พร้อม CSP ของตัวเอง (`script-src 'self' 'unsafe-eval'`, `frame-ancestors` ระบุ origin แอป)
+- `/api/capabilities` ของ staging คืน `toolSandboxOrigin: https://tabletop-sandbox-staging.ptchrr.workers.dev`
+- หน้า `/s/:id` ส่ง `frame-src 'self' blob: <sandbox prod> <sandbox staging>` และ **`script-src 'self'` ยังเข้ม**
+- ทดสอบด้วยเบราว์เซอร์จริงบน staging: ฝัง frame จาก sandbox origin แล้วส่ง init → frame **mount สำเร็จ** (`reply: "mounted"`, `rootText: "mounted:probe-package"`)
+- `scripts/verify-host.mjs` เพิ่มการตรวจ 4 ข้อ (publish origin · frame 200 · policy ของ frame · frame-src ระบุ origin) ⇒ staging ตอนนี้ **14 PASS / 0 FAIL / 2 SKIPPED**
+
+⇒ ทางที่ 2 ทำงานได้จริงบน host โดยไม่ผ่อน `script-src` ของแอปหลัก
+
+## D-046 — `/s/:id` โหลด workspace ได้ แต่แอปจบที่หน้าโต๊ะ ⇒ ห้อง (room shell) ไม่ถูกเรนเดอร์
+
+**บริบ���:** ทดสอบ 3B (ขับหน้า `/s/:id` บน staging จริง โดย mock `/api/**`) หลัง merge D-045
+
+**สิ่งที่วัดได้:**
+- แอปยิง `GET /api/auth/status` → `GET /api/session` → `GET /api/workspaces/<room>` และได้ workspace ที่มี `domain.collaborationSpace` (fixture)
+- แต่ URL สุดท้ายกลายเป็น `/t/<room>` และ **ไม่มี** element ของห้อง (`[data-testid="room-tool-title"]`, `room-tool-problem`, `room-tool-intent`, `space-room-note` ทั้งหมด `null`) และไม่มี iframe
+
+**สาเหตุที่เข้าใกล้ที่สุด (มีหลักฐานในโค้ด):** `TabletopApp.tsx:382` เขียน URL จาก `pathForProjection(view, page)` — เมื่อ `page` ไม่ใช่ `'space'` จะได้ `/t/<id>` แม้ route เดิมเป็น `/s/:id` (branch `route?.name === 'space'` ที่ `:343` ตั้ง `setSpaceRoomId(route.id)` แต่ไม่ได้กันไม่ให้ effect เขียน URL/`page` ทับ)
+
+**ผลต่อสถานะ:** การเปิด room ด้วย deep link ยังไม่ทำงานในผลิตภัณฑ์จริง ⇒ 3B ยังไม่ปิด และเป็นบั๊กของ route/state **ไม่ใช่** ของ sandbox (sandbox พิสูจน์แล้วด้วย probe แยกว่า mount ได้เมื่อฝัง frame ตรง ๆ)
+
+**ขั้นต่อไปที่ชัดเจน:**
+1. ทำให้ `page` เป็น `'space'` เมื่อ route เป็น space (หรือให้ `pathForProjection` คง `/s/:id` ไว้)
+2. เพิ่ม regression test: เปิด `/s/:id` แล้วต้องเห็น `room-tool-title`/iframe และ URL ต้องคงเป็น `/s/...`
+3. รัน 3B probe ซ้ำบน staging; ถ้า package ที่ AI สร้างยังล้ม ให้อ่าน reason จาก D-045 error bridge แล้วแก้ที่ package/prompt
+
+**หมายเหตุความซื่อตรง:** ผมไม่ได้แก้บั๊กนี้ในรอบสุดท้ายของงบ Goal เพราะต้องแตะการนำทางของแอปหลักและควรมี test ครอบ — บันทึกไว้ให้รอบถัดไปทำอย่างปลอดภัย
+
+## D-048 — สัญญา SDK ของ sandbox ที่ AI ต้องเขียนตาม + หลักฐานว่า package ที่ AI สร้าง render ได้
+
+**What happened:** เปิดห้องจริงบน staging (3B) แล้ว tool ขึ้น "Script error." — ตรวจด้วย `pageerror` ของเบราว์เซอร์พบสาเหตุจริง: `_toolsdk.useToolState is not a function`
+
+**Root cause:** prompt เดิมบอกแค่ "export a React component named Tool" ทำให้โมเดลเดาว่ามี hook แบบ `useToolState`/`useBehavior` จาก `@tabletop/tool-sdk` — ซึ่ง **ไม่มีอยู่จริง** ใน runtime (`sdk` มีแค่ `ports(); onPorts(); intent(); resize(); log()` และ component ถูกเรียกด้วย `{ sdk, ports, presentation }`) ⇒ throw ตอน render
+
+**การแก้ (branch `fix/f080-prompt-sdk`):**
+1. `SYSTEM_PROMPT` ระบุสัญญาจริง: props `{ sdk, ports, presentation }`, รายชื่อ method ของ `sdk`, และประโยค "There are NO hooks such as useToolState or useBehavior"
+2. เพิ่มกฎ id: ทุก id (packageId, port, behaviour, input, resource, action, field) เป็น lowercase kebab-case `^[a-z][a-z0-9-]*$` — เพราะรอบแรกโมเดลสร้าง `capacityPeople` แล้ว validator ปฏิเสธ
+
+**หลักฐานว่าแก้แล้วได้ผล:**
+- สร้างใหม่ 1 ครั้ง: `room-planner` ผ่า�� validator, `withinCap: true`, 1 call / **USD 0.001036**; ตรวจ source: `imports sdk hooks: false`, `uses props.sdk: true`
+- render จริงใน sandbox document (harness fixture ชั่วคราว, revert แล้ว): frame ให้ข้อความ **"Room Planner — No rooms available in the joined data."** และ `errors: []`
+- ⇒ chain ครบ: แอปจริง → CSP → sandbox origin → frame → runtime → compile → mount UI
+
+**บทเรียน:** adapter ที่ parse JSON ได้ไม่พอ — prompt ต้องบอก **surface ของ API ที่มีจริง** ไม่ใช่แค่รูปทรงของ JSON; และเมื่อ error ข้าม origin ให้หา `pageerror` (หรือ error bridge D-045) ก่อนสรุปว่าเป็นปัญหาแพลตฟอร์ม
+
+**ยืนยันครบทั้ง chain บน staging (2026-10-27, dev cad3e54):**
+
+- room: `https://tabletop-staging.ptchrr.workers.dev/s/<id>` (URL คงเป็น `/s/…` ตาม D-046)
+- tool frame: `https://tabletop-sandbox-staging.ptchrr.workers.dev/frame`
+- ข้อความใน frame: **"Room Planner — No rooms available in the joined data."** (UI ของ package ที่โมเดลสร้าง)
+- `errors: []` และ `public/_headers` ยัง `script-src self`
+
+⇒ ทางที่ 2 (D-044) ทำงานจริงตลอดเส้นบน host ที่ deploy และ package จาก AI รันได้ (หลังแก้ prompt ตาม D-048)
+ข้อจำกัด: การเรียก API ถูก mock เพราะไม่มี session ที่ลงชื่อเข้าใช้ — ยังไม่ใช่ผลทดสอบกับคนจริง
+
+## D-049 — ไม่มี UI สำหรับ "สร้างห้อง" หรือ "ติดตั้ง tool" ⇒ HUMAN-01 ตั้งห้องทดสอบไม่ได้ถ้าไม่ใช้ API
+
+**What happened:** ก่อนเตรียมห้องสำหรับ HUMAN-01 ผมตรวจว่า UI ทำอะไรได้: ค้น `space.create` และ `installTool` ใน `src/tabletop/**/*.tsx` — **ไม่พบเลย**
+
+| สิ่งที่ต้องมีก่อนทดสอบ | UI ทำได้? | มีจริงที่ไหน |
+|---|---|---|
+| สร้างห้อง (collaboration space) | ❌ | คำสั่ง `space.create` |
+| เชื่อมโต๊ะต้นทาง 2 แหล่ง | ❌ | คำสั่ง `space.addSource` + grant ที่ต้นทาง |
+| ติดตั้ง tool package ในห้อง | ❌ | คำสั่ง `space.installTool` |
+| เปิดห้อง `/s/:id` | ✅ | หน้า room shell |
+| เห็น tool ที่ติดตั้งแล้ว | ✅ | พิสูจน์บน staging (D-048) |
+
+**ผลต่อ HUMAN-01:** ผู้ทดสอบทั่วไปเปิดห้องที่เตรียมไว้ไม่ได้ด้วยตัวเอง — ต้องมีคน seed ผ่าน API ก่อน ⇒ งานนี้จึงยังรันไม่ได้จริง ไม่ใช่เพราะขาดคน แต่เพราะ **ขาด UI ในการตั้งค่า**
+
+**สิ่งที่ต้องทำต่อ (เพื่อให้ HUMAN-01 ทำได้จริง):**
+1. UI: ปุ่ม/ฟอร์ม "สร้างห้อง" (ตั้งชื่อ + slug) และ "เชื่อมโต๊ะ" (เลือก workspace ที่ตนเป็นเจ้าของ) ในหน้า `/tables` หรือหน้าโต๊ะ
+2. UI: "ติดตั้งเครื่องมือ" — เลือก package จากรายการที่ activate แล้ว (หรือจากผล authoring ล่าสุด) → `space.installTool` พร้อม definition
+3. ทางลัดที่เร็วกว่า: หน้า "เตรียมห้องตัวอย่าง" สำหรับผู้ดูแล (seed 2 แหล่ง + ถอน 1 + ติดตั้ง tool) เพื่อใช้ทดสอบ HUMAN-01 โดยไม่ต้องรอ UI ครบ
+
+**ระหว่างนี้:** \`human-01-protocol.md\` ถูกแก้ให้บอกตรง ๆ ว่าต้อง seed ห้องด้วยคำสั่งก่อน และห้ามปล่อยผู้ทดสอบเดินไปเจอทางตันเอง
+
+## D-050 — สร้างห้อง (collaboration room) ได้จากหน้าโต๊ะแล้ว
+
+**บริบท:** D-049 พบว่า UI ไม่มีทางสร้างห้อง ⇒ HUMAN-01 ตั้งห้องทดสอบไม่ได้
+
+**สิ่งที่ทำ (branch `feat/f080-room-setup`):**
+- `src/tabletop/ui/RoomSetupPanel.tsx` — ฟอร์มชื่อห้อง + ที่อยู่ `/s/…` (สร้าง slug ให้อัตโนมัติจากชื่อตามที่พิมพ์) พร้อมข้อความผลลัพธ์/ปัญหา และสถานะ busy
+- `roomSlugFrom()` — แปลงชื่อเป็น address ที่ปลอดภัย (lowercase, ขีด, ตัดอักขระอื่น; ชื่อที่ไม่มี Latin/digit ⇒ คืนค่าว่างเพื่อให้คนพิมพ์เอง) · มี unit test 4 เคส
+- `TabletopApp` — ปุ่ม "สร้างห้องจากโต๊ะนี้" เหนือ `TableSurface` → เรียก `space.create` ผ่าน **command path เดิม** (authority ยังตัดสินเรื่อง revision/สิทธิ์) → ย้ายไป `/s/<slug>`
+
+**หลักฐาน:**
+- unit (`src/tabletop/ui`) **217 passed** · typecheck 3 config ผ่าน · public scan 0 findings
+- **ui-gate: 17/17 measured** บน harness ใหม่ (`scripts/build-room-setup-harness.mjs` → `test-results/room-setup-harness/index.html`) — gate จับได้จริง 1 ข้อ (em dash ใน `<title>`) ผมแก้แล้วจึงผ่าน
+
+**ยังไม่ทำ:** ติดตั้ง tool package จาก UI (ต้องวาง JSON — `space.installTool` รับ definition และ Worker ตรวจ hash ให้อยู่แล้ว) และเชื่อม/ถอนแหล่งข้อมูลจาก UI
+## D-051 — ติดตั้ง tool package ในห้องได้จาก UI (วาง JSON)
+
+**บริบท:** D-049 พบว่าไม่มี UI ติดตั้ง tool; D-037 บอกว่าไม่มี package store ⇒ ทางที่ทำได้จริงคือให้วาง JSON ของ package ที่ activate แล้ว
+
+**สิ่งที่ทำ:**
+- `src/tabletop/ui/tool-install-input.ts` — ตรวจ JSON ด้วย `validateToolPackage` และ **คำนวณ SHA-256 เอง** (`toolPackageHashHex` จาก `toolPackageContentCanonical` ผ่าน `crypto.subtle`) ⇒ ไม่ให้คนพิมพ์ hash; route (`ai`/`human`) มาจาก provenance ของ package
+- `ToolInstallPanel.tsx` — วาง JSON → `space.installTool` และรายงานผล/เหตุผลที่ปฏิเสธ
+- `SpaceRoomScreen` — dep `installTool?` (ไม่ส่ง = พฤติกรรมเดิม); แสดง panel เฉพาะเมื่อห้องยังไม่มี tool
+- `space-room-deps.ts` — `installTool` อ่าน workspace ปัจจุบันเพื่อใช้ `revision`/`epoch` ที่สด แล้วส่งคำสั่งผ่าน command path เดิม
+
+**หลักฐาน:** unit `src/tabletop/ui` **222 passed** · `tool-install-input.test.ts` **5/5** (รวม: hash เดียวกันสำหรับ package เดียวกัน, provenance ไม่เปลี่ยน hash, package เสียถูกปฏิเสธพร้อมเหตุผล) · **ui-gate 17/17 measured** บน harness ที่ฝัง `room-setup.css` จริง (ทั้งสอง panel) · typecheck 3 config · public scan 0 findings
+
+**บทเรียนจากเกต:** รอบแรกที่ harness ไม่ได้ฝัง CSS จริง ได้ 17/17 จาก markup ที่ไม่มีสไตล์; เมื่อฝัง CSS จริง เกตจับ `px` literal 6 จุดและ em dash (จากคอมเมนต์ใน dependency) ⇒ แก้เป็น token ล้วน + minify หน้า harness จึงผ่านจริง
+## D-052 — panel "เชื่อมโต๊ะเข้าห้อง" พร้อมใช้ แต่ยังไม่ถูกวางในหน้าจอ
+
+**สิ่งที่ทำ:** `RoomSourcesPanel` (เลือกโต๊ะ → `space.addSource` · ถอด → `space.leaveSource`) + `linkableCandidates()` ที่ไม่เสนอห้องตัวเองและโต๊ะที่เชื่อมแล้ว · 3 unit tests · สไตล์ token-only ใน `room-setup.css`
+
+**หลักฐาน:** **ui-gate 17/17 measured** บน harness ที่แสดงทั้ง 3 panel (สร้างห้อง / ติดตั้ง tool / เชื่อมโต๊ะ) — เกตจับของจริง 2 ครั้งระหว่างทาง:
+1. `Single border-radius (8px) on all 11 rounded boxes` ⇒ ไล่ระดับเป็น `--tt-card-radius` (panel) / `--tt-button-radius` (ปุ่ม, select) / `--tt-radius-small` (ช่องกรอก)
+2. `overflow +2px @280/320px` ⇒ flex children ต้องมี `min-inline-size: 0` และ `select` ต้อง `inline-size: 100%`
+
+**ยังไม่ผูกเข้าหน้าจอ:** `RoomShell` ไม่มีตำแหน่งรับ panel นี้ และ `JoinedSource` ไม่มี `title`/`status` ที่ต้องใช้ ⇒ การผูกต้องเพิ่ม prop + map ข้อมูล ซึ่งควรทำเป็นสไลซ์ของตัวเองพร้อม test ไม่ใช่ยัดตอนท้าย (ผม revert การผูกที่ typecheck ไม่ผ่านทิ้ง)
+
+**ผลต่อ HUMAN-01:** ยังต้อง seed แหล่งข้อมูลผ่านคำสั่ง — แต่ตอนนี้เหลือชิ้นเดียว (เชื่อม/ถอดโต๊ะ) ไม่ใช่ทั้งห้อง
+## D-053 — เชื่อม/ถอดโต๊ะจากหน้าห้องได้แล้ว (ปิด D-049 ครบวง)
+
+**สิ่งที่ทำ:**
+- `RoomShell` มี slot `sources?` แสดงในคอลัมน์ข้อมูล
+- `SpaceRoomScreen` mount `RoomSourcesPanel` และ map `JoinedSource` ถูกต้อง: `label` → title · `live|stale` → linked · `revoked|missing` → revoked (รอบก่อนผมเข้าใจผิดว่ามี `title` — ของจริงคือ `label`)
+- `space-room-deps` ได้ helper `sendSpaceCommand(type, payload, success)` ที่ **อ่าน workspace ปัจจุบันก่อน** เพื่อใช้ `revision`/`epoch` สด แล้วส่งผ่าน `/commands` — ใช้ทั้ง `linkSource` (`space.addSource`) และ `unlinkSource` (`space.leaveSource`)
+- `TabletopApp` ส่ง `sourceCandidates` จากรายการโต๊ะใน session (ตัดห้องตัวเองออก)
+
+**หลักฐาน:** typecheck 3 config · unit (ui+navigation) **237 passed** · **room-shell driver 19 checks** · **ui-gate 17/17 measured** · public scan 0 findings
+
+**ผลต่อ D-049:** วงจรครบ — สร้างห้อง (D-050) → ติดตั้ง tool (D-051) → เชื่อม/ถอดโต๊ะ (D-053) ทำได้จาก UI ทั้งหมด ⇒ ผู้ทดสอบ HUMAN-01 ไม่ต้อง seed ผ่าน API อีก
+
+**ยังเหลือ:** หน้าให้สิทธิ์อ่านที่ต้นทาง (grant) — การเชื่อมโต๊ะยังไม่ให้สิทธิ์อ่านข้อมูล ซึ่งเป็นเจตนาของดีไซน์ (เจ้าของโต๊ะตัดสิน) แต่คนทดสอบต้องมีทางทำใน UI เช่นกัน
+## D-054 — panel ให้สิทธิ์ห้องอ่านข้อมูลจากโต๊ะ (เจ้าของโต๊ะเป็นผู้ให้)
+
+**สิ่งที่ค้นพบก่อนทำ:** ไม่มีคำสั่ง `space.grant*` เลย — สิทธิ์ถูกเขียนที่ **โต๊ะต้นทาง** ด้วย `source.grantProjection` และระบบทำได้แค่อ่าน (`internalSpaceGrants`) ⇒ UI ไม่ใช่แค่ "ยังไม่มีปุ่ม" แต่ "ไม่มีทางเขียนสิทธิ์จากแอป"
+
+**สิ่งที่ทำ:**
+- `space-grant-input.ts` — สร้าง payload ที่ส่งไป**โต๊ะต้นทาง**: `grantId`, `spaceId`, **`spaceWorkspaceId`**, `audience:{kind:'space-members'}`, `projections:[{portId, resource, fields, maxRows}]`, `actions:[]`
+- `SpaceGrantPanel` — เจ้าของโต๊ะเลือกห้อง + port + resource + ฟิลด์ + เพดานแถว แล้วให้สิทธิ์
+
+**หลักฐาน:** `space-grant-input.test.ts` **4/4** (รวม: ปฏิเสธ payload ที่มีแต่ slug ไม่มี workspace — เพราะ authority เทียบ workspace), typecheck 3 config, **ui-gate 17/17 measured** บน harness ที่แสดงทั้ง 4 panel
+
+**ยังไม่ผูกเข้าหน้าโต๊ะ:** panel พร้อมและผ่านเกต แต่การวางใน `TableSurface` ต้องเลือกตำแหน่งให้ไม่รบกวนหน้าหลัก — ทำเป็นสไลซ์ถัดไป (บทเรียนจาก D-052: ไม่ยัดการผูกที่ typecheck ไม่ผ่าน)
+## D-055 — ผูก panel เข้าหน้าโต๊ะจริง + สไตล์ของส่วนพับได้
+
+**สิ่งที่ทำ:**
+- `TabletopApp`: เพิ่มส่วนพับได้ "ให้ห้องอ่านข้อมูลจากโต๊ะนี้" ใต้ส่วนสร้างห้อง และ handler `grantRoomRead` ที่ส่ง `source.grantProjection` ไปที่ **โต๊ะที่กำลังเปิด** (authority ของเจ้าของใช้บังคับ) พร้อมรายการห้องจาก session
+- `table-panel.css`: สไตล์ของ `tt-panel` / `tt-panel__toggle` ด้วย token เท่านั้น (ตัวนี้ขาดมาตลอดตั้งแต่ D-050 — ผมตรวจไม่เจอจนกระทั่งเขียนสไตล์จริง)
+
+**หลักฐาน:** typecheck 3 config · **ui-gate 17/17 measured** (harness แสดง toggle ที่มี state จริงแบบเดียวกับแอป)
+
+**บทเรียนจากเกต 3 ครั้งในงานเดียว (ทั้งหมดเป็นข้อผิดพลาดของผม ไม่ใช่ของเกต):**
+1. `outline: 2px` ที่ผมใส่เอง — ไล่หา token แล้วไม่มี; `ds-allow-hardcode` ใช้ไม่ได้เพราะ **minify ตัดคอมเมนต์ก่อนเกตเห็น** ⇒ ตัด focus style ที่ประดิษฐ์เองออก แล้วใช้พฤติกรรมเดิมของผลิตภัณฑ์ (ถูกต้องกว่าการเพิ่ม token ใหม่เพื่อรองรับของที่ไม่มีใครขอ)
+2. ปุ่มใน harness ที่ "กดแล้วไม่เปลี่ยนอะไร" ⇒ เกตจับได้ (dead control) ⇒ ทำให้มี `useState` จริง
+3. ก่อนหน้านั้น: `px` literal, radius เดียวทุกกล่อง, overflow 2px ที่ 280px
+
+**ข้อจำกัดที่ยังเหลือ:** `grantRooms` ใช้ workspace id เป็น slot ของห้อง (`spaceId: workspace.id`) เพราะ session list ไม่มี slug — ห้องที่สร้างจาก D-050 มี slug ของตัวเอง การให้สิทธิ์จึงผูกด้วย workspace เป็นหลัก ซึ่งตรงกับสิ่งที่ authority ใช้ตรวจ

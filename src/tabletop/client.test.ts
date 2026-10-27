@@ -99,6 +99,44 @@ describe('TabletopClient access boundaries', () => {
     await expect(client.capabilities()).resolves.toMatchObject({ uploads: true, tableAssistant: { available: false }, model: { enabled: false } });
   });
 
+  it('keeps a sandbox origin the Worker vouches for', async () => {
+    const toolSandboxOrigin = 'https://tabletop-sandbox-staging.ptchrr.workers.dev';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ uploads: true, toolSandboxOrigin, tableAssistant: { available: true }, model: { enabled: true, reason: '' } })));
+    const client = new TabletopClient();
+
+    await expect(client.capabilities()).resolves.toMatchObject({ toolSandboxOrigin });
+  });
+
+  it('keeps a sandbox origin on the app host, so one deployment can serve both', async () => {
+    vi.stubGlobal('window', { location: { origin: 'https://tabletop.test' } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ uploads: true, toolSandboxOrigin: 'https://tabletop.test', tableAssistant: { available: true }, model: { enabled: true, reason: '' } })));
+    const client = new TabletopClient();
+
+    await expect(client.capabilities()).resolves.toMatchObject({ toolSandboxOrigin: 'https://tabletop.test' });
+  });
+
+  // D-044: the same values the Worker refuses must be refused here, and refusing one must not make
+  // the rest of the capability payload unreadable.
+  const refusedSandboxOrigins: [label: string, value: string][] = [
+    ['an http origin', 'http://tabletop-sandbox-staging.ptchrr.workers.dev'],
+    ['an origin carrying credentials', 'https://user:secret@tabletop-sandbox-staging.ptchrr.workers.dev'],
+    ['an origin carrying a query', 'https://tabletop-sandbox-staging.ptchrr.workers.dev?debug=1'],
+    ['an origin carrying a fragment', 'https://tabletop-sandbox-staging.ptchrr.workers.dev#top'],
+    ['an origin carrying a path', 'https://tabletop-sandbox-staging.ptchrr.workers.dev/frame.html'],
+    ['an origin that is too long', `https://${'a'.repeat(200)}.workers.dev`],
+    ['a host that is neither the app nor workers.dev', 'https://sandbox.example.test'],
+    ['a value that is not a URL', 'tabletop-sandbox-staging.ptchrr.workers.dev'],
+  ];
+
+  it.each(refusedSandboxOrigins)('ignores %s without failing the payload', async (_label, toolSandboxOrigin) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response({ uploads: true, toolSandboxOrigin, tableAssistant: { available: true }, model: { enabled: true, reason: '' } })));
+    const client = new TabletopClient();
+
+    const capabilities = await client.capabilities();
+    expect(capabilities).not.toHaveProperty('toolSandboxOrigin');
+    expect(capabilities.uploads).toBe(true);
+  });
+
   it('keeps model command identity stable and omits an unselected source', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(response({ id: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', status: 'queued' }));
     vi.stubGlobal('fetch', fetchMock);

@@ -29,6 +29,8 @@ jobs:
   # CI006: a release merge on main whose code is identical to its release PR head, which
   # already passed the full suite as a PR into main, reuses that result instead of running
   # everything again, so the deploy starts a few seconds after the merge.
+  # CI011: a release PR whose code equals the dev commit it was cut from (apart from the changelog
+  # cut) reuses that dev commit's passing full-suite push run.
   plan:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -60,10 +62,33 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           REF: ${{ github.ref }}
           REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           full=false
           reuse=false
-          if [ "$EVENT" = workflow_dispatch ] || [ "$BASE_REF" = main ]; then
+          if [ "$EVENT" = pull_request ] && [ "$BASE_REF" = main ] && [[ "$HEAD_REF" == release/* ]]; then
+            full=true
+            # CI011: a release PR is dev plus the changelog cut. If the code it would merge (HEAD is
+            # the PR's merge commit with main) equals the dev commit it was cut from, apart from
+            # CHANGELOG.md and changelog.d/, and that dev commit's push run passed the full suite,
+            # reuse it. A fix on the release branch or a main commit dev lacks changes the code, so
+            # everything runs.
+            cut="$(git merge-base "$PR_HEAD_SHA" origin/dev 2>/dev/null || true)"
+            if [ -n "$cut" ] && git diff --quiet "$cut" HEAD -- . ':(exclude)CHANGELOG.md' ':(exclude)changelog.d'; then
+              run="$(gh api "repos/$REPO/actions/workflows/validate.yml/runs?head_sha=$cut&event=push&branch=dev&status=success&per_page=5" \
+                --jq '.workflow_runs[0].html_url // empty' || true)"
+              if [ -n "$run" ]; then
+                full=false
+                reuse=true
+                echo "::notice::Same code as dev $cut apart from the changelog cut, which passed the full suite: $run"
+              else
+                echo "Code matches dev $cut but no passing full-suite dev run was found; running everything."
+              fi
+            else
+              echo "The release PR's code differs from dev ${cut:-?} beyond the changelog; running everything."
+            fi
+          elif [ "$EVENT" = workflow_dispatch ] || [ "$BASE_REF" = main ]; then
             full=true
           elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/dev ]; then
             full=true
@@ -311,10 +336,17 @@ jobs:
           include-hidden-files: false
           if-no-files-found: ignore
 
+  # CI009: the Workers suite was the slowest job (~8 min), so it runs as two parallel halves.
+  # TT_WORKERS_PART picks the checks in tests/cloudflare-browser.mjs; each half starts its own
+  # Miniflare, D1 and accounts. `needs.browser-workers.result` fails if either half fails.
   browser-workers:
-    name: Account multiplayer and AI browser acceptance on Workers
+    name: Account multiplayer and AI browser acceptance on Workers (${{ matrix.part }}/2)
     needs: plan
     if: needs.plan.outputs.full_suite == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -336,13 +368,15 @@ jobs:
         run: npm run build:cloudflare
       - name: Install test browser
         run: node node_modules/playwright/cli.js install --with-deps chromium
-      - name: Account multiplayer and AI browser acceptance on Workers
-        run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser failed; retrying once"; npm run test:cloudflare:browser; }
+      - name: Account multiplayer and AI browser acceptance on Workers (${{ matrix.part }}/2)
+        env:
+          TT_WORKERS_PART: ${{ matrix.part }}
+        run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser part $TT_WORKERS_PART failed; retrying once"; npm run test:cloudflare:browser; }
       - name: Retain test summaries
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-summaries-workers
+          name: test-summaries-workers-${{ matrix.part }}
           path: |
             test-results/cloudflare-browser/report.json
             test-results/cloudflare-browser/public-demo-desktop.png
@@ -500,34 +534,20 @@ jobs:
             gh issue create -R "$REPO" --title "$TITLE" --body "$body"
           fi
 
-  # CD002: a merge into dev whose full suite passed deploys tabletop-staging. It lives here,
-  # not in a workflow_run file, because workflow_run only fires for files on the default
-  # branch (main). Production is deployed only by release-deploy.yml (CD001).
-  deploy-staging:
-    name: Deploy tabletop-staging
+  # CD004/CD005: a dev run whose full suite passed closes the issue earlier failures opened.
+  # Separate from deploy-staging, which no longer waits for the browser suites.
+  close-dev-failure:
+    name: Close fixed dev browser-suite issue
     needs: [local-validation]
     # Explicit status evaluation avoids transitive skips from optional PR-only gates.
-    # Cancellation and unsuccessful validation still prevent deployment.
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.local-validation.result == 'success' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 40 # room for one deploy retry after a slow container step
-    concurrency:
-      group: staging-deploy
-      cancel-in-progress: false
+    timeout-minutes: 5
     permissions:
-      contents: read
-      issues: write # open an issue when a staging deploy fails
-    env:
-      SHA: ${{ github.sha }}
-      STAGING_URL: ${{ vars.STAGING_URL }}
-      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      WRANGLER_SEND_METRICS: "false"
+      issues: write
     steps:
-      # CD004: a later success closes the issues earlier failures opened; never fails the job.
+      # Never fails the job.
       - name: Close dev browser-suite issues fixed by this run
-        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -536,6 +556,39 @@ jobs:
           for n in $(gh issue list -R "$REPO" --state open --author app/github-actions --search '"dev: browser suites failing after merge" in:title' --json number,title --jq '.[] | select(.title | startswith("dev: browser suites failing after merge")) | .number' 2>/dev/null); do
             gh issue close "$n" -R "$REPO" --comment "Fixed: the full suite passed after the merge of ${GITHUB_SHA:0:7} in $RUN_URL" || true
           done
+
+  # CD002: a merge into dev deploys tabletop-staging. It lives here, not in a workflow_run
+  # file, because workflow_run only fires for files on the default branch (main).
+  # Production is deployed only by release-deploy.yml (CD001), gated by the release PR's full suite.
+  # CD005: staging starts as soon as the fast checks pass; the browser suites keep running
+  # alongside, and a failure there still fails local-validation and opens/comments the CI007
+  # issue. Staging may briefly run code whose browser suites later fail.
+  deploy-staging:
+    name: Deploy tabletop-staging
+    needs: [plan, fast-checks]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.fast-checks.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40 # room for one deploy retry after a slow container step
+    concurrency:
+      group: staging-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write # open an issue when a staging deploy fails
+    outputs: # CD007: rollback-staging returns to previous_version if the browser suites fail
+      previous_version: ${{ steps.live-before.outputs.version }}
+      deployed_version: ${{ steps.live-after.outputs.version }}
+    env:
+      SHA: ${{ github.sha }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
+      # F080 / D-044: host of the sandbox worker (static assets only). Override it with the repo
+      # variable of the same name; the app is deployed with it as TOOL_SANDBOX_ORIGIN below.
+      STAGING_SANDBOX_HOST: ${{ vars.STAGING_SANDBOX_HOST || 'tabletop-sandbox-staging.ptchrr.workers.dev' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
       - name: Record start
         run: |
           echo "JOB_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -569,14 +622,44 @@ jobs:
           npm run build
           echo "VERSION=$(node -p "require('./dist/version.json').version")" >> "$GITHUB_ENV"
           node -e "console.log(require('./dist/version.json'))"
+      - name: Staging — record the live version
+        id: live-before
+        run: |
+          v="$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          # The ID itself stays out of this public log; only whether it was read.
+          if [ -n "$v" ]; then echo "Recorded the live Worker Version."; else echo "::warning::Could not read the live Worker Version; CD007 rollback will skip for this run."; fi
       - name: Staging — migrations
         run: |
           echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
           bash .github/scripts/d1-migrate.sh wrangler.staging.json staging
+      # F080 / D-044: the sandbox document is its own Worker on its own origin. `frame.js` is a build
+      # product (gitignored), so it is generated here rather than trusted to exist from an earlier step.
+      # CD006: the sandbox goes first so the app is deployed once, already carrying its origin. A host
+      # that is not a bare name is refused before anything is published as a frame source.
+      - name: Staging — sandbox assets
+        run: |
+          echo "STAGE=staging-sandbox-assets" >> "$GITHUB_ENV"
+          if ! [[ "$STAGING_SANDBOX_HOST" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+            echo "::error::STAGING_SANDBOX_HOST must be a bare host such as tabletop-sandbox-staging.ptchrr.workers.dev"
+            exit 1
+          fi
+          node scripts/build-tool-sandbox-runtime.mjs
+      - name: Staging — sandbox deploy
+        run: |
+          echo "STAGE=staging-sandbox-deploy" >> "$GITHUB_ENV"
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.sandbox.jsonc
       - name: Staging — deploy
         run: |
           echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
-          bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json 2 60 --var "TOOL_SANDBOX_ORIGIN:https://$STAGING_SANDBOX_HOST"
+      - name: Staging — record the deployed version
+        id: live-after
+        run: |
+          v="$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          # The ID itself stays out of this public log; only whether it was read.
+          if [ -n "$v" ]; then echo "Recorded the live Worker Version."; else echo "::warning::Could not read the live Worker Version; CD007 rollback will skip for this run."; fi
       - name: Staging — smoke checks
         run: |
           echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
@@ -606,7 +689,7 @@ jobs:
         run: |
           DETECTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           BODY="$(printf '%s\n' \
-            "Staging deploy failed. Staging is NOT rolled back automatically; production is untouched." \
+            "Staging deploy failed. A failed deploy is NOT rolled back automatically (CD007 rolls back only after browser suites fail); production is untouched." \
             "" \
             "| Field | Value |" "| --- | --- |" \
             "| Commit (dev) | $SHA |" \
@@ -620,3 +703,83 @@ jobs:
             "Record the failure and fix times in MEMORY.md → Deploy failures.")"
           gh issue create --title "Staging deploy failed at ${STAGE:-unknown} (${SHA:0:7})" --body "$BODY" \
             || echo "Could not open the failure issue; the run log still has the details."
+
+  # CD007: staging deploys after the fast checks (CD005), so the browser suites finish later. If
+  # one of them fails, put back the Worker Version that was live before this run's deploy, but
+  # only while this run's version is still the live one: a newer merge that already deployed is
+  # never rolled back. D1 migrations and the sandbox Worker are not reverted (the sandbox is
+  # static and backward compatible). Its own concurrency group: sharing staging-deploy would let
+  # this pending job cancel a newer run's pending deploy.
+  rollback-staging:
+    name: Roll back tabletop-staging
+    needs: [deploy-staging, browser-node, browser-workers, browser-generated, report-dev-failure]
+    if: >-
+      ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev'
+      && needs.deploy-staging.result == 'success'
+      && (needs.browser-node.result == 'failure' || needs.browser-workers.result == 'failure' || needs.browser-generated.result == 'failure') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: staging-rollback
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write # comment on the dev browser-suite issue
+    env:
+      SHA: ${{ github.sha }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
+      PREVIOUS: ${{ needs.deploy-staging.outputs.previous_version }}
+      DEPLOYED: ${{ needs.deploy-staging.outputs.deployed_version }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Write deploy config
+        env:
+          WRANGLER_CONFIG_STAGING: ${{ secrets.WRANGLER_CONFIG_STAGING }}
+        run: |
+          umask 077
+          printf '%s' "$WRANGLER_CONFIG_STAGING" > wrangler.staging.json
+          npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
+      - name: Roll back if this run's version is still live
+        id: rollback
+        run: |
+          live="$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)"
+          echo "previous=$PREVIOUS deployed=$DEPLOYED live=$live"
+          if [ -z "$PREVIOUS" ] || [ -z "$DEPLOYED" ]; then
+            echo "result=skipped: the versions before/after the deploy were not recorded" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$live" != "$DEPLOYED" ]; then
+            echo "result=skipped: staging already serves a newer deploy (${live:-unknown})" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          npx wrangler rollback "$PREVIOUS" --config wrangler.staging.json --yes \
+            --message "CD007: browser suites failed at ${SHA:0:7}"
+          echo "result=rolled back to $PREVIOUS; staging /version now $(curl -fsS "$STAGING_URL/version" || echo unreadable)" >> "$GITHUB_OUTPUT"
+      - name: Remove deploy config
+        if: always()
+        run: rm -f wrangler.staging.json
+      # The notice must never change the rollback's outcome.
+      - name: Report on the dev browser-suite issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RESULT: "${{ steps.rollback.outputs.result || 'FAILED - wrangler rollback did not complete; staging still serves this run' }}"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: "dev: browser suites failing after merge"
+        run: |
+          body="Staging auto-rollback (CD007) for \`${SHA:0:7}\`: **$RESULT** — $RUN_URL
+          D1 migrations from this run are not reverted. The next merge into \`dev\` deploys again."
+          echo "$body" >> "$GITHUB_STEP_SUMMARY"
+          number="$(gh issue list -R "$REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty' 2>/dev/null)"
+          if [ -n "$number" ]; then gh issue comment "$number" -R "$REPO" --body "$body" || true; fi

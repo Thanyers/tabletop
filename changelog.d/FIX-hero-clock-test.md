@@ -1,0 +1,1 @@
+- **เทสต์ hero บนหน้าแรกไม่ล้มสุ่ม (FIX, test only):** เทสต์รอให้ React รับ onLoad ของรูปและเริ่มนับเวลา 18 วินาทีก่อนเลื่อนนาฬิกา (`data-hero-loaded` บน hero) · ก่อนหน้านี้ browser suite บน Workers ล้มเป็นพัก ๆ ที่ "sales" → "learning"

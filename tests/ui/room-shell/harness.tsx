@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RoomShell, type RoomRecapView, type RoomTableSummary } from '../../../src/tabletop/ui/RoomShell';
 import type { JoinedSource } from '../../../src/tabletop/ui/JoinedProjectionView';
 import { readJoinedSources, type JoinedSourceRequest, type ProjectionResponse } from '../../../src/tabletop/ui/joined-projection-client';
 import { createJoinedProjectionFetcher } from '../../../src/tabletop/ui/joined-projection-fetcher';
-import { SpaceRoomScreen, type SpaceRoomDeps } from '../../../src/tabletop/ui/SpaceRoomScreen';
-import type { CollaborationSpace } from '../../../src/tabletop/shared/collaboration-space';
+import { GeneratedToolHost, type ToolIntentRequest } from '../../../src/tabletop/ui/GeneratedToolHost';
+import { compileRoomTool, toolInstanceId, toolNonce, toolPortSnapshots, toolPresentation } from '../../../src/tabletop/ui/room-tool-hosting';
+import { SpaceRoomScreen, intentInputs, type SpaceRoomDeps, type ToolIntentAnswer } from '../../../src/tabletop/ui/SpaceRoomScreen';
+import type { CollaborationSpace, SpaceToolInstallation } from '../../../src/tabletop/shared/collaboration-space';
+import {
+  TOOL_PACKAGE_PINNED_IMPORTS,
+  TOOL_PACKAGE_RUNTIME_PROFILE,
+  TOOL_PACKAGE_SCHEMA_VERSION,
+  type ToolPackageDefinition,
+} from '../../../src/tabletop/shared/tool-package';
+import type { ToolIntentOutcome } from '../../../src/tabletop/shared/tool-protocol';
 
 /**
  * F080 / JT-V harness: the room shell (variant C) with the real client mapping in the loop.
@@ -139,10 +148,85 @@ function Harness(): React.ReactElement {
   );
 }
 
-/**
- * F080 / D-036: the real product screen with an installed tool, so the room's own view (not the
- * harness slot) is what the browser proves.
- */
+/* ------------------------------------------------------------------------------------------------
+ * F080 / D-040: the product room screen with a tool it installed, and with the referenced package.
+ * ---------------------------------------------------------------------------------------------- */
+
+const ROOM_TOOL_UI = `import { useState } from 'react';
+
+export function Tool(props: {
+  sdk: { intent: (id: string, inputs: Record<string, string | number | boolean>) => Promise<{ status: string; code?: string }> };
+}) {
+  const [count, setCount] = useState(0);
+  const [note, setNote] = useState('');
+  const send = async () => {
+    setCount((value) => value + 1);
+    const outcome = await props.sdk.intent('check-room', { note: 'จากห้อง' });
+    setNote(outcome.status === 'committed' ? 'บันทึกแล้ว' : 'ถูกปฏิเสธ: ' + String(outcome.code ?? 'unknown'));
+  };
+  return (
+    <section data-testid="room-tool-package" style={{ font: '14px/1.6 system-ui, sans-serif', padding: 12 }}>
+      <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>ตรวจผังห้อง</h3>
+      <p data-testid="room-tool-package-count" style={{ margin: '0 0 8px', fontSize: 12 }}>เรียก n = {count}</p>
+      <button type="button" data-testid="room-tool-check" onClick={send} style={{ padding: '6px 12px', borderRadius: 8 }}>
+        ตรวจห้อง
+      </button>
+      <p data-testid="room-tool-package-note" aria-live="polite" style={{ margin: '6px 0 0', fontSize: 12 }}>{note}</p>
+    </section>
+  );
+}
+`;
+
+const ROOM_TOOL_BEHAVIOR = `export function check(inputs: Record<string, unknown>) {
+  // The exported behaviour returns the change list; the isolate entry wraps it for the wire.
+  return [{ target: 'self', resource: 'checks', operation: 'create', values: { note: String(inputs.note ?? '') } }];
+}
+`;
+
+const ROOM_TOOL_PACKAGE: ToolPackageDefinition = {
+  schemaVersion: TOOL_PACKAGE_SCHEMA_VERSION,
+  packageId: 'room-planner',
+  version: 2,
+  title: 'เครื่องมือวางผังห้อง',
+  description: 'ตรวจผังห้องจากในห้องกิจกรรม',
+  uiEntry: 'ui/main.tsx',
+  behaviorEntry: 'behavior/check.ts',
+  files: [
+    { path: 'ui/main.tsx', language: 'tsx', text: ROOM_TOOL_UI },
+    { path: 'behavior/check.ts', language: 'ts', text: ROOM_TOOL_BEHAVIOR },
+  ],
+  ports: [],
+  behaviors: [{
+    id: 'check-room',
+    label: 'ตรวจห้อง',
+    entry: 'check',
+    inputs: [{ id: 'note', label: 'หมายเหตุ', kind: 'text', required: true }],
+    writes: [{ target: 'self', resource: 'checks', operations: ['create'], maxRows: 1 }],
+    actions: [],
+  }],
+  imports: { react: TOOL_PACKAGE_PINNED_IMPORTS.react },
+  runtimeProfile: TOOL_PACKAGE_RUNTIME_PROFILE,
+  provenance: { origin: 'human', authorLabel: 'room-shell fixture', createdAt: 1_760_000_000_000 },
+};
+
+/** A package whose UI entry cannot compile, so the screen must keep the card and say why. */
+const ROOM_TOOL_BROKEN: ToolPackageDefinition = {
+  ...ROOM_TOOL_PACKAGE,
+  files: [{ path: 'ui/main.tsx', language: 'tsx', text: 'export function Tool( {' }],
+  behaviorEntry: undefined,
+  behaviors: [],
+};
+
+const ROOM_TOOL_REFERENCE: Omit<SpaceToolInstallation, 'definition'> = {
+  packageId: 'room-planner',
+  version: 2,
+  contentHash: 'c'.repeat(64),
+  route: 'ai',
+  title: 'เครื่องมือวางผังห้อง',
+  installedBy: 'actor-b',
+  installedAt: 5,
+};
+
 const SPACE_WITH_TOOL: CollaborationSpace = {
   schemaVersion: 1,
   spaceId: 'activity-room',
@@ -158,29 +242,125 @@ const SPACE_WITH_TOOL: CollaborationSpace = {
   epoch: 1,
   createdAt: 1,
   updatedAt: 2,
-  tool: {
-    packageId: 'room-planner',
-    version: 2,
-    contentHash: 'c'.repeat(64),
-    route: 'ai',
-    title: 'เครื่องมือวางผังห้อง',
-    installedBy: 'actor-b',
-    installedAt: 5,
-  },
+  tool: { ...ROOM_TOOL_REFERENCE, definition: ROOM_TOOL_PACKAGE },
 } as CollaborationSpace;
 
+/**
+ * `?tool=reference` = a room that holds only the version reference (D-036), `?tool=broken` = an
+ * installed package that does not compile, `?tool=none` = no tool at all, default = the real host.
+ */
+function spaceForCase(): CollaborationSpace {
+  const which = new URLSearchParams(window.location.search).get('tool');
+  if (which === 'none') {
+    const withoutTool: CollaborationSpace = { ...SPACE_WITH_TOOL };
+    delete withoutTool.tool;
+    return withoutTool;
+  }
+  if (which === 'reference') return { ...SPACE_WITH_TOOL, tool: ROOM_TOOL_REFERENCE } as CollaborationSpace;
+  if (which === 'broken') {
+    return { ...SPACE_WITH_TOOL, tool: { ...ROOM_TOOL_REFERENCE, definition: ROOM_TOOL_BROKEN } } as CollaborationSpace;
+  }
+  return SPACE_WITH_TOOL;
+}
+
+interface RoomHarnessState {
+  /** Every intent the screen forwarded to its `runToolIntent` dep. */
+  intents: { behaviorId: string; inputs: Record<string, string | number | boolean> }[];
+  /** How many times the screen re-read the room. */
+  loads: number;
+}
+
+const roomHarness: RoomHarnessState = { intents: [], loads: 0 };
+(globalThis as unknown as { __ROOM_HARNESS__: RoomHarnessState }).__ROOM_HARNESS__ = roomHarness;
+
+/**
+ * The scripted intent route both cases share.
+ *
+ * It records the call and reports a commit, exactly as the room's route would after it wrote through
+ * `table.act`; the origin-served frame must reach this same stub (D-044).
+ */
+async function runToolIntentStub(input: { behaviorId: string; inputs: Record<string, string | number | boolean> }): Promise<ToolIntentAnswer> {
+  roomHarness.intents.push({ behaviorId: input.behaviorId, inputs: input.inputs });
+  return { ok: true, actionId: 'action-1', ack: { revision: 4, duplicate: false } };
+}
+
 function SpaceScreenHarness(): React.ReactElement {
+  const fixture = spaceForCase();
   const deps: SpaceRoomDeps = {
     actorId: 'actor-a',
     viewerLabel: () => 'คุณกันต์ · ผู้จัดการห้อง',
-    loadSpace: async () => ({ title: SPACE_WITH_TOOL.title, space: SPACE_WITH_TOOL }),
+    loadSpace: async () => {
+      roomHarness.loads += 1;
+      // A real load returns fresh objects; the screen must not remount the frame for that.
+      return { title: fixture.title, space: structuredClone(fixture) };
+    },
+    loadConnections: async () => [],
     loadRecap: async () => ({ headline: 'มี 1 แหล่งข้อมูลเปลี่ยน', incomplete: false, changed: [], withdrawn: [] }),
-    fetchProjection: async () => ({ ok: false, status: 404, body: { ok: false, errorCode: 'SPACE_SOURCE_NOT_LINKED' } }),
+    fetchProjection: async () => ({ status: 404, body: { ok: false, errorCode: 'SPACE_SOURCE_NOT_LINKED' } }),
+    runToolIntent: runToolIntentStub,
   };
   return <SpaceRoomScreen workspaceId={SPACE} deps={deps} />;
+}
+
+/**
+ * F080 / D-044: the same host, with the frame document served from a second origin.
+ *
+ * The page renders nothing but `GeneratedToolHost`, so the browser driver can prove that the frame
+ * mounts under the app's own policy (which keeps `script-src 'self'`) and that a declared behaviour
+ * still reaches the scripted intent route. `sandboxOrigin` is passed by the driver, which also runs
+ * the origin that serves `sandbox-assets/` with the sandbox's own CSP.
+ */
+const ORIGIN_TOOL: SpaceToolInstallation = { ...ROOM_TOOL_REFERENCE, definition: ROOM_TOOL_PACKAGE };
+const ORIGIN_COMPILED = compileRoomTool(ORIGIN_TOOL);
+
+function SandboxOriginHarness({ sandboxOrigin }: { sandboxOrigin: string }): React.ReactElement {
+  const nonce = useMemo(() => toolNonce(), []);
+  const presentation = useMemo(() => toolPresentation(ROOM_TOOL_PACKAGE, { locale: 'th', reducedMotion: true }), []);
+  const ports = useMemo(() => toolPortSnapshots([], ROOM_TOOL_PACKAGE), []);
+  const [note, setNote] = useState('');
+
+  const onIntent = useCallback(async (request: ToolIntentRequest): Promise<ToolIntentOutcome> => {
+    // The screen's own mapping (D-038), so the frame's inputs arrive here as the route would receive them.
+    const answer = await runToolIntentStub({ behaviorId: request.behaviorId, inputs: intentInputs(request.inputs) });
+    setNote(answer.ok ? `committed:${answer.actionId}` : `rejected:${answer.code}`);
+    return answer.ok
+      ? { requestId: request.requestId, behaviorId: request.behaviorId, status: 'committed' }
+      : { requestId: request.requestId, behaviorId: request.behaviorId, status: 'rejected', code: answer.code, message: answer.message };
+  }, []);
+
+  if (ORIGIN_COMPILED.state !== 'ready') {
+    return <pre role="alert" data-testid="origin-compile-problems">{JSON.stringify(ORIGIN_COMPILED, null, 2)}</pre>;
+  }
+  return (
+    <main style={{ font: '14px/1.6 system-ui, sans-serif', maxWidth: 720, margin: '0 auto', padding: 16 }}>
+      <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>F080 / D-044 — host frame from the sandbox origin</h1>
+      <p data-testid="origin-case" style={{ margin: '0 0 12px', fontSize: 12, color: '#555' }}>{sandboxOrigin}</p>
+      <div className="tt-room__tool-host">
+        <GeneratedToolHost
+          instanceId={toolInstanceId(ORIGIN_TOOL)}
+          nonce={nonce}
+          compiled={ORIGIN_COMPILED.compiled}
+          ports={ports}
+          presentation={presentation}
+          onIntent={onIntent}
+          sandboxOrigin={sandboxOrigin}
+          title={ORIGIN_TOOL.title}
+        />
+      </div>
+      <p data-testid="origin-note" role="status" style={{ margin: '12px 0 0', fontSize: 12 }}>{note}</p>
+    </main>
+  );
 }
 
 const container = document.getElementById('root');
 if (!container) throw new Error('The room shell harness has no root element.');
 container.className = 'tt-app';
-createRoot(container).render(new URLSearchParams(window.location.search).get('screen') === 'space' ? <SpaceScreenHarness /> : <Harness />);
+const params = new URLSearchParams(window.location.search);
+const sandboxOrigin = params.get('sandbox') === 'origin' ? params.get('sandboxOrigin') : undefined;
+createRoot(container).render(
+  params.get('sandbox') === 'origin'
+    ? sandboxOrigin
+      ? <SandboxOriginHarness sandboxOrigin={sandboxOrigin} />
+      : <p role="alert">sandbox=origin needs sandboxOrigin=&lt;url&gt;</p>
+    : params.get('screen') === 'space' ? <SpaceScreenHarness /> : <Harness />,
+);

@@ -1,0 +1,128 @@
+/*
+ * F080 / D-050, D-051: the room setup and tool install panels.
+ *
+ * Tokens only: colours, spacing, radii and sizes come from tabletop-tokens.css so the panels follow the
+ * product's theme. A literal px or colour here is a gate failure, not a style choice.
+ */
+
+.tt-setup {
+  display: grid;
+  gap: var(--tt-space-2);
+  padding: var(--tt-space-3);
+  background: var(--tt-cream-0);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-card-radius);
+  font-size: var(--tt-type-body);
+}
+
+.tt-setup__title {
+  margin: 0;
+  color: var(--tt-ink);
+  font-size: var(--tt-type-title);
+}
+
+.tt-setup__hint {
+  margin: 0;
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+  opacity: 0.8;
+}
+
+.tt-setup__form {
+  display: grid;
+  gap: var(--tt-space-2);
+  margin: 0;
+}
+
+.tt-setup__field {
+  display: grid;
+  gap: var(--tt-space-1);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+}
+
+.tt-setup__field input,
+.tt-setup__text {
+  width: 100%;
+  min-block-size: var(--tt-space-6);
+  padding: var(--tt-space-1) var(--tt-space-2);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-small);
+  background: var(--tt-cream-1);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-body);
+}
+
+.tt-setup__text {
+  min-block-size: calc(var(--tt-space-6) * 5);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  overflow: auto;
+}
+
+.tt-setup__submit {
+  justify-self: start;
+  min-block-size: var(--tt-space-6);
+  padding: 0 var(--tt-space-3);
+  border: 1px solid var(--tt-green-1);
+  border-radius: var(--tt-button-radius);
+  background: var(--tt-green-1);
+  color: var(--tt-cream-0);
+  font-size: var(--tt-type-small);
+  cursor: pointer;
+}
+
+.tt-setup__submit[disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tt-setup__problem,
+.tt-setup__ok {
+  margin: 0;  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+}
+
+.tt-setup__problem {
+  font-weight: 700;
+}
+
+/* D-052: the linked-source list. */
+.tt-setup__list {
+  display: grid;
+  gap: var(--tt-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tt-setup__list-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tt-space-2);
+  justify-content: space-between;
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+  /* Flex children default to min-width: auto and refuse to shrink, which pushed the page 2px wider
+     than the 280px viewport. Letting them shrink is what keeps long titles inside the panel. */
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.tt-setup__list-item > * {
+  min-inline-size: 0;
+}
+
+.tt-setup__field select {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-block-size: var(--tt-space-6);
+  padding: var(--tt-space-1) var(--tt-space-2);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-button-radius);
+  background: var(--tt-cream-1);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-body);
+}
+

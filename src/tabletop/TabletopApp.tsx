@@ -23,6 +23,10 @@ import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
 import type { AddableWebSource } from './workspace/table-chat-state';
 import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistoryWrite, pageForPath, pathForProjection, shouldApplyLateOpen, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
+import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
+import { SpaceGrantPanel } from './ui/SpaceGrantPanel';
+import { RoomDialog, RoomMenu, type RoomAction } from './ui/RoomActions';
+import './ui/room-actions.css';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
 import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHARS } from './shared/workspace-title';
@@ -379,14 +383,15 @@ export default function TabletopApp() {
 
   useEffect(() => {
     if (starting) return;
-    const target = pathForProjection(view ? { id: view.id } : null, page);
+    // D-046: a room keeps its own address; without this hint the room was rewritten to `/t/:id`.
+    const target = pathForProjection(view ? { id: view.id } : null, page, spaceRoomId !== null && view?.id === spaceRoomId);
     const { write, nextMode } = nextHistoryWrite(urlSyncRef.current, target, window.location.pathname);
     urlSyncRef.current = nextMode;
     if (write === 'skip') return;
     // Pushed entries remember the app page before them, so "Your tables" can step back instead of stacking `/`.
     if (write === 'replace') window.history.replaceState(window.history.state, document.title, target);
     else window.history.pushState({ tabletopFrom: window.location.pathname }, document.title, target);
-  }, [view?.id, page, starting]);
+  }, [view?.id, page, spaceRoomId, starting]);
 
   useEffect(() => {
     const followHistory = () => {
@@ -524,6 +529,59 @@ export default function TabletopApp() {
     (kind: UploadKind, file: File) => commands.upload(kind, file),
     [commands],
   );
+
+  /**
+   * F080 / D-049: create the room from the table screen.
+   *
+   * It goes through the ordinary command path, so the authority still decides: this only shapes the
+   * request and reports what came back.
+   */
+  const [roomDialog, setRoomDialog] = useState<RoomAction | null>(null);
+  const createRoom = useCallback(async (input: { spaceId: string; title: string }): Promise<RoomSetupResult> => {
+    try {
+      const next = await runCommand('space.create', { spaceId: input.spaceId, title: input.title });
+      if (next) setWorkspace(next);
+      setSpaceRoomId(input.spaceId);
+      return { ok: true, spaceId: input.spaceId, message: `สร้างห้องแล้ว: /s/${input.spaceId}` };
+    } catch (error) {
+      return { ok: false, message: errorText(error) };
+    }
+  }, [runCommand, setWorkspace]);
+
+  // Rooms this viewer belongs to, from the session list; the panel offers them as grant targets.
+  const grantRooms = (session?.workspaces ?? [])
+    .filter(workspace => workspace.id !== view?.id)
+    .map(workspace => ({ workspaceId: workspace.id, spaceId: workspace.id, title: workspace.title }));
+
+  /**
+   * F080 / D-054: let a room read one projection of this table.
+   *
+   * The command goes to this table (the source), so the owner's own authority applies, and the panel
+   * chose the fields and the row cap.
+   */
+  const grantRoomRead = useCallback(async (input: {
+    sourceWorkspaceId: string;
+    spaceWorkspaceId: string;
+    spaceId: string;
+    portId: string;
+    resource: string;
+    fields: string[];
+    maxRows: number;
+  }): Promise<{ ok: boolean; message: string }> => {
+    try {
+      await runCommand('source.grantProjection', {
+        grantId: `grant-${crypto.randomUUID()}`,
+        spaceId: input.spaceId,
+        spaceWorkspaceId: input.spaceWorkspaceId,
+        audience: { kind: 'space-members' },
+        projections: [{ portId: input.portId, resource: input.resource, fields: input.fields, maxRows: input.maxRows }],
+        actions: [],
+      });
+      return { ok: true, message: `ให้สิทธิ์ห้อง ${input.spaceId} แล้ว` };
+    } catch (error) {
+      return { ok: false, message: errorText(error) };
+    }
+  }, [runCommand]);
 
   const importTableFile = useCallback(
     (targetView: WorkspaceView, file: File) => commands.importTableFile(targetView, file),
@@ -734,9 +792,16 @@ export default function TabletopApp() {
       <SpaceRoomScreen
         workspaceId={spaceRoomId}
         deps={createSpaceRoomDeps({
+          workspaceId: spaceRoomId,
           loadWorkspace: (id) => tabletopClient.workspace(id),
           actorId: view.actor.actorId,
           viewerLabel: view.actor.name,
+          // F080 / D-044: the sandbox origin travels from the Worker's capabilities to the frame host.
+          ...(capabilities.toolSandboxOrigin ? { toolSandboxOrigin: capabilities.toolSandboxOrigin } : {}),
+          // F080 / D-053: the tables this person could link into the room, from the session list.
+          sourceCandidates: (session?.workspaces ?? [])
+            .filter(workspace => workspace.id !== spaceRoomId)
+            .map(workspace => ({ workspaceId: workspace.id, title: workspace.title })),
         })}
       />
     </div>
@@ -803,6 +868,8 @@ export default function TabletopApp() {
         <div className="tt-topbar__spacer" />
         <div className="tt-connection" data-state={connection} role="status" title="Live connection status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Offline' : 'Reconnecting'}</span></div>
         {view.kind !== 'invoice' && <HeaderPeople members={view.members} selfId={view.actor.actorId} store={cursorStore} onOpenPeople={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} />}
+        {/* D-049 / D-054: create a room from this table, or let a room read it. */}
+        <RoomMenu onChoose={setRoomDialog} />
         {canInvite && <button type="button" className="tt-button tt-button--quiet tt-invite-button" onClick={openInviteDialog}><Plus size={14} /> Invite</button>}
         <details className="tt-table-options"><summary aria-label="Table options"><MoreHorizontal size={20} /></summary><div className="tt-table-options__body">
           <a href="/demo" target="_blank" rel="noopener"><Play size={15} />Try a demo</a>
@@ -852,6 +919,8 @@ export default function TabletopApp() {
       />
 
       {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} onRemoveMember={view.kind === 'table' && viewerCan(view, 'members.remove') && !tableReadOnly ? (actorId) => void removeMember(actorId) : undefined} onInviteLinkNotice={view.kind === 'table' && canInvite && capabilities.inviteLinks ? showNotice : undefined} linkInvites={view.kind === 'table' && capabilities.inviteLinks === true} onAccessCommand={(type, payload) => runCommand(type, payload)} memberLimit={memberLimit} runtimeMemberSeats={runtimeMemberSeats} onSetMemberLimit={view.kind === 'table' && canInvite && !tableReadOnly ? (maxMembers) => void runCommand('display.set', { maxMembers }) : undefined} />}
+      {roomDialog === 'create' && <RoomDialog label="สร้างห้องจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} /></RoomDialog>}
+      {roomDialog === 'grant' && <RoomDialog label="ให้ห้องอ่านข้อมูลจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><SpaceGrantPanel sourceWorkspaceId={view.id} rooms={grantRooms} grantProjection={grantRoomRead} /></RoomDialog>}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
     </UploadCapabilityProvider>

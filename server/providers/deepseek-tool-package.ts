@@ -13,7 +13,13 @@ import {
  */
 
 const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
-const TOOL_PACKAGE_MODEL = 'deepseek-flash';
+/**
+ * D-042: this account answers `deepseek-flash` through a reasoning model that spends the budget on
+ * reasoning and returns empty `content`, so the default is the model that actually produced a
+ * validated package. `--model` still overrides it per run.
+ */
+const TOOL_PACKAGE_MODEL = 'deepseek-chat';
+const TOOL_PACKAGE_MAX_TOKENS = 8000;
 
 export interface DeepSeekToolPackageUsage {
   calls: number;
@@ -45,9 +51,14 @@ const SYSTEM_PROMPT = [
   '"behaviors":[{"id":"<kebab>","label":"<1-80 chars>","entry":"<exported function name>","inputs":[{"id":"<kebab>","label":"<text>","kind":"number|text|boolean","required":true}],"writes":[{"target":"self","resource":"<collection id>","operations":["create"],"maxRows":10}],"actions":["<table action id>"]}],',
   '"imports":{"react":"19.3.0"},"runtimeProfile":"tabletop-tool-1","provenance":{"origin":"ai","createdAt":<unix ms>}}',
   'port objects have only id, label, direction, kind, fields, maxRows - never name or description.',
+  'Every id (packageId, port id, behaviour id, input id, resource, action id, and every string in a port fields list) is lowercase kebab-case: ^[a-z][a-z0-9-]*$ - no uppercase letters, no underscores, no spaces.',
   'behaviors must be an array even when it is empty; writes and actions may be empty arrays.',
   `Allowed UI imports are exactly ${Object.keys(TOOL_PACKAGE_PINNED_IMPORTS).join(', ')}; the imports object must pin each one.`,
-  'The ui module exports a React component named Tool taking no arguments. The behaviour module exports the function named by its entry, returns an array of changes and optionally {changes, proposal:{actionId, inputs}}.',
+  'The ui module exports a React component named Tool. The behaviour module exports the function named by its entry, returns an array of changes and optionally {changes, proposal:{actionId, inputs}}.',
+  'The Tool component is called with props { sdk, ports, presentation } and nothing else. ports is an array of { portId, label, rows: [{ id, values }], revision }; presentation is { locale, reducedMotion, maxRows }.',
+  'sdk is the only API available to the UI: sdk.ports() returns the current ports, sdk.onPorts(fn) subscribes (returns an unsubscribe function), sdk.intent(behaviorId, inputs) asks the host to run a declared behaviour, sdk.resize(heightPx) sets the frame height, sdk.log(level, message) writes a diagnostic.',
+  'There are NO hooks such as useToolState or useBehavior and no other @tabletop/tool-sdk exports: importing one throws at render time. Keep UI state in React useState/useEffect inside the component.',
+  'Render real content from props.ports (the rows the host authorized) and call sdk.intent to act; never invent data and never fetch.',
   'A behaviour may only write resources its writes declare, and may only propose actions listed in its actions array (all ids lowercase kebab-case).',
 ].join('\n');
 
@@ -118,7 +129,7 @@ export class DeepSeekToolPackageGenerator {
   /** The authoring pipeline asks for a ceiling before it spends anything. */
   estimate(): { calls: number; usd: number } {
     const price = this.options.pricePerMillionUsd ?? { prompt: 0.28, completion: 0.42 };
-    const maxTokens = this.options.maxTokens ?? 4000;
+    const maxTokens = this.options.maxTokens ?? TOOL_PACKAGE_MAX_TOKENS;
     return {
       calls: 1,
       usd: Number(((maxTokens * price.completion + 2000 * price.prompt) / 1_000_000).toFixed(6)),
@@ -140,7 +151,7 @@ export class DeepSeekToolPackageGenerator {
         body: JSON.stringify({
           model: this.options.model ?? TOOL_PACKAGE_MODEL,
           temperature: 0.2,
-          max_tokens: this.options.maxTokens ?? 4000,
+          max_tokens: this.options.maxTokens ?? TOOL_PACKAGE_MAX_TOKENS,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },

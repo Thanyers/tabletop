@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -6,12 +7,23 @@ import { resolve } from 'node:path';
  * Build the F080 room-shell harness (variant C) as a self-contained file:// page.
  *
  * The real token file and the real shell stylesheet are inlined, so a layout measurement here is a
- * measurement of the product's styling rather than of a mock.
+ * measurement of the product's styling rather than of a mock. The sandbox runtime travels beside the
+ * page as `runtime.js` (as it does in production, where the host fetches `/tool-sandbox-runtime.js`)
+ * because the `?screen=space` case mounts the real `GeneratedToolHost`.
  */
 
 const root = resolve(import.meta.dirname, '..');
 const output = resolve(root, 'test-results/room-shell-harness');
 await mkdir(output, { recursive: true });
+
+// The runtime is a build product (gitignored), so the harness builds it instead of assuming it exists.
+execFileSync(process.execPath, [resolve(root, 'scripts/build-tool-sandbox-runtime.mjs')], { stdio: 'inherit' });
+const runtimeScript = await readFile(resolve(root, 'public/tool-sandbox-runtime.js'), 'utf8');
+if (/<\/script/iu.test(runtimeScript)) {
+  console.error('build-room-shell-harness: the sandbox runtime can close an inline script tag');
+  process.exit(1);
+}
+await writeFile(resolve(output, 'runtime.js'), `window.__TOOL_SANDBOX_RUNTIME__=${JSON.stringify(runtimeScript)};\n`, 'utf8');
 
 const result = await build({
   entryPoints: [resolve(root, 'tests/ui/room-shell/harness.tsx')],
@@ -45,6 +57,7 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root"></div>
+<script src="runtime.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

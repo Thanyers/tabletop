@@ -35,6 +35,10 @@ jobs:
       SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
       PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
       PRODUCTION_WORKER: ${{ vars.PRODUCTION_WORKER || 'tabletop' }}
+      # F080 / D-044: the tool sandbox is its own assets-only Worker on its own origin. Both names can
+      # be overridden with repository variables; the host is what the app publishes as frame-src.
+      PRODUCTION_SANDBOX_WORKER: ${{ vars.PRODUCTION_SANDBOX_WORKER || 'tabletop-sandbox' }}
+      PRODUCTION_SANDBOX_HOST: ${{ vars.PRODUCTION_SANDBOX_HOST || 'tabletop-sandbox.ptchrr.workers.dev' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WRANGLER_SEND_METRICS: "false"
@@ -114,12 +118,29 @@ jobs:
           echo "STAGE=production-migrations" >> "$GITHUB_ENV"
           bash .github/scripts/d1-migrate.sh wrangler.production.json production
 
+      # F080 / D-044: the sandbox document is served from its own assets-only Worker, so the app can
+      # keep script-src 'self'. `frame.js` is a build product, so it is rebuilt here rather than trusted.
+      # CD006: the sandbox goes first so the app is deployed once, already carrying its origin. A host
+      # that is not a bare name is refused before anything is published as a frame source.
+      - name: Production — sandbox assets
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-sandbox-assets" >> "$GITHUB_ENV"
+          if ! [[ "$PRODUCTION_SANDBOX_HOST" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+            echo "::error::PRODUCTION_SANDBOX_HOST must be a bare host such as tabletop-sandbox.ptchrr.workers.dev"
+            exit 1
+          fi
+          node scripts/build-tool-sandbox-runtime.mjs
+      - name: Production — sandbox deploy
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-sandbox-deploy" >> "$GITHUB_ENV"
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.sandbox.jsonc 2 60 --name "$PRODUCTION_SANDBOX_WORKER"
       - name: Production — deploy
         if: env.SKIP != '1'
         run: |
           echo "STAGE=production-deploy" >> "$GITHUB_ENV"
-          bash .github/scripts/wrangler-deploy-retry.sh wrangler.production.json
-
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.production.json 2 60 --var "TOOL_SANDBOX_ORIGIN:https://$PRODUCTION_SANDBOX_HOST"
       - name: Production — smoke checks
         if: env.SKIP != '1'
         run: |

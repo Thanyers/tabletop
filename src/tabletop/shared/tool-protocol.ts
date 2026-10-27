@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { jsonWithinBudget } from './json-budget';
+import {
+  TOOL_BRIDGE_LIMITS,
+  TOOL_PROTOCOL_VERSION,
+  type ToolProtocolVersion,
+} from './tool-bridge';
 
 /**
  * F080: the typed channel between the host and one generated tool instance.
@@ -8,29 +13,13 @@ import { jsonWithinBudget } from './json-budget';
  * below, always stamped with the nonce it was initialised with; the host may only send four.
  * Everything else is dropped before it can reach a reducer, so a compromised or buggy frame
  * cannot invent a method, a revision or an actor.
+ *
+ * The version and the limits have no schema dependency and live in `tool-bridge.ts`, so the sandbox
+ * document served from its own origin can import them without pulling this parser into its script.
  */
 
-export const TOOL_PROTOCOL_VERSION = 1 as const;
-export type ToolProtocolVersion = typeof TOOL_PROTOCOL_VERSION;
-
-export const TOOL_BRIDGE_LIMITS = {
-  /** Characters of one serialised message. Larger messages are dropped, not truncated. */
-  maxMessageChars: 64 * 1024,
-  /** Rows one port snapshot may carry into the frame. */
-  maxRowsPerPort: 200,
-  /** Ports announced in one message. */
-  maxPorts: 8,
-  /** Pending intents the host accepts from one instance before it starts rejecting. */
-  maxPendingIntents: 8,
-  /** Characters of one log line accepted from the frame. */
-  maxLogChars: 400,
-  /** Rendered height the frame may request, in CSS pixels. */
-  maxHeightPx: 4_000,
-  /** Characters of one diagnostic message returned to the author. */
-  maxDiagnosticChars: 1_000,
-  /** An intent that has not been answered in this many milliseconds is reported as abandoned. */
-  intentTimeoutMs: 15_000,
-} as const;
+export { TOOL_BRIDGE_LIMITS, TOOL_PROTOCOL_VERSION };
+export type { ToolProtocolVersion };
 
 /** Why a projection is what it is; the frame renders the difference instead of guessing. */
 export type ToolPortStatus = 'live' | 'stale' | 'missing' | 'revoked';

@@ -2,10 +2,10 @@
 
 | | |
 | --- | --- |
-| สถานะ | `done` — round 11 README parity / [PR #348](https://github.com/Thanyers/tabletop/pull/348), [release #351](https://github.com/Thanyers/tabletop/pull/351); default-branch README and production 9.1.5 / 0ce11c8 verified |
+| สถานะ | `done` — round 12 bilingual README cleanup / PR #364, release #366; main README pages and production 9.1.6 / b809d9b favicon verified |
 | เจ้าของฟีเจอร์ | Codex |
-| เวอร์ชัน | 9.1.5 — English README aligned with the three published hero cases; app, homepage and media unchanged |
-| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T6 |
+| เวอร์ชัน | 9.1.6 — English/Thai README and consistent favicon; homepage content and media unchanged |
+| งานในกระดาน | [PLAN.md](../../PLAN.md) แถว F077-T1 ถึง F077-T7 |
 
 ## ทำไม
 
@@ -32,6 +32,12 @@
 | F077-T2 | Apply English README and improve homepage visual story | Hero shows a useful evolving table; physical additions visibly answer a person's need; no README navigation; language/auth/reduced-motion behavior retained |
 
 ## การตัดสินใจ
+
+### Round 12 / F077-T7 — bilingual README and consistent mark
+
+26 October 2026: remove production-process commentary and the animation-source link from the public README; keep useful product guidance and legal terms. Add a complete Thai README with reciprocal English/ไทย links and existing Thai GIF/poster assets. Match the README and browser icon to the homepage's existing four-color, tilted mark. Preserve the accepted homepage narrative, animations and film. Review other README copy for repetition and implementation details.
+
+Scope-only publication: carry only these README/icon changes from production 9.1.5; exclude unrelated dev runtime work under the user's standing no-other-changes boundary. Main entry, full CI and deploy guards stay unchanged.
 
 ### Round 11 / F077-T6 — README parity with the published cases
 

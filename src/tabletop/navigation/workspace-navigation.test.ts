@@ -53,6 +53,13 @@ describe('navigation decisions', () => {
     expect(pathForProjection(null, 'landing')).toBe('/');
   });
 
+  it('keeps a room on its own address (D-046)', () => {
+    // A room deep link used to be rewritten to /t/:id, which moved the member to the table screen.
+    expect(pathForProjection({ id: 'room-a' }, 'landing', true)).toBe('/s/room-a');
+    expect(pathForProjection({ id: 'room-a' }, 'landing', false)).toBe('/t/room-a');
+    expect(pathForProjection(null, 'tables', true)).toBe('/tables');
+  });
+
   it('replaces the first entry, pushes user navigation, and leaves back/forward alone', () => {
     expect(nextHistoryWrite('replace', '/t/room-a', '/')).toEqual({ write: 'replace', nextMode: 'push' });
     expect(nextHistoryWrite('push', '/t/room-a', '/tables')).toEqual({ write: 'push', nextMode: 'push' });

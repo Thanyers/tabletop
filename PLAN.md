@@ -25,6 +25,7 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F088 | scroll บนการ์ดเลื่อนข้อมูลในการ์ด ไม่ซูมบอร์ด | `review` | [F088](docs/features/F088-card-wheel-scroll.md) |
+| F077-T7 | Clean README copy, add Thai/English navigation, align icon with homepage mark | `done` | Codex · PR #364 / release #366 · production 9.1.6 / b809d9b; both main README pages and served favicon verified |
 | F086 | แหล่งเว็บของร่างที่ใช้อัตโนมัติยังเพิ่มเข้าโต๊ะและอ้างอิงได้ | `review` | [F086](docs/features/F086-applied-draft-web-sources.md) |
 | F087 | ช่องแชทลอยเป็น island ไม่มีแถบพื้นหลังบังบอร์ด | `review` | [F087](docs/features/F087-composer-island.md) |
 | F085 | การ์ดไม่หายวับตอนโต๊ะอัปเดต (คลิก checkbox ไม่หลุดไปโดนพื้นหลัง) | `review` | [F085](docs/features/F085-cards-stay-visible.md) |

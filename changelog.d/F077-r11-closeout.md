@@ -1,1 +1,0 @@
-- Record the verified default-branch README case alignment, unchanged app/media scope, and successful 9.1.5 publication; sync release history back to dev. Documentation only.
