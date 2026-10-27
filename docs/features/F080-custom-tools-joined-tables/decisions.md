@@ -636,3 +636,13 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - ⇒ chain ครบ: แอปจริง → CSP → sandbox origin → frame → runtime → compile → mount UI
 
 **บทเรียน:** adapter ที่ parse JSON ได้ไม่พอ — prompt ต้องบอก **surface ของ API ที่มีจริง** ไม่ใช่แค่รูปทรงของ JSON; และเมื่อ error ข้าม origin ให้หา `pageerror` (หรือ error bridge D-045) ก่อนสรุปว่าเป็นปัญหาแพลตฟอร์ม
+
+**ยืนยันครบทั้ง chain บน staging (2026-10-27, dev cad3e54):**
+
+- room: `https://tabletop-staging.ptchrr.workers.dev/s/<id>` (URL คงเป็น `/s/…` ตาม D-046)
+- tool frame: `https://tabletop-sandbox-staging.ptchrr.workers.dev/frame`
+- ข้อความใน frame: **"Room Planner — No rooms available in the joined data."** (UI ของ package ที่โมเดลสร้าง)
+- `errors: []` และ `public/_headers` ยัง `script-src self`
+
+⇒ ทางที่ 2 (D-044) ทำงานจริงตลอดเส้นบน host ที่ deploy และ package จาก AI รันได้ (หลังแก้ prompt ตาม D-048)
+ข้อจำกัด: การเรียก API ถูก mock เพราะไม่มี session ที่ลงชื่อเข้าใช้ — ยังไม่ใช่ผลทดสอบกับคนจริง
