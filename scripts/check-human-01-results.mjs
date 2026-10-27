@@ -14,10 +14,28 @@ import { readFileSync } from 'node:fs';
 const path = process.argv[2];
 if (!path) {
   console.error('usage: node scripts/check-human-01-results.mjs <results.csv>');
+  console.error('');
+  console.error('The template lives at:');
+  console.error('  docs/features/F080-custom-tools-joined-tables/human-01-kit/results-template.csv');
   process.exit(2);
 }
 
-const lines = readFileSync(path, 'utf8').replace(/^\uFEFF/u, '').split(/\r?\n/u).filter(line => line.trim().length > 0);
+let raw;
+try {
+  raw = readFileSync(path, 'utf8');
+} catch (error) {
+  // The person running the study should not have to read a stack trace to learn a path is wrong.
+  if (error && error.code === 'ENOENT') {
+    console.error(`no results file at ${path}`);
+    console.error('');
+    console.error('Copy the template first, then fill it in during the sessions:');
+    console.error('  copy docs\\features\\F080-custom-tools-joined-tables\\human-01-kit\\results-template.csv <your-file>.csv');
+    process.exit(2);
+  }
+  throw error;
+}
+
+const lines = raw.replace(/^\uFEFF/u, '').split(/\r?\n/u).filter(line => line.trim().length > 0);
 const meta = {};
 const rows = [];
 let headerSeen = false;
