@@ -10,8 +10,20 @@ import { SpaceGrantPanel } from '../../../src/tabletop/ui/SpaceGrantPanel';
  * stylesheet, so the UI gate measures the product's styling rather than a mock.
  */
 
-function Harness(): React.ReactElement {
-  const [created, setCreated] = useState<string | undefined>();
+/** The collapsible section from the table page, with the state the real one has. */
+function PanelToggle(props: { label: string }): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="tt-panel">
+      <button type="button" className="tt-panel__toggle" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+        {open ? `ซ่อน${props.label}` : props.label}
+      </button>
+      {open ? <p className="tt-setup__hint">เนื้อหาที่แสดงเมื่อเปิด</p> : null}
+    </section>
+  );
+}
+
+function Harness(): React.ReactElement {  const [created, setCreated] = useState<string | undefined>();
 
   const createRoom = async (input: { spaceId: string; title: string }): Promise<RoomSetupResult> => {
     // A refused slug is what the authority would say, so the harness can show both states.
@@ -27,6 +39,9 @@ function Harness(): React.ReactElement {
   return (
     <main style={{ maxWidth: 620, margin: '0 auto', padding: 16 }}>
       <h1 style={{ fontSize: 18, marginTop: 0 }}>C · room setup</h1>
+      {/* D-055: the collapsible section the table page uses, so the gate measures its styles too. */}
+      <PanelToggle label="การให้สิทธิ์ห้อง" />
+      <PanelToggle label="ให้ห้องอ่านข้อมูลจากโต๊ะนี้" />
       <RoomSetupPanel createRoom={createRoom} defaultTitle="Activity Room" onCreated={setCreated} />
       <p data-testid="harness-created" role="status">{created ? `host ได้รับห้อง: /s/${created}` : 'host ยังไม่ได้รับห้อง'}</p>
       <ToolInstallPanel installTool={installTool as never} />

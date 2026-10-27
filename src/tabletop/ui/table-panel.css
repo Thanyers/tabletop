@@ -1,0 +1,28 @@
+/*
+ * F080 / D-055: the collapsible setup sections on the table page.
+ *
+ * Tokens only. The toggle reads as a quiet inline action, not a primary button, because it sits above
+ * the table surface and must not compete with it.
+ */
+
+.tt-panel {
+  display: grid;
+  gap: var(--tt-space-2);
+  margin-block-end: var(--tt-space-3);
+}
+
+.tt-panel__toggle {
+  justify-self: start;
+  min-block-size: var(--tt-space-6);
+  padding: 0 var(--tt-space-3);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-button-radius);
+  background: var(--tt-cream-1);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+  cursor: pointer;
+}
+
+.tt-panel__toggle[aria-expanded='true'] {
+  background: var(--tt-cream-2);
+}
