@@ -619,3 +619,20 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 3. รัน 3B probe ซ้ำบน staging; ถ้า package ที่ AI สร้างยังล้ม ให้อ่าน reason จาก D-045 error bridge แล้วแก้ที่ package/prompt
 
 **หมายเหตุความซื่อตรง:** ผมไม่ได้แก้บั๊กนี้ในรอบสุดท้ายของงบ Goal เพราะต้องแตะการนำทางของแอปหลักและควรมี test ครอบ — บันทึกไว้ให้รอบถัดไปทำอย่างปลอดภัย
+
+## D-048 — สัญญา SDK ของ sandbox ที่ AI ต้องเขียนตาม + หลักฐานว่า package ที่ AI สร้าง render ได้
+
+**What happened:** เปิดห้องจริงบน staging (3B) แล้ว tool ขึ้น "Script error." — ตรวจด้วย `pageerror` ของเบราว์เซอร์พบสาเหตุจริง: `_toolsdk.useToolState is not a function`
+
+**Root cause:** prompt เดิมบอกแค่ "export a React component named Tool" ทำให้โมเดลเดาว่ามี hook แบบ `useToolState`/`useBehavior` จาก `@tabletop/tool-sdk` — ซึ่ง **ไม่มีอยู่จริง** ใน runtime (`sdk` มีแค่ `ports(); onPorts(); intent(); resize(); log()` และ component ถูกเรียกด้วย `{ sdk, ports, presentation }`) ⇒ throw ตอน render
+
+**การแก้ (branch `fix/f080-prompt-sdk`):**
+1. `SYSTEM_PROMPT` ระบุสัญญาจริง: props `{ sdk, ports, presentation }`, รายชื่อ method ของ `sdk`, และประโยค "There are NO hooks such as useToolState or useBehavior"
+2. เพิ่มกฎ id: ทุก id (packageId, port, behaviour, input, resource, action, field) เป็น lowercase kebab-case `^[a-z][a-z0-9-]*$` — เพราะรอบแรกโมเดลสร้าง `capacityPeople` แล้ว validator ปฏิเสธ
+
+**หลักฐานว่าแก้แล้วได้ผล:**
+- สร้างใหม่ 1 ครั้ง: `room-planner` ผ่า�� validator, `withinCap: true`, 1 call / **USD 0.001036**; ตรวจ source: `imports sdk hooks: false`, `uses props.sdk: true`
+- render จริงใน sandbox document (harness fixture ชั่วคราว, revert แล้ว): frame ให้ข้อความ **"Room Planner — No rooms available in the joined data."** และ `errors: []`
+- ⇒ chain ครบ: แอปจริง → CSP → sandbox origin → frame → runtime → compile → mount UI
+
+**บทเรียน:** adapter ที่ parse JSON ได้ไม่พอ — prompt ต้องบอก **surface ของ API ที่มีจริง** ไม่ใช่แค่รูปทรงของ JSON; และเมื่อ error ข้าม origin ให้หา `pageerror` (หรือ error bridge D-045) ก่อนสรุปว่าเป็นปัญหาแพลตฟอร์ม
