@@ -77,7 +77,7 @@ const inputSchema = z.discriminatedUnion('kind', [
     }).optional(),
     /** F064: bounded web research gathered before the draft. Provenance/grounding only, never program.evidence. */
     research: z.strictObject({
-      brief: z.string().max(1_200),
+      brief: z.string().max(2_400),
       sources: z.array(z.strictObject({
         id: z.string().min(1).max(20),
         title: z.string().max(300),
@@ -85,7 +85,7 @@ const inputSchema = z.discriminatedUnion('kind', [
         date: z.string().max(64).nullable(),
         authority: z.number().int().min(-1).max(4),
         summary: z.string().max(400),
-      })).max(6),
+      })).max(12),
     }).optional(),
     repair: z.strictObject({ attempt: z.number().int().min(2).max(3), issues: z.array(z.string().max(MAX_REPAIR_ISSUE_CHARS)).min(1).max(MAX_REPAIR_ISSUES), previousOutput: z.string().max(18_000).optional() }).optional(),
   }),

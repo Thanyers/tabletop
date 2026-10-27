@@ -617,7 +617,7 @@ describe('Cloudflare AI proposal helper', () => {
       summary: 'not display text on the card',
     }));
     const summary = researchSummary({
-      queries: ['VAT ไทย 2569', 'q2', 'q3', 'q4', 'q5'],
+      queries: ['VAT ไทย 2569', ...Array.from({ length: MAX_JOB_RESEARCH_QUERIES + 1 }, (_, index) => `q${index + 2}`)],
       sources,
     });
 

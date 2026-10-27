@@ -24,9 +24,9 @@ export const MAX_JOB_SEARCH_TEXT_CHARS = MAX_JOB_SEARCH_QUERY_CHARS + MAX_JOB_SE
 /** F064: a search answers with at most 50 rows and keeps at most 10; this is the stored ceiling. */
 export const MAX_JOB_SEARCH_RESULTS = 100;
 /** F064 slice B: sources kept on a finished draft, matching the research step's own ceiling. */
-export const MAX_JOB_RESEARCH_SOURCES = 6;
+export const MAX_JOB_RESEARCH_SOURCES = 12;
 /** F064 slice B: search queries kept with the sources, for history and later evidence work. */
-export const MAX_JOB_RESEARCH_QUERIES = 4;
+export const MAX_JOB_RESEARCH_QUERIES = 12;
 /** F064 slice B: a source title is display text, redacted and clamped like any provider text. */
 export const MAX_JOB_RESEARCH_TITLE_CHARS = 200;
 /** F064 slice B: long enough for real URLs, short enough that a job row cannot be inflated. */

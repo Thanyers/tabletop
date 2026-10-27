@@ -62,7 +62,8 @@ describe('table research input (F064)', () => {
   it('rejects an oversized or malformed research block', () => {
     const tooMany = {
       ...research,
-      sources: Array.from({ length: 7 }, (_, index) => ({ ...research.sources[0], id: `web-${index}` })),
+      // F091: twelve sources fit; the thirteenth is refused.
+      sources: Array.from({ length: 13 }, (_, index) => ({ ...research.sources[0], id: `web-${index}` })),
     };
     expect(() => measureDeepSeekChangeRequest({ ...tableInput, research: tooMany } as DeepSeekChangeInput))
       .toThrow();
