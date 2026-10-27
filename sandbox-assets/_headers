@@ -1,8 +1,12 @@
 # F080 / D-044: the tool sandbox document is served from its own origin so the app page can keep
 # `script-src 'self'` (D-041/D-043). This policy is the sandbox's own: no network, no storage, no
 # navigation, and only the app's two origins may embed it. `'unsafe-eval'` is required because the
-# frame instantiates the runtime text the host sends; nothing else on this origin needs it.
+# frame instantiates the runtime; `connect-src 'self'` lets it fetch that runtime from this origin
+# (D-047) and nothing else.
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://tabletop.ptchrr.workers.dev https://tabletop-staging.ptchrr.workers.dev
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors https://tabletop.ptchrr.workers.dev https://tabletop-sandbox.ptchrr.workers.dev https://tabletop-staging.ptchrr.workers.dev https://tabletop-sandbox-staging.ptchrr.workers.dev
+  # D-047: the frame has an opaque origin (`sandbox="allow-scripts"`), so its own `/runtime.js` request
+  # is cross-origin. These assets are static and credential-free, so any origin may read them.
+  Access-Control-Allow-Origin: *
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
