@@ -35,6 +35,7 @@ if (!bundle) {
 
 const tokens = await readFile(resolve(root, 'src/tabletop/ui/tabletop-tokens.css'), 'utf8');
 const setupStyles = await readFile(resolve(root, 'src/tabletop/ui/room-setup.css'), 'utf8');
+const panelStyles = await readFile(resolve(root, 'src/tabletop/ui/table-panel.css'), 'utf8');
 const page = `<!doctype html>
 <html lang="th">
 <head>
@@ -43,6 +44,7 @@ const page = `<!doctype html>
 <title>F080 room setup</title>
 <style>${tokens}</style>
 <style>${setupStyles}</style>
+<style>${panelStyles}</style>
 <style>
   /* The panel ships with the app's own rules; keep the page background identical to the product. */
   body { margin: 0; background: var(--tt-cream-1); color: var(--tt-ink); font: inherit; }
@@ -56,3 +58,4 @@ const page = `<!doctype html>
 `;
 await writeFile(resolve(output, 'index.html'), page, 'utf8');
 console.log(`build-room-setup-harness: wrote ${resolve(output, 'index.html')}`);
+

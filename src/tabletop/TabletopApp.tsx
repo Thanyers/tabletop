@@ -24,6 +24,8 @@ import type { AddableWebSource } from './workspace/table-chat-state';
 import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistoryWrite, pageForPath, pathForProjection, shouldApplyLateOpen, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
 import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
+import { SpaceGrantPanel } from './ui/SpaceGrantPanel';
+import './ui/table-panel.css';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
 import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHARS } from './shared/workspace-title';
@@ -545,6 +547,42 @@ export default function TabletopApp() {
     }
   }, [runCommand, setWorkspace]);
 
+  const [grantOpen, setGrantOpen] = useState(false);
+  // Rooms this viewer belongs to, from the session list; the panel offers them as grant targets.
+  const grantRooms = (session?.workspaces ?? [])
+    .filter(workspace => workspace.id !== view?.id)
+    .map(workspace => ({ workspaceId: workspace.id, spaceId: workspace.id, title: workspace.title }));
+
+  /**
+   * F080 / D-054: let a room read one projection of this table.
+   *
+   * The command goes to this table (the source), so the owner's own authority applies, and the panel
+   * chose the fields and the row cap.
+   */
+  const grantRoomRead = useCallback(async (input: {
+    sourceWorkspaceId: string;
+    spaceWorkspaceId: string;
+    spaceId: string;
+    portId: string;
+    resource: string;
+    fields: string[];
+    maxRows: number;
+  }): Promise<{ ok: boolean; message: string }> => {
+    try {
+      await runCommand('source.grantProjection', {
+        grantId: `grant-${crypto.randomUUID()}`,
+        spaceId: input.spaceId,
+        spaceWorkspaceId: input.spaceWorkspaceId,
+        audience: { kind: 'space-members' },
+        projections: [{ portId: input.portId, resource: input.resource, fields: input.fields, maxRows: input.maxRows }],
+        actions: [],
+      });
+      return { ok: true, message: `ให้สิทธิ์ห้อง ${input.spaceId} แล้ว` };
+    } catch (error) {
+      return { ok: false, message: errorText(error) };
+    }
+  }, [runCommand]);
+
   const importTableFile = useCallback(
     (targetView: WorkspaceView, file: File) => commands.importTableFile(targetView, file),
     [commands],
@@ -857,6 +895,25 @@ export default function TabletopApp() {
         </button>
         {roomSetupOpen ? (
           <RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} />
+        ) : null}
+      </section>
+
+      {/* D-054: an owner grants a room read access from the table that holds the data. */}
+      <section className="tt-panel">
+        <button
+          type="button"
+          className="tt-panel__toggle"
+          aria-expanded={grantOpen}
+          onClick={() => setGrantOpen(open => !open)}
+        >
+          {grantOpen ? 'ซ่อนการให้สิทธิ์ห้อง' : 'ให้ห้องอ่านข้อมูลจากโต๊ะนี้'}
+        </button>
+        {grantOpen ? (
+          <SpaceGrantPanel
+            sourceWorkspaceId={view.id}
+            rooms={grantRooms}
+            grantProjection={grantRoomRead}
+          />
         ) : null}
       </section>
 
