@@ -1,0 +1,220 @@
+/*
+ * F080 / JT-V - room shell (variant C · split ledger, decision D-022).
+ *
+ * Values come only from `tabletop-tokens.css`; this file adds layout, not a palette. The narrow
+ * layout is a single column in the base layer so a phone never has to squeeze three columns.
+ */
+
+.tt-room {
+  display: grid;
+  gap: var(--tt-space-3);
+  padding: var(--tt-space-3);
+  background: var(--tt-canvas);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-body);
+}
+
+.tt-room__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--tt-space-2);
+  padding: var(--tt-space-3);
+  background: var(--tt-paper);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-medium);
+  box-shadow: var(--tt-shadow-piece);
+}
+
+.tt-room__title {
+  margin: 0;
+  font-size: var(--tt-type-title);
+  color: var(--tt-ink);
+}
+
+.tt-room__chip {
+  padding: 0 var(--tt-space-2);
+  border: 1px solid var(--tt-green-1);
+  border-radius: var(--tt-radius-large);
+  color: var(--tt-green-1);
+  background: var(--tt-green-2);
+  font-size: var(--tt-type-small);
+}
+
+.tt-room__chip--quiet {
+  border-color: var(--tt-line);
+  background: var(--tt-cream-0);
+  color: var(--tt-muted);
+}
+
+.tt-room__viewer {
+  margin-left: auto;
+  color: var(--tt-muted);
+  font-size: var(--tt-type-small);
+}
+
+.tt-room__body {
+  display: grid;
+  gap: var(--tt-space-3);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.tt-room__rail,
+.tt-room__data,
+.tt-room__side {
+  display: grid;
+  gap: var(--tt-space-2);
+  padding: var(--tt-space-3);
+  background: var(--tt-paper);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-medium);
+}
+
+.tt-room__heading {
+  margin: 0;
+  font-size: var(--tt-type-small);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tt-muted);
+  display: flex;
+  align-items: baseline;
+  gap: var(--tt-space-2);
+}
+
+.tt-room__heading-note {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+}
+
+.tt-room__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--tt-space-1);
+}
+
+.tt-room__table {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: var(--tt-space-2);
+  padding: var(--tt-space-2);
+  font: inherit;
+  text-align: left;
+  color: var(--tt-ink);
+  background: var(--tt-cream-0);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-small);
+  cursor: pointer;
+}
+
+.tt-room__table[aria-current='true'] {
+  border-color: var(--tt-moss);
+  background: var(--tt-green-2);
+  font-weight: 600;
+}
+
+/* On the tinted active row the muted tone drops under AA, so the meta text borrows the ink token. */
+.tt-room__table[aria-current='true'] .tt-room__table-meta {
+  color: var(--tt-ink);
+}
+
+.tt-room__table-meta {
+  margin-left: auto;
+  color: var(--tt-muted);
+  font-size: var(--tt-type-small);
+  font-weight: 400;
+}
+
+.tt-room__recap {
+  display: grid;
+  gap: var(--tt-space-2);
+  padding: var(--tt-space-3);
+  background: var(--tt-cream-0);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-small);
+}
+
+.tt-room__recap-line {
+  margin: 0;
+  color: var(--tt-ink);
+}
+
+/* F080 / D-036: the room states which tool version it runs. */
+.tt-room__tool {
+  display: grid;
+  gap: var(--tt-space-1);
+  padding: var(--tt-space-3);
+  background: var(--tt-cream-0);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-radius-small);
+}
+
+.tt-room__tool-title,
+.tt-room__tool-line {
+  margin: 0;
+  color: var(--tt-ink);
+}
+
+/* F080 / D-040: the installed package's own UI, mounted in the room's tool slot. */
+.tt-room__tool-host {
+  display: grid;
+  gap: var(--tt-space-2);
+  min-width: 0;
+}
+
+.tt-room__tool-note {
+  margin: 0;
+  color: var(--tt-muted);
+  font-size: var(--tt-type-small);
+}
+
+.tt-room__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--tt-space-2);
+  margin: 0;
+}
+
+.tt-room__facts dt {
+  color: var(--tt-muted);
+  font-size: var(--tt-type-small);
+}
+
+.tt-room__facts dd {
+  margin: 0;
+  font-size: var(--tt-type-title);
+  color: var(--tt-ink);
+}
+
+/* Two columns as soon as there is room for the data beside the rail. */
+@media (min-width: 720px) {
+  .tt-room__body {
+    grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  }
+
+  .tt-room__side {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The full ledger on a wide screen: tables, joined data, tool and recap. */
+@media (min-width: 1080px) {
+  .tt-room__body {
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) minmax(0, 22rem);
+  }
+
+  .tt-room__side {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-room * {
+    transition: none;
+  }
+}

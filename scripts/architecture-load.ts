@@ -282,7 +282,7 @@ export async function runArchitectureLoad(options: LoadOptions): Promise<Archite
   const repository = new SqlWorkspaceRepository(database);
   try {
     await migrateDatabase(database, 'local');
-    const authority = new CommandAuthority({ repository });
+    const authority = new CommandAuthority({ repository, identity: repository });
 
     interface LiveRoom {
       session: Awaited<ReturnType<CommandAuthority['createOrRefreshSession']>>['session'];

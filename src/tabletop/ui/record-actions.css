@@ -144,3 +144,13 @@
 
 /* F075: the last press of a control and the row it changed. */
 .tt-table-action__done { display: block; margin: 0; padding: 6px 9px; border-radius: 8px; background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 88%); color: var(--tt-ink, #303d3a); font-size: 12.5px; line-height: 1.45; }
+
+/* F081: yes/no fields as checkboxes, and a collapsed collection card that reads as a checklist. */
+.tt-table-checkbox { width: 18px; height: 18px; margin: 0; accent-color: var(--tt-moss, #2f6f5e); cursor: pointer; }
+.tt-table-checkbox:disabled { cursor: not-allowed; opacity: .55; }
+.tt-table-checklist { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.tt-table-checklist li label { display: flex; align-items: flex-start; gap: 10px; padding: 6px 4px; border-radius: 6px; font-size: 13.5px; line-height: 1.45; cursor: pointer; }
+.tt-table-checklist li label:hover { background: color-mix(in srgb, var(--tt-moss, #2f6f5e), transparent 92%); }
+.tt-table-checklist li .tt-table-checkbox { flex: none; margin-top: 1px; }
+.tt-table-checklist li.is-done span { color: var(--tt-muted); text-decoration: line-through; }
+.tt-table-checklist__more { padding: 4px; color: var(--tt-muted); font-size: 12px; }

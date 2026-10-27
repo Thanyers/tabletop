@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { DATE_SCHEMA, ID_SCHEMA, MAX_SATANG } from '../../src/tabletop/domain/helpers.js';
 import { DomainError } from '../../src/tabletop/shared/contracts.js';
 import { invoiceChangeSchema } from '../../src/tabletop/domain/index.js';
-import type { ModelInput, ModelProvider } from '../model.js';
+import type { ModelInput, ModelProvider } from './model-contracts.js';
 
 const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const DEFAULT_MODEL = 'deepseek-flash';
@@ -10,7 +10,7 @@ const DEFAULT_MAX_TOKENS = 2048;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_API_KEY_CHARS = 4096;
-const MAX_PROMPT_CHARS = 4000;
+import { MAX_DRAFT_PROMPT_CHARS as MAX_PROMPT_CHARS } from '../../src/tabletop/shared/ai-prompt-limits.js';
 const MAX_EXCERPT_CHARS = 4000;
 const MAX_INPUT_BYTES = 48_000;
 const MAX_REQUEST_OVERHEAD_BYTES = 8_000;

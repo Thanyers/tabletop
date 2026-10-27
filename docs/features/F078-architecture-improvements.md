@@ -38,10 +38,18 @@ Baseline inspected on 2026-10-24: dev `9efebab0c4c9`. `CommandAuthority` shares 
 | T5b | Navigation/focus lifecycle extraction (composition root keeps wiring) | T5a | URL/back/forward, create/open/switch and late async results keep current behavior; no UI redesign |
 | T6a | Room job view/progress seam (server-only) | T2–T4; ownership resolved | Public status/response/redaction/visibility unchanged |
 | T6b | Room job coordination seam (draft/assistant/reconcile/recovery), one path at a time | T6a | Retry/epoch/revision/revoked-member/late-result/uncertain-billing/auto-apply guards unchanged; conformance + relevant Room tests + full dev suite pass |
+| T6c | Room HTTP surface (route table + explicit deps); socket, job runners and images stay on the instance | T6b | Status codes, headers, guard order and error mapping unchanged; moved routes covered at the seam; no `ctx`/alarm/`this` in the new module |
 | T7a | Storage lifecycle and recovery contract + bounded growth measurement on disposable fixtures | T2, T4 | Every store and owner named, receipt replay horizon recorded as an open question, recovery manifest/schema/writer/epoch/revision/directory sequence/billing reconciliation described; nothing deleted |
 | T7b | Disposable recovery rehearsal | T7a | Multiple revisions, revoked member, pending/uncertain jobs, exact retry after restore, state hash/cursor/receipt/billing agreement; model RPO/RTO measured with hosted-restore limits stated |
 | T8 | Typed built-in Canvas view registration | T3, T5 | Compiler/tests catch a missing kind, malformed descriptors reject, valid schema→semantic→evaluation→render passes; wire contract preserved; core does not import React |
 | T9 | Extended load/soak and capacity comparison | T2, T5–T7 | Success/stale latency, queue/job age, failure/reconnect/outbox lag and storage curve across rooms compared against the recorded baseline before any capacity change |
+| T10 | Delete the Node runtime's unreachable model-job lifecycle; keep the provider contracts where their adapter consumes them | T1 | HTTP contract for `/model` unchanged (`503 MODEL_NOT_CONFIGURED`); no caller of the removed store/gateway; guard test keeps it from returning |
+| T12 | Point inverted seams down again: shared export, workspace decision modules, Canvas renderer/geometry out of the legacy tree | T1 | Same functions and inputs; moved tests pass at the new seam; no client import reaches `server/`; no behavior change |
+| T14 | Canvas browser view state (starred/hidden/seen/sizes/sort/layout) behind one module over an injected storage | T12 | Same keys, caps and fallbacks; blocked storage cannot break the canvas; unit tests cover corrupt values; component keeps React state only |
+| T13 | One owner for the AI prompt caps and for the shared-source limits, with drift tests | T12 | Same values and messages; contract/route/provider/UI import the leaf modules; a reintroduced literal fails a test |
+| T15 | Private chat state (closed cards, job→card ids, follow-ups, chat canvas ids) out of `useTableChat` | T12 | Same key, caps and fallbacks; blocked storage cannot break chat; the poll/retry loop stays for a later task |
+| T17 | Identity port (sessions + one-shot redemption) split from the workspace repository; no adapter implements what it cannot do | T4 | Session methods only where an identity store exists; missing identity fails loudly; Room adapter has no session methods; conformance suites still pass |
+| T16 | Chat job poll loop (`runJobPollLoop`) with injected clock/wait | T15 | Same intervals, limits, settle conditions and patches; cancellation stops without a timeout; a failed attempt keeps polling |
 
 Each implementation PR owns its code and test files. Shared status documents are updated serially by the main agent. T5/T6 must check existing `doing` ownership before touching UI or Room hotspots. The first delivery group is T1–T4; subsequent tasks remain explicitly tracked with their prerequisites.
 
@@ -114,6 +122,16 @@ This is deliberately one path, not the whole coordination layer: the draft and a
 
 Node `v22.23.2`: `npm run typecheck` (three configs) passed, Workers **204 passed / 0 failed** (including the receipt-before-timeout, timeout-recovery and reset-revokes-in-flight-job cases), `npm run build` passed, `npm run build:cloudflare` (Wrangler dry-run) passed, lint **0 errors** with the same three pre-existing `room.ts` warnings, public scan clean, `changelog.ts check` 9 fragments, `git diff --check` clean. `cloudflare/room.ts` went from 1489 to 1423 lines with a 110-line `room-job-recovery.ts`. The unit/SQL suite is **SKIPPED by nature** (it covers `src/` and `server/`, neither touched) and browser suites run in the full dev run after merge. No schema, billing, retention or visibility change.
 
+### T6c — Room HTTP surface (route table + dependency object)
+
+Moved out of `cloudflare/room.ts` into `cloudflare/room-http.ts`: `matchRoomRoute` (the 22-branch `if` chain becomes a named route table), the request/response helpers (`json`, `readJson`, `readBodyBytes`, JSON depth and body limits) and every route that does not need the Durable Object instance — internal create/redeem/join-link/view/metadata, workspace view, events, commands, invite-link, member removal, invitations and invoice export. The module takes an explicit `RoomHttpDeps` object (`env()` as a getter, repository, authority, `authorize`, `create`, `redeemInvite`, `joinByInviteLink`, `scheduleDirectorySync`) and imports no `ctx`, no alarm and no `this`.
+
+The routes that do need the instance stay on `Room` behind `handleRoomRoute`: the projection socket, the draft/assistant job runners and their alarm scheduling, and the canvas image route. Their bodies are unchanged from the previous single `fetch()`; only the dispatch that reaches them moved. The seam fails closed: a name in the route table with no handler throws instead of falling through.
+
+Behavior the move had to keep, now pinned by `cloudflare/room-http.test.ts`: `x-request-id` on every response, `x-tabletop-updated-at` always and a percent-encoded `x-tabletop-updated-by` only when someone changed the table, `cache-control: no-store` and `nosniff`, the guard order (session → mutation → writable → body → authority), the `201`/`200` split for the invite link and its single-render raw link, `429 MEMBER_LIMIT_REACHED` and the twelfth `member-12` seat on invitations not being an invalid seat, the read-only `TABLE_READ_ONLY` 403 for commands and invitations, export content type and attachment filename, and the “directory sync after committed membership/command” calls. Two environment details shaped the seam: read-only mode is a Proxy over `instance.env` in the tests, so the dependency is a getter rather than a captured value; and seat validation comes from the shared contracts rather than a local list, which a local eleven-seat copy had already broken.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **963 passed / 5 skipped (968)** (unchanged from the T7b baseline), Workers **236 passed / 0 failed** (204 baseline + 32 new seam tests), `npm run build` passed, `npm run build:cloudflare` (Wrangler dry-run) passed, lint **0 errors / 110 warnings** (baseline 111; the dead `empty()` helper was removed), `scripts/check-public-files.mjs` **970 files / 0 findings**, `changelog.ts check` fragments passed, `git diff --check` clean. `cloudflare/room.ts` went from 1,493 to 1,280 lines with a 468-line `room-http.ts`; browser suites are not run for a Worker-only move and the full dev run after merge covers them. No schema, billing, retention, visibility or production change.
+
 ### T8 — typed built-in Canvas view registration (PR #270)
 
 `src/tabletop/shared/view-kinds.ts` is the new leaf module: `import type` only, no zod, and plain metadata per kind (`layoutRole`, `needsRows`, `needsActions`) declared `satisfies { readonly [K in GenerativeViewDescriptor['kind']]: GenerativeViewKindMetadata }`. `GenerativeViewDescriptor` stays in `generative-contracts.ts` as the source of truth and does not import the registry, so there is no new runtime import cycle and no module-scope constant read across one (the 2026-10-23 `TABLE_AI_INPUT_BYTES` lesson).
@@ -159,3 +177,86 @@ T0/#264, T1/#260, T4/#263, T2/#261 and T3/#262 are merged into dev. T3's full de
 ### T3a closing status (2026-10-24)
 
 T3a/#265 merged as `d374e7051350237354d2055982cc383040c8e402`. Its dev run [40075882571](https://github.com/Thanyers/tabletop/actions/runs/40075882571) finished **success** with `Deploy tabletop-staging` **success** — the hosted deployment the scheduling fix existed for — while the three focused PR-only jobs stayed SKIPPED by design and are not counted as passes. Reading `/version` back returned staging `0.0.0-dev / d374e70` (`built_at` `2026-10-24T07:59:41Z`) and production unchanged at `9.0.2 / 8e2c7e1`. So the scheduling regression is closed by a real staging deployment, not by the overall run conclusion alone.
+
+### T10 — the Node runtime's unreachable model-job lifecycle
+
+The Node guest runtime answers `POST /api/workspaces/:id/model` with `503 MODEL_NOT_CONFIGURED` before it reaches any provider (`server/features.ts`, pinned by `server/features.test.ts`). Beside that route it still carried a complete parallel lifecycle — `ModelGateway`, `SqlModelJobStore`, `ModelJob`, `ModelJobStore`, their zod schemas and a 490-line test — with no production caller; only `ModelInput` and `ModelProvider` were read, by `server/providers/deepseek.ts` and the Worker invoice path.
+
+This task deletes the lifecycle (`server/model.ts` 504 lines and `server/model.test.ts` 490 lines) and keeps the two contracts that are actually consumed in `server/providers/model-contracts.ts`. It is guarded the test-first way: `server/dead-model-lifecycle.test.ts` asserts the module file is absent, failed before the deletion and passes after it, so a later change cannot quietly reinstate a second job store.
+
+Node `v22.23.2`: `npm run typecheck` (three configs) passed, unit/SQL **953 passed / 5 skipped (958)** (the 10 cases in `model.test.ts` went with the module), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (one pre-existing unused-import warning in `cloudflare/ai.ts` is unchanged), `node scripts/check-public-files.mjs` **970 files / 0 findings** after the commit, `git diff --check` clean. No HTTP contract, schema, billing, retention or production behavior change; the removed code was never reachable from a request.
+
+### T12 — inverted seams, pointed down again
+
+Three dependencies pointed up the layering that `CURRENT_ARCHITECTURE.md` describes, so a test or a move had to carry the wrong tree with it:
+
+- `server/exports.ts` formatted an invoice but was imported by the client `/demo` page (`src/tabletop/demo/InteractiveDemo.tsx`), the Worker Room HTTP seam and the Node feature routes. It is a pure formatter over the domain, so it now lives at `src/tabletop/shared/export-invoice.ts`; its test moved with it.
+- `src/tabletop/workspace/command-session.ts` — a seam that deliberately imports no React — imported `ui/table-chat-state` and `ui/table-candidate-apply`. Both are pure decision modules, so they now live next to it in `src/tabletop/workspace/`; the UI imports them downward.
+- `src/tabletop/ui/CanvasWorkspace.tsx` imported its edge renderer from the legacy `src/components/` tree and its obstacle-aware geometry from legacy `src/state/`. `CanvasEdge` (with its stylesheet) moved to `src/tabletop/ui/` and `edge-routing` to `src/tabletop/shared/`; the legacy workspace, the trio canvas and the constellation now import them from the Tabletop tree, which is the direction the product is supposed to retire toward.
+
+The sequence was test-first: the moved test files were created at their new paths first and failed (the modules were still elsewhere), then the implementations moved and the same tests passed unchanged. `grep` over `src/` confirms no client file imports `server/` anymore.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **953 passed / 5 skipped (958)** (same count as dev, the suites moved rather than changed), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. No behavior change: same functions, same inputs, same assertions.
+
+### T14 — Canvas view state behind one module
+
+`CanvasWorkspace.tsx` is the client's canvas composition root, and it also held six browser-backed view preferences inline: starred cards, hidden cards, cards this browser already saw, card sizes, the Objects sort order, and the per-viewer layout with its viewport. Each had its own key, cap, `try/catch` and parse rule — about 160 lines that could only be tested through a mounted canvas.
+
+They now live in `src/tabletop/ui/canvas-view-state.ts`: `createCanvasViewState(storage)` takes a `CanvasStorage` (`Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>`) or `null`, and returns one method pair per preference plus `sortMode`/`layout`. The component builds one instance over `window.localStorage` (with a guard for blocked storage) and keeps React state only; 23 call sites point at the module. `isCanvasPosition` is exported so the shared-layout parser and the stored-layout parser use one bounds check instead of two.
+
+Behavior is preserved on purpose, and the tests say so: the same `tabletop:r1:*` keys, 200/400 caps, id/dimension bounds, `pinned` default `true`, viewport clamp `0.25..1.7`, an unreadable value falls back to the default (`created-desc` for sort), an empty hidden set removes the key, and a storage that throws on read or write degrades silently.
+
+Test-first: `canvas-view-state.test.ts` was written before the module and failed with `Cannot find module`; after the module landed, two expectations were wrong about the default sort (`updated-desc` instead of the code's `created-desc`) and were corrected in the test, not the implementation.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **959 passed / 5 skipped (964)** (dev 953 + 6 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (three pre-existing hook-dependency warnings in `CanvasWorkspace` are unchanged), public scan **0 findings** after the commit. `CanvasWorkspace.tsx` went from 2,259 to 2,146 lines. No UI or user-visible behavior change.
+
+### T13 — one owner per limit
+
+Two classes of numbers were re-typed wherever they were needed:
+
+- **AI prompt caps.** `MAX_DRAFT_PROMPT_CHARS` and `MAX_ASSISTANT_PROMPT_CHARS` were `4_000`/`4000` in the assistant contract schemas, in `cloudflare/room.ts` and `room-job-view.ts`, in the job repository's prompt guard, and in the DeepSeek provider schemas. They now live in `src/tabletop/shared/ai-prompt-limits.ts`, a leaf module with no imports (the same reason `ai-request-limits.ts` exists: Worker startup can read it without an import cycle). `room-job-view` keeps exporting `MAX_TABLE_ASSISTANT_PROMPT_CHARS` so existing importers are unchanged.
+- **Shared-source limits.** Four slots, 32 KiB per file and 64 KiB per table were declared in the domain, again in `TABLE_CAPABILITY_LIMITS`, and again as literals in the client (`TableCanvasObjects`, `AIProposal`, `workspace/command-session`). `src/tabletop/shared/table-source-limits.ts` owns them now; `domain/table.ts` imports and re-exports the same names, and the client imports the leaf directly, so a limit change cannot leave the UI blocking a file the server accepts.
+
+Test-first: two drift tests were written before the consolidation and failed on the missing modules; after the change they also scan the contract, the Worker routes, the provider schemas and the three client files and fail if a prompt-cap literal (`prompt: z.string()…max(4_000|4000)`, `MAX_PROMPT_CHARS = 4000`) or a hand-typed source limit (`32 * 1024`, `64 * 1024`, `MAX_SOURCE_FILES = 4`, `sources.length >= 4`) comes back. The assistant contract is also tested behaviorally: 4,000 characters are accepted, 4,001 rejected.
+
+Deliberately left alone: the 4,000-character caps on assistant *answer text*, research snippets and job partial content are different concepts; consolidating them into a prompt cap would change what they bound.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **964 passed / 5 skipped (969)** (dev 959 + 5 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (the listed warnings are pre-existing), public scan **0 findings** after the commit. No limit value, guard order or user-facing message changed.
+
+### T15 — private chat state out of the hook
+
+The first slice of the chat-lifecycle work. `useTableChat.tsx` (1,144 lines) carried a second responsibility: per-viewer chat bookkeeping in browser storage — which cards this viewer closed, which card a server job belongs to, which follow-up came from which card, the per-viewer canvas scope, and the chat card's canvas id.
+
+Those live in `src/tabletop/workspace/private-chat-store.ts` now: `createPrivateChatStore(storage)` takes a `Pick<Storage, 'getItem' | 'setItem'>` or `null` and returns `scopeFor`, `chatNodeId`, `chatCardNodeId`, `load`, `save`, `rememberJobCard`, `rememberFollowUp`, `isDismissed` and `dismiss`. `persistentCardId` (job id, then model-job id, then card id) is exported because the hook still uses the same precedence outside the store.
+
+Behavior preserved deliberately, and tested: the same `tabletop:r1:private-chat:*` key, the 80-entry caps on each list, `save`/`load` keeping the given order (de-duplication stays in `dismiss`), corrupt or foreign values falling back to an empty state, dismissal by job id before model-job id before card id, and a shared `table.chat.<jobId>` card id only when `VISIBILITY_POLICY === 'open'` and the job id is a 64-char hex token. A `null` or throwing storage degrades silently.
+
+The hook keeps React state and calls the store; it drops from 1,144 to 1,084 lines. **Deliberately not moved:** the effectful poll/backoff/timeout/retry loop and the assistant confirmation flow. Those are the racy paths (F025/F038/F045) and deserve their own task with a fake clock, not a ride-along on a storage move.
+
+Test-first: `private-chat-store.test.ts` was written before the module and failed with `Cannot find module`; one expectation was wrong about `save` de-duplicating and was corrected in the test, matching the old hook's behavior.
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **972 passed / 5 skipped (977)** (dev 964 + 8 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. No UI or user-visible behavior change.
+
+### T17 — the identity port
+
+`WorkspaceRepository` promised session storage and one-shot invitation redemption. The Room's adapter implemented them anyway — four methods returning `null` and `createSession` throwing `ROOM_SESSION_STORAGE_UNSUPPORTED` — because the interface required them; the room keeps identity in D1 and in its own invite-link rows, so those methods could never be honest.
+
+The five methods moved to `IdentityRepository`, which only a runtime with an identity store implements (`SqlWorkspaceRepository implements WorkspaceRepository, IdentityRepository`). `CommandAuthority` takes an optional `identity`; when it is absent, its session methods throw `INTERNAL_ERROR` ("Session storage is not available in this runtime") through one `requireIdentity()` guard instead of pretending the session expired. `RoomRepository` no longer has the five methods at all, and the Node runtime, the repository-conformance harness and the four measurement/rehearsal scripts pass their repository for both ports.
+
+Behavior kept: no HTTP route changes, the Room still rejects `/api/session`-style work through the Worker's D1 auth, and the Node flow behaves exactly as before because it passes the same repository twice.
+
+Test-first: `server/identity-port.test.ts` was written before the option existed. It asserts that a runtime without identity fails with `INTERNAL_ERROR` (before the change it reported `SESSION_EXPIRED`), that the injected identity receives `getSession`/`touchSession`, and that `createOrRefreshSession` creates the session through it. Two fixture mistakes were found and fixed in the test, not the code: the server cookie name and the double-hash CSRF fixture (`sha256(sha256('tabletop-r1-csrf-v1:' + token))`).
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **975 passed / 5 skipped (980)** (dev 972 + 3 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors** (remaining warnings are pre-existing), public scan **0 findings** after the commit. The repository-conformance suites (SQL and Room adapters) still pass, so the split did not change transaction or receipt behavior.
+
+### T16 — the chat job poll loop
+
+The second slice of the chat lifecycle, and the racy one. `useTableChat`'s effect owned the loop that waits an interval, polls once, settles, survives an error, and reports a timeout — all inside a `useEffect` with refs and cancellation flags, so its bounds could only be exercised through a mounted chat.
+
+`src/tabletop/workspace/job-poll-loop.ts` now owns the loop. `runJobPollLoop({ intervalMs, limitMs, now, wait, attempt, isActive, onError, onTimeout })` resolves `'settled' | 'timed-out' | 'stopped'`, and keeps the previous order exactly: the limit is checked before each wait, an inactive caller returns `'stopped'` without the timeout patch, a failed attempt reports through `onError` and keeps polling, and the timeout is reported once. The hook keeps the card/scope callbacks — which job to poll, when a job counts as settled, which patch each outcome applies — and passes them in.
+
+Deliberately unchanged: the intervals (`DRAFT_POLL_MS` 1.2 s, `ANSWER_POLL_MS` 1 s), `ANSWER_POLL_LIMIT_MS` 250 s and `draftPollLimitMs()`, the settle predicates, and the `pollError`/`pollTimedOut` patches.
+
+Test-first: six tests on a fake clock were written before the module (`Cannot find module`), and they pin the settled-first case, repeated polling, the timeout at the limit, error-continue, cancellation during a wait (no extra attempt) and cancellation between attempts (no timeout patch).
+
+Node `v22.23.2`: typecheck (three configs) passed, unit/SQL **981 passed / 5 skipped (986)** (dev 975 + 6 new), Workers **236 passed / 0 failed**, `npm run build` passed, lint on the touched files **0 errors**, public scan **0 findings** after the commit. `useTableChat.tsx` went from 1,084 to 1,081 lines; the remaining hook surface is React state and card rendering.

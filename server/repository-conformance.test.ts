@@ -21,7 +21,7 @@ async function createSqlAdapter(): Promise<RepositoryConformanceAdapter> {
   const database = createPGliteDatabase();
   await migrateDatabase(database, 'local');
   const repository = new SqlWorkspaceRepository(database);
-  const authority = new CommandAuthority({ repository });
+  const authority = new CommandAuthority({ repository, identity: repository });
   const now = Date.now();
   const actorId = randomUUID();
   const record: SessionRecord = {

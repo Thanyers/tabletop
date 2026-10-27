@@ -132,8 +132,6 @@ jobs:
         run: node --test scripts/integration-gate-plan.test.mjs scripts/integration-gate-worker-startup.test.mjs
       - name: Unit and local SQL integration tests
         run: npm test -- --reporter=default --reporter=json --outputFile=test-results/unit-report.json
-      - name: Legacy local Component Lab regression tests
-        run: node --import tsx --test scripts/component-lab/component-lab.test.ts
       - name: Typecheck and build
         env:
           DEEPSEEK_KEY: tabletop-ci-secret-canary-for-build
@@ -313,10 +311,17 @@ jobs:
           include-hidden-files: false
           if-no-files-found: ignore
 
+  # CI009: the Workers suite was the slowest job (~8 min), so it runs as two parallel halves.
+  # TT_WORKERS_PART picks the checks in tests/cloudflare-browser.mjs; each half starts its own
+  # Miniflare, D1 and accounts. `needs.browser-workers.result` fails if either half fails.
   browser-workers:
-    name: Account multiplayer and AI browser acceptance on Workers
+    name: Account multiplayer and AI browser acceptance on Workers (${{ matrix.part }}/2)
     needs: plan
     if: needs.plan.outputs.full_suite == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -338,13 +343,15 @@ jobs:
         run: npm run build:cloudflare
       - name: Install test browser
         run: node node_modules/playwright/cli.js install --with-deps chromium
-      - name: Account multiplayer and AI browser acceptance on Workers
-        run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser failed; retrying once"; npm run test:cloudflare:browser; }
+      - name: Account multiplayer and AI browser acceptance on Workers (${{ matrix.part }}/2)
+        env:
+          TT_WORKERS_PART: ${{ matrix.part }}
+        run: npm run test:cloudflare:browser || { echo "::warning::test:cloudflare:browser part $TT_WORKERS_PART failed; retrying once"; npm run test:cloudflare:browser; }
       - name: Retain test summaries
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-summaries-workers
+          name: test-summaries-workers-${{ matrix.part }}
           path: |
             test-results/cloudflare-browser/report.json
             test-results/cloudflare-browser/public-demo-desktop.png
@@ -403,10 +410,63 @@ jobs:
           include-hidden-files: false
           if-no-files-found: ignore
 
+  # F080: the generated tool host is the isolation boundary for custom UI, so its browser proof
+  # has to run in CI and not only on the author's machine.
+  tool-host:
+    name: Generated tool host and frame isolation
+    needs: [plan]
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'dev' && needs.plan.outputs.ui_gate == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Build the sandbox runtime and the host harness
+        run: |
+          node scripts/build-tool-sandbox-runtime.mjs
+          node scripts/build-tool-host-harness.mjs
+      - name: Install Chromium
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Verify the host, the bridge and the frame isolation
+        env:
+          BROWSER_CHANNEL: chromium
+        run: node tests/ui/tool-host/browser.mjs
+      - name: Verify the authoring panel
+        env:
+          BROWSER_CHANNEL: chromium
+        run: npm run test:tool-authoring:browser
+      - name: Verify the room shell
+        env:
+          BROWSER_CHANNEL: chromium
+        run: npm run test:room-shell:browser
+      - name: Verify the joined data panel
+        env:
+          BROWSER_CHANNEL: chromium
+        run: npm run test:tool-joined:browser
+      - name: Retain host evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tool-host-evidence
+          path: |
+            test-results/tool-host/
+            test-results/tool-authoring/
+            test-results/tool-joined/
+            test-results/room-shell/
+          retention-days: 7
+          include-hidden-files: false
+          if-no-files-found: ignore
+
   # The rulesets require a check named `local-validation` on main and dev, so this job keeps
   # the name and passes only when every job that ran passed (skipped jobs are fine).
   local-validation:
-    needs: [plan, fast-checks, browser-node, browser-workers, browser-generated, worker-startup, focused-ui, focused-compute]
+    needs: [plan, fast-checks, browser-node, browser-workers, browser-generated, worker-startup, focused-ui, focused-compute, tool-host]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -449,17 +509,41 @@ jobs:
             gh issue create -R "$REPO" --title "$TITLE" --body "$body"
           fi
 
-  # CD002: a merge into dev whose full suite passed deploys tabletop-staging. It lives here,
-  # not in a workflow_run file, because workflow_run only fires for files on the default
-  # branch (main). Production is deployed only by release-deploy.yml (CD001).
-  deploy-staging:
-    name: Deploy tabletop-staging
+  # CD004/CD005: a dev run whose full suite passed closes the issue earlier failures opened.
+  # Separate from deploy-staging, which no longer waits for the browser suites.
+  close-dev-failure:
+    name: Close fixed dev browser-suite issue
     needs: [local-validation]
     # Explicit status evaluation avoids transitive skips from optional PR-only gates.
-    # Cancellation and unsuccessful validation still prevent deployment.
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.local-validation.result == 'success' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      # Never fails the job.
+      - name: Close dev browser-suite issues fixed by this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list -R "$REPO" --state open --author app/github-actions --search '"dev: browser suites failing after merge" in:title' --json number,title --jq '.[] | select(.title | startswith("dev: browser suites failing after merge")) | .number' 2>/dev/null); do
+            gh issue close "$n" -R "$REPO" --comment "Fixed: the full suite passed after the merge of ${GITHUB_SHA:0:7} in $RUN_URL" || true
+          done
+
+  # CD002: a merge into dev deploys tabletop-staging. It lives here, not in a workflow_run
+  # file, because workflow_run only fires for files on the default branch (main).
+  # Production is deployed only by release-deploy.yml (CD001), gated by the release PR's full suite.
+  # CD005: staging starts as soon as the fast checks pass; the browser suites keep running
+  # alongside, and a failure there still fails local-validation and opens/comments the CI007
+  # issue. Staging may briefly run code whose browser suites later fail.
+  deploy-staging:
+    name: Deploy tabletop-staging
+    needs: [plan, fast-checks]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.fast-checks.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40 # room for one deploy retry after a slow container step
     concurrency:
       group: staging-deploy
       cancel-in-progress: false
@@ -470,6 +554,9 @@ jobs:
       SHA: ${{ github.sha }}
       STAGING_URL: ${{ vars.STAGING_URL }}
       STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
+      # F080 / D-044: host of the sandbox worker (static assets only). Override it with the repo
+      # variable of the same name; the app is redeployed with it as TOOL_SANDBOX_ORIGIN below.
+      STAGING_SANDBOX_HOST: ${{ vars.STAGING_SANDBOX_HOST || 'tabletop-sandbox-staging.ptchrr.workers.dev' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WRANGLER_SEND_METRICS: "false"
@@ -514,13 +601,44 @@ jobs:
       - name: Staging — deploy
         run: |
           echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
-          npx wrangler deploy --config wrangler.staging.json
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json
+      # F080 / D-044: the sandbox document is its own Worker on its own origin. `frame.js` is a build
+      # product (gitignored), so it is generated here rather than trusted to exist from an earlier step.
+      - name: Staging — sandbox assets
+        run: |
+          echo "STAGE=staging-sandbox-assets" >> "$GITHUB_ENV"
+          node scripts/build-tool-sandbox-runtime.mjs
+      - name: Staging — sandbox deploy
+        run: |
+          echo "STAGE=staging-sandbox-deploy" >> "$GITHUB_ENV"
+          npx wrangler deploy --config wrangler.sandbox.jsonc
+      # The origin exists only after the sandbox worker does, so the app is redeployed once with it.
+      # A host that is not a bare name is refused here instead of being published as a frame source.
+      - name: Staging — deploy with the sandbox origin
+        run: |
+          echo "STAGE=staging-sandbox-origin" >> "$GITHUB_ENV"
+          if ! [[ "$STAGING_SANDBOX_HOST" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+            echo "::error::STAGING_SANDBOX_HOST must be a bare host such as tabletop-sandbox-staging.ptchrr.workers.dev"
+            exit 1
+          fi
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json 2 60 --var "TOOL_SANDBOX_ORIGIN:https://$STAGING_SANDBOX_HOST"
       - name: Staging — smoke checks
         run: |
           echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
           npx tsx server/release-deploy.ts smoke "$STAGING_URL" "$VERSION" "$SHA" --compute | tee -a "$GITHUB_STEP_SUMMARY"
           echo "STAGE=done" >> "$GITHUB_ENV"
           echo "Deployed dev $SHA ($VERSION) to staging." >> "$GITHUB_STEP_SUMMARY"
+      # CD004: a later success closes the issues earlier failures opened; never fails the job.
+      - name: Close staging-failure issues fixed by this run
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list -R "$REPO" --state open --author app/github-actions --search '"Staging deploy failed" in:title' --json number,title --jq '.[] | select(.title | startswith("Staging deploy failed")) | .number' 2>/dev/null); do
+            gh issue close "$n" -R "$REPO" --comment "Fixed: staging deployed and passed smoke checks at ${SHA:0:7} in $RUN_URL" || true
+          done
       - name: Remove deploy config
         if: always()
         run: rm -f wrangler.staging.json

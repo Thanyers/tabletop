@@ -29,7 +29,7 @@ describe('canvas object commands in chat', () => {
 
 describe('chat card references', () => {
   it('treats a change asked about a referenced card as a rule edit, and a question as a question', async () => {
-    const { tableChatMode } = await import('./table-chat-state');
+    const { tableChatMode } = await import('../workspace/table-chat-state');
     const ask = (prompt: string, referencedCard: boolean) => tableChatMode('owner', true, false, { prompt, hasCreateAction: false, referencedCard });
     expect(ask('เพิ่มระดับความยาก', true)).toBe('draft');
     expect(ask('make it harder', true)).toBe('draft');

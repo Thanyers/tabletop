@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DomainError } from '../../src/tabletop/shared/contracts.js';
 import { DeepSeekProvider } from './deepseek.js';
-import type { ModelInput } from '../model.js';
+import type { ModelInput } from './model-contracts.js';
 
 const API_KEY = 'sentinel-deepseek-test-key';
 const SOURCE_ID = 'verified-rate-card';

@@ -2,9 +2,10 @@ import { ApiFailure, type TabletopCapabilities, type UploadRequest } from '../cl
 import type { CommandAck, WorkspaceView } from '../shared/contracts';
 import type { RollResult } from '../shared/roll';
 import type { TableAssistantJob } from '../shared/table-assistant-contracts';
-import { matchesExpectedTableCandidateView, sameTableCandidateScope } from '../ui/table-candidate-apply';
-import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from '../ui/table-chat-state';
+import { matchesExpectedTableCandidateView, sameTableCandidateScope } from './table-candidate-apply';
+import { canApplyWorkspaceRefresh, draftRefreshBackoffMs, sameChatRequestScope, type AddableWebSource } from './table-chat-state';
 import { errorText } from './error-text';
+import { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../shared/table-source-limits';
 import { decodeSourceText, inferredMime } from './source-file';
 
 /**
@@ -231,7 +232,7 @@ export function createWorkspaceCommandSession(deps: WorkspaceCommandDeps): Works
     };
     if (!activeTarget()) throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
     if (!/\.(csv|json|txt|md)$/iu.test(file.name)) throw new ApiFailure('Use a UTF-8 CSV, JSON, TXT or Markdown file. PDF and binary files are not supported.', 415, 'TABLE_FILE');
-    if (file.size < 1 || file.size > 32 * 1024) throw new ApiFailure('Each source file must contain between 1 byte and 32 KiB.', 413, 'TABLE_FILE_SIZE');
+    if (file.size < 1 || file.size > TABLE_FILE_BYTES) throw new ApiFailure('Each source file must contain between 1 byte and 32 KiB.', 413, 'TABLE_FILE_SIZE');
 
     let text: string;
     try { text = decodeSourceText(await file.arrayBuffer()); }
@@ -240,7 +241,7 @@ export function createWorkspaceCommandSession(deps: WorkspaceCommandDeps): Works
     if (!current || current.domain.kind !== 'table') throw new ApiFailure('This table changed while the file was being prepared. Open it again and choose the file there.', 409);
     const nextBytes = new TextEncoder().encode(text).byteLength;
     const existingBytes = current.domain.sources.reduce((sum, source) => sum + new TextEncoder().encode(source.text).byteLength, 0);
-    if (current.domain.sources.length >= 4 || existingBytes + nextBytes > 64 * 1024) throw new ApiFailure('A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.', 413, 'TABLE_LIMIT');
+    if (current.domain.sources.length >= MAX_TABLE_SOURCES || existingBytes + nextBytes > TABLE_TOTAL_SOURCE_BYTES) throw new ApiFailure('A table can hold up to four source files and 64 KiB total. Remove an unused source or choose a smaller file.', 413, 'TABLE_LIMIT');
 
     const requestSequence = projectionClock.value;
     deps.setBusy('table.import');
@@ -268,9 +269,14 @@ export function createWorkspaceCommandSession(deps: WorkspaceCommandDeps): Works
   const addWebSources = async (targetView: WorkspaceView, sources: AddableWebSource[]): Promise<void> => {
     if (sources.length === 0) return;
     try {
+      const current = deps.readWorkspace() ?? targetView;
+      const before = current.domain.kind === 'table' ? current.domain.sources.length : 0;
       const latest = await runCommand('table.addWebSources', { sources });
       if (!latest) return;
-      deps.notify(`${sources.length} web source${sources.length === 1 ? '' : 's'} added to ${targetView.title}. Verify each one before asking AI to use it in a rule change.`, 'success');
+      // F086: the server stops at the table's source limit, so name what was actually added, not what was offered.
+      const added = latest.domain.kind === 'table' ? Math.max(0, latest.domain.sources.length - before) : sources.length;
+      const skipped = sources.length - added;
+      deps.notify(`${added} web source${added === 1 ? '' : 's'} added to ${latest.title}.${skipped > 0 ? ` ${skipped} did not fit: a table holds at most ${MAX_TABLE_SOURCES} sources.` : ''} Verify each one before asking AI to use it in a rule change.`, 'success');
     } catch (error) {
       deps.notify(errorText(error), 'error');
     }

@@ -29,9 +29,9 @@ flowchart TB
 | Client shell and Canvas | Navigation, camera/selection, pending inputs, previews, command submission and acknowledgement readback | [`TabletopApp`](../src/tabletop/TabletopApp.tsx), [`CanvasWorkspace`](../src/tabletop/ui/CanvasWorkspace.tsx) |
 | Shared domain | Program validation, actions, evolution, membership permissions and projections | [`domain/`](../src/tabletop/domain/), [`contracts`](../src/tabletop/shared/contracts.ts) |
 | Command authority | Actor, epoch, revision, idempotency and transactional state changes | [`authority.ts`](../server/authority.ts) |
-| Persistence adapters | Current state, receipts, events, snapshots, memberships and outboxes | [`WorkspaceRepository`](../server/repository.ts), [`RoomRepository`](../cloudflare/room-repository.ts) |
+| Persistence adapters | Current state, receipts, events, snapshots, memberships and outboxes (`WorkspaceRepository`); sessions and one-shot invitation redemption only where an identity store exists (`IdentityRepository`, F078-T17) | [`WorkspaceRepository`](../server/repository.ts), [`RoomRepository`](../cloudflare/room-repository.ts) |
 | Worker and D1 | OIDC/session/CSRF and discovery of rooms | [`index.ts`](../cloudflare/index.ts), [`auth.ts`](../cloudflare/auth.ts), [R1 auth/storage](R1_ARCHITECTURE.md) |
-| Room | HTTP/WebSocket transport, authority composition, AI/compute wakeups and directory reconciliation | [`room.ts`](../cloudflare/room.ts) |
+| Room | WebSocket transport, authority composition, AI/compute wakeups and directory reconciliation; the HTTP route table and every route that does not need the instance live in `room-http.ts` (F078-T6c) | [`room.ts`](../cloudflare/room.ts), [`room-http.ts`](../cloudflare/room-http.ts) |
 | AI and billing | Consent checks, request context, structured output, progress/recovery and recorded usage | [`ai.ts`](../cloudflare/ai.ts), [`table-assistant.ts`](../cloudflare/table-assistant.ts), [`billing.ts`](../cloudflare/billing.ts) |
 | Reusable compute | Resolve declared inputs, isolated execution, typed output validation and revision-bound lineage | [`orchestrator`](../server/table-compute-orchestrator.ts), [Reusable compute](REUSABLE_COMPUTE.md) |
 
@@ -71,10 +71,10 @@ These are descriptions of existing behavior, not policy changes introduced by F0
 
 Use the owning constants rather than copying one limit across request types:
 
-- Rule draft table input: `TABLE_AI_INPUT_BYTES` (128 KiB); complete provider envelope: `MAX_CHANGE_REQUEST_BYTES` (160 KiB), with reservation margin defined separately in [`ai-request-limits.ts`](../src/tabletop/shared/ai-request-limits.ts).
+- Rule draft table input: `TABLE_AI_INPUT_BYTES` (128 KiB); complete provider envelope: `MAX_CHANGE_REQUEST_BYTES` (160 KiB), with reservation margin defined separately in [`ai-request-limits.ts`](../src/tabletop/shared/ai-request-limits.ts). Prompt caps: `MAX_DRAFT_PROMPT_CHARS` and `MAX_ASSISTANT_PROMPT_CHARS` in [`ai-prompt-limits.ts`](../src/tabletop/shared/ai-prompt-limits.ts).
 - Assistant: separate `MAX_REQUEST_BODY_BYTES` (48 KiB), active-state/context bounds and output limits in [`table-assistant.ts`](../cloudflare/table-assistant.ts). Changing draft limits does not change assistant limits.
 - Collections/records/actions: [`TABLE_LIMITS`](../src/tabletop/domain/table.ts) and [`tableCapabilitySummary`](../src/tabletop/shared/table-capabilities.ts).
-- Source slots/text: `MAX_TABLE_SOURCES`, `TABLE_FILE_BYTES`, `TABLE_TOTAL_SOURCE_BYTES` in [`table.ts`](../src/tabletop/domain/table.ts). Web sources share those slots; canvas image bytes use their own route/limits in [`canvas-images.ts`](../src/tabletop/shared/canvas-images.ts).
+- Source slots/text: `MAX_TABLE_SOURCES`, `TABLE_FILE_BYTES`, `TABLE_TOTAL_SOURCE_BYTES` in [`table-source-limits.ts`](../src/tabletop/shared/table-source-limits.ts) (re-exported by `table.ts`). Web sources share those slots; canvas image bytes use their own route/limits in [`canvas-images.ts`](../src/tabletop/shared/canvas-images.ts).
 - Compute programs, input/output and run history: [`COMPUTE_LIMITS`](../src/tabletop/shared/table-compute.ts), [`compute-runtime-profiles.ts`](../src/tabletop/shared/compute-runtime-profiles.ts) and [execution limits](REUSABLE_COMPUTE.md#ขอบเขต-execution).
 
 Current state and derived results are different from storage history. A bounded list of visible compute runs does not bound historical full snapshots. [`RoomRepository.persistCommit`](../cloudflare/room-repository.ts) writes full snapshots with receipts/events; a reset scrubs prior contents. No general compaction or retention policy is introduced here.

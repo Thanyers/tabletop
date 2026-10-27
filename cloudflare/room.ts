@@ -2,24 +2,34 @@ import { MAX_IMAGE_BYTES, MAX_TABLE_IMAGES, sniffImageType } from '../src/tablet
 import { VISIBILITY_POLICY } from '../src/tabletop/shared/visibility.js';
 import { DurableObject } from 'cloudflare:workers';
 import type { AuthenticatedSession, AuthorizedWorkspace } from '../server/authority.js';
-import { isSeat, type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
+import { type CommandAck, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { CommandAuthority } from '../server/authority.js';
 import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
-import { canonicalJson, hashValue, isRecord, randomId, randomToken, sha256 } from '../server/codec.js';
-import { exportInvoice } from '../server/exports.js';
+import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
+import { compileToolPackage } from '../src/tabletop/runtime/tools/compile.js';
+import { buildToolBehaviorRequest } from '../src/tabletop/shared/tool-behavior-request.js';
+import { planToolBehaviorAction } from '../src/tabletop/shared/tool-action-proposal.js';
+import { toolPackageContentCanonical, type ToolWriteDeclaration } from '../src/tabletop/shared/tool-package.js';
+import { spaceAllows, spaceRoleOf } from '../src/tabletop/shared/collaboration-space.js';
+import { ToolBehaviorRunError, validateToolBehaviorOutput, type ToolBehaviorResourceSchemaMap, type ToolBehaviorResult } from '../src/tabletop/shared/tool-behavior.js';
+import { createCloudflareToolBehaviorRunner } from './tool-behavior-runner.js';
 import { projectionCursor } from '../server/projection-cursor.js';
-import { MAX_MEMBERS_PER_WORKSPACE } from '../server/limits.js';
-import { authenticateHash, authenticateRequest, isAdminSession, requireMutation, requireOrigin } from './auth.js';
+import { resolveSpaceProjectionRead } from '../src/tabletop/shared/space-projection-read.js';
+import { projectGrantRows } from '../src/tabletop/shared/tool-grant-rows.js';
+import { verifyToolInstall } from './tool-install-verify.js';
+import { buildSpaceExport } from '../src/tabletop/shared/space-export.js';
+import { selectGrantsForSpace } from '../src/tabletop/shared/space-grants.js';
+import { authenticateHash, authenticateRequest, requireMutation, requireOrigin } from './auth.js';
 import { proposeChange } from './ai.js';
 import { redactString, respondToTablePrompt, type IdentityReplacement } from './table-assistant.js';
 import { selectTableConversation, TABLE_MEMORY_SCAN_LIMIT } from './table-memory.js';
-import { UPDATED_AT_HEADER, UPDATED_BY_HEADER, type Env } from './contracts.js';
+import { type Env } from './contracts.js';
 import { aiTableDeadlineMs, modelJobRecoveryMs } from './ai-deadline.js';
 import { tailWithin, MAX_JOB_THINKING_TAIL_CHARS, type ModelJobSearchProgress } from '../src/tabletop/shared/model-job-progress.js';
 import { ModelProviderClosed, ModelRequestTimeout, ModelStreamFailure, type DeepSeekChangeProgress } from '../server/providers/deepseek-changes.js';
 import { requireWorkspaceWritable } from './table-mode.js';
-import { prepareWebEvidenceCommand } from './web-evidence.js';
+import { createRoomHttp, json, matchRoomRoute, parseToolIntentInput, readBodyBytes, readJson, type RoomHttp, type RoomRouteMatch, type ToolIntentRun } from './room-http.js';
 import { MAX_TABLE_ASSISTANT_JOBS_PER_ROOM, RoomRepository, type PendingDirectoryChange } from './room-repository.js';
 import {
   boundedFailureDetails,
@@ -48,33 +58,23 @@ import { cleanReasons, safeModelFailureCode, safeModelFailureReasons } from './m
 import { resolveTableRuleReferences } from '../src/tabletop/shared/table-rule-reference.js';
 import { COMPUTE_EXECUTION_TIMEOUT_MS } from '../src/tabletop/shared/compute-runtime-profiles.js';
 
-const MAX_JSON_BODY_BYTES = 256 * 1024;
 const MAX_COMMAND_BODY_BYTES = 256 * 1024;
-const MAX_JSON_DEPTH_LIMIT = 96;
-const MAX_MODEL_PROMPT_CHARS = 4_000;
+import { MAX_DRAFT_PROMPT_CHARS as MAX_MODEL_PROMPT_CHARS } from '../src/tabletop/shared/ai-prompt-limits.js';
 const TABLE_ASSISTANT_CONTEXT_TURNS = 6;
 const TABLE_ASSISTANT_CONTEXT_MAX_BYTES = 16_384;
 const TABLE_ASSISTANT_HISTORY_DEFAULT_PAGE_SIZE = 20;
 const TABLE_ASSISTANT_HISTORY_MAX_PAGE_SIZE = 50;
 const DIRECTORY_BATCH_SIZE = 100;
 const RETRY_DELAY_MS = 5_000;
-const MAX_EXPORT_BYTES = 10 * 1024 * 1024;
 const ROOM_EXPIRES_AT = 253_402_300_799_000;
 const ROOM_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const COMMAND_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{40,64}$/u;
-/** Actor ids are opaque account ids (UUIDs today); bound the shape before touching storage. */
-const MEMBER_ACTOR_ID_PATTERN = /^[A-Za-z0-9_-]{1,160}$/u;
-const INVITE_LINK_DAYS: readonly number[] = [1, 7, 30];
 
 interface CreateInput {
   id: string;
   kind: 'invoice' | 'teaching' | 'encounter' | 'table';
   title?: string;
-}
-
-interface RedeemInput {
-  ticket: string;
 }
 
 interface ModelInput {
@@ -110,74 +110,6 @@ interface PeerAttachment {
   revision: string;
 }
 
-function json(status: number, body: unknown, headers: HeadersInit = {}): Response {
-  const resultHeaders = new Headers(headers);
-  resultHeaders.set('content-type', 'application/json; charset=utf-8');
-  resultHeaders.set('cache-control', 'no-store');
-  resultHeaders.set('x-content-type-options', 'nosniff');
-  return new Response(JSON.stringify(body), { status, headers: resultHeaders });
-}
-
-function empty(status: number): Response {
-  return new Response(null, { status, headers: { 'cache-control': 'no-store' } });
-}
-
-function hasExcessiveDepth(value: unknown, depth = 0): boolean {
-  if (depth > MAX_JSON_DEPTH_LIMIT) return true;
-  if (Array.isArray(value)) return value.some((item) => hasExcessiveDepth(item, depth + 1));
-  if (isRecord(value)) return Object.values(value).some((item) => hasExcessiveDepth(item, depth + 1));
-  return false;
-}
-
-async function readJson(request: Request, maxBytes = MAX_JSON_BODY_BYTES): Promise<unknown> {
-  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
-  if (contentType !== 'application/json') throw new AuthorityError('CONTENT_TYPE_REQUIRED');
-  const bytes = await readBodyBytes(request, maxBytes, 'INVALID_JSON');
-  let value: unknown;
-  try {
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)) as unknown;
-  } catch {
-    throw new AuthorityError('INVALID_JSON');
-  }
-  if (hasExcessiveDepth(value)) throw new AuthorityError('INVALID_REQUEST');
-  return value;
-}
-
-/** Reads a request body without ever buffering more than `maxBytes`. */
-async function readBodyBytes(request: Request, maxBytes: number, emptyCode: string): Promise<Uint8Array> {
-  const statedLength = request.headers.get('content-length');
-  if (statedLength !== null) {
-    const length = Number(statedLength);
-    if (!Number.isSafeInteger(length) || length < 0) throw new AuthorityError('INVALID_REQUEST');
-    if (length > maxBytes) throw new AuthorityError('BODY_TOO_LARGE');
-  }
-  if (!request.body) throw new AuthorityError(emptyCode);
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) {
-        await reader.cancel();
-        throw new AuthorityError('BODY_TOO_LARGE');
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
-}
-
 /** F073: ids of the pictures cards on this table currently show. */
 function pinnedImageIds(workspace: WorkspaceView): Set<string> {
   const domain = workspace.domain;
@@ -204,13 +136,6 @@ function parseCreateInput(value: unknown): CreateInput {
 }
 
 
-function parseRedeemInput(value: unknown): RedeemInput {
-  if (!isRecord(value) || typeof value.ticket !== 'string' || !INVITE_TOKEN_PATTERN.test(value.ticket)
-      || Object.keys(value).some((key) => key !== 'ticket')) {
-    throw new AuthorityError('INVITE_INVALID');
-  }
-  return { ticket: value.ticket };
-}
 
 function parseModelInput(value: unknown): ModelInput {
   if (!isRecord(value) || typeof value.commandId !== 'string' || !COMMAND_ID_PATTERN.test(value.commandId)
@@ -263,10 +188,35 @@ function parsePeerAttachment(value: unknown): PeerAttachment | null {
   return value as unknown as PeerAttachment;
 }
 
+type TableDomainView = Extract<WorkspaceView['domain'], { kind: 'table' }>;
+
+/** F080 / D-038: a refused run is a value, so the route answers with a code and nothing was committed. */
+function toolIntentRefusal(code: string, message: string): ToolIntentRun {
+  return { ok: false, code, message };
+}
+
+/**
+ * F080 / D-038: the field allowlist this run is granted.
+ *
+ * The behaviour says which resources it may write; the table decides which fields those resources
+ * have, so the schema comes from the program's own collections and never from the caller. A declared
+ * resource the program does not define still gets an empty allowlist, which refuses every cell rather
+ * than silently widening the run.
+ */
+function toolResourceSchema(domain: TableDomainView, writes: readonly ToolWriteDeclaration[]): ToolBehaviorResourceSchemaMap {
+  const schema: ToolBehaviorResourceSchemaMap = {};
+  for (const write of writes) {
+    const collection = domain.program?.collections.find(entry => entry.id === write.resource);
+    schema[write.resource] = { fields: (collection?.fields ?? []).map(field => ({ id: field.id, type: field.type })) };
+  }
+  return schema;
+}
+
 export class Room extends DurableObject<Env> {
   readonly repository: RoomRepository;
   readonly authority: CommandAuthority;
   private readonly jobRecovery: RoomJobRecovery;
+  private readonly http: RoomHttp;
   private directorySyncTail: Promise<void> = Promise.resolve();
   /** Last cursor relay per session (sockets are re-wrapped per event, so they cannot be keys). */
   private readonly cursorSentAt = new Map<string, number>();
@@ -295,6 +245,112 @@ export class Room extends DurableObject<Env> {
       onComputeWorkScheduled: () => this.ctx.waitUntil(
         this.scheduleAlarmAt(Date.now() + COMPUTE_EXECUTION_TIMEOUT_MS + RETRY_DELAY_MS).catch(() => undefined),
       ),
+    });
+    this.http = createRoomHttp({
+      env: () => this.env,
+      repository: this.repository,
+      authority: this.authority,
+      requireBoundRoomId: () => this.requireBoundRoomId(),
+      authorize: (request, workspaceId) => this.authorize(request, workspaceId),
+      create: (request, input) => this.create(request, input),
+      redeemInvite: (request, ticket) => this.redeemInvite(request, ticket),
+      joinByInviteLink: (request, token) => this.joinByInviteLink(request, token),
+      scheduleDirectorySync: () => this.scheduleDirectorySync(),
+      // F080: the Worker vouches that the caller is in the destination space; this table decides
+      // the rest against its own grant list, read fresh for this request.
+      readSpaceProjection: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as { kind: string; spaceGrants?: Parameters<typeof resolveSpaceProjectionRead>[0]['grants'] };
+        const answer = resolveSpaceProjectionRead({
+          grants: Array.isArray(domain.spaceGrants) && domain.kind === 'table' ? domain.spaceGrants : [],
+          grantId: input.grantId,
+          spaceId: input.spaceId,
+          spaceWorkspaceId: input.spaceWorkspaceId,
+          sourceWorkspaceId: workspace.id,
+          sourceEpoch: workspace.epoch,
+          actorId: input.actorId,
+          portId: input.portId,
+          membership: { verifiedBy: 'destination', actorId: input.actorId },
+          now: Date.now(),
+        });
+        if (!answer.ok) return answer;
+        // Rows are read from the state this request already holds, at its own revisions, so the
+        // response cannot mix revisions even under load.
+        const records = (domain as { records?: Record<string, { id: string; values: Record<string, unknown> }[]>; dataRevision?: number; ruleRevision?: number });
+        const rows = projectGrantRows({
+          portId: answer.projection.portId,
+          fields: answer.projection.fields,
+          maxRows: answer.projection.maxRows,
+          dataRevision: records.dataRevision ?? 0,
+          ruleRevision: records.ruleRevision ?? 0,
+          grantVersion: answer.grantVersion,
+          label: 'source',
+          records: records.records?.[answer.projection.resource] ?? [],
+          readAt: Date.now(),
+        });
+        return { ...answer, rows: rows.rows, sourceDataRevision: rows.sourceDataRevision };
+      },
+      // F080: an action through a connection commits as the grant issuer, on this table's authority.
+      executeSpaceAction: async input => {
+        try {
+          const ack = await this.authority.executeSpaceAction({
+            actorId: input.actorId,
+            workspaceId: this.requireBoundRoomId(),
+            grantId: input.grantId,
+            spaceWorkspaceId: input.spaceWorkspaceId,
+            actionId: input.actionId,
+            inputs: input.inputs,
+            idempotencyKey: input.idempotencyKey,
+          });
+          return { ok: true as const, revision: ack.workspace.revision, duplicate: ack.duplicate };
+        } catch (error) {
+          const code = error instanceof AuthorityError ? error.code : 'SPACE_ACTION_FAILED';
+          return { ok: false as const, code, message: error instanceof Error ? error.message : 'The action failed.' };
+        }
+      },
+      // F080: a recap needs to know which connections this table holds for that room.
+      listSpaceGrants: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as unknown as {
+          spaceGrants?: Parameters<typeof selectGrantsForSpace>[0];
+          dataRevision?: number;
+        };
+        // The live revision travels with the answer, so a recap can compare without a second read.
+        const live = domain.dataRevision ?? 0;
+        return selectGrantsForSpace(Array.isArray(domain.spaceGrants) ? domain.spaceGrants : [], input.spaceWorkspaceId)
+          .map(connection => ({ ...connection, liveDataRevision: live }));
+      },
+      // F080 / D-038: the room runs the behaviour, plans the action and commits it through table.act.
+      runToolIntent: (request, workspaceId, input) => this.runToolIntent(request, workspaceId, input),
+      // F080: the export is built here because only this table can see its rows and its export flag.
+      exportSpaceProjection: async input => {
+        const workspaceId = this.requireBoundRoomId();
+        const workspace = await this.repository.withWorkspaceTransaction(workspaceId, async transaction => transaction.workspace);
+        const domain = workspace.domainState as unknown as {
+          kind?: string;
+          spaceGrants?: Parameters<typeof buildSpaceExport>[0]['grant'][];
+          records?: Record<string, { id: string; values: Record<string, unknown> }[]>;
+          dataRevision?: number;
+          ruleRevision?: number;
+        };
+        const grant = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
+        if (!grant) return { ok: false as const, code: 'SPACE_GRANT_NOT_FOUND', message: 'That connection is not granted to this space.' };
+        const projection = grant.projections.find(entry => entry.portId === input.portId);
+        return buildSpaceExport({
+          grant,
+          portId: input.portId,
+          actorId: input.actorId,
+          spaceWorkspaceId: input.spaceWorkspaceId,
+          sourceEpoch: workspace.epoch,
+          dataRevision: domain.dataRevision ?? 0,
+          ruleRevision: domain.ruleRevision ?? 0,
+          records: projection ? domain.records?.[projection.resource] ?? [] : [],
+          format: input.format,
+          producedAt: Date.now(),
+        });
+      },
     });
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -351,7 +407,98 @@ export class Room extends DurableObject<Env> {
     this.requireRoomId(workspaceId);
     const authorized = await this.authorize(request, workspaceId);
     requireMutation(request, this.env, authorized.session);
+    // D-037: an installed tool definition must hash to the reference before the domain stores it.
+    verifyToolInstall(envelope);
     return this.authority.execute(authorized.session, envelope, workspaceId);
+  }
+
+  /**
+   * F080 / D-038: run one behaviour of the tool this room installed, then commit its proposal.
+   *
+   * The pipeline is the one the e2e already proves with production pieces: re-prove the content
+   * hash, compile the stored definition, build the request from the package (never from the caller),
+   * run it in an isolate, validate the output and plan the action. Only then does the ordinary
+   * `table.act` command run, so there is still exactly one write path and a refusal leaves the table
+   * untouched. Every refusal is returned as a code instead of thrown.
+   */
+  async runToolIntent(request: Request, workspaceId: string, input: unknown): Promise<ToolIntentRun> {
+    this.requireRoomId(workspaceId);
+    const authorized = await this.authorize(request, workspaceId);
+    requireMutation(request, this.env, authorized.session);
+    requireWorkspaceWritable(this.env, authorized.workspace.kind);
+
+    const parsed = parseToolIntentInput(input);
+    if (!parsed) return toolIntentRefusal('TOOL_INTENT_PAYLOAD', 'A behaviour id and its declared inputs are required.');
+    const domain = authorized.workspace.domain;
+    if (domain.kind !== 'table') return toolIntentRefusal('TOOL_NOT_INSTALLED', 'Only a table room can run a tool.');
+    const space = domain.collaborationSpace;
+    const tool = space?.tool;
+    // D-036: no installation means no tool to run, and the room says so instead of pretending.
+    if (!space || !tool) return toolIntentRefusal('TOOL_NOT_INSTALLED', 'This room has no tool installed.');
+    // The space decides who may run its tool; a viewer is in the room but not allowed to make it act.
+    const role = spaceRoleOf(space, authorized.context.actorId);
+    if (!role || !spaceAllows(role, 'tool.run')) return toolIntentRefusal('TOOL_NOT_AUTHORIZED', 'This member may not run the room tool.');
+    // D-037: a reference without its package source cannot be compiled or run.
+    const definition = tool.definition;
+    if (!definition) return toolIntentRefusal('TOOL_NOT_INSTALLED', 'The installed tool has no package source to run.');
+    // D-038: prove the reference again before any stored source reaches the isolate.
+    if (sha256(toolPackageContentCanonical(definition)) !== tool.contentHash) {
+      return toolIntentRefusal('TOOL_HASH_MISMATCH', 'The installed tool does not match its recorded content hash.');
+    }
+    const compiled = compileToolPackage(definition, value => sha256(typeof value === 'string' ? value : JSON.stringify(value)));
+    if (!compiled.ok) {
+      const problem = compiled.problems[0];
+      return toolIntentRefusal(problem?.code ?? 'TOOL_COMPILE_FAILED',
+        problem ? `${problem.path}: ${problem.message}` : 'The installed package did not compile.');
+    }
+    const behavior = definition.behaviors.find(entry => entry.id === parsed.behaviorId);
+    if (!behavior) return toolIntentRefusal('TOOL_UNKNOWN_BEHAVIOR', `The installed package has no behaviour "${parsed.behaviorId}".`);
+    const built = buildToolBehaviorRequest({
+      package: definition,
+      compiled: compiled.compiled,
+      behaviorId: behavior.id,
+      inputs: parsed.inputs,
+      resourceSchema: toolResourceSchema(domain, behavior.writes),
+      // The revisions this room authorized the run at, so a behaviour can report what it read.
+      expected: { instanceRevision: domain.dataRevision, grantVersion: space.revision },
+    });
+    if (!built.ok) return toolIntentRefusal(built.code, built.message);
+
+    const runner = createCloudflareToolBehaviorRunner({ loader: this.env.COMPUTE_LOADER });
+    let result: ToolBehaviorResult;
+    try {
+      result = await runner.run(built.request);
+    } catch (error) {
+      const code = error instanceof ToolBehaviorRunError ? error.code : 'TOOL_BEHAVIOR_FAILED';
+      return toolIntentRefusal(code, 'The behaviour did not finish.');
+    }
+    const validation = validateToolBehaviorOutput(result, built.request);
+    if (!validation.ok) {
+      return toolIntentRefusal(validation.code, validation.problems[0] ?? 'The behaviour returned an unusable result.');
+    }
+    const planned = planToolBehaviorAction({
+      declaredActions: behavior.actions ?? [],
+      programActions: domain.program?.actions ?? [],
+      proposal: validation.proposal,
+    });
+    if (!planned.ok) return toolIntentRefusal(planned.code, planned.message);
+
+    // D-033 / D-038: the commit is the ordinary action command, with a fresh id and this room's
+    // revision and epoch. Nothing else in this method writes state.
+    try {
+      const ack = await this.authority.execute(authorized.session, {
+        commandId: randomId(),
+        expectedRevision: authorized.workspace.revision,
+        expectedEpoch: authorized.workspace.epoch,
+        type: 'table.act',
+        payload: { actionId: planned.actionId, inputs: planned.inputs },
+      }, workspaceId);
+      return { ok: true, actionId: planned.actionId, ack };
+    } catch (error) {
+      // A domain refusal (a failed condition, a stale revision) is still a refusal, not a crash.
+      if (error instanceof AuthorityError) return toolIntentRefusal(error.code, error.message);
+      throw error;
+    }
   }
 
   async create(request: Request, input: unknown): Promise<WorkspaceView> {
@@ -401,139 +548,28 @@ export class Room extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const requestId = randomId();
     try {
-      const url = new URL(request.url);
-      if (url.pathname === '/internal/create' && request.method === 'POST') {
-        const input = parseCreateInput(await readJson(request));
-        const workspace = await this.create(request, input);
-        return json(201, workspace, { 'x-request-id': requestId });
-      }
-      if (url.pathname === '/internal/redeem' && request.method === 'POST') {
-        const input = parseRedeemInput(await readJson(request));
-        const workspace = await this.redeemInvite(request, input.ticket);
-        return json(200, workspace, { 'x-request-id': requestId });
-      }
-      if (url.pathname === '/internal/join-link' && request.method === 'POST') {
-        const input = parseRedeemInput(await readJson(request));
-        const workspace = await this.joinByInviteLink(request, input.ticket);
-        return json(200, workspace, { 'x-request-id': requestId });
-      }
-      if (url.pathname === '/internal/view' && request.method === 'GET') {
-        const authorized = await this.authorize(request);
-        // F053: the table list shows when each table last changed and who changed it; the view contract stays unchanged.
-        const change = this.repository.lastChange(authorized.workspace.id, authorized.workspace.epoch);
-        const headers: Record<string, string> = { 'x-request-id': requestId, [UPDATED_AT_HEADER]: String(change?.at ?? authorized.workspace.createdAt) };
-        // Header values must survive non-Latin names, so the name travels percent-encoded.
-        if (change?.actorName) headers[UPDATED_BY_HEADER] = encodeURIComponent(change.actorName);
-        return json(200, authorized.workspace, headers);
-      }
-      if (url.pathname === '/internal/metadata' && request.method === 'GET') {
-        const session = await authenticateRequest(request, this.env);
-        if (!await isAdminSession(session, this.env)) throw new AuthorityError('ROLE_FORBIDDEN');
-        const roomId = this.requireBoundRoomId();
-        const workspace = await this.repository.getWorkspace(roomId);
-        if (!workspace) throw new AuthorityError('WORKSPACE_NOT_FOUND');
-        const members = await this.repository.withWorkspaceTransaction(roomId, async (transaction) => transaction.listMembers());
-        return json(200, {
-          id: workspace.id,
-          kind: workspace.kind,
-          createdAt: workspace.createdAt,
-          ownerId: workspace.ownerActorId,
-          memberCount: Math.min(MAX_MEMBERS_PER_WORKSPACE, members.length),
-          status: workspace.expiresAt <= Date.now() ? 'expired'
-            : workspace.domainState.kind === 'encounter' && workspace.domainState.paused ? 'paused' : 'active',
-        }, { 'x-request-id': requestId });
-      }
-      const imageRoute = /^\/api\/workspaces\/([0-9a-f-]{36})\/images(?:\/(img_[0-9a-f]{32}))?$/u.exec(url.pathname);
-      if (imageRoute) return await this.canvasImage(request, imageRoute[1]!, imageRoute[2], requestId);
-      const route = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|invite-link|members\/remove|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu.exec(url.pathname);
-      if (!route || this.roomId === null || route[1] !== this.roomId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
-      const workspaceId = route[1];
-      const suffix = route[2] ?? '';
-      if (suffix === 'socket') return await this.socket(request, workspaceId);
+      const match = matchRoomRoute(request, this.roomId);
+      if (!match) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+      if (match.handler === 'room-http') return await this.http.handle(request, match, requestId);
+      return await this.handleRoomRoute(request, match, requestId);
+    } catch (error) {
+      const mapped = safeError(error, requestId);
+      return json(mapped.status, mapped.body, { 'x-request-id': requestId });
+    }
+  }
 
-      if (request.method === 'GET' && suffix === '') {
-        const authorized = await this.authorize(request, workspaceId);
-        return json(200, authorized.workspace, { 'x-request-id': requestId });
-      }
-      if (request.method === 'GET' && suffix === 'events') {
-        const authorized = await this.authorize(request, workspaceId);
-        const afterValues = url.searchParams.getAll('after');
-        const unexpected = [...url.searchParams.keys()].some((key) => key !== 'after');
-        if (unexpected || afterValues.length > 1
-            || (afterValues[0] !== undefined && !PROJECTION_CURSOR_PATTERN.test(afterValues[0]))) {
-          throw new AuthorityError('INVALID_REQUEST');
-        }
-        const cursor = projectionCursor(authorized.workspace);
-        return json(200, {
-          resync: afterValues[0] !== cursor,
-          cursor,
-          workspace: authorized.workspace,
-        }, { 'x-request-id': requestId });
-      }
-      if (request.method === 'POST' && suffix === 'commands') {
-        const authorized = await this.authorize(request, workspaceId);
-        requireMutation(request, this.env, authorized.session);
-        requireWorkspaceWritable(this.env, authorized.workspace.kind);
-        const envelope = await readJson(request, MAX_COMMAND_BODY_BYTES);
-        const prepared = prepareWebEvidenceCommand(this.env, authorized.workspace, envelope);
-        if (!prepared.ok) throw new AuthorityError(prepared.code);
-        const result = await this.authority.execute(authorized.session, prepared.envelope, workspaceId);
-        this.scheduleDirectorySync();
-        return json(200, result, { 'x-request-id': requestId });
-      }
-      if (suffix === 'invite-link' && (request.method === 'GET' || request.method === 'POST')) {
-        const authorized = await this.authorize(request, workspaceId);
-        // F003-T3: only the owner of a data table manages its reusable link.
-        if (authorized.workspace.kind !== 'table'
-            || !authorized.context.permissions?.has('members.invite')) throw new AuthorityError('ROLE_FORBIDDEN');
-        if (request.method === 'GET') return json(200, this.repository.inviteLinkStatus(workspaceId, Date.now()), { 'x-request-id': requestId });
-        requireMutation(request, this.env, authorized.session);
-        requireWorkspaceWritable(this.env, authorized.workspace.kind);
-        const body = await readJson(request);
-        if (isRecord(body) && body.action === 'disable' && Object.keys(body).length === 1) {
-          await this.repository.disableInviteLink(workspaceId, Date.now());
-          return json(200, { enabled: false, expiresAt: null }, { 'x-request-id': requestId });
-        }
-        if (!isRecord(body) || body.action !== 'create' || !INVITE_LINK_DAYS.includes(body.days as number)
-            || Object.keys(body).some((key) => key !== 'action' && key !== 'days')) {
-          throw new AuthorityError('INVALID_REQUEST');
-        }
-        const token = randomToken();
-        const now = Date.now();
-        const created = await this.repository.createInviteLink(
-          workspaceId, authorized.session.record.actorId, sha256(token), now, now + (body.days as number) * 86_400_000,
-        );
-        // The raw link is returned once; only its hash is stored.
-        return json(201, { enabled: true, expiresAt: created.expiresAt, link: `${workspaceId}_${token}` }, { 'x-request-id': requestId });
-      }
-      if (request.method === 'POST' && suffix === 'members/remove') {
-        const authorized = await this.authorize(request, workspaceId);
-        requireMutation(request, this.env, authorized.session);
-        requireWorkspaceWritable(this.env, authorized.workspace.kind);
-        const body = await readJson(request);
-        if (!isRecord(body) || typeof body.actorId !== 'string' || !MEMBER_ACTOR_ID_PATTERN.test(body.actorId)
-            || Object.keys(body).some((key) => key !== 'actorId')) {
-          throw new AuthorityError('INVALID_REQUEST');
-        }
-        const workspace = await this.authority.removeMember(authorized.session, workspaceId, body.actorId);
-        this.scheduleDirectorySync();
-        return json(200, workspace, { 'x-request-id': requestId });
-      }
-      if (request.method === 'POST' && suffix === 'invites') {
-        const authorized = await this.authorize(request, workspaceId);
-        requireMutation(request, this.env, authorized.session);
-        requireWorkspaceWritable(this.env, authorized.workspace.kind);
-        const body = await readJson(request);
-        if (!isRecord(body) || !isSeat(body.seat)
-            || (body.replaceOutstanding !== undefined && typeof body.replaceOutstanding !== 'boolean')
-            || Object.keys(body).some((key) => key !== 'seat' && key !== 'replaceOutstanding')) {
-          throw new AuthorityError('INVALID_REQUEST');
-        }
-        const invite = await this.authority.createInvite(
-          authorized.session, workspaceId, body.seat, body.replaceOutstanding === true,
-        );
-        return json(201, { ticket: `${workspaceId}_${invite.ticket}`, expiresAt: invite.expiresAt }, { 'x-request-id': requestId });
-      }
+  /**
+   * Routes that need this instance: the projection socket, the provider job
+   * runners and their alarm scheduling. The bodies below are unchanged from the
+   * previous single fetch(); F078-T6c moved only the routes that do not need it.
+   */
+  private async handleRoomRoute(request: Request, match: RoomRouteMatch, requestId: string): Promise<Response> {
+    if (match.name === 'image') return this.canvasImage(request, match.workspaceId!, match.imageId, requestId);
+    const workspaceId = match.workspaceId!;
+    const suffix = match.suffix ?? '';
+    const url = new URL(request.url);
+    if (suffix === 'socket') return await this.socket(request, workspaceId);
+
       if (request.method === 'POST' && suffix === 'model') {
         const authorized = await this.authorize(request, workspaceId);
         requireMutation(request, this.env, authorized.session);
@@ -903,40 +939,9 @@ export class Room extends DurableObject<Env> {
           throw new AuthorityError('DATABASE_UNAVAILABLE');
         }
       }
-      if (request.method === 'GET' && suffix === 'export') {
-        const authorized = await this.authorize(request, workspaceId);
-        const formats = url.searchParams.getAll('format');
-        if ([...url.searchParams.keys()].some((key) => key !== 'format') || formats.length > 1) {
-          throw new AuthorityError('INVALID_REQUEST');
-        }
-        const format = formats[0] ?? 'csv';
-        if (format !== 'csv' && format !== 'html') throw new AuthorityError('INVALID_REQUEST');
-        if (authorized.workspace.kind !== 'invoice' || authorized.member.role !== 'owner') {
-          throw new AuthorityError('ROLE_FORBIDDEN');
-        }
-        const domain = authorized.workspace.domain;
-        if (domain.kind !== 'invoice') throw new AuthorityError('WORKSPACE_NOT_FOUND');
-        const content = exportInvoice(domain, format);
-        const bytes = new TextEncoder().encode(content);
-        if (bytes.byteLength > MAX_EXPORT_BYTES) throw new AuthorityError('BODY_TOO_LARGE');
-        return new Response(bytes, {
-          status: 200,
-          headers: {
-            'cache-control': 'no-store',
-            'content-type': format === 'csv' ? 'text/csv; charset=utf-8' : 'text/html; charset=utf-8',
-            'content-disposition': `attachment; filename="tabletop-invoice.${format}"`,
-            'x-content-type-options': 'nosniff',
-            'x-request-id': requestId,
-          },
-        });
-      }
-      throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
-    } catch (error) {
-      const mapped = safeError(error, requestId);
-      return json(mapped.status, mapped.body, { 'x-request-id': requestId });
-    }
-  }
 
+    throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+  }
   async alarm(): Promise<void> {
     try {
       if (this.repository.roomId) await this.authority.resumeTableCompute(this.repository.roomId);
@@ -1216,7 +1221,7 @@ export class Room extends DurableObject<Env> {
       expectedEpoch: input.expectedEpoch,
       // Keep the prompt that reserveModelJob stored: the committing and finished rows replace
       // `data`, and without it other members' history (F034) drops the finished request.
-      ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= 4_000 ? { prompt: input.prompt } : {}),
+      ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= MAX_TABLE_ASSISTANT_PROMPT_CHARS ? { prompt: input.prompt } : {}),
     };
     let commandMayHaveCommitted = false;
     // F045: identity tokens are captured from the authorized view before the provider runs, so the

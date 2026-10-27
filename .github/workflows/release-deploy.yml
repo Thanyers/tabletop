@@ -27,7 +27,7 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45 # room for one deploy retry after a slow container step
     permissions:
       contents: write # push the release tag
       issues: write   # open an issue when a deploy fails
@@ -35,6 +35,10 @@ jobs:
       SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
       PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
       PRODUCTION_WORKER: ${{ vars.PRODUCTION_WORKER || 'tabletop' }}
+      # F080 / D-044: the tool sandbox is its own assets-only Worker on its own origin. Both names can
+      # be overridden with repository variables; the host is what the app publishes as frame-src.
+      PRODUCTION_SANDBOX_WORKER: ${{ vars.PRODUCTION_SANDBOX_WORKER || 'tabletop-sandbox' }}
+      PRODUCTION_SANDBOX_HOST: ${{ vars.PRODUCTION_SANDBOX_HOST || 'tabletop-sandbox.ptchrr.workers.dev' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WRANGLER_SEND_METRICS: "false"
@@ -118,7 +122,33 @@ jobs:
         if: env.SKIP != '1'
         run: |
           echo "STAGE=production-deploy" >> "$GITHUB_ENV"
-          npx wrangler deploy --config wrangler.production.json
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.production.json
+
+      # F080 / D-044: the sandbox document is served from its own assets-only Worker, so the app can
+      # keep script-src 'self'. `frame.js` is a build product, so it is rebuilt here rather than trusted.
+      - name: Production — sandbox assets
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-sandbox-assets" >> "$GITHUB_ENV"
+          node scripts/build-tool-sandbox-runtime.mjs
+
+      - name: Production — sandbox deploy
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-sandbox-deploy" >> "$GITHUB_ENV"
+          npx wrangler deploy --config wrangler.sandbox.jsonc --name "$PRODUCTION_SANDBOX_WORKER"
+
+      # The origin exists only after that Worker does, so the app is redeployed once with it. A host
+      # that is not a bare name is refused here instead of being published as a frame source.
+      - name: Production — deploy with the sandbox origin
+        if: env.SKIP != '1'
+        run: |
+          echo "STAGE=production-sandbox-origin" >> "$GITHUB_ENV"
+          if ! [[ "$PRODUCTION_SANDBOX_HOST" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+            echo "::error::PRODUCTION_SANDBOX_HOST must be a bare host such as tabletop-sandbox.ptchrr.workers.dev"
+            exit 1
+          fi
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.production.json 2 60 --var "TOOL_SANDBOX_ORIGIN:https://$PRODUCTION_SANDBOX_HOST"
 
       - name: Production — smoke checks
         if: env.SKIP != '1'
@@ -139,6 +169,18 @@ jobs:
           npx tsx server/changelog.ts notes "$VERSION" > release-notes.md || echo "See CHANGELOG.md for v$VERSION." > release-notes.md
           gh release create "v$VERSION" --verify-tag --title "Tabletop v$VERSION" --notes-file release-notes.md \
             || echo "::warning::Could not publish the GitHub Release for v$VERSION; production is deployed."
+
+      # CD004: a later success closes the issues earlier failures opened; never fails the job.
+      - name: Close deploy-failure issues fixed by this run
+        if: env.SKIP != '1' && success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for n in $(gh issue list -R "$REPO" --state open --author app/github-actions --search '"Deploy failed:" in:title' --json number,title --jq '.[] | select(.title | startswith("Deploy failed:")) | .number' 2>/dev/null); do
+            gh issue close "$n" -R "$REPO" --comment "Fixed: production deployed and passed smoke checks (v$VERSION, ${SHA:0:7}) in $RUN_URL" || true
+          done
 
       - name: Remove deploy configs
         if: always()

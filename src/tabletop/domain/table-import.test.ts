@@ -209,7 +209,7 @@ describe('table.importRows', () => {
     const state = activeScores();
     if (!state.program) throw new Error('Expected an active scores program.');
     delete state.program.canvas;
-    state.program.actions[0]!.effects[0]!.value = { expression: { op: 'recordField', collection: 'scores', recordId: 'p1', field: 'score' } };
+    Object.assign(state.program.actions[0]!.effects[0]!, { value: { expression: { op: 'recordField', collection: 'scores', recordId: 'p1', field: 'score' } } });
     expectAtomicTableInputFailure(state, {
       collection: 'scores', mode: 'replace', rows: [{ player: 'Bo', score: 7 }, { player: 'Ada', score: 12 }],
     }, 'Choose an identity field');

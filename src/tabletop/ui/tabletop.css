@@ -39,9 +39,11 @@ body:has(.tt-app), body:has(.tt-chooser), body:has(.tt-loading), body:has(.tt-ac
    list inside the page at every scale. Browsers without it ignore this block and keep the
    native control and menu. */
 @supports (appearance: base-select) {
-  .tt-app select, .tt-chooser select, .tt-account-gate select, .tt-loading select, .tt-failure select { appearance: base-select; }
+  /* F083: the customizable select is a flex row (chosen text, then the chevron); centre it and keep the chevron at the
+     right edge, so a wide picker no longer leaves the chevron hanging after the text. */
+  .tt-app select, .tt-chooser select, .tt-account-gate select, .tt-loading select, .tt-failure select { appearance: base-select; align-items: center; gap: 8px; }
   /* The chevron the rest of the app draws, in place of the user-agent triangle. */
-  .tt-app select::picker-icon, .tt-chooser select::picker-icon, .tt-account-gate select::picker-icon, .tt-loading select::picker-icon, .tt-failure select::picker-icon { content: ''; width: 7px; height: 7px; margin-left: 6px; transform: translateY(-2px) rotate(45deg); border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; opacity: .75; }
+  .tt-app select::picker-icon, .tt-chooser select::picker-icon, .tt-account-gate select::picker-icon, .tt-loading select::picker-icon, .tt-failure select::picker-icon { content: ''; flex: none; width: 7px; height: 7px; margin-inline-start: auto; transform: translateY(-2px) rotate(45deg); border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; opacity: .75; }
   /* The list: paper, quiet line, soft lift — the same furniture as the app's other menus. */
   .tt-app select::picker(select), .tt-chooser select::picker(select), .tt-account-gate select::picker(select), .tt-loading select::picker(select), .tt-failure select::picker(select) { appearance: base-select; max-height: min(320px, 52vh); overflow: auto; padding: 4px; border: 1px solid var(--tt-line, #dfe6e5); border-radius: 10px; background: #fff; color: var(--tt-ink, #243548); box-shadow: 0 14px 34px #24354824; font: inherit; }
   .tt-app select option, .tt-chooser select option, .tt-account-gate select option, .tt-loading select option, .tt-failure select option { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font: inherit; }

@@ -14,9 +14,6 @@ import type {
   InvitationRecord,
   ModelJobCommitGuard,
   PendingArtifactCleanup,
-  RedeemInvitationInput,
-  RedeemedInvitation,
-  SessionRecord,
   StoredCommand,
   StoredEvent,
   StoredMember,
@@ -30,6 +27,7 @@ import { hashValue, isRecord, parseJsonValue, readNumber, readString } from '../
 import { AuthorityError } from '../server/errors.js';
 import { memberLimitMessage, workspaceMemberCapacity } from '../server/limits.js';
 import type { ModelFailureDetails, ModelJobProgress } from '../src/tabletop/shared/model-job-progress.js';
+import { MAX_ASSISTANT_PROMPT_CHARS } from '../src/tabletop/shared/ai-prompt-limits.js';
 
 type SqlRow = Record<string, SqlStorageValue>;
 type SqlBinding = SqlStorageValue;
@@ -510,22 +508,6 @@ export class RoomRepository implements WorkspaceRepository {
     });
   }
 
-  async createSession(_session: SessionRecord): Promise<void> {
-    throw new Error('ROOM_SESSION_STORAGE_UNSUPPORTED');
-  }
-
-  async getSession(_tokenHash: string): Promise<SessionRecord | null> {
-    return null;
-  }
-
-  async getRotatedSession(_tokenHash: string, _ticketHash: string): Promise<SessionRecord | null> {
-    return null;
-  }
-
-  async touchSession(_tokenHash: string, _now: number, _name?: string): Promise<SessionRecord | null> {
-    return null;
-  }
-
   async listWorkspaceReferences(actorId: string, now: number): Promise<WorkspaceReference[]> {
     if (this.boundRoomId === null) return [];
     const workspace = this.workspaceSync(this.boundRoomId);
@@ -617,10 +599,6 @@ export class RoomRepository implements WorkspaceRepository {
       }
       await transaction.insertInvitation(invitation);
     });
-  }
-
-  async redeemInvitation(_input: RedeemInvitationInput): Promise<RedeemedInvitation> {
-    throw new Error('ROOM_INVITE_REDEMPTION_USES_GLOBAL_IDENTITY');
   }
 
   /** F003-T3: replace the table's reusable link (any earlier link stops working at once). */
@@ -825,7 +803,7 @@ export class RoomRepository implements WorkspaceRepository {
       if (receipt) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
 
       if (input.kind === 'table-assistant') {
-        if (typeof input.prompt !== 'string' || input.prompt.length === 0 || input.prompt.length > 4_000) {
+        if (typeof input.prompt !== 'string' || input.prompt.length === 0 || input.prompt.length > MAX_ASSISTANT_PROMPT_CHARS) {
           throw new AuthorityError('INVALID_REQUEST');
         }
         const totalRow = this.rows<{ job_count: SqlStorageValue }>(
@@ -854,7 +832,7 @@ export class RoomRepository implements WorkspaceRepository {
         expectedRevision: input.expectedRevision,
         expectedEpoch: input.epoch,
         // Rule-draft prompts are kept too so open visibility (F034) can show them to the table.
-        ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= 4_000 ? { prompt: input.prompt } : {}),
+        ...(typeof input.prompt === 'string' && input.prompt.length > 0 && input.prompt.length <= MAX_ASSISTANT_PROMPT_CHARS ? { prompt: input.prompt } : {}),
       };
       this.storage.transactionSync(() => {
         this.storage.sql.exec(

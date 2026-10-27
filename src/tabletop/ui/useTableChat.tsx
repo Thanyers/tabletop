@@ -14,8 +14,10 @@ import { tableDraftBytes } from '../shared/table-draft-input';
 import { TABLE_AI_INPUT_BYTES } from '../domain/table';
 import { ClarificationAnswers } from './ClarificationAnswers';
 import { rememberConsent } from './table-chat-consent';
+import { createPrivateChatStore, type PrivateChatStorage } from '../workspace/private-chat-store';
+import { runJobPollLoop } from '../workspace/job-poll-loop';
 import { viewerCan } from '../shared/permissions';
-import { addableWebSources, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, parseChatFollowUps, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from './table-chat-state';
+import { addableWebSources, webSourcesNotOnTable, chosenFollowUps, draftFailureSummary, draftHistoryCard, draftInFlight, draftLimitSeconds, draftPartialLabel, draftPollLimitMs, draftRefreshPatch, draftSources, draftSourcesLabel, draftStopReason, draftThinkingLabel, historyCard, isUncertainRequest, liveSearchParts, liveThinkingLine, mergeChatHistory, nextQueuedDraft, sameChatRequestScope, tableChatMode, type ChatCard, type ChatFollowUp } from '../workspace/table-chat-state';
 
 type TableView = WorkspaceView & { kind: 'table'; domain: TableState };
 type CommandId = ReturnType<typeof crypto.randomUUID>;
@@ -28,7 +30,17 @@ const ANSWER_POLL_MS = 1_000;
 const ANSWER_POLL_LIMIT_MS = 250_000;
 const HISTORY_CARDS = 6;
 const DRAFT_HISTORY_CARDS = 5;
-const LOCAL_CARD_IDS = 80;
+
+/** Browser storage can be blocked (private mode, policy); chat state then lives in memory only. */
+function chatStorage(): PrivateChatStorage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+const chatStore = createPrivateChatStore(chatStorage());
 const ACCEPT_FILES = '.csv,.json,.txt,.md,text/csv,application/json,text/plain,text/markdown';
 
 export interface UseTableChatOptions {
@@ -60,13 +72,6 @@ export interface UseTableChatOptions {
   /** A short notification; the optional action (e.g. View rules) shows as a button on it. */
   notify: (text: string, tone: 'info' | 'error' | 'success', action?: { label: string; run: () => void }) => void;
   prefill?: { text: string; key: number };
-}
-
-interface PrivateChatLocalState {
-  dismissed: string[];
-  cardIdsByJob: Record<string, string>;
-  /** F070: which card each follow-up came from, keyed by the follow-up card id. Private to this browser. */
-  followUps: Record<string, ChatFollowUp>;
 }
 
 function isTableView(view: WorkspaceView | null): view is TableView {
@@ -111,74 +116,10 @@ function ElapsedLabel({ startedAt, kind, limitMs, chars, reasoningChars }: { sta
   </span>;
 }
 
-function scopeFor(view: TableView | null): string {
-  return view ? JSON.stringify([view.id, view.epoch, view.actor.actorId]) : '';
-}
-
-function chatNodeId(scope: string, id: string): string {
-  return `chat.${encodeURIComponent(scope)}.${id}`;
-}
-
 /** Under open visibility a card with a server job uses the job's shared id, so everyone moves the same card (F034). */
-function chatCardNodeId(scope: string, card: ChatCard): string {
-  const jobId = card.job?.id ?? card.modelJob?.id;
-  const shared = VISIBILITY_POLICY === 'open' && jobId ? sharedChatCanvasId(jobId) : null;
-  return shared ?? chatNodeId(scope, card.id);
-}
-
-function storageKey(scope: string): string {
-  return `tabletop:r1:private-chat:${encodeURIComponent(scope)}`;
-}
-
-function readPrivateChatState(scope: string): PrivateChatLocalState {
-  if (!scope || typeof window === 'undefined') return { dismissed: [], cardIdsByJob: {}, followUps: {} };
-  try {
-    const raw = window.localStorage.getItem(storageKey(scope));
-    if (!raw) return { dismissed: [], cardIdsByJob: {}, followUps: {} };
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { dismissed: [], cardIdsByJob: {}, followUps: {} };
-    const candidate = parsed as { dismissed?: unknown; cardIdsByJob?: unknown; followUps?: unknown };
-    const dismissed = Array.isArray(candidate.dismissed) ? candidate.dismissed.filter((id): id is string => typeof id === 'string').slice(-LOCAL_CARD_IDS) : [];
-    const cardIdsByJob: Record<string, string> = {};
-    if (typeof candidate.cardIdsByJob === 'object' && candidate.cardIdsByJob !== null && !Array.isArray(candidate.cardIdsByJob)) {
-      for (const [jobId, cardId] of Object.entries(candidate.cardIdsByJob)) {
-        if (typeof cardId === 'string' && jobId.length <= 160 && cardId.length <= 240) cardIdsByJob[jobId] = cardId;
-      }
-    }
-    return { dismissed, cardIdsByJob: Object.fromEntries(Object.entries(cardIdsByJob).slice(-LOCAL_CARD_IDS)), followUps: parseChatFollowUps(candidate.followUps, LOCAL_CARD_IDS) };
-  } catch {
-    return { dismissed: [], cardIdsByJob: {}, followUps: {} };
-  }
-}
-
-function writePrivateChatState(scope: string, state: PrivateChatLocalState): void {
-  if (!scope || typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(storageKey(scope), JSON.stringify({
-      dismissed: state.dismissed.slice(-LOCAL_CARD_IDS),
-      cardIdsByJob: Object.fromEntries(Object.entries(state.cardIdsByJob).slice(-LOCAL_CARD_IDS)),
-      followUps: Object.fromEntries(Object.entries(state.followUps).slice(-LOCAL_CARD_IDS)),
-    }));
-  } catch { /* Local closed state is a convenience; server history remains authoritative. */ }
-}
-
-function rememberJobCard(scope: string, jobId: string, cardId: string): void {
-  const local = readPrivateChatState(scope);
-  writePrivateChatState(scope, { ...local, cardIdsByJob: { ...local.cardIdsByJob, [jobId]: cardId } });
-}
 
 function shortTitle(title: string): string {
   return title.length > 48 ? `${title.slice(0, 47)}…` : title;
-}
-
-function rememberFollowUp(scope: string, cardId: string, link: ChatFollowUp): void {
-  const local = readPrivateChatState(scope);
-  writePrivateChatState(scope, { ...local, followUps: { ...local.followUps, [cardId]: link } });
-}
-
-function isDismissed(card: ChatCard, state: PrivateChatLocalState): boolean {
-  const persistentId = card.job?.id ?? card.modelJob?.id ?? card.id;
-  return state.dismissed.includes(persistentId);
 }
 
 function modelPhase(job: ModelJob): ChatCard['phase'] {
@@ -226,7 +167,7 @@ function actorHasTurn(view: TableView, requireTurn: boolean): boolean {
 export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; cards: CanvasAuxiliaryObject[]; editRules: (prompt?: string) => void; cancelEditRules: () => void } {
   const { view, aiEnabled, readOnly } = options;
   const table = isTableView(view) ? view : null;
-  const scope = scopeFor(table);
+  const scope = chatStore.scopeFor(table);
   const assistantAvailable = options.assistantAvailable !== false;
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -300,7 +241,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         optionsRef.current.loadDraftHistory ? optionsRef.current.loadDraftHistory(current).catch(() => [] as ModelJob[]) : Promise.resolve([] as ModelJob[]),
       ]);
       if (targetScope !== scopeRef.current || generation !== historyGeneration.current) return;
-      const local = readPrivateChatState(targetScope);
+      const local = chatStore.load(targetScope);
       const dismissed = new Set(local.dismissed);
       const jobs = [...page.items].sort((left, right) => right.createdAt - left.createdAt).slice(0, HISTORY_CARDS);
       // Requests stored before prompts were kept (pre-F034) have nothing to show; keep the newest few.
@@ -324,7 +265,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         const card = merged.find((item) => item.modelJob?.id === job.id);
         if (card) cardIdsByJob[job.id] = card.id;
       }
-      writePrivateChatState(targetScope, { ...local, cardIdsByJob });
+      chatStore.save(targetScope, { ...local, cardIdsByJob });
       setHistoryState({ scope: targetScope, status: 'ready' });
     } catch {
       if (!quiet && targetScope === scopeRef.current && generation === historyGeneration.current) setHistoryState({ scope: targetScope, status: 'error' });
@@ -389,7 +330,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
     }
   }, [scope, explicitDraftScope, table]);
 
-  const modeChatCards = useMemo(() => cards.filter((card) => !isDismissed(card, readPrivateChatState(scope))), [cards, scope]);
+  const modeChatCards = useMemo(() => cards.filter((card) => !chatStore.isDismissed(card, chatStore.load(scope))), [cards, scope]);
 
   const activePollCards = modeChatCards.filter((card) => {
     if (card.pollTimedOut) return false;
@@ -482,30 +423,28 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         return Boolean(card.job && (card.job.status === 'running' || card.job.confirmationStatus === 'processing'));
       }) : [];
     for (const card of toPoll) {
-      const startedAt = Date.now();
-      void (async () => {
-        const interval = card.kind === 'draft' ? DRAFT_POLL_MS : ANSWER_POLL_MS;
+      void runJobPollLoop({
+        intervalMs: card.kind === 'draft' ? DRAFT_POLL_MS : ANSWER_POLL_MS,
         // F045: a draft outlives its poll grace only if the server raised the configured limit.
-        const limit = card.kind === 'draft' ? draftPollLimitMs(card.modelJob) : ANSWER_POLL_LIMIT_MS;
-        while (!cancelled && Date.now() - startedAt < limit) {
-          await wait(interval);
-          if (cancelled || scopeRef.current !== startScope) return;
-          try {
-            if (card.kind === 'draft' && card.modelJob) {
-              const next = await pollModelOnce(startScope, card.id, viewRef.current?.id ?? '', card.modelJob.id);
-              if (next.status === 'failed' || next.status === 'completed' || next.status === 'complete') return;
-            } else if (card.job && startView) {
-              const latestView = viewRef.current?.id === startView.id ? viewRef.current : startView;
-              const next = await pollAnswerOnce(startScope, card.id, latestView, card.job.id);
-              if (next.status === 'failed' || (next.status === 'completed' && next.confirmationStatus !== 'processing')) return;
-            }
-          } catch (error) {
-            if (cancelled || scopeRef.current !== startScope) return;
-            patchCard(startScope, card.id, { pollError: errorText(error) });
+        limitMs: card.kind === 'draft' ? draftPollLimitMs(card.modelJob) : ANSWER_POLL_LIMIT_MS,
+        now: () => Date.now(),
+        wait,
+        isActive: () => !cancelled && scopeRef.current === startScope,
+        attempt: async () => {
+          if (card.kind === 'draft' && card.modelJob) {
+            const next = await pollModelOnce(startScope, card.id, viewRef.current?.id ?? '', card.modelJob.id);
+            return next.status === 'failed' || next.status === 'completed' || next.status === 'complete';
           }
-        }
-        if (!cancelled && scopeRef.current === startScope) patchCard(startScope, card.id, { pollTimedOut: true });
-      })();
+          if (card.job && startView) {
+            const latestView = viewRef.current?.id === startView.id ? viewRef.current : startView;
+            const next = await pollAnswerOnce(startScope, card.id, latestView, card.job.id);
+            return next.status === 'failed' || (next.status === 'completed' && next.confirmationStatus !== 'processing');
+          }
+          return true;
+        },
+        onError: (error) => patchCard(startScope, card.id, { pollError: errorText(error) }),
+        onTimeout: () => patchCard(startScope, card.id, { pollTimedOut: true }),
+      });
     }
     return () => { cancelled = true; };
   }, [scope, activePollKey, pollModelOnce, pollAnswerOnce, patchCard]);
@@ -557,7 +496,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [patchCard, refreshAfterDraft, focusAcceptedCard]);
 
   const acceptAnswer = useCallback((targetScope: string, card: ChatCard, job: TableAssistantJob) => {
-    rememberJobCard(targetScope, job.id, card.id);
+    chatStore.rememberJobCard(targetScope, job.id, card.id);
     patchCard(targetScope, card.id, {
       job,
       requestView: undefined,
@@ -619,9 +558,9 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       requestCommandId: queue ? undefined : commandId,
     };
     // F070: remember where a picked option leads before the card renders, so its line and chosen chip appear together.
-    if (origin) rememberFollowUp(targetScope, card.id, origin);
+    if (origin) chatStore.rememberFollowUp(targetScope, card.id, origin);
     updateCards(targetScope, (items) => [card, ...items]);
-    optionsRef.current.focusObject(chatNodeId(targetScope, card.id));
+    optionsRef.current.focusObject(chatStore.chatNodeId(targetScope, card.id));
     if (queue) return true;
     return startRequest(targetScope, { ...card, requestCommandId: commandId }, structuredClone(current));
   }, [startRequest, updateCards]);
@@ -712,9 +651,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   }, [scope, patchCard]);
 
   const dismiss = useCallback((card: ChatCard) => {
-    const local = readPrivateChatState(scope);
-    const persistentId = card.job?.id ?? card.modelJob?.id ?? card.id;
-    writePrivateChatState(scope, { ...local, dismissed: [...new Set([...local.dismissed, persistentId])].slice(-LOCAL_CARD_IDS) });
+    chatStore.save(scope, chatStore.dismiss(card, chatStore.load(scope)));
     updateCards(scope, (items) => items.filter((item) => item.id !== card.id));
   }, [scope, updateCards]);
 
@@ -774,12 +711,18 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
   // A card can finish before this page ever renders its waiting phase (a fast draft, a reload during the
   // last poll), so a card created after the page opened counts as seen too. Otherwise the card is removed
   // by `isFinishedResult` below and no notice replaces it: it would vanish silently.
+  // F086: web sources an auto-applied draft found that this member could still add to the table.
+  const sourcesToAdd = useCallback((card: ChatCard) => card.kind === 'draft' && options.webEvidence === true && table && viewerCan(table, 'files.add') && !readOnly
+    ? webSourcesNotOnTable(card.modelJob?.research, table.domain.sources)
+    : [], [options.webEvidence, table, readOnly]);
   const mountedAtRef = useRef(Date.now());
   const watchedCardsRef = useRef(new Set<string>());
   const notifiedCardsRef = useRef(new Set<string>());
   useEffect(() => {
     for (const card of cards) {
-      if (!isFinishedResult(card)) {
+      // F086: an applied draft that still offers sources says "rules added" on its own card, so no second notice.
+      if (card.kind === 'draft' && card.modelJob?.autoApply === 'applied' && sourcesToAdd(card).length > 0) notifiedCardsRef.current.add(card.id);
+      if (!isFinishedResult(card, sourcesToAdd(card))) {
         if (card.phase === 'sending' || card.phase === 'waiting' || card.confirming || card.confirmationPending) watchedCardsRef.current.add(card.id);
         continue;
       }
@@ -793,24 +736,24 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
         optionsRef.current.notify(`Done: “${request}”`, 'success', { label: 'Table history', run: () => optionsRef.current.focusObject('workspace.history') });
       }
     }
-  }, [cards]);
-  const currentLocalState = readPrivateChatState(scope);
+  }, [cards, sourcesToAdd]);
+  const currentLocalState = chatStore.load(scope);
   // A result stays on the canvas only while it asks for something (answer, review, confirm, retry, an error);
   // a finished one becomes a notification (below) instead.
-  const displayCards = modeChatCards.filter((card) => !isDismissed(card, currentLocalState) && !isFinishedResult(card));
+  const displayCards = modeChatCards.filter((card) => !chatStore.isDismissed(card, currentLocalState) && !isFinishedResult(card, sourcesToAdd(card)));
   const operationBusy = externalBusy || confirmBusy;
   const followUps = currentLocalState.followUps;
   const auxiliary = useMemo<CanvasAuxiliaryObject[]>(() => {
     if (!table) return [];
     const byId = new Map(displayCards.map((card) => [card.id, card]));
     return displayCards.map((card, index) => {
-      const chosen = new Map([...chosenFollowUps(card.id, displayCards, followUps)].map(([option, childId]) => [option, chatCardNodeId(scope, byId.get(childId)!)]));
+      const chosen = new Map([...chosenFollowUps(card.id, displayCards, followUps)].map(([option, childId]) => [option, chatStore.chatCardNodeId(scope, byId.get(childId)!)]));
       const link = followUps[card.id];
       const parent = link ? byId.get(link.parentCardId) : undefined;
       // Siblings from the same card stack in the order they were picked (oldest first).
       const siblings = link ? displayCards.filter((item) => followUps[item.id]?.parentCardId === link.parentCardId).reverse() : [];
       return {
-      id: chatCardNodeId(scope, card),
+      id: chatStore.chatCardNodeId(scope, card),
       title: chatCardTitle(card),
       // Another member's card names the asker in a muted line under the title (open visibility, F034).
       // F070: a follow-up names the card it came from, so a trail reads as steps.
@@ -823,7 +766,7 @@ export function useTableChat(options: UseTableChatOptions): { bar: ReactNode; ca
       at: card.createdAt,
       actorId: card.job?.askedBy ?? card.modelJob?.askedBy,
       position: { x: 760, y: 40 + index * 300 },
-      linkedFrom: parent && link ? { id: chatCardNodeId(scope, parent), label: link.option, order: Math.max(0, siblings.findIndex((item) => item.id === card.id)) } : undefined,
+      linkedFrom: parent && link ? { id: chatStore.chatCardNodeId(scope, parent), label: link.option, order: Math.max(0, siblings.findIndex((item) => item.id === card.id)) } : undefined,
       content: <ChatCardContent
         card={card}
         chosen={chosen}
@@ -1050,10 +993,24 @@ function ChatCardContent({ card, chosen, view, readOnly, webEvidence, retryDisab
   }
   // F039: a draft the server put into use on its own.
   if (card.kind === 'draft' && card.modelJob?.autoApply === 'applied' && !card.pollError) {
+    // F086: the web sources it used stay on this card until someone adds them to the table, so they can be verified
+    // and cited (F064 slice C); before, the card left the canvas with them.
+    const sources = draftSources(card.modelJob?.research);
+    const toAdd = webEvidence && viewerCan(view, 'files.add') && !readOnly ? webSourcesNotOnTable(card.modelJob?.research, view.domain.sources) : [];
     return <div className="tt-chat-card" data-testid="table-chat-answer">
       <p><Sparkles size={14} /> The new rules were added to the table. Remove any rule you do not want from the Rules card.</p>
+      {toAdd.length > 0 && <p className="tt-chat-card__hint">Add the web sources it used to the table, then verify them on the Files card so AI can cite them.</p>}
+      {sources.length > 0 && <details className="tt-chat-card__sources" data-testid="draft-sources">
+        <summary>{draftSourcesLabel(sources.length)}</summary>
+        <ul>
+          {sources.map((source) => <li key={source.url}>
+            <a href={source.url} target="_blank" rel="noopener">{source.title}</a>
+            <span>{[source.dateLabel, `authority ${source.authority}`].filter(Boolean).join(' · ')}</span>
+          </li>)}
+        </ul>
+      </details>}
       {card.checking && <p className="tt-chat-card__pending" role="status"><LoaderCircle size={14} className="tt-spin" />Refreshing the table…</p>}
-      <div className="tt-card-cta"><button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />View rules</button>{dismissButton}</div>
+      <div className="tt-card-cta">{toAdd.length > 0 && <button type="button" className="tt-button tt-button--quiet" data-testid="draft-add-sources" disabled={busy || card.checking} onClick={() => void onAddWebSources?.(view, toAdd)}>Add to table sources</button>}<button type="button" className="tt-button tt-button--quiet" disabled={card.checking} onClick={() => onOpenObject('table.rules')}><ArrowRight size={14} />View rules</button>{dismissButton}</div>
     </div>;
   }
   if (card.kind === 'draft') {
@@ -1137,8 +1094,9 @@ function ChatCardContent({ card, chosen, view, readOnly, webEvidence, retryDisab
 }
 
 /** A result with nothing left to do: rules that went into use, or an AI proposal that was confirmed. */
-function isFinishedResult(card: ChatCard): boolean {
+function isFinishedResult(card: ChatCard, sourcesToAdd: readonly unknown[] = []): boolean {
   if (card.pollError || card.requestError || card.error) return false;
-  if (card.kind === 'draft') return card.modelJob?.autoApply === 'applied';
+  // F086: rules in use but web sources still to offer: the card stays until they are added or it is closed.
+  if (card.kind === 'draft') return card.modelJob?.autoApply === 'applied' && sourcesToAdd.length === 0;
   return card.job?.result?.kind === 'action-proposal' && card.job.confirmationStatus === 'confirmed' && !card.confirming && !card.confirmationPending;
 }

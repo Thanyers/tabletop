@@ -5,6 +5,37 @@
 
 ## Lessons
 
+### 2026-10-26 — สคริปต์พิมพ์แชทไปเขียนทับคำบรรยายรูปของผู้ใช้บน staging
+- **What happened:** ตอนส่งข้อความเข้าแชทโต๊ะบน staging ด้วย `document.querySelector('textarea')` + native setter สคริปต์ไปเจอช่อง caption ของการ์ดรูป (F073) ก่อนช่องแชท แล้วกด Enter ทำให้คำบรรยายรูปที่ผู้ใช้แปะไว้ถูกบันทึกทับ · ค่าเดิมไม่มีใน log ต้องเดาจาก screenshot ว่าเป็นค่าว่างแล้วล้างกลับ
+- **Root cause:** การ์ด note/รูปบน canvas ก็เป็น `<textarea>` และอยู่ก่อนช่องแชทใน DOM · selector กว้างเกินไป และไม่ได้อ่านค่าเดิมเก็บไว้ก่อนเขียน
+- **Correct behavior:** เลือกช่องแชทด้วย `textarea:not(.tt-note__text)` แล้วเช็ค `placeholder === 'Ask, add something, or change this table'` ก่อนเขียน · ก่อนแตะข้อมูลบนโต๊ะที่คนอื่นใช้ ให้ดึง `/api/workspaces/<id>` เก็บ `notes` ไว้ใน scratchpad ก่อนเสมอ
+
+### 2026-10-26 — run บน dev ขึ้น `cancelled` เป็นเรื่องปกติ ไม่ใช่ failure
+- **What happened:** หลาย commit บน `dev` มี run ที่จบด้วย `cancelled` (เช่น `ad8930a`, `a400496`) ขณะที่ staging รายงาน sha เก่ากว่า ทำให้ดูเหมือน CI/deploy ค้าง
+- **Root cause:** workflow ใช้ concurrency กลุ่มเดียว (CD002: run บน `dev` อาจกำลัง deploy staging รวม D1 migration) ⇒ merge ใหม่ทำให้ run เก่าถูกยกเลิก และ staging deploy ผูกกับ run ที่ชนะเท่านั้น
+- **Correct behavior:** อ่านผลของ **commit ที่เป็น head** และดู run ล่าสุด ไม่ตีความ `cancelled` เป็นแดง; ถ้าจะยืนยัน deploy ให้เทียบ `/version` ของ staging กับ sha ของ dev แล้วรอ run ของ head จบ (rerun ด้วย SHA เดิมได้เมื่อจำเป็น)
+
+
+### 2026-10-26 — dev CI แดงเพราะเทสต์เบราว์เซอร์เดิม flaky (ไม่ใช่ F080)
+- **What happened:** run `40261590989` (commit `69ea166`, merge ของ F080-G2-02) จบด้วย `failure`; job `Account multiplayer and AI browser acceptance on Workers` ล้มที่ step 8 ด้วย `ExpectError: expect(locator).toHaveAttribute(expected) failed` สองครั้งติด (ล้มแล้ว retry ก็ล้ม) จึงทำให้ `local-validation` fail ตาม
+- **Root cause:** เป็น flake ของ suite เบราว์เซอร์เดิม (account multiplayer / AI บน Workers) ไม่ใช่ไฟล์ที่ F080 เพิ่ม — commit ถัดไปบน `dev` (`4db0727`) มีโค้ดชุดเดียวกันและผ่าน
+- **Correct behavior:** ก่อนสรุปว่า merge ทำให้ dev แดง ให้เปิด jobs ของ run (`gh api repos/.../actions/runs/<id>/jobs`) ดูว่าจบ job ไหน/step ใด แล้วดึง log ด้วย `gh api --allow-escape-sequences .../jobs/<jobId>/logs`; ถ้าเป็น `toHaveAttribute` ใน suite เบราว์เซอร์เดิม ให้ถือเป็น flake ที่ต้องเก็บ ไม่ใช่ rollback งานที่ merge แล้ว
+
+
+### 2026-10-26 — Wait for rendered state before advancing an animation clock
+- **What happened:** the local hero rotation check passed, but the first Linux release browser job saw sales instead of learning at its frozen-clock boundary. The decoded image could report complete before React processed its load state and installed the rotation timer. The authored adventure roll also initially showed a result without updating the named character's existing row; independent review caught that disconnect.
+- **Root cause:** readiness was inferred from one lower-level signal rather than the state change under test; visual control output was checked without its linked table readback.
+- **Correct behavior:** wait for decoded image readiness, drive the browser frames needed for React's load/effect work, then assert both sides of the 18-second interval with a documented frame tolerance. Inspect pre-action and resolved frames together: Mira's roll result and her table initiative must agree. Keep raw failed jobs and measured UI-gate limits in the evidence.
+
+### 2026-10-26 — Shared CLI identity can change after preflight
+- **What happened:** a merge attempt was denied because the active CLI account no longer matched the repository owner verified earlier in the turn. No merge occurred under that identity.
+- **Root cause:** the shared CLI's active account changed between initial verification and the later write; the actor that changed it is unknown.
+- **Correct behavior:** for GitHub writes, use a process-scoped token from the expected already-authenticated account, verify `gh api user` and the target repository immediately before writing, and let that process environment expire. Do not print the token or switch the shared default account.
+### 2026-10-26 — บัญชี gh ที่ active ผิด ทำให้ merge ไม่ผ่าน (ไม่ใช่ ruleset)
+- **What happened:** merge PR #305 และ #307 สำเร็จ แต่ PR #308 ถูกปฏิเสธด้วย `does not have the correct permissions to execute MergePullRequest`, REST merge ตอบ 404 และ `collaborators/.../permission` ตอบ 403 — ทั้งที่ `mergeStateStatus` เป็น CLEAN และ `local-validation` เขียว
+- **Root cause:** `gh auth status` มีสองบัญชีในเครื่อง (Thanyers = งานส่วนตัว, Patcharrr = งานออฟฟิศ) และ active account เป็น **Patcharrr** ซึ่งมีสิทธิ์เพียง `pull` บน `Thanyers/tabletop` (`permissions.push = false`) ⇒ token ใช้ได้แต่ไม่มีสิทธิ์เขียน repo นี้
+- **Correct behavior:** ก่อนเขียน repo นี้ ให้ `gh auth switch --user Thanyers` แล้ว `gh auth setup-git` และยืนยันด้วย `gh api repos/Thanyers/tabletop --jq .permissions.push` ต้องเป็น `true`; ถ้าเจอ "does not have the correct permissions" ให้สงสัยบัญชีก่อน ruleset และห้ามใช้ `--admin` หรือ force push เพื่อข้าม
+
 ### 2026-10-25 — Correct assets can still tell the story in the wrong order
 - **What happened:** the homepage opened a café case and its film before explaining the tools-to-software idea; README opened a learning animation before that idea. Repeated authoring labels interrupted both.
 - **Root cause:** sections were added where they were implemented instead of in the order a new reader needs them.
@@ -375,7 +406,27 @@
 - **Root cause:** เครื่องมือหรือ editor ที่ใช้แก้ conflict อ่านไฟล์ด้วย encoding ภาษาไทยของ Windows ไม่ใช่ UTF-8 · CI ไม่ตรวจ encoding ของเอกสาร
 - **Correct behavior:** หลังแก้ conflict ใน `.md` ทุกครั้ง รัน `git diff --cached -- '*.md' | grep -cE 'เธ|โ€'` ต้องได้ 0 ก่อน commit · ตั้ง editor/เครื่องมือให้อ่านเขียน UTF-8 · ถ้าเจอแล้ว ซ่อมโดยแปลงกลับ (Windows-874 → bytes → UTF-8) และเทียบกับเวอร์ชันก่อนเสีย ไม่แก้ทีละบรรทัดด้วยมือ
 
+### 2026-10-25 — `jsonWithinBudget` ปฏิเสธ object ที่มีค่า `undefined` (พลาดซ้ำสองที่ในงานเดียว)
+- **What happened:** `shared/json-budget.ts` ใช้กันค่าที่ไม่น่าเชื่อถือจาก wire และถือ `undefined` เป็นค่าที่ใช้ไม่ได้ · ใน F080 ผมใช้มันตรวจ tool package ที่สร้างใน TS ซึ่งเขียน optional field ที่ไม่ใช้เป็น `undefined` → ได้ `PACKAGE_BUDGET` ทั้งที่ package ถูกต้อง · แล้วพลาดซ้ำที่ bridge: host ตอบ `code: undefined` กลับเข้า frame ทำให้ `parseToolHostMessage` คืน `BRIDGE_TOO_LARGE` และ frame ไม่เคยได้ผลลัพธ์ (อาการคือ UI ค้าง ไม่มี error)
+- **Root cause:** ตรวจ "JSON view" ด้วยฟังก์ชันที่ออกแบบสำหรับ JS object ดิบ · `JSON.stringify` ตัด `undefined` ออก แต่ `jsonWithinBudget` เรียกซ้ำบน object จริง
+- **Correct behavior:** ก่อนเรียก `jsonWithinBudget` กับค่าที่ประกอบในโปรแกรม ให้ probe ด้วย `JSON.parse(JSON.stringify(value))` (ใน `try/catch`) แล้วค่อยส่งค่าเดิมให้ schema · ฝั่งผู้ส่ง ให้ละ optional field ที่เป็น `undefined` ออกแทนการส่งไป (`...(x === undefined ? {} : { x })`) · เขียน test ที่มี optional field เป็น `undefined` ทั้งสองทาง
+
+### 2026-10-25 — sandboxed iframe รันโมดูลที่ compile แล้วไม่ได้ถ้า CSP ไม่มี `'unsafe-eval'`
+- **What happened:** F080 สร้าง srcdoc + `sandbox="allow-scripts"` + CSP `default-src 'none'; script-src 'unsafe-inline'` แล้ว mount package ด้วย `new Function(...)` → เบราว์เซอร์บล็อก "Evaluating a string as JavaScript violates ... 'unsafe-eval'" และ UI แสดงเฉพาะ fallback error
+- **Root cause:** CSP ของ frame ต้องอนุญาต eval ถ้าจะ instantiate โมดูลที่ compile มาเป็นข้อความ · และ `frame-ancestors` ที่ส่งทาง `<meta>` ถูกเพิกเฉย (มี console warning)
+- **Correct behavior:** ใส่ `'unsafe-eval'` ใน `script-src` ของ **frame CSP เท่านั้น** (ไม่ใช่ของ host) เพราะ frame มี opaque origin ไม่มีคุกกี้/สตอเรจ/เน็ตเวิร์กอยู่แล้ว และอย่าใส่ `frame-ancestors` ใน meta · เก็บ `TOOL_SANDBOX_CSP` ไว้ที่ `ui/tool-sandbox/document.ts` ที่เดียว
+
+### 2026-10-25 — `Add-Content`/`Set-Content` ใน PowerShell เขียนทับไฟล์ไทยทั้งไฟล์เป็น double-encoded
+- **What happened:** ระหว่าง F080 ผมเพิ่มหัวข้อ decision ด้วย `Add-Content` แล้วแก้ประโยคด้วย `(Get-Content -Raw) -replace … | Set-Content` · ไฟล์ `decisions.md` ทั้งไฟล์ (20305 bytes) กลายเป็น UTF-8 ที่ decode ไม่ผ่าน (243 U+FFFD) และหลุดเข้า commit `607ece0` · ตรวจพบเพราะ `read` tool ฟ้อง `invalid UTF-8 text`
+- **Root cause:** cmdlet เหล่านี้ decode ไฟล์เดิมด้วย assumed encoding (ANSI/Windows-874 สำหรับไทย) แล้ว encode ใหม่ทั้งไฟล์ → ข้อความไทยเดิมพังทั้งไฟล์ ไม่ใช่แค่บรรทัดที่แก้ · เป็นคลาสเดียวกับ incident 2026-10-21 แต่รอบนี้มาจาก cmdlet ไม่ใช่ editor
+- **Correct behavior:** ห้ามใช้ `Set-Content`/`Add-Content`/`Out-File` กับไฟล์ที่มีภาษาไทย · ใช้ `edit`/`write` tool หรือ `node -e "fs.writeFileSync(path, text, 'utf8')"` เท่านั้น · หลังแก้เอกสารไทยทุกครั้ง ให้รันสแกน UTF-8 (strict decoder) + มาร์กเกอร์ mojibake (`เธ|โ€`) ก่อน commit · ถ้าพังแล้ว ให้กู้เวอร์ชันที่ยัง valid จาก `git show <sha>:<path>` ด้วย `fs.writeFileSync` (ไม่ผ่าน shell redirection) แล้วเขียนใหม่ทั้งบล็อกด้วย tool
+
 ## Deploy failures
+
+### 2026-10-25 — v9.1.3 Worker published before Container settings finished
+- **What happened:** [run 40132004027](https://github.com/Thanyers/tabletop/actions/runs/40132004027), [issue #291](https://github.com/Thanyers/tabletop/issues/291), started `2026-10-24T20:56:21Z` and failed at production-deploy at `2026-10-24T20:59:44Z`. Wrangler reported that the Worker version was deployed but Durable Object-managed Container application settings could not finish. Production already reported `9.1.3 / 4748689`; health/readiness/capabilities returned 200. Smoke was SKIPPED, so this was a partial deployment rather than a successful run.
+- **Root cause:** observed failure is incomplete Container settings application after Worker publication. The underlying platform cause is not established; this release changed homepage/README copy and no compute configuration.
+- **Correct behavior:** retry Release deploy through `workflow_dispatch` with the same full main SHA, as the run log and recovery procedure prescribe. Do not deploy locally, move the tag, change secrets, or infer completion from `/version` alone. The same-SHA retry [run 40132413721](https://github.com/Thanyers/tabletop/actions/runs/40132413721) failed at the same stage at `2026-10-24T21:04:27Z`; smoke and GitHub Release publication remained SKIPPED. Keep #291 open and record partial publication. After two identical failures, obtain a concrete platform diagnosis before retrying again; do not expand a homepage/README task into backend/configuration changes. Full deployment/compute readiness was UNVERIFIED at that snapshot. **Closure 2026-10-26:** replacement 9.1.4 / d09d2f2 [run 40256468104](https://github.com/Thanyers/tabletop/actions/runs/40256468104) passed Worker/Container settings and workflow smoke; production version/health/readiness/capabilities read back correctly and #291 closed. The old failure cause remains unknown; this closure does not establish actual compute execution acceptance.
 
 ### 2026-10-20 — CD001 รอบแรก: staging deploy ถูกปฏิเสธเพราะ CPU limits บน Workers Free
 - **What happened:** Release deploy ของ v2.2.0 ([run 39464889970](https://github.com/Thanyers/tabletop/actions/runs/39464889970), issue #49) ล้มที่ขั้น Staging — deploy เวลา 2026-10-20T17:19:20Z (job เริ่ม 17:18:20Z) ด้วย `CPU limits are not supported for the Free plan [code: 100328]` · staging/production ยังเป็น 2.0.0 ไม่มีผลต่อผู้ใช้ · แก้ secret config เวลา 2026-10-20T19:18:30Z · deploy สำเร็จทั้ง staging/production ด้วย SHA เดิมเวลา 2026-10-21T01:27Z ([run 39527338589](https://github.com/Thanyers/tabletop/actions/runs/39527338589)) และ issue #49 ปิดเวลา 01:33Z

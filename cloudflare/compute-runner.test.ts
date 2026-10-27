@@ -154,3 +154,40 @@ describe('real isolated generated JavaScript', () => {
     await expect(runner.run(pythonRequest)).resolves.toEqual({ outputs: { total: 42 } });
   });
 });
+
+/**
+ * F080 / ORACLE-01 (compute surface): the runner's answer is compared with an expectation computed
+ * here, in the test, from the inputs - not with a value produced by the engine under test.
+ */
+describe('compute output against an independent expectation', () => {
+  it('agrees with an independently computed expectation', async () => {
+    const runner = createCloudflareComputeRunner({ loader: bindings.COMPUTE_LOADER });
+    const left = 17;
+    const right = 25;
+    // The expected total is arithmetic done in this file, not by the module.
+    const expected = left + right;
+    const result = await runner.run({
+      ...request,
+      moduleId: 'oracle_sum',
+      source: 'export default function compute(inputs) { return { total: inputs.left + inputs.right }; }',
+      inputs: { left: { type: 'number', value: left }, right: { type: 'number', value: right } },
+      outputs: [{ id: 'total', label: 'Total', type: 'number' }],
+    });
+    expect(result).toEqual({ outputs: { total: expected } });
+  });
+
+  it('agrees on a payload it did not produce, including a zero and a negative', async () => {
+    const runner = createCloudflareComputeRunner({ loader: bindings.COMPUTE_LOADER });
+    const cases: { left: number; right: number }[] = [{ left: 0, right: 0 }, { left: -8, right: 3 }, { left: 2.5, right: 0.5 }];
+    for (const pair of cases) {
+      const result = await runner.run({
+        ...request,
+        moduleId: 'oracle_sum_cases',
+        source: 'export default function compute(inputs) { return { total: inputs.left + inputs.right }; }',
+        inputs: { left: { type: 'number', value: pair.left }, right: { type: 'number', value: pair.right } },
+        outputs: [{ id: 'total', label: 'Total', type: 'number' }],
+      });
+      expect(result, JSON.stringify(pair)).toEqual({ outputs: { total: pair.left + pair.right } });
+    }
+  });
+});

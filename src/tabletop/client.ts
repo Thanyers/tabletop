@@ -4,6 +4,7 @@ import type { ModelFailureDetails, ModelJobProgress, ModelJobResearch } from './
 import { tableAssistantHistoryPageSchema, tableAssistantJobSchema, type TableAssistantConfirmation, type TableAssistantHistoryPage, type TableAssistantJob, type TableAssistantRequest } from './shared/table-assistant-contracts';
 import { parseCursorRelay, type CursorRelay } from './shared/cursor-protocol';
 import { COMPUTE_RUNTIME_PROFILE, computeRuntimeCapabilities, type ComputeRuntimeCapabilities } from './shared/compute-runtime-profiles';
+import { readToolSandboxOrigin } from './shared/tool-sandbox-origin';
 
 export class ApiFailure extends Error {
   constructor(
@@ -76,6 +77,11 @@ export interface TabletopCapabilities {
   images?: boolean;
   /** F064 C: add/verify web sources and cite them as table evidence (Worker, unless switched off). */
   webEvidence?: boolean;
+  /**
+   * F080 / D-044: the origin that serves the sandbox document, when the Worker publishes one the app
+   * can vouch for. Absent keeps the inline `srcDoc` frame.
+   */
+  toolSandboxOrigin?: string;
   model: { enabled: boolean; reason: string };
 }
 
@@ -126,6 +132,11 @@ async function readResponse<T>(response: Response): Promise<T> {
 
 function networkFailure(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof DOMException && error.name === 'NetworkError');
+}
+
+/** The page's own origin, for the "sandbox on the app host" rule; empty when there is no page. */
+function pageOrigin(): string {
+  return typeof window === 'undefined' ? '' : window.location.origin;
 }
 
 function readComputeRuntimeCapabilities(value: unknown): ComputeRuntimeCapabilities | undefined {
@@ -229,7 +240,7 @@ export class TabletopClient {
       tableAssistant: { available: false, reason: unavailableAssistantReason },
       model: { enabled: false, reason: 'AI proposals are not configured on this local server.' },
     };
-    const body = await readResponse<{ uploads?: unknown; images?: unknown; webEvidence?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; compute?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
+    const body = await readResponse<{ uploads?: unknown; images?: unknown; webEvidence?: unknown; tableReadOnly?: unknown; inviteLinks?: unknown; memberSeats?: unknown; tableAssistant?: unknown; compute?: unknown; toolSandboxOrigin?: unknown; model?: { enabled?: unknown; reason?: unknown } }>(response);
     const tableAssistant = body.tableAssistant;
     const validTableAssistant = tableAssistant === undefined || (
       typeof tableAssistant === 'object'
@@ -242,6 +253,8 @@ export class TabletopClient {
       throw new ApiFailure('The workspace feature settings could not be read.', 502);
     }
     const assistantCapability = tableAssistant as { available: boolean; reason?: string } | undefined;
+    // D-044: a value the app cannot vouch for is ignored, not a reason to fail the whole payload.
+    const sandboxOrigin = readToolSandboxOrigin(body.toolSandboxOrigin, pageOrigin());
     return {
       uploads: body.uploads,
       ...(typeof body.tableReadOnly === 'boolean' ? { tableReadOnly: body.tableReadOnly } : {}),
@@ -254,6 +267,7 @@ export class TabletopClient {
         ? { available: assistantCapability.available, ...(assistantCapability.reason ? { reason: assistantCapability.reason } : {}) }
         : { available: false, reason: unavailableAssistantReason },
       ...(body.compute === undefined ? {} : { compute: readComputeRuntimeCapabilities(body.compute) }),
+      ...(sandboxOrigin.ok ? { toolSandboxOrigin: sandboxOrigin.origin } : {}),
       model: {
         enabled: body.model.enabled,
         reason: typeof body.model.reason === 'string' ? body.model.reason : '',

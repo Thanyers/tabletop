@@ -1,12 +1,14 @@
 import { viewerCan } from '../shared/permissions';
-import { recordChoiceLabels } from './record-summary';
+import { checkboxAction, checkboxUnavailableReason } from './checkbox-actions';
+import { recordChoiceLabels, recordSummary } from './record-summary';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { AlertCircle, Database, FilePlus2, Pencil, Play, Trash2, Users } from 'lucide-react';
-import type { TableAction, TableChange, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
+import type { TableAction, TableChange, TableOperand, TableCollection, TableField, TableProgram, TableRecord, TableSource, TableState, TableValue } from '../shared/table-contracts';
 import type { ComputedColumn } from '../shared/table-contracts';
 import { computeRecordRow, MAX_COMPUTED_COLUMNS } from '../shared/computed-columns';
 import { formatComputedExpression, parseComputedFormula } from '../shared/computed-formula';
 import { TABLE_CAPABILITIES, TABLE_CAPABILITY_LIMITS } from '../shared/table-capabilities';
+import { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../shared/table-source-limits';
 import type { ActorContext, WorkspaceView } from '../shared/contracts';
 import type { PlanNode } from '../runtime';
 import { applyTableChange, handleTableCommand } from '../domain/table';
@@ -14,7 +16,7 @@ import type { GenerativeViewDescriptor } from '../shared/generative-contracts';
 import { CandidateLifecycle } from './WorkbenchShared';
 import type { Command, WorkbenchProps } from './types';
 import { clearGeneratedCanvasPreview, GeneratedCanvasObject } from './GeneratedCanvasObjects';
-import { applyTableCandidate } from './table-candidate-apply';
+import { applyTableCandidate } from '../workspace/table-candidate-apply';
 import { NoteCard } from './NoteCard';
 import { autoMapping, buildImportRows, parseCsv, worksheetToCsvTable } from './table-row-import';
 import { RollParameterControl } from './RollParameterControl';
@@ -38,8 +40,8 @@ interface TableCanvasObjectProps {
   onEditRules?: (prompt?: string) => void;
 }
 
-const MAX_SOURCE_FILES = 4;
-const MAX_SOURCE_BYTES = 64 * 1024;
+const MAX_SOURCE_FILES = MAX_TABLE_SOURCES;
+const MAX_SOURCE_BYTES = TABLE_TOTAL_SOURCE_BYTES;
 
 export function TableCanvasObject(props: TableCanvasObjectProps) {
   if (props.view.domain.kind !== 'table') return null;
@@ -398,6 +400,8 @@ function ActionDefinition({ action, program, members, onRemove, badge, interacti
     const collection = param?.collection;
     const target = collection ? `${onLabel(program, collection)} · ${fieldLabel(program, collection, effect.field)}` : (param?.label ?? 'The selected row');
     const written = collection ? fieldLabel(program, collection, effect.field) : '';
+    // F081: a toggle has no value; it flips the yes/no field.
+    if (effect.op === 'toggle') return `${target} switches between yes and no`;
     // "Completion note becomes Completion note" is noise: say what the person supplies instead.
     let value: string;
     if ('input' in effect.value) {
@@ -450,6 +454,9 @@ function ProposedRecords({ collection, records, members }: { collection: TableCo
   </details>;
 }
 
+/** F081: rows a collapsed checklist card shows before pointing at the full card. */
+const CHECKLIST_PREVIEW_ROWS = 8;
+
 function TableCollectionView({ view, state, node, busy, onCommand, expanded = false }: TableCanvasObjectProps & { state: TableState }) {
   const collectionId = node.id.slice('table.collection.'.length);
   const collection = state.program?.collections.find((item) => item.id === collectionId);
@@ -464,6 +471,57 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
   const actionController = useTableActionController(view, onCommand);
   const contextId = useId().replace(/:/g, '');
   const actionSelectId = `${contextId}-tt-table-record-action`;
+  // F081: yes/no fields are checkboxes that run the rule which toggles (or sets) that field for the row.
+  // F082: clicks never get lost while an earlier one is saving: each click shows its result at once and waits
+  // its turn in a queue; the queue re-reads the latest row before each step and skips a step already true.
+  const checkRole = view.actor.role === 'owner' ? 'owner' : 'participant';
+  const [pendingChecks, setPendingChecks] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const checkQueue = useRef<{ key: string; rowId: string; fieldId: string; wanted: boolean }[]>([]);
+  const checkRunning = useRef(false);
+  const latestState = useRef(state);
+  latestState.current = state;
+  const settleCheck = (key: string) => setPendingChecks((current) => {
+    if (!current.has(key) || checkQueue.current.some((job) => job.key === key)) return current;
+    const next = new Map(current); next.delete(key); return next;
+  });
+  const runCheckQueue = async () => {
+    if (checkRunning.current) return;
+    checkRunning.current = true;
+    try {
+      for (let job = checkQueue.current.shift(); job; job = checkQueue.current.shift()) {
+        const current = latestState.current;
+        const row = current.records[collectionId]?.find((item) => item.id === job!.rowId);
+        const actual = row?.values[job.fieldId] === true;
+        const match = row && actual !== job.wanted
+          ? checkboxAction(current.program?.actions ?? [], collectionId, job.fieldId, row.values[job.fieldId], checkRole) : null;
+        if (match) await onCommand('table.act', { actionId: match.action.id, inputs: { [match.parameterId]: job.rowId } });
+        settleCheck(job.key);
+      }
+    } finally { checkRunning.current = false; }
+  };
+  const checkbox = (row: TableRecord, field: TableField) => {
+    const key = `${row.id}.${field.id}`;
+    const stored = row.values[field.id] === true;
+    const checked = pendingChecks.get(key) ?? stored;
+    const match = checkboxAction(state.program?.actions ?? [], collectionId, field.id, checked, checkRole);
+    const label = `${field.label}: ${recordSummary(row, collection, view.members, { omitYesNo: true })}`;
+    const click = () => {
+      if (!match) return;
+      const wanted = !checked;
+      setPendingChecks((current) => new Map(current).set(key, wanted));
+      checkQueue.current.push({ key, rowId: row.id, fieldId: field.id, wanted });
+      void runCheckQueue();
+    };
+    return <input type="checkbox" className="tt-table-checkbox nodrag" checked={checked} aria-label={label}
+      aria-busy={pendingChecks.has(key) || undefined}
+      title={match ? match.action.title : checkboxUnavailableReason(checked)}
+      disabled={!match} onChange={click} />;
+  };
+  // A collapsed card reads as a checklist only when a yes/no field can be ticked both ways (a toggle, or a pair of
+  // set rules); a field changed by other means (e.g. equipment availability) keeps the plain preview.
+  const checkField = collection?.fields.find((field) => field.type === 'boolean'
+    && checkboxAction(state.program?.actions ?? [], collectionId, field.id, false, checkRole) !== null
+    && checkboxAction(state.program?.actions ?? [], collectionId, field.id, true, checkRole) !== null);
   const parameterSelectId = `${contextId}-tt-table-record-parameter`;
   const [selectedRecordId, setSelectedRecordId] = useState('');
   const [selectedActionId, setSelectedActionId] = useState('');
@@ -511,7 +569,12 @@ function TableCollectionView({ view, state, node, busy, onCommand, expanded = fa
     {expanded && collection && viewerCan(view, 'data.columns') && <TableComputedColumns collection={collection} state={state} busy={busy} onCommand={onCommand} />}
     {expanded && collection && viewerCan(view, 'data.import') && !computeWriter && <TableRowImport collection={collection} existingRecords={state.records[collectionId] ?? []} fixedRecordIds={fixedRecordIds} busy={busy} onCommand={onCommand} />}
     {expanded && collection && computeWriter && <p className="tt-table-readonly-inline" role="status">This table is filled by a calculation. Run it from Rules to refresh these results; rows cannot be imported directly here.</p>}
-    {!expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && !hasCalculatedRows && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">{hasCalculatedRows ? 'No source records are available. Calculated results are shown above.' : 'No records are available in this collection.'}</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => { const serverRow = serverValues?.[collectionId]?.[row.id]; const value = serverRow && column.id in serverRow ? serverRow[column.id] : computeRecordRow(computed, collectionId, row)[column.id]; return <td key={column.id}>{formatComputed(value)}</td>; })}</tr>)}</tbody></table></div>}
+    {!expanded && collection && checkField && rows.length > 0 ? <ul className="tt-table-checklist tt-table-collection__preview" aria-label={`${collection.title} checklist`}>
+      {rows.slice(0, CHECKLIST_PREVIEW_ROWS).map((row) => <li key={row.id} className={(pendingChecks.get(`${row.id}.${checkField.id}`) ?? row.values[checkField.id] === true) ? 'is-done' : undefined}>
+        <label>{checkbox(row, checkField)}<span>{recordSummary(row, collection, view.members, { omitYesNo: true })}</span></label>
+      </li>)}
+      {rows.length > CHECKLIST_PREVIEW_ROWS && <li className="tt-table-checklist__more">+{rows.length - CHECKLIST_PREVIEW_ROWS} more — open the card to see all</li>}
+    </ul> : !expanded ? <div className="tt-table-collection__preview">{rows.slice(0, 2).map((row) => <span key={row.id}>{collection?.fields.slice(0, 2).map((field) => `${field.label}: ${displayValue(row.values[field.id], view.members)}`).join(' · ') || displayValue(row.id, view.members)}</span>)}{rows.length === 0 && !hasCalculatedRows && <p className="tt-canvas-inline__note">No records yet.</p>}</div> : !collection ? <p className="tt-canvas-inline__empty">This collection is not in the active table rules.</p> : rows.length === 0 ? <p className="tt-canvas-inline__empty">{hasCalculatedRows ? 'No source records are available. Calculated results are shown above.' : 'No records are available in this collection.'}</p> : <div className="tt-table-grid-scroll"><table className="tt-table-grid tt-table-record-grid"><caption>{collection.title} · shared records</caption><thead><tr><th scope="col"><span className="tt-visually-hidden">Select a record</span></th>{collection.fields.map((field) => <th scope="col" key={field.id}>{field.label}</th>)}{computed.map((column) => <th scope="col" key={column.id}>{column.label} <span className="tt-table-computed-badge">calculated</span></th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={row.id === selectedRecordId ? 'is-selected' : undefined}><td><button type="button" className="tt-table-record-select" aria-label={`${row.id === selectedRecordId ? 'Deselect' : 'Select'} ${recordLabel(row, collection, view.members)}`} aria-pressed={row.id === selectedRecordId} disabled={busy !== null} onClick={() => chooseRecord(row.id)}>{row.id === selectedRecordId ? 'Selected' : 'Select'}</button></td>{collection.fields.map((field) => <td key={field.id}>{field.type === 'boolean' ? checkbox(row, field) : displayValue(row.values[field.id], view.members)}</td>)}{computed.map((column) => { const serverRow = serverValues?.[collectionId]?.[row.id]; const value = serverRow && column.id in serverRow ? serverRow[column.id] : computeRecordRow(computed, collectionId, row)[column.id]; return <td key={column.id}>{formatComputed(value)}</td>; })}</tr>)}</tbody></table></div>}
     {expanded && selectedRecord && <section className="tt-table-record-actions" aria-label={`Actions for ${recordLabel(selectedRecord, collection, view.members)}`}>
       <div><strong>{recordLabel(selectedRecord, collection, view.members)}</strong></div>
       {eligibleActions.length === 0 ? <p className="tt-canvas-inline__note">{collectionActions.length === 0 ? 'No table actions use this collection.' : `Actions for this collection are limited to ${formatActionRoles(collectionActions)}.`}</p> : <>
@@ -657,7 +720,7 @@ function TableRowImport({ collection, existingRecords, fixedRecordIds, busy, onC
     if (!file) return;
     const fileInput = event.currentTarget;
     setMessage(''); setCsv(''); setWorksheet(null); setFileName(''); setReplaceConfirmed(false); setOpen(true);
-    if (file.size > 32 * 1024) { setMessage('Files must be 32 KiB or smaller.'); fileInput.value = ''; return; }
+    if (file.size > TABLE_FILE_BYTES) { setMessage('Files must be 32 KiB or smaller.'); fileInput.value = ''; return; }
     setReadingFile(true);
     try {
       if (/\.xlsx$/iu.test(file.name)) {
@@ -887,7 +950,7 @@ function fieldLabel(program: TableProgram, collectionId: string, fieldId: string
   return program.collections.find((collection) => collection.id === collectionId)?.fields.find((field) => field.id === fieldId)?.label ?? fieldId;
 }
 
-function operandLabel(value: TableAction['effects'][number]['value'], action: TableAction, program?: TableProgram, members?: WorkspaceView['members']): string {
+function operandLabel(value: TableOperand, action: TableAction, program?: TableProgram, members?: WorkspaceView['members']): string {
   if ('literal' in value) return displayValue(value.literal, members);
   if ('input' in value) return action.parameters.find((parameter) => parameter.id === value.input)?.label ?? 'provided value';
   if ('record' in value) {

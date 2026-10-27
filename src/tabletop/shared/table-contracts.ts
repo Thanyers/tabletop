@@ -3,6 +3,8 @@ import type { DomainBase } from './contracts';
 import type { GenerativeCanvas, GenerativeExpression } from './generative-contracts';
 import type { RollSpec, TablePendingRoll } from './roll';
 import type { ComputeRunRecord, TableComputeProgram } from './table-compute';
+import type { CollaborationSpace } from './collaboration-space';
+import type { ToolProjectionGrant } from './tool-connection';
 
 /** Data-only program with a bounded arithmetic AST and optional closed canvas descriptors. */
 export type TableValue = string | number | boolean | null | string[];
@@ -24,7 +26,10 @@ export interface TableSource {
 export interface TableParameter { id: string; label: string; type: 'text' | 'number' | 'boolean' | 'record' | 'roll'; collection?: string; min?: number; max?: number; choices?: string[]; roll?: RollSpec }
 export type TableOperand = { literal: TableValue } | { input: string } | { record: string; field: string } | { system: 'actor' | 'seat' | 'turn' } | { expression: GenerativeExpression };
 export interface TableCondition { left: TableOperand; op: 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains'; right: TableOperand; message: string }
-export interface TableEffect { record: string; field: string; op: 'set' | 'add'; value: TableOperand }
+/** F081: `toggle` flips a yes/no field and takes no value, so one action both checks and unchecks a box. */
+export type TableEffect =
+  | { record: string; field: string; op: 'set' | 'add'; value: TableOperand }
+  | { record: string; field: string; op: 'toggle' };
 export interface TableCreate { collection: string; values: Record<string, TableOperand> }
 export interface TableAction { id: string; title: string; description: string; roles: ('owner' | 'participant')[]; parameters: TableParameter[]; conditions: TableCondition[]; effects: TableEffect[]; creates?: TableCreate[]; requireTurn: boolean; advanceTurn: boolean }
 export interface TableInvariant { id: string; collection: string; fields: string[]; message: string }
@@ -120,4 +125,15 @@ export interface TableState extends DomainBase {
   pendingRolls?: TablePendingRoll[];
   actionRevision: number;
   activity: { actorId: string; action: string; at: number }[];
+  /**
+   * F080: the collaboration space this workspace hosts, when it hosts one. Optional and absent in
+   * older workspaces, so reading stored state never fails because the field was not there — the
+   * same additive shape notes and card metadata used.
+   */
+  collaborationSpace?: CollaborationSpace;
+  /**
+   * F080: projections this table has granted to a collaboration space, recorded at the source.
+   * The destination only holds a reference, so revoking here is enough to close the connection.
+   */
+  spaceGrants?: ToolProjectionGrant[];
 }

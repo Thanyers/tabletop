@@ -3,7 +3,9 @@ import { DomainError, SEATS, TABLE_TURN_SEATS, TABLE_TURN_SEAT_PATTERN, type Act
 import type { TableAction, TableChange, TableField, TableOperand, TableProgram, TableRecord, TableState, TableValue, TableSource } from '../shared/table-contracts';
 import { GENERATIVE_FORBIDDEN_IDENTIFIERS, type GenerativeExpression, type GenerativeOutput, type GenerativeScalar } from '../shared/generative-contracts';
 import { ROLL_LIMITS, rollSpecProblems, type RollGroup, type RollSpec, type RollResult, type TablePendingRoll } from '../shared/roll';
-import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload } from './helpers';
+import { assert, canonicalJson, hasRole, requirePermission, ID_SCHEMA, parsePayload, TABLE_ACTIVITY_LIMIT } from './helpers';
+import { handleSpaceCommand } from './collaboration-space';
+import { handleSourceGrantCommand } from './tool-grant';
 import { liveCanvasCardIds, pruneCardMeta, touchCardMeta } from './table-card-meta';
 import { assertPendingRoll, consumePendingRolls, createRoll, retainPendingRolls } from './roll';
 import { createGenerativeExpressionSession, evaluateGenerativeCanvas } from '../runtime/generative/evaluator';
@@ -17,10 +19,9 @@ import { computeInputBindingSchema, computeProgramProblems, computeRunRecordSche
 import { MAX_JOB_RESEARCH_DATE_CHARS, MAX_JOB_RESEARCH_SOURCES, MAX_JOB_RESEARCH_SUMMARY_CHARS, MAX_JOB_RESEARCH_TITLE_CHARS, MAX_JOB_RESEARCH_URL_CHARS, MAX_SOURCE_AUTHORITY } from '../shared/model-job-progress';
 import { fixedProgramRecordIds, matchRowsByIdentity } from '../shared/row-identity';
 
-export const TABLE_FILE_BYTES = 32 * 1024;
-export const TABLE_TOTAL_SOURCE_BYTES = 64 * 1024;
-/** F064 C: source slots per table, imported files and web sources together. */
-export const MAX_TABLE_SOURCES = 4;
+import { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES } from '../shared/table-source-limits';
+/** F078-T13: one owner for the source limits; re-exported so domain importers stay unchanged. */
+export { MAX_TABLE_SOURCES, TABLE_FILE_BYTES, TABLE_TOTAL_SOURCE_BYTES };
 // F066: kept in a leaf module so Worker startup can never read it before it is set.
 export { TABLE_AI_INPUT_BYTES } from '../shared/ai-request-limits';
 /** F037: shared notes are bounded so they stay cheap to render and to send to the model as context. */
@@ -117,7 +118,10 @@ export const tableProgramSchema: z.ZodType<TableProgram> = z.strictObject({
     id, title: text, description: text, roles: z.array(z.enum(['owner', 'participant'])).min(1).max(2),
     parameters: z.array(parameterSchema).max(TABLE_LIMITS.parametersPerAction),
     conditions: z.array(z.strictObject({ left: operand, op: z.enum(['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'contains']), right: operand, message: text })).max(TABLE_LIMITS.conditionsPerAction),
-    effects: z.array(z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand })).max(TABLE_LIMITS.effectsPerAction),
+    effects: z.array(z.union([
+      z.strictObject({ record: id, field: id, op: z.enum(['set', 'add']), value: operand }),
+      z.strictObject({ record: id, field: id, op: z.literal('toggle') }),
+    ])).max(TABLE_LIMITS.effectsPerAction),
     creates: z.array(z.strictObject({ collection: id, values: z.record(id, operand) })).max(MAX_TABLE_ACTION_CREATES).optional(),
     requireTurn: z.boolean(), advanceTurn: z.boolean(),
   })).max(TABLE_LIMITS.actions),
@@ -434,7 +438,9 @@ export function checkProgram(program: TableProgram, sources?: readonly TableSour
       assert(c.op === 'eq' || c.op === 'neq' ? l === r || l === 'null' || r === 'null' : c.op === 'contains' ? l === 'list' && r === 'text' : l === 'number' && r === 'number', 'TABLE_SCHEMA', 'Condition operand types are incompatible.');
     }
     for (const e of action.effects) {
-      const f = resolveField(e.record, e.field), t = operandType(e.value);
+      const f = resolveField(e.record, e.field);
+      if (e.op === 'toggle') { assert(f.type === 'boolean', 'TABLE_SCHEMA', 'Only a yes/no field can be toggled.'); continue; }
+      const t = operandType(e.value);
       assert(e.op === 'add' ? f.type === 'number' && t === 'number' : t === f.type || t === 'null' && !f.required, 'TABLE_SCHEMA', 'Effect value does not match its field.');
     }
     for (const create of action.creates ?? []) {
@@ -996,6 +1002,12 @@ function updateComputeRun(state: TableState, payload: unknown, ctx: ActorContext
 }
 
 export function handleTableCommand(state: TableState, type: string, payload: unknown, ctx: ActorContext): TableCommandDecision | null {
+  // F080: collaboration-space commands live in their own module and report a refusal by throwing.
+  const spaceDecision = handleSpaceCommand(state, type, payload, ctx);
+  if (spaceDecision) return spaceDecision;
+  // F080: a projection grant is the source table's decision, so it is handled here too.
+  const grantDecision = handleSourceGrantCommand(state, type, payload, ctx);
+  if (grantDecision) return grantDecision;
   if (type === 'table.compute.run') return queueComputeRun(state, payload, ctx, true);
   if (type === 'table.compute.queue') return queueComputeRun(state, payload, ctx, false);
   if (type === 'table.compute.update') return updateComputeRun(state, payload, ctx);
@@ -1116,7 +1128,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const next = structuredClone(state);
     next.computedColumns = structuredClone(legacyColumns);
     next.dataRevision += 1;
-    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Computed columns updated (${combinedColumns.length})`, at: ctx.now }].slice(-100);
+    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Computed columns updated (${combinedColumns.length})`, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT);
     return { state: next, label: `Computed columns updated (${combinedColumns.length}).` };
   }
   if (type === 'table.importRows') {
@@ -1215,7 +1227,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     assert(referenceIssues.length === 0, 'TABLE_INPUT', referenceIssues[0] ?? 'The replacement would leave an invalid rule reference. No rows were imported.');
     validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn }, state.computeRuns, state);
     next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
-    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-100);
+    next.activity = [...next.activity, { actorId: ctx.actorId, action: `Imported ${created.length} rows into ${collection.title}`, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT);
     return { state: next, label: input.mode === 'replace'
       ? `Replaced ${collection.title} with ${created.length} rows.`
       : `Imported ${created.length} rows into ${collection.title}.` };
@@ -1306,6 +1318,8 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
     const row = next.records[p.collection!].find(row => row.id === input.inputs[p.id])!;
     const key = `${p.collection}.${row.id}.${effect.field}`;
     assert(!touched.has(key), 'TABLE_INPUT', 'Two parameters point at the same effect target.'); touched.add(key);
+    // F081: a toggle flips the stored yes/no value; an unset value counts as no.
+    if (effect.op === 'toggle') { row.values[effect.field] = row.values[effect.field] !== true; continue; }
     const resolved = resolve(action, state, resolvedInputs, effect.value, ctx, evaluateExpression);
     if (effect.op === 'add') { const old = row.values[effect.field]; assert(typeof old === 'number' && typeof resolved === 'number', 'TABLE_VALUE', 'Only numeric values can be added.'); row.values[effect.field] = old + resolved; }
     else row.values[effect.field] = structuredClone(resolved);
@@ -1334,7 +1348,7 @@ export function handleTableCommand(state: TableState, type: string, payload: unk
   if (action.advanceTurn) next.turn = program.turnOrder[(program.turnOrder.indexOf(state.turn ?? '') + 1) % program.turnOrder.length];
   validateGenerativeOutput(program, next.records, { actor: ctx.actorId, ...(ctx.seat ? { seat: ctx.seat } : {}), turn: next.turn }, state.computeRuns, state);
   next.dataRevision += 1; next.actionRevision = nextActionRevision; next.candidate = null;
-  next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-100);
+  next.activity = [...next.activity, { actorId: ctx.actorId, action: action.title, at: ctx.now }].slice(-TABLE_ACTIVITY_LIMIT);
   return {
     state: next,
     label: action.title,

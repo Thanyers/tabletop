@@ -1,18 +1,47 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **24 ตุลาคม 2569 เวลา 19:16 น. (Asia/Bangkok)**: production รายงาน **9.1.2 / abe4aaf**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40092917650) สำเร็จ และ health/readiness ตอบ 200. Staging snapshot ที่ตรวจได้เป็น **0.0.0-dev / 8e32920**; เป็นการอ่าน ณ เวลาที่ระบุ ไม่ใช่คำยืนยันว่า dev HEAD รอบถัดไป deploy แล้ว
+ตรวจ `/version` ออนไลน์ล่าสุด **26 ตุลาคม 2569 เวลา 17:28 น. (Asia/Bangkok)**: production รายงาน **9.1.6 / b809d9b**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40307321305) ผ่านครบ รวม Container settings, smoke และ GitHub Release publication. Health/readiness 200; favicon ที่ให้บริการตรงกับ source และ README ทั้งสองภาษาบน main ตรวจแล้ว. Staging snapshot **0.0.0-dev / b7a486b** เป็นการอ่าน ณ เวลานั้น ไม่ใช่ผล deploy ของ closeout.
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [abe4aaf](https://github.com/Thanyers/tabletop/commit/abe4aafbb33eb7ac540276ccd020583fde530ac7) — PR #286 | `8e32920` — observed snapshot |
-| Release | v9.1.2 / 9.1.2 | dev / 0.0.0-dev |
+| Source | [b809d9b](https://github.com/Thanyers/tabletop/commit/b809d9b69f279f044b77e88bb4470763c3ae34e3) — PR #366 | `b7a486b` — observed snapshot |
+| Release | v9.1.6 / 9.1.6 — deploy/smoke passed | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.1.6 — bilingual README and consistent icon (26 October 2026)
+
+- [Release PR #366](https://github.com/Thanyers/tabletop/pull/366), main `b809d9b`; [exact-head full CI](https://github.com/Thanyers/tabletop/actions/runs/40305987823) passed all three browser suites and fast checks. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/40307321305) succeeded including Container settings, smoke and GitHub Release publication.
+- README removes production-process commentary and adds reciprocal English/ไทย links with existing localized GIFs. Browser and README favicon match the homepage mark. Both main README pages and served favicon verified. Production version 9.1.6 / b809d9b; health/readiness 200.
+- Scope-only publication from production 9.1.5 excludes unrelated dev work. Homepage copy/layout, animations, film, runtime, schema, dependencies and configuration unchanged. Rollback reference 9.1.5. No AI calls or production data writes used for validation.
+- Release Notes generated from the main-equivalent release tree: 34 releases, latest 9.1.6, 0 fragments. Existing private artifact cannot be updated by available tools; generated HTML is the handoff.
+
+## Release 9.1.5 — README parity with published hero cases (26 October 2026)
+
+- [Release PR #351](https://github.com/Thanyers/tabletop/pull/351), main `0ce11c8`; [exact-head full CI](https://github.com/Thanyers/tabletop/actions/runs/40294440122) passed all three browser suites and fast checks. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/40295626873) passed Container settings, smoke and GitHub Release publication. Production readback: 9.1.5 / 0ce11c8, built_at 2026-10-26T08:56:08Z; health/readiness 200.
+- Default-branch README now presents café sales → physics learning → adventure play using the same EN hero GIFs/posters. Origin, capability/beta/start guidance and AGPL text preserved; all 13 local references resolve. Actual GitHub rendering and README blob checked against the approved source. [F077 evidence](narrative/F077/verification.md).
+- This scope-only documentation release starts from verified production 9.1.4 and excludes unrelated dev runtime work. App, homepage, film, media, backend, dependencies and deployment configuration have no diff from that baseline. Rollback reference 9.1.4; no live AI or production data mutation used for validation.
+- Release Notes HTML generated from the main-equivalent changelog (33 releases, latest 9.1.5). The existing private Claude artifact cannot be published with this agent's tools; the ignored file is the handoff without a replacement public URL.
+
+## Release 9.1.4 — scope-only three-case hero (26 October 2026)
+
+- [Release PR #309](https://github.com/Thanyers/tabletop/pull/309), main `d09d2f2`; [exact-head full release CI](https://github.com/Thanyers/tabletop/actions/runs/40255695998) passed all three browser suites and fast checks. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/40256468104) passed Worker/Container settings, migrations, smoke and GitHub Release publication. Readback: `9.1.4 / d09d2f2`, built_at `2026-10-26T01:55:13Z`; health/readiness/capabilities 200.
+- The user's explicit no-other-changes instruction required a bounded production-baseline release instead of bundling unrelated dev architecture work. Only the hero rotates café sales → accepted physics → adventure play, with EN/TH selection, pause and reduced-motion posters. README, film, non-hero homepage copy/sections, existing learning media, backend, lockfile, schema and deploy configuration match production 9.1.3. Rollback target 9.1.3.
+- Production case order/source selection verified; all three served EN GIF hashes equal source. [F077 evidence](narrative/F077/verification.md) retains the first clock-test race, its fix, 35 local browser groups, final-source CI and 13 PASS / 3 FAIL / 4 SKIP raw UI gate. No live AI or production account/data writes used for validation.
+- Replacement deployment completed the settings stage that failed for 9.1.3; incident #291 closed on 26 October. The earlier attempts remain failed/partial; their underlying cause was not established. This does not add actual compute execution acceptance beyond the pipeline smoke scope.
+- Release Notes HTML generated from the main-equivalent released changelog (32 releases, latest 9.1.4). This agent cannot publish to the existing private Claude artifact; the ignored HTML remains the handoff without a replacement public URL.
+
+## Release 9.1.3 — public content live; Container settings incomplete (25 October 2026)
+
+- [Release PR #289](https://github.com/Thanyers/tabletop/pull/289), main `4748689`; [full release CI](https://github.com/Thanyers/tabletop/actions/runs/40131202479) passed all three browser suites and fast checks. Public homepage and GitHub README contain the final narrative order/copy; accepted media and backend/configuration source are unchanged. Rollback reference: 9.1.2 (no rollback performed).
+- Both [initial deploy](https://github.com/Thanyers/tabletop/actions/runs/40132004027) and [same-SHA retry](https://github.com/Thanyers/tabletop/actions/runs/40132413721) failed at Production — deploy after Worker publication, while applying Durable Object-managed Container settings. D1 migration steps succeeded. Workflow smoke and GitHub Release publication were SKIPPED. `/version` and health/readiness readback do not establish compute readiness or full pipeline completion. [Incident #291](https://github.com/Thanyers/tabletop/issues/291) was open at that snapshot; replacement 9.1.4 later completed deployment and closed it. The underlying cause of these earlier attempts is unknown.
+- No third blind retry, local deployment, backend/configuration/credential change or production account/data mutation was made for this homepage/README request. [F077 evidence](narrative/F077/verification.md) records final-source validation and retained UI-gate limits.
+- Release Notes HTML was generated from the released changelog. This agent cannot publish to the existing private Claude artifact; the ignored HTML is the handoff without a replacement public URL.
 
 ## Release 9.1.2 — scoped hero and realistic tool imagery (24 October 2026)
 
@@ -268,7 +297,7 @@ Release deploy รอบแรกของ CD001 ล้มที่ staging เ�
 
 ## ประวัติ release ที่เกี่ยวข้อง
 
-| Release | สิ่งที่ส่ง | หลักฐาน |
+| Release | v9.1.6 / 9.1.6 — deploy/smoke passed | dev / 0.0.0-dev |
 | --- | --- | --- |
 | 21 ต.ค. `v3.4.0` / `442e074` | F031 thinking/caps/compact guide/180s, F030 corpus rounds | [PR #102](https://github.com/Thanyers/tabletop/pull/102), [run 39629734074](https://github.com/Thanyers/tabletop/actions/runs/39629734074) |
 | 21 ต.ค. `v3.3.2` / `957074d` | F025 refresh race, F026 clarify language, F027 reject hint, F028 minimal fallback, F029 corpus | [PR #96](https://github.com/Thanyers/tabletop/pull/96), [run 39611292996](https://github.com/Thanyers/tabletop/actions/runs/39611292996), [PR #97](https://github.com/Thanyers/tabletop/pull/97) |

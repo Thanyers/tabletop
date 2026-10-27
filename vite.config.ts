@@ -1,7 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { execFileSync } from 'node:child_process';
-import { componentLabPlugin } from './scripts/component-lab/plugin';
 import { BUILD_INFO_FILE, createBuildInfo } from './server/build-info';
 
 const git = (...args: string[]): string | null => {
@@ -23,7 +22,7 @@ const buildInfoPlugin = (): Plugin => ({
 });
 
 export default defineConfig({
-  plugins: [react(), componentLabPlugin(), buildInfoPlugin()],
+  plugins: [react(), buildInfoPlugin()],
   server: {
     host: '127.0.0.1',
     port: 5173,

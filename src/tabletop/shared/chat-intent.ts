@@ -33,7 +33,30 @@ const DATA_NOUN = /\b(?:records?|rows?|entries|data|mock\w*|samples?)\b|รา�
 /** Something the builder can act on; a change verb without one is conversation, not a rule edit. */
 const TOPIC = /\b(?:tables?|collections?|columns?|fields?|records?|rows?|data|cards?|charts?|forms?|buttons?|views?|ui|dashboards?)\b|ตาราง|คอลัมน์|ฟิลด์|ข้อมูล|รายการ|การ์ด|กราฟ|ปุ่ม|ฟอร์ม|หน้าจอ/iu;
 /** Changing one existing record: this belongs to an action, not to the builder. */
+/** F082: words about the rules themselves; with a change verb (or "new/instead") they ask the builder, not an action. */
+const RULE_NOUN = /\b(?:rules?|conditions?|formulas?|calculat\w*)\b|กฎ|เงื่อนไข|สูตร|คำนวณ/iu;
+const RULE_CHANGE = /\b(?:instead|new|cite|evidence)\b|ใหม่|แทน|อ้างอิง|หลักฐาน/iu;
+/** F086: words a bare "Change this rule" is made of; anything beyond them names what to change. */
+const RULE_FILLER = /\b(?:please|this|that|the|a|my|our|rules?|conditions?|formulas?)\b|นี้|นั้น|ของ|ให้|หน่อย|กฎ|เงื่อนไข|สูตร/giu;
 const DATA_ACTION = /\b(?:mark|set|move|assign|approve|reject|confirm|delete|remove)\b[^.!?]{0,60}\b(?:status|paid|unpaid|done|to|from|row|record)\b|\b(?:change|update|edit)\b[^.!?]{0,60}\b(?:status|paid|unpaid|row|record|cell)\b|ทำเครื่องหมาย|จ่ายแล้ว|เปลี่ยนสถานะ|ยืนยัน|อนุมัติ|ปฏิเสธ/iu;
+
+const DATA_ACTION_ANYWHERE = new RegExp(DATA_ACTION.source, 'giu');
+
+/**
+ * F082: a request to change the table's own structure or rules, even when it names a record action inside it
+ * ("add a todo table with a button to mark it done"). Action phrases are removed first so the "ทำ" in
+ * "ทำเครื่องหมาย" no longer reads as a change verb.
+ */
+function asksTheBuilder(prompt: string): boolean {
+  if (STRUCTURE.test(prompt)) return true;
+  const rest = prompt.replace(DATA_ACTION_ANYWHERE, ' ');
+  if (UI_NOUN.test(rest) && CHANGE_VERB.test(rest)) return true;
+  if (!RULE_NOUN.test(rest) || !(CHANGE_VERB.test(rest) || RULE_CHANGE.test(rest))) return false;
+  // A bare "Change this rule" names nothing to change yet, so it stays a conversation until a rule is picked.
+  // F086: anything more specific (a table word, or what the change is, e.g. "cite the verified VAT sources") drafts.
+  const detail = rest.replace(RULE_FILLER, ' ').replace(new RegExp(CHANGE_VERB.source, 'giu'), ' ').replace(/[\s.!?,]+/gu, '');
+  return TOPIC.test(rest) || detail.length >= 3;
+}
 
 export function classifyChatIntent(input: ChatIntentInput): ChatIntent {
   const prompt = input.prompt.trim();
@@ -42,6 +65,7 @@ export function classifyChatIntent(input: ChatIntentInput): ChatIntent {
   if (GREETING.test(prompt)) return 'ask';
   // A question never becomes a draft, even when it mentions a form or a table.
   if (QUESTION.test(prompt)) return 'ask';
+  if (asksTheBuilder(prompt)) return fallback;
   if (DATA_ACTION.test(prompt)) return 'act';
 
   if (CHANGE_VERB.test(prompt)) {

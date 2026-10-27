@@ -20,7 +20,9 @@ import type { Env } from './contracts.js';
 const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const MODEL = 'deepseek-flash';
 const MAX_API_KEY_CHARS = 4096;
-const MAX_PROMPT_CHARS = 4000;
+import { MAX_ASSISTANT_PROMPT_CHARS } from '../src/tabletop/shared/ai-prompt-limits.js';
+
+const MAX_PROMPT_CHARS = MAX_ASSISTANT_PROMPT_CHARS;
 const MAX_REQUEST_BODY_BYTES = 48 * 1024;
 // F041: a raw SSE stream is mostly JSON envelope (~294 bytes per token measured on
 // deepseek-flash), so the old 64 KiB cap cut ordinary Thai answers off after ~200 tokens.
@@ -369,12 +371,12 @@ function prepareConversation(
     ...(entry.confirmationStatus === undefined ? {} : { confirmationStatus: entry.confirmationStatus }),
   }));
   let omitted = 0;
-  while (items.length > 0 && (items[0]!.prompt.length > 4000 || items[0]!.result.text.length > 8000
+  while (items.length > 0 && (items[0]!.prompt.length > MAX_PROMPT_CHARS || items[0]!.result.text.length > 8000
     || new TextEncoder().encode(JSON.stringify(items)).byteLength > MAX_CONVERSATION_BYTES)) {
     items.shift();
     omitted += 1;
   }
-  if (items.some((entry) => entry.prompt.length > 4000 || entry.result.text.length > 8000)) {
+  if (items.some((entry) => entry.prompt.length > MAX_PROMPT_CHARS || entry.result.text.length > 8000)) {
     return fail('TABLE_ASSISTANT_CONTEXT_INVALID', 'A prior conversation entry exceeds its safe size limit.');
   }
   return { items, omitted };

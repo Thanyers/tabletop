@@ -1,14 +1,14 @@
 import { RoleSettings } from './ui/RoleSettings';
 import { viewerCan } from './shared/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Search, Send, ShieldCheck, Table2, Users, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Pencil, CircleAlert, Clipboard, LoaderCircle, MoreHorizontal, Play, Plus, RefreshCw, RotateCcw, Search, Send, ShieldCheck, Table2, Users, X , FilterX } from 'lucide-react';
 import { NODE_TABLE_MEMBER_SEATS, TABLE_MEMBER_SEATS, tableMemberSeatLimit, type CaseKind, type Seat, type SessionView, type WorkspaceView } from './shared/contracts';
 import type { TableAssistantHistoryPage, TableAssistantJob } from './shared/table-assistant-contracts';
 import type { TableState } from './shared/table-contracts';
 import { planForWorkspace } from './runtime';
 import { parseRoute, routePath, saveReturnPath, takeReturnPath } from './routes';
 import { relativeTime } from './ui/relative-time';
-import { NO_TABLE_FILTER, filterTables, isFiltered, listDate, type TableListFilter, type TableOwnership, type TableRecency, type TableSort } from './ui/table-list-filter';
+import { NO_TABLE_FILTER, filterTables, listDate, type TableListFilter, type TableOwnership, type TableRecency, type TableSort } from './ui/table-list-filter';
 import { ApiFailure, clearInviteFragment, inviteFromFragment, isInviteLink, tabletopClient, type AdminWorkspacePage, type AuthStatus, type ConnectionState, type GoogleAuthUser, type ModelJob, type TabletopCapabilities, type WorkspaceInvite } from './client';
 import { InviteLinkPanel } from './ui/InviteLinkPanel';
 import { ConfirmDialog, MemberStrip, UploadCapabilityProvider } from './ui/WorkbenchShared';
@@ -16,11 +16,16 @@ import { LiveCursorProvider, createCursorStore } from './ui/live-cursors';
 import { HeaderPeople } from './ui/HeaderPeople';
 import { AccountBadge, AccountMenu, AccountSignIn, SignedInWelcome } from './ui/account';
 import { AIProposal } from './ui/AIProposal';
+import { SpaceRoomScreen } from './ui/SpaceRoomScreen';
+import { createSpaceRoomDeps } from './ui/space-room-deps';
 import { useTableChat } from './ui/useTableChat';
 import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
-import type { AddableWebSource } from './ui/table-chat-state';
+import type { AddableWebSource } from './workspace/table-chat-state';
 import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistoryWrite, pageForPath, pathForProjection, shouldApplyLateOpen, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
+import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
+import { SpaceGrantPanel } from './ui/SpaceGrantPanel';
+import './ui/table-panel.css';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
 import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHARS } from './shared/workspace-title';
@@ -118,6 +123,8 @@ export default function TabletopApp() {
   const [capabilities, setCapabilities] = useState<TabletopCapabilities>(localCapabilities);
   const [session, setSession] = useState<SessionView | null>(null);
   const [view, setView] = useState<WorkspaceView | null>(null);
+  // F080: when set, `/s/:id` renders the collaboration room instead of the table surface.
+  const [spaceRoomId, setSpaceRoomId] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
   // Which page shows while no table is open: the table list or the /new start page.
   const [page, setPage] = useState<AppPage>('landing');
@@ -218,6 +225,7 @@ export default function TabletopApp() {
     try {
       const next = await tabletopClient.workspace(id);
       setWorkspace(next);
+      setSpaceRoomId(null);
       setWorkspaceMenuOpen(false);
       return next;
     } catch (error) {
@@ -335,6 +343,20 @@ export default function TabletopApp() {
             setPage('tables');
             showNotice('This table is not available to this account. Ask the table owner for an invitation.', 'error');
           }
+        } else if (route?.name === 'space') {
+          try {
+            const opened = await tabletopClient.workspace(route.id);
+            if (alive) {
+              setWorkspace(opened);
+              setSpaceRoomId(route.id);
+            }
+          } catch (error) {
+            if (error instanceof ApiFailure && error.status === 401) throw error;
+            if (!alive) return;
+            // The same notice as a table: an outsider learns nothing about the room either.
+            setPage('tables');
+            showNotice('This room is not available to this account.', 'error');
+          }
         } else if (route?.name === 'new') {
           setPage('new');
         } else if (route?.name === 'tables' || route?.name === 'join') {
@@ -360,14 +382,15 @@ export default function TabletopApp() {
 
   useEffect(() => {
     if (starting) return;
-    const target = pathForProjection(view ? { id: view.id } : null, page);
+    // D-046: a room keeps its own address; without this hint the room was rewritten to `/t/:id`.
+    const target = pathForProjection(view ? { id: view.id } : null, page, spaceRoomId !== null && view?.id === spaceRoomId);
     const { write, nextMode } = nextHistoryWrite(urlSyncRef.current, target, window.location.pathname);
     urlSyncRef.current = nextMode;
     if (write === 'skip') return;
     // Pushed entries remember the app page before them, so "Your tables" can step back instead of stacking `/`.
     if (write === 'replace') window.history.replaceState(window.history.state, document.title, target);
     else window.history.pushState({ tabletopFrom: window.location.pathname }, document.title, target);
-  }, [view?.id, page, starting]);
+  }, [view?.id, page, spaceRoomId, starting]);
 
   useEffect(() => {
     const followHistory = () => {
@@ -505,6 +528,60 @@ export default function TabletopApp() {
     (kind: UploadKind, file: File) => commands.upload(kind, file),
     [commands],
   );
+
+  /**
+   * F080 / D-049: create the room from the table screen.
+   *
+   * It goes through the ordinary command path, so the authority still decides: this only shapes the
+   * request and reports what came back.
+   */
+  const [roomSetupOpen, setRoomSetupOpen] = useState(false);
+  const createRoom = useCallback(async (input: { spaceId: string; title: string }): Promise<RoomSetupResult> => {
+    try {
+      const next = await runCommand('space.create', { spaceId: input.spaceId, title: input.title });
+      if (next) setWorkspace(next);
+      setSpaceRoomId(input.spaceId);
+      return { ok: true, spaceId: input.spaceId, message: `สร้างห้องแล้ว: /s/${input.spaceId}` };
+    } catch (error) {
+      return { ok: false, message: errorText(error) };
+    }
+  }, [runCommand, setWorkspace]);
+
+  const [grantOpen, setGrantOpen] = useState(false);
+  // Rooms this viewer belongs to, from the session list; the panel offers them as grant targets.
+  const grantRooms = (session?.workspaces ?? [])
+    .filter(workspace => workspace.id !== view?.id)
+    .map(workspace => ({ workspaceId: workspace.id, spaceId: workspace.id, title: workspace.title }));
+
+  /**
+   * F080 / D-054: let a room read one projection of this table.
+   *
+   * The command goes to this table (the source), so the owner's own authority applies, and the panel
+   * chose the fields and the row cap.
+   */
+  const grantRoomRead = useCallback(async (input: {
+    sourceWorkspaceId: string;
+    spaceWorkspaceId: string;
+    spaceId: string;
+    portId: string;
+    resource: string;
+    fields: string[];
+    maxRows: number;
+  }): Promise<{ ok: boolean; message: string }> => {
+    try {
+      await runCommand('source.grantProjection', {
+        grantId: `grant-${crypto.randomUUID()}`,
+        spaceId: input.spaceId,
+        spaceWorkspaceId: input.spaceWorkspaceId,
+        audience: { kind: 'space-members' },
+        projections: [{ portId: input.portId, resource: input.resource, fields: input.fields, maxRows: input.maxRows }],
+        actions: [],
+      });
+      return { ok: true, message: `ให้สิทธิ์ห้อง ${input.spaceId} แล้ว` };
+    } catch (error) {
+      return { ok: false, message: errorText(error) };
+    }
+  }, [runCommand]);
 
   const importTableFile = useCallback(
     (targetView: WorkspaceView, file: File) => commands.importTableFile(targetView, file),
@@ -708,6 +785,28 @@ export default function TabletopApp() {
   if (!view && page === 'landing') return <SignedInWelcome user={headerAccount} busy={busy === 'auth.logout'} onOpenTables={openTablesPage} onStart={openStartPage} onSignOut={() => void signOut()} onLoadAdminWorkspaces={loadAdminWorkspaces} />;
   if (!view) return <WorkspaceChooser session={session} account={headerAccount} onHome={openLandingPage} onLoadAdminWorkspaces={loadAdminWorkspaces} busy={busy} tableReadOnly={capabilities.tableReadOnly === true} notice={notice} onDismissNotice={() => setNotice(null)} onSignOut={() => void signOut()} onStart={openStartPage} onOpen={(id) => void openWorkspace(id)} />;
 
+  // F080: a room is its own screen. It reuses the workspace load for auth, then lets the screen ask
+  // its own questions, so no table surface code runs for a room and nothing here decides access.
+  if (spaceRoomId) return (
+    <div className="tt-app" data-workspace-kind="table">
+      <SpaceRoomScreen
+        workspaceId={spaceRoomId}
+        deps={createSpaceRoomDeps({
+          workspaceId: spaceRoomId,
+          loadWorkspace: (id) => tabletopClient.workspace(id),
+          actorId: view.actor.actorId,
+          viewerLabel: view.actor.name,
+          // F080 / D-044: the sandbox origin travels from the Worker's capabilities to the frame host.
+          ...(capabilities.toolSandboxOrigin ? { toolSandboxOrigin: capabilities.toolSandboxOrigin } : {}),
+          // F080 / D-053: the tables this person could link into the room, from the session list.
+          sourceCandidates: (session?.workspaces ?? [])
+            .filter(workspace => workspace.id !== spaceRoomId)
+            .map(workspace => ({ workspaceId: workspace.id, title: workspace.title })),
+        })}
+      />
+    </div>
+  );
+
   const selectedNode = compiled.plan?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const tableReadOnly = view.kind === 'table' && capabilities.tableReadOnly === true;
   const canInvite = view.kind !== 'invoice' && viewerCan(view, 'members.invite') && !(view.kind === 'table' && tableReadOnly);
@@ -784,6 +883,40 @@ export default function TabletopApp() {
 
       {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p>{notice.action && <button type="button" className="tt-notice__action" onClick={() => { notice.action?.run(); setNotice(null); }}>{notice.action.label}</button>}<button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
 
+      {/* D-049: a table can become a room without leaving the page. */}
+      <section className="tt-panel">
+        <button
+          type="button"
+          className="tt-panel__toggle"
+          aria-expanded={roomSetupOpen}
+          onClick={() => setRoomSetupOpen(open => !open)}
+        >
+          {roomSetupOpen ? 'ซ่อนการสร้างห้อง' : 'สร้างห้องจากโต๊ะนี้'}
+        </button>
+        {roomSetupOpen ? (
+          <RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} />
+        ) : null}
+      </section>
+
+      {/* D-054: an owner grants a room read access from the table that holds the data. */}
+      <section className="tt-panel">
+        <button
+          type="button"
+          className="tt-panel__toggle"
+          aria-expanded={grantOpen}
+          onClick={() => setGrantOpen(open => !open)}
+        >
+          {grantOpen ? 'ซ่อนการให้สิทธิ์ห้อง' : 'ให้ห้องอ่านข้อมูลจากโต๊ะนี้'}
+        </button>
+        {grantOpen ? (
+          <SpaceGrantPanel
+            sourceWorkspaceId={view.id}
+            rooms={grantRooms}
+            grantProjection={grantRoomRead}
+          />
+        ) : null}
+      </section>
+
       <TableSurface
         view={view}
         plan={compiled.plan}
@@ -851,6 +984,9 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
   const hasTimes = session.workspaces.some((workspace) => workspace.updatedAt !== undefined);
   // Clearing the filters keeps the sort, which is a preference rather than a filter.
   const clearFilters = () => setFilter((current) => ({ ...NO_TABLE_FILTER, sort: current.sort }));
+  // The filter icon clears the dropdowns only; the search box has its own clear button.
+  const filtersActive = filter.kind !== 'all' || filter.ownership !== 'all' || filter.recency !== 'any';
+  const clearDropdowns = () => setFilter((current) => ({ ...NO_TABLE_FILTER, sort: current.sort, query: current.query }));
   const changeSort = (sort: TableSort) => { setFilter((current) => ({ ...current, sort })); saveTableSort(sort); };
   return <main className="tt-chooser"><ChooserHeader session={session} account={account} busy={busy} onSignOut={onSignOut} onLoadAdminWorkspaces={onLoadAdminWorkspaces} onHome={onHome} />
     <NoticeBanner notice={notice} onDismiss={onDismissNotice} />
@@ -860,8 +996,11 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
       {session.workspaces.length > 0 && <div className="tt-existing-tables">
         <div className="tt-existing-tables__head">
           <h2>Pick up where you left off</h2>
-          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} /></label>
+          {session.workspaces.length > 1 && <small className="tt-table-filters__count" role="status">{visibleWorkspaces.length} of {session.workspaces.length}</small>}
         </div>
+        {/* One toolbar: search first, then each filter as a pill that holds its label and value (F053). */}
+        <div className="tt-table-toolbar">
+          <label className="tt-table-search"><Search size={14} aria-hidden="true" /><span className="tt-visually-hidden">Search your tables</span><input type="search" value={query} placeholder="Search tables" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setQuery(''); }} />{query && <button type="button" className="tt-table-search__clear" aria-label="Clear search" title="Clear search" onClick={(event) => { setQuery(''); event.currentTarget.parentElement?.querySelector('input')?.focus(); }}><X size={14} aria-hidden="true" /></button>}</label>
         {session.workspaces.length > 1 && <div className="tt-table-filters" role="group" aria-label="Filter tables">
           <label><span>Sort</span><select value={filter.sort} onChange={(event) => changeSort(event.target.value as TableSort)}>
             <option value="updated">Last updated</option>
@@ -882,9 +1021,9 @@ function WorkspaceChooser({ session, account, onHome, onLoadAdminWorkspaces, bus
             <option value="week">Last 7 days</option>
             <option value="month">Last 30 days</option>
           </select></label>}
-          {isFiltered(filter) && <button type="button" className="tt-table-filters__clear" onClick={clearFilters}><X size={13} aria-hidden="true" />Clear</button>}
-          <small className="tt-table-filters__count" role="status">{visibleWorkspaces.length} of {session.workspaces.length}</small>
+          <button type="button" className="tt-table-filters__reset" aria-label="Clear filters" title={filtersActive ? 'Clear filters' : 'No filters to clear'} disabled={!filtersActive} onClick={clearDropdowns}><FilterX size={16} aria-hidden="true" /></button>
         </div>}
+        </div>
         {visibleWorkspaces.map((workspace) => {
           const updatedAt = workspace.updatedAt;
           return <button type="button" key={workspace.id} onClick={() => onOpen(workspace.id)} disabled={busy !== null}><CaseIcon kind={workspace.kind} /><span><strong>{workspace.title}</strong><small>{workspace.id === lastId ? 'Last opened · ' : ''}{caseInfo[workspace.kind].title} · {workspace.role}</small></span>

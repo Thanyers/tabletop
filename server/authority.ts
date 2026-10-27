@@ -2,7 +2,11 @@ import type { IncomingMessage } from 'node:http';
 import { DomainError, type ActorContext, type Artifact, type CaseKind, type CommandAck, type CommandEnvelope, type DomainDecision, type DomainState, type InvoiceLine, type Member, type Role, type Seat, type SessionView, type Shipment, type WorkspaceView } from '../src/tabletop/shared/contracts.js';
 import { defaultWorkspaceTitle, normalizeWorkspaceTitle } from '../src/tabletop/shared/workspace-title.js';
 import { memberPermissions, type Permission } from '../src/tabletop/shared/permissions.js';
+import { authorizeSpaceAction, type ToolProjectionGrant } from '../src/tabletop/shared/tool-connection.js';
+import type { WorkspaceTransaction } from './repository.js';
 import { ACCESS_COMMANDS } from '../src/tabletop/domain/access.js';
+import { SPACE_COMMANDS, isSpaceCommand } from '../src/tabletop/shared/collaboration-space-command.js';
+import { SOURCE_GRANT_COMMANDS, isSourceGrantCommand } from '../src/tabletop/domain/tool-grant.js';
 import { DISPLAY_COMMANDS } from '../src/tabletop/domain/display.js';
 import { createDomain, decideDomain, projectDomain, invoiceImportSchema } from '../src/tabletop/domain/index.js';
 import { z } from 'zod';
@@ -31,6 +35,7 @@ import {
   workspaceMemberCapacity,
 } from './limits.js';
 import type {
+  IdentityRepository,
   InvitationRecord,
   ModelJobCommitGuard,
   SessionRecord,
@@ -82,6 +87,8 @@ const publicCommands: Record<CaseKind, ReadonlySet<string>> = {
     'table.import', 'table.importRows', 'table.removeSource', 'table.act', 'table.roll', 'table.setComputedColumns', 'table.compute.run', 'canvas.layout',
     'table.addWebSources', 'table.reviewWebSource',
     'table.addNote', 'table.updateNote', 'table.moveNote', 'table.removeNote',
+    ...SPACE_COMMANDS,
+    ...SOURCE_GRANT_COMMANDS,
     'evolve.propose', 'evolve.rollback', 'evolve.simulate', 'evolve.validate', 'evolve.approve', 'evolve.activate',
     'evolve.autoApply', 'evolve.removeItem',
     ...ACCESS_COMMANDS, ...DISPLAY_COMMANDS,
@@ -120,6 +127,12 @@ export interface TrustedInvoiceImport {
 
 export interface AuthorityOptions {
   readonly repository: WorkspaceRepository;
+  /**
+   * F078-T17: session storage. The Node runtime passes its repository for this
+   * too; the Room has no identity store, so its session methods fail loudly
+   * instead of silently returning "no session".
+   */
+  readonly identity?: IdentityRepository;
   readonly secureCookies?: boolean;
   readonly now?: () => number;
   readonly onWorkspaceChanged?: (workspaceId: string, epoch: number) => void;
@@ -129,6 +142,11 @@ export interface AuthorityOptions {
   readonly computeRunner?: ComputeRunner;
   readonly scheduleBackground?: (task: Promise<void>) => void;
   readonly onComputeWorkScheduled?: (workspaceId: string) => void;
+}
+
+/** F080: a check that runs inside the commit transaction for an action invoked through a connection. */
+export interface SpaceActionGuard {
+  assertAllowed(transaction: WorkspaceTransaction, workspace: StoredWorkspace): Promise<void>;
 }
 
 interface InternalCommandSession {
@@ -226,7 +244,20 @@ function commandFrom(value: unknown): CommandEnvelope {
   return result.data;
 }
 
-function assertIdentityFieldsAbsent(payload: unknown): void {
+/**
+ * Some commands name a target in an identity-shaped field: the member being assigned or removed,
+ * the table being unlinked. The acting identity always comes from the session, and the strict
+ * payload schema pins which keys are legal, so these are exempt from the spoof guard. Every other
+ * command must not carry those keys at all.
+ */
+export function commandNamesItsOwnTarget(type: string): boolean {
+  return type === 'teaching.setRepresentation'
+    || type === 'access.assign'
+    || isSpaceCommand(type)
+    || isSourceGrantCommand(type);
+}
+
+export function assertIdentityFieldsAbsent(payload: unknown): void {
   if (!isRecord(payload)) return;
   const forbidden = ['actorId', 'role', 'seat', 'workspaceId', 'epoch'];
   if (forbidden.some((key) => Object.hasOwn(payload, key))) throw new AuthorityError('COMMAND_IDENTITY_SPOOF');
@@ -245,6 +276,7 @@ function mapDomainError(error: DomainError): AuthorityError {
 
 export class CommandAuthority {
   readonly repository: WorkspaceRepository;
+  private readonly identity: IdentityRepository | null;
   private readonly secureCookies: boolean;
   private readonly now: () => number;
   private readonly workspaceIdFactory: () => string;
@@ -257,6 +289,7 @@ export class CommandAuthority {
 
   constructor(options: AuthorityOptions) {
     this.repository = options.repository;
+    this.identity = options.identity ?? null;
     this.secureCookies = options.secureCookies ?? false;
     this.now = options.now ?? Date.now;
     this.workspaceIdFactory = options.workspaceIdFactory ?? randomId;
@@ -279,6 +312,12 @@ export class CommandAuthority {
     }) : null;
   }
 
+  /** Session storage is optional by design; using it without one is a wiring bug, not an expired session. */
+  private requireIdentity(): IdentityRepository {
+    if (!this.identity) throw new AuthorityError('INTERNAL_ERROR', 'Session storage is not available in this runtime.');
+    return this.identity;
+  }
+
   setWorkspaceChangedHandler(handler: (workspaceId: string, epoch: number) => void): void {
     this.onWorkspaceChanged = handler;
   }
@@ -287,7 +326,7 @@ export class CommandAuthority {
     const name = parseName(input);
     const rawToken = cookieToken(request);
     if (rawToken) {
-      const existing = await this.repository.getSession(sha256(rawToken));
+      const existing = await this.requireIdentity().getSession(sha256(rawToken));
       if (existing && existing.revokedAt === null && expiresAt(existing) > this.now()) {
         const session = await this.authenticate(request);
         this.requireCsrf(request, session);
@@ -314,7 +353,7 @@ export class CommandAuthority {
       rotatedToTokenHash: null,
       rotationTicketHash: null,
     };
-    await this.repository.createSession(record);
+    await this.requireIdentity().createSession(record);
     const session = { record, csrfToken, expiresAt: expiresAt(record) };
     return {
       session,
@@ -327,10 +366,10 @@ export class CommandAuthority {
     const rawToken = cookieToken(request);
     if (!rawToken) throw new AuthorityError('SESSION_REQUIRED');
     const tokenHash = sha256(rawToken);
-    const stored = await this.repository.getSession(tokenHash);
+    const stored = await this.requireIdentity().getSession(tokenHash);
     const now = this.now();
     if (!stored || stored.revokedAt !== null || expiresAt(stored) <= now) throw new AuthorityError('SESSION_EXPIRED');
-    const refreshed = await this.repository.touchSession(tokenHash, now);
+    const refreshed = await this.requireIdentity().touchSession(tokenHash, now);
     if (!refreshed) throw new AuthorityError('SESSION_EXPIRED');
     const csrfToken = csrfForToken(rawToken);
     if (!constantTimeHashEqual(refreshed.csrfHash, csrfToken)) throw new AuthorityError('SESSION_EXPIRED');
@@ -540,7 +579,7 @@ export class CommandAuthority {
     if (!rawSessionToken) throw new AuthorityError('SESSION_REQUIRED');
     const ticketHash = sha256(ticket);
     const sessionTokenHash = sha256(rawSessionToken);
-    const storedSession = await this.repository.getSession(sessionTokenHash);
+    const storedSession = await this.requireIdentity().getSession(sessionTokenHash);
     if (!storedSession) throw new AuthorityError('SESSION_REQUIRED');
     const csrf = request.headers['x-csrf-token'];
     if (typeof csrf !== 'string' || !constantTimeHashEqual(storedSession.csrfHash, csrf)) {
@@ -571,7 +610,7 @@ export class CommandAuthority {
     };
     let redeemed;
     try {
-      redeemed = await this.repository.redeemInvitation({
+      redeemed = await this.requireIdentity().redeemInvitation({
         ticketHash,
         sessionTokenHash,
         nextSession,
@@ -768,6 +807,88 @@ export class CommandAuthority {
     });
   }
 
+  /**
+   * Run one source action through a connection.
+   *
+   * The grant issuer is the actor: a connection can never do more than the person who granted it.
+   * The grant is re-checked inside the commit transaction, the command id is derived from the
+   * caller's idempotency key so a retry replays the receipt instead of applying twice, and the
+   * commit is still the source table's own single-target commit.
+   */
+  async executeSpaceAction(input: {
+    actorId: string;
+    workspaceId: string;
+    grantId: string;
+    spaceWorkspaceId: string;
+    actionId: string;
+    inputs: Record<string, unknown>;
+    idempotencyKey: string;
+  }): Promise<CommandAck> {
+    // The actor that commits is the person who granted the connection, never the requester: a
+    // connection can only ever do what its issuer could do themselves.
+    const grantedBy = await this.repository.withWorkspaceTransaction(input.workspaceId, async transaction => {
+      const domain = transaction.workspace.domainState as unknown as { spaceGrants?: ToolProjectionGrant[] };
+      const found = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
+      return found?.grantedBy;
+    });
+    if (!grantedBy) throw new AuthorityError('SPACE_ACTION_NOT_GRANTED');
+    const actingActorId = grantedBy;
+
+    const guard: SpaceActionGuard = {
+      assertAllowed: async (transaction, workspace) => {
+        const member = await transaction.getMember(actingActorId);
+        if (!member || member.revokedAt !== null) throw new AuthorityError('MEMBERSHIP_REVOKED');
+        const domain = workspace.domainState as unknown as { kind?: string; spaceGrants?: ToolProjectionGrant[] };
+        const grant = Array.isArray(domain.spaceGrants) ? domain.spaceGrants.find(entry => entry.grantId === input.grantId) : undefined;
+        if (!grant || grant.sourceWorkspaceId !== workspace.id) throw new AuthorityError('SPACE_ACTION_NOT_GRANTED');
+        const verdict = authorizeSpaceAction(grant, {
+          spaceWorkspaceId: input.spaceWorkspaceId,
+          sourceEpoch: workspace.epoch,
+          actorId: actingActorId,
+          actionId: input.actionId,
+          membershipVerifiedBy: 'destination',
+        });
+        if (!verdict.ok) {
+          const code = verdict.code === 'GRANT_REVOKED' ? 'SPACE_ACTION_REVOKED'
+            : verdict.code === 'GRANT_STALE_EPOCH' ? 'SPACE_ACTION_STALE'
+              : verdict.code === 'GRANT_ACTION_NOT_PERMITTED' ? 'SPACE_ACTION_NOT_GRANTED'
+                : 'SPACE_ACTION_FORBIDDEN';
+          throw new AuthorityError(code, verdict.message);
+        }
+        // A connection cannot exceed what the issuer may already do at this table.
+        if (!may(workspace, member, 'table.act')) throw new AuthorityError('SPACE_ACTION_FORBIDDEN');
+      },
+    };
+    // The commit needs the revision and epoch the caller is acting on; the guard below re-checks
+    // the grant, and a change in between still fails the normal CAS instead of committing blindly.
+    const snapshot = await this.computeSnapshot(input.workspaceId, actingActorId);
+    const envelope: CommandEnvelope = {
+      commandId: sha256('tabletop-space-action-v1:' + input.grantId + ':' + input.actionId + ':' + input.idempotencyKey),
+      expectedRevision: snapshot.workspace.revision,
+      expectedEpoch: snapshot.workspace.epoch,
+      type: 'table.act',
+      payload: { actionId: input.actionId, inputs: input.inputs },
+    };
+    // The receipt hash covers the request, not the revision it happened to read, so a retry after a
+    // commit replays the stored ack instead of failing as an idempotency mismatch.
+    const fingerprint = sha256(JSON.stringify({
+      grantId: input.grantId,
+      spaceWorkspaceId: input.spaceWorkspaceId,
+      actionId: input.actionId,
+      inputs: input.inputs,
+      idempotencyKey: input.idempotencyKey,
+    }));
+    return this.executeInternal(
+      { record: { actorId: actingActorId, tokenHash: '' } },
+      input.workspaceId,
+      envelope,
+      null,
+      fingerprint,
+      undefined,
+      guard,
+      true,
+    );
+  }
   private async executeTrustedCompute(
     actorId: string,
     workspaceId: string,
@@ -796,11 +917,17 @@ export class CommandAuthority {
     trustedOperation: 'artifact-import' | 'table-compute' | null,
     requestFingerprint?: string,
     modelJobGuard?: ModelJobCommitGuard,
+    spaceActionGuard?: SpaceActionGuard,
+    stableRequestHash = false,
   ): Promise<CommandAck> {
     const now = this.now();
     const requestHash = requestFingerprint === undefined
       ? this.commandRequestHash(envelope)
-      : this.trustedRequestHash(envelope, requestFingerprint);
+      : stableRequestHash
+        // A retry must replay the stored receipt even though the revision moved, so the hash covers
+        // the request identity (type, payload, fingerprint) and not the revision it expected.
+        ? hashValue({ type: envelope.type, payload: envelope.payload, requestFingerprint })
+        : this.trustedRequestHash(envelope, requestFingerprint);
     let ack: CommandAck;
     try {
       ack = await this.repository.withWorkspaceTransaction(workspaceId, async (transaction) => {
@@ -818,6 +945,8 @@ export class CommandAuthority {
               || (envelope.type === 'table.compute.update' && workspace.ownerActorId !== session.record.actorId)
               || !may(workspace, member, 'data.compute'))) throw new AuthorityError('TRUSTED_OPERATION_REQUIRED');
         if (modelJobGuard) await transaction.assertModelJobCommitting(modelJobGuard);
+        // F080: re-checked inside the commit transaction, so a revoke cannot race the commit.
+        if (spaceActionGuard) await spaceActionGuard.assertAllowed(transaction, workspace);
         if (workspace.kind === 'teaching' && envelope.type === 'teaching.setRepresentation') {
           await this.validateTeachingTarget(transaction, envelope.payload);
         }
@@ -825,6 +954,17 @@ export class CommandAuthority {
         if (existing) {
           if (existing.payloadHash !== requestHash) throw new AuthorityError('IDEMPOTENCY_MISMATCH');
           return { ...existing.response, duplicate: true };
+        }
+        if (envelope.type === 'space.addMember' || envelope.type === 'space.setRole' || envelope.type === 'space.transferManager') {
+          // F080: the target of a space command must be someone the table actually has. Without
+          // this, a manager could write an actorId that no membership row backs, and the destination
+          // space would then treat an outsider as a member.
+          const target = envelope.type === 'space.addMember'
+            ? (envelope.payload as { member?: { actorId?: unknown } } | null)?.member?.actorId
+            : (envelope.payload as { actorId?: unknown } | null)?.actorId;
+          if (typeof target !== 'string') throw new AuthorityError('SPACE_PAYLOAD');
+          const targetMember = await transaction.getMember(target);
+          if (!targetMember || targetMember.revokedAt !== null) throw new AuthorityError('MEMBER_NOT_FOUND', 'This person is not at the table.');
         }
         if (envelope.type === 'access.assign') {
           // F035: roles go to current members only, and the owner's access never changes.
@@ -861,7 +1001,7 @@ export class CommandAuthority {
           return this.renameWorkspace(transaction, workspace, member, session, envelope, requestHash, title, now);
         }
         // access.assign names its target member; the block above already checked it is a current non-owner member.
-        if (envelope.type !== 'teaching.setRepresentation' && envelope.type !== 'access.assign') assertIdentityFieldsAbsent(envelope.payload);
+        if (!commandNamesItsOwnTarget(envelope.type)) assertIdentityFieldsAbsent(envelope.payload);
         if (envelope.type === 'teaching.answer' && member.role !== 'learner') throw new AuthorityError('ROLE_FORBIDDEN');
         // F035: other lesson commands are decided by the member's permissions in the domain (requirePermission).
 
@@ -1183,7 +1323,7 @@ export class CommandAuthority {
   }
 
   private async refreshName(session: AuthenticatedSession, name: string): Promise<AuthenticatedSession> {
-    const record = await this.repository.touchSession(session.record.tokenHash, this.now(), name);
+    const record = await this.requireIdentity().touchSession(session.record.tokenHash, this.now(), name);
     if (!record) throw new AuthorityError('SESSION_EXPIRED');
     return { record, csrfToken: session.csrfToken, expiresAt: expiresAt(record) };
   }
@@ -1210,7 +1350,7 @@ export class CommandAuthority {
   }
 }
 
-function commandAllowed(kind: CaseKind, type: string, trustedOperation: 'artifact-import' | 'table-compute' | null): boolean {
+export function commandAllowed(kind: CaseKind, type: string, trustedOperation: 'artifact-import' | 'table-compute' | null): boolean {
   if (type === 'workspace.reset' || type === 'workspace.rename') return true;
   if (type === 'invoice.import') return trustedOperation === 'artifact-import' && kind === 'invoice';
   if (type === 'table.compute.queue' || type === 'table.compute.update') return trustedOperation === 'table-compute' && kind === 'table';

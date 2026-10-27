@@ -23,6 +23,8 @@ export interface Env {
   COMPUTE_LOADER?: WorkerLoader;
   /** F066: opt in to Python execution inside the room's isolated container. */
   TABLE_COMPUTE_PYTHON?: string;
+  /** F080 / D-044: origin serving the sandbox document; absent (or unusable) keeps the `srcDoc` frame. */
+  TOOL_SANDBOX_ORIGIN?: string;
 }
 
 export interface Account {
