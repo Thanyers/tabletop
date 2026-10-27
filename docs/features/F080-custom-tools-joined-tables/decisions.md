@@ -568,3 +568,25 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 3. ยอมรับว่า tool รันได้เฉพาะใน harness จนกว่าจะทำข้อ 1 หรือ 2
 
 **ผลต่อสถานะ:** ISO-01/EXEC-01/G1-03 ยังถูกต้องในระดับกลไก (isolation ทำงาน) แต่ **ยังไม่ทำงานบนหน้าที่ deploy** และถูกบันทึกไว้ใน limitation ทุกข้อแล้ว
+
+## D-044 — เจ้าของเลือกทางที่ 2: แยก sandbox ไปคนละ origin (พิสูจน์ด้วย PoC แล้วว่าได้ผล)
+
+**การตัดสินใจของเจ้าของ (2026-10-27):** เลือกทางที่ 2 — sandbox มี origin ของตัวเอง ไม่ผ่อน CSP ของแอปหลัก
+
+**PoC ที่วัดจริง (ก่อนลงโค้ดจริง):** เสิร์ฟสอง origin บนเครื่อง — app origin ใช้ policy เดิม (`script-src 'self'`) และ sandbox origin ใช้ policy ของตัวเอง (`default-src 'none'; script-src 'self' 'unsafe-eval'; connect-src 'none'`) — iframe `sandbox="allow-scripts"` ชี้ข้าม origin, parent ส่ง package ผ่าน `postMessage`, frame eval แล้วรายงานกลับ
+
+```json
+{ "appCspStrict": true, "frameText": "mounted:poc", "state": "mounted" }
+```
+
+⇒ **แอปหลักคง CSP เข้มได้** และ tool ยังรันได้ — ไม่ต้อง `'unsafe-inline'` ที่ไหนเลย (frame โหลด bootstrap เป็นไฟล์ `/frame.js` จาก origin ของตัวเอง)
+
+**ดีไซน์ที่จะทำ (สไลซ์ถัดไป):**
+1. **Worker ใหม่** `tabletop-sandbox` / `tabletop-sandbox-staging` — static assets: `frame.html` + `frame.js` + `_headers` ของตัวเอง (`frame-ancestors` จำกัดเฉพาะ origin ของแอป)
+2. **App worker**: เพิ่ม var `TOOL_SANDBOX_ORIGIN` และส่งให้ client; `GeneratedToolHost` ตั้ง `src` เป็น origin นั้นแทน `srcDoc`
+3. **Handshake**: frame → `ready` → parent ส่ง `init { nonce, runtimeScript, modules, ports, presentation }` → frame mount แล้วรายงาน `mounted`/`log`/`intent`; parent ตรวจ `event.origin` **และ** nonce ก่อนรับทุกข้อความ
+4. **Intents** ยังผ่าน parent → `POST /api/workspaces/:id/space/tool/intent` (ทางเขียนเดียว ไม่เปลี่ยน)
+5. **CI**: deploy sandbox worker ในงาน staging (และ release job สำหรับ production) — ไม่ deploy จากเครื่อง
+6. **ทดสอบ**: unit สำหรับ origin/nonce guard; browser harness ที่ใช้สอง origin; staging verify ด้วย `verify-host.mjs`
+
+**สิ่งที่ยังไม่เปลี่ยน:** CSP ของแอปหลัก (`script-src 'self'`) · X-Frame-Options ของแอป (frame ไม่ได้ฝังแอป) · ไม่มี token ใน URL (package ส่งผ่าน postMessage เท่านั้น)
