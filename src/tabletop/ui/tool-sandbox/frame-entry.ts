@@ -57,6 +57,27 @@ function startRuntime(message: ToolSandboxInitMessage): void {
 }
 
 let started = false;
+let reportedRuntimeError = false;
+
+/**
+ * D-045: once the runtime is running, anything it throws surfaces here.
+ *
+ * A cross-origin script that throws is sanitised by the browser to "Script error." before the host
+ * sees it, which hides the real reason from the person and from us. This origin is the one place that
+ * can read the message, so it forwards it through the same `blocked` channel the host already shows.
+ */
+window.addEventListener('error', event => {
+  if (!started || reportedRuntimeError) return;
+  reportedRuntimeError = true;
+  const where = event.filename ? ` (${event.filename}:${event.lineno ?? 0})` : '';
+  reportBlocked(`${event.message || 'The tool threw an error.'}${where}`);
+});
+window.addEventListener('unhandledrejection', event => {
+  if (!started || reportedRuntimeError) return;
+  reportedRuntimeError = true;
+  const promiseEvent = event as PromiseRejectionEvent;
+  reportBlocked(`Unhandled rejection: ${describeError(promiseEvent.reason)}`);
+});
 
 window.addEventListener('message', event => {
   // This frame runs in an opaque origin (`sandbox="allow-scripts"` without `allow-same-origin`), so
