@@ -65,7 +65,7 @@ export interface SpaceRoomScreenProps {
 }
 
 /** The route's input contract has no `null`: an absent input is one the frame did not send (D-038). */
-function intentInputs(inputs: Record<string, ToolScalar>): Record<string, string | number | boolean> {
+export function intentInputs(inputs: Record<string, ToolScalar>): Record<string, string | number | boolean> {
   const next: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(inputs)) {
     if (value === null) continue;

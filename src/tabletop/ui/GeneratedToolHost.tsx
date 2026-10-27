@@ -14,6 +14,7 @@ import {
   type ToolScalar,
 } from '../shared/tool-protocol';
 import { buildToolSandboxDocument } from './tool-sandbox/document';
+import { buildToolSandboxInitMessage, parseToolSandboxFrameHello, toolSandboxFrameUrl } from './tool-sandbox/frame-message';
 import { createToolHostWatchdog } from './tool-host-watchdog';
 
 /**
@@ -48,6 +49,15 @@ export interface GeneratedToolHostProps {
   initialHeightPx?: number;
   /** How long the frame gets to say anything before the host reports that it never started (D-041). */
   readyTimeoutMs?: number;
+  /**
+   * D-044: serve the frame document from the sandbox's own origin instead of `srcDoc`.
+   *
+   * Absent means the `srcDoc` path, unchanged. When set to a bare http(s) origin, the frame is loaded
+   * from `${sandboxOrigin}/frame.html` — a document whose Content-Security-Policy is the sandbox's own,
+   * which is what lets the app page keep `script-src 'self'` — and the host hands it the runtime text
+   * and the boot payload in one init message once the frame reports that it is up.
+   */
+  sandboxOrigin?: string;
 }
 
 let runtimePromise: Promise<string> | undefined;
@@ -76,6 +86,14 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
   const [height, setHeight] = useState(props.initialHeightPx ?? 320);
   const [failure, setFailure] = useState<string | undefined>();
 
+  /** D-044: the origin-served frame starts from the runtime text, which travels as a message. */
+  const sandboxOrigin = props.sandboxOrigin;
+  const frameUrl = sandboxOrigin === undefined ? undefined : toolSandboxFrameUrl(sandboxOrigin);
+  const originMode = frameUrl !== undefined;
+  const [runtimeReady, setRuntimeReady] = useState(false);
+  const runtimeRef = useRef<string | undefined>(undefined);
+  const initSentRef = useRef(false);
+
   const portsRef = useRef(props.ports);
   portsRef.current = props.ports;
   const portsSentRef = useRef<ToolPortSnapshot[] | undefined>(undefined);
@@ -85,7 +103,11 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
    * "the tool never answered" into a sentence a person can act on instead of an empty box.
    */
   const watchdog = useMemo(
-    () => createToolHostWatchdog({ timeoutMs: props.readyTimeoutMs ?? 3000, onTimeout: message => setFailure(message) }),
+    () => createToolHostWatchdog({
+      timeoutMs: props.readyTimeoutMs ?? 3000,
+      // A frame that said why it could not start has already given the user a better sentence.
+      onTimeout: message => setFailure(current => current ?? message),
+    }),
     [props.readyTimeoutMs],
   );
   useEffect(() => () => watchdog.dispose(), [watchdog]);
@@ -102,26 +124,40 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
     [presentationKey],
   );
 
+  /**
+   * The boot payload, built at send time so a projection that changed while the runtime was loading
+   * is the one the frame starts with. Later changes go through the ports push below.
+   */
+  const buildInit = useCallback((): Extract<ToolHostMessage, { kind: 'init' }> => ({
+    protocol: TOOL_PROTOCOL_VERSION,
+    kind: 'init',
+    instanceId,
+    nonce,
+    packageId: compiled.packageId,
+    packageVersion: compiled.version,
+    contentHash: compiled.contentHash,
+    ports: portsRef.current,
+    presentation: stablePresentation,
+  }), [compiled, instanceId, nonce, stablePresentation]);
+
   useEffect(() => {
     let cancelled = false;
     setDocument(undefined);
     setFrameLoaded(false);
+    setRuntimeReady(false);
+    initSentRef.current = false;
+    runtimeRef.current = undefined;
     portsSentRef.current = undefined;
     loadToolSandboxRuntime()
       .then(runtimeScript => {
         if (cancelled) return;
-        const init: Extract<ToolHostMessage, { kind: 'init' }> = {
-          protocol: TOOL_PROTOCOL_VERSION,
-          kind: 'init',
-          instanceId,
-          nonce,
-          packageId: compiled.packageId,
-          packageVersion: compiled.version,
-          contentHash: compiled.contentHash,
-          ports: portsRef.current,
-          presentation: stablePresentation,
-        };
-        setDocument(buildToolSandboxDocument({ runtimeScript, compiled, init }));
+        runtimeRef.current = runtimeScript;
+        if (originMode) {
+          // The frame document is the sandbox origin's; the runtime goes in the init message instead.
+          setRuntimeReady(true);
+          return;
+        }
+        setDocument(buildToolSandboxDocument({ runtimeScript, compiled, init: buildInit() }));
       })
       .catch((error: unknown) => {
         if (!cancelled) setFailure(error instanceof Error ? error.message : String(error));
@@ -129,7 +165,30 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
     return () => {
       cancelled = true;
     };
-  }, [compiled, instanceId, nonce, stablePresentation]);
+  }, [buildInit, compiled, originMode]);
+
+  /**
+   * D-044: hand the frame its runtime and boot payload, once.
+   *
+   * A named `targetOrigin` can never match this frame — `sandbox="allow-scripts"` without
+   * `allow-same-origin` gives it an opaque origin — so the channel is bounded by window identity
+   * (checked in the listener below) and by sending exactly once.
+   */
+  const sendInit = useCallback((): void => {
+    const target = frameRef.current?.contentWindow;
+    const runtimeScript = runtimeRef.current;
+    if (!originMode || !target || runtimeScript === undefined || initSentRef.current) return;
+    initSentRef.current = true;
+    const built = buildToolSandboxInitMessage({ runtimeScript, compiled, init: buildInit() });
+    if (!built.ok) {
+      setFailure(built.detail);
+      return;
+    }
+    target.postMessage(built.message, '*');
+    // The init already carried these projections; the ports push below only sends newer ones.
+    portsSentRef.current = portsRef.current;
+    setFrameLoaded(true);
+  }, [buildInit, compiled, originMode]);
 
   /**
    * Push projection changes into the live frame.
@@ -162,6 +221,19 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
       const frame = frameRef.current;
       // Identity first: a message from another window is not ours, whatever it claims.
       if (!frame || event.source !== frame.contentWindow) return;
+      // D-044: the origin-served document announces itself (or its refusal) before a runtime exists.
+      const hello = parseToolSandboxFrameHello(event.data);
+      if (hello?.kind === 'blocked') {
+        // It answered, so the watchdog stands down: the frame already gave the user a better sentence.
+        watchdog.heard();
+        initSentRef.current = true;
+        setFailure(hello.reason);
+        return;
+      }
+      if (hello?.kind === 'ready') {
+        sendInit();
+        return;
+      }
       const parsed = parseToolFrameMessage(event.data);
       if (!parsed.ok) return;
       const message: ToolFrameMessage = parsed.message;
@@ -206,16 +278,21 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [instanceId, nonce, onIntent, onLog, reply]);
+  }, [instanceId, nonce, onIntent, onLog, reply, sendInit, watchdog]);
 
-  if (failure) {
+  // A configured origin that is not a bare http(s) origin would point the frame at something else.
+  const problem = failure ?? (sandboxOrigin !== undefined && !originMode
+    ? 'TOOL_SANDBOX_ORIGIN_INVALID: the configured sandbox origin is not an http(s) origin.'
+    : undefined);
+  if (problem) {
     return (
       <div role="alert" style={{ padding: 12, border: '1px solid #b3261e', borderRadius: 10, color: '#b3261e', fontSize: 13 }}>
-        {`โหลดเครื่องมือไม่สำเร็จ: ${failure}`}
+        {`โหลดเครื่องมือไม่สำเร็จ: ${problem}`}
       </div>
     );
   }
-  if (!document) {
+  // The origin-served frame must exist before it can talk; the `srcDoc` frame needs its document.
+  if (originMode ? !runtimeReady : !document) {
     return (
       <div aria-busy="true" style={{ height, display: 'grid', placeItems: 'center', fontSize: 13, opacity: 0.7 }}>
         กำลังเตรียมเครื่องมือ…
@@ -226,8 +303,14 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
     <iframe
       ref={frameRef}
       title={title}
-      srcDoc={document}
-      onLoad={() => { setFrameLoaded(true); watchdog.started(); }}
+      src={originMode ? frameUrl : undefined}
+      srcDoc={originMode ? undefined : document}
+      onLoad={() => {
+        watchdog.started();
+        // The document is up: the frame's own handshake may still be in flight, so start it here too.
+        if (originMode) sendInit();
+        else setFrameLoaded(true);
+      }}
       // No allow-same-origin: the frame must stay an opaque origin with no cookie access.
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"

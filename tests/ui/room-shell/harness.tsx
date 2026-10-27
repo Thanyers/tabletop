@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RoomShell, type RoomRecapView, type RoomTableSummary } from '../../../src/tabletop/ui/RoomShell';
 import type { JoinedSource } from '../../../src/tabletop/ui/JoinedProjectionView';
 import { readJoinedSources, type JoinedSourceRequest, type ProjectionResponse } from '../../../src/tabletop/ui/joined-projection-client';
 import { createJoinedProjectionFetcher } from '../../../src/tabletop/ui/joined-projection-fetcher';
-import { SpaceRoomScreen, type SpaceRoomDeps } from '../../../src/tabletop/ui/SpaceRoomScreen';
+import { GeneratedToolHost, type ToolIntentRequest } from '../../../src/tabletop/ui/GeneratedToolHost';
+import { compileRoomTool, toolInstanceId, toolNonce, toolPortSnapshots, toolPresentation } from '../../../src/tabletop/ui/room-tool-hosting';
+import { SpaceRoomScreen, intentInputs, type SpaceRoomDeps, type ToolIntentAnswer } from '../../../src/tabletop/ui/SpaceRoomScreen';
 import type { CollaborationSpace, SpaceToolInstallation } from '../../../src/tabletop/shared/collaboration-space';
 import {
   TOOL_PACKAGE_PINNED_IMPORTS,
@@ -12,6 +14,7 @@ import {
   TOOL_PACKAGE_SCHEMA_VERSION,
   type ToolPackageDefinition,
 } from '../../../src/tabletop/shared/tool-package';
+import type { ToolIntentOutcome } from '../../../src/tabletop/shared/tool-protocol';
 
 /**
  * F080 / JT-V harness: the room shell (variant C) with the real client mapping in the loop.
@@ -270,6 +273,17 @@ interface RoomHarnessState {
 const roomHarness: RoomHarnessState = { intents: [], loads: 0 };
 (globalThis as unknown as { __ROOM_HARNESS__: RoomHarnessState }).__ROOM_HARNESS__ = roomHarness;
 
+/**
+ * The scripted intent route both cases share.
+ *
+ * It records the call and reports a commit, exactly as the room's route would after it wrote through
+ * `table.act`; the origin-served frame must reach this same stub (D-044).
+ */
+async function runToolIntentStub(input: { behaviorId: string; inputs: Record<string, string | number | boolean> }): Promise<ToolIntentAnswer> {
+  roomHarness.intents.push({ behaviorId: input.behaviorId, inputs: input.inputs });
+  return { ok: true, actionId: 'action-1', ack: { revision: 4, duplicate: false } };
+}
+
 function SpaceScreenHarness(): React.ReactElement {
   const fixture = spaceForCase();
   const deps: SpaceRoomDeps = {
@@ -283,16 +297,70 @@ function SpaceScreenHarness(): React.ReactElement {
     loadConnections: async () => [],
     loadRecap: async () => ({ headline: 'มี 1 แหล่งข้อมูลเปลี่ยน', incomplete: false, changed: [], withdrawn: [] }),
     fetchProjection: async () => ({ status: 404, body: { ok: false, errorCode: 'SPACE_SOURCE_NOT_LINKED' } }),
-    runToolIntent: async (input) => {
-      roomHarness.intents.push({ behaviorId: input.behaviorId, inputs: input.inputs });
-      // The route commits through the room's action path; the stub only reports that it did.
-      return { ok: true, actionId: 'action-1', ack: { revision: 4, duplicate: false } };
-    },
+    runToolIntent: runToolIntentStub,
   };
   return <SpaceRoomScreen workspaceId={SPACE} deps={deps} />;
+}
+
+/**
+ * F080 / D-044: the same host, with the frame document served from a second origin.
+ *
+ * The page renders nothing but `GeneratedToolHost`, so the browser driver can prove that the frame
+ * mounts under the app's own policy (which keeps `script-src 'self'`) and that a declared behaviour
+ * still reaches the scripted intent route. `sandboxOrigin` is passed by the driver, which also runs
+ * the origin that serves `sandbox-assets/` with the sandbox's own CSP.
+ */
+const ORIGIN_TOOL: SpaceToolInstallation = { ...ROOM_TOOL_REFERENCE, definition: ROOM_TOOL_PACKAGE };
+const ORIGIN_COMPILED = compileRoomTool(ORIGIN_TOOL);
+
+function SandboxOriginHarness({ sandboxOrigin }: { sandboxOrigin: string }): React.ReactElement {
+  const nonce = useMemo(() => toolNonce(), []);
+  const presentation = useMemo(() => toolPresentation(ROOM_TOOL_PACKAGE, { locale: 'th', reducedMotion: true }), []);
+  const ports = useMemo(() => toolPortSnapshots([], ROOM_TOOL_PACKAGE), []);
+  const [note, setNote] = useState('');
+
+  const onIntent = useCallback(async (request: ToolIntentRequest): Promise<ToolIntentOutcome> => {
+    // The screen's own mapping (D-038), so the frame's inputs arrive here as the route would receive them.
+    const answer = await runToolIntentStub({ behaviorId: request.behaviorId, inputs: intentInputs(request.inputs) });
+    setNote(answer.ok ? `committed:${answer.actionId}` : `rejected:${answer.code}`);
+    return answer.ok
+      ? { requestId: request.requestId, behaviorId: request.behaviorId, status: 'committed' }
+      : { requestId: request.requestId, behaviorId: request.behaviorId, status: 'rejected', code: answer.code, message: answer.message };
+  }, []);
+
+  if (ORIGIN_COMPILED.state !== 'ready') {
+    return <pre role="alert" data-testid="origin-compile-problems">{JSON.stringify(ORIGIN_COMPILED, null, 2)}</pre>;
+  }
+  return (
+    <main style={{ font: '14px/1.6 system-ui, sans-serif', maxWidth: 720, margin: '0 auto', padding: 16 }}>
+      <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>F080 / D-044 — host frame from the sandbox origin</h1>
+      <p data-testid="origin-case" style={{ margin: '0 0 12px', fontSize: 12, color: '#555' }}>{sandboxOrigin}</p>
+      <div className="tt-room__tool-host">
+        <GeneratedToolHost
+          instanceId={toolInstanceId(ORIGIN_TOOL)}
+          nonce={nonce}
+          compiled={ORIGIN_COMPILED.compiled}
+          ports={ports}
+          presentation={presentation}
+          onIntent={onIntent}
+          sandboxOrigin={sandboxOrigin}
+          title={ORIGIN_TOOL.title}
+        />
+      </div>
+      <p data-testid="origin-note" role="status" style={{ margin: '12px 0 0', fontSize: 12 }}>{note}</p>
+    </main>
+  );
 }
 
 const container = document.getElementById('root');
 if (!container) throw new Error('The room shell harness has no root element.');
 container.className = 'tt-app';
-createRoot(container).render(new URLSearchParams(window.location.search).get('screen') === 'space' ? <SpaceScreenHarness /> : <Harness />);
+const params = new URLSearchParams(window.location.search);
+const sandboxOrigin = params.get('sandbox') === 'origin' ? params.get('sandboxOrigin') : undefined;
+createRoot(container).render(
+  params.get('sandbox') === 'origin'
+    ? sandboxOrigin
+      ? <SandboxOriginHarness sandboxOrigin={sandboxOrigin} />
+      : <p role="alert">sandbox=origin needs sandboxOrigin=&lt;url&gt;</p>
+    : params.get('screen') === 'space' ? <SpaceScreenHarness /> : <Harness />,
+);

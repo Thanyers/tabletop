@@ -1,5 +1,6 @@
 import type { CompiledToolPackage } from '../../runtime/tools/compile';
 import type { ToolHostMessage } from '../../shared/tool-protocol';
+import { TOOL_SANDBOX_BOOT_ELEMENT_ID } from './frame-message';
 
 /**
  * F080: the document a tool instance runs in.
@@ -64,7 +65,7 @@ export function buildToolSandboxDocument(input: ToolSandboxDocumentInput): strin
 </head>
 <body>
 <div id="root"></div>
-<script type="application/json" id="tool-boot">${embedJson({ modules: input.compiled.modules, uiEntry: input.compiled.uiEntry, init: input.init })}</script>
+<script type="application/json" id="${TOOL_SANDBOX_BOOT_ELEMENT_ID}">${embedJson({ modules: input.compiled.modules, uiEntry: input.compiled.uiEntry, init: input.init })}</script>
 <script>${input.runtimeScript}</script>
 <script>window.__TOOL_SANDBOX_START__ && window.__TOOL_SANDBOX_START__();</script>
 </body>

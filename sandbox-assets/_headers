@@ -1,0 +1,8 @@
+# F080 / D-044: the tool sandbox document is served from its own origin so the app page can keep
+# `script-src 'self'` (D-041/D-043). This policy is the sandbox's own: no network, no storage, no
+# navigation, and only the app's two origins may embed it. `'unsafe-eval'` is required because the
+# frame instantiates the runtime text the host sends; nothing else on this origin needs it.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://tabletop.ptchrr.workers.dev https://tabletop-staging.ptchrr.workers.dev
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
