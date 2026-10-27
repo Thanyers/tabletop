@@ -3,11 +3,15 @@
  * The button matches Invite; the menu reuses the table-options popover and adds a second line per item.
  */
 
-/* Size, border and type come from .tt-button like Invite; only undo the square options-summary box. */
+/* Own popover, styled like the table options one. Never reuse `.tt-table-options`: tests select it. */
+.tt-room-menu { position: relative; }
+.tt-room-menu > summary { list-style: none; cursor: pointer; }
+.tt-room-menu > summary::-webkit-details-marker { display: none; }
+
+/* Size, border and type come from .tt-button like Invite. */
 .tt-room-menu > summary.tt-room-menu__button {
   display: inline-flex;
-  width: auto;
-  height: auto;
+  align-items: center;
   gap: 6px;
   white-space: nowrap;
   /* Same compact size as Invite (`.tt-invite-button`, which also forces these). */
@@ -18,9 +22,10 @@
 
 .tt-room-menu[open] > summary.tt-room-menu__button { background: var(--tt-canvas); }
 
-.tt-room-menu__body { width: 300px; }
+.tt-room-menu__body { position: absolute; z-index: 50; top: 44px; right: 0; display: grid; gap: 4px; width: 300px; max-width: calc(100vw - 24px); padding: 10px; border: 1px solid var(--tt-line); border-radius: 14px; background: var(--tt-paper); box-shadow: 0 12px 36px #303d3a14; }
 
-.tt-room-menu__body > button { align-items: flex-start; cursor: pointer; }
+.tt-room-menu__body > button { display: flex; align-items: flex-start; gap: 10px; min-height: 42px; padding: 8px 10px; color: inherit; border: 0; border-radius: 8px; background: transparent; font-size: 14px; text-align: left; cursor: pointer; }
+.tt-room-menu__body > button:hover { background: var(--tt-canvas); }
 .tt-room-menu__body > button > svg { flex: none; margin-top: 3px; }
 .tt-room-menu__body > button > span { display: grid; gap: 2px; min-width: 0; }
 .tt-room-menu__body > button strong { font-weight: 600; }

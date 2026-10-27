@@ -6,7 +6,8 @@ import { ChevronDown, DoorOpen, KeyRound, Plus, X } from 'lucide-react';
  *
  * They used to be two pill toggles stacked between the header and the canvas, which pushed the table
  * down and read as loose controls. A header menu keeps them one click away, and each opens its form in
- * a dialog so the canvas never moves.
+ * a dialog so the canvas never moves. It has its own classes: browser tests find the table options
+ * menu by `.tt-table-options`, so that class must stay unique.
  */
 
 export type RoomAction = 'create' | 'grant';
@@ -18,11 +19,11 @@ export function RoomMenu({ onChoose }: { onChoose: (action: RoomAction) => void 
     onChoose(action);
   };
   return (
-    <details ref={menuRef} className="tt-table-options tt-room-menu">
+    <details ref={menuRef} className="tt-room-menu">
       <summary className="tt-button tt-button--quiet tt-room-menu__button" aria-label="ห้อง: สร้างห้องหรือให้ห้องอ่านข้อมูล">
         <DoorOpen size={15} /><span>ห้อง</span><ChevronDown size={14} />
       </summary>
-      <div className="tt-table-options__body tt-room-menu__body">
+      <div className="tt-room-menu__body">
         <button type="button" onClick={() => choose('create')}>
           <Plus size={15} /><span><strong>สร้างห้องจากโต๊ะนี้</strong><small>เปิดห้องให้หลายโต๊ะทำงานด้วยกัน</small></span>
         </button>
