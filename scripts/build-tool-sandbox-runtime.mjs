@@ -50,3 +50,8 @@ console.log(`tool-sandbox-runtime: wrote ${runtime.length} characters to public/
 // The origin-served frame is a plain external script, so an inline-tag check does not apply to it.
 const frame = await bundle('src/tabletop/ui/tool-sandbox/frame-entry.ts', 'sandbox-assets/frame.js');
 console.log(`tool-sandbox-frame: wrote ${frame.length} characters to sandbox-assets/frame.js`);
+
+// D-047: the sandbox origin serves the runtime itself, so the frame evaluates code it loaded from its
+// own origin instead of a 686 KB string posted by the app. Same bundle, second copy.
+await writeFile(resolve(root, 'sandbox-assets/runtime.js'), runtime, 'utf8');
+console.log(`tool-sandbox-runtime: copied ${runtime.length} characters to sandbox-assets/runtime.js`);

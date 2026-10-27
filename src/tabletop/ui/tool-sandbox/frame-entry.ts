@@ -41,16 +41,24 @@ function isInitAttempt(value: unknown): boolean {
  * The element is created through the DOM rather than parsed from markup, so the JSON cannot close a
  * tag; the runtime still reads the same `#tool-boot` element it always did.
  */
-function startRuntime(message: ToolSandboxInitMessage): void {
+/** D-047: the runtime this origin serves, used when the host does not inline it. */
+async function loadOwnRuntime(): Promise<string> {
+  const response = await fetch('/runtime.js', { credentials: 'omit' });
+  if (!response.ok) throw new Error(`TOOL_RUNTIME_UNAVAILABLE: ${response.status}`);
+  return response.text();
+}
+
+async function startRuntime(message: ToolSandboxInitMessage): Promise<void> {
   document.documentElement.lang = message.init.presentation.locale;
+  // The runtime is the sandbox's own asset on this origin; the srcdoc document still receives it inline.
+  const runtimeScript = message.runtimeScript ?? await loadOwnRuntime();
   const boot = document.createElement('script');
   boot.type = 'application/json';
   boot.id = TOOL_SANDBOX_BOOT_ELEMENT_ID;
   boot.textContent = JSON.stringify({ modules: message.modules, uiEntry: message.uiEntry, init: message.init });
   document.body.appendChild(boot);
-  // The runtime text is the host's build artifact; `'unsafe-eval'` on this origin is what lets it run,
-  // and no other script this origin serves needs that privilege.
-  new Function(message.runtimeScript)();
+  // `'unsafe-eval'` on this origin is what lets the runtime run; no other script here needs it.
+  new Function(runtimeScript)();
   const start = globalThis.__TOOL_SANDBOX_START__;
   if (typeof start !== 'function') throw new Error('The sandbox runtime installed no start function.');
   start();
@@ -93,11 +101,10 @@ window.addEventListener('message', event => {
     return;
   }
   started = true;
-  try {
-    startRuntime(parsed.message);
-  } catch (error) {
+  // D-047: the runtime may have to be fetched from this origin first, so starting is asynchronous.
+  void startRuntime(parsed.message).catch((error: unknown) => {
     reportBlocked(describeError(error));
-  }
+  });
 });
 
 // The host waits for this before it posts the payload; without it a blocked frame is just a blank box.

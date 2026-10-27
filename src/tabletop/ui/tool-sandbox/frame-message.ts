@@ -25,8 +25,11 @@ export type ToolSandboxInitHook = Extract<ToolHostMessage, { kind: 'init' }>;
 export interface ToolSandboxInitMessage {
   protocol: ToolProtocolVersion;
   kind: 'init';
-  /** The bundled runtime as text; the frame instantiates it inside its own realm. */
-  runtimeScript: string;
+  /**
+   * The bundled runtime as text. D-047: absent when the frame is served from the sandbox origin, which
+   * loads its own `/runtime.js`; the srcdoc document still receives it inline.
+   */
+  runtimeScript?: string;
   modules: Record<string, string>;
   uiEntry: string;
   init: ToolSandboxInitHook;
@@ -36,7 +39,8 @@ export interface ToolSandboxInitMessage {
 export type ToolSandboxFrameHello = { kind: 'ready' } | { kind: 'blocked'; reason: string };
 
 export interface ToolSandboxInitInput {
-  runtimeScript: string;
+  /** D-047: omitted when the frame loads the runtime from its own origin. */
+  runtimeScript?: string;
   compiled: { modules: Record<string, string>; uiEntry: string };
   init: ToolSandboxInitHook;
 }
@@ -106,11 +110,13 @@ export function parseToolSandboxInitMessage(value: unknown): ToolBridgeParse<Too
     return failure('BRIDGE_SCHEMA', 'kind: the frame starts only on an init message.');
   }
   const runtimeScript = candidate.runtimeScript;
-  if (typeof runtimeScript !== 'string' || runtimeScript.length === 0) {
-    return failure('BRIDGE_SCHEMA', 'runtimeScript: the frame needs the runtime text to start.');
-  }
-  if (runtimeScript.length > TOOL_BRIDGE_LIMITS.maxRuntimeScriptChars) {
-    return failure('BRIDGE_TOO_LARGE', `runtimeScript: the runtime text exceeds ${TOOL_BRIDGE_LIMITS.maxRuntimeScriptChars} characters.`);
+  if (runtimeScript !== undefined) {
+    if (typeof runtimeScript !== 'string' || runtimeScript.length === 0) {
+      return failure('BRIDGE_SCHEMA', 'runtimeScript: when sent, the runtime text must be a non-empty string.');
+    }
+    if (runtimeScript.length > TOOL_BRIDGE_LIMITS.maxRuntimeScriptChars) {
+      return failure('BRIDGE_TOO_LARGE', `runtimeScript: the runtime text exceeds ${TOOL_BRIDGE_LIMITS.maxRuntimeScriptChars} characters.`);
+    }
   }
   if (!isModuleText(candidate.modules)) {
     return failure('BRIDGE_SCHEMA', 'modules: every module is text the frame can instantiate.');
@@ -140,7 +146,7 @@ export function buildToolSandboxInitMessage(input: ToolSandboxInitInput): ToolBr
   return parseToolSandboxInitMessage({
     protocol: TOOL_PROTOCOL_VERSION,
     kind: 'init',
-    runtimeScript: input.runtimeScript,
+    ...(input.runtimeScript === undefined ? {} : { runtimeScript: input.runtimeScript }),
     modules: input.compiled.modules,
     uiEntry: input.compiled.uiEntry,
     init: input.init,

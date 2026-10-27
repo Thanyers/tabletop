@@ -99,8 +99,15 @@ describe('the sandbox init message', () => {
     expect(parsed).toMatchObject({ ok: false, code: 'BRIDGE_SCHEMA' });
   });
 
-  it('refuses a message with no runtime text', () => {
-    for (const runtimeScript of [undefined, '', 42]) {
+  it('accepts an init without runtime text, which the sandbox origin serves itself (D-047)', () => {
+    const parsed = parseToolSandboxInitMessage(message({ runtimeScript: undefined }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.message.runtimeScript).toBeUndefined();
+  });
+
+  it('still refuses a runtime text that is present but unusable', () => {
+    for (const runtimeScript of ['', 42]) {
       const parsed = parseToolSandboxInitMessage(message({ runtimeScript }));
       expect(parsed).toMatchObject({ ok: false, code: 'BRIDGE_SCHEMA' });
       if (parsed.ok) continue;

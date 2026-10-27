@@ -153,7 +153,7 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
         if (cancelled) return;
         runtimeRef.current = runtimeScript;
         if (originMode) {
-          // The frame document is the sandbox origin's; the runtime goes in the init message instead.
+          // D-047: the sandbox origin serves the runtime, so the host only waits for the frame.
           setRuntimeReady(true);
           return;
         }
@@ -176,10 +176,9 @@ export function GeneratedToolHost(props: GeneratedToolHostProps): React.ReactEle
    */
   const sendInit = useCallback((): void => {
     const target = frameRef.current?.contentWindow;
-    const runtimeScript = runtimeRef.current;
-    if (!originMode || !target || runtimeScript === undefined || initSentRef.current) return;
+    if (!originMode || !target || initSentRef.current) return;
     initSentRef.current = true;
-    const built = buildToolSandboxInitMessage({ runtimeScript, compiled, init: buildInit() });
+    const built = buildToolSandboxInitMessage({ compiled, init: buildInit() });
     if (!built.ok) {
       setFailure(built.detail);
       return;
