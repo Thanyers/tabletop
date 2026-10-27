@@ -46,6 +46,8 @@ describe('table research input (F064)', () => {
     expect(body).not.toBeNull();
     const messages = body!.messages as Array<{ role: string; content: string }>;
     expect(messages[0].content).toContain('When research is present');
+    // F090: research is grounding, never program.evidence, unless the source is a table file.
+    expect(messages[0].content).toContain('Research grounds values, not program.evidence');
     expect(messages[1].content).toContain('web-1');
     expect(messages[1].content).toContain('https://www.thaigov.go.th/th/news/166956');
     expect(messages[1].content).toContain('VAT 7%');
