@@ -25,7 +25,8 @@ import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistor
 import { TableSurface } from './ui/TableSurface';
 import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
 import { SpaceGrantPanel } from './ui/SpaceGrantPanel';
-import './ui/table-panel.css';
+import { RoomDialog, RoomMenu, type RoomAction } from './ui/RoomActions';
+import './ui/room-actions.css';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
 import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHARS } from './shared/workspace-title';
@@ -535,7 +536,7 @@ export default function TabletopApp() {
    * It goes through the ordinary command path, so the authority still decides: this only shapes the
    * request and reports what came back.
    */
-  const [roomSetupOpen, setRoomSetupOpen] = useState(false);
+  const [roomDialog, setRoomDialog] = useState<RoomAction | null>(null);
   const createRoom = useCallback(async (input: { spaceId: string; title: string }): Promise<RoomSetupResult> => {
     try {
       const next = await runCommand('space.create', { spaceId: input.spaceId, title: input.title });
@@ -547,7 +548,6 @@ export default function TabletopApp() {
     }
   }, [runCommand, setWorkspace]);
 
-  const [grantOpen, setGrantOpen] = useState(false);
   // Rooms this viewer belongs to, from the session list; the panel offers them as grant targets.
   const grantRooms = (session?.workspaces ?? [])
     .filter(workspace => workspace.id !== view?.id)
@@ -868,6 +868,8 @@ export default function TabletopApp() {
         <div className="tt-topbar__spacer" />
         <div className="tt-connection" data-state={connection} role="status" title="Live connection status"><i aria-hidden="true" /><span>{connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting' : connection === 'offline' ? 'Offline' : 'Reconnecting'}</span></div>
         {view.kind !== 'invoice' && <HeaderPeople members={view.members} selfId={view.actor.actorId} store={cursorStore} onOpenPeople={() => requestCanvasFocus(DEFAULT_CANVAS_AUXILIARY_IDS.people)} />}
+        {/* D-049 / D-054: create a room from this table, or let a room read it. */}
+        <RoomMenu onChoose={setRoomDialog} />
         {canInvite && <button type="button" className="tt-button tt-button--quiet tt-invite-button" onClick={openInviteDialog}><Plus size={14} /> Invite</button>}
         <details className="tt-table-options"><summary aria-label="Table options"><MoreHorizontal size={20} /></summary><div className="tt-table-options__body">
           <a href="/demo" target="_blank" rel="noopener"><Play size={15} />Try a demo</a>
@@ -882,40 +884,6 @@ export default function TabletopApp() {
       {tableReadOnly && <div className="tt-notice tt-notice--info tt-table-readonly-notice" role="status"><span><ShieldCheck size={15} /></span><p>Editing this shared table is temporarily paused. Existing records and rules remain available to inspect.</p></div>}
 
       {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p>{notice.action && <button type="button" className="tt-notice__action" onClick={() => { notice.action?.run(); setNotice(null); }}>{notice.action.label}</button>}<button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
-
-      {/* D-049: a table can become a room without leaving the page. */}
-      <section className="tt-panel">
-        <button
-          type="button"
-          className="tt-panel__toggle"
-          aria-expanded={roomSetupOpen}
-          onClick={() => setRoomSetupOpen(open => !open)}
-        >
-          {roomSetupOpen ? 'ซ่อนการสร้างห้อง' : 'สร้างห้องจากโต๊ะนี้'}
-        </button>
-        {roomSetupOpen ? (
-          <RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} />
-        ) : null}
-      </section>
-
-      {/* D-054: an owner grants a room read access from the table that holds the data. */}
-      <section className="tt-panel">
-        <button
-          type="button"
-          className="tt-panel__toggle"
-          aria-expanded={grantOpen}
-          onClick={() => setGrantOpen(open => !open)}
-        >
-          {grantOpen ? 'ซ่อนการให้สิทธิ์ห้อง' : 'ให้ห้องอ่านข้อมูลจากโต๊ะนี้'}
-        </button>
-        {grantOpen ? (
-          <SpaceGrantPanel
-            sourceWorkspaceId={view.id}
-            rooms={grantRooms}
-            grantProjection={grantRoomRead}
-          />
-        ) : null}
-      </section>
 
       <TableSurface
         view={view}
@@ -951,6 +919,8 @@ export default function TabletopApp() {
       />
 
       {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} onRemoveMember={view.kind === 'table' && viewerCan(view, 'members.remove') && !tableReadOnly ? (actorId) => void removeMember(actorId) : undefined} onInviteLinkNotice={view.kind === 'table' && canInvite && capabilities.inviteLinks ? showNotice : undefined} linkInvites={view.kind === 'table' && capabilities.inviteLinks === true} onAccessCommand={(type, payload) => runCommand(type, payload)} memberLimit={memberLimit} runtimeMemberSeats={runtimeMemberSeats} onSetMemberLimit={view.kind === 'table' && canInvite && !tableReadOnly ? (maxMembers) => void runCommand('display.set', { maxMembers }) : undefined} />}
+      {roomDialog === 'create' && <RoomDialog label="สร้างห้องจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} /></RoomDialog>}
+      {roomDialog === 'grant' && <RoomDialog label="ให้ห้องอ่านข้อมูลจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><SpaceGrantPanel sourceWorkspaceId={view.id} rooms={grantRooms} grantProjection={grantRoomRead} /></RoomDialog>}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
     </UploadCapabilityProvider>
