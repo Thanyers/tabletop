@@ -29,9 +29,15 @@ export function pageForPath(pathname: string): AppPage {
   return route?.name === 'new' ? 'new' : route?.name === 'tables' ? 'tables' : 'landing';
 }
 
-/** The address the current projection belongs at. */
-export function pathForProjection(view: { id: string } | null, page: AppPage): string {
-  return routePath(view ? { name: 'table', id: view.id } : { name: page });
+/**
+ * The address the current projection belongs at.
+ *
+ * D-046: an open room keeps its `/s/:id` address. Without the flag this always wrote `/t/:id`, so a
+ * member who followed a room deep link was silently moved to the table screen.
+ */
+export function pathForProjection(view: { id: string } | null, page: AppPage, room = false): string {
+  if (view) return routePath(room ? { name: 'space', id: view.id } : { name: 'table', id: view.id });
+  return routePath({ name: page });
 }
 
 export interface HistoryWrite {
