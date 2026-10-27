@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RoomSetupPanel, type RoomSetupResult } from '../../../src/tabletop/ui/RoomSetupPanel';
 import { ToolInstallPanel, type ToolInstallOutcome } from '../../../src/tabletop/ui/ToolInstallPanel';
+import { RoomSourcesPanel, type RoomSourcesOutcome } from '../../../src/tabletop/ui/RoomSourcesPanel';
 
 /**
  * F080 / D-050, D-051 harness: both setup panels on their own, with the repo's real tokens and
@@ -28,6 +29,13 @@ function Harness(): React.ReactElement {
       <RoomSetupPanel createRoom={createRoom} defaultTitle="Activity Room" onCreated={setCreated} />
       <p data-testid="harness-created" role="status">{created ? `host ได้รับห้อง: /s/${created}` : 'host ยังไม่ได้รับห้อง'}</p>
       <ToolInstallPanel installTool={installTool as never} />
+      <RoomSourcesPanel
+        roomId="room-1"
+        candidates={[{ workspaceId: 'room-1', title: 'This room' }, { workspaceId: 'table-a', title: 'Plan' }, { workspaceId: 'table-b', title: 'Budget' }]}
+        linked={[{ workspaceId: 'table-b', title: 'Budget', status: 'linked' }]}
+        linkSource={async (): Promise<RoomSourcesOutcome> => ({ ok: true, message: 'เชื่อมโต๊ะแล้ว' })}
+        unlinkSource={async (): Promise<RoomSourcesOutcome> => ({ ok: true, message: 'ถอดโต๊ะแล้ว' })}
+      />
     </main>
   );
 }

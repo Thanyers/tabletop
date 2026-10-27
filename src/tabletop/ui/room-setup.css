@@ -11,7 +11,7 @@
   padding: var(--tt-space-3);
   background: var(--tt-cream-0);
   border: 1px solid var(--tt-line);
-  border-radius: var(--tt-radius-small);
+  border-radius: var(--tt-card-radius);
   font-size: var(--tt-type-body);
 }
 
@@ -65,7 +65,7 @@
   min-block-size: var(--tt-space-6);
   padding: 0 var(--tt-space-3);
   border: 1px solid var(--tt-green-1);
-  border-radius: var(--tt-radius-small);
+  border-radius: var(--tt-button-radius);
   background: var(--tt-green-1);
   color: var(--tt-cream-0);
   font-size: var(--tt-type-small);
@@ -79,11 +79,50 @@
 
 .tt-setup__problem,
 .tt-setup__ok {
-  margin: 0;
-  color: var(--tt-ink);
+  margin: 0;  color: var(--tt-ink);
   font-size: var(--tt-type-small);
 }
 
 .tt-setup__problem {
   font-weight: 700;
 }
+
+/* D-052: the linked-source list. */
+.tt-setup__list {
+  display: grid;
+  gap: var(--tt-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tt-setup__list-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tt-space-2);
+  justify-content: space-between;
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+  /* Flex children default to min-width: auto and refuse to shrink, which pushed the page 2px wider
+     than the 280px viewport. Letting them shrink is what keeps long titles inside the panel. */
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.tt-setup__list-item > * {
+  min-inline-size: 0;
+}
+
+.tt-setup__field select {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-block-size: var(--tt-space-6);
+  padding: var(--tt-space-1) var(--tt-space-2);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-button-radius);
+  background: var(--tt-cream-1);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-body);
+}
+

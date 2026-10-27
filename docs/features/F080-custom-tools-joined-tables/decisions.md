@@ -695,3 +695,14 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **หลักฐาน:** unit `src/tabletop/ui` **222 passed** · `tool-install-input.test.ts` **5/5** (รวม: hash เดียวกันสำหรับ package เดียวกัน, provenance ไม่เปลี่ยน hash, package เสียถูกปฏิเสธพร้อมเหตุผล) · **ui-gate 17/17 measured** บน harness ที่ฝัง `room-setup.css` จริง (ทั้งสอง panel) · typecheck 3 config · public scan 0 findings
 
 **บทเรียนจากเกต:** รอบแรกที่ harness ไม่ได้ฝัง CSS จริง ได้ 17/17 จาก markup ที่ไม่มีสไตล์; เมื่อฝัง CSS จริง เกตจับ `px` literal 6 จุดและ em dash (จากคอมเมนต์ใน dependency) ⇒ แก้เป็น token ล้วน + minify หน้า harness จึงผ่านจริง
+## D-052 — panel "เชื่อมโต๊ะเข้าห้อง" พร้อมใช้ แต่ยังไม่ถูกวางในหน้าจอ
+
+**สิ่งที่ทำ:** `RoomSourcesPanel` (เลือกโต๊ะ → `space.addSource` · ถอด → `space.leaveSource`) + `linkableCandidates()` ที่ไม่เสนอห้องตัวเองและโต๊ะที่เชื่อมแล้ว · 3 unit tests · สไตล์ token-only ใน `room-setup.css`
+
+**หลักฐาน:** **ui-gate 17/17 measured** บน harness ที่แสดงทั้ง 3 panel (สร้างห้อง / ติดตั้ง tool / เชื่อมโต๊ะ) — เกตจับของจริง 2 ครั้งระหว่างทาง:
+1. `Single border-radius (8px) on all 11 rounded boxes` ⇒ ไล่ระดับเป็น `--tt-card-radius` (panel) / `--tt-button-radius` (ปุ่ม, select) / `--tt-radius-small` (ช่องกรอก)
+2. `overflow +2px @280/320px` ⇒ flex children ต้องมี `min-inline-size: 0` และ `select` ต้อง `inline-size: 100%`
+
+**ยังไม่ผูกเข้าหน้าจอ:** `RoomShell` ไม่มีตำแหน่งรับ panel นี้ และ `JoinedSource` ไม่มี `title`/`status` ที่ต้องใช้ ⇒ การผูกต้องเพิ่ม prop + map ข้อมูล ซึ่งควรทำเป็นสไลซ์ของตัวเองพร้อม test ไม่ใช่ยัดตอนท้าย (ผม revert การผูกที่ typecheck ไม่ผ่านทิ้ง)
+
+**ผลต่อ HUMAN-01:** ยังต้อง seed แหล่งข้อมูลผ่านคำสั่ง — แต่ตอนนี้เหลือชิ้นเดียว (เชื่อม/ถอดโต๊ะ) ไม่ใช่ทั้งห้อง
