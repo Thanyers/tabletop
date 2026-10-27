@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-26T18:40:00+07:00",
-  "lastVerifiedAt": "2026-10-26T18:40:00+07:00",
+  "updatedAt": "2026-10-27T11:20:00+07:00",
+  "lastVerifiedAt": "2026-10-27T11:20:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,7 +18,7 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "8eb7298",
+    "headSha": "200b53f",
     "candidateSha": "4db0727",
     "pr": 305,
     "prState": "draft",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "34 PASS / 1 UNVERIFIED (HUMAN-01) จาก 35 · dev = 8eb7298 · G1-01/EDIT-01 ปิดด้วยการรันโมเดลจริง: 1 call/0.000673 USD (room-planner v1) และ 1 call/0.001104 USD (continuation ที่ UI เปลี่ยนจริง) + รันยืนยัน default อีก 1 call/0.000676 USD · D-038 server + UI merge แล้ว: intent route รัน behaviour จริงและ commit ผ่าน table.act; หน้าห้อง mount GeneratedToolHost + watchdog · D-043: per-path CSP ใช้ไม่ได้กับ Pages (header ซ้อน, เบราว์เซอร์บังคับส่วนแคบสุด — วัดแล้ว rendered:no) จึง revert กฎ /s/* และบันทึก limitation ลง ISO-01/EXEC-01/G1-03 · เหลือเพียง HUMAN-01 (ผู้ใช้จริง 5 คน เว้น 3 วัน) ซึ่ง agent ทำแทนไม่ได้ · ทางเลือก CSP ระดับผลิตภัณฑ์ยังต้องให้เจ้าของตัดสิน (ผ่อนทั้งแอป หรือแยก origin ของ sandbox)",
+  "currentCheckpoint": "34 PASS / 1 UNVERIFIED (HUMAN-01) จาก 35 · dev = 200b53f · D-044 ปิดครบ: sandbox worker ของตัวเอง (staging + release pipeline), capabilities → client → room, frame-src ระบุ origin และ script-src ยัง he้ม · ยืนยันบน staging ด้วยเบราว์เซอร์ (mount สำเร็จ) · D-045: error bridge ใน sandbox frame — tool ที่ล้มหลัง start รายงานเหตุผลจริงแทน Script error · D-046: 3B พบว่า /s/:id โหลด workspace ได้แต่แอปจบที่ /t/<id> (page/pathForProjection) ⇒ room shell ไม่เรนเดอร์ — ต้องแก้ route/state + เพิ่ม regression test · ค้าง: HUMAN-01 (ผู้ใช้จริง 5 คน เว้น 3 วัน) และบั๊ก D-046",
   "slices": [
     {
       "alias": "C0",

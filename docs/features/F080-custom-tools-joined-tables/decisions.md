@@ -600,3 +600,22 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - `scripts/verify-host.mjs` เพิ่มการตรวจ 4 ข้อ (publish origin · frame 200 · policy ของ frame · frame-src ระบุ origin) ⇒ staging ตอนนี้ **14 PASS / 0 FAIL / 2 SKIPPED**
 
 ⇒ ทางที่ 2 ทำงานได้จริงบน host โดยไม่ผ่อน `script-src` ของแอปหลัก
+
+## D-046 — `/s/:id` โหลด workspace ได้ แต่แอปจบที่หน้าโต๊ะ ⇒ ห้อง (room shell) ไม่ถูกเรนเดอร์
+
+**บริบ���:** ทดสอบ 3B (ขับหน้า `/s/:id` บน staging จริง โดย mock `/api/**`) หลัง merge D-045
+
+**สิ่งที่วัดได้:**
+- แอปยิง `GET /api/auth/status` → `GET /api/session` → `GET /api/workspaces/<room>` และได้ workspace ที่มี `domain.collaborationSpace` (fixture)
+- แต่ URL สุดท้ายกลายเป็น `/t/<room>` และ **ไม่มี** element ของห้อง (`[data-testid="room-tool-title"]`, `room-tool-problem`, `room-tool-intent`, `space-room-note` ทั้งหมด `null`) และไม่มี iframe
+
+**สาเหตุที่เข้าใกล้ที่สุด (มีหลักฐานในโค้ด):** `TabletopApp.tsx:382` เขียน URL จาก `pathForProjection(view, page)` — เมื่อ `page` ไม่ใช่ `'space'` จะได้ `/t/<id>` แม้ route เดิมเป็น `/s/:id` (branch `route?.name === 'space'` ที่ `:343` ตั้ง `setSpaceRoomId(route.id)` แต่ไม่ได้กันไม่ให้ effect เขียน URL/`page` ทับ)
+
+**ผลต่อสถานะ:** การเปิด room ด้วย deep link ยังไม่ทำงานในผลิตภัณฑ์จริง ⇒ 3B ยังไม่ปิด และเป็นบั๊กของ route/state **ไม่ใช่** ของ sandbox (sandbox พิสูจน์แล้วด้วย probe แยกว่า mount ได้เมื่อฝัง frame ตรง ๆ)
+
+**ขั้นต่อไปที่ชัดเจน:**
+1. ทำให้ `page` เป็น `'space'` เมื่อ route เป็น space (หรือให้ `pathForProjection` คง `/s/:id` ไว้)
+2. เพิ่ม regression test: เปิด `/s/:id` แล้วต้องเห็น `room-tool-title`/iframe และ URL ต้องคงเป็น `/s/...`
+3. รัน 3B probe ซ้ำบน staging; ถ้า package ที่ AI สร้างยังล้ม ให้อ่าน reason จาก D-045 error bridge แล้วแก้ที่ package/prompt
+
+**หมายเหตุความซื่อตรง:** ผมไม่ได้แก้บั๊กนี้ในรอบสุดท้ายของงบ Goal เพราะต้องแตะการนำทางของแอปหลักและควรมี test ครอบ — บันทึกไว้ให้รอบถัดไปทำอย่างปลอดภัย
