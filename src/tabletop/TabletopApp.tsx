@@ -379,14 +379,15 @@ export default function TabletopApp() {
 
   useEffect(() => {
     if (starting) return;
-    const target = pathForProjection(view ? { id: view.id } : null, page);
+    // D-046: a room keeps its own address; without this hint the room was rewritten to `/t/:id`.
+    const target = pathForProjection(view ? { id: view.id } : null, page, spaceRoomId !== null && view?.id === spaceRoomId);
     const { write, nextMode } = nextHistoryWrite(urlSyncRef.current, target, window.location.pathname);
     urlSyncRef.current = nextMode;
     if (write === 'skip') return;
     // Pushed entries remember the app page before them, so "Your tables" can step back instead of stacking `/`.
     if (write === 'replace') window.history.replaceState(window.history.state, document.title, target);
     else window.history.pushState({ tabletopFrom: window.location.pathname }, document.title, target);
-  }, [view?.id, page, starting]);
+  }, [view?.id, page, spaceRoomId, starting]);
 
   useEffect(() => {
     const followHistory = () => {
