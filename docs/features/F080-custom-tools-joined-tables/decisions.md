@@ -706,3 +706,16 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 **ยังไม่ผูกเข้าหน้าจอ:** `RoomShell` ไม่มีตำแหน่งรับ panel นี้ และ `JoinedSource` ไม่มี `title`/`status` ที่ต้องใช้ ⇒ การผูกต้องเพิ่ม prop + map ข้อมูล ซึ่งควรทำเป็นสไลซ์ของตัวเองพร้อม test ไม่ใช่ยัดตอนท้าย (ผม revert การผูกที่ typecheck ไม่ผ่านทิ้ง)
 
 **ผลต่อ HUMAN-01:** ยังต้อง seed แหล่งข้อมูลผ่านคำสั่ง — แต่ตอนนี้เหลือชิ้นเดียว (เชื่อม/ถอดโต๊ะ) ไม่ใช่ทั้งห้อง
+## D-053 — เชื่อม/ถอดโต๊ะจากหน้าห้องได้แล้ว (ปิด D-049 ครบวง)
+
+**สิ่งที่ทำ:**
+- `RoomShell` มี slot `sources?` แสดงในคอลัมน์ข้อมูล
+- `SpaceRoomScreen` mount `RoomSourcesPanel` และ map `JoinedSource` ถูกต้อง: `label` → title · `live|stale` → linked · `revoked|missing` → revoked (รอบก่อนผมเข้าใจผิดว่ามี `title` — ของจริงคือ `label`)
+- `space-room-deps` ได้ helper `sendSpaceCommand(type, payload, success)` ที่ **อ่าน workspace ปัจจุบันก่อน** เพื่อใช้ `revision`/`epoch` สด แล้วส่งผ่าน `/commands` — ใช้ทั้ง `linkSource` (`space.addSource`) และ `unlinkSource` (`space.leaveSource`)
+- `TabletopApp` ส่ง `sourceCandidates` จากรายการโต๊ะใน session (ตัดห้องตัวเองออก)
+
+**หลักฐาน:** typecheck 3 config · unit (ui+navigation) **237 passed** · **room-shell driver 19 checks** · **ui-gate 17/17 measured** · public scan 0 findings
+
+**ผลต่อ D-049:** วงจรครบ — สร้างห้อง (D-050) → ติดตั้ง tool (D-051) → เชื่อม/ถอดโต๊ะ (D-053) ทำได้จาก UI ทั้งหมด ⇒ ผู้ทดสอบ HUMAN-01 ไม่ต้อง seed ผ่าน API อีก
+
+**ยังเหลือ:** หน้าให้สิทธิ์อ่านที่ต้นทาง (grant) — การเชื่อมโต๊ะยังไม่ให้สิทธิ์อ่านข้อมูล ซึ่งเป็นเจตนาของดีไซน์ (เจ้าของโต๊ะตัดสิน) แต่คนทดสอบต้องมีทางทำใน UI เช่นกัน

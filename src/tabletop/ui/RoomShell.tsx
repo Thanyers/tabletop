@@ -45,6 +45,8 @@ export interface RoomShellProps {
   tool?: ReactNode;
   /** The authoring surface, shown when someone may edit the tool. */
   authoring?: ReactNode;
+  /** D-053: linking and unlinking the tables this room reads. */
+  sources?: ReactNode;
 }
 
 export function RoomShell(props: RoomShellProps): ReactElement {
@@ -124,6 +126,7 @@ export function RoomShell(props: RoomShellProps): ReactElement {
               </dl>
             </div>
           ) : null}
+          {props.sources ? <div className="tt-room__sources">{props.sources}</div> : null}
           {props.tool ? <div className="tt-room__tool">{props.tool}</div> : null}
           {props.authoring ? <div className="tt-room__authoring">{props.authoring}</div> : null}
         </aside>

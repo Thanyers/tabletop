@@ -760,6 +760,10 @@ export default function TabletopApp() {
           viewerLabel: view.actor.name,
           // F080 / D-044: the sandbox origin travels from the Worker's capabilities to the frame host.
           ...(capabilities.toolSandboxOrigin ? { toolSandboxOrigin: capabilities.toolSandboxOrigin } : {}),
+          // F080 / D-053: the tables this person could link into the room, from the session list.
+          sourceCandidates: (session?.workspaces ?? [])
+            .filter(workspace => workspace.id !== spaceRoomId)
+            .map(workspace => ({ workspaceId: workspace.id, title: workspace.title })),
         })}
       />
     </div>
