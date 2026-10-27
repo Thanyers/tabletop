@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RoomSetupPanel, type RoomSetupResult } from '../../../src/tabletop/ui/RoomSetupPanel';
+import { ToolInstallPanel, type ToolInstallOutcome } from '../../../src/tabletop/ui/ToolInstallPanel';
 
 /**
- * F080 / D-049 harness: the room setup panel on its own, with the repo's real tokens and stylesheet, so
- * the UI gate measures the product's styling rather than a mock.
+ * F080 / D-050, D-051 harness: both setup panels on their own, with the repo's real tokens and
+ * stylesheet, so the UI gate measures the product's styling rather than a mock.
  */
 
 function Harness(): React.ReactElement {
@@ -16,13 +17,17 @@ function Harness(): React.ReactElement {
     return { ok: true, spaceId: input.spaceId, message: `สร้างห้องแล้ว: /s/${input.spaceId}` };
   };
 
+  const installTool = async (tool: { packageId: string }): Promise<ToolInstallOutcome> => {
+    if (tool.packageId === 'refused') return { ok: false, message: 'The room refused this package.' };
+    return { ok: true, message: `ติดตั้งแล้ว: ${tool.packageId}` };
+  };
+
   return (
     <main style={{ maxWidth: 620, margin: '0 auto', padding: 16 }}>
       <h1 style={{ fontSize: 18, marginTop: 0 }}>C · room setup</h1>
       <RoomSetupPanel createRoom={createRoom} defaultTitle="Activity Room" onCreated={setCreated} />
-      <p data-testid="harness-created" role="status">
-        {created ? `host ได้รับห้อง: /s/${created}` : 'host ยังไม่ได้รับห้อง'}
-      </p>
+      <p data-testid="harness-created" role="status">{created ? `host ได้รับห้อง: /s/${created}` : 'host ยังไม่ได้รับห้อง'}</p>
+      <ToolInstallPanel installTool={installTool as never} />
     </main>
   );
 }

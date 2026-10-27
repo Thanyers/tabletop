@@ -8,6 +8,8 @@ import { GeneratedToolHost, type ToolIntentRequest } from './GeneratedToolHost';
 import { compileRoomTool, toolInstanceId, toolNonce, toolPortSnapshots, toolPresentation } from './room-tool-hosting';
 import { RoomShell, type RoomRecapView, type RoomTableSummary } from './RoomShell';
 import { ToolInstallationCard } from './ToolInstallationCard';
+import { ToolInstallPanel } from './ToolInstallPanel';
+import type { ToolInstallTool } from './tool-install-input';
 
 /**
  * F080 / JT-V: the room screen — the part that turns three answers into one shell.
@@ -55,6 +57,8 @@ export interface SpaceRoomDeps extends JoinedReadDeps {
    * A refusal is a value, not an exception (D-040): the frame gets the code so the package can branch
    * on it, and the screen can say why nothing was committed.
    */
+  /** D-051: install a package in this room; absent when the caller may not author. */
+  installTool?(tool: ToolInstallTool): Promise<{ ok: boolean; message: string }>;
   runToolIntent(input: {
     behaviorId: string;
     inputs: Record<string, string | number | boolean>;
@@ -196,7 +200,11 @@ export function SpaceRoomScreen(props: SpaceRoomScreenProps): React.ReactElement
 
   let toolSlot: React.ReactNode;
   if (!tool) {
-    toolSlot = <p data-testid="space-room-note" style={{ margin: 0 }}>{note || 'เครื่องมือของห้องนี้ยังไม่ถูกเลือก'}</p>;
+    toolSlot = props.deps.installTool ? (
+      <ToolInstallPanel installTool={props.deps.installTool} onInstalled={() => { void load(); }} />
+    ) : (
+      <p data-testid="space-room-note" style={{ margin: 0 }}>{note || 'เครื่องมือของห้องนี้ยังไม่ถูกเลือก'}</p>
+    );
   } else if (compiled.state === 'ready') {
     toolSlot = (
       <div className="tt-room__tool-host">
