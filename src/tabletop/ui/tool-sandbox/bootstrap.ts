@@ -2,6 +2,7 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import * as JsxRuntime from 'react/jsx-runtime';
 import { parseToolHostMessage, type ToolHostMessage, type ToolPortSnapshot } from '../../shared/tool-protocol';
+import { TOOL_SANDBOX_BOOT_ELEMENT_ID } from './frame-message';
 import { createToolSdk, type ToolSdk, type ToolSdkControl } from './sdk';
 
 /**
@@ -53,7 +54,7 @@ function resolveRelative(fromPath: string, specifier: string, has: (path: string
 }
 
 function readBoot(): ToolSandboxBoot {
-  const element = document.getElementById('tool-boot');
+  const element = document.getElementById(TOOL_SANDBOX_BOOT_ELEMENT_ID);
   if (!element || !element.textContent) throw new Error('The tool sandbox has no boot payload.');
   return JSON.parse(element.textContent) as ToolSandboxBoot;
 }

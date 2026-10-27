@@ -1,0 +1,15 @@
+{
+  // F080 / D-044: the tool sandbox is its own origin, so its CSP can be stricter than the app's
+  // without loosening the app's. This worker is assets only: no main script, no bindings, no vars.
+  // The `_headers` file in `sandbox-assets/` is what ships the policy and the ancestor allowlist.
+  //
+  // Deploy is deliberately out of scope for this slice: nothing here is deployed from a machine.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tabletop-sandbox-staging",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./sandbox-assets"
+  }
+}
