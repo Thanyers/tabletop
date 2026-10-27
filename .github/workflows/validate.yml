@@ -624,7 +624,11 @@ jobs:
           node -e "console.log(require('./dist/version.json'))"
       - name: Staging — record the live version
         id: live-before
-        run: echo "version=$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          v="$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          # The ID itself stays out of this public log; only whether it was read.
+          if [ -n "$v" ]; then echo "Recorded the live Worker Version."; else echo "::warning::Could not read the live Worker Version; CD007 rollback will skip for this run."; fi
       - name: Staging — migrations
         run: |
           echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
@@ -651,7 +655,11 @@ jobs:
           bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json 2 60 --var "TOOL_SANDBOX_ORIGIN:https://$STAGING_SANDBOX_HOST"
       - name: Staging — record the deployed version
         id: live-after
-        run: echo "version=$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          v="$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          # The ID itself stays out of this public log; only whether it was read.
+          if [ -n "$v" ]; then echo "Recorded the live Worker Version."; else echo "::warning::Could not read the live Worker Version; CD007 rollback will skip for this run."; fi
       - name: Staging — smoke checks
         run: |
           echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
