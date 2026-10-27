@@ -550,6 +550,9 @@ jobs:
     permissions:
       contents: read
       issues: write # open an issue when a staging deploy fails
+    outputs: # CD007: rollback-staging returns to previous_version if the browser suites fail
+      previous_version: ${{ steps.live-before.outputs.version }}
+      deployed_version: ${{ steps.live-after.outputs.version }}
     env:
       SHA: ${{ github.sha }}
       STAGING_URL: ${{ vars.STAGING_URL }}
@@ -594,6 +597,9 @@ jobs:
           npm run build
           echo "VERSION=$(node -p "require('./dist/version.json').version")" >> "$GITHUB_ENV"
           node -e "console.log(require('./dist/version.json'))"
+      - name: Staging — record the live version
+        id: live-before
+        run: echo "version=$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)" >> "$GITHUB_OUTPUT"
       - name: Staging — migrations
         run: |
           echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
@@ -618,6 +624,9 @@ jobs:
         run: |
           echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
           bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json 2 60 --var "TOOL_SANDBOX_ORIGIN:https://$STAGING_SANDBOX_HOST"
+      - name: Staging — record the deployed version
+        id: live-after
+        run: echo "version=$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)" >> "$GITHUB_OUTPUT"
       - name: Staging — smoke checks
         run: |
           echo "STAGE=staging-smoke" >> "$GITHUB_ENV"
@@ -647,7 +656,7 @@ jobs:
         run: |
           DETECTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           BODY="$(printf '%s\n' \
-            "Staging deploy failed. Staging is NOT rolled back automatically; production is untouched." \
+            "Staging deploy failed. A failed deploy is NOT rolled back automatically (CD007 rolls back only after browser suites fail); production is untouched." \
             "" \
             "| Field | Value |" "| --- | --- |" \
             "| Commit (dev) | $SHA |" \
@@ -661,3 +670,83 @@ jobs:
             "Record the failure and fix times in MEMORY.md → Deploy failures.")"
           gh issue create --title "Staging deploy failed at ${STAGE:-unknown} (${SHA:0:7})" --body "$BODY" \
             || echo "Could not open the failure issue; the run log still has the details."
+
+  # CD007: staging deploys after the fast checks (CD005), so the browser suites finish later. If
+  # one of them fails, put back the Worker Version that was live before this run's deploy, but
+  # only while this run's version is still the live one: a newer merge that already deployed is
+  # never rolled back. D1 migrations and the sandbox Worker are not reverted (the sandbox is
+  # static and backward compatible). Its own concurrency group: sharing staging-deploy would let
+  # this pending job cancel a newer run's pending deploy.
+  rollback-staging:
+    name: Roll back tabletop-staging
+    needs: [deploy-staging, browser-node, browser-workers, browser-generated, report-dev-failure]
+    if: >-
+      ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev'
+      && needs.deploy-staging.result == 'success'
+      && (needs.browser-node.result == 'failure' || needs.browser-workers.result == 'failure' || needs.browser-generated.result == 'failure') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: staging-rollback
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write # comment on the dev browser-suite issue
+    env:
+      SHA: ${{ github.sha }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
+      PREVIOUS: ${{ needs.deploy-staging.outputs.previous_version }}
+      DEPLOYED: ${{ needs.deploy-staging.outputs.deployed_version }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.2
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Write deploy config
+        env:
+          WRANGLER_CONFIG_STAGING: ${{ secrets.WRANGLER_CONFIG_STAGING }}
+        run: |
+          umask 077
+          printf '%s' "$WRANGLER_CONFIG_STAGING" > wrangler.staging.json
+          npx tsx server/release-deploy.ts check-config wrangler.staging.json "$STAGING_WORKER" "$STAGING_URL"
+      - name: Roll back if this run's version is still live
+        id: rollback
+        run: |
+          live="$(bash .github/scripts/staging-live-version.sh wrangler.staging.json)"
+          echo "previous=$PREVIOUS deployed=$DEPLOYED live=$live"
+          if [ -z "$PREVIOUS" ] || [ -z "$DEPLOYED" ]; then
+            echo "result=skipped: the versions before/after the deploy were not recorded" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$live" != "$DEPLOYED" ]; then
+            echo "result=skipped: staging already serves a newer deploy (${live:-unknown})" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          npx wrangler rollback "$PREVIOUS" --config wrangler.staging.json --yes \
+            --message "CD007: browser suites failed at ${SHA:0:7}"
+          echo "result=rolled back to $PREVIOUS; staging /version now $(curl -fsS "$STAGING_URL/version" || echo unreadable)" >> "$GITHUB_OUTPUT"
+      - name: Remove deploy config
+        if: always()
+        run: rm -f wrangler.staging.json
+      # The notice must never change the rollback's outcome.
+      - name: Report on the dev browser-suite issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RESULT: "${{ steps.rollback.outputs.result || 'FAILED - wrangler rollback did not complete; staging still serves this run' }}"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: "dev: browser suites failing after merge"
+        run: |
+          body="Staging auto-rollback (CD007) for \`${SHA:0:7}\`: **$RESULT** — $RUN_URL
+          D1 migrations from this run are not reverted. The next merge into \`dev\` deploys again."
+          echo "$body" >> "$GITHUB_STEP_SUMMARY"
+          number="$(gh issue list -R "$REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty' 2>/dev/null)"
+          if [ -n "$number" ]; then gh issue comment "$number" -R "$REPO" --body "$body" || true; fi
