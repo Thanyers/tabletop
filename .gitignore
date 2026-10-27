@@ -23,3 +23,4 @@ sandbox-assets/frame.js
 # CD001: real deploy configs are written only inside the pipeline
 wrangler.staging.json
 wrangler.production.json
+sandbox-assets/runtime.js
