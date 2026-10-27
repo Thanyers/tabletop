@@ -555,7 +555,7 @@ jobs:
       STAGING_URL: ${{ vars.STAGING_URL }}
       STAGING_WORKER: ${{ vars.STAGING_WORKER || 'tabletop-staging' }}
       # F080 / D-044: host of the sandbox worker (static assets only). Override it with the repo
-      # variable of the same name; the app is redeployed with it as TOOL_SANDBOX_ORIGIN below.
+      # variable of the same name; the app is deployed with it as TOOL_SANDBOX_ORIGIN below.
       STAGING_SANDBOX_HOST: ${{ vars.STAGING_SANDBOX_HOST || 'tabletop-sandbox-staging.ptchrr.workers.dev' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -598,29 +598,25 @@ jobs:
         run: |
           echo "STAGE=staging-migrations" >> "$GITHUB_ENV"
           bash .github/scripts/d1-migrate.sh wrangler.staging.json staging
-      - name: Staging — deploy
-        run: |
-          echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
-          bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json
       # F080 / D-044: the sandbox document is its own Worker on its own origin. `frame.js` is a build
       # product (gitignored), so it is generated here rather than trusted to exist from an earlier step.
+      # CD006: the sandbox goes first so the app is deployed once, already carrying its origin. A host
+      # that is not a bare name is refused before anything is published as a frame source.
       - name: Staging — sandbox assets
         run: |
           echo "STAGE=staging-sandbox-assets" >> "$GITHUB_ENV"
-          node scripts/build-tool-sandbox-runtime.mjs
-      - name: Staging — sandbox deploy
-        run: |
-          echo "STAGE=staging-sandbox-deploy" >> "$GITHUB_ENV"
-          npx wrangler deploy --config wrangler.sandbox.jsonc
-      # The origin exists only after the sandbox worker does, so the app is redeployed once with it.
-      # A host that is not a bare name is refused here instead of being published as a frame source.
-      - name: Staging — deploy with the sandbox origin
-        run: |
-          echo "STAGE=staging-sandbox-origin" >> "$GITHUB_ENV"
           if ! [[ "$STAGING_SANDBOX_HOST" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
             echo "::error::STAGING_SANDBOX_HOST must be a bare host such as tabletop-sandbox-staging.ptchrr.workers.dev"
             exit 1
           fi
+          node scripts/build-tool-sandbox-runtime.mjs
+      - name: Staging — sandbox deploy
+        run: |
+          echo "STAGE=staging-sandbox-deploy" >> "$GITHUB_ENV"
+          bash .github/scripts/wrangler-deploy-retry.sh wrangler.sandbox.jsonc
+      - name: Staging — deploy
+        run: |
+          echo "STAGE=staging-deploy" >> "$GITHUB_ENV"
           bash .github/scripts/wrangler-deploy-retry.sh wrangler.staging.json 2 60 --var "TOOL_SANDBOX_ORIGIN:https://$STAGING_SANDBOX_HOST"
       - name: Staging — smoke checks
         run: |
