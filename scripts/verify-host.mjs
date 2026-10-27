@@ -24,7 +24,7 @@ const rows = [];
 async function fetchStatus(path, init = {}) {
   try {
     const response = await fetch(root + path, { redirect: 'manual', ...init, signal: AbortSignal.timeout(15_000) });
-    return { status: response.status, type: response.headers.get('content-type') ?? '', body: await response.text() };
+    return { status: response.status, type: response.headers.get('content-type') ?? '', csp: response.headers.get('content-security-policy') ?? '', body: await response.text() };
   } catch (error) {
     return { status: 0, type: '', body: String(error) };
   }
@@ -78,6 +78,31 @@ for (const path of [
     body: JSON.stringify({ behaviorId: 'reserve', inputs: {} }),
   });
   record(`refuses ${path} without a session`, response.status === 401 ? 'PASS' : response.status === 404 ? 'FAIL' : 'FAIL', `status ${response.status}`);
+}
+
+// 4c. the tool sandbox lives on its own origin (D-044): the app must name it, and it must answer
+{
+  const capabilities = await fetchStatus('/api/capabilities');
+  let origin = '';
+  try { origin = String(JSON.parse(capabilities.body).toolSandboxOrigin ?? ''); } catch { origin = ''; }
+  record('publishes a tool sandbox origin', origin.startsWith('https://') ? 'PASS' : 'SKIPPED', origin || 'not configured on this host');
+  if (origin) {
+    let frameStatus = 0;
+    let frameCsp = '';
+    try {
+      const frame = await fetch(origin + '/frame.html', { redirect: 'follow', signal: AbortSignal.timeout(15_000) });
+      frameStatus = frame.status;
+      frameCsp = frame.headers.get('content-security-policy') ?? '';
+    } catch { frameStatus = 0; }
+    record('serves the sandbox frame from that origin', frameStatus === 200 ? 'PASS' : 'FAIL', 'status ' + frameStatus);
+    record('the sandbox frame carries its own policy', frameCsp.includes("'unsafe-eval'") && frameCsp.includes('frame-ancestors') ? 'PASS' : 'FAIL', frameCsp ? 'policy present' : 'no CSP header');
+    const room = await fetchStatus('/s/' + unknownRoom);
+    const csp = room.csp || '';
+    record('names that origin in frame-src', csp.includes(origin) ? 'PASS' : 'FAIL', csp ? (csp.includes(origin) ? 'frame-src names it' : 'frame-src does not name it') : 'no CSP header');
+  } else {
+    record('serves the sandbox frame from that origin', 'SKIPPED', 'no origin published');
+    record('names that origin in frame-src', 'SKIPPED', 'no origin published');
+  }
 }
 
 // 5. what this script cannot prove
