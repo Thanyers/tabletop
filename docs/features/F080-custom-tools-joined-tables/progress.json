@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "feature": "F080",
-  "updatedAt": "2026-10-27T15:05:00+07:00",
-  "lastVerifiedAt": "2026-10-27T15:05:00+07:00",
+  "updatedAt": "2026-10-27T15:15:00+07:00",
+  "lastVerifiedAt": "2026-10-27T15:15:00+07:00",
   "goal": {
     "tool": "native DSH goal",
     "id": "goal-95e6a3b3-fa95-4d67-b31f-8cefa5e8bf5c",
@@ -18,7 +18,7 @@
     "fetchedAt": "2026-10-25T21:41:00+07:00",
     "worktree": "isolated git worktree ของ repo (ไม่ได้แก้ checkout อ้างอิง)",
     "branch": "feat/F080-custom-tools",
-    "headSha": "7dd52a2",
+    "headSha": "b821b6e",
     "candidateSha": "4db0727",
     "pr": 305,
     "prState": "draft",
@@ -32,7 +32,7 @@
     ],
     "ownership": "ไม่มี open PR/แถว PLAN ที่แตะ custom tools/joined tables; งานนี้ถือ F080-T* คนเดียว ไม่ชนไฟล์ของงานอื่นที่ doing"
   },
-  "currentCheckpoint": "34 PASS / 1 UNVERIFIED (HUMAN-01) จาก 35 · dev = 7dd52a2 · sandbox origin (D-044) ทำงานบน staging: room /s/<id> ฝัง frame จาก tabletop-sandbox-staging.ptchrr.workers.dev แล้ว UI ของ package ที่ AI สร้างขึ้นจริง (\"Room Planner - No rooms available in the joined data.\", errors: []) ทั้งที่แอปหลักยัง script-src self · D-045 error bridge: tool ที่ล้มรายงานสาเหตุจริงแทน \"Script error.\" · D-046 deep link: เปิด /s/<id> แล้วอยู่ที่ห้อง (เดิมถูกเขียนเป็น /t/<id>) · D-047 runtime เสิร์ฟจาก sandbox origin เอง (/runtime.js + CORS) — driver 19/19 · D-048 prompt บอก SDK จริง (sdk/ports/presentation + ไม่มี hook useToolState) — package ที่ AI สร้าง render ได้ 1 call / USD 0.001036 · D-050..D-055 UI ครบวงจรบนหน้าโต๊ะ/ห้อง: สร้างห้อง · ติดตั้ง tool (hash คำนวณเอง) · เชื่อม/ถอดโต๊ะ · ให้สิทธิ์อ่าน (source.grantProjection) — ui-gate 17/17 ทุกชิ้น · HUMAN-01 พร้อมรัน: kit + checker ที่รันจริงแล้ว 3 สถานะ (ไฟล์ไม่มี = ข้อความ+exit 2 · template ว่าง = FAIL ซื่อสัตย์ · ผลถูกต้อง = 5 passed 0 failed) · ค้าง: HUMAN-01 (ผู้ใช้จริง 5 คน เว้น 3 วัน ≥4 ผ่าน) — agent ทำแทนไม่ได้ · ไม่มีการแตะ production เลย",
+  "currentCheckpoint": "34 PASS / 1 UNVERIFIED (HUMAN-01) จาก 35 · dev = b821b6e · ตรวจบน commit b821b6e: typecheck 3 config ผ่าน · npm test 1313 passed / 5 skipped · npm run test:cloudflare 354 passed 0 failed · ui-gate 17/17 measured (4 panel) · room-shell driver 19 checks · staging ยืนยันด้วยเบราว์เซอร์จริง: room /s/<id> ฝัง frame จาก tabletop-sandbox-staging.ptchrr.workers.dev และ UI ของ package ที่ AI สร้างขึ้นจริง (\"Room Planner - No rooms available in the joined data.\", errors: []) ขณะที่แอปหลักยัง script-src self · งานที่ปิดในชุดนี้: D-044 sandbox origin · D-045 error bridge · D-046 deep link · D-047 runtime ที่ origin · D-048 prompt SDK จริง · D-050 สร้างห้อง · D-051 ติดตั้ง tool · D-052/D-053 เชื่อม-ถอดโต๊ะ · D-054/D-055 ให้สิทธิ์อ่าน (source.grantProjection) · checker HUMAN-01 ที่ทดสอบ 3 สถานะ · เหลือข้อเดียว: HUMAN-01 (ผู้ใช้จริง 5 คน เว้น 3 วัน ≥4 ผ่าน) — ต้องเป็นเจ้าของงาน · agent ทำแทนไม่ได้และห้ามปิด Goal ก่อนผ่าน · ไม่มีการแตะ production ตลอดงาน: ไม่ merge main · ไม่ tag · ไม่ deploy จากเครื่อง · ไม่รัน migration · ไม่แก้ข้อมูล/config/credential ของ production",
   "slices": [
     {
       "alias": "C0",
