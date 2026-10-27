@@ -23,6 +23,7 @@ import { addNote, imagesLeft, noteLimitReason, pinImages } from './ui/NoteCard';
 import type { AddableWebSource } from './workspace/table-chat-state';
 import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistoryWrite, pageForPath, pathForProjection, shouldApplyLateOpen, signInReturnPath, tableChangeReset, type AppPage } from './navigation/workspace-navigation';
 import { TableSurface } from './ui/TableSurface';
+import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
 import { StartPage } from './ui/StartPage';
 import { starterFor } from './shared/starters';
 import { displayWorkspaceTitle, normalizeWorkspaceTitle, WORKSPACE_TITLE_MAX_CHARS } from './shared/workspace-title';
@@ -526,6 +527,24 @@ export default function TabletopApp() {
     [commands],
   );
 
+  /**
+   * F080 / D-049: create the room from the table screen.
+   *
+   * It goes through the ordinary command path, so the authority still decides: this only shapes the
+   * request and reports what came back.
+   */
+  const [roomSetupOpen, setRoomSetupOpen] = useState(false);
+  const createRoom = useCallback(async (input: { spaceId: string; title: string }): Promise<RoomSetupResult> => {
+    try {
+      const next = await runCommand('space.create', { spaceId: input.spaceId, title: input.title });
+      if (next) setWorkspace(next);
+      setSpaceRoomId(input.spaceId);
+      return { ok: true, spaceId: input.spaceId, message: `สร้างห้องแล้ว: /s/${input.spaceId}` };
+    } catch (error) {
+      return { ok: false, message: errorText(error) };
+    }
+  }, [runCommand, setWorkspace]);
+
   const importTableFile = useCallback(
     (targetView: WorkspaceView, file: File) => commands.importTableFile(targetView, file),
     [commands],
@@ -821,6 +840,21 @@ export default function TabletopApp() {
       {tableReadOnly && <div className="tt-notice tt-notice--info tt-table-readonly-notice" role="status"><span><ShieldCheck size={15} /></span><p>Editing this shared table is temporarily paused. Existing records and rules remain available to inspect.</p></div>}
 
       {notice && <div className={`tt-notice tt-notice--${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'error' ? <CircleAlert size={15} /> : notice.tone === 'success' ? <Check size={15} /> : <Activity size={15} />}</span><p>{notice.text}</p>{notice.action && <button type="button" className="tt-notice__action" onClick={() => { notice.action?.run(); setNotice(null); }}>{notice.action.label}</button>}<button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button></div>}
+
+      {/* D-049: a table can become a room without leaving the page. */}
+      <section className="tt-panel">
+        <button
+          type="button"
+          className="tt-panel__toggle"
+          aria-expanded={roomSetupOpen}
+          onClick={() => setRoomSetupOpen(open => !open)}
+        >
+          {roomSetupOpen ? 'ซ่อนการสร้างห้อง' : 'สร้างห้องจากโต๊ะนี้'}
+        </button>
+        {roomSetupOpen ? (
+          <RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} />
+        ) : null}
+      </section>
 
       <TableSurface
         view={view}

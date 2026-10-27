@@ -667,3 +667,18 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 3. ทางลัดที่เร็วกว่า: หน้า "เตรียมห้องตัวอย่าง" สำหรับผู้ดูแล (seed 2 แหล่ง + ถอน 1 + ติดตั้ง tool) เพื่อใช้ทดสอบ HUMAN-01 โดยไม่ต้องรอ UI ครบ
 
 **ระหว่างนี้:** \`human-01-protocol.md\` ถูกแก้ให้บอกตรง ๆ ว่าต้อง seed ห้องด้วยคำสั่งก่อน และห้ามปล่อยผู้ทดสอบเดินไปเจอทางตันเอง
+
+## D-050 — สร้างห้อง (collaboration room) ได้จากหน้าโต๊ะแล้ว
+
+**บริบท:** D-049 พบว่า UI ไม่มีทางสร้างห้อง ⇒ HUMAN-01 ตั้งห้องทดสอบไม่ได้
+
+**สิ่งที่ทำ (branch `feat/f080-room-setup`):**
+- `src/tabletop/ui/RoomSetupPanel.tsx` — ฟอร์มชื่อห้อง + ที่อยู่ `/s/…` (สร้าง slug ให้อัตโนมัติจากชื่อตามที่พิมพ์) พร้อมข้อความผลลัพธ์/ปัญหา และสถานะ busy
+- `roomSlugFrom()` — แปลงชื่อเป็น address ที่ปลอดภัย (lowercase, ขีด, ตัดอักขระอื่น; ชื่อที่ไม่มี Latin/digit ⇒ คืนค่าว่างเพื่อให้คนพิมพ์เอง) · มี unit test 4 เคส
+- `TabletopApp` — ปุ่ม "สร้างห้องจากโต๊ะนี้" เหนือ `TableSurface` → เรียก `space.create` ผ่าน **command path เดิม** (authority ยังตัดสินเรื่อง revision/สิทธิ์) → ย้ายไป `/s/<slug>`
+
+**หลักฐาน:**
+- unit (`src/tabletop/ui`) **217 passed** · typecheck 3 config ผ่าน · public scan 0 findings
+- **ui-gate: 17/17 measured** บน harness ใหม่ (`scripts/build-room-setup-harness.mjs` → `test-results/room-setup-harness/index.html`) — gate จับได้จริง 1 ข้อ (em dash ใน `<title>`) ผมแก้แล้วจึงผ่าน
+
+**ยังไม่ทำ:** ติดตั้ง tool package จาก UI (ต้องวาง JSON — `space.installTool` รับ definition และ Worker ตรวจ hash ให้อยู่แล้ว) และเชื่อม/ถอนแหล่งข้อมูลจาก UI
