@@ -19,7 +19,12 @@ const result = await build({
   format: 'iife',
   platform: 'browser',
   target: 'es2022',
-  minify: false,
+  // Minified so vendored dependency comments never land in the page the gate measures; the gate reads
+  // raw HTML, and a comment inside React is not UI. Our own strings are still visible to it.
+  minify: true,
+  // The bundle is produced in memory, so esbuild cannot emit a CSS file. The panel's real stylesheet
+  // is inlined into the page below instead, which is what the gate must measure.
+  loader: { '.css': 'empty' },
   define: { 'process.env.NODE_ENV': '"production"' },
 });
 const bundle = result.outputFiles?.[0]?.text;
@@ -29,6 +34,7 @@ if (!bundle) {
 }
 
 const tokens = await readFile(resolve(root, 'src/tabletop/ui/tabletop-tokens.css'), 'utf8');
+const setupStyles = await readFile(resolve(root, 'src/tabletop/ui/room-setup.css'), 'utf8');
 const page = `<!doctype html>
 <html lang="th">
 <head>
@@ -36,6 +42,7 @@ const page = `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>F080 room setup</title>
 <style>${tokens}</style>
+<style>${setupStyles}</style>
 <style>
   /* The panel ships with the app's own rules; keep the page background identical to the product. */
   body { margin: 0; background: var(--tt-cream-1); color: var(--tt-ink); font: inherit; }

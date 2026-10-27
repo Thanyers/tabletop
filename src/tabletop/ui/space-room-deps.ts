@@ -139,5 +139,49 @@ export function createSpaceRoomDeps(input: SpaceRoomAdapterInput): SpaceRoomDeps
       }
       return { ok: true, actionId, ack: body };
     },
+    /**
+     * D-051: install a pasted package in this room.
+     *
+     * This is an ordinary command, so the authority still checks membership, the declared actions and
+     * the package hash; the panel only reports what came back.
+     */
+    async installTool(tool) {
+      // A command needs the revision and epoch the room is at now, so read the room first instead of
+      // carrying a stale pair through the adapter's input.
+      let current;
+      try {
+        current = await input.loadWorkspace(input.workspaceId);
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) };
+      }
+      let response: Response;
+      try {
+        response = await doFetch(`${origin}/api/workspaces/${encodeURIComponent(input.workspaceId)}/commands`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            commandId: globalThis.crypto.randomUUID(),
+            expectedRevision: current.revision,
+            expectedEpoch: current.epoch,
+            type: 'space.installTool',
+            payload: { tool },
+          }),
+        });
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) };
+      }
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        body = null;
+      }
+      if (response.ok) return { ok: true, message: `ติดตั้งแล้ว: ${tool.title} v${tool.version}` };
+      const message = typeof body === 'object' && body !== null && typeof (body as { message?: unknown }).message === 'string'
+        ? String((body as { message: string }).message)
+        : `ติดตั้งไม่สำเร็จ: ${response.status}`;
+      return { ok: false, message };
+    },
   };
 }

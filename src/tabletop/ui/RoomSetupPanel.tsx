@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import './room-setup.css';
 
 /**
  * F080 / D-049: turn a table into a collaboration room.

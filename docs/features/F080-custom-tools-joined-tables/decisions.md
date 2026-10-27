@@ -682,3 +682,16 @@ Log การตัดสินใจที่ผูกกับ contract/สถ
 - **ui-gate: 17/17 measured** บน harness ใหม่ (`scripts/build-room-setup-harness.mjs` → `test-results/room-setup-harness/index.html`) — gate จับได้จริง 1 ข้อ (em dash ใน `<title>`) ผมแก้แล้วจึงผ่าน
 
 **ยังไม่ทำ:** ติดตั้ง tool package จาก UI (ต้องวาง JSON — `space.installTool` รับ definition และ Worker ตรวจ hash ให้อยู่แล้ว) และเชื่อม/ถอนแหล่งข้อมูลจาก UI
+## D-051 — ติดตั้ง tool package ในห้องได้จาก UI (วาง JSON)
+
+**บริบท:** D-049 พบว่าไม่มี UI ติดตั้ง tool; D-037 บอกว่าไม่มี package store ⇒ ทางที่ทำได้จริงคือให้วาง JSON ของ package ที่ activate แล้ว
+
+**สิ่งที่ทำ:**
+- `src/tabletop/ui/tool-install-input.ts` — ตรวจ JSON ด้วย `validateToolPackage` และ **คำนวณ SHA-256 เอง** (`toolPackageHashHex` จาก `toolPackageContentCanonical` ผ่าน `crypto.subtle`) ⇒ ไม่ให้คนพิมพ์ hash; route (`ai`/`human`) มาจาก provenance ของ package
+- `ToolInstallPanel.tsx` — วาง JSON → `space.installTool` และรายงานผล/เหตุผลที่ปฏิเสธ
+- `SpaceRoomScreen` — dep `installTool?` (ไม่ส่ง = พฤติกรรมเดิม); แสดง panel เฉพาะเมื่อห้องยังไม่มี tool
+- `space-room-deps.ts` — `installTool` อ่าน workspace ปัจจุบันเพื่อใช้ `revision`/`epoch` ที่สด แล้วส่งคำสั่งผ่าน command path เดิม
+
+**หลักฐาน:** unit `src/tabletop/ui` **222 passed** · `tool-install-input.test.ts` **5/5** (รวม: hash เดียวกันสำหรับ package เดียวกัน, provenance ไม่เปลี่ยน hash, package เสียถูกปฏิเสธพร้อมเหตุผล) · **ui-gate 17/17 measured** บน harness ที่ฝัง `room-setup.css` จริง (ทั้งสอง panel) · typecheck 3 config · public scan 0 findings
+
+**บทเรียนจากเกต:** รอบแรกที่ harness ไม่ได้ฝัง CSS จริง ได้ 17/17 จาก markup ที่ไม่มีสไตล์; เมื่อฝัง CSS จริง เกตจับ `px` literal 6 จุดและ em dash (จากคอมเมนต์ใน dependency) ⇒ แก้เป็น token ล้วน + minify หน้า harness จึงผ่านจริง
