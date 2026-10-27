@@ -1,1 +1,0 @@
-- Record verified bilingual README publication and consistent production favicon in 9.1.6; sync release history back to dev. Documentation only.

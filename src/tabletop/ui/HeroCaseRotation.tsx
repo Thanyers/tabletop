@@ -60,7 +60,7 @@ export function HeroCaseRotation({ language }: { language: LandingLanguage }) {
     return () => window.clearTimeout(timer);
   }, [activeIndex, paused, reducedMotion, loadedSource, source]);
 
-  return <figure className="tt-public-welcome__hero-story" data-hero-case={activeCase.id}>
+  return <figure className="tt-public-welcome__hero-story" data-hero-case={activeCase.id} data-hero-loaded={loadedSource === source ? 'true' : undefined}>
     <img key={source} src={source} width={960} height={540} loading="eager" decoding="async" alt={content.alt} onLoad={() => setLoadedSource(source)} />
     {!reducedMotion && <button className="tt-public-welcome__motion-toggle" type="button" onClick={() => setPaused((value) => !value)} aria-label={paused ? (language === 'en' ? 'Resume animation' : 'เล่นภาพเคลื่อนไหวต่อ') : (language === 'en' ? 'Pause animation' : 'หยุดภาพเคลื่อนไหวชั่วคราว')}>
       {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}

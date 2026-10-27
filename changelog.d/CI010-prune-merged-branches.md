@@ -1,1 +1,0 @@
-- **ลบ branch ที่ merge แล้วอัตโนมัติ (CI010):** workflow ใหม่ `prune-branches.yml` ลบ branch บน GitHub ที่งานเข้า `dev` แล้วทันทีหลัง merge และกวาดซ้ำทุกวัน · เก็บ branch ที่มี PR เปิดอยู่, ยังไม่ merge, หรือเพิ่งแตกมาไม่ถึง 3 วันโดยยังไม่มี PR
