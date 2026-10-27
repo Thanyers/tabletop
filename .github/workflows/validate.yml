@@ -29,6 +29,8 @@ jobs:
   # CI006: a release merge on main whose code is identical to its release PR head, which
   # already passed the full suite as a PR into main, reuses that result instead of running
   # everything again, so the deploy starts a few seconds after the merge.
+  # CI011: a release PR whose code equals the dev commit it was cut from (apart from the changelog
+  # cut) reuses that dev commit's passing full-suite push run.
   plan:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -60,10 +62,33 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           REF: ${{ github.ref }}
           REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           full=false
           reuse=false
-          if [ "$EVENT" = workflow_dispatch ] || [ "$BASE_REF" = main ]; then
+          if [ "$EVENT" = pull_request ] && [ "$BASE_REF" = main ] && [[ "$HEAD_REF" == release/* ]]; then
+            full=true
+            # CI011: a release PR is dev plus the changelog cut. If the code it would merge (HEAD is
+            # the PR's merge commit with main) equals the dev commit it was cut from, apart from
+            # CHANGELOG.md and changelog.d/, and that dev commit's push run passed the full suite,
+            # reuse it. A fix on the release branch or a main commit dev lacks changes the code, so
+            # everything runs.
+            cut="$(git merge-base "$PR_HEAD_SHA" origin/dev 2>/dev/null || true)"
+            if [ -n "$cut" ] && git diff --quiet "$cut" HEAD -- . ':(exclude)CHANGELOG.md' ':(exclude)changelog.d'; then
+              run="$(gh api "repos/$REPO/actions/workflows/validate.yml/runs?head_sha=$cut&event=push&branch=dev&status=success&per_page=5" \
+                --jq '.workflow_runs[0].html_url // empty' || true)"
+              if [ -n "$run" ]; then
+                full=false
+                reuse=true
+                echo "::notice::Same code as dev $cut apart from the changelog cut, which passed the full suite: $run"
+              else
+                echo "Code matches dev $cut but no passing full-suite dev run was found; running everything."
+              fi
+            else
+              echo "The release PR's code differs from dev ${cut:-?} beyond the changelog; running everything."
+            fi
+          elif [ "$EVENT" = workflow_dispatch ] || [ "$BASE_REF" = main ]; then
             full=true
           elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/dev ]; then
             full=true

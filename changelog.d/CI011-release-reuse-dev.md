@@ -1,0 +1,1 @@
+- **release PR ไม่รันชุดเต็มซ้ำถ้าโค้ดเหมือน dev (CI011):** PR จาก `release/*` เข้า `main` ที่ต่างจาก commit บน `dev` ที่ตัดมาแค่ `CHANGELOG.md`/`changelog.d/` และ commit นั้นผ่านชุดเต็มบน dev แล้ว ใช้ผลเดิม `local-validation` ผ่านในไม่กี่วินาทีแทน 5–6 นาที · ถ้าแก้โค้ดบน release branch หรือ `main` มี commit ที่ dev ไม่มี จะรันชุดเต็มตามเดิม
