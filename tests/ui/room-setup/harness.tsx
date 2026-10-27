@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { RoomSetupPanel, type RoomSetupResult } from '../../../src/tabletop/ui/RoomSetupPanel';
 import { ToolInstallPanel, type ToolInstallOutcome } from '../../../src/tabletop/ui/ToolInstallPanel';
 import { RoomSourcesPanel, type RoomSourcesOutcome } from '../../../src/tabletop/ui/RoomSourcesPanel';
+import { SpaceGrantPanel } from '../../../src/tabletop/ui/SpaceGrantPanel';
 
 /**
  * F080 / D-050, D-051 harness: both setup panels on their own, with the repo's real tokens and
@@ -35,6 +36,11 @@ function Harness(): React.ReactElement {
         linked={[{ workspaceId: 'table-b', title: 'Budget', status: 'linked' }]}
         linkSource={async (): Promise<RoomSourcesOutcome> => ({ ok: true, message: 'เชื่อมโต๊ะแล้ว' })}
         unlinkSource={async (): Promise<RoomSourcesOutcome> => ({ ok: true, message: 'ถอดโต๊ะแล้ว' })}
+      />
+      <SpaceGrantPanel
+        sourceWorkspaceId="table-a"
+        rooms={[{ workspaceId: 'room-1', spaceId: 'activity-room', title: 'Activity Room' }]}
+        grantProjection={async () => ({ ok: true, message: 'ให้สิทธิ์ห้องแล้ว' })}
       />
     </main>
   );
