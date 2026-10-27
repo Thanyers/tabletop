@@ -1,0 +1,1 @@
+- **Deploy เร็วขึ้น ~1.5 นาที (CD006):** staging และ production deploy Worker sandbox ก่อน แล้ว deploy แอปครั้งเดียวพร้อม `TOOL_SANDBOX_ORIGIN` แทนการ deploy แอปสองรอบ · ไม่มีช่วงที่แอปใหม่ยังไม่รู้ sandbox origin · ถ้า sandbox ล้มจะหยุดก่อนแตะแอป · deploy sandbox ลองซ้ำ 1 ครั้งเหมือนแอป
