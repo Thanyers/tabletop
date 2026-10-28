@@ -128,6 +128,7 @@ describe('room-http route table', () => {
     ['GET', `/api/workspaces/${ROOM}/assistant/${'a'.repeat(64)}/confirm`.replace('/confirm', ''), 'assistant.get', 'room'],
     ['POST', `/api/workspaces/${ROOM}/assistant/${'a'.repeat(64)}/confirm`, 'assistant.confirm', 'room'],
     ['POST', `/api/workspaces/${ROOM}/images`, 'image', 'room'],
+    ['POST', `/api/workspaces/${ROOM}/images/from-link`, 'image.fromLink', 'room'],
   ])('%s %s is %s on the %s side', (method, path, name, handler) => {
     const match = matchRoomRoute(request(path, { method }), ROOM);
     expect(match?.name).toBe(name);

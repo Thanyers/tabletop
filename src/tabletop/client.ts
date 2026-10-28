@@ -112,6 +112,9 @@ export type AuthStatus =
   | { mode: 'guest' }
   | { mode: 'google'; authenticated: boolean; loginUrl: string; user?: GoogleAuthUser };
 
+/** F092: what the from-link route may return (it sniffs the bytes on the server). */
+const IMAGE_LINK_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
 async function readResponse<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null) as Record<string, unknown> | null;
   if (!response.ok) {
@@ -570,6 +573,30 @@ export class TabletopClient {
       throw new ApiFailure('The request could not be sent. Check your connection and try again.', 0);
     }
     return readResponse<T>(response);
+  }
+
+  /**
+   * F092: a picture the server fetched from a link (the picture itself, or a page's og:image). Nothing is stored yet:
+   * the caller resizes and uploads it like a chosen file.
+   */
+  async imageFromLink(view: Pick<WorkspaceView, 'id'>, link: string): Promise<File> {
+    let response: Response;
+    try {
+      response = await fetch(`/api/workspaces/${encodeURIComponent(view.id)}/images/from-link`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json', 'x-csrf-token': this.csrfToken },
+        body: JSON.stringify({ url: link }),
+      });
+    } catch {
+      throw new ApiFailure('The link could not be fetched. Check your connection and try again.', 0);
+    }
+    if (!response.ok) await readResponse<never>(response);
+    const type = response.headers.get('content-type') ?? '';
+    if (!IMAGE_LINK_TYPES.includes(type)) throw new ApiFailure('That link did not give a JPEG, PNG or WebP picture.', 415);
+    const blob = await response.blob();
+    const name = decodeURIComponent(new URL(link).pathname.split('/').filter(Boolean).pop() ?? '') || 'linked-image';
+    return new File([blob], name.slice(0, 80), { type });
   }
 
   /** F073: upload one resized picture; the id comes from its bytes, so retrying the same picture is safe. */

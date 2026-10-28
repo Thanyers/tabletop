@@ -190,20 +190,30 @@ export function addNote(view: WorkspaceView, onCommand: Command): void {
   void onCommand('table.addNote', nextNoteSpot(view.domain.kind === 'table' ? view.domain.notes ?? [] : []));
 }
 
+/** F092: a picture from a link keeps where it came from; the source wins over the caption when space runs out. */
+export function imageCaption(caption: string, source?: string): string {
+  if (!source) return caption.slice(0, MAX_NOTE_TEXT);
+  const credit = `Source: ${source}`.slice(0, MAX_NOTE_TEXT);
+  const room = MAX_NOTE_TEXT - credit.length - 1;
+  const text = caption.trim();
+  return text && room > 0 ? `${text.slice(0, room)}\n${credit}` : credit;
+}
+
 /**
  * F073/F076: resize each picture in the browser, upload it, then pin it as an image card; the caption goes on
  * every card. Cards sit side by side so a batch never lands on one spot.
  */
-export async function pinImages(view: WorkspaceView, files: readonly File[], caption: string, onCommand: Command, upload: (image: Blob) => Promise<string>): Promise<void> {
+export async function pinImages(view: WorkspaceView, files: readonly File[], caption: string, onCommand: Command, upload: (image: Blob) => Promise<string>, sources: readonly (string | undefined)[] = []): Promise<void> {
   const notes = view.domain.kind === 'table' ? view.domain.notes ?? [] : [];
   const spot = nextNoteSpot(notes);
   let x = spot.x;
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     if (!acceptedImageFile(file)) throw new Error('Use a JPEG, PNG or WebP image.');
     const prepared = await prepareCanvasImage(file);
     const imageId = await upload(prepared.blob);
     const size = imageCardSize(prepared.width, prepared.height);
-    const pinned = await onCommand('table.addNote', { x, y: spot.y, ...size, imageId, ...(caption ? { text: caption.slice(0, MAX_NOTE_TEXT) } : {}) });
+    const text = imageCaption(caption, sources[index]);
+    const pinned = await onCommand('table.addNote', { x, y: spot.y, ...size, imageId, ...(text ? { text } : {}) });
     if (!pinned) throw new Error('The image could not be pinned. It is still in the chat box.');
     x += size.width + 32;
   }
