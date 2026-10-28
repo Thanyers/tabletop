@@ -761,7 +761,8 @@ export default function TabletopApp() {
       onAddNote: () => addNote(view, runCommand),
       noteDisabledReason: noteLimitReason(view),
       ...(capabilities.images ? {
-        onPinImages: (images: readonly File[], caption: string) => pinImages(view, images, caption, runCommand, (image) => tabletopClient.uploadCanvasImage(view, image)),
+        onPinImages: (images: readonly File[], caption: string, sources?: readonly (string | undefined)[]) => pinImages(view, images, caption, runCommand, (image) => tabletopClient.uploadCanvasImage(view, image), sources),
+        onImageFromLink: (link: string) => tabletopClient.imageFromLink(view, link),
         imagesLeft: imagesLeft(view),
       } : {}),
     } : undefined,

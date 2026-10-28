@@ -22,7 +22,7 @@ export { Room } from './room.js';
 export { Billing } from './billing.js';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|invite-link|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}|images(?:/img_[0-9a-f]{32})?))?$`, 'u');
+const workspaceRoute = new RegExp(`^/api/workspaces/(${uuid})(?:/(commands|invites|invite-link|members/remove|socket|events|model(?:/[a-f0-9]{64})?|assistant(?:/[a-f0-9]{64}(?:/confirm)?)?|export|uploads|sources/[0-9a-f-]{36}|images(?:/img_[0-9a-f]{32}|/from-link)?))?$`, 'u');
 /** F080: a cross-workspace projection read. Answered by the Worker, not forwarded to the destination Room. */
 const spaceProjectionRoute = new RegExp(`^/api/workspaces/(${uuid})/space/projection$`, 'u');
 /** F080: an action invoked through a connection; answered by the Worker, committed by the source. */
@@ -353,6 +353,8 @@ async function route(request: Request, env: Env): Promise<Response> {
       requireOrigin(request, env);
       await limit(env, `socket:${session.record.actorId}`, 30, 60_000);
     }
+    // F092: each call makes the server fetch an outside site, so it gets its own small budget.
+    if (matched[2] === 'images/from-link') await limit(env, `image-link:${session.record.actorId}`, 20, 60_000);
     return room(env, matched[1]).fetch(request);
   }
   throw new AuthorityError('NOT_FOUND', 'Not found.', 404);

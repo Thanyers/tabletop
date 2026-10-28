@@ -231,6 +231,10 @@
 .tt-app .tt-table-chat-bar__menu button:hover:not(:disabled), .tt-app .tt-table-chat-bar__menu button:focus-visible { background: var(--tt-canvas); outline: none; }
 .tt-app .tt-table-chat-bar__menu button:disabled { opacity: .5; cursor: not-allowed; }
 .tt-app .tt-table-chat-bar__images { display: grid; gap: 6px; margin: 0 var(--tt-space-3, 12px) 6px; }
+/* F092: the link field opened from the + menu sits where waiting pictures appear. */
+.tt-app .tt-table-chat-bar__link { display: flex; align-items: center; gap: 6px; margin: 0 var(--tt-space-3, 12px) 6px; }
+.tt-app .tt-table-chat-bar__link input { flex: 1 1 auto; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--tt-line, #dfe6e5); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
+.tt-app .tt-table-chat-bar__link-close { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--tt-muted, #6d7c78); cursor: pointer; }
 .tt-app .tt-table-chat-bar__images ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .tt-app .tt-table-chat-bar__images li { position: relative; width: 64px; height: 64px; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px #303d3a26; background: #fff; }
 .tt-app .tt-table-chat-bar__images img { width: 100%; height: 100%; object-fit: cover; }
