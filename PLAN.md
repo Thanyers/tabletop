@@ -25,6 +25,7 @@
 | ID | ฟีเจอร์ | สถานะ | เอกสาร |
 | --- | --- | --- | --- |
 | F092 | แปะรูปจากลิงก์ (ภาพปกจากหน้าเว็บทางการ) | `review` | [F092](docs/features/F092-image-from-link.md) |
+| F091 | ค้นเว็บพอสำหรับงานรวบรวมรายการ + หาอันดับจากตัวชี้วัดจริง | `review` | [F091](docs/features/F091-deeper-research.md) |
 | F090 | ผลค้นเว็บไม่ถูกใส่เป็น evidence ของโต๊ะที่ไม่มีไฟล์แหล่งที่มา | `review` | [F090](docs/features/F090-research-not-evidence.md) |
 | F088 | scroll บนการ์ดเลื่อนข้อมูลในการ์ด ไม่ซูมบอร์ด | `review` | [F088](docs/features/F088-card-wheel-scroll.md) |
 | F077-T7 | Clean README copy, add Thai/English navigation, align icon with homepage mark | `done` | Codex · PR #364 / release #366 · production 9.1.6 / b809d9b; both main README pages and served favicon verified |
@@ -96,6 +97,7 @@
 | ID | งาน | สถานะ | ผู้รับผิดชอบ | branch / PR | พื้นที่ที่แตะ | ต้องรอ | หมายเหตุ |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F092-T1 | route images/from-link + เมนู Image from a link + คำบรรยายที่มา | `review` | lead (AI) | `feat/F092-image-from-link` | `cloudflare/image-link.ts`, `cloudflare/room.ts`, `cloudflare/room-http.ts`, `cloudflare/index.ts`, `client.ts`, `ui/TableChat.tsx`, `ui/NoteCard.tsx`, `TabletopApp.tsx`, tests | — | ไม่มี migration |
+| F091-T1 | research ขนาน/งบเวลา/12 แหล่ง/brief รายการ + prompt หาตัวชี้วัดอันดับ | `review` | lead (AI) | `feat/F091-deeper-research` | `server/providers/deepseek-research.ts`, `server/providers/deepseek-changes.ts`, `shared/model-job-progress.ts`, `cloudflare/ai.ts`, tests | — | ไม่มี migration |
 | F090-T1 | prompt research ≠ evidence + ข้อความตรวจบอกวิธีแก้ | `review` | lead (AI) | `fix/F090-research-not-evidence` | `server/providers/deepseek-changes.ts`, `domain/table.ts`, tests | — | ไม่มี migration |
 | F088-T1 | native wheel listener + `canScrollWithin` ใน `CanvasNodeBody` | `review` | lead (AI) | `fix/F088-card-wheel-scroll` | `ui/CanvasWorkspace.tsx` | — | ไม่มี migration |
 | F086-T1 | `webSourcesNotOnTable` + การ์ด applied แสดงแหล่ง/ปุ่ม + แจ้งจำนวนจริง + intent อ้างอิงกฎ | `review` | lead (AI) | `fix/F086-applied-draft-sources` | `ui/useTableChat.tsx`, `workspace/table-chat-state.ts`, `workspace/command-session.ts`, `shared/chat-intent.ts`, tests | — | ไม่มี migration |
