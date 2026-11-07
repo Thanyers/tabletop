@@ -3,7 +3,7 @@
 แหล่งความจริงของ **สถานะงาน** โปรเจกต์นี้ (ไม่ใช่แชท) · อัปเดตทุกครั้งที่จบงาน ตามกติกาใน [CLAUDE.md](CLAUDE.md)
 รายละเอียดเชิงลึกอยู่ในเอกสารเจ้าของเรื่อง — ไฟล์นี้สรุปและลิงก์ ไม่คัดลอกซ้ำ
 
-อัปเดตล่าสุด: 2026-10-25
+อัปเดตล่าสุด: 2026-11-07
 
 ## ผลิตภัณฑ์
 
@@ -29,6 +29,7 @@ Canvas ร่วมกันสำหรับสร้างงานหรื�
 
 ## สถานะปัจจุบัน
 
+- **Release 9.3.0 — done / production (2026-11-07):** ออกรุ่นเพราะเมนู **ห้อง** (F080, PR #405 + #407) อยู่บน `dev` ตั้งแต่ 27 ต.ค. แต่ 9.2.0 ถูกตัดก่อนหน้านั้น production จึงยังไม่มี · [release PR #411](https://github.com/Thanyers/tabletop/pull/411) merge main `e0046a7`; CI011 ใช้ผลชุดเต็มของ dev `f97fade` ซ้ำ (`local-validation` ผ่าน 3 วินาที) · [deploy 42376207655](https://github.com/Thanyers/tabletop/actions/runs/42376207655) ผ่านครบ รวม tag `v9.3.0`, migrations, sandbox, smoke และ GitHub Release · readback `/version` 9.3.0 / e0046a7, `/healthz` + `/readyz` 200, และ app chunk บน production มี `tt-room-menu` แล้ว (9.2.0 ไม่มี) · ตรวจด้วยตาบน Node guest runtime (Node v26.3.1, build ใหม่): เมนูเปิดได้สองรายการ และที่ 375px เหลือไอคอนประตู · ไม่มี D1 migration / secret / binding ใหม่ · rollback target 9.2.0 ([DEPLOYMENTS](docs/DEPLOYMENTS.md))
 - **F092 image from a link (2026-10-28, branch `feat/F092-image-from-link`, `review`):** `POST /api/workspaces/:id/images/from-link` ดึงรูปหรือ og:image ของหน้าเว็บ (เฉพาะ host สาธารณะ http(s), redirect ≤3 ตรวจซ้ำ, ≤8 MiB, magic bytes, 20 ครั้ง/นาที/คน) แล้วคืน bytes ให้เบราว์เซอร์ย่อและอัปโหลดตามทางเดิม · เมนู + "Image from a link" · คำบรรยายต่อท้าย "Source: <ลิงก์>" ([F092](docs/features/F092-image-from-link.md))
 - **F091 deeper research (2026-10-28, branch `feat/F091-deeper-research`, `review`):** research ค้น query ในรอบเดียวกันพร้อมกัน (≤6), 3 รอบภายในงบ 75 วิ, เก็บ 12 แหล่ง, brief 2,400 ตัวอักษรแบบบรรทัด `รายการ | วันที่ | URL` · prompt สอนงานรวบรวมรายการและให้หาตัวชี้วัดอันดับจริง · คำขอไทม์ไลน์มังงะ: 4 → 12 เรื่อง ([F091](docs/features/F091-deeper-research.md))
 - **F090 research not evidence (2026-10-27, branch `fix/F090-research-not-evidence`, `review`):** prompt ระบุว่าผลค้นเว็บใช้เป็นข้อมูล/หมายเหตุ ไม่ใช่ `program.evidence` เว้นแต่เป็นไฟล์บนโต๊ะ · ข้อความ `TABLE_EVIDENCE` ของโต๊ะไม่มีไฟล์บอกวิธีแก้ให้รอบซ่อม ([F090](docs/features/F090-research-not-evidence.md))

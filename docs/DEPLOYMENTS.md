@@ -1,18 +1,24 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **27 ตุลาคม 2569 เวลา 15:59 น. (Asia/Bangkok)**: production รายงาน **9.2.0 / 467cb37**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/40476842884) ผ่านครบ รวม sandbox Worker, smoke และ GitHub Release publication. Health/readiness 200; `/api/capabilities` ประกาศ `toolSandboxOrigin` และ sandbox `runtime.js` ตอบ 200. Staging snapshot **0.0.0-dev / b17ce90** เป็นการอ่าน ณ เวลานั้น.
+ตรวจ `/version` ออนไลน์ล่าสุด **7 พฤศจิกายน 2569 เวลา 20:22 น. (Asia/Bangkok)**: production รายงาน **9.3.0 / e0046a7**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/42376207655) ผ่านครบทุกขั้น รวม tag `v9.3.0`, D1 migrations, sandbox Worker, deploy, smoke และ GitHub Release publication. `/healthz` และ `/readyz` ตอบ 200. Staging snapshot **0.0.0-dev / f97fade** เป็นการอ่าน ณ เวลานั้น.
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [467cb37](https://github.com/Thanyers/tabletop/commit/467cb378a1e57d7c7e67b5ed41d0ea8d0b3ff3af) — PR #399 | `b17ce90` — observed snapshot |
-| Release | v9.2.0 / 9.2.0 — deploy/smoke passed | dev / 0.0.0-dev |
+| Source | [e0046a7](https://github.com/Thanyers/tabletop/commit/e0046a7) — PR #411 | `f97fade` — observed snapshot |
+| Release | v9.3.0 / 9.3.0 — deploy/smoke passed | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.3.0 — room actions in a header menu, deeper research, image from a link (7 November 2026)
+
+- [Release PR #411](https://github.com/Thanyers/tabletop/pull/411), main `e0046a7`. The release head differed from dev `f97fade` only in `CHANGELOG.md` / `changelog.d/`, so CI011 reused the dev full-suite result and `local-validation` passed in 3s on the PR; `main` had no commit that dev lacked, so no merge of `main` into the release branch was needed. [Deploy](https://github.com/Thanyers/tabletop/actions/runs/42376207655) succeeded end to end: tag `v9.3.0`, D1 migrations, sandbox assets + sandbox deploy, app deploy, smoke checks and GitHub Release publication.
+- MINOR from dev `f97fade`: F080 moves the two room actions into a **ห้อง** menu in the table header beside Invite (icon-only at ≤760px) with each form in a dialog, F091 deeper web research for list-building requests (12 sources, real ranking signals), F092 pinning an image from a link via og:image, F090 web research recorded as grounding rather than `program.evidence`, F088 card-scroll over tables, and CD006/CD007/CI011. No D1 migration, no new secret or binding, nothing to configure before deploy. Rollback target 9.2.0.
+- Readback: `/version` 9.3.0 / e0046a7, built_at 2026-11-07T13:17:47Z; `/healthz` and `/readyz` 200. The served production app chunk now contains the room menu (`tt-room-menu`, `aria-label="ห้อง: …"`), which the 9.2.0 bundle did not — that was the user-visible gap that prompted this release.
 
 ## Release 9.2.0 — custom tools sandbox origin and canvas fixes (27 October 2026)
 
