@@ -4,6 +4,21 @@
 
 ## Unreleased
 
+## 9.3.0 — 2026-11-07
+
+MINOR: the room actions move into a header menu beside Invite (F080), deeper web research for list-building requests (F091), pinning an image from a link (F092), card-scroll and web-source fixes (F088, F090), and CI/CD changes (CD006, CD007, CI011). No D1 migration, no new secret or binding; nothing to configure before deploy. Rollback target 9.2.0.
+
+- **แปะรูปจากลิงก์ (F092, MINOR):** เมนู + มี "Image from a link" วางลิงก์รูป หรือหน้าเว็บ (เช่นหน้าหนังสือของร้าน/สำนักพิมพ์) แล้วระบบดึงภาพปกจาก og:image มาให้ รอในช่องแชทเหมือนรูปจากเครื่อง ส่งแล้วแปะเป็นการ์ดรูปพร้อม "Source: <ลิงก์>" · server ดึงเฉพาะเว็บสาธารณะ http(s) ตรวจ redirect ทุกครั้ง จำกัดขนาด 8 MiB และตรวจชนิดไฟล์จริง · ไม่มี migration/secret/binding
+- **AI ค้นเว็บพอสำหรับงานรวบรวมรายการ (F091, MINOR):** คำขอแบบ "รายเดือน / N อันดับ" ค้นหลายคำพร้อมกันและหลายรอบภายในเวลาที่กำหนด เก็บได้ 12 แหล่ง (เดิม 6) · ขอ "ดังที่สุด/ขายดี" จะหาตัวชี้วัดจริง (bestseller, อันดับในแอป, รางวัล) และบอกชื่อตัวชี้วัด ถ้าไม่มีจะบอกว่าไม่ทราบ ไม่จัดอันดับเอง · ไม่มี migration/secret/binding
+- **ผลค้นเว็บไม่ถูกใส่เป็นหลักฐานของโต๊ะที่ไม่มีไฟล์ (F090, PATCH):** คำขอแบบ "เติมข้อมูลเท่าที่มีหลักฐาน" บนโต๊ะที่ไม่มีไฟล์แหล่งที่มาไม่ล้มด้วย "Prompt-only tables cannot cite…" อีก · AI ถูกสอนให้ใส่ลิงก์/ข้อความจากเว็บในช่องข้อมูลหรือหมายเหตุแทน และข้อความตรวจบอกวิธีแก้ให้รอบซ่อม · ไม่มี migration/secret/binding
+- **แก้ browser suite ล้มหลังย้ายปุ่มห้องขึ้น header (FIX):** เมนู "ห้อง" ใช้ class ของตัวเองแทน `tt-table-options` ที่เทสต์ใช้หาเมนู ⋯ ของโต๊ะ · หน้าตาเหมือนเดิม
+- **ปุ่มห้องย้ายไปอยู่บน header (F080):** "สร้างห้องจากโต๊ะนี้" และ "ให้ห้องอ่านข้อมูลจากโต๊ะนี้" ไม่ได้เป็นปุ่มแคปซูลสองอันซ้อนกันเหนือโต๊ะอีกแล้ว แต่อยู่ในเมนู **ห้อง** ข้างปุ่ม Invite · เลือกแล้วฟอร์มเปิดเป็นหน้าต่าง (ปิดด้วย ✕, Esc หรือคลิกนอกกรอบ) พื้นที่โต๊ะจึงไม่ถูกดันลง · บนจอแคบเหลือแค่ไอคอนเหมือน Invite · ปุ่ม "สร้างห้อง" อ่านง่ายขึ้น (ตัวอักษรสีอ่อนบนพื้นเขียว)
+- **release PR ไม่รันชุดเต็มซ้ำถ้าโค้ดเหมือน dev (CI011):** PR จาก `release/*` เข้า `main` ที่ต่างจาก commit บน `dev` ที่ตัดมาแค่ `CHANGELOG.md`/`changelog.d/` และ commit นั้นผ่านชุดเต็มบน dev แล้ว ใช้ผลเดิม `local-validation` ผ่านในไม่กี่วินาทีแทน 5–6 นาที · ถ้าแก้โค้ดบน release branch หรือ `main` มี commit ที่ dev ไม่มี จะรันชุดเต็มตามเดิม
+- **staging ถอยเองเมื่อเทสต์บนเบราว์เซอร์ล้ม (CD007):** staging deploy ทันทีหลังเช็คเร็ว (CD005) แล้ว browser suites รันตาม · ถ้าชุดใดล้ม job ใหม่ `rollback-staging` รัน `wrangler rollback` กลับ Worker Version ที่ live ก่อน deploy ของ run นั้น และ comment ใน issue "dev: browser suites failing after merge" · ถอยเฉพาะเมื่อ version ของ run นั้นยัง live (ไม่ถอยทับ merge ใหม่) · ไม่ถอย D1 migration และ sandbox · production ไม่เปลี่ยน
+- **Deploy เร็วขึ้น ~1.5 นาที (CD006):** staging และ production deploy Worker sandbox ก่อน แล้ว deploy แอปครั้งเดียวพร้อม `TOOL_SANDBOX_ORIGIN` แทนการ deploy แอปสองรอบ · ไม่มีช่วงที่แอปใหม่ยังไม่รู้ sandbox origin · ถ้า sandbox ล้มจะหยุดก่อนแตะแอป · deploy sandbox ลองซ้ำ 1 ครั้งเหมือนแอป
+- **เทสต์ hero บนหน้าแรกไม่ล้มสุ่ม (FIX, test only):** เทสต์รอให้ React รับ onLoad ของรูปและเริ่มนับเวลา 18 วินาทีก่อนเลื่อนนาฬิกา (`data-hero-loaded` บน hero) · ก่อนหน้านี้ browser suite บน Workers ล้มเป็นพัก ๆ ที่ "sales" → "learning"
+- **scroll บนการ์ดเลื่อนข้อมูลในการ์ด (F088, PATCH):** เอาเมาส์ไว้บนตารางหรือรายการที่เลื่อนได้ในการ์ดแล้ว scroll จะเลื่อนข้อมูลแทนการซูมบอร์ด · เลื่อนสุดแล้ว หรือกด Ctrl/⌘ บอร์ดยังซูมได้ · ไม่มี migration/secret/binding
+
 ## 9.2.0 — 2026-10-27
 
 MINOR: custom tools in their own sandbox origin with joined-table sources (F080), table checkbox toggles (F081), canvas/card fixes (F082–F087), /tables filter controls, internal Room/chat refactors (F078) and the Procedural surface frozen to legacy/ (F079). No D1 migration; the release pipeline also deploys the assets-only sandbox Worker with default names, nothing to configure first. Rollback target 9.1.6.
