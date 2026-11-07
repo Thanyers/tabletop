@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-11-08 — กล่อง "สร้างห้อง" รายงานว่าสำเร็จมาตั้งแต่ D-050 ทั้งที่ command ถูกปฏิเสธทุกครั้ง
+- **What happened:** ตอนลอง F093 ในเครื่อง กด "สร้างห้องจากโต๊ะนี้" แล้วหน้าจอเด้งเข้าหน้าห้องและไม่มี error ให้เห็น แต่ log ของเซิร์ฟเวอร์ขึ้น `POST /api/workspaces/<id>/commands status 422 errorCode SPACE_PAYLOAD` และ `GET /api/workspaces/<id>` ไม่มี `collaborationSpace` เลย — ไม่เคยมีห้องถูกสร้างจากหน้าโต๊ะตั้งแต่ D-050 และ 9.3.0 ก็ปล่อยของพังนี้ขึ้น production ไปแล้ว
+- **Root cause:** สองชั้นซ้อนกัน · (1) `createRoom` ส่ง `{ spaceId, title }` แต่ `createSchema` บังคับ `sharedToolWorkspaceId` ด้วย · (2) `runCommand` ใน `workspace/command-session.ts` **catch error แล้ว `return null`** ไม่ throw ดังนั้น `try/catch` ของผู้เรียกจึงไม่มีทางทำงาน และโค้ดที่เขียนว่า `return { ok: true }` หลังเรียกก็รายงานสำเร็จเสมอ · harness ของ D-050 ใช้ `createRoom` ปลอมที่คืน ok เสมอ จึงไม่เคยจับได้
+- **Correct behavior:** ผู้เรียก `runCommand` ทุกที่ต้องถือ **`null` = ไม่สำเร็จ** (`if (!next) return { ok: false, … }`) ห้ามเขียน `try/catch` แล้วถือว่าไม่ throw คือสำเร็จ · เวลาตรวจ panel ที่ยิง command อย่าเชื่อข้อความบนกล่อง ให้ดู `mcp__Claude_Browser__preview_logs` หา `status 4xx` และ `GET /api/workspaces/<id>` ว่า state เปลี่ยนจริง · payload ของ command ใหม่ให้สร้างจาก helper ที่มีเทสต์ยิงผ่าน `parseSpaceCommand`/schema ตัวจริง ไม่ประกอบ object ดิบในคอมโพเนนต์
+
 ### 2026-10-27 — ใส่ class ของเมนูเดิมซ้ำเพื่อยืมสไตล์ แล้ว browser suite บน dev ล้ม 3 ชุด
 - **What happened:** PR #405 ให้เมนู "ห้อง" ใหม่ใช้ `class="tt-table-options tt-room-menu"` เพื่อยืมสไตล์ popover · PR เข้า dev รันแค่ชุดเร็วจึงผ่าน · หลัง merge (`5e4d986`) browser suite node + Workers 1/2 + 2/2 ล้มด้วย `strict mode violation: locator('.tt-table-options') resolved to 2 elements` · CD007 ถอย staging กลับ `a127dc5` เอง และเปิด issue #406
 - **Root cause:** เทสต์หาเมนู ⋯ ของโต๊ะด้วย `.tt-table-options` (`tests/cloudflare-browser.mjs`, `tests/generic-table-browser.mjs`, `tests/tabletop-r1.mjs`) · class ที่เทสต์ใช้เป็น selector จึงต้องมีอันเดียวในหน้า แต่ไม่ได้ `git grep` ใน `tests/` ก่อนนำ class ไปใช้ซ้ำ

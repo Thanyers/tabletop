@@ -26,6 +26,7 @@ import { TableSurface } from './ui/TableSurface';
 import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
 import { SpaceGrantPanel } from './ui/SpaceGrantPanel';
 import { grantResources, grantableRooms, tableStateOf } from './ui/space-grant-options';
+import { buildRoomCreatePayload } from './ui/room-setup-input';
 import { RoomDialog, RoomMenu, type RoomAction } from './ui/RoomActions';
 import './ui/room-actions.css';
 import { StartPage } from './ui/StartPage';
@@ -536,18 +537,28 @@ export default function TabletopApp() {
    *
    * It goes through the ordinary command path, so the authority still decides: this only shapes the
    * request and reports what came back.
+   *
+   * F093 fixes two things here. The payload was missing `sharedToolWorkspaceId`, so the authority
+   * refused every attempt with `SPACE_PAYLOAD` and no room was ever created from this page; it is
+   * built by `buildRoomCreatePayload` now, which a test holds to the command schema. And a refusal
+   * was reported as success: `runCommand` notifies and returns `null` rather than throwing, so the
+   * old `catch` never ran and the panel said "สร้างห้องแล้ว" while moving to a room that did not
+   * exist. A missing view means there is nothing to create the room on.
    */
   const [roomDialog, setRoomDialog] = useState<RoomAction | null>(null);
   const createRoom = useCallback(async (input: { spaceId: string; title: string }): Promise<RoomSetupResult> => {
+    const hostWorkspaceId = view?.id;
+    if (hostWorkspaceId === undefined) return { ok: false, message: 'เปิดโต๊ะก่อนจึงจะสร้างห้องจากโต๊ะนั้นได้' };
     try {
-      const next = await runCommand('space.create', { spaceId: input.spaceId, title: input.title });
-      if (next) setWorkspace(next);
+      const next = await runCommand('space.create', buildRoomCreatePayload({ hostWorkspaceId, spaceId: input.spaceId, title: input.title }));
+      if (!next) return { ok: false, message: 'สร้างห้องไม่สำเร็จ — ดูเหตุผลที่ข้อความแจ้งเตือนด้านบน แล้วลองใหม่' };
+      setWorkspace(next);
       setSpaceRoomId(input.spaceId);
       return { ok: true, spaceId: input.spaceId, message: `สร้างห้องแล้ว: /s/${input.spaceId}` };
     } catch (error) {
       return { ok: false, message: errorText(error) };
     }
-  }, [runCommand, setWorkspace]);
+  }, [runCommand, setWorkspace, view?.id]);
 
   /**
    * F093: the rooms and the resources the grant dialog may offer, read from this table.
