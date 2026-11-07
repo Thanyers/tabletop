@@ -6,6 +6,7 @@ import { type CommandAck, type WorkspaceView } from '../src/tabletop/shared/cont
 import { CommandAuthority } from '../server/authority.js';
 import { createCloudflareComputeRunner } from './compute-runner.js';
 import { AuthorityError, safeError } from '../server/errors.js';
+import { fetchImageFromLink } from './image-link.js';
 import { canonicalJson, hashValue, isRecord, randomId, sha256 } from '../server/codec.js';
 import { compileToolPackage } from '../src/tabletop/runtime/tools/compile.js';
 import { buildToolBehaviorRequest } from '../src/tabletop/shared/tool-behavior-request.js';
@@ -396,6 +397,34 @@ export class Room extends DurableObject<Env> {
     throw new AuthorityError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
   }
 
+  /**
+   * F092: the bytes of a picture a member links to, checked like an upload but not stored: the browser resizes it and
+   * stores it through POST /images, so there is one storage path and one size limit. Same rights as uploading.
+   */
+  private async canvasImageFromLink(request: Request, workspaceId: string, requestId: string): Promise<Response> {
+    if (this.roomId === null || workspaceId !== this.roomId) throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+    if (request.method !== 'POST') throw new AuthorityError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405);
+    const authorized = await this.authorize(request, workspaceId);
+    if (authorized.workspace.kind !== 'table') throw new AuthorityError('NOT_FOUND', 'Not found.', 404);
+    requireMutation(request, this.env, authorized.session);
+    requireWorkspaceWritable(this.env, authorized.workspace.kind);
+    if (authorized.context.role !== 'owner' && authorized.context.role !== 'participant') throw new AuthorityError('ROLE_FORBIDDEN');
+    const body = await readBodyBytes(request, 4_096, 'INVALID_REQUEST');
+    let link: unknown;
+    try { link = (JSON.parse(new TextDecoder().decode(body)) as { url?: unknown }).url; } catch { link = undefined; }
+    if (typeof link !== 'string') throw new AuthorityError('INVALID_REQUEST', 'Send {"url": "..."}.', 400);
+    const image = await fetchImageFromLink(link);
+    return new Response(image.bytes, { status: 200, headers: {
+      'content-type': image.mime,
+      'content-length': String(image.bytes.byteLength),
+      'x-image-source': encodeURI(image.imageUrl),
+      'x-content-type-options': 'nosniff',
+      'content-security-policy': "default-src 'none'; sandbox",
+      'cache-control': 'no-store',
+      'x-request-id': requestId,
+    } });
+  }
+
   async authorize(request: Request, workspaceId?: string): Promise<AuthorizedWorkspace> {
     const target = workspaceId ?? this.requireBoundRoomId();
     this.requireRoomId(target);
@@ -565,6 +594,7 @@ export class Room extends DurableObject<Env> {
    */
   private async handleRoomRoute(request: Request, match: RoomRouteMatch, requestId: string): Promise<Response> {
     if (match.name === 'image') return this.canvasImage(request, match.workspaceId!, match.imageId, requestId);
+    if (match.name === 'image.fromLink') return this.canvasImageFromLink(request, match.workspaceId!, requestId);
     const workspaceId = match.workspaceId!;
     const suffix = match.suffix ?? '';
     const url = new URL(request.url);

@@ -5,6 +5,11 @@
 
 ## Lessons
 
+### 2026-10-27 — ใส่ class ของเมนูเดิมซ้ำเพื่อยืมสไตล์ แล้ว browser suite บน dev ล้ม 3 ชุด
+- **What happened:** PR #405 ให้เมนู "ห้อง" ใหม่ใช้ `class="tt-table-options tt-room-menu"` เพื่อยืมสไตล์ popover · PR เข้า dev รันแค่ชุดเร็วจึงผ่าน · หลัง merge (`5e4d986`) browser suite node + Workers 1/2 + 2/2 ล้มด้วย `strict mode violation: locator('.tt-table-options') resolved to 2 elements` · CD007 ถอย staging กลับ `a127dc5` เอง และเปิด issue #406
+- **Root cause:** เทสต์หาเมนู ⋯ ของโต๊ะด้วย `.tt-table-options` (`tests/cloudflare-browser.mjs`, `tests/generic-table-browser.mjs`, `tests/tabletop-r1.mjs`) · class ที่เทสต์ใช้เป็น selector จึงต้องมีอันเดียวในหน้า แต่ไม่ได้ `git grep` ใน `tests/` ก่อนนำ class ไปใช้ซ้ำ
+- **Correct behavior:** ก่อนใส่ class เดิมให้ element ใหม่ ให้รัน `git grep -n "<class>" -- tests scripts` ถ้าเทสต์ใช้เป็น selector ให้ทำ class ของตัวเองแล้วคัดลอกสไตล์ · งาน UI ที่เปลี่ยน header/เมนูของโต๊ะ ให้รัน `npm run test:r1:browser` และ `TT_WORKERS_PART=1 npm run test:cloudflare:browser` ในเครื่องก่อน merge เพราะ PR เข้า dev ไม่รัน browser suite
+
 ### 2026-10-26 — สคริปต์พิมพ์แชทไปเขียนทับคำบรรยายรูปของผู้ใช้บน staging
 - **What happened:** ตอนส่งข้อความเข้าแชทโต๊ะบน staging ด้วย `document.querySelector('textarea')` + native setter สคริปต์ไปเจอช่อง caption ของการ์ดรูป (F073) ก่อนช่องแชท แล้วกด Enter ทำให้คำบรรยายรูปที่ผู้ใช้แปะไว้ถูกบันทึกทับ · ค่าเดิมไม่มีใน log ต้องเดาจาก screenshot ว่าเป็นค่าว่างแล้วล้างกลับ
 - **Root cause:** การ์ด note/รูปบน canvas ก็เป็น `<textarea>` และอยู่ก่อนช่องแชทใน DOM · selector กว้างเกินไป และไม่ได้อ่านค่าเดิมเก็บไว้ก่อนเขียน

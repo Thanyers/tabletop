@@ -46,6 +46,8 @@ describe('table research input (F064)', () => {
     expect(body).not.toBeNull();
     const messages = body!.messages as Array<{ role: string; content: string }>;
     expect(messages[0].content).toContain('When research is present');
+    // F090: research is grounding, never program.evidence, unless the source is a table file.
+    expect(messages[0].content).toContain('Research grounds values, not program.evidence');
     expect(messages[1].content).toContain('web-1');
     expect(messages[1].content).toContain('https://www.thaigov.go.th/th/news/166956');
     expect(messages[1].content).toContain('VAT 7%');
@@ -60,7 +62,8 @@ describe('table research input (F064)', () => {
   it('rejects an oversized or malformed research block', () => {
     const tooMany = {
       ...research,
-      sources: Array.from({ length: 7 }, (_, index) => ({ ...research.sources[0], id: `web-${index}` })),
+      // F091: twelve sources fit; the thirteenth is refused.
+      sources: Array.from({ length: 13 }, (_, index) => ({ ...research.sources[0], id: `web-${index}` })),
     };
     expect(() => measureDeepSeekChangeRequest({ ...tableInput, research: tooMany } as DeepSeekChangeInput))
       .toThrow();

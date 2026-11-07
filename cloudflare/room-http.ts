@@ -38,6 +38,8 @@ const MEMBER_ACTOR_ID_PATTERN = /^[A-Za-z0-9_-]{1,160}$/u;
 const INVITE_LINK_DAYS: readonly number[] = [1, 7, 30];
 
 const IMAGE_ROUTE = /^\/api\/workspaces\/([0-9a-f-]{36})\/images(?:\/(img_[0-9a-f]{32}))?$/u;
+/** F092: fetch a picture from a link for the member, who then resizes and uploads it as usual. */
+const IMAGE_LINK_ROUTE = /^\/api\/workspaces\/([0-9a-f-]{36})\/images\/from-link$/u;
 const WORKSPACE_ROUTE = /^\/api\/workspaces\/([0-9a-f-]{36})(?:\/(commands|invites|invite-link|members\/remove|events|socket|model(?:\/[a-f0-9]{64})?|assistant(?:\/[a-f0-9]{64}(?:\/confirm)?)?|export))?$/iu;
 const MODEL_JOB_SUFFIX = /^model\/[a-f0-9]{64}$/u;
 const ASSISTANT_JOB_SUFFIX = /^assistant\/[a-f0-9]{64}$/u;
@@ -242,6 +244,8 @@ export function matchRoomRoute(request: Request, boundRoomId: string | null): Ro
   if (request.method === 'POST' && url.pathname === '/internal/space-grants') {
     return { handler: 'room-http', name: 'internal.space-grants' };
   }
+  const imageLinkRoute = IMAGE_LINK_ROUTE.exec(url.pathname);
+  if (imageLinkRoute) return { handler: 'room', name: 'image.fromLink', workspaceId: imageLinkRoute[1]! };
   const imageRoute = IMAGE_ROUTE.exec(url.pathname);
   if (imageRoute) {
     return { handler: 'room', name: 'image', workspaceId: imageRoute[1]!, ...(imageRoute[2] === undefined ? {} : { imageId: imageRoute[2] }) };

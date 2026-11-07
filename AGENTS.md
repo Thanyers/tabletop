@@ -99,7 +99,7 @@ git switch -c hotfix/X.Y.Z vX.Y.(Z-1)   # แตกจาก tag ที่รั
 2. check `local-validation` ของ commit ล่าสุดใน PR ผ่าน และ GitHub บอกว่า mergeable (ไม่มี conflict)
 3. ใช้ `gh pr merge <n> --merge` (merge commit) · **ห้ามใช้ `--admin`** หรือวิธีใดที่ข้าม ruleset
 4. merge เฉพาะ PR ที่ AI เปิดเอง หรือที่ผู้ใช้สั่งให้ merge · หลัง merge แจ้งผู้ใช้พร้อมลิงก์ PR และ merge commit
-5. PR เข้า `main`: check `local-validation` ต้องเป็น **ชุดเต็ม** (PR เข้า `main` รันชุดเต็มอยู่แล้วตาม [§3](#3-ci))
+5. PR เข้า `main`: check `local-validation` ต้องเป็น **ชุดเต็ม** หรือผลชุดเต็มที่ใช้ซ้ำได้ตาม [§3](#3-ci)
 
 **ข้อยกเว้นเดียวที่ยังต้องให้คนตอบในแชทก่อน merge เข้า `main`:** release ที่มี D1 migration แบบย้อนไม่ได้ (drop/rename column/table, ลบหรือเขียนทับข้อมูลเดิม) · เพราะ rollback ด้วยเลขเวอร์ชันกู้ข้อมูลไม่ได้ (เป็น R0 ตาม [CLAUDE.md](CLAUDE.md)) · migration แบบเพิ่มอย่างเดียว (เพิ่ม table/column nullable) ไม่ต้องถาม
 

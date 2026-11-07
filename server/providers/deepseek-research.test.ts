@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MAX_RESEARCH_ROUNDS, runResearch } from './deepseek-research.js';
+import { MAX_QUERIES_PER_ROUND, MAX_RESEARCH_ROUNDS, RESEARCH_BUDGET_MS, runResearch } from './deepseek-research.js';
 import { MAX_JOB_SEARCH_QUERY_CHARS, MAX_JOB_SEARCH_TITLE_CHARS, type ModelJobSearchProgress } from '../../src/tabletop/shared/model-job-progress.js';
 
 interface Scripted {
@@ -105,6 +105,41 @@ describe('runResearch', () => {
     const outcome = await runResearch('everything', { apiKey: 'k', fetchImpl });
     expect(outcome.rounds).toBe(MAX_RESEARCH_ROUNDS);
     expect(chatBodies).toHaveLength(MAX_RESEARCH_ROUNDS + 1);
+    expect(chatBodies.at(-1)?.tool_choice).toBe('none');
+  });
+
+  // F091: a list request asks for many narrow searches in one turn; they run together, capped per round.
+  it('runs one turn of searches together, capped per round, and answers every call', async () => {
+    const calls = Array.from({ length: MAX_QUERIES_PER_ROUND + 2 }, (_, index) => ({
+      id: `call-${index}`, type: 'function', function: { name: 'web_search', arguments: JSON.stringify({ query: `month ${index + 1}` }) },
+    }));
+    const { fetchImpl, chatBodies, searchBodies } = scriptedFetch({
+      chat: [{ choices: [{ message: { content: '', tool_calls: calls } }] }, finalTurn({ brief: 'list', sourceUrls: [] })],
+      search: Array.from({ length: MAX_QUERIES_PER_ROUND }, () => searchResults),
+    });
+    const outcome = await runResearch('releases per month', { apiKey: 'k', fetchImpl });
+    expect(searchBodies).toHaveLength(MAX_QUERIES_PER_ROUND);
+    expect(outcome.queries).toHaveLength(MAX_QUERIES_PER_ROUND);
+    const toolMessages = (chatBodies[1]?.messages as Array<{ role: string; tool_call_id?: string }>).filter((message) => message.role === 'tool');
+    expect(toolMessages.map((message) => message.tool_call_id)).toEqual(calls.map((call) => call.id));
+  });
+
+  it('stops starting new rounds once the research budget is spent', async () => {
+    const start = 1_000_000;
+    const now = vi.spyOn(Date, 'now').mockReturnValue(start);
+    const { fetchImpl, chatBodies } = scriptedFetch({
+      chat: [toolTurn('q1'), toolTurn('q2'), finalTurn({ brief: 'done', sourceUrls: [] })],
+      search: [searchResults, searchResults],
+    });
+    // The first round's search finishes after the budget.
+    const timed: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/v1/tools/search')) now.mockReturnValue(start + RESEARCH_BUDGET_MS + 1);
+      return fetchImpl(input, init);
+    }) as typeof fetch;
+    const outcome = await runResearch('everything', { apiKey: 'k', fetchImpl: timed });
+    now.mockRestore();
+    expect(outcome.rounds).toBe(1);
+    expect(chatBodies).toHaveLength(2);
     expect(chatBodies.at(-1)?.tool_choice).toBe('none');
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, } from 'react';
-import { ArrowUp, AtSign, ImagePlus, LoaderCircle, Paperclip, Plus, StickyNote, X } from 'lucide-react';
+import { ArrowUp, AtSign, ImagePlus, Link2, LoaderCircle, Paperclip, Plus, StickyNote, X } from 'lucide-react';
 import { runCanvasObjectCommand, type ChatCardReference } from './canvas-object-finder';
 import { consentKey, consentQuestion, needsConsent, rememberConsent, storedConsent, type TableChatConsentScope, type TableChatMode } from './table-chat-consent';
 import { VISIBILITY_POLICY } from '../shared/visibility';
@@ -22,7 +22,9 @@ export interface ComposerTools {
   onAddNote?: () => void;
   noteDisabledReason?: string;
   /** Pins the waiting pictures as image cards, the typed message as their caption. */
-  onPinImages?: (images: readonly File[], caption: string) => Promise<void>;
+  onPinImages?: (images: readonly File[], caption: string, sources?: readonly (string | undefined)[]) => Promise<void>;
+  /** F092: fetch a picture from a link (the picture or a page with og:image); it then waits like a chosen file. */
+  onImageFromLink?: (link: string) => Promise<File>;
   /** Pictures that can still be added to this table. */
   imagesLeft?: number;
 }
@@ -90,7 +92,11 @@ export function TableChat({
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   // F076: pictures chosen but not yet pinned; they stay here so the person can drop them or add a caption first.
-  const [waitingImages, setWaitingImages] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [waitingImages, setWaitingImages] = useState<{ id: string; file: File; url: string; source?: string }[]>([]);
+  // F092: the link field opened from the + menu, and whether its fetch is running.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [link, setLink] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
   const [pinning, setPinning] = useState(false);
   const messageRef = useRef(message);
   messageRef.current = message;
@@ -124,15 +130,33 @@ export function TableChat({
   waitingRef.current = waitingImages;
   useEffect(() => () => { for (const image of waitingRef.current) URL.revokeObjectURL(image.url); }, []);
 
-  const queueImages = (files: readonly File[]) => {
+  const queueImages = (files: readonly File[], source?: string) => {
     const accepted = files.filter((file) => IMAGE_TYPES.includes(file.type));
     if (accepted.length < files.length) setAttachmentError('Use a JPEG, PNG or WebP image.');
     else setAttachmentError('');
     const room = Math.min(imagesLeft, MAX_WAITING_IMAGES - waitingImages.length);
     if (accepted.length > room) setAttachmentError(room > 0 ? `You can add ${room} more image${room === 1 ? '' : 's'} here.` : 'This table cannot take more images.');
-    const next = accepted.slice(0, Math.max(0, room)).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }));
+    const next = accepted.slice(0, Math.max(0, room)).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(source ? { source } : {}) }));
     if (next.length) setWaitingImages((current) => [...current, ...next]);
     fieldRef.current?.focus();
+  };
+
+  const fetchLinkedImage = async () => {
+    const fetchImage = composerTools?.onImageFromLink;
+    const address = link.trim();
+    if (!fetchImage || !address || linkBusy) return;
+    setLinkBusy(true);
+    setAttachmentError('');
+    try {
+      const file = await fetchImage(address);
+      queueImages([file], address);
+      setLink('');
+      setLinkOpen(false);
+    } catch (error) {
+      setAttachmentError(error instanceof Error && error.message ? error.message : 'That link could not give a picture.');
+    } finally {
+      setLinkBusy(false);
+    }
   };
 
   const dropImage = (id: string) => {
@@ -151,7 +175,7 @@ export function TableChat({
     setSendError('');
     const pinned = waitingImages;
     try {
-      await pin(pinned.map((image) => image.file), trimmed);
+      await pin(pinned.map((image) => image.file), trimmed, pinned.map((image) => image.source));
       for (const image of pinned) URL.revokeObjectURL(image.url);
       setWaitingImages((current) => current.filter((image) => !pinned.includes(image)));
       setMessage('');
@@ -284,6 +308,17 @@ export function TableChat({
         : `Your message is about the selected ${referenceGroupLabel(cardReferences)}. Add another with a chat button on the canvas.`}</small>
       {cardReferences.length > 1 && <button type="button" className="tt-table-chat-bar__reference-clear" aria-label="Stop referencing all selected items" onClick={() => { onClearCardReferences?.(); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>}
     </div>}
+    {linkOpen && <div className="tt-table-chat-bar__link" data-testid="chat-image-link">
+      <label className="tt-visually-hidden" htmlFor={`${messageId}-link`}>Link to a picture or a page</label>
+      <input id={`${messageId}-link`} type="url" inputMode="url" autoFocus value={link} placeholder="Paste a link to a picture or a book page" disabled={linkBusy}
+        onChange={(event) => setLink(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') { event.preventDefault(); void fetchLinkedImage(); }
+          if (event.key === 'Escape') { event.preventDefault(); setLinkOpen(false); fieldRef.current?.focus(); }
+        }} />
+      <button type="button" className="tt-button tt-button--quiet" disabled={linkBusy || link.trim().length === 0} onClick={() => void fetchLinkedImage()}>{linkBusy ? <LoaderCircle size={13} className="tt-spin" /> : null}Get picture</button>
+      <button type="button" className="tt-table-chat-bar__link-close" aria-label="Close the link field" disabled={linkBusy} onClick={() => { setLinkOpen(false); fieldRef.current?.focus(); }}><X size={13} aria-hidden="true" /></button>
+    </div>}
     {waitingImages.length > 0 && <div className="tt-table-chat-bar__images" data-testid="chat-waiting-images">
       <ul aria-label="Images waiting to be pinned">
         {waitingImages.map((image) => <li key={image.id}>
@@ -300,6 +335,7 @@ export function TableChat({
           {canAttach && <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); fileRef.current?.click(); }}><Paperclip size={15} aria-hidden="true" /><span>Attach a file<small>{composerTools?.onPinImages ? 'CSV, JSON, text or an image' : 'CSV, JSON or text'}</small></span></button>}
           {composerTools?.onAddNote && <button type="button" role="menuitem" disabled={Boolean(composerTools.noteDisabledReason)} title={composerTools.noteDisabledReason} onClick={() => { setMenuOpen(false); composerTools.onAddNote?.(); }}><StickyNote size={15} aria-hidden="true" /><span>Add a note<small>{composerTools.noteDisabledReason ?? 'A sticky note on the canvas'}</small></span></button>}
           {composerTools?.onPinImages && <button type="button" role="menuitem" disabled={!canAddImages} onClick={() => { setMenuOpen(false); imageRef.current?.click(); }}><ImagePlus size={15} aria-hidden="true" /><span>Add an image<small>{canAddImages ? 'Shows here first; send to pin it' : 'This table cannot take more images'}</small></span></button>}
+          {composerTools?.onPinImages && composerTools.onImageFromLink && <button type="button" role="menuitem" disabled={!canAddImages} onClick={() => { setMenuOpen(false); setLinkOpen(true); }}><Link2 size={15} aria-hidden="true" /><span>Image from a link<small>{canAddImages ? 'A picture or a page with a cover; the link is credited' : 'This table cannot take more images'}</small></span></button>}
         </div>}
         {canAttach && <input ref={fileRef} type="file" hidden accept={composerTools?.onPinImages ? `${acceptFiles ?? ''},${IMAGE_TYPES.join(',')}` : acceptFiles} aria-label="Choose a file to attach" onChange={(event) => {
           const file = event.currentTarget.files?.[0];

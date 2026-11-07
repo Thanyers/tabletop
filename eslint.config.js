@@ -12,6 +12,7 @@ export default tseslint.config(
       'server/.data/', 'public/', 'docs/', 'handoff/', '.claude/', 'legacy/',
       // F080 / D-044: the sandbox worker's script is an esbuild product, like public/.
       'sandbox-assets/frame.js',
+      'sandbox-assets/runtime.js',
     ],
   },
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },

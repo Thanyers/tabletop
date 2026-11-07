@@ -286,4 +286,26 @@ describe('canvas images on the Room (F073)', () => {
     expect(gone.status).toBe(404);
     await gone.arrayBuffer();
   });
+
+  // F092: the from-link route is a member mutation like an upload; it refuses unsafe links before any fetch.
+  it('fetches from a link only for members with a valid request, and refuses private addresses', async () => {
+    const { member, outsider, roomId, stub } = await tableWithMember('Link');
+    const post = (actor: TestActor, body: unknown, mutation = true) => {
+      const requestHeaders = headers(actor, mutation);
+      requestHeaders.set('Content-Type', 'application/json');
+      return stub.fetch(new Request(`${ORIGIN}/api/workspaces/${roomId}/images/from-link`, { method: 'POST', headers: requestHeaders, body: JSON.stringify(body) }));
+    };
+    const privateLink = await post(member, { url: 'http://169.254.169.254/latest/meta-data' });
+    expect(privateLink.status).toBe(422);
+    expect(((await privateLink.json()) as { errorCode: string }).errorCode).toBe('IMAGE_LINK_INVALID');
+    const malformed = await post(member, { link: 'https://a.example.com/x' });
+    expect(malformed.status).toBe(400);
+    await malformed.arrayBuffer();
+    const noCsrf = await post(member, { url: 'https://a.example.com/x' }, false);
+    expect(noCsrf.status).toBe(403);
+    await noCsrf.arrayBuffer();
+    const stranger = await post(outsider, { url: 'https://a.example.com/x' });
+    expect(stranger.status).toBeGreaterThanOrEqual(400);
+    await stranger.arrayBuffer();
+  });
 });
