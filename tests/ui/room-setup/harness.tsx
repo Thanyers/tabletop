@@ -52,9 +52,24 @@ function Harness(): React.ReactElement {  const [created, setCreated] = useState
         linkSource={async (): Promise<RoomSourcesOutcome> => ({ ok: true, message: 'เชื่อมโต๊ะแล้ว' })}
         unlinkSource={async (): Promise<RoomSourcesOutcome> => ({ ok: true, message: 'ถอดโต๊ะแล้ว' })}
       />
+      {/* F093: one room is stated rather than chosen; the resource and its fields come from the table. */}
       <SpaceGrantPanel
         sourceWorkspaceId="table-a"
         rooms={[{ workspaceId: 'room-1', spaceId: 'activity-room', title: 'Activity Room' }]}
+        resources={[
+          { id: 'rooms', label: 'Rooms', fields: [{ id: 'name', label: 'Name' }, { id: 'price', label: 'Price' }, { id: 'beds', label: 'Beds' }] },
+          { id: 'guests', label: 'Guests', fields: [{ id: 'name', label: 'Name' }, { id: 'nights', label: 'Nights' }] },
+        ]}
+        grantProjection={async () => ({ ok: true, message: 'ให้สิทธิ์ห้องแล้ว' })}
+      />
+      {/* F093: with several rooms the picker returns, already pointing at the first. */}
+      <SpaceGrantPanel
+        sourceWorkspaceId="table-a"
+        rooms={[
+          { workspaceId: 'room-1', spaceId: 'activity-room', title: 'Activity Room' },
+          { workspaceId: 'room-2', spaceId: 'studio', title: 'Studio' },
+        ]}
+        resources={[]}
         grantProjection={async () => ({ ok: true, message: 'ให้สิทธิ์ห้องแล้ว' })}
       />
     </main>

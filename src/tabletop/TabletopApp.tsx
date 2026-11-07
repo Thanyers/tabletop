@@ -25,6 +25,7 @@ import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistor
 import { TableSurface } from './ui/TableSurface';
 import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
 import { SpaceGrantPanel } from './ui/SpaceGrantPanel';
+import { grantResources, grantableRooms, tableStateOf } from './ui/space-grant-options';
 import { RoomDialog, RoomMenu, type RoomAction } from './ui/RoomActions';
 import './ui/room-actions.css';
 import { StartPage } from './ui/StartPage';
@@ -548,10 +549,19 @@ export default function TabletopApp() {
     }
   }, [runCommand, setWorkspace]);
 
-  // Rooms this viewer belongs to, from the session list; the panel offers them as grant targets.
-  const grantRooms = (session?.workspaces ?? [])
-    .filter(workspace => workspace.id !== view?.id)
-    .map(workspace => ({ workspaceId: workspace.id, spaceId: workspace.id, title: workspace.title }));
+  /**
+   * F093: the rooms and the resources the grant dialog may offer, read from this table.
+   *
+   * The session list cannot say which workspaces host a room, so offering all of them asked the
+   * person to know something the app did not. A table does know the space it hosts and the spaces it
+   * has already granted, and its own collections and fields.
+   */
+  const grantTable = tableStateOf(view?.domain);
+  const grantRooms = useMemo(
+    () => grantableRooms(grantTable, view?.id, workspaceId => session?.workspaces.find(item => item.id === workspaceId)?.title),
+    [grantTable, view?.id, session?.workspaces],
+  );
+  const grantResourceOptions = useMemo(() => grantResources(grantTable?.program), [grantTable?.program]);
 
   /**
    * F080 / D-054: let a room read one projection of this table.
@@ -921,7 +931,7 @@ export default function TabletopApp() {
 
       {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} onRemoveMember={view.kind === 'table' && viewerCan(view, 'members.remove') && !tableReadOnly ? (actorId) => void removeMember(actorId) : undefined} onInviteLinkNotice={view.kind === 'table' && canInvite && capabilities.inviteLinks ? showNotice : undefined} linkInvites={view.kind === 'table' && capabilities.inviteLinks === true} onAccessCommand={(type, payload) => runCommand(type, payload)} memberLimit={memberLimit} runtimeMemberSeats={runtimeMemberSeats} onSetMemberLimit={view.kind === 'table' && canInvite && !tableReadOnly ? (maxMembers) => void runCommand('display.set', { maxMembers }) : undefined} />}
       {roomDialog === 'create' && <RoomDialog label="สร้างห้องจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} /></RoomDialog>}
-      {roomDialog === 'grant' && <RoomDialog label="ให้ห้องอ่านข้อมูลจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><SpaceGrantPanel sourceWorkspaceId={view.id} rooms={grantRooms} grantProjection={grantRoomRead} /></RoomDialog>}
+      {roomDialog === 'grant' && <RoomDialog label="ให้ห้องอ่านข้อมูลจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><SpaceGrantPanel sourceWorkspaceId={view.id} rooms={grantRooms} resources={grantResourceOptions} grantProjection={grantRoomRead} /></RoomDialog>}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
     </UploadCapabilityProvider>

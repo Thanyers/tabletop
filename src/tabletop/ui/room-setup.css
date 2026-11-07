@@ -126,3 +126,44 @@
   font-size: var(--tt-type-body);
 }
 
+
+/* F093: the fields a grant may expose are ticked from the table's own list, not typed. */
+.tt-setup__checks {
+  display: grid;
+  gap: var(--tt-space-1);
+  margin: 0;
+  padding: var(--tt-space-2);
+  border: 1px solid var(--tt-line);
+  border-radius: var(--tt-button-radius);
+  background: var(--tt-cream-1);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+}
+
+.tt-setup__checks > legend {
+  padding-inline: var(--tt-space-1);
+  color: var(--tt-ink);
+  font-size: var(--tt-type-small);
+  opacity: 0.8;
+}
+
+.tt-setup__check {
+  display: flex;
+  gap: var(--tt-space-2);
+  align-items: center;
+  min-block-size: var(--tt-space-6);
+  min-inline-size: 0;
+  color: var(--tt-ink);
+  font-size: var(--tt-type-body);
+  overflow-wrap: anywhere;
+}
+
+.tt-setup__check > input[type='checkbox'] {
+  flex: 0 0 auto;
+  inline-size: var(--tt-space-4);
+  block-size: var(--tt-space-4);
+  min-block-size: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--tt-green-1);
+}
