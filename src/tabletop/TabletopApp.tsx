@@ -25,6 +25,8 @@ import { EVIDENCE_SOURCE_OBJECT, EVIDENCE_TABLE_OBJECT, focusRequest, nextHistor
 import { TableSurface } from './ui/TableSurface';
 import { RoomSetupPanel, type RoomSetupResult } from './ui/RoomSetupPanel';
 import { SpaceGrantPanel } from './ui/SpaceGrantPanel';
+import { grantResources, grantableRooms, tableStateOf } from './ui/space-grant-options';
+import { buildRoomCreatePayload } from './ui/room-setup-input';
 import { RoomDialog, RoomMenu, type RoomAction } from './ui/RoomActions';
 import './ui/room-actions.css';
 import { StartPage } from './ui/StartPage';
@@ -535,23 +537,42 @@ export default function TabletopApp() {
    *
    * It goes through the ordinary command path, so the authority still decides: this only shapes the
    * request and reports what came back.
+   *
+   * F093 fixes two things here. The payload was missing `sharedToolWorkspaceId`, so the authority
+   * refused every attempt with `SPACE_PAYLOAD` and no room was ever created from this page; it is
+   * built by `buildRoomCreatePayload` now, which a test holds to the command schema. And a refusal
+   * was reported as success: `runCommand` notifies and returns `null` rather than throwing, so the
+   * old `catch` never ran and the panel said "สร้างห้องแล้ว" while moving to a room that did not
+   * exist. A missing view means there is nothing to create the room on.
    */
   const [roomDialog, setRoomDialog] = useState<RoomAction | null>(null);
   const createRoom = useCallback(async (input: { spaceId: string; title: string }): Promise<RoomSetupResult> => {
+    const hostWorkspaceId = view?.id;
+    if (hostWorkspaceId === undefined) return { ok: false, message: 'เปิดโต๊ะก่อนจึงจะสร้างห้องจากโต๊ะนั้นได้' };
     try {
-      const next = await runCommand('space.create', { spaceId: input.spaceId, title: input.title });
-      if (next) setWorkspace(next);
+      const next = await runCommand('space.create', buildRoomCreatePayload({ hostWorkspaceId, spaceId: input.spaceId, title: input.title }));
+      if (!next) return { ok: false, message: 'สร้างห้องไม่สำเร็จ — ดูเหตุผลที่ข้อความแจ้งเตือนด้านบน แล้วลองใหม่' };
+      setWorkspace(next);
       setSpaceRoomId(input.spaceId);
       return { ok: true, spaceId: input.spaceId, message: `สร้างห้องแล้ว: /s/${input.spaceId}` };
     } catch (error) {
       return { ok: false, message: errorText(error) };
     }
-  }, [runCommand, setWorkspace]);
+  }, [runCommand, setWorkspace, view?.id]);
 
-  // Rooms this viewer belongs to, from the session list; the panel offers them as grant targets.
-  const grantRooms = (session?.workspaces ?? [])
-    .filter(workspace => workspace.id !== view?.id)
-    .map(workspace => ({ workspaceId: workspace.id, spaceId: workspace.id, title: workspace.title }));
+  /**
+   * F093: the rooms and the resources the grant dialog may offer, read from this table.
+   *
+   * The session list cannot say which workspaces host a room, so offering all of them asked the
+   * person to know something the app did not. A table does know the space it hosts and the spaces it
+   * has already granted, and its own collections and fields.
+   */
+  const grantTable = tableStateOf(view?.domain);
+  const grantRooms = useMemo(
+    () => grantableRooms(grantTable, view?.id, workspaceId => session?.workspaces.find(item => item.id === workspaceId)?.title),
+    [grantTable, view?.id, session?.workspaces],
+  );
+  const grantResourceOptions = useMemo(() => grantResources(grantTable?.program), [grantTable?.program]);
 
   /**
    * F080 / D-054: let a room read one projection of this table.
@@ -921,7 +942,7 @@ export default function TabletopApp() {
 
       {inviteOpen && <InviteDialog view={view} availableSeats={remainingInviteSeats} canInvite={canInvite} busy={inviteBusy} invite={inviteState} previousInvitesRevoked={previousInvitesRevoked} copied={copied} onSelectSeat={setInviteSeat} selectedSeat={inviteSeat} onCreate={(seat, replace) => void createInvite(seat, replace)} onCopy={() => void copyInvite()} onClose={() => setInviteOpen(false)} onRemoveMember={view.kind === 'table' && viewerCan(view, 'members.remove') && !tableReadOnly ? (actorId) => void removeMember(actorId) : undefined} onInviteLinkNotice={view.kind === 'table' && canInvite && capabilities.inviteLinks ? showNotice : undefined} linkInvites={view.kind === 'table' && capabilities.inviteLinks === true} onAccessCommand={(type, payload) => runCommand(type, payload)} memberLimit={memberLimit} runtimeMemberSeats={runtimeMemberSeats} onSetMemberLimit={view.kind === 'table' && canInvite && !tableReadOnly ? (maxMembers) => void runCommand('display.set', { maxMembers }) : undefined} />}
       {roomDialog === 'create' && <RoomDialog label="สร้างห้องจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><RoomSetupPanel createRoom={createRoom} defaultTitle={view.title} /></RoomDialog>}
-      {roomDialog === 'grant' && <RoomDialog label="ให้ห้องอ่านข้อมูลจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><SpaceGrantPanel sourceWorkspaceId={view.id} rooms={grantRooms} grantProjection={grantRoomRead} /></RoomDialog>}
+      {roomDialog === 'grant' && <RoomDialog label="ให้ห้องอ่านข้อมูลจากโต๊ะนี้" onClose={() => setRoomDialog(null)}><SpaceGrantPanel sourceWorkspaceId={view.id} rooms={grantRooms} resources={grantResourceOptions} grantProjection={grantRoomRead} /></RoomDialog>}
       {resetOpen && <ConfirmDialog title="Reset this table?" confirmLabel="Reset table" busy={busy === 'workspace.reset'} onClose={() => setResetOpen(false)} onConfirm={() => void beginReset()}><p>This clears the current table contents, drafts, and unresolved actions. Existing invitation links and member access are revoked. You will keep your table role.</p><p>The reset creates a new table revision and cannot be undone.</p></ConfirmDialog>}
     </div>
     </UploadCapabilityProvider>

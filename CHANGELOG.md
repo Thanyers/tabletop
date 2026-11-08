@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+## 9.4.0 — 2026-11-08
+
+MINOR: the grant dialog now picks the room, the resource and the fields from what the table actually has instead of listing every workspace and asking for two typed ids (F093), and creating a room from a table works again — space.create was sent without sharedToolWorkspaceId and refused every time since F080 D-050, while the panel reported success. No D1 migration, no new secret or binding; nothing to configure before deploy. Rollback target 9.3.0.
+
+- **กล่องให้ห้องอ่านข้อมูลเลือกจากของจริงในโต๊ะ (F093, MINOR):** "ห้องที่จะให้สิทธิ์" ไม่ลิสต์ทุกโต๊ะในเซสชันอีกแล้ว แต่เหลือเฉพาะห้องที่โต๊ะนี้สร้างไว้หรือเคยให้สิทธิ์ · มีห้องเดียวจะบอกชื่อห้องไปเลยไม่ต้องกดเลือก มีหลายห้องก็เลือกห้องแรกไว้ให้ · "ตาราง (resource)" เป็นเมนูของตารางในกฎโต๊ะ และ "ฟิลด์ที่ให้เห็น" เป็น checkbox ของฟิลด์ในตารางนั้นแทนการพิมพ์คั่นจุลภาค (เริ่มต้นไม่ติ๊กให้ คนเลือกเอง) · โต๊ะที่ยังไม่มีห้องเห็นข้อความให้สร้างห้องก่อน โต๊ะที่ยังไม่มีกฎยังพิมพ์เองได้เหมือนเดิม · ไม่มี migration/secret/binding
+- **สร้างห้องจากโต๊ะได้จริง และบอกตามตรงเมื่อไม่สำเร็จ (F093, FIX):** ปุ่ม "สร้างห้องจากโต๊ะนี้" เคยถูกปฏิเสธทุกครั้ง (`SPACE_PAYLOAD`) เพราะคำขอขาด `sharedToolWorkspaceId` ที่ authority บังคับ — ไม่เคยมีห้องถูกสร้างจากหน้าโต๊ะเลยตั้งแต่ D-050 · และเมื่อถูกปฏิเสธ กล่องยังขึ้นว่า "สร้างห้องแล้ว" พร้อมพาไปหน้าห้องที่ไม่มีจริง เพราะเส้นทางคำสั่งแจ้งเตือนแล้วคืน `null` แทนที่จะ throw · ตอนนี้คำขอครบ (ห้องใช้ workspace ของตัวเองเป็น shared-tool workspace) และการปฏิเสธรายงานว่าไม่สำเร็จ
+
 ## 9.3.0 — 2026-11-07
 
 MINOR: the room actions move into a header menu beside Invite (F080), deeper web research for list-building requests (F091), pinning an image from a link (F092), card-scroll and web-source fixes (F088, F090), and CI/CD changes (CD006, CD007, CI011). No D1 migration, no new secret or binding; nothing to configure before deploy. Rollback target 9.2.0.

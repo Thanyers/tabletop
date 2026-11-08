@@ -28,6 +28,7 @@
 | F091 | ค้นเว็บพอสำหรับงานรวบรวมรายการ + หาอันดับจากตัวชี้วัดจริง | `review` | [F091](docs/features/F091-deeper-research.md) |
 | F090 | ผลค้นเว็บไม่ถูกใส่เป็น evidence ของโต๊ะที่ไม่มีไฟล์แหล่งที่มา | `review` | [F090](docs/features/F090-research-not-evidence.md) |
 | F088 | scroll บนการ์ดเลื่อนข้อมูลในการ์ด ไม่ซูมบอร์ด | `review` | [F088](docs/features/F088-card-wheel-scroll.md) |
+| F093 | กล่องให้ห้องอ่านข้อมูล: เลือกห้อง/ตาราง/ฟิลด์จากของจริงในโต๊ะ แทนลิสต์ทุก workspace และช่องพิมพ์ | `review` | lead (AI) · `feat/F093-grant-panel-pickers` · [F093](docs/features/F093-grant-panel-pickers.md) · แตะ `ui/SpaceGrantPanel.tsx`, `ui/space-grant-options.ts`, `ui/room-setup.css`, `TabletopApp.tsx`, `tests/ui/room-setup/harness.tsx` |
 | F077-T7 | Clean README copy, add Thai/English navigation, align icon with homepage mark | `done` | Codex · PR #364 / release #366 · production 9.1.6 / b809d9b; both main README pages and served favicon verified |
 | F086 | แหล่งเว็บของร่างที่ใช้อัตโนมัติยังเพิ่มเข้าโต๊ะและอ้างอิงได้ | `review` | [F086](docs/features/F086-applied-draft-web-sources.md) |
 | F087 | ช่องแชทลอยเป็น island ไม่มีแถบพื้นหลังบังบอร์ด | `review` | [F087](docs/features/F087-composer-island.md) |
