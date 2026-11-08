@@ -1,18 +1,24 @@
 # Deployment ปัจจุบัน
 
-ตรวจ `/version` ออนไลน์ล่าสุด **7 พฤศจิกายน 2569 เวลา 20:22 น. (Asia/Bangkok)**: production รายงาน **9.3.0 / e0046a7**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/42376207655) ผ่านครบทุกขั้น รวม tag `v9.3.0`, D1 migrations, sandbox Worker, deploy, smoke และ GitHub Release publication. `/healthz` และ `/readyz` ตอบ 200. Staging snapshot **0.0.0-dev / f97fade** เป็นการอ่าน ณ เวลานั้น.
+ตรวจ `/version` ออนไลน์ล่าสุด **8 พฤศจิกายน 2569 เวลา 15:35 น. (Asia/Bangkok)**: production รายงาน **9.4.0 / 727b6c2**; [Release deploy](https://github.com/Thanyers/tabletop/actions/runs/42463246107) ผ่านครบทุกขั้น รวม tag `v9.4.0`, D1 migrations, sandbox Worker, deploy, smoke และ GitHub Release publication. `/healthz` และ `/readyz` ตอบ 200. Staging snapshot **0.0.0-dev / 697ef95** เป็นการอ่าน ณ เวลานั้น.
 
 | รายการ | Production | Staging |
 | --- | --- | --- |
 | URL | [tabletop.ptchrr.workers.dev](https://tabletop.ptchrr.workers.dev/) | [tabletop-staging.ptchrr.workers.dev](https://tabletop-staging.ptchrr.workers.dev/) |
 | Worker / D1 | tabletop / tabletop-production | tabletop-staging / tabletop-staging |
 | Durable Objects | Room และ Billing ของ production | Room และ Billing แยก namespace |
-| Source | [e0046a7](https://github.com/Thanyers/tabletop/commit/e0046a7) — PR #411 | `f97fade` — observed snapshot |
-| Release | v9.3.0 / 9.3.0 — deploy/smoke passed | dev / 0.0.0-dev |
+| Source | [727b6c2](https://github.com/Thanyers/tabletop/commit/727b6c2) — PR #415 | `697ef95` — observed snapshot |
+| Release | v9.4.0 / 9.4.0 — deploy/smoke passed | dev / 0.0.0-dev |
 | แผน | Workers Paid ตามการอนุญาต F066-T8 | บัญชี Paid เดียวกัน |
 | เพดาน AI | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี | คง private config เดิม; รอบนี้ไม่ได้อ่านวงเงินบัญชี |
 
 /demo และ /demo/replay อยู่ใน Worker เดียวกัน merge เข้า `dev` รวมงานเอกสาร รันชุดเต็มและ deploy **staging** อัตโนมัติ (CD002, `/version` = `0.0.0-dev`) · merge `release/*` / `hotfix/*` เข้า `main` deploy **production** ([CD001](TEAM_HANDOFF_TH.md#deploy-อัตโนมัติ-cd001)) ([ขั้น deploy](AGENT_OPERATIONS.md#6-deploy-อัตโนมัติหลัง-merge-release)); branch งานอื่นไม่ deploy
+
+## Release 9.4.0 — grant dialog pickers, and creating a room from a table works (8 November 2026)
+
+- [Release PR #415](https://github.com/Thanyers/tabletop/pull/415), main `727b6c2`. The release head differed from dev `697ef95` only in `CHANGELOG.md` / `changelog.d/`, so CI011 reused the dev full-suite result and `local-validation` passed in 3s on the PR; the run on `main` reused the release PR's result the same way (CI006). [Deploy](https://github.com/Thanyers/tabletop/actions/runs/42463246107) succeeded end to end in 2m37s: tag `v9.4.0`, D1 migrations, sandbox assets + sandbox deploy, app deploy, smoke checks and GitHub Release publication.
+- MINOR from dev `697ef95`, both parts of F093: the grant dialog picks the room, the resource and the fields from what the table actually has, instead of listing every workspace in the session and asking for two typed ids; and **creating a room from a table works again** — `space.create` was sent without `sharedToolWorkspaceId`, so the authority refused every attempt with `SPACE_PAYLOAD` since F080 D-050 while the panel reported success, because `runCommand` notifies and returns `null` rather than throwing. No D1 migration, no new secret or binding. Rollback target 9.3.0.
+- Readback: `/version` 9.4.0 / 727b6c2, built_at 2026-11-08T08:32:01Z; `/healthz` and `/readyz` 200. The served production app chunk contains both the field pickers (`space-grant-field-`) and the room-create payload helper (`sharedToolWorkspaceId`), neither of which 9.3.0 had.
 
 ## Release 9.3.0 — room actions in a header menu, deeper research, image from a link (7 November 2026)
 
